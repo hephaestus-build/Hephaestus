@@ -207,9 +207,13 @@ Trivy time, including failed invocations. Timings use a monotonic clock around t
 They add no scanner work or latency threshold. They are advisory, not security evidence: failure to
 save them warns without changing the scan result. The same durations appear in the job log.
 
-Upstream NATS, Traefik, nginx, and Alpine images are versioned and digest-pinned in the production
-Compose topology. They receive the same per-platform SBOM, license, vulnerability, and index-membership
-evidence as first-party images. Hephaestus requires its own signatures and build provenance only for
+The Helm chart consumes the image pins from the verified release lock.
+The inventory in `security/release-images.json` defines the images that release evidence must cover.
+The 0.95 Compose files still consume the proxy and volume initializer.
+Their images retain release evidence until those consumers are removed.
+
+Upstream images are versioned and digest-pinned.
+They receive the same per-platform SBOM, license, vulnerability, and index-membership evidence as first-party images. Hephaestus requires its own signatures and build provenance only for
 images it builds. Image publishing uses GitHub's native attestation action to record provenance and
 registry storage metadata. Only publishing jobs and their reusable-workflow callers receive
 `artifact-metadata: write`, alongside the signing and attestation permissions.
