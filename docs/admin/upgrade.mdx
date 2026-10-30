@@ -48,6 +48,7 @@ not your production data. They do not replace this staging update.
 
 Before the 1.0 migration, back up the database and encryption keys.
 Stop all database writers.
+For chart hosts, use [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades).
 Run the [migrate run mode](./runtime-roles#database-migrations) with the existing system encryption key and the active credential key and version.
 Configure any missing keys before the migration.
 Keep the prior credential key and its version configured if stored credentials still use them.
