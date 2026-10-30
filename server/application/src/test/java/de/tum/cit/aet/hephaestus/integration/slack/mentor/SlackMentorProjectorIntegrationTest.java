@@ -163,6 +163,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @BeforeEach
     void setUpProjector() {
+        // The clock starts with the test instance, which can precede the context's start; turns record real time.
+        Duration behind = Duration.between(clock.instant(), Instant.now());
+        if (behind.isPositive()) {
+            clock.advance(behind);
+        }
         developer = persistUser("slack-projector-developer");
         workspace =
                 createWorkspace("slack-projector", "Slack Projector", "slack-projector", AccountType.ORG, developer);
