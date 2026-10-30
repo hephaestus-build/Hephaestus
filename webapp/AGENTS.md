@@ -6,6 +6,7 @@ Vite for the build. React Compiler runs at build time.
 
 [DESIGN.md](DESIGN.md) owns the visual intent and the surface rules.
 Read it before you change styling, a practice surface, a drawer level, a loading or error state, motion, a status badge, or a `Field`.
+Its § Design principles decides a case that no specific rule covers.
 
 This file explains constraints that are easy to miss.
 It omits conventions that the tree or a lint message at the call site already explains.
