@@ -115,8 +115,7 @@ public interface SandboxBackend {
      * @param attempt the claimed job's attempt; null for a host, or a caller that holds no claim
      * @param command the runtime's command; the initializer's is {@code SandboxLayout.INITIALIZER_COMMAND}
      * @param deadline when a review attempt's upload window closes. A backend whose runtime enforces a deadline itself
-     *     ends the sandbox then, also when its worker is gone: a Kubernetes Job does. Docker has no such deadline; there
-     *     the runner's observation ends the sandbox, and the reconciler removes one whose worker is gone. Null for a
+     *     ends the sandbox then, also when its worker is gone: a Kubernetes Job enforces that deadline. Null for a
      *     Heph host, which runs until it is removed
      * @param environment the environment of both processes, built for the gateway address the backend gives the sandbox
      */
@@ -141,8 +140,7 @@ public interface SandboxBackend {
     }
 
     /**
-     * A sandbox, by the name that its runtime records for it: a Kubernetes Job or Pod name, or the name that every
-     * Docker resource of the sandbox carries.
+     * A sandbox, by its Kubernetes Job or Pod name.
      */
     record Handle(String id) {}
 

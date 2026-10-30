@@ -1042,7 +1042,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 
 	// The selected settings, the same strings that the chart's objects use.
 	assert.equal(envValue(worker, "SPRING_PROFILES_ACTIVE"), "prod,worker");
-	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_RUNTIME"), "kubernetes");
+	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_RUNTIME"), undefined);
 	assert.equal(envValue(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE"), sandboxes);
 	for (const [variable, field] of [
 		["POD_NAME", "metadata.name"],

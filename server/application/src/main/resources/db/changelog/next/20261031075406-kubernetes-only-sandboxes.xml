@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793364891555-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="review_job"/>
+            <columnExists tableName="review_job" columnName="config_snapshot"/>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*) FROM review_job
+                WHERE config_snapshot -> 'schemaVersion' = '8'::jsonb
+                  AND config_snapshot -> 'allowInternet' IS DISTINCT FROM 'false'::jsonb
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>Sandbox network access is enforced by Kubernetes policy. Remove the unused false flag from v8 snapshots in every job state; older frozen formats retain their original meaning.</comment>
+        <sql><![CDATA[
+            UPDATE review_job
+            SET config_snapshot = (config_snapshot - 'allowInternet') || '{"schemaVersion":9}'::jsonb
+            WHERE config_snapshot -> 'schemaVersion' = '8'::jsonb
+        ]]></sql>
+        <rollback>
+            <stop>Stop every role and restore the database backup taken before this upgrade. The previous runtime cannot read the promoted configuration snapshots.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

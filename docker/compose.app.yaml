@@ -242,7 +242,7 @@ services:
       # + docker/compose.core.yaml). Disable it here so the receiver beans don't load
       # in application-server (saves RAM; prevents accidental localhost traffic).
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
-      # Sandboxes run on application-worker, the only service given the Docker socket.
+      # Sandbox work runs in the Kubernetes worker.
       HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       # Names the organisation running the optional research study, and its presence is what makes
       # first-login setup ask about it at all. Unset means this deployment runs none.
@@ -493,20 +493,13 @@ services:
       # all (it runs no sync/webhook role), so no NATS_SERVER is set here.
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
       HEPHAESTUS_FABRIC_ROOT: /data/git-repos
-      SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
-      SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
-      SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
-      SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
       SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}
-      SANDBOX_DOCKER_CONTAINER_RUNTIME: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:-}
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-5}
       AGENT_MAX_CONCURRENT_COMPOSITIONS: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:-16}
       PRACTICE_REVIEW_COMPOSITION_TIMEOUT: ${PRACTICE_REVIEW_COMPOSITION_TIMEOUT:-10m}
-      SANDBOX_MEMORY_BYTES: ${SANDBOX_MEMORY_BYTES:-3221225472}
       SANDBOX_CPUS: ${SANDBOX_CPUS:-1.0}
-      SANDBOX_PIDS_LIMIT: ${SANDBOX_PIDS_LIMIT:-256}
       # SSRF guard for the in-process LLM proxy. Must match application-server's value: that pod
       # decides whether a loopback provider URL may be SAVED, this one whether it may be DIALLED, and
       # a split between them shows up as connections that save fine and then fail at call time.
@@ -564,12 +557,7 @@ services:
       volume-init:
         condition: service_completed_successfully
     restart: unless-stopped
-    # Joins the host's docker group so the unprivileged image can reach root:docker 0660
-    # /var/run/docker.sock. Host-specific — see DOCKER_GROUP_ID in .env.example.
-    group_add:
-      - "${DOCKER_GROUP_ID:-999}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - worker-git-repos:/data/git-repos
     networks:
       - shared-network

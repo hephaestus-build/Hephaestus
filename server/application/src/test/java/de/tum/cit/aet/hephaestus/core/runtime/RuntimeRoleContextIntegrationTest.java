@@ -12,6 +12,8 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
+import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
+import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -54,6 +56,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import io.nats.client.Nats;
 import jakarta.servlet.Filter;
 import java.net.URLEncoder;
@@ -88,6 +91,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.BootstrapUtils;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -124,9 +128,10 @@ class RuntimeRoleContextIntegrationTest {
                 .toArray(String[]::new);
         // A valid positive pool setting must not make the database-free receiver create a DataSource.
         int maximum = role == RuntimeRole.SERVER ? 16 : 24;
-        var configuration =
-                BootstrapUtils.resolveTestContextBootstrapper(getClass()).buildMergedContextConfiguration();
-        new WebApplicationContextRunner()
+        var configuration = BootstrapUtils.resolveTestContextBootstrapper(
+                        role == RuntimeRole.WORKER ? WorkerGraph.class : getClass())
+                .buildMergedContextConfiguration();
+        var runner = new WebApplicationContextRunner()
                 .withInitializer(application -> {
                     var conversion = new ApplicationConversionService();
                     application.getEnvironment().setConversionService(conversion);
@@ -170,67 +175,73 @@ class RuntimeRoleContextIntegrationTest {
                         "hephaestus.sync.nats.password=",
                         "hephaestus.integration.slack.enabled=true",
                         "hephaestus.integration.outline.enabled=true")
-                .withPropertyValues(properties)
-                .run(application -> {
-                    assertThat(application).hasNotFailed();
-                    assertThat(RuntimeRole.enabled(application.getEnvironment()))
-                            .containsExactly(role);
-                    assertThat(application.getBeansOfType(ScmRepositoryItemLifecycle.class))
-                            .hasSize(role == RuntimeRole.SERVER ? 1 : 0);
-                    if (role == RuntimeRole.SERVER) {
-                        assertThat(application).hasSingleBean(ReviewJobZombieSweeper.class);
-                        assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
-                        assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
-                                .isNotEmpty();
-                        assertThat(application).hasSingleBean(AccountReferenceService.class);
-                        assertThat(application).hasSingleBean(ResearchParticipationQuery.class);
-                        assertThat(application).hasSingleBean(MonitoredRepositoryQuery.class);
-                        assertThat(application).hasSingleBean(PracticeReviewCoverageService.class);
-                        assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
-                        assertThat(application).hasSingleBean(GitHubLifecycleListener.class);
-                        assertThat(application).hasSingleBean(GitHubInstallationReconciler.class);
-                        assertThat(application).hasSingleBean(GitHubWorkspaceProvisioningAdapter.class);
-                        assertThat(application).hasSingleBean(SlackRetentionPurger.class);
-                        assertThat(application).hasSingleBean(SlackWorkspaceContentEraser.class);
-                        assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
-                    } else {
-                        assertThat(application).doesNotHaveBean(ReviewJobZombieSweeper.class);
-                        assertThat(application).doesNotHaveBean(ReviewJobCompletionService.class);
-                        assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
-                                .isEmpty();
-                        assertThat(application).doesNotHaveBean(AccountReferenceService.class);
-                        assertThat(application).doesNotHaveBean(ResearchParticipationQuery.class);
-                        assertThat(application).doesNotHaveBean(MonitoredRepositoryQuery.class);
-                        assertThat(application).doesNotHaveBean(PracticeReviewCoverageService.class);
-                        assertThat(application).doesNotHaveBean(GitHubLifecycleListener.class);
-                        assertThat(application).doesNotHaveBean(GitHubInstallationReconciler.class);
-                        assertThat(application).doesNotHaveBean(GitHubWorkspaceProvisioningAdapter.class);
-                        assertThat(application).doesNotHaveBean(SlackRetentionPurger.class);
-                        assertThat(application).doesNotHaveBean(SlackWorkspaceContentEraser.class);
-                        assertThat(application).doesNotHaveBean(SlackWorkspacePurgeAdapter.class);
-                    }
-                    if (role == RuntimeRole.WORKER) {
-                        assertThat(application).hasSingleBean(ReviewJobExecutor.class);
-                        assertThat(application).hasSingleBean(WorkerDrainCoordinator.class);
-                        assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
-                    } else {
-                        assertThat(application).doesNotHaveBean(ReviewJobExecutor.class);
-                    }
-                    if (role == RuntimeRole.WEBHOOK) {
-                        assertThat(application).hasSingleBean(JetStreamPublisher.class);
-                        assertThat(application).doesNotHaveBean(ResultAdmissionPolicy.class);
-                        assertThat(application).doesNotHaveBean(ResultMarkService.class);
-                        assertThat(application).doesNotHaveBean(CitedSourceAccess.class);
-                        assertThat(application).doesNotHaveBean(EvidenceDeliveryAuthorization.class);
-                    } else {
-                        assertThat(application).doesNotHaveBean(JetStreamPublisher.class);
-                        assertThat(application).hasSingleBean(ResultMarkService.class);
-                        assertThat(application).hasSingleBean(CitedSourceAccess.class);
-                        assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);
-                    }
-                    assertDatabaseConnections(application, role, database, maximum);
-                    assertSlackIngressOwnership(application, role);
-                });
+                .withPropertyValues(properties);
+        if (role == RuntimeRole.WORKER) {
+            // Resolve the real worker graph; this role test has no cluster and starts no sandbox.
+            runner = runner.withPropertyValues(
+                    "hephaestus.sandbox.kubernetes.namespace=role-test-sandboxes",
+                    "hephaestus.sandbox.kubernetes.pod-name=role-test-worker",
+                    "hephaestus.sandbox.kubernetes.pod-ip=127.0.0.1");
+        }
+        runner.run(application -> {
+            assertThat(application).hasNotFailed();
+            assertThat(RuntimeRole.enabled(application.getEnvironment())).containsExactly(role);
+            assertThat(application.getBeansOfType(ScmRepositoryItemLifecycle.class))
+                    .hasSize(role == RuntimeRole.SERVER ? 1 : 0);
+            if (role == RuntimeRole.SERVER) {
+                assertThat(application).hasSingleBean(ReviewJobZombieSweeper.class);
+                assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
+                assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
+                        .isNotEmpty();
+                assertThat(application).hasSingleBean(AccountReferenceService.class);
+                assertThat(application).hasSingleBean(ResearchParticipationQuery.class);
+                assertThat(application).hasSingleBean(MonitoredRepositoryQuery.class);
+                assertThat(application).hasSingleBean(PracticeReviewCoverageService.class);
+                assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
+                assertThat(application).hasSingleBean(GitHubLifecycleListener.class);
+                assertThat(application).hasSingleBean(GitHubInstallationReconciler.class);
+                assertThat(application).hasSingleBean(GitHubWorkspaceProvisioningAdapter.class);
+                assertThat(application).hasSingleBean(SlackRetentionPurger.class);
+                assertThat(application).hasSingleBean(SlackWorkspaceContentEraser.class);
+                assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
+            } else {
+                assertThat(application).doesNotHaveBean(ReviewJobZombieSweeper.class);
+                assertThat(application).doesNotHaveBean(ReviewJobCompletionService.class);
+                assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
+                        .isEmpty();
+                assertThat(application).doesNotHaveBean(AccountReferenceService.class);
+                assertThat(application).doesNotHaveBean(ResearchParticipationQuery.class);
+                assertThat(application).doesNotHaveBean(MonitoredRepositoryQuery.class);
+                assertThat(application).doesNotHaveBean(PracticeReviewCoverageService.class);
+                assertThat(application).doesNotHaveBean(GitHubLifecycleListener.class);
+                assertThat(application).doesNotHaveBean(GitHubInstallationReconciler.class);
+                assertThat(application).doesNotHaveBean(GitHubWorkspaceProvisioningAdapter.class);
+                assertThat(application).doesNotHaveBean(SlackRetentionPurger.class);
+                assertThat(application).doesNotHaveBean(SlackWorkspaceContentEraser.class);
+                assertThat(application).doesNotHaveBean(SlackWorkspacePurgeAdapter.class);
+            }
+            if (role == RuntimeRole.WORKER) {
+                assertThat(application).hasSingleBean(ReviewJobExecutor.class);
+                assertThat(application).hasSingleBean(WorkerDrainCoordinator.class);
+                assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
+            } else {
+                assertThat(application).doesNotHaveBean(ReviewJobExecutor.class);
+            }
+            if (role == RuntimeRole.WEBHOOK) {
+                assertThat(application).hasSingleBean(JetStreamPublisher.class);
+                assertThat(application).doesNotHaveBean(ResultAdmissionPolicy.class);
+                assertThat(application).doesNotHaveBean(ResultMarkService.class);
+                assertThat(application).doesNotHaveBean(CitedSourceAccess.class);
+                assertThat(application).doesNotHaveBean(EvidenceDeliveryAuthorization.class);
+            } else {
+                assertThat(application).doesNotHaveBean(JetStreamPublisher.class);
+                assertThat(application).hasSingleBean(ResultMarkService.class);
+                assertThat(application).hasSingleBean(CitedSourceAccess.class);
+                assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);
+            }
+            assertDatabaseConnections(application, role, database, maximum);
+            assertSlackIngressOwnership(application, role);
+        });
     }
 
     /** Count live connections while the role holds its entire configured pool; the receiver must hold none. */
@@ -271,6 +282,13 @@ class RuntimeRoleContextIntegrationTest {
             }
         }
     }
+
+    @ContextConfiguration(classes = Application.class)
+    @MockitoBean(name = "sandboxKubernetesClient", types = KubernetesClient.class, enforceOverride = true)
+    @MockitoBean(
+            types = {KubernetesSandboxCache.class, KubernetesIsolationProbe.class},
+            enforceOverride = true)
+    private static class WorkerGraph {}
 
     /**
      * Slack Events stay with the webhook role, which publishes them. Interactivity belongs to the server role, which

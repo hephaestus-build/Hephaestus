@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
@@ -20,7 +18,6 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
 @ConditionalOnWorkerRole
-@ConditionalOnProperty(name = SandboxRuntime.PROPERTY, havingValue = "kubernetes")
 public class KubernetesSandboxMaintenanceConfiguration {
 
     @Bean

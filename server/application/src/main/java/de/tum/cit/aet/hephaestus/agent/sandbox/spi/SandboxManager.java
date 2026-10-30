@@ -55,7 +55,7 @@ public interface SandboxManager {
      *
      * @param spec the complete sandbox specification
      * @return the execution result (exit code, output files, logs)
-     * @throws SandboxException if the sandbox infrastructure fails (Docker unreachable, container
+     * @throws SandboxException if the sandbox infrastructure fails (Kubernetes unreachable, Pod
      *     creation error, etc.)
      * @throws SandboxCancelledException if the job was cancelled via {@link #cancel}
      */

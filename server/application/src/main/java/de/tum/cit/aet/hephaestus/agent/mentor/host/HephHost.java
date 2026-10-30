@@ -64,7 +64,7 @@ public class HephHost {
 
     /**
      * Waits until a host's command channel is open, starting a host when none runs. Only the dispatcher's claim thread
-     * calls it. The launch runs outside the lock, so the channel handshake and a shutdown never wait for Docker.
+     * calls it. The launch runs outside the lock, so the channel handshake and a shutdown never wait for Kubernetes.
      *
      * @return false when no host could start or connect in time, or the host exited before it connected
      */

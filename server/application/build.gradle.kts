@@ -14,6 +14,8 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.commons.compress)
+    implementation(libs.httpcore5)
     implementation(platform(libs.okhttp.bom))
     implementation(project(":generated-clients"))
     implementation(libs.jspecify)
@@ -48,8 +50,6 @@ dependencies {
     implementation(libs.postgresql)
     runtimeOnly(libs.h2)
     compileOnly(libs.lombok)
-    // docker-java exposes Immutables metadata; consumers need annotations, not its processor.
-    compileOnly(libs.immutables.value.annotations)
     // PostgreSQL driver types carry Checker Framework annotations that javac must resolve.
     compileOnly(libs.checker.qual)
     implementation(libs.spring.modulith.starter.core)
@@ -72,9 +72,6 @@ dependencies {
     testImplementation(libs.archunit.junit5)
     implementation(libs.therapi.runtime.javadoc)
     implementation(libs.jnats)
-    implementation(libs.docker.java.api)
-    implementation(libs.docker.java.core)
-    implementation(libs.docker.java.transport.httpclient5)
     implementation(libs.fabric8.kubernetes.client)
     testImplementation(libs.fabric8.kubernetes.server.mock)
     implementation(libs.bolt) {
@@ -592,6 +589,16 @@ for ((taskName, command) in
             )
         }
     }
+}
+
+// A qualification image adds only the test classpath to the same server image that the chart runs.
+tasks.register<Sync>("kubernetesLiveBundle") {
+    if (!packagedServer.get()) dependsOn(tasks.testClasses)
+    into(layout.buildDirectory.dir("kubernetes-live"))
+    from(compiledMain) { into("main") }
+    from(layout.buildDirectory.dir("classes/java/test")) { into("test") }
+    from(layout.buildDirectory.dir("resources/test")) { into("test") }
+    from(configurations.testRuntimeClasspath) { into("lib") }
 }
 
 // Consumer jobs execute the package job's compiled test artifact; no compilation is scheduled.

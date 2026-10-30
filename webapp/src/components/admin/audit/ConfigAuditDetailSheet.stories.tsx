@@ -18,8 +18,8 @@ const baseEntry: ConfigAuditEntryView = {
 	actor: { id: 7, displayName: "Ada Lovelace", email: "ada@example.com" },
 	workspaceId: 3,
 	changedKeys: ["timeoutSeconds", "maxConcurrentJobs"],
-	oldValue: JSON.stringify({ timeoutSeconds: 600, maxConcurrentJobs: 1, allowInternet: false }),
-	newValue: JSON.stringify({ timeoutSeconds: 900, maxConcurrentJobs: 3, allowInternet: false }),
+	oldValue: JSON.stringify({ timeoutSeconds: 600, maxConcurrentJobs: 1 }),
+	newValue: JSON.stringify({ timeoutSeconds: 900, maxConcurrentJobs: 3 }),
 };
 
 const meta = {

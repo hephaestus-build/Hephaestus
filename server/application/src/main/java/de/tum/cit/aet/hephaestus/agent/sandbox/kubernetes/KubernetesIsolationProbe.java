@@ -384,11 +384,12 @@ public class KubernetesIsolationProbe {
                 .put("reachable", target.reachable()));
         spec.put("processes", processes);
         long memory = processes > 0 ? TRIAL_MEMORY : PROBE_MEMORY;
-        ResourceLimits limits = new ResourceLimits(memory, 0.5, Math.max(processes, 1), time);
+        ResourceLimits limits = new ResourceLimits(0.5, time);
         Pod pod = pods.probePod(
                 new KubernetesPods.Workload(name, labels, image, "probe"),
                 List.of("node", "-e", SCRIPT, spec.toString()),
                 limits,
+                memory,
                 time.toSeconds(),
                 hostUsers);
         Instant end = Instant.now().plus(time);

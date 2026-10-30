@@ -20,8 +20,7 @@ import org.junit.jupiter.api.Test;
 class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
     /** The default review sandbox: one CPU. Its memory and disk come from {@link KubernetesPods#REVIEW}. */
-    private static final ResourceLimits LIMITS =
-            new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30));
+    private static final ResourceLimits LIMITS = new ResourceLimits(1.0, Duration.ofMinutes(30));
 
     private static final Map<String, Quantity> REVIEW = KubernetesSandboxQuota.footprint(LIMITS, Map.of());
 
@@ -176,7 +175,7 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
         when(cache.quotas()).thenThrow(new KubernetesClientException("not listed yet"));
 
         assertThat(new KubernetesSandboxQuota(cache, "sandboxes", "", REVIEWS)
-                        .roomFor(new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30))))
+                        .roomFor(new ResourceLimits(1.0, Duration.ofMinutes(30))))
                 .isEqualTo(Integer.MAX_VALUE);
     }
 

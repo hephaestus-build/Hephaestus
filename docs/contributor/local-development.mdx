@@ -40,7 +40,8 @@ Install and configure the following tools before you attempt a local build:
    [`.github/actions/setup-helm/action.yml`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml)
    pins. That file is the one home of the version and its checksums. CI installs the same version.
    Verify it with `helm version`.
-5. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
+5. **Kubernetes dev tools** – The host worker runs its sandboxes in k3d. Install the tools in [Kubernetes](#kubernetes) before you start `vp run dev`.
+6. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
 If you push branches to the repository instead of a fork, also configure commit signing.
 [CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup.
@@ -99,6 +100,16 @@ they are used.
 
 These are Spring profiles, not build profiles. Gradle’s `bootRun` passes `-Pprofiles=…` through to
 Spring. `vp run dev:server:e2e` uses that interface.
+
+`vp run dev` runs the server and worker roles in a host JVM against one shared k3d cluster.
+Each worktree uses its own sandbox namespace, derived from its port set, with its own ResourceQuota.
+Its sandbox, tools and loop Pods stay in that namespace.
+Five worktrees share the cluster. They do not each install a full chart release.
+
+The cluster has one full chart release for cluster qualification and live suites.
+Run that release on demand with `vp run dev:kubernetes`.
+Production and `small` resource requests also apply when you qualify those profiles.
+Changing the dev release's requests requires separate measurements of dev peaks.
 
 Create `application-local.yml` in `server/application/src/main/resources` to override defaults. This file is gitignored.
 
@@ -414,15 +425,28 @@ Manual database edits are a last resort.
 
 `vp run dev:kubernetes` installs the chart on a local [k3d](https://k3d.io) cluster with the images of this checkout.
 It needs Docker with at least 10 GiB of memory, `k3d`, `kubectl`, Helm 4, the [`pack` CLI](https://github.com/buildpacks/pack/releases), `openssl` and `curl`.
-The cluster uses about 6 GiB, and a practice review 3 GiB more.
-The command checks these first and names each missing item.
+The command checks the tools and memory budget first and names each missing item.
 On macOS, `brew install k3d helm kubectl` installs three of the tools.
 If the `buildpacks/tap/pack` formula fails, use the `pack` release archive.
 
 The native stack (`vp run dev`) is the default inner loop.
 It reloads the webapp at once.
-Your IDE starts and debugs the JVM.
-It has no NetworkPolicy, no Jobs, no Gateway and no Kubernetes sandbox backend.
+The server and worker stay on the host, where your IDE can debug them.
+The worker runs its Pods in the shared cluster.
+
+The dev launcher builds and pins the agent image, creates the worktree namespace, and applies the chart's sandbox quota, NetworkPolicy and worker RBAC there.
+It gives the JVM a namespace-scoped kubeconfig with short-lived credentials.
+No cluster credential reaches a sandbox.
+
+Set distinct `SERVER_PORT` and `SANDBOX_API_PORT` values in each worktree's `server/.env`.
+The namespace is `heph-dev-<SERVER_PORT>-<SANDBOX_API_PORT>`.
+The management port defaults to `SERVER_PORT + 1010`. Set `MANAGEMENT_PORT` when that port is in use.
+The host loop runs one review and one conversation turn at a time.
+The Pod requests stay the same as the chart's.
+
+`vp run dev:kubernetes:worktree:reset` deletes only this worktree's namespace and PriorityClasses.
+Stop its JVM first.
+A port set that belongs to another worktree stops startup instead of changing that namespace.
 
 Use the cluster before you push a change to one of these:
 
@@ -444,8 +468,9 @@ In the cluster, follow the logs of a role with the `kubectl` command that `dev:k
    Port 443 must be free. The check stops the command when a program holds it.
    It also creates a local registry, which the nodes use as a mirror of `ghcr.io`.
 2. It builds the server, webapp, agent and PostgreSQL images, and pushes them to that registry.
-3. It creates the namespaces, a Secret with generated values, and the certificates.
-   It keeps them in the folder `kubernetes-cluster` of the gitignored `.context` folder.
+3. It creates the qualification namespaces, a Secret with generated values, and the certificates.
+   It keeps them in `~/.hephaestus/kubernetes-cluster`, shared by the worktrees.
+   Each worktree generates its private host-worker kubeconfig at `.context/kubernetes-host/<namespace>/kubeconfig.json`.
 4. It turns on the Gateway provider of the Traefik that k3s ships, and creates the Gateway `cluster`.
 5. It installs the chart with the dev profile and two workers.
    It waits until each worker has passed its isolation probe.
@@ -481,6 +506,11 @@ GITHUB_OAUTH_CLIENT_ID=... GITHUB_OAUTH_CLIENT_SECRET=... \
   HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@you vp run dev:kubernetes
 ```
 
+Only one qualification release runs in the shared cluster.
+Run it when you need chart or live-suite qualification. Then use `vp run dev:kubernetes:down` to release its compute resources.
+Host edit loops keep their separate namespaces and keep running.
+Five simultaneous full releases are outside the dev contract.
+
 A second run reuses the cluster, the registry, the Secrets and the database.
 It keeps every value of the Secrets, and adds only a key that a newer checkout needs.
 It also keeps the OAuth app, so you give the variables only once.
@@ -490,8 +520,8 @@ Every `kubectl` and `helm` call of the command uses the cluster `k3d-hephaestus`
 
 | Command | Does |
 |---|---|
-| `vp run dev:kubernetes:down` | Stops the cluster and keeps its data. The next `dev:kubernetes` starts it again. It fails if no cluster exists. |
-| `vp run dev:kubernetes:reset` | Deletes the cluster, its data, the registry and the work folder with the CA. It prints what it removed. It succeeds if no cluster exists. The next run makes a new CA, so trust it again. |
+| `vp run dev:kubernetes:down` | Drains the qualification workers and removes that release and its sandbox namespace. Keeps the shared cluster, host-loop namespaces, database volumes, Secrets and CA. The next `dev:kubernetes` installs the release again. |
+| `vp run dev:kubernetes:reset` | Deletes the shared cluster, its data, the registry and the work folder with the CA. Refuses while host-loop namespaces exist: stop those JVMs and reset each worktree namespace first. The next run makes a new CA, so trust it again. |
 
 If Docker has no free address pool for the cluster network, the command stops before k3d starts.
 Stopped Compose stacks of other worktrees keep their networks.

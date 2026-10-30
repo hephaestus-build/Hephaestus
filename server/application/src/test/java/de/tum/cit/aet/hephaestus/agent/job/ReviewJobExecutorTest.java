@@ -621,7 +621,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .toJson(new JsonMapper()));
         return job;
@@ -631,8 +630,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void shouldGiveTheSandboxTheConfiguredLimitsAndTheCredentialsDeadlineWhenPreparingAnAttempt() {
         var job = configuredJob();
         job.setAttempt(2);
-        sandboxProperties = new SandboxProperties(
-                5, 10, 60, new SandboxProperties.DefaultResourceLimits(3L * 1024 * 1024 * 1024, 1.5, 300));
+        sandboxProperties = new SandboxProperties(5, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), new JsonMapper());
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
@@ -689,8 +687,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(spec.jobId()).isEqualTo(job.getId());
         assertThat(spec.attempt()).isEqualTo(2);
         assertThat(spec.resourceLimits())
-                .isEqualTo(new ResourceLimits(
-                        3L * 1024 * 1024 * 1024, 1.5, 300, Duration.ofSeconds(snapshot.timeoutSeconds())));
+                .isEqualTo(new ResourceLimits(1.5, Duration.ofSeconds(snapshot.timeoutSeconds())));
     }
 
     private static byte[] scriptReport() {
@@ -765,8 +762,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldClaimNoMoreThanTheSandboxSlots() {
-        sandboxProperties = new SandboxProperties(
-                2, 10, 60, new SandboxProperties.DefaultResourceLimits(3L * 1024 * 1024 * 1024, 1.5, 300));
+        sandboxProperties = new SandboxProperties(2, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         assertThat(executor(mock(AsyncTaskExecutor.class)).computeCapacity()).isEqualTo(2);
     }
 
@@ -1047,7 +1043,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .toJson(new JsonMapper()));
         var workerCapacity = mock(WorkerCapacityState.class);
@@ -1172,7 +1167,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .toJson(new JsonMapper()));
         var workerCapacity = mock(WorkerCapacityState.class);

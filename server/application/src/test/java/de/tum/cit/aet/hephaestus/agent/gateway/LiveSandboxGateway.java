@@ -1,7 +1,5 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.gateway;
 
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxWorkspaceController;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;

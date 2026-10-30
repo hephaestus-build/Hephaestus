@@ -52,9 +52,9 @@ import org.slf4j.LoggerFactory;
  * read-only root file system and the seccomp profile ({@code RuntimeDefault} unless the operator names the shipped
  * Localhost one). It also has no service account token, no service variables, no host namespace, no DNS server and
  * {@code restartPolicy: Never}. Writable places are {@code emptyDir} volumes, on the node's disk with a size limit,
- * except {@code /run}, which can hold a credential and stays in memory. Docker gives the scratch places as tmpfs.
+ * except {@code /run}, which can hold a credential and stays in memory.
  *
- * <p>Where Docker's host configuration has no Pod field:
+ * <p>Controls that the Pod API does not express:
  *
  * <ul>
  *   <li>The {@code nofile} 1024 and {@code core} 0 limits, soft and hard: every container command and every exec starts
@@ -62,7 +62,7 @@ import org.slf4j.LoggerFactory;
  *       process cannot raise a hard limit without a capability, and the containers have none.
  *   <li>A per-container process limit: the kubelet's per-Pod limit stands in where the nodes set one. The isolation
  *       probe records whether they do; without one, a sandbox's memory limit bounds its processes.
- *   <li>Docker's {@code noexec} tmpfs mounts and its IPC mode {@code none}: an {@code emptyDir} has no mount options
+ *   <li>An {@code emptyDir} has no {@code noexec} mount option
  *       and a Pod has a private IPC namespace of its own. ADR 0041 records why Kubernetes does without them.
  * </ul>
  *
@@ -98,14 +98,14 @@ public class KubernetesPods {
     static final String WORKSPACE = "/workspace";
 
     /**
-     * The attempt workspace of {@code DockerAttemptWorkspace}, one volume per path: the initializer writes all of them,
+     * The attempt workspace, one volume per path: the initializer writes all of them,
      * the runtime reads {@code /workspace} only.
      */
     private static final Map<String, String> ATTEMPT_VOLUMES = attemptVolumes();
 
     /**
-     * An empty volume hides what the image keeps in {@code /workspace}, where a Docker volume is filled from the image
-     * on its first mount; the runner resolves its SDK through the image's {@code /workspace/node_modules} link.
+     * An empty volume hides the image's {@code /workspace/node_modules} link. The initializer restores that link so
+     * the runner resolves its SDK from the image.
      */
     static final List<String> INITIALIZER_COMMAND = List.of(
             "sh",
@@ -150,7 +150,7 @@ public class KubernetesPods {
 
     private static final long MIB = 1024L * 1024;
 
-    /** The scratch places of every sandbox Pod that Docker gives as tmpfs, here on the node's disk. */
+    /** The scratch places of every sandbox Pod, on the node's disk. */
     private static final List<String> SCRATCH_PATHS = List.of("/home/agent/.local", "/tmp");
 
     /** The scratch place that can hold a credential stays in memory: its pages count against the memory limit. */
@@ -163,8 +163,7 @@ public class KubernetesPods {
 
     /**
      * The memory that one kind of sandbox Pod requests and may use, and its local disk. Kubernetes sizes its sandbox
-     * Pods here, from measured use; {@link ResourceLimits#memoryBytes()} is the Docker backend's, whose tmpfs places
-     * count against memory. Each of the Pod's {@code diskVolumes} volumes on the node's disk has a size limit of {@code
+     * Pods here, from measured use. Each of the Pod's {@code diskVolumes} volumes on the node's disk has a size limit of {@code
      * volumeBytes}, and the Pod's main container may use them all and its logs ({@link #diskLimit}). The kubelet evicts
      * the Pod past either bound, so that no sandbox can fill the node's disk.
      */
@@ -204,7 +203,7 @@ public class KubernetesPods {
 
     /**
      * A turn sandbox's command container: 3 MiB measured. Its workspace, where a repository that a turn loads lands,
-     * and its scratch places each hold Docker's turn workspace size. It requests 20m: a pooled sandbox is idle, and a
+     * and its scratch places each have a fixed size limit. It requests 20m: a pooled sandbox is idle, and a
      * turn's commands are short bursts that its limit serves.
      */
     static final Size TURN =
@@ -227,8 +226,8 @@ public class KubernetesPods {
             List.of("bash", "-c", "trap '' HUP INT QUIT TERM USR1 USR2 ALRM PIPE; while :; do sleep 3600; done");
 
     /**
-     * The fixed start of every container command and every exec: Docker's {@code nofile} and {@code core} ulimits of
-     * {@code ContainerSecurityPolicy}, soft and hard. {@code prlimit} (util-linux, in the agent image) sets them on
+     * The fixed start of every container command and every exec: the {@code nofile} and {@code core} limits,
+     * soft and hard. {@code prlimit} (util-linux, in the agent image) sets them on
      * itself and executes the command after {@code --} with its arguments as they are: no shell parses them. The
      * process count stays the cgroup's: {@code RLIMIT_NPROC} counts the user's processes on the whole host.
      */
@@ -379,9 +378,10 @@ public class KubernetesPods {
             Workload workload,
             List<String> command,
             ResourceLimits limits,
+            long memoryBytes,
             long activeDeadlineSeconds,
             boolean hostUsers) {
-        Size size = probeSize(limits);
+        Size size = probeSize(limits, memoryBytes);
         Container probe = base(RUNTIME, workload.image(), SANDBOX_UID)
                 .withCommand(command)
                 .withVolumeMounts(scratchMounts())
@@ -511,7 +511,7 @@ public class KubernetesPods {
 
     /**
      * A sandbox container's bounds: the memory, disk and CPU that its kind requests from measured use. Its CPU limit is
-     * a share of CPU time, as on Docker, not a reserved core.
+     * a share of CPU time, not a reserved core.
      */
     static ResourceRequirements resources(ResourceLimits limits, Size size) {
         long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
@@ -534,11 +534,11 @@ public class KubernetesPods {
     }
 
     /** A probe Pod requests the memory it is given and writes nothing but its line of output. */
-    private static Size probeSize(ResourceLimits limits) {
+    private static Size probeSize(ResourceLimits limits, long memoryBytes) {
         long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
         return new Size(
-                limits.memoryBytes(),
-                limits.memoryBytes(),
+                memoryBytes,
+                memoryBytes,
                 SIDE_LOG_BYTES,
                 SIDE_LOG_BYTES,
                 SCRATCH_PATHS.size(),

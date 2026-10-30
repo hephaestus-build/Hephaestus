@@ -947,7 +947,7 @@ The chart runs the workers as one Deployment:
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
 - `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
-- The settings `HEPHAESTUS_SANDBOX_RUNTIME=kubernetes`, the sandbox namespace, and the pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
+- The sandbox namespace and the Pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
 The sandbox namespace is the one that you created for this release.
@@ -1116,7 +1116,7 @@ Each sandbox Pod therefore starts with an init container that waits, at most 60 
 #### Sandbox sizes
 
 The worker sizes each sandbox Pod from the measured use of that kind of sandbox.
-`SANDBOX_MEMORY_BYTES` applies to Docker only.
+The Pod-kind table owns the memory and storage sizes; no per-review memory or process setting overrides it.
 
 | Sandbox Pod | CPU request | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1142,7 +1142,7 @@ Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
 The worker counts the eviction as a failure of the infrastructure, and the review spends a retry: a review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
 The chart's sandbox quota without a scope counts the disk requests of all sandbox Pods.
 
-Kubernetes has no field for two Docker sandbox settings.
+The sandbox uses the cluster runtime and its volume options.
 `/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-24-the-kubernetes-runtime) records why.
 

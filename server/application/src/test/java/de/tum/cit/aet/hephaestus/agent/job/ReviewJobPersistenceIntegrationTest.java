@@ -468,7 +468,6 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         UsageFundingSource.INSTANCE, UsagePricingState.NO_CHARGE, null, null, null, null, null, null));

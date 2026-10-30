@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.util.List;
@@ -22,11 +20,9 @@ class SandboxPropertiesEnvBindingTest extends BaseUnitTest {
 
     @Test
     void shouldGiveReviewSandboxesTheLimitsTheDocumentedVariablesSet() throws IOException {
-        var limits = bindWith(Map.of(
-                        "SANDBOX_MEMORY_BYTES", "3221225472", "SANDBOX_CPUS", "1.5", "SANDBOX_PIDS_LIMIT", "300"))
-                .defaultResourceLimits();
+        var limits = bindWith(Map.of("SANDBOX_CPUS", "1.5")).defaultResourceLimits();
 
-        assertThat(limits).isEqualTo(new SandboxProperties.DefaultResourceLimits(3221225472L, 1.5, 300));
+        assertThat(limits).isEqualTo(new SandboxProperties.DefaultResourceLimits(1.5));
     }
 
     @Test
@@ -37,10 +33,7 @@ class SandboxPropertiesEnvBindingTest extends BaseUnitTest {
 
         assertThat(bindWith(Map.of()).defaultResourceLimits())
                 .isEqualTo(withoutYaml)
-                .isEqualTo(new SandboxProperties.DefaultResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256));
-        // The shipped default keeps room for the processes when every tmpfs mount is full.
-        assertThatCode(() -> ContainerSecurityPolicy.requireRoomBesideTmpfs(withoutYaml.memoryBytes()))
-                .doesNotThrowAnyException();
+                .isEqualTo(new SandboxProperties.DefaultResourceLimits(1.0));
     }
 
     private static SandboxProperties bindWith(Map<String, Object> envVars) throws IOException {

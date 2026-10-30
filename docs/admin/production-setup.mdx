@@ -405,8 +405,8 @@ Slack revocation alerts and Outline expiry information stay unchanged.
 - Checks for a quiet workspace.
 
 Two deployment-topology facts belong here.
-The **worker runtime role** (`hephaestus.runtime.worker.enabled`), not `AGENT_ENABLED`, activates the Docker sandbox.
-Only `application-worker` runs sandboxes and holds the Docker socket, for both queued reviews and the conversation host.
+The **worker runtime role** (`hephaestus.runtime.worker.enabled`), not `AGENT_ENABLED`, activates Kubernetes sandbox work.
+Only the worker launches sandbox Pods, for both queued reviews and the conversation host.
 `application-server` disables its worker role and uses connected workers.
 
 `NATS_ENABLED` controls webhook-driven sync consumption.

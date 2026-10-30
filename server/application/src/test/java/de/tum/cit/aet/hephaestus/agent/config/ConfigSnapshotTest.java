@@ -62,10 +62,8 @@ class ConfigSnapshotTest extends BaseUnitTest {
         assertThat(snapshot.contextWindow()).isEqualTo(16000);
         assertThat(snapshot.maxOutputTokens()).isEqualTo(1000);
         assertThat(snapshot.model().apiProtocol()).isEqualTo(LlmApiProtocol.OPENAI_RESPONSES);
-        assertThat(snapshot.schemaVersion()).isEqualTo(8);
-        assertThat(snapshot.allowInternet())
-                .as("no sandbox reaches the Internet")
-                .isFalse();
+        assertThat(snapshot.schemaVersion()).isEqualTo(9);
+        assertThat(snapshot.toJson(mapper).has("allowInternet")).isFalse();
         assertThat(snapshot.withPriceSnapshot(LlmPriceSnapshot.unpricedInstance())
                         .model()
                         .connectionRef())
@@ -74,7 +72,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {-1, 0, 5, 7, 9})
+    @ValueSource(ints = {-1, 0, 5, 7, 8, 10})
     void rejectsEveryOtherSchemaVersion(int version) {
         var json = (ObjectNode) snapshot(600).toJson(mapper);
         json.put("schemaVersion", version);
@@ -106,13 +104,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
     private static ConfigSnapshot snapshot(int timeout) {
         return new ConfigSnapshot(
-                ConfigSnapshot.SCHEMA_VERSION,
-                model(LlmApiProtocol.OPENAI_RESPONSES),
-                16000,
-                1000,
-                timeout,
-                false,
-                null);
+                ConfigSnapshot.SCHEMA_VERSION, model(LlmApiProtocol.OPENAI_RESPONSES), 16000, 1000, timeout, null);
     }
 
     private static FrozenModel model(LlmApiProtocol protocol) {

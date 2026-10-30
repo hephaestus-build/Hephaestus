@@ -43,6 +43,7 @@ jobs:
     uses: ./.github/workflows/ci-kubernetes.yml
     permissions:
       contents: read
+      actions: read
     with:
       commit: ${{ needs.build.outputs.commit }}
       ref: ${{ needs.build.outputs.commit }}

@@ -75,7 +75,7 @@ sequenceDiagram
    `release.yml` starts only after that run succeeds.
 4. **Merging the Version PR cuts the release.** The workflow resolves release image digests, then runs the evidence gate.
    Only then does it create the draft at the merge commit and attach evidence.
-   After seeded-upgrade and supported-host gates also pass, it publishes the release and verifies its immutable state.
+   After seeded-upgrade and k3s host gates also pass, it publishes the release and verifies its immutable state.
    The seeded-upgrade gate also runs the previous release on the new and a partly migrated schema.
    [Previous release on the new schema](./database-migration#previous-release-on-the-new-schema) has the checks.
    Then it promotes CI-built images to `X.Y.Z`, `X.Y`, and `latest`.
@@ -112,7 +112,7 @@ The schema-migration notice stays in the description.
 
 An ordinary merge of an already-published version does not cut a release.
 
-The resume path covers failures *after* draft creation: seeded-upgrade, supported-host, or publication failures.
+The resume path covers failures *after* draft creation: seeded-upgrade, k3s host, or publication failures.
 While the release is a draft, a workflow rerun at the same commit regenerates evidence and replaces assets.
 
 A draft pins its version to its commit.
@@ -140,14 +140,10 @@ Otherwise, the restrictions remain.
 
 ## Supported-host qualification
 
-Every release boots its signed, immutable image lock through the self-hosted topology on native Ubuntu
-24.04 `amd64` and `arm64` hosts. The gate enforces the [published support matrix](../admin/install#supported-host-matrix),
-waits for stack readiness, and exercises HTTPS ingress. Either cell can block publication.
+Every release installs its signed, immutable Helm chart on native Ubuntu 24.04 `amd64` and `arm64` runners.
+Either architecture can block publication.
+The seeded-upgrade gate separately proves the supported migration path.
 
-The release workflow attaches each cell's status record to the immutable GitHub release. This qualification covers a
-clean boot. The seeded-upgrade gate separately proves the supported migration path.
-
-Every release also installs its draft assets with the Helm chart on native Ubuntu 24.04 `amd64` and `arm64` runners.
 `release-host-smoke.yml` follows [Install on one host (k3s)](/admin/kubernetes#install-on-one-host-k3s).
 It verifies the signed `k3s-*` assets. The installer verifies the release chart as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
 Then `scripts/kubernetes-cluster.ts release-smoke` runs the release's `k3s-install.sh`, the command of the docs, with a local CA and without the DNS and clock checks. A runner of 16 GiB installs with the `small-16gib.yaml` profile.
@@ -158,7 +154,7 @@ This qualification override retains the effective kubelet policy and allocatable
 It runs the command a second time, which must keep the release Secret, and then an upgrade that rolls every role except PostgreSQL and NATS. The upgrade fails if it replaced their Pods.
 It waits for the migration Job, every role, and each worker's isolation probe, and it sends requests through the Gateway.
 It also checks that the kubelet and logind run with the configured shutdown budget. It does not reboot.
-Publication waits for both cells of this smoke and of the Compose boot.
+Publication waits for both native k3s smokes and their matching `host-smoke-k3s-<architecture>.json` receipts.
 
 `Let's Encrypt` cannot reach a runner, so a local CA issues the Gateway certificate in the k3s smoke.
 The k3s smoke runs only at a release, or by a dispatch of `release-host-smoke.yml` with a release tag and its commit.
@@ -170,11 +166,9 @@ It signs each of these assets, attests them with the release, and uploads them b
 k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.
 The clusters of `ci-kubernetes.yml` run no cert-manager: only the k3s smoke tests that pin.
 
-A pull request that can change fresh-installation bindings gets the Compose boot before merge.
-`Supported-host boot smoke` in `cicd.yml` runs `docker/self-host/setup.sh`.
-It starts PostgreSQL, NATS, and the application server from that run's images, on `amd64` only and without the edge.
-Both jobs fill blank installer settings through `scripts/prepare-host-smoke-env.ts`.
-Thus, pre-merge and release boots answer the same operator questions.
+A pull request that can change fresh-installation bindings runs the Kubernetes cluster qualification.
+It starts the chart with that run's images, waits for every role and isolation probe, and checks HTTPS through the Gateway.
+The latest amd64 k3s leg also runs the sandbox live suite from the compiled server artifact.
 [CI/CD § Path filters](./ci-cd.mdx#path-filters) lists the selection paths.
 
 ## Supply-chain evidence
@@ -230,7 +224,7 @@ preflight` job in `cicd.yml` both run them, and the preflight runs the verifier 
 which performs every check except signature verification.
 
 | Release evidence check                                                           | Can a release be the first to run it?                                                                                                                                                                                                              |
-| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------- | --------------------------------------------------------------------------------- |
 | Manifest matches `security/release-images.json`, both platforms, canonical order | No — `check-release-image-inventory.ts` validates the inventory on every pull request, and `generate-release-evidence.test.ts` feeds the real generator's manifest to the real verifier                                                            |
 | Syft, SPDX and CycloneDX describe the same subject and the same packages         | No — the preflight generates the triple and validates it                                                                                                                                                                                           |
 | Trivy licence report is bound to its subject                                     | No — the preflight generates and validates it                                                                                                                                                                                                      |

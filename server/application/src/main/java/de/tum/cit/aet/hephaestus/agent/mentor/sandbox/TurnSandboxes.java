@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
  * the assigned sandboxes of attempts that no longer run here, and the sandboxes of workers that are positively gone.
  * It never removes a sandbox of a live other worker.
  */
-@WorkspaceAgnostic("Sandboxes are Docker resources; each assignment names the workspace of its turn")
+@WorkspaceAgnostic("Sandboxes are Kubernetes resources; each assignment names the workspace of its turn")
 public class TurnSandboxes implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(TurnSandboxes.class);
@@ -55,8 +55,7 @@ public class TurnSandboxes implements AutoCloseable {
      * One CPU, 1 GiB and 256 processes. A sandbox lives as long as its attempt, so the runtime bound is the longest
      * one any sandbox may have; each command has its own.
      */
-    public static final ResourceLimits LIMITS =
-            new ResourceLimits(1024L * 1024 * 1024, 1.0, 256, ResourceLimits.MAX_RUNTIME);
+    public static final ResourceLimits LIMITS = new ResourceLimits(1.0, ResourceLimits.MAX_RUNTIME);
 
     /** The attempt a sandbox serves. */
     public record Attempt(UUID turnId, int number) {}
@@ -121,7 +120,7 @@ public class TurnSandboxes implements AutoCloseable {
 
     /**
      * The lifecycle fence: creation's end, assignment, release, discard and close change {@link #pool},
-     * {@link #assigned}, {@link #ended}, {@link #changed} and {@link #closed} only while holding it. Docker calls run
+     * {@link #assigned}, {@link #ended}, {@link #changed} and {@link #closed} only while holding it. Kubernetes calls run
      * outside it.
      */
     private final Object lifecycle = new Object();
@@ -370,7 +369,7 @@ public class TurnSandboxes implements AutoCloseable {
         try {
             listed = sandboxes.list();
         } catch (SandboxException e) {
-            // The class only, as below: a Docker failure can quote the daemon's response body.
+            // The class only, as below: an exec failure can quote the API's response body.
             log.warn("Could not list the turn sandboxes: {}", e.getClass().getSimpleName());
             return;
         }

@@ -294,7 +294,6 @@ class TerminalUsageTest extends BaseUnitTest {
                 null,
                 null,
                 600,
-                false,
                 null);
 
         static Stream<Arguments> billable() {

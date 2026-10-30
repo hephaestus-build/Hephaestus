@@ -495,7 +495,7 @@ Thus, a question that arrives during a disconnect is either not stored or erased
 
 ## The conversation host
 
-Each worker runs one conversation host container (`HephHost`, `HephHostSpec`).
+Each worker runs one conversation host Pod (`HephHost`, `HephHostSpec`).
 A worker with Hephaestus capacity starts its host before it claims a turn, also when no turn is queued.
 The host is ready when it opens its command channel.
 The worker's readiness includes `hephTurnDispatcher`, so a rolling update keeps the old worker until the replacement host is ready.
@@ -522,12 +522,12 @@ If the host is lost after a claim, the worker tries one fresh host before the cl
 | Readable paths | The workspace, `/opt/pi-sdk`, the empty home, and the practice-script library (`/opt/practice-scripts`). The provider helper imports that library through the workspace link that the practice runners also use (`PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP`). |
 | Writable paths | Pi's agent directory and the temporary directory only. |
 | Limits | `HephHostSpec.LIMITS`. [Runtime roles](/admin/runtime-roles#the-conversation-host) gives the values. |
-| Network | Its own internal network. It reaches only the worker's Sandbox Gateway. [Runtime roles](/admin/runtime-roles#the-conversation-host) gives the exception for a worker that runs outside a container. |
-| Docker label | Kind `heph-host`. `SESSION_ID` is the host id. |
+| Network | NetworkPolicy permits only the worker's Sandbox Gateway. |
+| Pod label | `hephaestus.build/sandbox-kind=host`. `SESSION_ID` is the host id. |
 | Tools | `link_result`, `link_problem`, `show_feedback`, `search_conversation`, and `read`, `bash` and `load_context` when the worker can serve them ([Context folder](#context-folder)). The three run in a turn sandbox, not in the host. |
 
 The sandbox SPI `agent.sandbox.spi.HostSandbox` launches the host.
-`SandboxHosts` implements it on the sandbox backend that runs practice reviews (`DockerSandboxBackend` on Docker).
+`SandboxHosts` implements it on the sandbox backend that runs practice reviews (`KubernetesSandboxBackend`).
 
 A host that does not open its channel in time fails the claimed turn ([How a turn fails](#how-a-turn-fails)).
 [Runtime roles](/admin/runtime-roles#the-conversation-host) gives the timeouts and the ping interval of the host.
@@ -648,7 +648,8 @@ Hephaestus reads a section only when it needs it, so the system prompt that each
 The host holds no list of document keys.
 
 The host offers the three tools only when `GET context` returns `contextFolder: true` (`TurnContextFolder.available`).
-The value is `false` after the worker failed to start a turn sandbox, for example without Docker or without the agent image.
+The value is `false` after the worker failed to start a turn sandbox.
+For example, the cluster could not schedule the Pod or pull the agent image.
 No setting turns the tools on or off.
 
 #### Endpoints
@@ -672,9 +673,9 @@ These rules apply to the endpoints:
 - The worker cancels sandbox commands that exceed their bound by 5 seconds or are killed by their timeout (`ExecSandboxes.cancelCommands`).
   The cancellation ends every process of the sandbox user, also a child that left the command's process group.
   The sandbox stays in use for the next calls.
-  On Docker, the worker runs `kill -KILL -1` as the sandbox user, because the image has no `pkill`.
+  Kubernetes runs cancellation through a separate exec session as the sandbox user.
 - `exec` writes the full output to `/tmp/heph-out/<n>.log` and returns the last 2,000 lines or 50 KB, with Pi's notice.
-- The command gets no environment from the host or the worker. `GIT_CONFIG_*` sets `safe.directory=*`, because root owns the folder.
+- The command gets no environment from the host or the worker. `GIT_CONFIG_*` sets `safe.directory=*`, because the trusted stager owns the folder.
 - A load path is `repos/<host>/<full path>[@ref]`. A ref is a branch, a SHA, `pull/N` on GitHub, or `merge-request/N` on GitLab.
 - A load without a ref takes the default branch. A second load of the same repository replaces the first.
 
@@ -695,17 +696,17 @@ The request fixtures `sandbox-read`, `sandbox-exec` and `sandbox-load` in `agent
 #### Turn sandboxes
 
 `TurnSandboxes` owns the turn sandboxes of one worker.
-`DockerExecSandboxes` starts each one with its own Docker client, so a long command never takes a connection that a review waits on.
+`KubernetesExecSandboxes` starts each one as a Pod in the sandbox namespace.
 
 | Property | Value |
 | --- | --- |
-| Image and policy | The agent image of the release, under `ContainerSecurityPolicy` |
-| Process | `sleep infinity` under Docker `--init`, as root. Commands run as user 1000. |
-| Folder | `/workspace`, 512 MiB, read-only for the user: a tmpfs on Docker, a volume on the node's disk on Kubernetes |
-| Scratch | `/tmp`: the tmpfs of the policy on Docker, a volume on the node's disk on Kubernetes |
+| Image and policy | The release's agent image, under the Restricted Pod Security Standard |
+| Process | Commands run as user 1000. The trusted stager runs in its own container as user 1001. Both are non-root. |
+| Folder | `/workspace`, read-only for the command user, on the node's disk |
+| Scratch | `/tmp`, a bounded volume on the node's disk |
 | Network | `none` |
-| Limits | 1 CPU, 1 GiB of memory, 256 processes (`TurnSandboxes.LIMITS`) |
-| Labels | `hephaestus.kind=heph-sandbox`, `hephaestus.heph-sandbox=<id>`, `hephaestus.heph-worker=<worker id>`, and the owner and creator labels |
+| Limits | The turn-sandbox row of the [Pod-kind resource table](/admin/kubernetes#sandbox-sizes). The kubelet sets the process limit |
+| Labels | `hephaestus.build/sandbox-kind=turn`, the sandbox id, and the creating worker's id |
 
 A sandbox has three states: `POOLED`, `ASSIGNED` and `REMOVED`.
 The worker keeps 2 sandboxes in the pool (`HephHostConfiguration.SANDBOX_POOL`).
@@ -714,7 +715,7 @@ The pool then fills again in the background.
 An assigned sandbox never goes back to the pool.
 The assignment exists only in the memory of the worker.
 
-The worker removes the sandbox of an attempt with `docker rm -f -v` on each path that seals the attempt's model calls:
+The worker removes the sandbox of an attempt by deleting its Pod on each path that seals the attempt's model calls:
 
 - The end of the turn from the host (`finish`).
 - A lost lease.
@@ -726,12 +727,12 @@ A load that runs at that time is abandoned.
 
 The reconciler (`TurnSandboxes.reconcile`) runs at startup and every 60 seconds on the worker.
 It removes the sandboxes of this worker that it does not know, and the assigned sandboxes of attempts that no longer run here.
-It also removes a sandbox whose creator worker container is gone.
+It also removes a sandbox whose creating worker no longer has a live heartbeat.
 It never removes a sandbox of a live other worker.
 `SandboxReconciler` ignores turn sandboxes.
 
-A worker that runs outside a container labels its sandboxes with an id for each process.
-After a crash of such a worker, its sandboxes stay until you remove them with `docker rm`.
+The same worker identity and lease rules apply to host development.
+The worktree's restricted namespace keeps its Pods separate from the other edit loops.
 
 A change to what a workspace's turns may read sends `MentorLedgerEvents.ContextChanged` over the ledger `NOTIFY` channel.
 The listener of each worker then removes every turn sandbox of that workspace (`releaseWorkspace`).
@@ -757,9 +758,8 @@ After a staging, the sandbox user cannot write the folder or what the tar wrote.
 `exec` runs commands only as the sandbox user, so no command can stage.
 A failed staging can leave part of the tar, so the worker removes that sandbox.
 
-On Docker, a staging is a script that runs through `docker exec --user 0`.
-The script extracts the tar and then runs `chmod -R a-w`.
-The script reads the stream with `head -c`, because docker-java does not close the standard input of an exec.
+Kubernetes staging uses a bounded exec stream.
+The staging script extracts the tar and makes the result read-only for the command user.
 
 `HephTurnContexts` builds the fixed documents once for each attempt, as JSON with times in the developer's time zone.
 The folder stages them with indentation, so that `read` can page them by line.
@@ -796,20 +796,11 @@ Without Git mirrors (`GIT_CHECKOUT_ENABLED`), INDEX.md has no `repos/` section.
 | Time of a load | The time left in the turn |
 | Size of a checkout | The checkout bound of a review (`GIT_MAX_SNAPSHOT_BYTES`) |
 
-#### Measured times
+#### Live qualification
 
-`TurnSandboxLiveTest` measured these times with real Docker and the agent image:
-
-| Step | Time |
-| --- | --- |
-| Cold start of one pool sandbox | 0.45 to 0.8 seconds |
-| First call: take a sandbox from the pool, stage INDEX.md and 2 documents, and read | 129 to 195 ms |
-| One `read` page | 51 to 54 ms at the median, 70 to 82 ms at p95 |
-| One load of a small repository with `.git`, without a fetch | 73 to 115 ms |
-| `bash` with `git log` | 56 to 67 ms at the median, 66 to 103 ms at p95 |
-| End of a command after the attempt stopped | 28 to 64 ms |
-
-A load that must fetch, and a full turn with a model, were not measured.
+`KubernetesSandboxLiveTest.TurnContext` covers staging, document reads, Git loads, timeout and cancellation on the real Kubernetes adapters.
+Run it through the [Kubernetes live suite](./testing#live-external-service-tests).
+Timings from the retired Docker backend do not describe this runtime.
 
 The output of each tool is untrusted data from the workspace.
 After the turn, the results follow the rules of [Tool results](#tool-results).

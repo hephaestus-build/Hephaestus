@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntime;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
@@ -31,23 +30,17 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.validation.BindValidationException;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.mock.env.MockEnvironment;
 
-/**
- * Which sandbox runtime a role loads. The worker runs Docker unless Kubernetes is selected; a selected Kubernetes
- * runtime without its configuration, or a runtime the worker does not know, stops the start rather than fall back.
- */
+/** A worker requires its Kubernetes configuration; other roles create no sandbox client. */
 @Tag("unit")
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 class SandboxRuntimeSelectionTest {
 
-    private static final String RUNTIME = SandboxRuntime.PROPERTY + "=";
     private static final String[] KUBERNETES = {
-        RUNTIME + "kubernetes",
         "hephaestus.sandbox.kubernetes.namespace=hephaestus-sandboxes",
         "hephaestus.sandbox.kubernetes.pod-name=hephaestus-worker-0",
         "hephaestus.sandbox.kubernetes.pod-ip=10.42.0.7"
@@ -82,24 +75,10 @@ class SandboxRuntimeSelectionTest {
                     AgentImageProperties.class,
                     () -> new AgentImageProperties("ghcr.io/example/agent:1", ImagePullPolicy.IF_NOT_PRESENT));
 
-    /** Docker's own configuration gives the backend there; it is out of this test, so a stand-in gives it. */
-    @Test
-    void shouldRunDockerWhenNoRuntimeIsSelected() {
-        runner.withBean(SandboxBackend.class, () -> mock(SandboxBackend.class)).run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context.getBean(SandboxRuntime.class)).isEqualTo(SandboxRuntime.DOCKER);
-            assertThat(context)
-                    .doesNotHaveBean(KubernetesClient.class)
-                    .doesNotHaveBean(KubernetesSandboxBackend.class)
-                    .hasBean("sandboxExecutor");
-        });
-    }
-
     @Test
     void shouldWireEveryKubernetesSandboxWhenSelected() {
         runner.withPropertyValues(KUBERNETES).run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context.getBean(SandboxRuntime.class)).isEqualTo(SandboxRuntime.KUBERNETES);
             assertThat(context.getBean(SandboxBackend.class)).isInstanceOf(KubernetesSandboxBackend.class);
             assertThat(context.getBean(SandboxManager.class)).isInstanceOf(SandboxAttemptRunner.class);
             assertThat(context.getBean(HostSandbox.class)).isInstanceOf(SandboxHosts.class);
@@ -112,11 +91,24 @@ class SandboxRuntimeSelectionTest {
         });
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"specs", "cds-training"})
+    void shouldInspectTheContractWithoutAClusterInBuildProfiles(String profile) {
+        runner.withPropertyValues("spring.profiles.active=" + profile).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context)
+                    .doesNotHaveBean(SandboxBackend.class)
+                    .doesNotHaveBean(SandboxManager.class)
+                    .doesNotHaveBean(HostSandbox.class)
+                    .doesNotHaveBean(ExecSandboxes.class)
+                    .doesNotHaveBean("sandboxKubernetesClient");
+        });
+    }
+
     @Test
     void shouldNotStartWhenKubernetesIsSelectedWithoutItsConfiguration() {
-        runner.withPropertyValues(RUNTIME + "kubernetes")
-                .run(context ->
-                        assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(BindValidationException.class));
+        runner.run(context ->
+                assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(BindValidationException.class));
     }
 
     @ParameterizedTest
@@ -176,23 +168,13 @@ class SandboxRuntimeSelectionTest {
     }
 
     @Test
-    void shouldNotStartOnARuntimeItDoesNotKnow() {
-        runner.withPropertyValues(RUNTIME + "podman").run(context -> {
-            assertThat(context.getStartupFailure()).isInstanceOf(Exception.class);
-            assertThat(context.getStartupFailure()).hasStackTraceContaining(BindException.class.getSimpleName());
-        });
-    }
-
-    @Test
     void shouldLeaveEverySandboxRuntimeOffOutsideTheWorkerRole() {
-        runner.withPropertyValues(RuntimeRole.WORKER_PROPERTY + "=false", RUNTIME + "kubernetes")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context)
-                            .doesNotHaveBean(SandboxRuntime.class)
-                            .doesNotHaveBean(KubernetesClient.class)
-                            .doesNotHaveBean(KubernetesSandboxJobs.class)
-                            .doesNotHaveBean(SandboxManager.class);
-                });
+        runner.withPropertyValues(RuntimeRole.WORKER_PROPERTY + "=false").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context)
+                    .doesNotHaveBean(KubernetesClient.class)
+                    .doesNotHaveBean(KubernetesSandboxJobs.class)
+                    .doesNotHaveBean(SandboxManager.class);
+        });
     }
 }

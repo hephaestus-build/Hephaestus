@@ -39,17 +39,17 @@ Use the monolith when:
 
 - You are a single contributor who runs locally.
 - You have one app server and no horizontal scale yet.
-- LLM capacity limits your worker, not Docker capacity.
+- Model-call capacity limits your worker.
 
 Split the worker out when:
 
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
-The shipped Compose stacks use separate containers in both the multi-file stack (`docker/compose.{proxy,core,app}.yaml`) and the single-host install.
-`application-server` turns off the worker role and has no Docker socket.
-`application-worker` runs all sandboxes and is the only container with the socket.
-The `gate:env` check fails a container that mounts the socket without the worker role.
+The Helm chart runs the server and worker in separate Pods.
+The server disables the worker role.
+The worker launches sandbox work through the Kubernetes API.
+No application role needs a Docker socket. The environment gate rejects that mount.
 
 Split the webhook receiver out when:
 
@@ -64,7 +64,7 @@ Each role has a Spring profile YAML that turns off the other two flags and remov
   Its HTTP connector also serves management endpoints.
   It binds to loopback for in-container health checks.
   A separate sandbox gateway listens on `SANDBOX_API_PORT` (default `8081`).
-  If you set it to `0`, the gateway binds a free port at start, and sandboxes dial that port.
+  Kubernetes requires a fixed gateway port that matches the chart NetworkPolicy.
 - `application-webhook.yml`: `runtime.server=false` and `runtime.worker=false`.
   It enables sync NATS and disables the agent job queue.
   Webhook pods never claim jobs.
@@ -277,7 +277,7 @@ The `webhook` overlay has no such exclusion.
 It uses only the role gate.
 
 No `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
-The Docker sandbox *is* the worker capability, controlled by `hephaestus.runtime.worker.enabled`.
+Kubernetes sandbox work is the worker capability, controlled by `hephaestus.runtime.worker.enabled`.
 A server pod that keeps the worker role, such as a monolith, opens the sandbox gateway on the same port.
 It needs the same firewall controls as a separate worker.
 The webhook role turns off the worker role and opens no gateway.
@@ -365,7 +365,7 @@ The application server keeps these functions:
 - A first admission check when a question arrives. The worker admits the turn again, with the budget check, when it claims it.
 - The conversation store in PostgreSQL.
 
-The server role needs no Docker client and never connects to a conversation host.
+The server role needs no sandbox client and never connects to a conversation host.
 `AGENT_ENABLED` controls queued practice reviews, not Hephaestus.
 
 ### Dispatch
@@ -582,35 +582,16 @@ It does not reduce the resident review limit to four.
 
 ### The conversation host
 
-Each worker starts its conversation host when it claims its first turn.
-A worker that never claims a turn starts no host.
-The host runs in a container of the agent image. Its script comes from the worker, not from the image.
-The host has these fixed limits:
+Each worker starts its conversation host before it claims a turn, including when no question is queued.
+The host runs in a Pod of the pinned agent image. Its script comes from the worker.
+The [Pod-kind table](./kubernetes#sandbox-sizes) owns its resource requests and limits.
+The host does not count against `SANDBOX_MAX_CONCURRENT` or the worker JVM's memory limit.
+Its sandbox namespace and NetworkPolicy come from the chart.
 
-- 2 GiB of memory on Docker. On Kubernetes, 1 GiB ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
-- 1 CPU. On Kubernetes, it requests 50m.
-- 256 processes.
-
-These limits do not come from the `SANDBOX_*` variables, and the host does not count against `SANDBOX_MAX_CONCURRENT`.
-The host is a separate container beside the worker container.
-Its 2 GiB do not count against `APPLICATION_WORKER_MEM_LIMIT` or the worker's [memory headroom](./sizing#memory-headroom).
-The machine must hold them in addition to the worker container.
-The host has its own internal Docker network and volumes.
-Its container has the label `hephaestus.kind=heph-host`.
-
-Two cases change the network:
-
-- A worker that runs on the machine itself, outside any container, cannot join a Docker network.
-  It gives its host an ordinary bridge network with internet access (see the [threat model](./threat-model.mdx), SB-3).
-  The host reaches the worker through `host.docker.internal`.
-  Local development runs this way.
-- A worker in a container that it cannot identify starts no host.
-  Each conversation turn on it fails with **Hephaestus could not start. Try again in a moment.**
-  The worker logs why.
-  [Docker configuration](./configuration-readiness.mdx#docker-configuration) gives the hostname rule.
+The [host development loop](/contributor/local-development#spring-profiles-and-local-configuration) supplies its own namespace and gateway metadata.
 
 The host is ready when it opens its command channel to the worker's sandbox gateway.
-If the host cannot start, or the channel does not open within 3 minutes, the turn fails.
+A worker whose host is not ready claims no question. A question that waits to start for 3 minutes fails through server maintenance, using its persisted queue time.
 The developer then sees **Hephaestus could not start. Try again in a moment.**
 
 If the command channel closes, the worker removes the host.
@@ -622,14 +603,14 @@ It does not copy the host's output into its own log, because that output can hol
 When a sandbox ends abnormally, the worker logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
 Only for a practice review does that line also carry the review runtime's own last error lines.
 When a host cannot start, the worker logs the cause that it knows.
-For example, it logs the hostname rule or the exit code of the host's workspace setup.
+For example, it logs an API refusal or the exit code of the host's workspace setup.
 
 A turn that ran in a removed host runs again when its lease expires, if it was on its first attempt.
 A turn on its second attempt fails.
 The next turn that the worker claims starts a new host.
 On a graceful drain, the worker stops claiming turns and waits for its running turns up to `hephaestus.worker.drain.timeout`, the same timeout as for reviews.
 Then it removes the host.
-If a worker stops without a drain, sandbox maintenance removes its host (see [Configuration readiness](./configuration-readiness.mdx#removing-leftover-sandbox-networks)).
+If a worker stops without a drain, sandbox maintenance removes its host after its worker lease expires.
 
 The worker gives each attempt a credential that is valid only for that turn.
 The worker resolves provider keys and never sends them to the host.
@@ -650,15 +631,15 @@ Plan for these containers on each worker, beside the review sandboxes and the co
 Each turn sandbox has these fixed limits:
 
 - 1 CPU.
-- 1 GiB of memory on Docker, which includes its files. On Kubernetes, 512 MiB, and its files are on the node's disk ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
-- 256 processes.
+- Memory and storage from the [Pod-kind table](./kubernetes#sandbox-sizes).
+- The process limit enforced by the kubelet.
 - No network.
 
 The limits are bounds, not reservations. An idle sandbox runs only `sleep`.
 `SANDBOX_MAX_CONCURRENT` and the review capacity of the worker do not count turn sandboxes.
-Their containers have the label `hephaestus.kind=heph-sandbox`.
+Their Pods have `hephaestus.build/sandbox-kind=turn`.
 
-Turn sandboxes need Docker on the worker and the agent image of the release.
+Turn sandboxes need the qualified Kubernetes worker and the pinned agent image of the release.
 If the worker cannot start a turn sandbox, Hephaestus cannot read the developer's work and says so.
 The worker logs `Could not fill the turn sandbox pool` at `WARN` and tries again every 60 seconds.
 Hephaestus reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
@@ -667,8 +648,8 @@ No setting turns turn sandboxes on or off.
 
 The worker removes leftover turn sandboxes at startup and every 60 seconds.
 It never removes a turn sandbox of another worker that still runs.
-A worker that runs outside a container, as in local development, cannot find its leftovers after a crash.
-Remove them with `docker rm -f $(docker ps -aq --filter label=hephaestus.kind=heph-sandbox)`.
+The worker uses its sandbox namespace and worker ownership labels for cleanup.
+Host development does not run the worker role.
 
 The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
 
@@ -755,12 +736,11 @@ A sandbox calls only the gateway of the worker that runs its attempt, so the key
 
 ### Sandbox runtime
 
-`HEPHAESTUS_SANDBOX_RUNTIME` selects where a worker runs its sandboxes: `docker`, the default, or `kubernetes`.
-A worker runs exactly one runtime, and a runtime that cannot start never hands its work to the other one.
-A value that names no runtime stops the worker's start.
-
-The Kubernetes runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [configuration reference](./configuration-reference).
-The [Helm chart](./kubernetes#worker) sets each of them.
+Workers run sandboxes only on Kubernetes.
+The runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [configuration reference](./configuration-reference).
+The [Helm chart](./kubernetes#worker) sets each of them, including the worker Pod metadata from the Downward API.
+Missing metadata prevents worker startup.
+The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
 
 Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
 The other workers keep a worker's conversation host and turn sandboxes while it beats.
@@ -800,7 +780,7 @@ A failed settlement does not stop the other jobs from being settled.
 Only a job whose settlement won its ownership fence has its container stopped.
 
 If a stop fails or exceeds the cleanup deadline, the worker records incomplete cleanup.
-A Docker call that does not respond to interruption can finish after the deadline.
+A container-runtime operation that does not respond to interruption can finish after the deadline.
 The worker does not wait indefinitely for that call.
 Leftover containers remain subject to normal sandbox reconciliation.
 

@@ -409,8 +409,8 @@ hephaestus:
     #   server  — WIRED. Gates ServerSchedulingConfig (@EnableScheduling),
     #     IntegrationNatsConsumer (the unified NATS pull consumer), and WorkspaceStartupListener.
     #     Setting false silences all @Scheduled methods and prevents workspace bootstrap.
-    #   worker  — WIRED. Gates DockerSandboxConfiguration + the poll-based AgentJobExecutor.
-    #     Setting false removes the Docker sandbox runtime + the agent job poller.
+    #   worker  — Runs Kubernetes sandboxes and the poll-based review executor.
+    #     Setting false removes the Kubernetes sandbox runtime and the agent job poller.
     #   webhook — WIRED. Gates the integration.webhook receiver (controllers, HMAC
     #     verifier, JetStream publisher, stream bootstrap, health, lifecycle).
     #     The webhook-server production container deploys with server=false + worker=false
@@ -619,9 +619,6 @@ hephaestus:
 
 
     sandbox:
-        # docker (default) or kubernetes. A worker runs one runtime and never falls back to the other.
-        runtime: ${HEPHAESTUS_SANDBOX_RUNTIME:docker}
-        # Read only when runtime is kubernetes. The chart sets each value: docs/admin/runtime-roles.mdx.
         kubernetes:
             namespace: ${HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE:}
             pod-name: ${HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME:}
@@ -631,14 +628,6 @@ hephaestus:
             node-selector: ${HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR:}
             tolerations: ${HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS:}
             probe-interval: ${HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL:15m}
-        # The LLM proxy's gate: docs/admin/runtime-roles.mdx § Worker pod env vars.
-        docker:
-            host: ${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}
-            tls-verify: ${SANDBOX_DOCKER_TLS_VERIFY:false}
-            cert-path: ${SANDBOX_DOCKER_CERT_PATH:}
-            # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
-            container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
-            owner: ${SANDBOX_DOCKER_OWNER:default}
         max-concurrent-containers: ${SANDBOX_MAX_CONCURRENT:5}
         container-stop-timeout-seconds: ${SANDBOX_STOP_TIMEOUT:10}
         reconciliation-interval-seconds: ${SANDBOX_RECONCILIATION_INTERVAL:60}
@@ -648,9 +637,7 @@ hephaestus:
             requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:120}
         # Each review sandbox; the sizing behind the defaults is in docs/admin/sizing.mdx § Review sandbox limits.
         default-resource-limits:
-            memory-bytes: ${SANDBOX_MEMORY_BYTES:3221225472}  # 3 GiB, tmpfs included; Docker only
             cpus: ${SANDBOX_CPUS:1.0}
-            pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
     # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the other
     # hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx § Tunables.

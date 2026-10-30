@@ -1,4 +1,6 @@
 [versions]
+commons-compress = "1.28.0"
+httpcore5 = "5.4.3"
 immutables = "2.10.1"
 checker-qual = "3.55.1"
 pmd = "7.27.0"
@@ -17,7 +19,6 @@ openapi-generator = "7.25.0"
 palantir-java-format = "2.102.0"
 resilience4j = "2.4.0"
 okhttp = "5.5.0"
-docker-java = "3.7.1"
 fabric8 = "8.0.0"
 vertx-codegen = "5.2.0"
 archunit = "1.5.0"
@@ -42,6 +43,8 @@ bcpkix = "1.85"
 commonmark = "0.30.0"
 
 [libraries]
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
+httpcore5 = { module = "org.apache.httpcomponents.core5:httpcore5", version.ref = "httpcore5" }
 immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
 checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "checker-qual" }
 # Tool/BOM coordinates let Renovate identify versions consumed through plugin DSLs and BOM properties.
@@ -113,9 +116,6 @@ assertj-core = { module = "org.assertj:assertj-core" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 therapi-runtime-javadoc = { module = "com.github.therapi:therapi-runtime-javadoc", version.ref = "therapi" }
 jnats = { module = "io.nats:jnats", version.ref = "jnats" }
-docker-java-api = { module = "com.github.docker-java:docker-java-api", version.ref = "docker-java" }
-docker-java-core = { module = "com.github.docker-java:docker-java-core", version.ref = "docker-java" }
-docker-java-transport-httpclient5 = { module = "com.github.docker-java:docker-java-transport-httpclient5", version.ref = "docker-java" }
 fabric8-kubernetes-client = { module = "io.fabric8:kubernetes-client", version.ref = "fabric8" }
 fabric8-kubernetes-server-mock = { module = "io.fabric8:kubernetes-server-mock", version.ref = "fabric8" }
 vertx-codegen-api = { module = "io.vertx:vertx-codegen-api", version.ref = "vertx-codegen" }

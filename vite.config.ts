@@ -474,15 +474,16 @@ export default defineConfig({
 				"docker compose down -v && node ../scripts/rm.ts postgres-data && docker compose up -d --wait",
 				{ cwd: "server" },
 			),
-			"dev:server": run(`${gradlew} :application:bootRun`, {
+			"dev:server": run("node scripts/dev-kubernetes.ts run", {
 				dependsOn: ["dev:compose"],
 			}),
-			"dev:server:e2e": run(`${gradlew} :application:bootRun -Pprofiles=e2e`, {
+			"dev:server:e2e": run("node scripts/dev-kubernetes.ts run e2e", {
 				dependsOn: ["dev:compose:e2e"],
 			}),
 			// The chart on a local k3d cluster with this checkout's images: docs/contributor/local-development.mdx.
 			"dev:kubernetes": run("node scripts/kubernetes-cluster.ts dev"),
 			"dev:kubernetes:down": run("node scripts/kubernetes-cluster.ts down"),
+			"dev:kubernetes:worktree:reset": run("node scripts/dev-kubernetes.ts reset"),
 			"dev:kubernetes:reset": run("node scripts/kubernetes-cluster.ts reset"),
 			"check:ports": run("node scripts/check-ports.ts"),
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),
