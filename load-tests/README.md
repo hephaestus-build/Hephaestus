@@ -1,5 +1,9 @@
 # Compose capacity qualification
 
+For an isolated Kubernetes course benchmark, use the
+[contributor procedure](../docs/contributor/capacity-benchmark.md).
+It reuses these k6 adapters and adds open session arrivals, replay provenance and a stream observer.
+
 These [Grafana k6](https://grafana.com/docs/k6/latest/) scenarios measure the supported single-host
 Compose topology. They spend LLM budget and create durable rows; run them only on an isolated host.
 

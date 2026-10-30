@@ -6,5 +6,5 @@
  * @returns {Record<string, string>} the summary file and its contents
  */
 export function handleSummary(data) {
-	return { "/results/summary.json": JSON.stringify(data, null, 2) };
+	return { [__ENV.LOAD_SUMMARY_PATH ?? "/results/summary.json"]: JSON.stringify(data, null, 2) };
 }

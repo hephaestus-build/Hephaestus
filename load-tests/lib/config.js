@@ -61,13 +61,13 @@ export function authHeaders() {
 }
 
 /**
- * @param {Pick<import("k6/http").Response, "json">} response
+ * @param {{ json: (field: string) => import("k6").JSONValue | undefined }} response
  * @param {string} field
  * @returns {import("k6").JSONValue | null}
  */
 export function jsonField(response, field) {
 	try {
-		return response.json(field);
+		return response.json(field) ?? null;
 	} catch {
 		return null;
 	}

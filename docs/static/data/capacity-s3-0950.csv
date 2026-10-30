@@ -1,0 +1,4 @@
+release,measured_commit,admission,users,turns_per_user,expected_turns,done,first_text_within_10_seconds,missed_10_seconds,first_text_within_10_seconds_percent,required_good_turns,chat_target_pass,first_text_p50_seconds,first_text_p95_seconds,turn_p50_seconds,turn_p95_seconds,case_seconds,finite_cohort_drain_turns_per_hour,review_jobs,replay_provenance,provider_ttft_seconds,declared_output_tokens,tools,provider_429_percent
+0.95.0,af3ef372209c07d912a3d9f0354fec148524458f,8,40,3,120,120,8,112,6.666666666666667,114,false,25.782,55.974,35.557,65.757,199.591,2164.426251684695,0,assumed,3,500,false,0
+0.95.0,af3ef372209c07d912a3d9f0354fec148524458f,16,40,3,120,120,96,24,80,114,false,3.459,31.269,13.2415,41.05,129.655,3331.919324360804,0,assumed,3,500,false,0
+0.95.0,af3ef372209c07d912a3d9f0354fec148524458f,32,40,3,120,120,112,8,93.33333333333333,114,false,3.5675,17.877,13.3705,27.661,116.087,3721.3469208438496,0,assumed,3,500,false,0

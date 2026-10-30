@@ -1,0 +1,41 @@
+# TEST ONLY. Use only for release bench in namespace capacity-bench-20261030.
+# Overlay small.yaml and small-16gib.yaml from the verified release chart.
+host: capacity-bench.invalid
+deploymentEnvironment: capacity-bench
+priorityClasses:
+  create: true
+trustedProxies: "^127[.]0[.]0[.]1$"
+secret:
+  name: capacity-bench
+route:
+  parentRefs:
+    - name: unused-bench-route-removed
+networkPolicy:
+  # Replay has no egress. It stands in for the Gateway peer in this private test release.
+  gateway:
+    namespace: capacity-bench-20261030
+    podLabels: { app.kubernetes.io/name: capacity-replay }
+  workerGatewayPorts: [8080]
+  kubernetesApi:
+    # Replace the documentation address with the qualified API /32 and export the same value
+    # as BENCH_KUBERNETES_API_CIDR for the post-renderer.
+    cidr: 192.0.2.10/32
+    port: 6443
+postgresql:
+  tls:
+    existingSecret: capacity-bench-db-tls
+server:
+  replicas: 0
+worker:
+  replicas: 0
+  sandbox:
+    namespace: capacity-bench-20261030-sandboxes
+webhook:
+  replicas: 0
+webapp:
+  replicas: 1
+config:
+  auth:
+    assuranceEnforced: false
+  llmPrivateHosts: [replay.capacity-bench-20261030.svc.cluster.local]
+  llmPrivateHostsAllowHttp: true

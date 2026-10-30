@@ -1,5 +1,5 @@
 /** Read-only node and container sampler. Run locally; remote-exec is the only remote transport. */
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
@@ -21,6 +21,8 @@ const { values } = parseArgs({
 		timeline: { type: "string" },
 		out: { type: "string", default: "kubernetes-footprint.json" },
 		"provider-budget": { type: "string" },
+		"minimum-available-mib": { type: "string" },
+		"bench-postgres": { type: "boolean" },
 	},
 });
 if (values.host !== "hephaestus-staging") {
@@ -28,6 +30,18 @@ if (values.host !== "hephaestus-staging") {
 }
 const count = positiveInteger(values.samples, "--samples");
 const interval = positiveInteger(values["interval-ms"], "--interval-ms");
+const minimumAvailable =
+	values["minimum-available-mib"] === undefined
+		? null
+		: positiveInteger(values["minimum-available-mib"], "--minimum-available-mib") * 1024 * 1024;
+const state = { stopping: false };
+let safetyStop = false;
+function stop() {
+	state.stopping = true;
+}
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+	process.once(signal, stop);
+}
 const remote = async (command: string) => output("remote-exec", [values.host, command]);
 const nodes = asRecord(parseJson(await remote("sudo kubectl get nodes -o json")), "nodes");
 const nodeBudgets = asArray(nodes.items, "nodes.items").map((value) => {
@@ -41,14 +55,22 @@ const nodeBudgets = asArray(nodes.items, "nodes.items").map((value) => {
 	};
 });
 // POSIX shell at the remote runtime boundary: the host need not have Node. Reads counters only.
-const counters = `sudo sh -c 'printf "NODE\\n"; cat /proc/meminfo; for f in $(find /sys/fs/cgroup -name memory.stat -path "*cri-containerd*"); do d="\${f%/memory.stat}"; printf "CGROUP %s\\n" "$d"; for k in memory.current memory.peak memory.stat; do printf "%s\\n" "$k"; cat "$d/$k" 2>/dev/null || printf "unavailable\\n"; done; done'`;
+const counters = `sudo sh -c 'printf "NODE\\n"; cat /proc/meminfo; head -1 /proc/stat; for k in cpu memory io; do printf "PRESSURE %s\\n" "$k"; cat "/proc/pressure/$k" 2>/dev/null || printf "unavailable\\n"; done; for f in $(find /sys/fs/cgroup -name memory.stat -path "*cri-containerd*"); do d="\${f%/memory.stat}"; printf "CGROUP %s\\n" "$d"; for k in memory.current memory.peak memory.stat memory.events cpu.stat; do printf "%s\\n" "$k"; cat "$d/$k" 2>/dev/null || printf "unavailable\\n"; done; printf "processRss\\n"; for p in $(cat "$d/cgroup.procs" 2>/dev/null); do awk "/^VmRSS:/ {print \\$2}" "/proc/$p/status" 2>/dev/null; done | awk "{total+=\\$1} END {printf \\"%.0f\\\\n\\",total*1024}"; done'`;
 const snapshots: {
 	t: number;
 	nodeUsed: number;
 	nodeAvailable: number;
+	nodeCounters: {
+		fileCache: number;
+		swapUsed: number;
+		cpu: number[];
+		pressure: Record<string, string>;
+	};
 	containers: Record<string, Record<string, number | null>>;
+	postgres: unknown;
 }[] = [];
 const identities: ReturnType<typeof parseContainerIdentities> = {};
+await writeFile(`${values.out}.jsonl`, "", { flag: "wx" });
 for (let index = 0; index < count; index += 1) {
 	const started = Date.now();
 	Object.assign(
@@ -94,14 +116,60 @@ for (let index = 0; index < count; index += 1) {
 			shmem: counter("shmem"),
 			kernel: counter("kernel"),
 			kernelAccounted,
+			processRss: counter("processRss"),
+			cpuUsageUsec: counter("usage_usec"),
+			cpuThrottledUsec: counter("throttled_usec"),
+			cpuThrottledPeriods: counter("nr_throttled"),
+			oom: counter("oom"),
+			oomKills: counter("oom_kill"),
 		};
 	}
-	snapshots.push({
+	let postgres: unknown = null;
+	if (values["bench-postgres"] === true) {
+		const rawPostgres = await remote(
+			`sudo -n kubectl exec -n capacity-bench-20261030 bench-postgresql-0 -- sh -c 'exec psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -At -c "SELECT json_build_object($$connections$$,count(*),$$active$$,count(*) FILTER(WHERE state=$$active$$),$$lockWaits$$,count(*) FILTER(WHERE wait_event_type=$$Lock$$)) FROM pg_stat_activity WHERE datname=current_database();"'`.replaceAll(
+				"$$",
+				String.raw`\$\$`,
+			),
+		);
+		postgres = parseJson(rawPostgres.trim());
+	}
+	const snapshot = {
 		t: started,
 		nodeUsed: mem("MemTotal") - mem("MemAvailable"),
 		nodeAvailable: mem("MemAvailable"),
+		nodeCounters: {
+			fileCache: mem("Cached"),
+			swapUsed: mem("SwapTotal") - mem("SwapFree"),
+			cpu: (/^cpu\s+(?<values>[\d ]+)$/mu.exec(meminfo)?.groups?.values ?? "")
+				.trim()
+				.split(/\s+/u)
+				.filter(Boolean)
+				.map(Number),
+			pressure: Object.fromEntries(
+				["cpu", "memory", "io"].map((kind) => [
+					kind,
+					meminfo.split(`PRESSURE ${kind}\n`)[1]?.split("PRESSURE ")[0]?.trim() ?? "unavailable",
+				]),
+			),
+		},
 		containers,
-	});
+		postgres,
+	};
+	snapshots.push(snapshot);
+	await appendFile(`${values.out}.jsonl`, `${JSON.stringify(snapshot)}\n`);
+	await writeFile(`${values.out}.identities.json`, JSON.stringify(identities));
+	if (index === 0) {
+		process.stdout.write("SAMPLER_READY\n");
+	}
+	if (minimumAvailable !== null && snapshot.nodeAvailable < minimumAvailable) {
+		safetyStop = true;
+		process.stdout.write(`HEADROOM_STOP ${snapshot.nodeAvailable}\n`);
+		break;
+	}
+	if (state.stopping) {
+		break;
+	}
 	if (index + 1 < count) {
 		await sleep(Math.max(0, interval - (Date.now() - started)));
 	}
@@ -123,6 +191,7 @@ const bytes = (measurements: readonly number[]) => {
 };
 const report = {
 	startedAt: new Date(snapshots[0]?.t ?? Date.now()).toISOString(),
+	safetyStop,
 	measurement:
 		"read-only Kubernetes cgroup v2; node use = MemTotal - MemAvailable; no load generated",
 	nodeBudgets,
@@ -138,17 +207,24 @@ const report = {
 			{
 				...identity,
 				counters: Object.fromEntries(
-					["current", "lifetimePeak", "anon", "file", "shmem", "kernel", "kernelAccounted"].map(
-						(key) => [
-							key,
-							bytes(
-								snapshots.flatMap((row) => {
-									const value = row.containers[id]?.[key];
-									return value == null ? [] : [value];
-								}),
-							),
-						],
-					),
+					[
+						"current",
+						"lifetimePeak",
+						"anon",
+						"file",
+						"shmem",
+						"kernel",
+						"kernelAccounted",
+						"processRss",
+					].map((key) => [
+						key,
+						bytes(
+							snapshots.flatMap((row) => {
+								const value = row.containers[id]?.[key];
+								return value == null ? [] : [value];
+							}),
+						),
+					]),
 				),
 			},
 		]),

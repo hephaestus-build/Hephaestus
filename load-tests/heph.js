@@ -47,6 +47,7 @@ const firstPartial = new Trend("heph_first_partial", true);
 const firstText = new Trend("heph_first_text", true);
 const queueWait = new Trend("heph_queue_wait", true);
 const completed = new Rate("heph_turn_completed");
+const finished = new Counter("heph_turns_finished");
 const refused = new Counter("heph_turn_refused");
 
 export const options = {
@@ -66,6 +67,7 @@ export const options = {
 		"http_req_failed{operation:heph_poll}": ["rate<0.01"],
 		"http_req_duration{operation:heph_turn}": ["p(95)<1000"],
 		heph_turn_completed: ["rate>0.99"],
+		heph_turns_finished: ["count>0"],
 		heph_turn_duration: [`p(95)<${turnP95Ms}`],
 		heph_first_partial: [`p(95)<${firstPartialP95Ms}`],
 	},
@@ -157,14 +159,16 @@ function observe(turn, seen, startedAt) {
 /**
  * Asks once and follows the turn through the conversation's active turns until it ends.
  * @param {string | null} parentEntryId - null asks at the top level
+ * @param {string} [text] - the synthetic question, or the configured question
+ * @param {string} [requestId] - an optional synthetic correlation ID
  * @returns {string | null} the question's entry id when Heph answered
  */
-function ask(parentEntryId) {
+export function ask(parentEntryId, text = question, requestId = crypto.randomUUID()) {
 	const startedAt = Date.now();
 	const deadline = startedAt + turnTimeoutSeconds * 1000;
 	const body = JSON.stringify({
-		requestId: crypto.randomUUID(),
-		text: question,
+		requestId,
+		text,
 		...(parentEntryId === null ? {} : { parentEntryId }),
 	});
 	const submitted = http.post(url(hephPaths.turns), body, {
@@ -206,6 +210,9 @@ function ask(parentEntryId) {
 		}
 		turnDuration.add(Date.now() - startedAt);
 		completed.add(status === "DONE");
+		if (status === "DONE") {
+			finished.add(1);
+		}
 		check(status, { "heph answered": (value) => value === "DONE" });
 		return questionId;
 	}
