@@ -83,20 +83,6 @@ public class LlmModelAdminController {
                 .toList());
     }
 
-    @GetMapping("/models/{id}")
-    @Operation(summary = "Get an LLM catalog model", operationId = "adminGetLlmModel")
-    @ApiResponse(
-            responseCode = "200",
-            description = "OK",
-            content = @Content(schema = @Schema(implementation = LlmModelDTO.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "LLM model not found",
-            content = @Content(schema = @Schema(hidden = true)))
-    public ResponseEntity<LlmModelDTO> get(@PathVariable Long id) {
-        return ResponseEntity.ok(toDTO(modelService.get(id)));
-    }
-
     @PatchMapping("/models/{id}")
     @Operation(summary = "Update a model's metadata", operationId = "adminUpdateLlmModel")
     @ApiResponse(

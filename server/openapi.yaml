@@ -18,18 +18,36 @@ servers:
 security:
 - bearerAuth: []
 tags:
+- description: Global contributor information
+  name: Contributors
 - description: The current developer's practice profile
   name: Practice Profile
+- description: User preferences
+  name: Account
 - description: The authenticated developer's feedback
   name: Practice feedback
+- description: Instance-admin login provider management
+  name: Admin
+- description: Per-workspace Slack channel consent + activation
+  name: Slack channel activation
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
 - description: Running release identity and update checks
   name: Instance Release
+- description: "Sign-in, refresh and sign-out for installed clients"
+  name: Client session
 - description: The current developer's standing in each practice
   name: Practice Standings
 - description: Recipient responses to delivered practice feedback
   name: Feedback Response
+- description: Workspace-scoped per-purpose agent configuration
+  name: Agents
+- description: The current developer's standing in each practice group
+  name: Practice Group Standings
+- description: Asking for a review of a piece of work by hand
+  name: Practice review requests
+- description: Current account transparency and research consent
+  name: Consent
 - description: "User account management (settings, deletion)"
   name: Account
 - description: Instance-admin account management
@@ -38,12 +56,21 @@ tags:
   name: Slack User Preferences
 - description: Instance-admin research disclosures and downstream removal receipts
   name: Research
+- description: Adopt instance catalog practices into a workspace
+  name: Practice Catalog Adoption
 - description: |-
     Practices across the workspace, read by the calling developer: everyone, the caller included, inside a count, and
      the caller's own figures beside the workspace's. Like the Practice profile, the route takes no user parameter.
   name: practices-across-workspace-controller
 - description: Per-workspace Outline collection mirroring control plane
   name: Outline collections
+- description: Team management within workspace
+  name: Teams
+- description: Instance-wide email transport verification
+  name: Instance Email
+- description: "Workspace-scoped \"bring your own\" AI provider connections, models\
+    \ and settings"
+  name: Workspace LLM
 - description: Why each practice did or did not run on one piece of work. Any workspace
     member can read it.
   name: Practice review trace
@@ -53,17 +80,29 @@ tags:
   name: Auth
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
+- description: Active sessions
+  name: Account
 - description: Instance-admin-only read-only access to users
   name: User view
 - description: Review catalog changes before they affect a workspace
   name: Practice Catalog
+- description: |-
+    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
+     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
+  name: git-lab-preflight-controller
 - description: Workspace integration connection management
   name: Connections
+- description: Instance-admin LLM connection and settings management
+  name: Admin LLM
+- description: Public JWK set for verifying Hephaestus session JWTs
+  name: Auth discovery
 - description: "Workspace-admin access to reviews, results, and feedback delivery\
     \ history"
   name: Practice reviews
 - description: GDPR Art. 20 self-service data export
   name: Account
+- description: The developer's conversation with Hephaestus
+  name: Mentor
 - description: Instance-administrator access and erasure requests
   name: Person Data
 - description: Workspace-scoped history of admin configuration changes
@@ -74,59 +113,18 @@ tags:
      on both success and failure; only <code>Accept: application/json</code> requests get
      4xx JSON.
   name: o-auth-callback-controller
+- description: Repository contributions and open work
+  name: Activity
 - description: Redacted production configuration facts
   name: Configuration Readiness
 - description: Identity provider discovery (public)
   name: Auth discovery
-- description: Read-only access to practice evaluation results
-  name: Practice Results
-- description: Global contributor information
-  name: Contributors
-- description: User preferences
-  name: Account
-- description: Instance-admin login provider management
-  name: Admin
-- description: Per-workspace Slack channel consent + activation
-  name: Slack channel activation
-- description: "Sign-in, refresh and sign-out for installed clients"
-  name: Client session
-- description: Workspace-scoped per-purpose agent configuration
-  name: Agents
-- description: The current developer's standing in each practice group
-  name: Practice Group Standings
-- description: Asking for a review of a piece of work by hand
-  name: Practice review requests
-- description: Current account transparency and research consent
-  name: Consent
-- description: Adopt instance catalog practices into a workspace
-  name: Practice Catalog Adoption
-- description: Team management within workspace
-  name: Teams
-- description: Instance-wide email transport verification
-  name: Instance Email
-- description: "Workspace-scoped \"bring your own\" AI provider connections, models\
-    \ and settings"
-  name: Workspace LLM
-- description: Active sessions
-  name: Account
-- description: |-
-    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
-     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
-  name: git-lab-preflight-controller
-- description: Instance-admin LLM connection and settings management
-  name: Admin LLM
-- description: Public JWK set for verifying Hephaestus session JWTs
-  name: Auth discovery
-- description: The developer's conversation with Hephaestus
-  name: Mentor
-- description: Workspace-scoped team settings management
-  name: Team Settings
-- description: Repository contributions and open work
-  name: Activity
 - description: Integration sync observability and manual controls
   name: Sync
 - description: "Current user identity, linked accounts, deletion"
   name: Account
+- description: Read-only access to practice evaluation results
+  name: Practice Results
 paths:
   /.well-known/jwks.json:
     get:
@@ -727,27 +725,6 @@ paths:
       summary: Delete an LLM connection
       tags:
       - Admin LLM
-    get:
-      operationId: adminGetLlmConnection
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LlmConnection"
-          description: OK
-        "404":
-          description: LLM connection not found
-      summary: Get an LLM connection
-      tags:
-      - Admin LLM
     patch:
       operationId: adminUpdateLlmConnection
       parameters:
@@ -828,27 +805,6 @@ paths:
         "409":
           description: Cannot delete a model still bound to an agent configuration
       summary: Delete an LLM catalog model
-      tags:
-      - Admin LLM
-    get:
-      operationId: adminGetLlmModel
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LlmModel"
-          description: OK
-        "404":
-          description: LLM model not found
-      summary: Get an LLM catalog model
       tags:
       - Admin LLM
     patch:
@@ -5293,36 +5249,6 @@ paths:
       summary: Remove your AI provider connection
       tags:
       - Workspace LLM
-    get:
-      operationId: workspaceGetLlmConnection
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceLlmConnection"
-          description: OK
-        "404":
-          description: Connection not found
-      summary: Get one of your AI provider connections
-      tags:
-      - Workspace LLM
     patch:
       operationId: workspaceUpdateLlmConnection
       parameters:
@@ -5440,36 +5366,6 @@ paths:
         "409":
           description: Cannot delete a model still bound to an agent configuration
       summary: Remove a model on your AI provider
-      tags:
-      - Workspace LLM
-    get:
-      operationId: workspaceGetLlmModel
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceLlmModel"
-          description: OK
-        "404":
-          description: Model not found
-      summary: Get a model on your AI provider
       tags:
       - Workspace LLM
     patch:
@@ -5729,35 +5625,6 @@ paths:
         "204":
           description: Membership removed
       summary: Remove a workspace member
-      tags:
-      - membership
-    get:
-      operationId: getMembership
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: accountId
-        required: true
-        schema:
-          type: string
-          maximum: 9223372036854776000
-          pattern: "^[1-9][0-9]*$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceMembership"
-          description: OK
-      summary: Get a workspace membership
       tags:
       - membership
   /workspaces/{workspaceSlug}/members/{accountId}/hidden:
@@ -6400,37 +6267,6 @@ paths:
             \ workspace has no ACTIVE Outline connection"
       summary: Remove a collection from the mirror and erase its mirrored documents
         (terminal)
-      tags:
-      - Outline collections
-    get:
-      operationId: getOutlineCollection
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: collectionId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OutlineCollection"
-          description: Mirrored collection returned
-        "404":
-          description: "The collection is not registered for this workspace, or the\
-            \ workspace has no ACTIVE Outline connection"
-      summary: One mirrored Outline collection with its sync state and live document
-        count
       tags:
       - Outline collections
     patch:
@@ -7539,80 +7375,6 @@ paths:
       summary: Resolve a feedback link posted before item IDs
       tags:
       - item
-  /workspaces/{workspaceSlug}/practices/items/{itemId}:
-    get:
-      operationId: getReviewItem
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: itemId
-        required: true
-        schema:
-          type: string
-          maxLength: 19
-          pattern: "^[1-9][0-9]*$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ItemRef"
-          description: OK
-      summary: Get an item
-      tags:
-      - item
-  /workspaces/{workspaceSlug}/practices/items/{itemId}/events:
-    get:
-      operationId: listItemEvents
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: itemId
-        required: true
-        schema:
-          type: string
-          maxLength: 19
-          pattern: "^[1-9][0-9]*$"
-      - in: query
-        name: page
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 0
-      - in: query
-        name: size
-        required: false
-        schema:
-          type: integer
-          format: int32
-          default: 25
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PageResponseDTOItemEvent"
-          description: OK
-      summary: List item events
-      tags:
-      - item
   /workspaces/{workspaceSlug}/practices/items/{itemId}/facts:
     get:
       operationId: getItemFacts
@@ -7896,36 +7658,6 @@ paths:
       summary: Accept selected fields from a practice release
       tags:
       - Practice Catalog
-  /workspaces/{workspaceSlug}/practices/reorder:
-    patch:
-      operationId: reorderPractices
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReorderRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Practice"
-          description: OK
-      tags:
-      - practice-catalog
   /workspaces/{workspaceSlug}/practices/results:
     get:
       description: Paginated results for the authenticated developer with optional
@@ -8115,35 +7847,6 @@ paths:
                 $ref: "#/components/schemas/ReviewBatch"
           description: Created
       summary: Create a review batch
-      tags:
-      - review-batch
-  /workspaces/{workspaceSlug}/practices/review-batches/{batchId}:
-    get:
-      operationId: getReviewBatch
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: batchId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReviewBatch"
-          description: OK
-      summary: Get a review batch
       tags:
       - review-batch
   /workspaces/{workspaceSlug}/practices/review-batches/{batchId}/status:
@@ -8665,34 +8368,6 @@ paths:
                 $ref: "#/components/schemas/ProblemDetail"
           description: Invalid filter or pagination
       summary: List practice reviews with result and feedback outcomes
-      tags:
-      - Practice reviews
-  /workspaces/{workspaceSlug}/practices/reviews/evidence-outcomes:
-    get:
-      description: "One entry per practice that recent reviews considered, with the\
-        \ sources that skipped it."
-      operationId: getReviewEvidenceOutcomes
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ReviewEvidenceOutcome"
-          description: Evidence outcomes returned
-      summary: Summarize how each practice's evidence requirements turned out on recent
-        reviews
       tags:
       - Practice reviews
   /workspaces/{workspaceSlug}/practices/reviews/feedback:
@@ -10159,66 +9834,6 @@ paths:
           description: OK
       tags:
       - feedback-review
-  /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/practice-scripts:
-    get:
-      operationId: listReviewPracticeScripts
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: reviewId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PracticeScriptRun"
-          description: OK
-      summary: List scripts executed in a review
-      tags:
-      - Practice reviews
-  /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/usage:
-    get:
-      operationId: getReviewUsage
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: reviewId
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ReviewUsage"
-          description: OK
-      summary: Get review usage
-      tags:
-      - Practice reviews
   /workspaces/{workspaceSlug}/practices/scans:
     get:
       operationId: listScans
@@ -11522,35 +11137,6 @@ paths:
       summary: Update current user's Slack workspace preferences
       tags:
       - Slack User Preferences
-  /workspaces/{workspaceSlug}/slug:
-    patch:
-      operationId: renameSlug
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RenameWorkspaceSlugRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Workspace"
-          description: Workspace renamed
-      summary: Rename workspace slug and create redirect
-      tags:
-      - workspace
   /workspaces/{workspaceSlug}/status:
     patch:
       operationId: updateStatus
@@ -11757,261 +11343,6 @@ paths:
       summary: Add a repository label to a team
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/teams/{teamId}/settings:
-    get:
-      description: Returns the visibility settings for a team in the workspace
-      operationId: getTeamSettings
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceTeamSettings"
-          description: Team settings returned
-      summary: Get team settings
-      tags:
-      - Team Settings
-    patch:
-      description: Updates the visibility settings for a team in the workspace
-      operationId: updateTeamSettings
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateTeamSettingsRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceTeamSettings"
-          description: Team settings updated
-        "404":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceTeamSettings"
-          description: Team not found in workspace
-      summary: Update team settings
-      tags:
-      - Team Settings
-  /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters:
-    get:
-      description: Returns all labels configured as filters for a team in the workspace
-      operationId: getLabelFilters
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LabelInfo"
-          description: Label filters returned
-      summary: Get team label filters
-      tags:
-      - Team Settings
-  /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}:
-    delete:
-      description: Removes a label filter from a team in the workspace
-      operationId: removeLabelFilter
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: labelId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "204":
-          description: Label filter removed
-        "404":
-          description: Label filter not found
-      summary: Remove label filter
-      tags:
-      - Team Settings
-    post:
-      description: Adds a label as a filter for a team in the workspace
-      operationId: addLabelFilter
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: labelId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "201":
-          description: Label filter added
-        "404":
-          description: Team or label not found
-      summary: Add label filter
-      tags:
-      - Team Settings
-  /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}:
-    get:
-      description: Returns the contribution visibility settings for a repository in
-        a team
-      operationId: getRepositorySettings
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: repositoryId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceTeamRepositorySettings"
-          description: Repository settings returned
-      summary: Get repository settings
-      tags:
-      - Team Settings
-    patch:
-      description: Updates the contribution visibility settings for a repository in
-        a team
-      operationId: updateRepositorySettings
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: teamId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      - in: path
-        name: repositoryId
-        required: true
-        schema:
-          type: integer
-          format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateRepositorySettingsRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceTeamRepositorySettings"
-          description: Repository settings updated
-        "404":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceTeamRepositorySettings"
-          description: Team or repository not found
-      summary: Update repository settings
-      tags:
-      - Team Settings
   /workspaces/{workspaceSlug}/token:
     patch:
       operationId: updateToken
@@ -18640,54 +17971,6 @@ components:
       - sort
       - totalElements
       - totalPages
-    PageResponseDTOItemEvent:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ItemEvent"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
     PageResponseDTOItemRef:
       type: object
       description: |-
@@ -22152,20 +21435,6 @@ components:
           type: string
       required:
       - reason
-    RenameWorkspaceSlugRequest:
-      type: object
-      description: Request to rename a workspace's URL slug
-      properties:
-        newSlug:
-          type: string
-          description: Non-reserved lowercase ASCII DNS label. Consecutive hyphens
-            are prohibited.
-          example: new-workspace-slug
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      required:
-      - newSlug
     ReorderRequest:
       type: object
       properties:
@@ -23321,27 +22590,6 @@ components:
       - avatarUrl
       - displayName
       - providerLogin
-    ReviewEvidenceOutcome:
-      type: object
-      properties:
-        notReviewed:
-          type: integer
-          format: int32
-        outcomes:
-          $ref: "#/components/schemas/OutcomeVector"
-        practiceName:
-          type: string
-        practiceSlug:
-          type: string
-        withheld:
-          type: integer
-          format: int32
-      required:
-      - notReviewed
-      - outcomes
-      - practiceName
-      - practiceSlug
-      - withheld
     ReviewFeedback:
       type: object
       properties:
@@ -27375,17 +26623,6 @@ components:
           $ref: "#/components/schemas/WorkspaceReviewScope"
           description: Replaces repository and person coverage wholesale. Null leaves
             it unchanged.
-    UpdateRepositorySettingsRequest:
-      type: object
-      description: Request to update repository contribution visibility settings in
-        a workspace
-      properties:
-        hiddenFromContributions:
-          type: boolean
-          description: Whether activity in this repository should be left out of the
-            team's activity
-      required:
-      - hiddenFromContributions
     UpdateReviewBatchStatusRequest:
       type: object
       properties:
@@ -27443,15 +26680,6 @@ components:
           type: boolean
       required:
       - cancelRequested
-    UpdateTeamSettingsRequest:
-      type: object
-      description: Request to update team visibility settings in a workspace
-      properties:
-        hidden:
-          type: boolean
-          description: Whether the team should be hidden from workspace activity
-      required:
-      - hidden
     UpdateUserSettings:
       type: object
       description: A change to the user's preferences and settings
@@ -28979,51 +28207,6 @@ components:
       required:
       - developers
       - standing
-    WorkspaceTeamRepositorySettings:
-      type: object
-      description: Repository contribution visibility settings for a specific team
-        within a workspace
-      properties:
-        hiddenFromContributions:
-          type: boolean
-          description: Whether activity in this repository is left out of the team's
-            activity
-        repositoryId:
-          type: integer
-          format: int64
-          description: The repository ID these settings apply to
-        teamId:
-          type: integer
-          format: int64
-          description: The team ID these settings apply to
-        workspaceId:
-          type: integer
-          format: int64
-          description: The workspace ID these settings belong to
-      required:
-      - hiddenFromContributions
-      - repositoryId
-      - teamId
-      - workspaceId
-    WorkspaceTeamSettings:
-      type: object
-      description: Team visibility settings for a specific workspace
-      properties:
-        hidden:
-          type: boolean
-          description: Whether the team is hidden from workspace activity
-        teamId:
-          type: integer
-          format: int64
-          description: The team ID these settings apply to
-        workspaceId:
-          type: integer
-          format: int64
-          description: The workspace ID these settings belong to
-      required:
-      - hidden
-      - teamId
-      - workspaceId
     WorkspaceTile:
       type: object
       description: "One figure: the reader's own value, then the middle half of the\

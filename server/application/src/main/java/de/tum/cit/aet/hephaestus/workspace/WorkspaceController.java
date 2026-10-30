@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -8,7 +7,6 @@ import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspace
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireWorkspaceOwner;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
-import de.tum.cit.aet.hephaestus.workspace.dto.RenameWorkspaceSlugRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceFeaturesRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspacePublicActivityRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceStatusRequestDTO;
@@ -135,21 +133,6 @@ public class WorkspaceController {
     public ResponseEntity<WorkspaceDTO> updateFeatures(
             WorkspaceContext workspaceContext, @Valid @RequestBody UpdateWorkspaceFeaturesRequestDTO request) {
         Workspace workspace = workspaceService.updateFeatures(workspaceContext, request);
-        return ResponseEntity.ok(workspaceQueryService.toWorkspaceDTO(workspace));
-    }
-
-    @PatchMapping("/slug")
-    @Operation(summary = "Rename workspace slug and create redirect")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Workspace renamed",
-            content = @Content(schema = @Schema(implementation = WorkspaceDTO.class)))
-    @RequireWorkspaceOwner
-    @AuditExempt(
-            reason = "renames are unattributed: workspace_slug_history keeps old slugs redirecting," + " with no actor")
-    public ResponseEntity<WorkspaceDTO> renameSlug(
-            WorkspaceContext workspaceContext, @Valid @RequestBody RenameWorkspaceSlugRequestDTO request) {
-        Workspace workspace = workspaceService.renameSlug(workspaceContext, request.newSlug());
         return ResponseEntity.ok(workspaceQueryService.toWorkspaceDTO(workspace));
     }
 }

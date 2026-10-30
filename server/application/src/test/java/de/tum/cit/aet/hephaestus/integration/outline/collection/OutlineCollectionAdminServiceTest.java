@@ -327,29 +327,4 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
         verify(outlineApiClient).listCollections(SERVER_URL, TOKEN, 5);
         verify(outlineApiClient, never()).listCollections(SERVER_URL, TOKEN);
     }
-
-    @Test
-    void getCollection_returnsTheRegisteredRowWithItsLiveCount() {
-        OutlineCollectionAdminService service = service();
-        when(collectionRepository.findByWorkspaceIdAndConnectionIdAndCollectionId(WS, CONNECTION_ID, COLLECTION_ID))
-                .thenReturn(Optional.of(registeredRow(MirrorState.ENABLED, SyncStatus.COMPLETE)));
-        when(documentRepository.countByWorkspaceIdAndConnectionIdAndCollectionIdAndDeletedAtIsNull(
-                        WS, CONNECTION_ID, COLLECTION_ID))
-                .thenReturn(3L);
-
-        OutlineCollectionDTO dto = service.getCollection(WS, COLLECTION_ID);
-
-        assertThat(dto.collectionId()).isEqualTo(COLLECTION_ID);
-        assertThat(dto.state()).isEqualTo(MirrorState.ENABLED);
-        assertThat(dto.documentCount()).isEqualTo(3L);
-    }
-
-    @Test
-    void getCollection_unknownId_isNotFound() {
-        OutlineCollectionAdminService service = service();
-        when(collectionRepository.findByWorkspaceIdAndConnectionIdAndCollectionId(WS, CONNECTION_ID, COLLECTION_ID))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.getCollection(WS, COLLECTION_ID)).isInstanceOf(EntityNotFoundException.class);
-    }
 }

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.practices;
 
-import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
@@ -14,7 +13,6 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDefinitionOptionsDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGuidanceDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeVersionDTO;
-import de.tum.cit.aet.hephaestus.practices.dto.ReorderRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.ReviewedPracticeDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.SetFeedbackModeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
@@ -146,15 +144,6 @@ public class PracticeCatalogController {
             @PathVariable String practiceSlug,
             @RequestBody @Valid SetFeedbackModeRequestDTO input) {
         return presenter.present(ctx.id(), practices.setFeedbackMode(ctx, practiceSlug, input.feedbackMode()));
-    }
-
-    @PatchMapping("/reorder")
-    @RequireAtLeastWorkspaceAdmin
-    @AuditExempt(reason = "Order changes presentation only")
-    @Operation(operationId = "reorderPractices")
-    public List<PracticeDTO> reorder(WorkspaceContext ctx, @RequestBody @Valid ReorderRequestDTO input) {
-        practices.reorderPractices(ctx, input.slugs());
-        return presenter.presentPractices(ctx.id(), practices.listPractices(ctx, null));
     }
 
     @PutMapping("/{practiceSlug}/group")

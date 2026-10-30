@@ -289,13 +289,13 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
     }
 
     @Nested
-    class Get {
+    class Tenancy {
 
         @Test
-        void throwsNotFoundForAConnectionOwnedByAnotherWorkspace() {
+        void throwsNotFoundWhenDeletingAConnectionOwnedByAnotherWorkspace() {
             when(connectionRepository.findByIdAndWorkspaceId(5L, 1L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> connectionService.get(workspaceContext, 5L))
+            assertThatThrownBy(() -> connectionService.delete(workspaceContext, 5L))
                     .isInstanceOf(EntityNotFoundException.class);
         }
     }

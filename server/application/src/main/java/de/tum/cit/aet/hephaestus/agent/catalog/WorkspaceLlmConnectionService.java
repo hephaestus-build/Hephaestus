@@ -37,11 +37,6 @@ public class WorkspaceLlmConnectionService {
         return connectionRepository.findByWorkspaceId(workspaceContext.id());
     }
 
-    @Transactional(readOnly = true)
-    public WorkspaceLlmConnection get(WorkspaceContext workspaceContext, Long id) {
-        return load(workspaceContext, id);
-    }
-
     private WorkspaceLlmConnection load(WorkspaceContext workspaceContext, Long id) {
         return connectionRepository
                 .findByIdAndWorkspaceId(id, workspaceContext.id())

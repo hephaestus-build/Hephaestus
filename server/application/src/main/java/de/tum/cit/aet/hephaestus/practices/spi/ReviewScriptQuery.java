@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public interface ReviewScriptQuery {
-    List<PracticeScriptRunDTO> forReview(long workspaceId, UUID reviewId);
-
-    /** {@link #forReview} for many reviews in one read, keyed by review id; a review without runs is absent. */
+    /** The script runs of each review, keyed by review id; a review without runs is absent. */
     Map<UUID, List<PracticeScriptRunDTO>> forReviews(long workspaceId, Collection<UUID> reviewIds);
 }

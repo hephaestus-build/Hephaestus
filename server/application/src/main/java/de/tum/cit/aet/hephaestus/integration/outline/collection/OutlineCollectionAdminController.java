@@ -68,21 +68,6 @@ public class OutlineCollectionAdminController {
         return ResponseEntity.ok(adminService.listCollections(workspace.id()));
     }
 
-    @GetMapping("/{collectionId}")
-    @Operation(
-            operationId = "getOutlineCollection",
-            summary = "One mirrored Outline collection with its sync state and live document count")
-    @ApiResponse(responseCode = "200", description = "Mirrored collection returned")
-    @ApiResponse(
-            responseCode = "404",
-            description =
-                    "The collection is not registered for this workspace, or the workspace has no ACTIVE Outline connection",
-            content = @Content(schema = @Schema(hidden = true)))
-    public ResponseEntity<OutlineCollectionDTO> getOutlineCollection(
-            WorkspaceContext workspace, @PathVariable String collectionId) {
-        return ResponseEntity.ok(adminService.getCollection(workspace.id(), collectionId));
-    }
-
     @GetMapping("/candidates")
     @Operation(
             operationId = "listOutlineCollectionCandidates",

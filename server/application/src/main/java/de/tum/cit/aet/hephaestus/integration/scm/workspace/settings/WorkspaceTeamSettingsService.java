@@ -62,11 +62,6 @@ public class WorkspaceTeamSettingsService {
     // Team Visibility (Hidden) Settings
 
     @Transactional(readOnly = true)
-    public Optional<WorkspaceTeamSettings> getTeamSettings(Long workspaceId, Long teamId) {
-        return teamSettingsRepository.findByWorkspaceIdAndTeamId(workspaceId, teamId);
-    }
-
-    @Transactional(readOnly = true)
     public boolean isTeamHidden(Long workspaceId, Long teamId) {
         return teamSettingsRepository
                 .findByWorkspaceIdAndTeamId(workspaceId, teamId)
@@ -110,13 +105,6 @@ public class WorkspaceTeamSettingsService {
     }
 
     // Repository Contribution Visibility Settings
-
-    @Transactional(readOnly = true)
-    public Optional<WorkspaceTeamRepositorySettings> getRepositorySettings(
-            Long workspaceId, Long teamId, Long repositoryId) {
-        return repositorySettingsRepository.findByWorkspaceIdAndTeamIdAndRepositoryId(
-                workspaceId, teamId, repositoryId);
-    }
 
     @Transactional(readOnly = true)
     public boolean isRepositoryHiddenFromContributions(Long workspaceId, Long teamId, Long repositoryId) {
@@ -208,12 +196,6 @@ public class WorkspaceTeamSettingsService {
     @Transactional(readOnly = true)
     public Set<Long> getTeamIdsWithLabelFilters(Long workspaceId) {
         return labelFilterRepository.findTeamIdsWithLabelFilters(workspaceId);
-    }
-
-    /** Returns empty when the team or label does not exist in the workspace. */
-    @Transactional
-    public Optional<WorkspaceTeamLabelFilter> addLabelFilter(Workspace workspace, Long teamId, Long labelId) {
-        return addLabelFilterInTransaction(workspace, teamId, labelId);
     }
 
     private Optional<WorkspaceTeamLabelFilter> addLabelFilterInTransaction(

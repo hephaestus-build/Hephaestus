@@ -51,21 +51,6 @@ public class WorkspaceLlmConnectionController {
                 .toList());
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Get one of your AI provider connections", operationId = "workspaceGetLlmConnection")
-    @ApiResponse(
-            responseCode = "200",
-            description = "OK",
-            content = @Content(schema = @Schema(implementation = WorkspaceLlmConnectionDTO.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Connection not found",
-            content = @Content(schema = @Schema(hidden = true)))
-    @RequireAtLeastWorkspaceAdmin
-    public ResponseEntity<WorkspaceLlmConnectionDTO> get(WorkspaceContext workspaceContext, @PathVariable Long id) {
-        return ResponseEntity.ok(WorkspaceLlmConnectionDTO.from(connectionService.get(workspaceContext, id)));
-    }
-
     @PostMapping
     @Operation(summary = "Connect your own AI provider", operationId = "workspaceCreateLlmConnection")
     @ApiResponse(responseCode = "201", description = "Connection created; URL in the Location header")

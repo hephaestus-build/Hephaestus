@@ -21,8 +21,6 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -179,28 +177,6 @@ public class PracticeService {
                 before,
                 new PracticeUsageSnapshot(practice.getFeedbackMode())));
         return practice;
-    }
-
-    @Transactional
-    public void reorderPractices(WorkspaceContext ctx, List<String> slugs) {
-        lock(ctx);
-        var all = practices.findAllForCatalog(ctx.id());
-        if (slugs.size() != new HashSet<>(slugs).size()
-                || !new HashSet<>(slugs)
-                        .equals(new HashSet<>(
-                                all.stream().map(Practice::getSlug).toList()))) {
-            throw new IllegalArgumentException("List every practice once in the order.");
-        }
-        var positions = new HashMap<@Nullable Long, Integer>();
-        for (String slug : slugs) {
-            Practice practice = getPractice(ctx, slug);
-            Long groupId =
-                    practice.getGroup() == null ? null : practice.getGroup().getId();
-            int position = positions.getOrDefault(groupId, 0);
-            practice.setPosition(position);
-            positions.put(groupId, position + 1);
-            practices.save(practice);
-        }
     }
 
     @Transactional

@@ -215,6 +215,7 @@ target/
 tmp
 .tox/
 # Translations
+*.tsbuildinfo
 # Unit test / coverage reports
 # User-specific stuff
 #  Usually these files are written by a python script from a template

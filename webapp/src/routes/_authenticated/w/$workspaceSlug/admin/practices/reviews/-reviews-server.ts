@@ -4,7 +4,6 @@ import { z } from "zod";
 import type {
 	ItemRef,
 	ResultMark,
-	ReviewEvidenceOutcome,
 	ReviewFeedback,
 	ReviewProblem,
 	ReviewResult,
@@ -22,12 +21,10 @@ import {
 	feedbackDetail,
 	feedbackIdsFrom,
 	feedbackPracticeSlugs,
-	itemEventsOf,
 	itemTraceOf,
 	locationCounts,
 	mergedPullRequestFacts,
 	openIssueFacts,
-	practiceCounts,
 	practiceGroups,
 	practiceGroupSlug,
 	practiceReviewOverview,
@@ -42,11 +39,9 @@ import {
 	reviewDeveloperOf,
 	reviewFeedback,
 	reviewFeedbackChecksOf,
-	reviewPracticeScripts,
 	reviewProblems,
 	reviewResults,
 	reviews,
-	reviewUsageTwoAttempts,
 	workspaceMembers,
 	workspacePractices,
 } from "@/components/admin/practice-reviews/fixtures";
@@ -304,14 +299,6 @@ const createDecisionSchema = z.object({
 	contentDigest: z.string().optional(),
 });
 
-const evidenceOutcomes: ReviewEvidenceOutcome[] = practiceCounts.map((counts) => ({
-	practiceSlug: counts.practiceSlug,
-	practiceName: counts.practiceName,
-	outcomes: counts.results,
-	withheld: counts.feedback.withheld,
-	notReviewed: 0,
-}));
-
 export interface ReviewMockOptions {
 	results?: ReviewResult[];
 	feedback?: ReviewFeedback[];
@@ -346,9 +333,6 @@ export function reviewHandlers({
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/queue", () =>
 			HttpResponse.json(busyReviewQueue),
-		),
-		http.get("*/workspaces/:workspaceSlug/practices/reviews/evidence-outcomes", () =>
-			HttpResponse.json(evidenceOutcomes),
 		),
 		...resultHandlers(resultRows, requireResultSort),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/problems", ({ request }) =>
@@ -524,12 +508,6 @@ function reviewDetailHandlers() {
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/:reviewId", ({ params }) =>
 			HttpResponse.json(reviewDetail(String(params.reviewId))),
 		),
-		http.get("*/workspaces/:workspaceSlug/practices/reviews/:reviewId/usage", () =>
-			HttpResponse.json(reviewUsageTwoAttempts),
-		),
-		http.get("*/workspaces/:workspaceSlug/practices/reviews/:reviewId/practice-scripts", () =>
-			HttpResponse.json(Object.values(reviewPracticeScripts)),
-		),
 		http.get(
 			"*/workspaces/:workspaceSlug/practices/reviews/:reviewId/feedback-checks",
 			({ params }) =>
@@ -561,9 +539,6 @@ function itemHandlers() {
 				url,
 			);
 		}),
-		http.get("*/workspaces/:workspaceSlug/practices/items/:itemId", ({ params }) =>
-			HttpResponse.json(itemNamed(String(params.itemId))),
-		),
 		http.get("*/workspaces/:workspaceSlug/practices/items/:itemId/trace", ({ params }) => {
 			const itemId = String(params.itemId);
 			const review = reviewOfItem(itemId);
@@ -581,13 +556,6 @@ function itemHandlers() {
 			}
 			return HttpResponse.json({ item, facts: [] });
 		}),
-		http.get(
-			"*/workspaces/:workspaceSlug/practices/items/:itemId/events",
-			({ params, request }) => {
-				const review = reviewOfItem(String(params.itemId));
-				return springPage(review === undefined ? [] : itemEventsOf(review), new URL(request.url));
-			},
-		),
 	];
 }
 

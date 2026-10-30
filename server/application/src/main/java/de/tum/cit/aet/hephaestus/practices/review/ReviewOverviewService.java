@@ -6,20 +6,16 @@ import de.tum.cit.aet.hephaestus.core.time.TimeRange;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.dto.GroupRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewFeedbackCountsDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewBucketDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewEvidenceOutcomeDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewPracticeCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewResultCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewStatusCountsDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.TimeBucketSize;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -140,28 +136,5 @@ public class ReviewOverviewService {
                 .filter(r -> Objects.equals(r.getPracticeId(), practice))
                 .mapToInt(ReviewOverviewRepository.MarkedCount::getCount)
                 .sum();
-    }
-
-    public List<ReviewEvidenceOutcomeDTO> evidenceOutcomes(long ws) {
-        var now = clock.instant();
-        var from = now.minus(Duration.ofDays(30));
-        var outcomes = counts.outcomes(ws, from, now);
-        var states = counts.itemStates(ws, from, now).stream()
-                .collect(Collectors.groupingBy(ReviewOverviewRepository.ItemCount::getPracticeId));
-        return practices.findByWorkspaceId(ws).stream()
-                .map(p -> {
-                    var c = outcomes(outcomes, p.getId());
-                    var s = states.getOrDefault(p.getId(), List.of()).stream()
-                            .collect(Collectors.toMap(
-                                    ReviewOverviewRepository.ItemCount::getState,
-                                    ReviewOverviewRepository.ItemCount::getCount));
-                    return new ReviewEvidenceOutcomeDTO(
-                            p.getSlug(),
-                            Objects.requireNonNull(p.getCurrentVersion().getName()),
-                            new OutcomeVectorDTO(c.met(), c.notMet(), c.doesNotApply(), c.couldNotDetermine()),
-                            s.getOrDefault(ReviewItemState.WITHHELD, 0),
-                            s.getOrDefault(ReviewItemState.LISTED, 0));
-                })
-                .toList();
     }
 }

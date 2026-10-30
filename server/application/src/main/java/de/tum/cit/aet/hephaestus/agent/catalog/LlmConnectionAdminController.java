@@ -54,20 +54,6 @@ public class LlmConnectionAdminController {
                 connectionService.list().stream().map(LlmConnectionDTO::from).toList());
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Get an LLM connection", operationId = "adminGetLlmConnection")
-    @ApiResponse(
-            responseCode = "200",
-            description = "OK",
-            content = @Content(schema = @Schema(implementation = LlmConnectionDTO.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "LLM connection not found",
-            content = @Content(schema = @Schema(hidden = true)))
-    public ResponseEntity<LlmConnectionDTO> get(@PathVariable Long id) {
-        return ResponseEntity.ok(LlmConnectionDTO.from(connectionService.get(id)));
-    }
-
     @PostMapping
     @Operation(summary = "Create an LLM connection", operationId = "adminCreateLlmConnection")
     @ApiResponse(responseCode = "201", description = "Connection created; URL in the Location header")
