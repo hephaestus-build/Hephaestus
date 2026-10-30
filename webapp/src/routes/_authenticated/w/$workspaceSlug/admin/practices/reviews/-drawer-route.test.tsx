@@ -16,12 +16,10 @@ import type {
 	ReviewResult,
 } from "@/api/types.gen";
 import {
-	feedbackDetail,
 	practiceCounts,
 	problemDetail,
 	resultDetail,
 	reviewDetail,
-	reviewFeedback,
 	reviewItem,
 	reviewProblems,
 	reviewRefOf,
@@ -140,7 +138,7 @@ describe("practice review levels", () => {
 	});
 
 	/**
-	 * One record sheet stands at a time (`layeredStack`), so a problem's result opens in the
+	 * One record sheet stands at a time (`single`), so a problem's result opens in the
 	 * problem's place as a step of its own: Back returns to the problem, and Escape then closes to the
 	 * list with focus on the row the problem was opened from.
 	 */
@@ -293,26 +291,6 @@ describe("practice review levels", () => {
 				screen.getByRole("link", openRow("observation", result.summary)),
 			),
 		);
-	});
-
-	/** A link from before that stacked several levels opens the one in front. */
-	it("opens only the front record of a stacked address", async () => {
-		const feedback = reviewFeedback.find(
-			(row) => feedbackDetail(row.id).basis.at(0)?.result.summary != null,
-		);
-		assert(feedback);
-		const [source] = feedbackDetail(feedback.id).basis;
-		assert(source?.result.summary != null);
-		const { router } = renderRouteAtWithRouter(
-			`${REVIEWS}?detail=${encodeURIComponent(
-				JSON.stringify([`feedback:${feedback.id}`, `result:${source.resultId}`]),
-			)}`,
-		);
-		await screen.findByRole("dialog", { name: source.result.summary }, ROUTE_RENDER_WAIT);
-		expect(screen.getAllByRole("dialog")).toHaveLength(1);
-		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
-			`result:${source.resultId}`,
-		]);
 	});
 
 	/**

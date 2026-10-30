@@ -2461,51 +2461,11 @@ describe("Workspace activity", () => {
 		expect(within(level).queryByRole("button", { name: "Treat as automation" })).toBeNull();
 	});
 
-	it("sends an old profile address to the person on Workspace activity", async () => {
+	it("shows an address from before 1.0 as not found instead of sending it on", async () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/user/bob");
 
-		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/workspace-activity"),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(router.state.location.href).toBe("/w/acme/workspace-activity?detail=person:bob");
-	});
-
-	it("sends someone else's old practice group page to them on Workspace activity", async () => {
-		const { router } = renderRouteAtWithRouter(
-			"/w/acme/user/bob/practice-groups/review-ready-work",
-		);
-
-		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/workspace-activity"),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(router.state.location.href).toBe("/w/acme/workspace-activity?detail=person:bob");
-	});
-
-	it("sends an old practice group page to its level on the practice profile", async () => {
-		// The practice profile sends a workspace that reviews no practices away, so this one reviews them.
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
-			),
-		);
-		const { router } = renderRouteAtWithRouter(
-			"/w/acme/user/ada-lrz/practice-groups/review-ready-work",
-		);
-
-		await waitFor(
-			() => expect(router.state.location.pathname).toBe("/w/acme/practice-profile"),
-			ROUTE_RENDER_WAIT,
-		);
-		expect(router.state.location.href).toBe(
-			"/w/acme/practice-profile?detail=practice-group:review-ready-work",
-		);
-		// The addressed group level has mounted over the profile before its final address is checked.
-		await screen.findByRole("dialog", { name: "Practice group" }, ROUTE_RENDER_WAIT);
-		expect(router.state.location.href).toBe(
-			"/w/acme/practice-profile?detail=practice-group:review-ready-work",
-		);
+		await screen.findByText(/^It may have been deleted or moved/u, undefined, ROUTE_RENDER_WAIT);
+		expect(router.state.location.pathname).toBe("/w/acme/user/bob");
 	});
 
 	describe.each(TIMELINES)("%s", (_timeline, address, path, queryKeyOf, regionOf) => {

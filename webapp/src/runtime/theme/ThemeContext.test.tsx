@@ -34,38 +34,17 @@ function ThemeButtons() {
 
 describe("ThemeProvider", () => {
 	afterEach(() => {
-		localStorage.clear();
 		clearThemeCookie();
 		document.documentElement.className = "";
 		delete document.documentElement.dataset.colorMode;
 	});
 
-	// `localStorage` outlives any rename of the themes, so a value from an older build must not reach
-	// the document as a class nobody styles.
-	it("falls back to the default theme when the stored one is not a theme this build knows", () => {
-		localStorage.setItem("theme", "solarized");
-
-		render(<ThemeProvider defaultTheme="light" />);
-
-		expect(document.documentElement.dataset.colorMode).toBe("light");
-	});
-
-	it("takes the theme from the shared cookie before the per-origin choice", () => {
+	it("takes the theme from the shared cookie", () => {
 		setThemeCookie("dark");
-		localStorage.setItem("theme", "light");
 
 		render(<ThemeProvider defaultTheme="light" />);
 
 		expect(document.documentElement.dataset.colorMode).toBe("dark");
-	});
-
-	it("moves a choice from before the cookie into the cookie once", () => {
-		localStorage.setItem("theme", "dark");
-
-		render(<ThemeProvider />);
-
-		expect(readThemeCookie(document.cookie)).toBe("dark");
-		expect(localStorage.getItem("theme")).toBeNull();
 	});
 
 	it("writes a new choice to the cookie that the other hosts read", () => {
@@ -79,16 +58,6 @@ describe("ThemeProvider", () => {
 
 		expect(readThemeCookie(document.cookie)).toBe("dark");
 		expect(document.documentElement.dataset.colorMode).toBe("dark");
-	});
-
-	it("keeps a cookie that already holds a choice and clears the per-origin one", () => {
-		setThemeCookie("light");
-		localStorage.setItem("theme", "dark");
-
-		render(<ThemeProvider />);
-
-		expect(readThemeCookie(document.cookie)).toBe("light");
-		expect(localStorage.getItem("theme")).toBeNull();
 	});
 
 	it("neither reads nor writes the cookie when it is not persistent", () => {
@@ -113,7 +82,6 @@ describe("theme-init.js", () => {
 	);
 
 	afterEach(() => {
-		localStorage.clear();
 		clearThemeCookie();
 		document.documentElement.className = "";
 		delete document.documentElement.dataset.colorMode;
@@ -140,14 +108,6 @@ describe("theme-init.js", () => {
 
 		expect(document.documentElement.dataset.colorMode).toBe("dark");
 		expect(document.documentElement.classList.contains("solarized")).toBe(false);
-	});
-
-	it("falls back to the per-origin choice from before the cookie", () => {
-		localStorage.setItem("theme", "dark");
-
-		runInThisContext(script);
-
-		expect(document.documentElement.dataset.colorMode).toBe("dark");
 	});
 
 	// The script cannot import the TypeScript reader, so the two must agree on every cookie string.

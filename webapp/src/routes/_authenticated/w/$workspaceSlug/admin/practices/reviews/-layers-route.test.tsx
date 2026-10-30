@@ -520,7 +520,6 @@ describe("the trace and a record over it", () => {
 				`result:${RESULT}`,
 			]),
 		);
-		expect(router.state.location.search).not.toHaveProperty("focus");
 		expect(startedAt(sheet)).toBe("review");
 		expect(sheet.querySelector<HTMLElement>('[data-here="true"]')?.dataset.stepKey).toBe("review");
 	});
@@ -530,22 +529,6 @@ describe("the trace and a record over it", () => {
 		const sheet = await traceSheet();
 		await userEvent.click(within(sheet).getByRole("button", { name: "Expand all" }));
 		expect(startedAt(sheet)).toBe("review");
-	});
-
-	it("keeps a sheet over the trace as the deepest level: an address with more keeps the front one", async () => {
-		const { router } = renderRouteAtWithRouter(
-			`${REVIEWS}?detail=${encodeURIComponent(
-				JSON.stringify([TRACE, `review:${REVIEW}`, `result:${RESULT}`]),
-			)}`,
-		);
-		await waitFor(
-			() =>
-				expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
-					TRACE,
-					`result:${RESULT}`,
-				]),
-			ROUTE_RENDER_WAIT,
-		);
 	});
 
 	/**
@@ -783,35 +766,11 @@ describe("the trace of work no review started on", () => {
 });
 
 describe("deep links", () => {
-	it("opens a review's page address that focused a result as that result's trace, keeping the selection and the scope", async () => {
-		const { router } = renderRouteAtWithRouter(
-			`${REVIEWS}/review/${REVIEW}?focus=result:${RESULT}&reviewId=${REVIEW}&selected=true&practiceSlug=thin-controllers&from=2026-08-01&developerId=7`,
-		);
-		await waitFor(() => expect(router.state.location.pathname).toBe(REVIEWS), ROUTE_RENDER_WAIT);
-		expect(router.state.location.search).toMatchObject({
-			detail: `trace:result:${RESULT}`,
-			reviewId: REVIEW,
-			selected: true,
-			practiceSlug: "thin-controllers",
-			from: "2026-08-01",
-			developerId: "7",
-		});
-		expect(router.state.location.search).not.toHaveProperty("focus");
-		const sheet = await traceSheet();
-		await waitFor(() => expect(startedAt(sheet)).toBe(`result:${RESULT}`));
-	});
-
-	it("opens an old review level as the review's sheet", async () => {
+	it("opens a review level as the review's sheet", async () => {
 		const { router } = renderRouteAtWithRouter(`${REVIEWS}/results?detail=review:${REVIEW}`);
 		const sheet = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await within(sheet).findByRole("heading", { name: "State and history" }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.pathname).toBe(`${REVIEWS}/results`);
 		expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([`review:${REVIEW}`]);
-	});
-
-	it("drops a step an old address still names", async () => {
-		const { router } = renderRouteAtWithRouter(`${REVIEWS}?detail=review:${REVIEW}&focus=results`);
-		await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
-		expect(router.state.location.search).not.toHaveProperty("focus");
 	});
 });

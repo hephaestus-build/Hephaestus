@@ -17,11 +17,6 @@ export type ReviewRange = (typeof REVIEW_RANGES)[number];
 /** A range with a first day, which `reviewRangeStart` finds: every range but all time. */
 export type DatedReviewRange = Exclude<ReviewRange, typeof ALL_TIME>;
 
-/** The review range an address from before named "1y" means now: all time. */
-export function reviewRangeOf(value: unknown): unknown {
-	return value === "1y" ? ALL_TIME : value;
-}
-
 interface ReviewRangeDef {
 	/** How many days back, today included; all time has none, and `reviewRangeStart` never takes it. */
 	days: number;

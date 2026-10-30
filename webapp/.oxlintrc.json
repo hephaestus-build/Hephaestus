@@ -17,7 +17,7 @@
 		"src/api",
 		"src/routeTree.gen.ts",
 		// Vendored by `msw init`.
-		"public/mockServiceWorker.js",
+		".storybook/public/mockServiceWorker.js",
 		// Build output, and neither is in `.gitignore`, which oxlint would otherwise honour.
 		"playwright-report",
 		"coverage"

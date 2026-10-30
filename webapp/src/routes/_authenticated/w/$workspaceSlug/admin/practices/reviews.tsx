@@ -1,18 +1,13 @@
 import {
 	createFileRoute,
 	Outlet,
-	redirect,
 	stripSearchParams,
 	useMatchRoute,
 	useSearch,
 } from "@tanstack/react-router";
 
 import { PracticeReviewsLayout } from "@/components/admin/practice-reviews/PracticeReviewsLayout";
-import {
-	layeredStack,
-	recordLevel,
-	type RecordRef,
-} from "@/components/admin/practice-reviews/review-layers";
+import { recordLevel, type RecordRef } from "@/components/admin/practice-reviews/review-layers";
 import {
 	PRACTICE_REVIEWS_SEARCH_DEFAULTS,
 	type PracticeReviewsSearch,
@@ -42,36 +37,15 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/pra
 		middlewares: [
 			stripSearchParams<PracticeReviewsSearch>(PRACTICE_REVIEWS_SEARCH_DEFAULTS),
 			// The queue belongs to the level it was opened as. Left behind under another level, it would
-			// turn the next piece of feedback opened from a list into a queue too. An address from when
-			// the trace walked its steps names one as `focus`; once a level is open it means nothing. With
-			// none open it stays, since a review's old page address turns it into the trace it opens.
+			// turn the next piece of feedback opened from a list into a queue too.
 			({ search, next }) => {
 				const result = next(search);
-				const stack = stackInSearch(result.detail);
-				const kept: PracticeReviewsSearch & { focus?: unknown } = {
+				return {
 					...result,
-					queue: stack.length > 0 ? result.queue : undefined,
+					queue: stackInSearch(result.detail).length > 0 ? result.queue : undefined,
 				};
-				if (stack.length > 0) {
-					delete kept.focus;
-				}
-				return kept;
 			},
 		],
-	},
-	// An address from before the layers held deeper stacks: it keeps what it showed in front.
-	beforeLoad: ({ search, location }) => {
-		const stack = parsePracticeReviewLevels(search.detail);
-		const layered = layeredStack(stack);
-		if (layered.length === stack.length) {
-			return;
-		}
-		const url = new URL(location.href, "https://hephaestus.invalid");
-		url.searchParams.delete("detail");
-		for (const entry of layered) {
-			url.searchParams.append("detail", detailStackKey(entry));
-		}
-		throw redirect({ href: `${url.pathname}${url.search}`, replace: true });
 	},
 	head: practiceReviewsHead("Practice reviews"),
 	component: ReviewsLayoutRoute,

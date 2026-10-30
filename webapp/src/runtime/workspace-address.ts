@@ -23,7 +23,6 @@ const APEX_PATHS = [
 	"/verify-passkey",
 	"/integrations",
 	"/about",
-	"/landing",
 	"/workspaces",
 	// Do not prefix explicit workspace paths; output rewrites handle their target workspace.
 	"/w",

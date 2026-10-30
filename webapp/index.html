@@ -42,9 +42,7 @@
     <script src="/env-config.js"></script>
     <!-- Applies the theme cookie before the first paint; the app's ThemeProvider takes over after. -->
     <script src="/theme-init.js"></script>
-    <!-- The manifest link is injected by src/main.tsx (localhost gets manifest-dev.json). An
-         inline script here would violate the deployed Content-Security-Policy (script-src 'self'
-         in webapp/docker/security-headers.conf and the Traefik edge middleware). -->
+    <link rel="manifest" href="/manifest.json" />
     <title>Hephaestus</title>
   </head>
   <body class="bg-sidebar">

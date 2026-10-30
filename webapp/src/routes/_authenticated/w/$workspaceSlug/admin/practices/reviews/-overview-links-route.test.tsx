@@ -51,9 +51,9 @@ describe("the overview's figures open the lists filtered to them", () => {
 		expect(router.state.location.search).toMatchObject({ status: ["RUNNING", "QUEUED"] });
 	});
 
-	it("opens an address from before that asked for 12 months as all time", async () => {
+	it("opens all time with no first day, and its figures' lists with no date filter", async () => {
 		const { overviewReads } = serveAttention();
-		const { router } = renderRouteAtWithRouter(`${OVERVIEW}?range=1y`);
+		const { router } = renderRouteAtWithRouter(`${OVERVIEW}?range=all`);
 
 		const allTime = await screen.findByRole("button", { name: "All time" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(allTime.getAttribute("aria-pressed")).toBe("true"));

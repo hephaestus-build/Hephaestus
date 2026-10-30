@@ -84,7 +84,7 @@ export function ProblemLevel({ nested, path, problem: state }: ProblemLevelProps
 								</ReviewFact>
 							)}
 							<ReviewFact label="Observation">
-								{/* One record sheet stands at a time (`layeredStack`): its parent takes its place, and Back returns here. */}
+								{/* One record sheet stands at a time (`single`): its parent takes its place, and Back returns here. */}
 								<DetailStackLink
 									entry={resultLevel(state.problem.resultId)}
 									single

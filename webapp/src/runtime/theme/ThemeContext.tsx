@@ -2,22 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 import environment from "@/environment";
 
-import { isTheme, readThemeCookie, type Theme, themeCookies } from "./theme-cookie";
-
-/**
- * The per-origin key that held the theme before the cookie; read once, then cleared. Drop it, here
- * and in `theme-init.js`, once no supported release predates the cookie.
- */
-const LEGACY_STORAGE_KEY = "theme";
-
-function readLegacyTheme(): Theme | undefined {
-	try {
-		const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-		return isTheme(legacy) ? legacy : undefined;
-	} catch {
-		return undefined;
-	}
-}
+import { readThemeCookie, type Theme, themeCookies } from "./theme-cookie";
 
 function writeThemeCookie(theme: Theme) {
 	const scope = {
@@ -66,24 +51,8 @@ export function ThemeProvider({
 		if (!persistent) {
 			return defaultTheme;
 		}
-		return readThemeCookie(document.cookie) ?? readLegacyTheme() ?? defaultTheme;
+		return readThemeCookie(document.cookie) ?? defaultTheme;
 	});
-
-	// A choice from before the cookie moves into it once, so it reaches the other hosts too.
-	useEffect(() => {
-		if (!persistent) {
-			return;
-		}
-		const legacy = readLegacyTheme();
-		if (legacy !== undefined && readThemeCookie(document.cookie) === undefined) {
-			writeThemeCookie(legacy);
-		}
-		try {
-			localStorage.removeItem(LEGACY_STORAGE_KEY);
-		} catch {
-			// Blocked storage holds no legacy choice to clear.
-		}
-	}, [persistent]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;

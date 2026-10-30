@@ -10,6 +10,7 @@ import { type Browser, expect, type Locator, type Page, test } from "@playwright
 
 import { getResponse } from "msw";
 import type { WorkspaceMembership } from "@/api/types.gen";
+import { THEME_COOKIE } from "@/runtime/theme/theme-cookie";
 
 import { BASE_URL } from "./server.ts";
 import { handlers, NOW, WORKSPACE } from "./workspace.ts";
@@ -69,8 +70,8 @@ async function open(
 		locale: "en-US",
 		timezoneId: "UTC",
 	});
-	// The app defaults to dark and keeps the reader's choice under this key.
-	await context.addInitScript((scheme) => localStorage.setItem("theme", scheme), colorScheme);
+	// The reader's theme choice, which the app reads before the first paint.
+	await context.addCookies([{ name: THEME_COOKIE, value: colorScheme, url: BASE_URL }]);
 	// A returning reader has closed the practice profile's reading guide, so the image shows the page.
 	await context.addInitScript(() =>
 		localStorage.setItem("hephaestus:section-folded:practice-profile:how-to-read", "true"),

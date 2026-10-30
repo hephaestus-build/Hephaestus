@@ -10,31 +10,8 @@ export type TraceNode =
 	| { kind: "result"; id: string }
 	| { kind: "feedback"; id: string };
 
-/** A step the address can name as `?focus=`: any step but the review, which a trace of a review stands on. */
-export type TraceFocus = Exclude<TraceNode, { kind: "review" }>;
-
 export function traceStepKey(node: TraceNode): string {
 	return "id" in node ? `${node.kind}:${node.id}` : node.kind;
-}
-
-/** `?focus=` read back; undefined for a value the page cannot centre on. */
-export function parseTraceFocus(raw: string | undefined): TraceFocus | undefined {
-	if (raw === "work" || raw === "results" || raw === "end") {
-		return { kind: raw };
-	}
-	const separator = raw?.indexOf(":") ?? -1;
-	if (raw === undefined || separator < 1) {
-		return undefined;
-	}
-	const kind = raw.slice(0, separator);
-	const id = raw.slice(separator + 1);
-	if (id.length === 0) {
-		return undefined;
-	}
-	if (kind === "result" || kind === "feedback") {
-		return { kind, id };
-	}
-	return undefined;
 }
 
 export function sameTraceNode(a: TraceNode | undefined, b: TraceNode | undefined): boolean {

@@ -15,31 +15,10 @@ import {
 } from "./lineage-fixtures";
 import { lineageStateCase, richReviewFixture } from "./lineage-state-fixtures";
 import { reviewStepState } from "./lineage-story";
-import { chainReview, ownResults, parseTraceFocus, traceStepKey, tracedBy } from "./review-trace";
+import { chainReview, ownResults, tracedBy } from "./review-trace";
 
 const whole = lineageRecords(wholeReview);
 const stateRecords = (key: string) => lineageRecords(lineageStateCase(key).lineage);
-
-describe("the record a review's page opens on", () => {
-	it("reads back what it writes", () => {
-		for (const focus of [
-			{ kind: "work" as const },
-			{ kind: "results" as const },
-			{ kind: "end" as const },
-			{ kind: "result" as const, id: LINEAGE_RESULT.cache404 },
-			{ kind: "feedback" as const, id: LINEAGE_FEEDBACK.onGitHub },
-		]) {
-			expect(parseTraceFocus(traceStepKey(focus))).toStrictEqual(focus);
-		}
-	});
-
-	it("drops a value it cannot pin", () => {
-		expect(parseTraceFocus("review:1")).toBeUndefined();
-		expect(parseTraceFocus("moment:MERGED-1")).toBeUndefined();
-		expect(parseTraceFocus("result:")).toBeUndefined();
-		expect(parseTraceFocus(undefined)).toBeUndefined();
-	});
-});
 
 describe("the review a chain tells", () => {
 	it("is the review that recorded the record the graph was asked for", () => {

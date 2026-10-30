@@ -1,8 +1,4 @@
-import {
-	REVIEW_RANGES,
-	type ReviewRange,
-	reviewRangeOf,
-} from "@/components/admin/practice-reviews/review-range";
+import { REVIEW_RANGES, type ReviewRange } from "@/components/admin/practice-reviews/review-range";
 
 /**
  * The overview's range, remembered while the browser tab is open: the lists have dates of their own,
@@ -23,7 +19,7 @@ function isReviewRange(value: unknown): value is ReviewRange {
 /** The range last chosen on the overview in this tab, or undefined when there is none to read. */
 export function rememberedRange(workspaceSlug: string): ReviewRange | undefined {
 	try {
-		const stored = reviewRangeOf(sessionStorage.getItem(keyOf(workspaceSlug)));
+		const stored = sessionStorage.getItem(keyOf(workspaceSlug));
 		return isReviewRange(stored) ? stored : undefined;
 	} catch {
 		return undefined;
