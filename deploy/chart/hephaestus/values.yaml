@@ -86,7 +86,7 @@ postgresql:
     size: 20Gi
     storageClassName: ""
   resources:
-    requests: { cpu: 250m, memory: 512Mi, ephemeral-storage: 256Mi }
+    requests: { cpu: 250m, memory: 2Gi, ephemeral-storage: 256Mi }
     limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 1Gi }
   # Optional: pgBackRest for the bundled server. PostgreSQL archives its WAL to one S3-compatible
   # bucket, and CronJobs take a full backup each week and a differential backup on the other days.
@@ -125,7 +125,7 @@ postgresql:
       full: "15 2 * * 0"
       differential: "15 2 * * 1-6"
     resources:
-      requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 64Mi }
+      requests: { cpu: 100m, memory: 512Mi, ephemeral-storage: 64Mi }
       limits: { cpu: "1", memory: 512Mi, ephemeral-storage: 1Gi }
   external:
     # The name that the server certificate holds: verify-full checks it.

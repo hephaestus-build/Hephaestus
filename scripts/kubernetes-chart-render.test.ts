@@ -2396,6 +2396,64 @@ await test("the JVM roles request the memory that they may use", () => {
 	}
 });
 
+await test("PostgreSQL containers reserve their full memory limits in bundled profiles", () => {
+	for (const name of ["small", "small-16gib", "preview", "dev"] as const) {
+		const resources = rendered([
+			...layersFor(name),
+			{
+				postgresql: {
+					backup: {
+						enabled: true,
+						clientTlsSecret: "backup-tls",
+						s3: { bucket: "test-backups", endpoint: "s3.example.com", region: "eu-central-1" },
+					},
+				},
+			},
+		]);
+		const postgres = workload(resources, "postgresql");
+		for (const entry of list(get(podSpec(postgres), "containers"))) {
+			const limit = amount(get(entry, "resources", "limits", "memory"));
+			assert.ok(limit > 0);
+			assert.equal(
+				amount(get(entry, "resources", "requests", "memory")),
+				limit,
+				`${name}: ${String(get(entry, "name"))}`,
+			);
+		}
+	}
+});
+
+await test("PostgreSQL has a lower kubelet OOM adjustment than review and conversation sandboxes", () => {
+	// Kubelet's Burstable formula: kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/.
+	// This computes the adjustment from rendered requests; it does not claim to invoke the kernel OOM killer.
+	const nodeBytes = 16 * 2 ** 30;
+	const adjustment = (requestBytes: number) =>
+		Math.min(999, Math.max(2, 1000 - Math.floor((1000 * requestBytes) / nodeBytes)));
+	for (const name of ["small", "small-16gib"] as const) {
+		const resources = rendered(layersFor(name));
+		const postgres = workload(resources, "postgresql");
+		const limits = get(container(postgres), "resources", "limits");
+		const requests = get(container(postgres), "resources", "requests");
+		assert.ok(amount(get(requests, "cpu")) < amount(get(limits, "cpu")), "CPU remains burstable");
+		const score = adjustment(amount(get(requests, "memory")));
+		for (const sandbox of [sandboxPods.review, sandboxPods.hephHost, sandboxPods.turn]) {
+			assert.ok(
+				score < adjustment(sandbox.gib * 2 ** 30),
+				`${name}: database precedes sandbox in OOM protection`,
+			);
+		}
+		const tiers = resources.filter((resource) => kindOf(resource) === "PriorityClass");
+		const roles = tiers.find(
+			(resource) => nameOf(resource) === get(podSpec(postgres), "priorityClassName"),
+		);
+		assert.ok(roles);
+		assert.equal(
+			get(roles, "value"),
+			Math.max(...tiers.map((resource) => Number(get(resource, "value")))),
+		);
+	}
+});
+
 await test("every role verifies an external PostgreSQL with the CA alone", () => {
 	const resources = rendered(layersFor("external"));
 	assert.equal(

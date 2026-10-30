@@ -7,7 +7,7 @@ postgresql:
   persistence:
     size: 5Gi
   resources:
-    requests: { cpu: 100m, memory: 256Mi, ephemeral-storage: 128Mi }
+    requests: { cpu: 100m, memory: 1Gi, ephemeral-storage: 128Mi }
     limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 512Mi }
 nats:
   jetstream:
