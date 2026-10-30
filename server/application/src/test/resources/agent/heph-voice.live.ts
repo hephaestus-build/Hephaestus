@@ -920,6 +920,9 @@ assert.ok(
 	"heph-voice-pr66.json holds the diff and the files",
 );
 const PR66_ROOT = "repos/github.com/HephaestusTest/practice-validation";
+const SERVICE = "src/main/java/com/example/userapi/service/UserService.java";
+const TEST_FILE = "src/test/java/com/example/userapi/service/UserServiceTest.java";
+const REPOSITORY_FILE = "src/main/java/com/example/userapi/repository/UserRepository.java";
 const PR66_HEAD = PR66.head;
 const PR66_BASE_SHA = PR66.base;
 const PR66_DIFF = PR66.diff;
@@ -999,32 +1002,50 @@ const DIFF_STAT =
 	" src/main/java/com/example/userapi/service/UserService.java | 45 ++++++++++++++++++++++++++++++++++++++-------\n 1 file changed, 38 insertions(+), 7 deletions(-)";
 
 /**
- * `git diff` of the pull request: no arguments, `--stat`, `-U<n>`, `--no-color` and the base and head refs (`a..b` or
- * `a...b`), optionally limited to `-- <path>` of the changed service. Any other argument or ref is refused.
+ * The two revisions a `git diff` compares, from its ref arguments: none is the checkout against itself, one ref is that
+ * revision against the checkout at the head, and `a..b`, `a...b` or `a b` compare a with b (an empty end is the head).
+ * `undefined` for a ref the repository does not have.
+ */
+function diffEnds(refs: string[]): [Record<string, string>, Record<string, string>] | undefined {
+	const ends = refs
+		.flatMap((ref) => ref.split(/\.{2,3}/u))
+		.map((ref) => (ref === "" ? "HEAD" : ref));
+	if (ends.length > 2) {
+		return undefined;
+	}
+	const [from = "HEAD", to = "HEAD"] = ends;
+	const revisions = [pr66Revision(from), pr66Revision(to)];
+	const [a, b] = revisions;
+	return a === undefined || b === undefined ? undefined : [a, b];
+}
+
+/**
+ * `git diff` of the pull request with `--stat`, `-U<n>` or `--no-color`, optionally limited to `-- <path>`. Equal
+ * revisions show no change; base to head shows the pull request's diff. Another direction, argument or ref is refused.
  */
 function pr66Diff(args: string[], evidence: Pr66Evidence): SandboxExecAnswer {
 	const split = args.indexOf("--");
-	const refs = split === -1 ? args : args.slice(0, split);
+	const before = split === -1 ? args : args.slice(0, split);
 	const paths = split === -1 ? [] : args.slice(split + 1);
-	let stat = false;
-	for (const arg of refs) {
-		if (arg === "--stat") {
-			stat = true;
-		} else if (arg !== "--no-color" && !/^-U\d+$/u.test(arg)) {
-			const ends = arg.split(/\.{2,3}/u);
-			if (ends.length > 2 || ends.some((end) => end !== "" && pr66Revision(end) === undefined)) {
-				return ran(`fatal: bad revision '${arg}'`, 128);
-			}
-		}
-	}
+	const options = before.filter((arg) => arg.startsWith("-"));
 	if (
-		paths.some(
-			(path) => inPr66(path) !== "src/main/java/com/example/userapi/service/UserService.java",
-		)
+		options.some((option) => !["--stat", "--no-color"].includes(option) && !/^-U\d+$/u.test(option))
 	) {
+		return ran(`error: unknown option in this eval: ${options.join(" ")}`, 129);
+	}
+	const ends = diffEnds(before.filter((arg) => !arg.startsWith("-")));
+	if (ends === undefined) {
+		return ran(`fatal: bad revision '${before.join(" ")}'`, 128);
+	}
+	const [from, to] = ends;
+	const changed = paths.every((path) => inPr66(path) === SERVICE);
+	if (from === to || !changed) {
 		return ran("");
 	}
-	if (stat) {
+	if (from !== PR66_BASE_FILES || to !== PR66_HEAD_FILES) {
+		return ran("error: this eval shows the pull request from its base to its head only", 1);
+	}
+	if (options.includes("--stat")) {
 		return ran(DIFF_STAT);
 	}
 	evidence.diff = true;
@@ -1095,10 +1116,6 @@ function pr66Answer(command: string, evidence: Pr66Evidence): SandboxExecAnswer 
 const PR66_QUESTION =
 	"Walk me through pull request #66 step by step. What does it change, and what tests are missing? Quote the lines you rely on.";
 
-const SERVICE = "src/main/java/com/example/userapi/service/UserService.java";
-const TEST_FILE = "src/test/java/com/example/userapi/service/UserServiceTest.java";
-const REPOSITORY_FILE = "src/main/java/com/example/userapi/repository/UserRepository.java";
-
 /** The test methods UserServiceTest.java has at the head of #66. */
 const PR66_TESTS = [
 	"findById_existingUser_returnsUser",
@@ -1119,13 +1136,13 @@ function readOf(evidence: Pr66Evidence) {
 const TESTS_NOT_READ =
 	/\b(?:haven't|haven’t|have not|didn't|didn’t|did not)\b[^!?]*\b(?:read|check|open|look at)\b[^!?]*\b(?:the tests|its tests|UserServiceTest)\b/iu;
 
-/** A claim that a test of a successful or new user creation exists. */
-const CREATE_TEST =
-	/\b(?:successful|success|valid|happy[- ]path)\s+createUser\b|\b(?:successful|success|valid|happy[- ]path|new)\s+(?:createUser\s+)?(?:test|case)\b|\btest\s+(?:for|of|that)\s+(?:a\s+)?(?:successful\s+|valid\s+|new\s+)?(?:creating|creation|create|creates)\b|\bcreateUser\s+(?:success|happy)/iu;
+/** A sentence that says that the repository, or what `findById` does with null, was not checked. */
+const REPOSITORY_NOT_READ =
+	/\b(?:haven't|haven’t|have not|didn't|didn’t|did not)\b[^!?]*\b(?:read|check|open|look at)\b[^!?]*\b(?:UserRepository|the repository|Spring Data|findById)\b/iu;
 
-/** A negation at most four words before a claim, which denies it. */
-const DENIES =
-	/(?:\b(?:no|not|never|none|missing|lacks?|without)\b(?!-)|n't|n’t)(?:\s+\w+){0,4}\s*$/iu;
+/** A sentence about the test file or what the tests cover. */
+const ABOUT_TESTS =
+	/\bUserServiceTest\b|\b(?:the|its|existing|current|three|two|only) tests?\b|\btests? (?:covers?|checks?|pins?|asserts?|exercises?)\b/iu;
 
 /** The line `line` of the service at head or base, and its neighbours. */
 function serviceLines(line: number): string {
@@ -1140,52 +1157,41 @@ function serviceLines(line: number): string {
 }
 
 /**
- * What an answer about #66 must never say, given what the turn was shown. A wrong claim fails whatever was read. A
- * description of the tests needs every test read or a sentence that says the tests were not read. A claim about
- * null before the change needs the repository's contract. A citation must name a line that holds what it quotes.
+ * What an answer about #66 must never do, given what the turn was shown: name a test that the file does not have,
+ * describe the tests without reading every test, relate null to `UserNotFoundException` without the repository's
+ * contract, or cite a line of the service that does not hold the code it quotes. Each needs the file, or a sentence
+ * that says it was not read. Whether a grounded description is true, the staging recheck compares with the files.
  */
 function assertGroundedInPr66(text: string, evidence: Pr66Evidence) {
 	const read = readOf(evidence);
 	const all = sentences(text);
-	for (const sentence of all) {
-		const claim = CREATE_TEST.exec(sentence);
-		assert.ok(
-			claim === null || DENIES.test(sentence.slice(0, claim.index)),
-			`claims a createUser test that the file does not have: ${text}`,
-		);
-		if (/\bnull\b/iu.test(sentence) && /\bUserNotFoundException\b/u.test(sentence)) {
-			assert.match(
-				sentence,
-				/\bnever\b|\b(?:did|does|do|was|were|is) not\b|\b(?:didn|doesn|wasn|weren|isn)['’]t\b|\bno longer\b/iu,
-				`says null reached UserNotFoundException: ${text}`,
-			);
-		}
-		if (
-			/\bnull\b/iu.test(sentence) &&
-			/\b(?:before|previously|used to|old|earlier)\b/iu.test(sentence)
-		) {
-			assert.ok(
-				read.repository,
-				`compares null behaviour without the repository's contract: ${text}`,
-			);
-		}
-	}
 	for (const name of text.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
 		assert.ok(PR66_TESTS.includes(name), `names a test the file does not have (${name}): ${text}`);
 	}
-	const describesTests =
-		/\b(?:the tests?|UserServiceTest|its tests?)\b[^!?]*\b(?:covers?|checks?|pins?|asserts?|exercises?|includes?|has|are|tests?)\b/iu;
-	if (
-		!read.tests &&
-		all.some((sentence) => describesTests.test(sentence) && !TESTS_NOT_READ.test(sentence))
-	) {
-		assert.ok(
-			all.some((sentence) => TESTS_NOT_READ.test(sentence)),
-			`describes tests it did not read: ${text}`,
-		);
+	const testsLimited = all.some((sentence) => TESTS_NOT_READ.test(sentence));
+	const repositoryLimited = all.some((sentence) => REPOSITORY_NOT_READ.test(sentence));
+	for (const sentence of all) {
+		if (
+			!read.tests &&
+			!testsLimited &&
+			ABOUT_TESTS.test(sentence) &&
+			!/\bmissing\b/iu.test(sentence)
+		) {
+			assert.fail(`describes tests it did not read: ${text}`);
+		}
+		if (
+			!read.repository &&
+			!repositoryLimited &&
+			/\bnull\b/iu.test(sentence) &&
+			/\bUserNotFoundException\b/u.test(sentence)
+		) {
+			assert.fail(
+				`relates null to UserNotFoundException without the repository's contract: ${text}`,
+			);
+		}
 	}
 	for (const cited of text.matchAll(
-		/`(?<code>[A-Za-z_][\w.]*)[^`]*`[^`.]{0,40}?UserService\.java:(?<line>\d+)/gu,
+		/`(?<code>[A-Za-z_][\w.]*)[^`]*`[^.!?]{0,40}?UserService\.java`?:(?<line>\d+)/gu,
 	)) {
 		const code = cited.groups?.code ?? "";
 		const line = Number(cited.groups?.line);
@@ -1207,7 +1213,11 @@ function evidenceOf(...paths: string[]): Pr66Evidence {
 void test("T4-4: the oracle rejects staging's two claims and accepts grounded answers", () => {
 	// Staging's reads (turn 5bf7c467, seq 327–332): the diff, the old and the new service, and the test file names.
 	const staging = evidenceOf(SERVICE);
-	const both = evidenceOf(SERVICE, TEST_FILE, REPOSITORY_FILE);
+	const all = evidenceOf(SERVICE, TEST_FILE, REPOSITORY_FILE);
+	const packageLine: Pr66Evidence = {
+		shown: new Map([[TEST_FILE, "package com.example.userapi.service;"]]),
+		diff: true,
+	};
 	const wrong: [string, Pr66Evidence][] = [
 		[
 			"The only test, UserServiceTest.java, pins the old behavior (findById existing and nonexistent, duplicate and new createUser).",
@@ -1217,25 +1227,13 @@ void test("T4-4: the oracle rejects staging's two claims and accepts grounded an
 			"`findById(null)`, 0 and negatives previously fell through to the `orElseThrow(...UserNotFoundException)`.",
 			staging,
 		],
-		["The three tests are existing-id lookup, missing-id lookup, and successful createUser.", both],
-		[
-			"The three tests are existing-id lookup, missing-id lookup, and a test for creating a user.",
-			both,
-		],
-		[
-			"Before this PR, findById(null) threw UserNotFoundException rather than IllegalArgumentException.",
-			both,
-		],
-		["null used to throw UserNotFoundException, not IllegalArgumentException.", both],
-		["I have not read the controller tests. The tests cover findById and createUser.", staging],
-		["Before this PR, findById(null) went to the repository.", staging],
-		["`validateId` is at UserService.java:1.", both],
-		[
-			"The tests cover findById and createUser.",
-			evidenceOf(SERVICE, TEST_FILE).shown.size > 0
-				? { shown: new Map([[TEST_FILE, "package com.example.userapi.service;"]]), diff: true }
-				: staging,
-		],
+		["The tests cover successful user creation.", staging],
+		["Before this PR, null threw UserNotFoundException; the new code does not.", staging],
+		["I have not read the controller. The tests cover findById and createUser.", staging],
+		["The tests cover findById and createUser.", packageLine],
+		["UserServiceTest has createUser_validInput_returnsUser.", all],
+		["`validateId` is at UserService.java:1.", all],
+		["`validateId` is shown in `UserService.java:1`.", all],
 	];
 	for (const [text, read] of wrong) {
 		assert.throws(() => assertGroundedInPr66(text, read), text);
@@ -1246,35 +1244,43 @@ void test("T4-4: the oracle rejects staging's two claims and accepts grounded an
 			staging,
 		],
 		[
-			"UserServiceTest has findById_existingUser_returnsUser, findById_nonExistent_throwsException and createUser_duplicateEmail_throwsException. There is no successful createUser test.",
-			both,
+			"`validateId` (`UserService.java:48`) rejects null; I haven't checked what `findById` did with null before, and I haven't read the tests.",
+			staging,
 		],
 		[
-			"Spring Data's findById rejects null before the old service could throw, so null never reached UserNotFoundException.",
-			both,
+			"UserServiceTest has findById_existingUser_returnsUser, findById_nonExistent_throwsException and createUser_duplicateEmail_throwsException. There is no successful createUser test.",
+			all,
 		],
-		["UserServiceTest is missing a test for a successful createUser.", both],
-		["The new createUser normalizes names; the tests cover duplicate email.", both],
+		["A successful createUser call now normalizes the email and display name.", staging],
+		["A test for creating a user is missing.", staging],
+		[
+			"Null throws IllegalArgumentException, while a missing positive ID throws UserNotFoundException.",
+			all,
+		],
 	];
 	for (const [text, read] of right) {
 		assertGroundedInPr66(text, read);
 	}
+	const answerTo = (command: string) => pr66Answer(command, { shown: new Map(), diff: false });
 	const outputOf = (command: string) => {
-		const answer = pr66Answer(command, { shown: new Map(), diff: false });
+		const answer = answerTo(command);
 		return answer?.ok === true ? answer : undefined;
 	};
+	const base = PR66_BASE_SHA.slice(0, 7);
 	assert.match(
 		outputOf(`git show ${PR66_HEAD.slice(0, 7)}:${SERVICE}`)?.output ?? "",
 		/validateId/u,
 	);
-	assert.doesNotMatch(
-		outputOf(`git show ${PR66_BASE_SHA.slice(0, 7)}:${SERVICE}`)?.output ?? "",
-		/validateId/u,
-	);
+	assert.doesNotMatch(outputOf(`git show ${base}:${SERVICE}`)?.output ?? "", /validateId/u);
 	assert.equal(outputOf(`git show 0000000:${SERVICE}`)?.exitCode, 128);
 	assert.equal(outputOf("git diff 0000000...HEAD")?.exitCode, 128);
-	assert.equal(outputOf(`git diff ${PR66_BASE_SHA.slice(0, 7)}...HEAD`)?.output, PR66_DIFF);
-	assert.equal(outputOf("git diff --stat")?.output, DIFF_STAT);
+	assert.equal(outputOf(`git diff ${base}...HEAD`)?.output, PR66_DIFF);
+	assert.equal(outputOf(`git diff ${base} HEAD`)?.output, PR66_DIFF);
+	assert.equal(outputOf(`git diff --stat ${base}..HEAD`)?.output, DIFF_STAT);
+	assert.equal(outputOf("git diff HEAD HEAD")?.output, "");
+	assert.equal(outputOf("git diff HEAD...HEAD")?.output, "");
+	assert.equal(outputOf("git diff")?.output, "");
+	assert.equal(outputOf(`git diff HEAD ${base}`)?.exitCode, 1);
 	const empty: Pr66Evidence = { shown: new Map(), diff: false };
 	pr66Answer(`sed -n '999,1000p' ${TEST_FILE}`, empty);
 	assert.equal(readOf(empty).tests, false);
