@@ -40,21 +40,37 @@ const meta = {
 		workspaces,
 		isLoading: false,
 		hasSearch: false,
-		onViewUsers: fn(),
+		onViewAsUser: fn(),
 	},
 } satisfies Meta<typeof AdminWorkspacesTable>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/**
+ * An active workspace opens its administration on the workspace settings, or starts a user view. A
+ * workspace that is not active offers neither.
+ */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "View users of AET" }));
-		await expect(args.onViewUsers).toHaveBeenCalledWith(activeWorkspace);
-		await expectGenuinelyDisabled(
-			canvas.getByRole("button", { name: "View users of Intro Course" }),
+		await expect(canvas.getByRole("link", { name: "Open administration of AET" })).toHaveAttribute(
+			"href",
+			"/w/aet/admin/settings",
 		);
-		canvas.getByText("This workspace is not active, so its users cannot be viewed.");
+		await userEvent.click(canvas.getByRole("button", { name: "View as user in AET" }));
+		await expect(args.onViewAsUser).toHaveBeenCalledWith(activeWorkspace);
+		await expect(
+			canvas.queryByRole("link", { name: "Open administration of Intro Course" }),
+		).not.toBeInTheDocument();
+		await expectGenuinelyDisabled(
+			canvas.getByRole("button", { name: "Open administration of Intro Course" }),
+		);
+		await expectGenuinelyDisabled(
+			canvas.getByRole("button", { name: "View as user in Intro Course" }),
+		);
+		canvas.getByText(
+			"This workspace is not active, so you cannot open its administration or view it as a user.",
+		);
 		// Statuses and providers in words, never the constants the wire carries.
 		canvas.getByText("Active");
 		canvas.getByText("Suspended");
@@ -123,9 +139,9 @@ export const RefreshFailed: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("These workspaces may be out of date");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
-		await expect(canvas.getByRole("button", { name: "View users of AET" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "View as user in AET" })).toBeEnabled();
 		await expectGenuinelyDisabled(
-			canvas.getByRole("button", { name: "View users of Intro Course" }),
+			canvas.getByRole("button", { name: "View as user in Intro Course" }),
 		);
 	},
 };
@@ -134,7 +150,7 @@ export const RefreshRetrying: Story = {
 	args: { refreshFailure: { error: { status: 503 }, onRetry: fn(), pending: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
-		await expect(canvas.getByRole("button", { name: "View users of AET" })).toBeEnabled();
+		await expect(canvas.getByRole("button", { name: "View as user in AET" })).toBeEnabled();
 	},
 };
 

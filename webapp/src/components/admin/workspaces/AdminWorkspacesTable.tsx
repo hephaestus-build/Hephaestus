@@ -1,10 +1,11 @@
-import { Building2, Users } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Building2, Settings, Users } from "lucide-react";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { QueryErrorAlert, type QueryErrorAlertProps } from "@/components/common/QueryErrorAlert";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
 	Table,
 	TableBody,
@@ -25,7 +26,7 @@ export interface AdminWorkspacesTableProps {
 	/** Reading the list again failed; the workspaces last read stay, with the failure above them. */
 	refreshFailure?: RefreshFailure;
 	hasSearch: boolean;
-	onViewUsers: (workspace: AdminWorkspaceView) => void;
+	onViewAsUser: (workspace: AdminWorkspaceView) => void;
 }
 
 type WorkspaceStatus = AdminWorkspaceView["status"];
@@ -65,21 +66,24 @@ function WorkspacesTableHeader() {
 				</TableHead>
 				<TableHead scope="col">Created</TableHead>
 				<TableHead scope="col" className="text-right">
-					<span className="sr-only">Support access</span>
+					<span className="sr-only">Actions</span>
 				</TableHead>
 			</TableRow>
 		</TableHeader>
 	);
 }
 
-/** Metadata only: a workspace's content is reached through a user view, never listed here. */
+/**
+ * Metadata only: a workspace's content is reached through its administration or a user view, never
+ * listed here.
+ */
 export function AdminWorkspacesTable({
 	workspaces,
 	isLoading,
 	loadFailure,
 	refreshFailure,
 	hasSearch,
-	onViewUsers,
+	onViewAsUser,
 }: AdminWorkspacesTableProps) {
 	if (loadFailure !== undefined) {
 		return <QueryErrorAlert title="We could not load workspaces" {...loadFailure} />;
@@ -143,19 +147,44 @@ export function AdminWorkspacesTable({
 								{formatCreatedAt(ws.createdAt)}
 							</TableCell>
 							<TableCell className="text-right">
-								<Button
-									variant="outline"
-									size="sm"
-									aria-label={`View users of ${ws.displayName}`}
-									disabled={ws.status !== "ACTIVE"}
-									onClick={() => onViewUsers(ws)}
-								>
-									<Users aria-hidden />
-									View users
-								</Button>
+								<div className="flex justify-end gap-2">
+									{ws.status === "ACTIVE" ? (
+										<Link
+											to="/w/$workspaceSlug/admin/settings"
+											params={{ workspaceSlug: ws.workspaceSlug }}
+											aria-label={`Open administration of ${ws.displayName}`}
+											className={buttonVariants({ variant: "outline", size: "sm" })}
+										>
+											<Settings aria-hidden />
+											Open administration
+										</Link>
+									) : (
+										// The server answers no administration read of a workspace that is not active.
+										<Button
+											variant="outline"
+											size="sm"
+											aria-label={`Open administration of ${ws.displayName}`}
+											disabled
+										>
+											<Settings aria-hidden />
+											Open administration
+										</Button>
+									)}
+									<Button
+										variant="outline"
+										size="sm"
+										aria-label={`View as user in ${ws.displayName}`}
+										disabled={ws.status !== "ACTIVE"}
+										onClick={() => onViewAsUser(ws)}
+									>
+										<Users aria-hidden />
+										View as user
+									</Button>
+								</div>
 								{ws.status !== "ACTIVE" && (
 									<span className="sr-only">
-										This workspace is not active, so its users cannot be viewed.
+										This workspace is not active, so you cannot open its administration or view it
+										as a user.
 									</span>
 								)}
 							</TableCell>
