@@ -1,5 +1,16 @@
 import { readFileSync } from "node:fs";
 
+import { parse } from "yaml";
+
+import { chartImages } from "./kubernetes-chart.ts";
+import {
+	renderDeployTopology,
+	readDeployContainers,
+	topologyImage,
+	type DeployContainer,
+} from "./lib/deploy-topology.ts";
+import { asRecord, readJsonFileSync } from "./lib/json.ts";
+
 interface UpstreamImage {
 	name: string;
 	repository: string;
@@ -51,14 +62,105 @@ export function validateInventory(inventory: unknown, workflow: string): string[
 	if (!("upstream" in inventory) || !Array.isArray(inventory.upstream)) {
 		throw new Error("malformed upstream image inventory");
 	}
-	if (inventory.upstream.some((upstream) => !isUpstreamImage(upstream))) {
-		throw new Error("malformed upstream image inventory");
+	const upstream = new Set<string>();
+	for (const image of inventory.upstream) {
+		if (!isUpstreamImage(image)) {
+			throw new Error("malformed upstream image inventory");
+		}
+		if (configured.includes(image.name) || upstream.has(image.name)) {
+			throw new Error("release image inventory contains duplicates");
+		}
+		upstream.add(image.name);
 	}
+
 	return releaseImages(workflow).filter((image) => !configured.includes(image));
 }
 
+/** The chart's actual containers and sandbox image input must consume the verified release pins. */
+export function deployedImageConsumers(containers: readonly DeployContainer[]): string[] {
+	const expected = new Map(chartImages.map((name) => [topologyImage(name), name]));
+	const consumers = new Set<string>();
+	for (const container of containers) {
+		const references = [
+			container.image,
+			container.environment.get("HEPHAESTUS_AGENT_IMAGE_REFERENCE"),
+		].filter((reference) => reference !== undefined);
+		for (const reference of references) {
+			const name = expected.get(reference);
+			if (name === undefined) {
+				throw new Error(`${container.name} bypasses verified chart image values`);
+			}
+			consumers.add(name);
+		}
+	}
+	if (consumers.size === 0) {
+		throw new Error("the chart selects no image consumers");
+	}
+	return [...consumers].toSorted();
+}
+
+export function validateChartConsumers(
+	consumers: readonly string[],
+	schemaImages: readonly string[],
+	inventoried: ReadonlySet<string>,
+): void {
+	for (const name of new Set([...consumers, ...schemaImages, ...chartImages])) {
+		if (!chartImages.some((image) => image === name)) {
+			throw new Error(`unexpected chart image ${name}`);
+		}
+		if (!consumers.includes(name)) {
+			throw new Error(`${name}: missing consumer`);
+		}
+		if (!schemaImages.includes(name)) {
+			throw new Error(`${name}: missing schema`);
+		}
+		if (!inventoried.has(name)) {
+			throw new Error(`${name}: missing evidence`);
+		}
+	}
+}
+
+/** Preserve verification of the 0.95 host bundle until its consumers and evidence retire together. */
+export function composeImageConsumers(
+	text: string,
+	file: string,
+	known: ReadonlySet<string>,
+): Set<string> {
+	const document: unknown = parse(text, { merge: true });
+	const services = asRecord(asRecord(document, file).services, `${file} services`);
+	if (Object.keys(services).length === 0) {
+		throw new Error(`${file} has no services`);
+	}
+	const consumers = new Set<string>();
+	for (const [name, raw] of Object.entries(services)) {
+		const service = asRecord(raw, `${file}:${name}`);
+		const variable =
+			typeof service.image === "string"
+				? /^\$\{HEPHAESTUS_IMAGE_(?<name>[A-Z0-9_]+):\?[^}]+\}$/u.exec(service.image)?.groups?.name
+				: undefined;
+		const image = variable?.toLowerCase().replaceAll("_", "-");
+		if (image === undefined || !known.has(image)) {
+			throw new Error(`${file}:${name} bypasses the verified release lock`);
+		}
+		consumers.add(image);
+	}
+	return consumers;
+}
+
+export function validateRetained(
+	known: ReadonlySet<string>,
+	chart: readonly string[],
+	retained: ReadonlySet<string>,
+): void {
+	for (const name of known) {
+		if (!chart.includes(name) && !retained.has(name)) {
+			throw new Error(`release image ${name} has no evidenced deployment consumer`);
+		}
+	}
+}
+
 if (import.meta.main) {
-	const inventory = JSON.parse(readFileSync("security/release-images.json", "utf8")) as unknown;
+	const inventory: unknown = readJsonFileSync("security/release-images.json");
 	const missing = validateInventory(
 		inventory,
 		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
@@ -66,56 +168,53 @@ if (import.meta.main) {
 	if (missing.length > 0) {
 		throw new Error(`release images missing from evidence inventory: ${missing.join(", ")}`);
 	}
-	if (
-		typeof inventory !== "object" ||
-		inventory === null ||
-		!("images" in inventory) ||
-		!Array.isArray(inventory.images) ||
-		!("upstream" in inventory) ||
-		!Array.isArray(inventory.upstream)
-	) {
-		throw new Error("malformed upstream image inventory");
-	}
-	// The release-time validator in verify-release-evidence.ts rejects an inventory
-	// without schemaVersion 1. Assert it here too, where every pull request runs:
-	// otherwise the mismatch only surfaces mid-release, after the tag is cut.
-	if (!("schemaVersion" in inventory) || inventory.schemaVersion !== 1) {
+	const source = asRecord(inventory, "release inventory");
+	if (source.schemaVersion !== 1) {
 		throw new Error("release image inventory must declare schemaVersion 1");
 	}
-	const compose = [
-		"docker/compose.app.yaml",
-		"docker/compose.core.yaml",
-		"docker/compose.proxy.yaml",
-	]
-		.map((path) => readFileSync(path, "utf8"))
-		.join("\n");
-	const knownImages = new Set(
-		inventory.images.filter((image): image is string => typeof image === "string"),
+	if (!Array.isArray(source.images) || !Array.isArray(source.upstream)) {
+		throw new Error("malformed release image inventory");
+	}
+	const known = new Set(
+		source.images.filter((image): image is string => typeof image === "string"),
 	);
-	for (const image of inventory.upstream) {
+	for (const image of source.upstream) {
 		if (!isUpstreamImage(image)) {
 			throw new Error("malformed upstream image inventory");
 		}
-		knownImages.add(image.name);
-	}
-	const deployedImages = new Set<string>();
-	for (const match of compose.matchAll(/^\s*image:\s*["']?(?<reference>[^\s"']+)/gmu)) {
-		const reference = match.groups?.reference ?? "";
-		const variable = /^\$\{HEPHAESTUS_IMAGE_(?<variable>[A-Z0-9_]+):\?/u.exec(reference)?.groups
-			?.variable;
-		const name = variable?.toLowerCase().replaceAll("_", "-");
-		if (name === undefined || !knownImages.has(name)) {
-			throw new Error(`deployed image does not consume the verified release lock: ${reference}`);
+		if (known.has(image.name)) {
+			throw new Error(`duplicate release image ${image.name}`);
 		}
-		deployedImages.add(name);
+		known.add(image.name);
 	}
-	// Include agent-pi, which the application launches outside Compose.
-	deployedImages.add("agent-pi");
-	const extra = [...knownImages].filter((image) => !deployedImages.has(image));
-	const absent = [...deployedImages].filter((image) => !knownImages.has(image));
-	if (extra.length > 0 || absent.length > 0) {
-		throw new Error(
-			`release inventory and production topology differ (extra: ${extra.join(", ") || "none"}; missing: ${absent.join(", ") || "none"})`,
-		);
+	const consumers = deployedImageConsumers(readDeployContainers(renderDeployTopology()));
+	const schema = asRecord(
+		readJsonFileSync("deploy/chart/hephaestus/values.schema.json"),
+		"chart schema",
+	);
+	const images = asRecord(asRecord(schema.properties, "chart properties").images, "chart images");
+	validateChartConsumers(
+		consumers,
+		Object.keys(asRecord(images.properties, "chart image properties")),
+		known,
+	);
+	// The 0.95 release still evidences the proxy and volume initializer. CT-1 removes their consumers
+	// and inventory entries together; the chart never treats those images as chart values.
+	const retained = new Set<string>();
+	for (const file of [
+		"docker/compose.app.yaml",
+		"docker/compose.core.yaml",
+		"docker/compose.proxy.yaml",
+	]) {
+		for (const name of composeImageConsumers(readFileSync(file, "utf8"), file, known)) {
+			if (!consumers.includes(name)) {
+				retained.add(name);
+			}
+		}
 	}
+
+	validateRetained(known, consumers, retained);
+	console.log(
+		`release image inventory: ${consumers.length} chart consumers, ${retained.size} retained release consumers`,
+	);
 }
