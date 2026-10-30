@@ -275,7 +275,6 @@ helm upgrade --install <release> /var/lib/hephaestus/chart/hephaestus-<version>.
 Prepare the verified target source tree first, as [Database maintenance](./kubernetes#database-maintenance) describes.
 Keep writers stopped until the target migration and server succeed.
 
-
 Install the 0.95.1 reconciler before promoting 1.0.
 The reconciler units now live in `deploy/reconcile/`, independent of the Compose files.
 To update an existing 0.95.0 reconciler, stop its timer and wait for the active tick to finish, as [Upgrading a host](#upgrading-a-host-installed-before-the-tooling-link) describes.
@@ -367,7 +366,7 @@ Helm status and history reads have a two-minute limit.
 The upgrade and recovery commands have deadlines derived from `HEPHAESTUS_WAIT_TIMEOUT`.
 The unit stops the whole tick after two hours.
 
-If you increase the Helm timeout, set `TimeoutStartSec` above three times that timeout plus 30 minutes.
+If you increase the Helm timeout, set `TimeoutStartSec` above three times that timeout plus 40 minutes.
 Use a systemd drop-in for the override.
 
 The revision's Job migrates the database.
@@ -391,6 +390,8 @@ After you run it, the next tick installs the release again.
 For 0.95.x → 1.0, follow [Database maintenance](./kubernetes#database-maintenance) and [Upgrade to 1.0](./upgrade-to-1-0).
 Pause the timer before phase 1.
 Save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json` before you change the release.
+Record the stopped phase-1 Helm revision from `helm history <release> --namespace <namespace>`.
+
 Verify the backups, record the worker count, and use the verified source chart to stop the server and workers.
 Wait until their Pods and every sandbox Pod and Job are removed.
 Then promote the target release and restart the timer for phase 2.
@@ -410,6 +411,9 @@ After the server is ready, pause the timer and restore the recorded worker count
 Keep the desired worker count in `/etc/hephaestus/chart.yaml`, then resume the timer.
 A new promotion of the same target can also restore that count after the cutover succeeds.
 
+The reconciler removes no image on a chart host.
+The kubelet's image garbage collection removes unused images.
+
 ### Recover a stopped cutover
 
 Before you promote 1.0, set `HEPHAESTUS_WAIT_TIMEOUT` above the expected migration time.
@@ -423,6 +427,7 @@ If a stopped cutover fails or remains pending:
 3. Read `helm history <release> --namespace <namespace>` and record the failed revision.
 4. Inspect `kubectl get job <release>-migration-<revision> --namespace <namespace>`.
    Wait for its Complete or Failed condition before you restore data.
+   After its 24-hour TTL, an absent Job is finished only if no migration Pod remains.
    If you must cancel it, delete that Job and wait for its Pods to disappear first.
 5. Restore the pre-upgrade database as [If migration fails](./upgrade#if-migration-fails) describes.
    Keep every database writer stopped during the restore.
@@ -432,14 +437,12 @@ If a stopped cutover fails or remains pending:
    To return to the source release, promote its signed release with rollback enabled, then resume the timer.
 8. After the selected release succeeds, restore the worker count as phase 4 describes.
 
-A signed rollback request does not permit an automatic major downgrade.
+A signed rollback request does not permit an automatic major release downgrade.
+Before a commit rollback across a schema boundary, restore the database through the same manual procedure.
 Restore the database first, then use the manual Helm rollback above.
 If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json` after both restores succeed.
 Then promote the source release and resume the timer.
 A commit channel must descend from the recorded release source, unless its signed request permits rollback.
-
-The reconciler removes no image on a chart host.
-The kubelet's image garbage collection removes unused images.
 
 ### Switch a host between Compose and the chart
 

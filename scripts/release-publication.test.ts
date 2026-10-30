@@ -608,6 +608,12 @@ for (const scenario of [
 					/\["helm","pull","oci:\/\/ghcr\.io\/hephaestus-build\/charts\/hephaestus@sha256:b{64}","--destination",/u,
 				);
 				assert.doesNotMatch(result.calls, /charts\/hephaestus:/u);
+				assert.match(result.calls, /"--destination","[^"]*\/installed-chart\/\.chart-[^"]*"/u);
+				assert.match(
+					await readFile(path.join(directory, "installed-chart", `${release}.images.yaml`), "utf8"),
+					/ghcr\.io\/hephaestus-build\/webapp@sha256:/u,
+				);
+
 				// Its signature is the registry signature of that digest, by the release workflow.
 				assert.match(
 					result.calls,

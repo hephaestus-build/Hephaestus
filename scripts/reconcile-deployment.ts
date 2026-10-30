@@ -968,7 +968,7 @@ async function targetIsBehindApplied(
 	const previous = appliedCommit(applied);
 	if (previous === undefined) {
 		throw new OperatorActionRequiredError(
-			"The applied release has no recorded source commit. Pause reconciliation and establish the installed release source before selecting a commit channel.",
+			"The applied release has no recorded source commit. Pause reconciliation and promote the installed release again to record its source, then select a commit channel.",
 		);
 	}
 	await run(
