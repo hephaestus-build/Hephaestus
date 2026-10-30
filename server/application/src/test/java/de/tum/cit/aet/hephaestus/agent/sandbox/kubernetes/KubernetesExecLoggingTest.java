@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -70,7 +71,8 @@ class KubernetesExecLoggingTest {
                 worker,
                 "agent",
                 KubernetesFixtures.live(KubernetesFixtures.WORKER_ID),
-                new SandboxExits(pods, new SimpleMeterRegistry()))) {
+                new SandboxExits(pods, new SimpleMeterRegistry()),
+                mock(KubernetesSandboxCache.class))) {
             logging.setLogLevel(owner, LogLevel.WARN);
 
             // Without the shipped entry the client's logger inherits an ordinary level and writes the URL.

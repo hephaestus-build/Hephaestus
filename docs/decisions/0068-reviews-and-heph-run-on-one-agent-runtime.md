@@ -519,6 +519,7 @@ Turns are ordered by the workspace's running turns.
 
 Resident turn admission follows CPU, separately from tools memory and provider calls.
 The automatic count is the declared allocatable CPU, less review reservations and resident role requests, divided by 50m per turn.
+Role requests include the fixed conversation host and tools quota.
 Its ceiling is 32 turns across the worker replicas. An explicit turn count remains the operator's override.
 One declaration supplies the allocatable CPU to both this formula and the chart's fit test.
 
@@ -539,6 +540,7 @@ The replay used a three-second first-token delay and 500 output tokens, with no 
 
 It does not qualify tool-heavy traffic, sustained arrivals, real provider quotas, or the ten-second first-text objective.
 The evidence bundle is `af3-admission-sweep`, with validated `summary.csv` and `phases.csv` receipts.
+The SHA-256 of `summary.csv` is `9701a9601c6884062913781500758da2bbb441fbf9e8b352674795ec29d35cad`.
 48 turns require the later tool-heavy and 80-user qualification.
 
 **Decision: amended on 2026-10-30.**

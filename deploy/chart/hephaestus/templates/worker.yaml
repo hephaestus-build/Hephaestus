@@ -27,7 +27,8 @@ Each PriorityClass tier has its own quota, so that review and conversation sandb
 other's room. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest
 pins it to the Pods the worker builds, and the chart's fit tests read it too. The reviews tier holds each worker's reviews once: during
 a rollout the new workers wait for the old ones' room. Every running worker, the old ones during a rollout
-included, has its isolation probe there, and its conversation host and turn sandboxes in the conversations tier.
+included, has its isolation probe there. The conversations tier holds its host, two warm tools Pods and
+at most eight assigned tools Pods. Resident turn admission does not enlarge that memory quota.
 */}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson }}
 {{- $replicas := int .Values.worker.replicas }}
@@ -37,7 +38,8 @@ included, has its isolation probe there, and its conversation host and turn sand
 {{- $probe := $table.isolationProbe }}
 {{- $host := $table.hephHost }}
 {{- $turn := $table.turnSandbox }}
-{{- $turnSandboxes := add (int $table.pooledTurnSandboxes) $turns }}
+{{- $tools := min $turns (int $table.activeTurnSandboxes) }}
+{{- $turnSandboxes := add (int $table.pooledTurnSandboxes) $tools }}
 {{- $reviews := mul $replicas (int .Values.worker.reviews) }}
 {{- /* Requests, not limits: sandbox Pods are Burstable, and a quota on limits would admit about half the reviews
 that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
@@ -49,7 +51,7 @@ that the node holds. The scheduler places Pods by their requests; a limit bounds
   (dict "tier" "reviews"
     "pods" $reviewPods
     "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)) (mul $reviewPods (int $overhead.memoryMi)))
-    "cpuMillis" (add (mul $reviews (int $review.cpuMillis)) (mul $running (int $probe.cpuMillis)) (mul $reviewPods (int $overhead.cpuMillis)))
+    "cpuMillis" (int (include "hephaestus.reviewCpuMillis" .))
     "diskMi" (add (mul $reviews (int $review.ephemeralStorageMi)) (mul $running (int $probe.ephemeralStorageMi))))
   (dict "tier" "conversations"
     "pods" $conversationPods

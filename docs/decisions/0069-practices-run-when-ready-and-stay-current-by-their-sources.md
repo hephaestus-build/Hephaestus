@@ -623,7 +623,7 @@ Review Pod admission follows [ADR 0068 G](0068-reviews-and-heph-run-on-one-agent
 
 This practice-concurrency amendment changes no practice width or measured footprint value.
 The separate resident-turn CPU rule and its 32-turn ceiling are in ADR 0068 G.
-The tools tier keeps its eight active plus two warm Pods. It does not grow with resident turn admission.
+The tools tier keeps its ten-Pod budget, including up to two warm Pods. It does not grow with resident turn admission.
 
 ### D12. Batch APIs only for evals
 

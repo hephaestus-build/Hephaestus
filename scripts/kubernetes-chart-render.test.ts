@@ -1086,13 +1086,11 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	assert.equal(envValue(worker, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
 	assert.equal(get(container(worker), "image"), prepared.images["application-server"]);
 
-	// The single-node profile's one worker: the new one starts beside the draining one, and a stopping
-	// worker has its drain and the shutdown phases.
+	// The single-node worker drains before its replacement, within its configured grace.
 	assert.equal(kindOf(worker), "Deployment");
 	assert.equal(get(worker, "spec", "replicas"), 1);
 	assert.deepEqual(get(worker, "spec", "strategy"), {
-		type: "RollingUpdate",
-		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
+		type: "Recreate",
 	});
 	const spec = podSpec(worker);
 	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "3600s");
@@ -1171,10 +1169,9 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		String(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage")),
 		/^[1-9][0-9]*Mi$/u,
 	);
-	// small.yaml: one worker that rolls by a surge of one, so the quotas hold two workers' probe runs, conversation hosts and
-	// turn sandboxes, but only the one worker's review: the new worker waits for the old one's room.
-	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "7");
-	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "22");
+	// One worker with Recreate: one review, one probe run, one host and the unchanged eight-plus-two tools quota.
+	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "4");
+	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "11");
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
 	for (const kind of ["ClusterRole", "ClusterRoleBinding"]) {
@@ -1682,28 +1679,44 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		// A worker without git checkout reports itself out of service, so its Deployment never rolls out.
 		assert.equal(envValue(workload(resources, "worker"), "GIT_CHECKOUT_ENABLED"), "true", name);
 	}
-	// The worker's Heph turns and the server's Heph capacity come from one resolved worker.conversationTurns. Its auto is
-	// the number in the chart's table, which the worker's own auto matches.
-	const table = readJsonFileSync(path.join(chart, "sandbox-pod-requests.json"));
-	assert.ok(isRecord(table) && typeof table.autoConversationTurns === "number");
-	const auto = table.autoConversationTurns;
+	// CPU-based auto is resolved once for the worker and server. Explicit counts remain overrides.
 	const capacities = (layers: readonly Layer[]) => {
 		const resources = rendered(layers);
+		const budget = readJsonFileSync(path.join(chart, "turn-admission.json"));
+		const turns = Number(
+			envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
+		);
+		const replicas = Number(get(workload(resources, "worker"), "spec", "replicas"));
+		const roleCpu = workloads(resources).reduce(
+			(cpu, role) => cpu + podRequests(podSpec(role)).cpu * Number(get(role, "spec", "replicas")),
+			0,
+		);
+		const quotaCpu = ["reviews", "conversations"].reduce(
+			(cpu, tier) => cpu + amount(get(tierQuota(resources, tier), "spec", "hard", "requests.cpu")),
+			0,
+		);
+		const planned =
+			roleCpu + quotaCpu + (turns * replicas * Number(get(budget, "cpuMillisPerTurn"))) / 1000;
+		assert.ok(
+			planned <= Number(get(budget, "allocatableCpuMillis")) / 1000,
+			`steady CPU plan ${planned}`,
+		);
+		assert.ok(turns * replicas <= Number(get(budget, "maximumTurns")));
 		return {
 			worker: envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
 			server: envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
 		};
 	};
-	assert.deepEqual(capacities(layersFor("small")), { worker: "8", server: "8" });
+	assert.deepEqual(capacities(layersFor("small")), { worker: "32", server: "32" });
 	assert.deepEqual(capacities([...layersFor("small"), { worker: { conversationTurns: "auto" } }]), {
-		worker: String(auto),
-		server: String(auto),
+		worker: "32",
+		server: "32",
 	});
 	assert.deepEqual(
 		capacities([...layersFor("small"), { worker: { replicas: 3, conversationTurns: "auto" } }]),
 		{
-			worker: String(auto),
-			server: String(3 * auto),
+			worker: "1",
+			server: "3",
 		},
 	);
 	assert.deepEqual(
@@ -1713,6 +1726,34 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			server: "10",
 		},
 	);
+	assert.deepEqual(capacities([...layersFor("small"), { worker: { reviews: 15 } }]), {
+		worker: "8",
+		server: "8",
+	});
+	assert.deepEqual(
+		capacities([...layersFor("small"), { server: { resources: { requests: { cpu: "2" } } } }]),
+		{ worker: "1", server: "1" },
+	);
+	const exhausted = render([
+		...layersFor("small"),
+		{ server: { resources: { requests: { cpu: "3" } } } },
+	]);
+	assert.equal(exhausted.ok, false);
+	assert.match(exhausted.stderr, /no CPU room/u);
+	assert.equal(
+		env(
+			workload(
+				rendered([
+					...layersFor("small"),
+					{ worker: { enabled: false }, server: { resources: { requests: { cpu: "3" } } } },
+				]),
+				"server",
+			),
+			"HEPHAESTUS_MENTOR_TURN_CAPACITY",
+		),
+		undefined,
+	);
+
 	// No Heph slot at all: the server knows no capacity, so no question says that every slot is taken.
 	assert.deepEqual(capacities([...layersFor("small"), { worker: { conversationTurns: 0 } }]), {
 		worker: "0",
@@ -1825,7 +1866,7 @@ await test("the server's operator settings reach the server alone", () => {
 });
 
 /** A Kubernetes quantity in bytes or in cores. */
-const amount = (value: unknown): number => {
+function amount(value: unknown): number {
 	const text = typeof value === "string" || typeof value === "number" ? String(value) : "0";
 	const units: Record<string, number> = {
 		m: 1e-3,
@@ -1838,9 +1879,9 @@ const amount = (value: unknown): number => {
 	assert.ok(match?.groups, `a quantity: ${text}`);
 	const { number = "0", unit = "" } = match.groups;
 	return Number(number) * (units[unit] ?? 1);
-};
+}
 /** What one Pod requests: its containers together, or its largest init container when that is more. */
-const podRequests = (spec: unknown) => {
+function podRequests(spec: unknown) {
 	const sum = (entries: unknown[], key: string) =>
 		entries.reduce<number>(
 			(total, entry) => total + amount(get(entry, "resources", "requests", key)),
@@ -1854,7 +1895,7 @@ const podRequests = (spec: unknown) => {
 		cpu: Math.max(sum(running, "cpu"), most(init, "cpu")),
 		memory: Math.max(sum(running, "memory"), most(init, "memory")),
 	};
-};
+}
 /** The Pods that a rollout adds beside the old ones: maxSurge, 25 % by default, none for Recreate. */
 const surge = (deployment: Resource) => {
 	const replicas = Number(get(deployment, "spec", "replicas") ?? 1);
@@ -1873,6 +1914,9 @@ const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(1);
 
 /** The chart's single-node budgets use the platform's configured reservation policy. */
 const nodeRoom = (memory: number) => {
+	const cpu =
+		Number(get(readJsonFileSync(path.join(chart, "turn-admission.json")), "allocatableCpuMillis")) /
+		1000;
 	const policy = asRecord(
 		parseAllDocuments(
 			readFileSync(new URL("../deploy/platform/k3s-kubelet.yaml", import.meta.url), "utf8"),
@@ -1880,8 +1924,13 @@ const nodeRoom = (memory: number) => {
 		"kubelet policy",
 	);
 	const reservations = [get(policy, "kubeReserved"), get(policy, "systemReserved")];
+	assert.equal(
+		cpu,
+		4 - reservations.reduce<number>((sum, value) => sum + amount(get(value, "cpu")), 0),
+		"declared CPU follows the kubelet reservations",
+	);
 	return {
-		cpu: 4 - reservations.reduce<number>((sum, value) => sum + amount(get(value, "cpu")), 0),
+		cpu,
 		memory:
 			memory -
 			reservations.reduce<number>((sum, value) => sum + amount(get(value, "memory")), 0) -
@@ -1919,7 +1968,7 @@ const sandboxPods = (() => {
 		turn: entry("turnSandbox"),
 		probe: entry("isolationProbe"),
 		pooledTurns: count("pooledTurnSandboxes"),
-		autoConversationTurns: count("autoConversationTurns"),
+		activeTurnSandboxes: count("activeTurnSandboxes"),
 	};
 })();
 const sandboxGib = {
@@ -1928,24 +1977,6 @@ const sandboxGib = {
 	turn: sandboxPods.turn.gib,
 	pooledTurns: sandboxPods.pooledTurns,
 	probe: sandboxPods.probe.gib,
-};
-
-/**
- * A single-node profile runs the most Heph turns that its node holds, up to the worker's automatic number: either
- * the automatic number, or one more turn sandbox would not fit beside the rest.
- */
-const assertTurnsFill = (turns: number, used: Budget, node: Budget) => {
-	const more = Math.floor(
-		Math.min(
-			(node.memory - used.memory) / (sandboxPods.turn.gib * 2 ** 30),
-			(node.cpu - used.cpu) / sandboxPods.turn.cpu,
-		),
-	);
-	assert.equal(
-		turns,
-		Math.min(sandboxPods.autoConversationTurns, turns + more),
-		`${turns} Heph turns; ${more} more would fit`,
-	);
 };
 
 await test("the single-node profile's requests, one upgrade beside them and its sandbox quota fit the node it states", () => {
@@ -2007,10 +2038,9 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	}
 	disk += amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
 	assert.equal(get(workload(resources, "worker"), "spec", "replicas"), 1);
-	assertTurnsFill(
+	assert.equal(
 		Number(envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX")),
-		{ cpu, memory },
-		node,
+		32,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -2035,7 +2065,8 @@ for (const name of ["small", "small-16gib"] as const) {
 		const workerReviews = replicas * Number(envValue(worker, "SANDBOX_MAX_CONCURRENT"));
 		const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
 		assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
-		const turnSandboxes = sandboxPods.pooledTurns + turns;
+		const turnSandboxes =
+			sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes);
 		const expected = {
 			reviews: {
 				gib: workerReviews * sandboxPods.review.gib + running * sandboxPods.probe.gib,
@@ -2072,11 +2103,12 @@ const tierHard = (layers: Layer[]) => {
 };
 
 await test("each tier's quota counts the RuntimeClass overhead of every sandbox Pod that it holds", () => {
-	const without = tierHard(layersFor("small"));
+	const without = tierHard([...layersFor("small"), { worker: { conversationTurns: 32 } }]);
 	const withOverhead = tierHard([
 		...layersFor("small"),
 		{
 			worker: {
+				conversationTurns: 32,
 				runtime: { runtimeClassName: "gvisor", podOverhead: { cpuMillis: 100, memoryMi: 40 } },
 			},
 		},
@@ -2094,16 +2126,13 @@ await test("each tier's quota counts the RuntimeClass overhead of every sandbox 
 const strategy = (name: (typeof profiles)[number], component: string) =>
 	get(workload(rendered(layersFor(name)), component), "spec", "strategy");
 
-await test("workers roll by surge unless the profile asks for Recreate, and the webhook always surges", () => {
+await test("workers use the profile strategy, and the webhook keeps reception during upgrades", () => {
 	assert.deepEqual(get(workload(rendered(withWorker("dev")), "worker"), "spec", "strategy"), {
 		type: "RollingUpdate",
 		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
 	});
-	// small holds a second worker beside the draining one; 16 GiB does not hold its second conversation pool.
-	assert.deepEqual(strategy("small", "worker"), {
-		type: "RollingUpdate",
-		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
-	});
+	// Both single-node profiles drain before the replacement so the declared budget holds.
+	assert.deepEqual(strategy("small", "worker"), { type: "Recreate" });
 	assert.deepEqual(strategy("small-16gib", "worker"), { type: "Recreate" });
 	// Push events are not redeliverable: the new receiver starts before the old one stops.
 	for (const name of ["small", "small-16gib"] as const) {
@@ -2175,14 +2204,16 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 		cpu:
 			sandboxPods.review.cpu +
 			sandboxPods.hephHost.cpu +
-			(sandboxPods.pooledTurns + turns) * sandboxPods.turn.cpu,
+			(sandboxPods.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes)) *
+				sandboxPods.turn.cpu,
 		memory:
 			(sandboxGib.review +
 				sandboxGib.hephHost +
-				(sandboxGib.pooledTurns + turns) * sandboxGib.turn) *
+				(sandboxGib.pooledTurns + Math.min(turns, sandboxPods.activeTurnSandboxes)) *
+					sandboxGib.turn) *
 			2 ** 30,
 	});
-	assertTurnsFill(turns, steady, node);
+	assert.equal(turns, 32);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
 		steady.memory <= node.memory,

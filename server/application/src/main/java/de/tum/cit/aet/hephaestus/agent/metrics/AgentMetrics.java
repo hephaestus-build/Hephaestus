@@ -77,6 +77,7 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_STARTED = "mentor.turn.started";
     public static final String MENTOR_TURN_RETRIED = "mentor.turn.retried";
     public static final String MENTOR_TURN_QUEUED = "mentor.turn.queued";
+    public static final String MENTOR_TURN_TOOLS_WAIT = "mentor.turn.tools.wait";
     public static final String MENTOR_TURN_QUEUE_WAIT = "mentor.turn.queue_wait";
     public static final String MENTOR_TURN_LEASE_REAPER_FAILURE = "mentor.turn.lease_reaper.failure";
     public static final String MENTOR_TURN_CLAIM_FAILURE = "mentor.turn.claim.failure";

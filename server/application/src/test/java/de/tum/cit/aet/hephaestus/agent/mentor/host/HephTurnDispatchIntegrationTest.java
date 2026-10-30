@@ -137,7 +137,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private HephTurnController controller;
     private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(3);
     private final FakeExecSandboxes runtime = new FakeExecSandboxes();
-    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0);
+    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
     private Workspace workspace;
     private MentorConversation conversation;
 
@@ -305,7 +305,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The attempt takes a turn sandbox, as its first read, bash or load_context call does. */
     private void holdASandbox(MentorTurn asked, int attempt) {
-        sandboxes.acquire(new TurnSandboxes.Attempt(asked.getId(), attempt), workspace.getId());
+        sandboxes.acquire(new TurnSandboxes.Attempt(asked.getId(), attempt), workspace.getId(), () -> false);
         assertThat(runtime.running).hasSize(1);
     }
 
@@ -373,8 +373,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
             }
         };
         var configuration = new HephHostConfiguration();
-        ScheduledTaskRegistrar reconciles =
-                configuration.turnSandboxReconciles(dispatcher, new TurnSandboxes(stalled, 0));
+        ScheduledTaskRegistrar reconciles = configuration.turnSandboxReconciles(
+                dispatcher, new TurnSandboxes(stalled, 0, new SimpleMeterRegistry()));
         ScheduledTaskRegistrar ticks = configuration.hephTurnTicks(dispatcher);
         reconciles.afterPropertiesSet();
         ticks.afterPropertiesSet();
@@ -390,6 +390,39 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
             answers.countDown();
             ticks.destroy();
             reconciles.destroy();
+        }
+    }
+
+    @Test
+    void shouldShowToolsQuotaWaitAndRestoreTheHostStageWithoutAnotherHostUpdate() throws Exception {
+        MentorTurn asked = ask("Read my repository");
+        TurnAttempt turn = credential(host.next("start"));
+        JsonNode reading = mapper.readTree("""
+                {"activity":"tool","tool":"read","stage":"Reading the repository…","messages":[]}""");
+        controller.partial(asked.getId(), reading, HephTurnFixtures.authenticated(turn));
+        runtime.quotaFull = true;
+        var attempt = new TurnSandboxes.Attempt(turn.turnId(), turn.attempt());
+        var waiting = CompletableFuture.supplyAsync(() -> sandboxes.acquire(attempt, workspace.getId(), () -> false));
+        try {
+            await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.waitingForQuota(attempt));
+            dispatcher.tick();
+            assertThat(row(asked).getPartial().path("stage").asString()).isEqualTo("Waiting for tools…");
+            JsonNode writing = mapper.readTree("""
+                    {"activity":"writing","tool":null,"messages":[{"content":[{"type":"text","text":"Found it"}]}]}""");
+            controller.partial(asked.getId(), writing, HephTurnFixtures.authenticated(turn));
+            dispatcher.tick();
+            assertThat(row(asked).getPartial()).isEqualTo(writing);
+            controller.partial(asked.getId(), reading, HephTurnFixtures.authenticated(turn));
+            dispatcher.tick();
+            assertThat(row(asked).getPartial().path("stage").asString()).isEqualTo("Waiting for tools…");
+            runtime.quotaFull = false;
+            waiting.get(5, TimeUnit.SECONDS);
+            dispatcher.tick();
+            assertThat(row(asked).getPartial()).isEqualTo(reading);
+        } finally {
+            sandboxes.release(turn.turnId(), turn.attempt());
+            runtime.quotaFull = false;
+            waiting.handle((result, failed) -> null).get(5, TimeUnit.SECONDS);
         }
     }
 

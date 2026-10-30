@@ -445,21 +445,35 @@ Give the profile as the first `-f` file, before your own values, as [Install](#i
 | `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
 | `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, bounded streams |
 
-`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review and up to 8 conversation turns at a time.
+`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review and up to 32 resident conversation turns at a time.
 A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.8 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new worker, webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.8 GiB | 1.00 | The new Pods' caches |
-| The sandbox quotas during the upgrade: in the reviews tier one review and the isolation probes of both workers, in the conversations tier the conversation host, its two pooled turn sandboxes and 8 running turns of each worker | 5.8 GiB | 1.00 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 21.4 GiB of 30.25 GiB | 3.25 of 3.5 | 80 GiB of the 110 GiB left beside images and review workspaces |
+| An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.8 GiB | 0.75 | The new Pods' caches |
+| The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.2 GiB | 0.55 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
+| Total, against the node less platform reservations and the hard eviction floor | 16.8 GiB of 30.25 GiB | 2.55 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
 
-The worker upgrades by a rolling update with a surge of one.
-The new worker passes its isolation probe and opens its conversation host's command channel before the old worker drains.
-Hephaestus keeps answering during the upgrade.
-The old worker finishes its running review within its drain of up to 60 minutes. The new worker's review waits for that review's room in the reviews quota.
-A turn sandbox requests 25m of CPU, so a second conversation host and turn pool fit beside the old ones.
+The worker drains before its replacement starts.
+The worker uses `Recreate` in both single-node profiles.
+The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
+The server also uses `Recreate`. The webhook role keeps its rolling update.
+Measure the deployment outage against the 99.5% availability budget.
+
+`worker.conversationTurns: auto` uses the CPU declaration in the chart's `turn-admission.json`.
+It subtracts resident role requests and the existing review-tier reservation from 3500m of allocatable CPU.
+Each resident turn budgets 50m, with a ceiling of 32 across the workers.
+The chart divides that count across worker replicas. An explicit turn count remains the operator's override.
+The declaration also supplies the fit test, which checks it against the kubelet reservation policy.
+
+The conversation quota has ten tools-Pod slots per worker, including a warm pool of up to two.
+A turn needs a tools Pod only when it calls a tool.
+When the quota is full, it waits and shows "Waiting for tools…".
+The metric `mentor_turn_tools_wait_seconds` records that wait from quota refusal through tools readiness, including Pod start.
+Its `outcome` is `ready` or `abandoned`. Model calls still wait for their own provider grants.
+
+The table counts schedulable Pod requests. The resident-turn CPU planning cost is checked separately in steady state.
 
 The table gives the measured resident memory of each role and the chart's sizes.
 Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
@@ -487,8 +501,9 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 ```
 
 The overlay lowers the NATS request to 512 MiB and keeps its limit at 3 GiB.
-It also changes worker updates to `Recreate`, with a drain of at most 10 minutes.
-The worker still runs one review and up to 8 conversation turns at a time, as in `small.yaml`.
+It keeps worker updates at `Recreate`, with a drain of at most 10 minutes.
+It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
+The worker still runs one review and up to 32 resident conversation turns at a time, as in `small.yaml`.
 A second worker's conversation host and turn pool do not fit in 16 GiB beside the first: the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
 The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
@@ -926,7 +941,7 @@ The chart runs the workers as one Deployment:
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
-- `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Each running turn holds a turn sandbox beside the 2 pooled ones, and the conversations quota counts them ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` sets 8.
+- `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
 - The settings `HEPHAESTUS_SANDBOX_RUNTIME=kubernetes`, the sandbox namespace, and the pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
@@ -1251,7 +1266,8 @@ The new Pods wait for the migrated schema, and the previous release serves until
 `--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
 The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 The server stops before its new version starts (`Recreate`).
-The webhook role and the workers roll: new workers prove the cluster with the isolation probe before an old worker drains.
+The webhook role rolls. In the single-node profiles, the worker drains and stops before its replacement starts.
+The replacement proves the cluster with the isolation probe before it claims work.
 An old worker drains for up to `worker.drainTimeoutSeconds`, 60 minutes by default, and Kubernetes no longer counts it while it terminates.
 Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
 A review runs for up to 3 hours.

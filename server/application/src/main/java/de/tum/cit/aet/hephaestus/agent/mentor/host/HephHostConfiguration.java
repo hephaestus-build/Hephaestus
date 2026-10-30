@@ -65,8 +65,11 @@ public class HephHostConfiguration {
      */
     @Bean(destroyMethod = "close")
     TurnSandboxes turnSandboxes(
-            ExecSandboxes sandboxes, MentorLedgerNotifications notifications, TurnContextGenerations generations) {
-        TurnSandboxes turnSandboxes = new TurnSandboxes(sandboxes, SANDBOX_POOL);
+            ExecSandboxes sandboxes,
+            MentorLedgerNotifications notifications,
+            TurnContextGenerations generations,
+            MeterRegistry meters) {
+        TurnSandboxes turnSandboxes = new TurnSandboxes(sandboxes, SANDBOX_POOL, meters);
         notifications.subscribe(new TurnContextRevocations(generations, turnSandboxes));
         return turnSandboxes;
     }

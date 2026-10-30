@@ -135,7 +135,10 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 new ProxyCallsInFlight(3),
                 WorkerPropertiesFixtures.minimal("1", "4"));
         var sandboxController = new HephTurnSandboxController(
-                contexts, dispatcher, HephTurnFixtures.folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0)));
+                contexts,
+                dispatcher,
+                HephTurnFixtures.folder(
+                        beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())));
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));

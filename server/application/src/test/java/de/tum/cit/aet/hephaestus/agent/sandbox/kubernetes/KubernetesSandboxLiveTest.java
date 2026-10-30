@@ -850,7 +850,7 @@ class KubernetesSandboxLiveTest {
 
     @Test
     void shouldGiveTheNextCallANewSandboxWhenTheContextFolderLosesItsSandbox() throws Exception {
-        TurnSandboxes sandboxes = new TurnSandboxes(turns, 0);
+        TurnSandboxes sandboxes = new TurnSandboxes(turns, 0, new SimpleMeterRegistry());
         try {
             var folder = new TurnContextFolder(
                     sandboxes,
@@ -863,7 +863,8 @@ class KubernetesSandboxLiveTest {
             ObjectNode ready = folder.exec(turn, deadline, documents(), "echo ready", null);
             assertThat(ready.path("exitCode").asInt()).as(ready.toString()).isZero();
             assertThat(ready.path("output").asString()).isEqualTo("ready\n");
-            String first = sandboxes.acquire(attempt, turn.workspaceId()).containerId();
+            String first =
+                    sandboxes.acquire(attempt, turn.workspaceId(), () -> false).containerId();
             track(first);
             Pod lost = present(first);
             assertThat(worker.createdBySelf(lost.getMetadata().getLabels()))
@@ -886,7 +887,8 @@ class KubernetesSandboxLiveTest {
             log.info("TIMING context folder call on a new sandbox (create + stage + exec): {} ms", millis(replaced));
             assertThat(again.path("exitCode").asInt()).as(again.toString()).isZero();
             assertThat(again.path("output").asString()).isEqualTo("again\n");
-            String second = sandboxes.acquire(attempt, turn.workspaceId()).containerId();
+            String second =
+                    sandboxes.acquire(attempt, turn.workspaceId(), () -> false).containerId();
             track(second);
             assertThat(second).as("the next call has a sandbox of its own").isNotEqualTo(first);
             Pod replacement = present(second);

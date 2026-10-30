@@ -152,6 +152,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile Instant renewed;
         /** The partial answer this attempt last stored; {@code null} before its first. */
         volatile @Nullable JsonNode partial;
+        /** The latest host snapshot before a local tools-wait stage is applied. */
+        volatile @Nullable JsonNode hostPartial;
 
         volatile boolean started;
         volatile @Nullable String stopReason;
@@ -347,12 +349,27 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         if (turn == null || turn.attempt != attempt) {
             throw new MentorLeaseLostException(turnId, attempt);
         }
-        JsonNode stored = turn.partial;
-        if (partial.equals(stored)) {
-            return;
+        turn.hostPartial = partial;
+        reportPartial(turn);
+    }
+
+    private void reportPartial(Running turn) {
+        synchronized (turn) {
+            JsonNode partial = turn.hostPartial;
+            if (partial == null) return;
+            if (partial instanceof ObjectNode snapshot
+                    && !"writing".equals(snapshot.path("activity").asString())
+                    && sandboxes.waitingForQuota(new TurnSandboxes.Attempt(turn.turnId, turn.attempt))) {
+                ObjectNode waiting = snapshot.deepCopy();
+                waiting.put("activity", "tool");
+                waiting.put("stage", "Waiting for tools…");
+                partial = waiting;
+            }
+            JsonNode stored = turn.partial;
+            if (partial.equals(stored)) return;
+            completion.progress(turn.turnId, turn.attempt, workerId, partial, stored == null ? turn.claimed : null);
+            turn.partial = partial;
         }
-        completion.progress(turnId, attempt, workerId, partial, stored == null ? turn.claimed : null);
-        turn.partial = partial;
     }
 
     /** The host ended the attempt through the turn endpoint; its slot is free. */
@@ -544,6 +561,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     turns.renewLease(turn.turnId, turn.attempt, workerId, lease);
                     turn.renewed = now;
                 }
+                reportPartial(turn);
             } catch (MentorLeaseLostException leaseLost) {
                 lost(turn);
             } catch (RuntimeException e) {

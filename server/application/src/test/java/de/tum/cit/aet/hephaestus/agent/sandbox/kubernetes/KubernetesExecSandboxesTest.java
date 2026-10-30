@@ -5,15 +5,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodListBuilder;
+import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.kubernetes.api.model.ResourceQuotaBuilder;
+import io.fabric8.kubernetes.api.model.StatusBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -98,6 +105,7 @@ class KubernetesExecSandboxesTest {
     private static final int LARGE_ARCHIVE = 48 * 1024 * 1024;
 
     private final MockWebServer server = new MockWebServer();
+    private final KubernetesSandboxCache quotaCache = mock(KubernetesSandboxCache.class);
     private final List<String> paths = new CopyOnWriteArrayList<>();
     private final CountDownLatch released = new CountDownLatch(1);
     private volatile Function<RecordedRequest, MockResponse> exec = request -> new MockResponse().setResponseCode(404);
@@ -140,6 +148,81 @@ class KubernetesExecSandboxesTest {
             client.close();
         }
         server.close();
+    }
+
+    @Test
+    void shouldWaitFromTheQuotaCacheWithoutSendingRefusedPodCreates() {
+        when(quotaCache.current()).thenReturn(true);
+        when(quotaCache.quotas())
+                .thenReturn(List.of(new ResourceQuotaBuilder()
+                        .withNewStatus()
+                        .addToHard("requests.memory", new Quantity("160Mi"))
+                        .addToUsed("requests.memory", new Quantity("160Mi"))
+                        .endStatus()
+                        .build()));
+        try (var runtime = sandboxes(server.url("/").toString())) {
+            assertThatThrownBy(() -> runtime.create("tools", TurnSandboxes.LIMITS))
+                    .isInstanceOfSatisfying(
+                            SandboxCapacityException.class,
+                            full -> assertThat(full.reason())
+                                    .isEqualTo(SandboxCapacityException.Reason.QUOTA_EXCEEDED));
+            assertThat(paths).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRefuseAQuotaTooSmallForOneToolsPodWithoutWaiting() {
+        when(quotaCache.current()).thenReturn(true);
+        when(quotaCache.quotas())
+                .thenReturn(List.of(new ResourceQuotaBuilder()
+                        .withNewStatus()
+                        .addToHard("requests.memory", new Quantity("128Mi"))
+                        .endStatus()
+                        .build()));
+        try (var runtime = sandboxes(server.url("/").toString())) {
+            assertThatThrownBy(() -> runtime.create("tools", TurnSandboxes.LIMITS))
+                    .isInstanceOfSatisfying(
+                            SandboxCapacityException.class,
+                            full -> assertThat(full.reason())
+                                    .isEqualTo(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT));
+            assertThat(paths).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldReportAQuota403AsCapacity() {
+        assertThat(refusedCreate("pods tools is forbidden: exceeded quota: conversations"))
+                .isInstanceOf(SandboxCapacityException.class);
+    }
+
+    @Test
+    void shouldKeepAPermission403SeparateFromCapacity() {
+        assertThat(refusedCreate("pods tools is forbidden: service account may not create pods"))
+                .isInstanceOf(SandboxException.class)
+                .isNotInstanceOf(SandboxCapacityException.class);
+    }
+
+    private Throwable refusedCreate(String message) {
+        try (var runtime = sandboxes(server.url("/").toString())) {
+            var pods =
+                    new KubernetesPods(shared(), KubernetesFixtures.worker(TURNS), 10, ImagePullPolicy.IF_NOT_PRESENT);
+            server.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    return json(new KubernetesSerialization()
+                                    .asJson(new StatusBuilder()
+                                            .withCode(403)
+                                            .withMessage(message)
+                                            .build()))
+                            .setResponseCode(403);
+                }
+            });
+            return catchThrowable(() -> pods.create(new PodBuilder()
+                    .withNewMetadata()
+                    .withName("tools")
+                    .endMetadata()
+                    .build()));
+        }
     }
 
     @Test
@@ -631,6 +714,7 @@ class KubernetesExecSandboxesTest {
                 new KubernetesClientBuilder().withConfig(config).build();
         client = shared;
         var worker = KubernetesFixtures.worker(TURNS);
+        worker.proved(KubernetesSandboxRuntimeTest.passed());
         var pods = new KubernetesPods(shared, worker, 10, ImagePullPolicy.IF_NOT_PRESENT);
         return new KubernetesExecSandboxes(
                 shared,
@@ -638,7 +722,8 @@ class KubernetesExecSandboxesTest {
                 worker,
                 "agent",
                 KubernetesFixtures.live(KubernetesFixtures.WORKER_ID),
-                new SandboxExits(pods, new SimpleMeterRegistry()));
+                new SandboxExits(pods, new SimpleMeterRegistry()),
+                quotaCache);
     }
 
     private KubernetesClient shared() {

@@ -80,13 +80,6 @@ const MENTOR_WORKING_TOKENS = 49_152;
 const PARTIAL_INTERVAL_MS = 250;
 
 const REQUEST_TIMEOUT_MS = 60_000;
-/**
- * A turn sandbox call can wait for a sandbox to start and its documents to be staged, for a command to run for up to
- * 60 s, or for a repository to load within the turn's time left, so it gets more time than other calls. A stop of the
- * turn aborts it earlier. It is never repeated: a repeated command would run again.
- */
-const SANDBOX_TIMEOUT_MS = 150_000;
-
 /** The longest a command runs, in seconds: the worker's bound, which also never passes the turn's deadline. */
 const EXEC_TIMEOUT_SECONDS = 60;
 
@@ -297,9 +290,9 @@ export function httpTurnApi(
 		path: string,
 		body: unknown,
 		signal?: AbortSignal,
-		timeoutMs = REQUEST_TIMEOUT_MS,
+		timeoutMs: number | null = REQUEST_TIMEOUT_MS,
 	): Promise<Response> {
-		const timeout = AbortSignal.timeout(timeoutMs);
+		const timeout = timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs);
 		let response: Response;
 		try {
 			response = await fetch(`${proxyUrl}/turn/${turnId}/${path}`, {
@@ -309,7 +302,12 @@ export function httpTurnApi(
 					...(body === undefined ? {} : { "content-type": "application/json" }),
 				},
 				body: body === undefined ? undefined : JSON.stringify(body),
-				signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
+				signal:
+					timeout === undefined
+						? signal
+						: signal === undefined
+							? timeout
+							: AbortSignal.any([signal, timeout]),
 			});
 		} catch (error) {
 			throw signal?.aborted === true ? error : transient(errorText(error));
@@ -333,7 +331,7 @@ export function httpTurnApi(
 		return response;
 	}
 
-	/** One turn sandbox call, its answer checked where it crosses into the host. */
+	/** Tools wait within the turn's cancellation and worker deadline; a shorter request timeout would abandon a live tool call. */
 	async function sandbox<T>(
 		endpoint: string,
 		request: object,
@@ -341,9 +339,7 @@ export function httpTurnApi(
 		parse: (value: unknown) => T | null,
 	): Promise<T> {
 		const what = `sandbox/${endpoint}`;
-		const answer = parse(
-			await json(await call("POST", what, request, signal, SANDBOX_TIMEOUT_MS), what),
-		);
+		const answer = parse(await json(await call("POST", what, request, signal, null), what));
 		if (answer === null) {
 			throw new Error(`the worker sent a malformed ${what} answer`);
 		}

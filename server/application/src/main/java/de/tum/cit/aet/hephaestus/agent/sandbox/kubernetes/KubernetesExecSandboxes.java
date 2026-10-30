@@ -2,9 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.RequestConfig;
@@ -21,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -32,6 +36,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.io.IOUtils;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -102,6 +107,9 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
     private final String image;
     private final SandboxExits exits;
     private final KubernetesLiveWorkers liveWorkers;
+    private final KubernetesSandboxCache cache;
+    private final ReentrantLock quotaAdmission = new ReentrantLock();
+    private @Nullable Long quotaRefusedAt;
 
     /** Opens each call's exec, so that the call can stop waiting for it. */
     private final ExecutorService calls = Executors.newVirtualThreadPerTaskExecutor();
@@ -112,13 +120,15 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
             KubernetesWorker worker,
             String image,
             KubernetesLiveWorkers liveWorkers,
-            SandboxExits exits) {
+            SandboxExits exits,
+            KubernetesSandboxCache cache) {
         this.liveWorkers = liveWorkers;
         this.client = client;
         this.pods = pods;
         this.worker = worker;
         this.image = image;
         this.exits = exits;
+        this.cache = cache;
     }
 
     /** The worker's Pod name: a restarted worker container keeps it, so its next start removes what a crash left. */
@@ -132,6 +142,61 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
         return worker.isolated();
     }
 
+    /** A current cache refuses early; the API server decides every create that is sent. */
+    private void createToolsPod(Pod pod) {
+        quotaAdmission.lock();
+        try {
+            Long refused = quotaRefusedAt;
+            if (refused != null && System.nanoTime() - refused < TimeUnit.SECONDS.toNanos(1)) {
+                throw new SandboxCapacityException(
+                        "The tools quota has no room", SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+            }
+            try {
+                checkQuota(pod);
+                pods.create(pod);
+                quotaRefusedAt = null;
+            } catch (SandboxCapacityException full) {
+                if (full.reason() == SandboxCapacityException.Reason.QUOTA_EXCEEDED) quotaRefusedAt = System.nanoTime();
+                throw full;
+            }
+        } finally {
+            quotaAdmission.unlock();
+        }
+    }
+
+    private void checkQuota(Pod pod) {
+        List<ResourceQuota> quotas;
+        Map<String, Quantity> overhead = Map.of();
+        try {
+            if (!cache.current()) return;
+            quotas = cache.quotas();
+            String runtimeClass = pod.getSpec().getRuntimeClassName();
+            if (runtimeClass != null) {
+                for (Pod observed : cache.pods(Map.of())) {
+                    if (observed.getSpec() != null
+                            && runtimeClass.equals(observed.getSpec().getRuntimeClassName())
+                            && observed.getSpec().getOverhead() != null) {
+                        overhead = observed.getSpec().getOverhead();
+                        break;
+                    }
+                }
+            }
+        } catch (RuntimeException unreadable) {
+            // A stale or unreadable cache cannot decide admission; the Pod create below still can.
+            return;
+        }
+        var footprint = KubernetesSandboxQuota.footprint(pod, overhead);
+        String priority = Objects.toString(pod.getSpec().getPriorityClassName(), "");
+        if (KubernetesSandboxQuota.neverFits(quotas, footprint, priority)) {
+            throw new SandboxCapacityException(
+                    "The tools quota cannot hold one tools Pod", SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
+        }
+        if (KubernetesSandboxQuota.fits(quotas, footprint, priority) == 0) {
+            throw new SandboxCapacityException(
+                    "The tools quota has no room", SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+        }
+    }
+
     @Override
     public String create(String sandboxId, ResourceLimits limits) {
         if (!sandboxId.matches(KubernetesSandboxProperties.DNS_LABEL)) {
@@ -141,7 +206,7 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
         String name = "hephaestus-turn-" + sandboxId;
         Map<String, String> labels = worker.labels(KubernetesWorker.KIND_TURN);
         labels.put(KubernetesWorker.SANDBOX_ID, sandboxId);
-        pods.create(pods.turnPod(new KubernetesPods.Workload(name, labels, image, HOSTNAME), limits));
+        createToolsPod(pods.turnPod(new KubernetesPods.Workload(name, labels, image, HOSTNAME), limits));
         KubernetesPods.Waited started;
         try {
             started = pods.waitFor(

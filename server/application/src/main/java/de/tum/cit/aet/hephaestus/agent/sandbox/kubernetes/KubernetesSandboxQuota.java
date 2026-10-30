@@ -1,15 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +20,7 @@ import org.slf4j.LoggerFactory;
 /**
  * How many more review sandboxes the ResourceQuotas of the sandbox namespace admit now. The API server refuses a Pod
  * that a quota cannot hold, and a review Job's Pod then never starts; a worker that asks first leaves the review in its
- * queue instead. The chart renders one quota; an operator's own quotas count the same way. Another sandbox, such as a
+ * queue instead. The chart renders a review-tier quota; an operator's own quotas count the same way. Another sandbox, such as a
  * Heph turn's, can take the room between the answer and the Pod, so the answer bounds what is claimed, nothing more.
  */
 public class KubernetesSandboxQuota {
@@ -166,6 +169,33 @@ public class KubernetesSandboxQuota {
                 Map.entry("ephemeral-storage", disk),
                 Map.entry("requests.ephemeral-storage", disk),
                 Map.entry("limits.ephemeral-storage", diskLimit));
+    }
+
+    /** The effective requests and limits of a tools Pod, with the RuntimeClass overhead seen in the cache. */
+    static Map<String, Quantity> footprint(Pod pod, Map<String, Quantity> overhead) {
+        Map<String, Quantity> footprint = new HashMap<>();
+        footprint.put("pods", new Quantity("1"));
+        footprint.put("count/pods", new Quantity("1"));
+        for (String type : List.of("requests", "limits")) {
+            for (String resource : List.of("cpu", "memory", "ephemeral-storage")) {
+                Function<Container, BigDecimal> amount = container -> {
+                    var resources = container.getResources();
+                    var values = "requests".equals(type) ? resources.getRequests() : resources.getLimits();
+                    Quantity quantity = values.get(resource);
+                    return quantity == null ? BigDecimal.ZERO : quantity.getNumericalAmount();
+                };
+                BigDecimal running =
+                        pod.getSpec().getContainers().stream().map(amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal init =
+                        pod.getSpec().getInitContainers().stream().map(amount).reduce(BigDecimal.ZERO, BigDecimal::max);
+                Quantity extra = overhead.get(resource);
+                BigDecimal total = running.max(init).add(extra == null ? BigDecimal.ZERO : extra.getNumericalAmount());
+                Quantity value = new Quantity(total.toPlainString());
+                footprint.put(type + "." + resource, value);
+                if ("requests".equals(type)) footprint.put(resource, value);
+            }
+        }
+        return footprint;
     }
 
     private static Quantity plus(@Nullable Quantity amount, @Nullable Quantity overhead) {

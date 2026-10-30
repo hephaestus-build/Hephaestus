@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.BoundedTranscript;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import io.fabric8.kubernetes.api.model.Container;
@@ -638,6 +639,10 @@ public class KubernetesPods {
         } catch (KubernetesClientException e) {
             if (e.getCode() == 409) {
                 throw new SandboxException("A sandbox Pod of this name already exists", e);
+            }
+            if (e.getCode() == 403 && e.getMessage() != null && e.getMessage().contains("exceeded quota")) {
+                throw new SandboxCapacityException(
+                        "The sandbox quota has no room for another Pod", SandboxCapacityException.Reason.QUOTA_EXCEEDED);
             }
             throw failure("Could not create a sandbox Pod", e);
         }

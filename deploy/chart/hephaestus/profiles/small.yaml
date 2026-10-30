@@ -31,13 +31,12 @@ server:
 worker:
   enabled: true
   replicas: 1
-  # An upgrade starts the new worker beside the draining one, so reviews and conversations keep running. A chart
-  # test checks that the node holds both workers' sandboxes.
-  rolloutStrategy: RollingUpdate
+  # Drain the old worker before its replacement starts so the node holds 32 resident turns.
+  # Reviews and conversations pause during the drain and replacement.
+  rolloutStrategy: Recreate
   reviews: 1
-  # The worker's automatic number of conversation turns. A chart test checks that each single-node profile
-  # holds them beside the review, from sandbox-pod-requests.json.
-  conversationTurns: 8
+  # The CPU budget admits 32 resident turns. The tools quota stays at eight plus two warm Pods.
+  conversationTurns: auto
   gitCache:
     sizeLimit: 10Gi
   resources:

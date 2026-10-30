@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -37,7 +38,11 @@ final class HephTurnFixtures {
 
     /** The worker's turn contexts with the results and the feedback store a test chooses. */
     static HephTurnContexts contexts(ApplicationContext beans, ResultHistoryQuery results, FeedbackStore feedback) {
-        return contexts(beans, results, feedback, folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0)));
+        return contexts(
+                beans,
+                results,
+                feedback,
+                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())));
     }
 
     /** The worker's turn contexts with the context folder a test chooses. */
@@ -61,7 +66,7 @@ final class HephTurnFixtures {
                 beans,
                 beans.getBean(ResultHistoryQuery.class),
                 beans.getBean(FeedbackStore.class),
-                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0)),
+                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())),
                 generations);
     }
 
