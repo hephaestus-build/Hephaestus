@@ -7,7 +7,9 @@
 ## Update, 2026-10-30
 
 Temporary outages must not exhaust a retry budget.
-The consumer now retries unclassified failures indefinitely and stores parsing failures in PostgreSQL before termination.
+The consumer retries proven temporary failures without a delivery limit.
+Unknown failures exhaust a retry budget.
+Permanent failures and exhausted unknown failures have a metadata record in PostgreSQL before termination.
 The decision to avoid a second JetStream stream remains.
 [Webhook delivery and retry order](../contributor/ingest-durability.md) owns the current contract.
 

@@ -1,12 +1,16 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
-import de.tum.cit.aet.hephaestus.core.AuditExempt;
+import de.tum.cit.aet.hephaestus.core.AuditLedger;
+import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
+import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.constraints.Min;
 import java.util.List;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,8 +43,14 @@ public class InstallationDeadLetterController {
 
     @PostMapping("/{id}/replays")
     @Operation(operationId = "replayInstallationDeadLetter", summary = "Replay an unassigned installation dead letter")
-    @AuditExempt(reason = "Retries an already admitted provider event through its original handler")
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "INSTALLATION_EVENT_REPLAYED")
+    @RequiresRecentSignIn
     public ConsumerDeadLetterDTO replay(@PathVariable Long id) {
-        return replays.replayInstallation(id);
+        return replays.replayInstallation(id, actorId());
+    }
+
+    private static Long actorId() {
+        return SecurityUtils.getCurrentAccountId()
+                .orElseThrow(() -> new AccessDeniedException("An account is required"));
     }
 }

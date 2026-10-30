@@ -79,9 +79,13 @@ class IntegrationNatsConsumerLoggingTest {
                     .containsEntry("error.type", IllegalStateException.class.getName());
             assertThat(event.getFormattedMessage() + fields(event)).doesNotContain("canary");
         }
-        assertThat(fields(failures.get(0))).containsEntry("integration.delivery", 1L);
+        assertThat(fields(failures.get(0)))
+                .containsEntry("integration.delivery", 1L)
+                .containsKey("error.stack_trace");
         assertThat(failures.get(0).getThrowableProxy()).isNull();
-        assertThat(fields(failures.get(1))).containsEntry("integration.delivery", 2L);
+        assertThat(fields(failures.get(1)))
+                .containsEntry("integration.delivery", 2L)
+                .doesNotContainKey("error.stack_trace");
         assertThat(failures.get(1).getThrowableProxy()).isNull();
     }
 

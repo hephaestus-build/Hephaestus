@@ -10,15 +10,19 @@ public record ConsumerDeadLetterDTO(
         @NonNull String stream,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long sequence,
         @NonNull String errorClass,
+        @NonNull Instant receivedAt,
         @NonNull Instant failedAt,
-        @Nullable Instant replayedAt) {
+        @Nullable Instant replayedAt,
+        @Nullable Long replayedBy) {
     static ConsumerDeadLetterDTO from(ConsumerDeadLetter row) {
         return new ConsumerDeadLetterDTO(
                 row.getId(),
                 row.getStreamName(),
                 row.getStreamSequence(),
                 row.getErrorClass(),
+                row.getReceivedAt(),
                 row.getFailedAt(),
-                row.getReplayedAt());
+                row.getReplayedAt(),
+                row.getReplayedBy());
     }
 }

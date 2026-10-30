@@ -20,6 +20,7 @@ import io.nats.client.StreamContext;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
+import io.nats.client.api.MessageInfo;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
@@ -41,6 +42,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,6 +102,10 @@ public class IntegrationNatsConsumer {
     private static final int MAX_SCOPE_RECONCILE_ATTEMPTS = 6;
 
     private final Object connectionLock = new Object();
+
+    private record DispatchScope(@Nullable Long workspaceId, String stream) {}
+
+    private final Map<DispatchScope, ReentrantLock> dispatchLocks = new ConcurrentHashMap<>();
     private final Object scopeLifecycleMonitor = new Object();
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
@@ -753,7 +760,7 @@ public class IntegrationNatsConsumer {
                         && config.getMaxDeliver() == -1
                         && config.getMaxAckPending() == 1
                         && config.getAckPolicy() == AckPolicy.Explicit
-                        && config.getBackoff().equals(retryTimeouts(consumerProperties))) {
+                        && Objects.equals(config.getBackoff(), retryTimeouts(consumerProperties))) {
                     return existing;
                 }
                 log.info(
@@ -812,12 +819,8 @@ public class IntegrationNatsConsumer {
     }
 
     static List<Duration> retryTimeouts(NatsConsumerProperties properties) {
-        // BackOff replaces AckWait. Keep the first timeout long enough for a normal handler.
-        Duration first = properties.ackWait();
-        Duration last = first.compareTo(properties.poison().maxDelay()) >= 0
-                ? first
-                : properties.poison().maxDelay();
-        return List.of(first, last.multipliedBy(2), last.multipliedBy(4));
+        // Replace older multi-stage timeout lists so every timeout uses the configured acknowledgement wait.
+        return List.of(properties.ackWait());
     }
 
     private String durableBaseName() {
@@ -834,7 +837,7 @@ public class IntegrationNatsConsumer {
 
     // Message dispatch
 
-    /** ACK only after handler and liveness writes succeed. Unknown failures always retry. */
+    /** ACK after the handler commits; liveness reporting must not repeat a completed handler. */
     void handleMessage(@Nullable Long scopeId, Message msg) {
         if (shuttingDown.get()) {
             safeNak(msg);
@@ -852,11 +855,19 @@ public class IntegrationNatsConsumer {
                 if (key == null) {
                     throw new IllegalStateException("Integration handler returned a null key");
                 }
-                activityRecorder.recordEventProcessed(scopeId, key.kind(), key.eventType());
+                try {
+                    activityRecorder.recordEventProcessed(scopeId, key.kind(), key.eventType());
+                } catch (Exception failure) {
+                    log.warn(
+                            "Event liveness update failed: scopeId={}, error.type={}",
+                            scopeId,
+                            failure.getClass().getName());
+                }
             }
             msg.ack();
             stats.recordDispatch(Instant.now());
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            if (e instanceof VirtualMachineError) throw e;
             if (!shuttingDown.get()) {
                 // Exception messages can contain raw provider payloads. Log only the failure type.
                 long delivery = IntegrationPoisonHandler.readDeliveredCount(msg);
@@ -866,7 +877,20 @@ public class IntegrationNatsConsumer {
                         .addKeyValue("integration.delivery", delivery)
                         .addKeyValue("error.type", e.getClass().getName());
                 if (scopeId != null) failure = failure.addKeyValue("integration.scope.id", scopeId);
-
+                if (delivery <= 1) {
+                    Throwable diagnostic = e;
+                    for (int depth = 0; depth < 16 && diagnostic.getCause() != null; depth++) {
+                        diagnostic = Objects.requireNonNull(diagnostic.getCause());
+                    }
+                    failure = failure.addKeyValue(
+                                    "error.root_type", diagnostic.getClass().getName())
+                            .addKeyValue(
+                                    "error.stack_trace",
+                                    Arrays.stream(diagnostic.getStackTrace())
+                                            .limit(32)
+                                            .map(StackTraceElement::toString)
+                                            .toList());
+                }
                 failure.log("Handler failed");
             }
             stats.recordNak(Instant.now());
@@ -876,6 +900,24 @@ public class IntegrationNatsConsumer {
 
     @Nullable
     IntegrationMessageHandler dispatch(@Nullable Long scopeId, Message msg) {
+        var metadata = msg.isJetStream() ? msg.metaData() : null;
+        String stream =
+                metadata != null ? metadata.getStream() : msg.getSubject().split("\\.", 2)[0];
+        return serialDispatch(scopeId, stream, () -> dispatchAdmitted(scopeId, msg));
+    }
+
+    <T extends @Nullable Object> T serialDispatch(@Nullable Long scopeId, String stream, Supplier<T> work) {
+        // Replay and live delivery share the scope, even though replay is an explicit late event.
+        var lock = dispatchLocks.computeIfAbsent(new DispatchScope(scopeId, stream), ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            return work.get();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private @Nullable IntegrationMessageHandler dispatchAdmitted(@Nullable Long scopeId, Message msg) {
         Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(msg.getSubject());
         if (handler.isEmpty()) return null;
         IntegrationMessageHandler resolved = handler.get();
@@ -883,8 +925,33 @@ public class IntegrationNatsConsumer {
                 .filter(candidate -> candidate.owns(msg.getSubject()))
                 .findFirst();
         if (admission.isEmpty()) resolved.onMessage(msg);
-        else if (!admission.get().admit(scopeId, msg, () -> resolved.onMessage(msg))) return null;
+        else if (!admission.get().admit(scopeId, msg, () -> resolved.onMessage(msg))) {
+            log.info(
+                    "Skipped message: reason=routeNotAdmitted, scopeId={}, route={}",
+                    scopeId,
+                    ConsumerSubjectMath.routeLabel(msg.getSubject()));
+            return null;
+        }
         return resolved;
+    }
+
+    boolean isReplayAdmitted(@Nullable Long scopeId, String stream, String subject) {
+        if (scopeId == null) {
+            return "github".equals(stream)
+                    && ConsumerSubjectMath.matchesFilter(
+                            ConsumerSubjectMath.installationAwareSubjectFilter(IntegrationKind.GITHUB), subject);
+        }
+        return subscriptionProvider.getSubscriptionInfo(scopeId).stream()
+                .flatMap(info -> info.streamSubscriptions().stream())
+                .filter(subscription -> subscription.streamName().equals(stream))
+                .flatMap(subscription -> subscription.subjects().stream())
+                .anyMatch(filter -> ConsumerSubjectMath.matchesFilter(filter, subject));
+    }
+
+    MessageInfo readRetainedMessage(String stream, long sequence) throws IOException, JetStreamApiException {
+        Connection connection = natsConnection;
+        if (connection == null) throw new IOException("NATS consumer connection is unavailable");
+        return connection.jetStreamManagement().getMessage(stream, sequence);
     }
 
     // Connection management

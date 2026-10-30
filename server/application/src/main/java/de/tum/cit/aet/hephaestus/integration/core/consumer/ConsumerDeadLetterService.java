@@ -4,44 +4,37 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.nats.client.Message;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 @Service
 @ConditionalOnServerRole
 public class ConsumerDeadLetterService {
     private final ConsumerDeadLetterRepository repository;
-    private final ObjectMapper mapper;
 
-    public ConsumerDeadLetterService(ConsumerDeadLetterRepository repository, ObjectMapper mapper) {
+    public ConsumerDeadLetterService(ConsumerDeadLetterRepository repository) {
         this.repository = repository;
-        this.mapper = mapper;
     }
 
     @Transactional
     @WorkspaceAgnostic(
             "Consumer capture supplies the owning workspace explicitly; installation events have no workspace")
-    public void capture(@Nullable Long workspaceId, Message message, Exception failure) {
+    public void capture(@Nullable Long workspaceId, Message message, Throwable failure) {
         var metadata = message.metaData();
-        String reply = message.getReplyTo();
-        if (reply == null || metadata == null) throw new IllegalArgumentException("JetStream metadata required");
-        var headers = message.getHeaders();
-        repository.capture(
+        if (metadata == null) throw new IllegalArgumentException("JetStream metadata required");
+        repository.capture(new ConsumerDeadLetterRepository.Capture(
                 workspaceId,
                 metadata.getConsumer(),
                 metadata.getStream(),
                 metadata.streamSequence(),
                 message.getSubject(),
-                message.getData(),
-                mapper.writeValueAsString(headers == null ? Map.of() : headers.toMap()),
-                reply,
+                metadata.timestamp().toInstant().truncatedTo(ChronoUnit.MICROS),
                 failure.getClass().getName(),
-                Instant.now());
+                Instant.now()));
     }
 
     @Transactional(readOnly = true)

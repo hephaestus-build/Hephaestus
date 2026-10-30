@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 @PersonDataStores({
     "oauth_state_nonce",
     "connection_audit",
+    "consumer_dead_letter",
     "sync_job",
     "item_event",
     "item_event_evidence",
@@ -48,6 +49,16 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id,connection_id,event_type,from_state,to_state,actor_kind,actor_ref,actor_account_id,correlation_id,detail,occurred_at",
                         "id",
                         "actor_account_id=NULL,actor_ref=NULL,detail=NULL",
+                        400),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "consumer_dead_letter",
+                        "consumer_dead_letter",
+                        "t.replayed_by = :account",
+                        "id,workspace_id,stream_name,stream_sequence,error_class,received_at,failed_at,replayed_at,replayed_by",
+                        "id,replayed_by",
+                        "replayed_by=NULL",
                         400),
                 new JdbcPersonDataStore(
                         jdbc,

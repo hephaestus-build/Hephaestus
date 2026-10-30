@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.nats.client.impl.NatsMessage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -121,6 +122,26 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         eventListener.clear();
         setupTestData();
+    }
+
+    @Test
+    void shouldKeepTheNewerIssueStateWhenAnOlderEnvelopeIsReplayed() throws Exception {
+        var edited = Objects.requireNonNull(loadPayload("issues.edited").issue());
+        handler.onMessage(new NatsMessage(
+                "github.HephaestusTest.TestRepository.issues",
+                null,
+                new ClassPathResource("github/issues.edited.json").getContentAsByteArray()));
+        var older = new NatsMessage(
+                "github.HephaestusTest.TestRepository.issues",
+                null,
+                new ClassPathResource("github/issues.opened.json").getContentAsByteArray());
+        handler.onMessage(older);
+        handler.onMessage(older);
+        var issue = issueRepository
+                .findByRepositoryIdAndNumber(testRepository.getId(), 20)
+                .orElseThrow();
+        assertThat(issue.getTitle()).isEqualTo(edited.title());
+        assertThat(issue.getUpdatedAt()).isEqualTo(edited.updatedAt());
     }
 
     // Event Key Tests

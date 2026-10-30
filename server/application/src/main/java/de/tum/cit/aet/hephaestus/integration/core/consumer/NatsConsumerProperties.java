@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import org.hibernate.validator.constraints.time.DurationMin;
@@ -56,7 +57,7 @@ public record NatsConsumerProperties(
 
     public NatsConsumerProperties {
         if (poison == null) {
-            poison = new PoisonProperties(Duration.ofSeconds(2), Duration.ofMinutes(5));
+            poison = new PoisonProperties(10, Duration.ofSeconds(2), Duration.ofMinutes(5));
         }
         if (inactiveThreshold != null
                 && !inactiveThreshold.isZero()
@@ -70,17 +71,19 @@ public record NatsConsumerProperties(
         }
     }
 
-    /** Bounded delays for retries. No attempt count can prove a permanent failure. */
+    /** Unknown failures exhaust this budget; proven operational failures retry until recovery. */
     public record PoisonProperties(
+            @DefaultValue("10") @Positive int maxRedeliver,
+
             @DurationUnit(ChronoUnit.SECONDS)
             @DefaultValue("2s")
             @NotNull(message = "base-delay must not be null")
-            @DurationMin(millis = 1)
+            @DurationMin(seconds = 1)
             Duration baseDelay,
 
             @DurationUnit(ChronoUnit.MINUTES)
             @DefaultValue("5m")
             @NotNull(message = "max-delay must not be null")
-            @DurationMin(millis = 1)
+            @DurationMin(seconds = 1)
             Duration maxDelay) {}
 }
