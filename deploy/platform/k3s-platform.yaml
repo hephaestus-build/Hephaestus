@@ -120,7 +120,8 @@ spec:
         hostPort: 443
         exposedPort: 443
     service:
-      type: ClusterIP
+      spec:
+        type: ClusterIP
     resources:
       requests: { cpu: 100m, memory: 128Mi }
       limits: { cpu: "1", memory: 512Mi }

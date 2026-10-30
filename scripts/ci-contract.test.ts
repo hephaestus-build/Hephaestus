@@ -4157,7 +4157,12 @@ void describe("CI contract", () => {
 		assert.match(notes, /PREVIOUS_VERSION: \$\{\{ needs\.release\.outputs\.previous_version \}\}/u);
 		assert.match(notes, /--notes "\$PREVIOUS_VERSION" "\$VERSION" CHANGELOG\.md/u);
 		assert.doesNotMatch(notes, /contents: write|id-token|packages: write/u);
-		assert.match(gate, /RELEASE_NOTES: \$\{\{ needs\.release-notes\.outputs\.notes \}\}/u);
+		assert.doesNotMatch(gate, /RELEASE_NOTES:/u);
+		assert.match(notes, /node scripts\/github-release-notes\.ts notes\.md release-body\.md/u);
+		assert.match(notes, /name: release-notes\n/u);
+		assert.match(gate, /--notes-file release-notes\/release-body\.md/u);
+		const completeNotes = gate.indexOf("cp release-notes/notes.md evidence/release-notes.md");
+		assert.ok(completeNotes !== -1 && completeNotes < gate.indexOf("sha256sum -- * > SHA256SUMS"));
 		assert.doesNotMatch(gate, /awk|CHANGELOG\.md|install: "frozen"/u);
 		const publication = job(source, "publish-release");
 		const published = publication.indexOf('gh release edit "$TAG_NAME"');

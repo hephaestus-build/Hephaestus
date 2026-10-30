@@ -18,6 +18,7 @@ import { test } from "node:test";
 import { isMap, isSeq, parseDocument } from "yaml";
 
 import { parseInventory } from "./commit-image-lock.ts";
+import { githubReleaseBody } from "./github-release-notes.ts";
 import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 import { lockFromEvidence } from "./release-image-lock.ts";
@@ -749,6 +750,20 @@ async function laterEvidence(directory: string) {
 	for (const name of platformAssets) {
 		await sign(path.join(directory, "k3s-platform", name));
 	}
+	const notes = `## ${release.slice(1)}\n\nComplete release notes.\n`;
+	const notesDirectory = path.join(directory, "release-notes");
+	await mkdir(notesDirectory);
+	await writeFile(path.join(evidence, "release-notes.md"), notes);
+	await writeFile(
+		path.join(notesDirectory, "release-body.md"),
+		githubReleaseBody({
+			notes,
+			release,
+			commit: later,
+			repository: "hephaestus-build/Hephaestus",
+			migrations: false,
+		}),
+	);
 	const attestation = path.join(directory, "attestation.jsonl");
 	await writeFile(attestation, '{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}\n');
 	return {
@@ -757,7 +772,6 @@ async function laterEvidence(directory: string) {
 		ATTESTATION: attestation,
 		JOINT: `evidence/${jointLock}`,
 		MIGRATIONS: "false",
-		RELEASE_NOTES: `## ${release.slice(1)}`,
 	};
 }
 
@@ -810,6 +824,10 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 				assert.deepEqual(
 					await readFile(path.join(archive, `release-${release}.json`)),
 					await readFile(path.join(directory, evidence.ASSET)),
+				);
+				assert.deepEqual(
+					await readFile(path.join(archive, "release-notes.md")),
+					await readFile(path.join(directory, "evidence", "release-notes.md")),
 				);
 				// The release attestation travels with the release, under the name provenance tools read.
 				assert.deepEqual(
