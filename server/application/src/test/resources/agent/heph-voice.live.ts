@@ -827,3 +827,60 @@ void test(
 		assertNoInternalTerm(TERMS, reply.text);
 	},
 );
+
+/** Pull request #46, which nobody has approved yet and nobody was asked to review, as MergeReadinessContentSource lists it. */
+const WAITING_FOR_APPROVAL: Folder = {
+	...RUNNING,
+	"INDEX.md": `${INDEX}\n- \`inputs/context/merge_readiness.json\`: their open pull requests, with what the provider says about merging and the reviews by people\n`,
+	"inputs/context/merge_readiness.json": json({
+		readAt: "Tue 2026-10-27 09:12 +01:00",
+		pullRequests: [
+			{
+				...WORK,
+				state: "OPEN",
+				providerFreshness: "UNKNOWN",
+				recordUpdatedAt: "Mon 2026-10-26 23:02 +01:00",
+				mergeable: "YES",
+				mergeStateStatus: "BLOCKED",
+				reviewDecision: "not approved yet",
+				checks: "SUCCESS",
+				checksFor: "CURRENT_HEAD",
+				checksObserved: "STATUS_REPORTED",
+				latestReviews: [],
+				latestReviewsStatus: "COMPLETE",
+				generalNotes: [],
+				generalNotesStatus: "COMPLETE",
+				threads: [],
+			},
+		],
+		notLoaded: [],
+	}),
+};
+
+void test(
+	"T2-4: Hephaestus says in plain words that a pull request waits for an approval",
+	{ skip, timeout: TURN_MS },
+	async () => {
+		const reply = await ask(
+			"t2-4-waiting-for-review",
+			turn("Is anything of mine still waiting to be reviewed right now?", true),
+			WAITING_FOR_APPROVAL,
+		);
+		assert.ok(
+			reply.looked.some((entry) => entry.includes("merge_readiness")),
+			`answered without reading merge readiness: ${reply.looked.join(", ")}`,
+		);
+		assert.match(reply.text, /#46/u, `does not name the pull request: ${reply.text}`);
+		assert.doesNotMatch(
+			reply.text,
+			/\breadiness\b|\bnot loaded\b/iu,
+			`names a document: ${reply.text}`,
+		);
+		assert.doesNotMatch(
+			reply.text,
+			/\b[A-Z]+_[A-Z_]+\b|\bBLOCKED\b/u,
+			`names a code: ${reply.text}`,
+		);
+		assertNoInternalTerm(TERMS, reply.text);
+	},
+);

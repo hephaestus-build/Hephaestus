@@ -183,7 +183,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(entry.path("number").asInt()).isEqualTo(1);
         assertThat(entry.path("mergeable").asString()).isEqualTo("NO");
         assertThat(entry.path("mergeStateStatus").asString()).isEqualTo("UNSTABLE");
-        assertThat(entry.path("reviewDecision").asString()).isEqualTo("APPROVED");
+        assertThat(entry.path("reviewDecision").asString()).isEqualTo("approved");
         assertThat(entry.path("checks").asString()).isEqualTo("FAILURE");
         assertThat(entry.path("checksFor").asString()).isEqualTo("CURRENT_HEAD");
         JsonNode approval = entry.path("latestReviews").get(0);
@@ -198,6 +198,27 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                         "tutor: Looks good. Please merge only once the CI pipeline is green.",
                         "tutor: Reminder: a green pipeline is required before merging.");
         assertThat(entry.path("generalNotesStatus").asString()).isEqualTo("COMPLETE");
+    }
+
+    @Test
+    void shouldGiveTheApprovalStateInWordsTheDeveloperReadsWhenNobodyApprovedOrSomeoneAskedForChanges() {
+        PullRequest unapproved = mergeRequest(course, 2, true, MergeStateStatus.BLOCKED, CheckState.SUCCESS, HEAD);
+        unapproved.setReviewDecision(ReviewDecision.REVIEW_REQUIRED);
+        pullRequestRepository.save(unapproved);
+        PullRequest returned = mergeRequest(course, 3, true, MergeStateStatus.BLOCKED, CheckState.SUCCESS, HEAD);
+        returned.setReviewDecision(ReviewDecision.CHANGES_REQUESTED);
+        pullRequestRepository.save(returned);
+        PullRequest unread = mergeRequest(course, 4, null, null, CheckState.SUCCESS, HEAD);
+        unread.setReviewDecision(null);
+        pullRequestRepository.save(unread);
+
+        JsonNode payload = payload(workspace.getId(), student.getId());
+
+        assertThat(payload.path("pullRequests")
+                        .valueStream()
+                        .map(entry -> entry.path("number").asInt() + " "
+                                + entry.path("reviewDecision").asString()))
+                .contains("2 not approved yet", "3 changes requested", "4 UNKNOWN");
     }
 
     @Test
