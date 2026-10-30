@@ -57,7 +57,7 @@ public class LegacySecretsChange implements CustomTaskChange {
                     new SecretColumn("workspace_llm_connection", "api_key"))) {
                 var rows = jdbc.query(
                         "SELECT id," + column.column() + " FROM " + column.table() + " WHERE " + column.column()
-                                + " NOT LIKE 'ENC:%'",
+                                + " NOT LIKE 'ENC:%' FOR UPDATE",
                         (rs, row) -> new StringSecret(rs.getLong(1), Objects.requireNonNull(rs.getString(2))));
                 for (var row : rows) {
                     jdbc.update(
@@ -67,19 +67,21 @@ public class LegacySecretsChange implements CustomTaskChange {
                 }
             }
             var sealer = new JwtSigningKeySealer(systemKey);
-            jdbc.query("SELECT kid,private_key_pem FROM jwt_signing_key WHERE encryption_key_id='v0-unsealed'", rs -> {
-                byte[] privateDer = Objects.requireNonNull(rs.getBytes(2));
-                try {
-                    KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(privateDer));
-                } catch (GeneralSecurityException exception) {
-                    throw new EncryptionException("Invalid legacy JWT signing key", exception);
-                }
-                jdbc.update(
-                        "UPDATE jwt_signing_key SET private_key_pem=?,encryption_key_id=? WHERE kid=?",
-                        sealer.seal(privateDer),
-                        sealer.keyId(),
-                        rs.getString(1));
-            });
+            jdbc.query(
+                    "SELECT kid,private_key_pem FROM jwt_signing_key WHERE encryption_key_id='v0-unsealed' FOR UPDATE",
+                    rs -> {
+                        byte[] privateDer = Objects.requireNonNull(rs.getBytes(2));
+                        try {
+                            KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(privateDer));
+                        } catch (GeneralSecurityException exception) {
+                            throw new EncryptionException("Invalid legacy JWT signing key", exception);
+                        }
+                        jdbc.update(
+                                "UPDATE jwt_signing_key SET private_key_pem=?,encryption_key_id=? WHERE kid=?",
+                                sealer.seal(privateDer),
+                                sealer.keyId(),
+                                rs.getString(1));
+                    });
         } catch (Exception exception) {
             throw new CustomChangeException(
                     "Secret conversion failed. Keep writers stopped, verify the system, active and prior credential keys, then retry the migration.");

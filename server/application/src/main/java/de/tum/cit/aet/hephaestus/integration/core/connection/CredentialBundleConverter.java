@@ -38,7 +38,6 @@ public class CredentialBundleConverter {
 
     private final Map<Integer, SecretKey> keys;
     private final int activeKeyVersion;
-    private final @Nullable Integer priorKeyVersion;
     private final boolean enabled;
     private final ObjectMapper objectMapper;
 
@@ -88,7 +87,6 @@ public class CredentialBundleConverter {
             throw new IllegalArgumentException("Active and prior key versions must differ");
         }
         this.activeKeyVersion = activeKeyVersion;
-        this.priorKeyVersion = priorKeyVersion;
         this.objectMapper = objectMapper;
         if (encryptionKey == null || encryptionKey.isBlank()) {
             if (production) {
@@ -132,9 +130,10 @@ public class CredentialBundleConverter {
     }
 
     public CredentialBundle decrypt(byte[] dbData, EncryptionContext ctx, @Nullable Integer keyVersion) {
-        int resolvedVersion =
-                keyVersion != null ? keyVersion : priorKeyVersion != null ? priorKeyVersion : activeKeyVersion;
-        return decrypt(dbData, ctx, resolvedVersion);
+        if (keyVersion == null) {
+            throw new EncryptionException("Credential key version is missing. Run the release database migration.");
+        }
+        return decrypt(dbData, ctx, keyVersion.intValue());
     }
 
     private CredentialBundle decrypt(byte[] dbData, EncryptionContext ctx, int keyVersion) {

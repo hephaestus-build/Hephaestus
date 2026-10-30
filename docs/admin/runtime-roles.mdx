@@ -114,7 +114,8 @@ profile group requires the same keys as selecting `prod` directly.
 
 The `migrate` run mode applies the database migration of a release, then exits.
 Start the application image with `SPRING_PROFILES_ACTIVE=prod,migrate`.
-It needs only `DATABASE_URL`, `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
+It needs `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and the stored-secret encryption keys.
+Use the same system key and active and prior credential key settings as the server.
 It starts no web server and no runtime role.
 It exits with status 0 when the schema is current, and with a non-zero status when the migration fails.
 

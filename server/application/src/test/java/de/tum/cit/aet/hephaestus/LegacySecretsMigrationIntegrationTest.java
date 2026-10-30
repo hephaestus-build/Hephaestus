@@ -16,9 +16,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
-import java.sql.DriverManager;
-import java.io.StringWriter;
 import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -85,10 +85,11 @@ class LegacySecretsMigrationIntegrationTest {
         }
         var active = new CredentialBundleConverter(ACTIVE_KEY, 8, PRIOR_KEY, 7, true);
         var credentials = jdbc.query(
-                "SELECT id,credentials_encrypted,credentials_key_version,state FROM connection ORDER BY id",
+                "SELECT id,credentials_encrypted,credentials_key_version,state,credentials_rotation_failed_at FROM connection ORDER BY id",
                 (rs, row) -> {
                     assertThat(rs.getInt(3)).isEqualTo(8);
                     assertThat(rs.getString(4)).isEqualTo("SUSPENDED");
+                    assertThat(rs.getTimestamp(5)).isNull();
                     return active.decrypt(Objects.requireNonNull(rs.getBytes(2)), context(rs.getLong(1)), rs.getInt(3));
                 });
         assertThat(credentials)
@@ -96,6 +97,8 @@ class LegacySecretsMigrationIntegrationTest {
                         new BearerToken("token-1001", null),
                         new BearerToken("token-1002", null),
                         new BearerToken("token-1003", null));
+        assertThatThrownBy(() -> jdbc.update("UPDATE connection SET credentials_key_version=NULL WHERE id=1001"))
+                .hasMessageContaining("ck_connection_encrypted_requires_key_version");
         var sealer = new JwtSigningKeySealer(new SystemEncryptionKey(properties, environment()));
         var signedKeys = jdbc.query(
                 "SELECT kid,private_key_pem,encryption_key_id,active FROM jwt_signing_key ORDER BY kid", (rs, row) -> {
@@ -162,6 +165,10 @@ class LegacySecretsMigrationIntegrationTest {
                         "SELECT count(*) FROM connection WHERE credentials_key_version IS NULL", Integer.class))
                 .isEqualTo(3);
         assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM connection WHERE credentials_rotation_failed_at IS NOT NULL",
+                        Integer.class))
+                .isEqualTo(3);
+        assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM jwt_signing_key WHERE encryption_key_id='v0-unsealed'", Integer.class))
                 .isEqualTo(2);
         assertThat(jdbc.queryForObject(
@@ -192,8 +199,8 @@ class LegacySecretsMigrationIntegrationTest {
             var converter = new CredentialBundleConverter(keys[index], false);
             jdbc.update(
                     """
-                    INSERT INTO connection(id,workspace_id,kind,instance_key,state,config,credentials_encrypted,credentials_alg)
-                    VALUES (?,1001,'GITLAB',?,'SUSPENDED','{"type":"GITLAB"}'::jsonb,?,'aesgcm-v2')
+                    INSERT INTO connection(id,workspace_id,kind,instance_key,state,config,credentials_encrypted,credentials_alg,credentials_rotation_failed_at)
+                    VALUES (?,1001,'GITLAB',?,'SUSPENDED','{"type":"GITLAB"}'::jsonb,?,'aesgcm-v2',now())
                     """, id, Long.toString(id), converter.encrypt(new BearerToken("token-" + id, null), context(id)));
         }
         var key = new ECKeyGenerator(Curve.P_256).generate();

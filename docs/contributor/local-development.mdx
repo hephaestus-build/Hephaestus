@@ -102,7 +102,7 @@ Spring. `vp run dev:server:e2e` uses that interface.
 
 Create `application-local.yml` in `server/application/src/main/resources` to override defaults. This file is gitignored.
 
-Before the first local sign-in, set `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` in `server/.env`.
+Before you start the local server, set `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` in `server/.env`.
 Each key must contain exactly 32 UTF-8 bytes.
 For a new database, generate each value with `openssl rand -base64 24`.
 Keep these values across restarts.

@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  * wildcard default is still in effect.
  *
  * <p>Mirrors {@link de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService#assertKeysSealed()}:
- * prod-only, throws {@link IllegalStateException} from a non-swallowed {@code @PostConstruct}.
+ * throws {@link IllegalStateException} from a non-swallowed {@code @PostConstruct}.
  */
 @Component
 @ReceiverComponent

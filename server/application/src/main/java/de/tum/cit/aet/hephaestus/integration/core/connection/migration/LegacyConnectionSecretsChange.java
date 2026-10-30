@@ -57,10 +57,10 @@ public class LegacyConnectionSecretsChange implements CustomTaskChange {
             try (var statement = jdbc.createStatement();
                     var rows = statement.executeQuery("""
                         SELECT id,workspace_id,kind,instance_key,credentials_encrypted FROM connection
-                        WHERE credentials_encrypted IS NOT NULL AND credentials_key_version IS NULL
+                        WHERE credentials_encrypted IS NOT NULL AND credentials_key_version IS NULL FOR UPDATE
                         """);
                     var update = jdbc.prepareStatement("""
-                        UPDATE connection SET credentials_encrypted=?,credentials_alg=?,credentials_key_version=?,version=version+1
+                        UPDATE connection SET credentials_encrypted=?,credentials_alg=?,credentials_key_version=?,credentials_rotation_failed_at=NULL,updated_at=now(),version=version+1
                         WHERE id=?
                         """)) {
                 while (rows.next()) {

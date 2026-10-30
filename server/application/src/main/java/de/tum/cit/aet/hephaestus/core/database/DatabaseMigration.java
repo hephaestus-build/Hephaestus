@@ -22,7 +22,7 @@ import org.springframework.modulith.NamedInterface;
 /**
  * The migrate run mode: the application image with the {@value #PROFILE} profile applies the Liquibase changelog
  * and exits, with a non-zero status when the migration fails. It starts a context of only the data source and
- * Liquibase, so it needs the database settings and no runtime role. The roles wait for it at start
+ * Liquibase, so it needs the database settings and stored-secret encryption keys, but no runtime role. The roles wait for it at start
  * ({@link MigratedSchemaWait}). {@link MigrationLock} keeps a second migration out.
  *
  * <p>Not a {@code @Configuration}: the application's component scan would otherwise import this context into

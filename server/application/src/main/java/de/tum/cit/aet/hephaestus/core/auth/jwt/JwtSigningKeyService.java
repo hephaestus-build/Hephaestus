@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -63,7 +63,8 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
     /** How long to trust the in-memory key cache before reloading from DB. */
     private static final long CACHE_TTL_MILLIS = 60_000L;
 
-    public JwtSigningKeyService(JwtSigningKeyRepository repository, Environment environment, JwtSigningKeySealer sealer) {
+    public JwtSigningKeyService(
+            JwtSigningKeyRepository repository, Environment environment, JwtSigningKeySealer sealer) {
         this.repository = repository;
         this.environment = environment;
         this.sealer = sealer;
