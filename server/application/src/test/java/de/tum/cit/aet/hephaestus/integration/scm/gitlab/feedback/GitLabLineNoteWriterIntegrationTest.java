@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.practices.feedback.AbstractFeedbackDeliveryIntegrationTest;
@@ -68,7 +69,8 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                                             + "]")
                     .build());
         }));
-        var writer = new GitLabLineNoteWriter(gitlab.provider(), gitlab.rest(), tokens, guard, targets, reader);
+        var writer = new GitLabLineNoteWriter(
+                gitlab.provider(), gitlab.rest(), tokens, guard, targets, reader, ScmFeedbackFixtures.formatter());
         var resolution = mock(FeedbackTargetResolver.class);
         when(resolution.resolve(any())).thenReturn(target);
         when(resolution.resolveExisting(any())).thenReturn(target);

@@ -3,13 +3,14 @@ package de.tum.cit.aet.hephaestus.integration.scm.feedback;
 import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
-import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
 // Key the answer link by work so repeated reviews retain the same copy marker.
@@ -49,45 +50,34 @@ public class ScmFeedbackFormatter {
                 .toUriString();
     }
 
-    public String format(String sanitizedBody, ItemRef item, @Nullable String modelName) {
-        var sb = new StringBuilder(sanitizedBody.length() + 640);
-        sb.append(sanitizedBody).append("\n\n");
-        sb.append("---\n");
-        appendMetadataFooter(sb, item, modelName);
-        appendWhyAndSettingsLink(sb);
-        return sb.toString();
+    /** Resolve links once, before a copy fence or provider request. */
+    public Footer footer(ItemRef item) {
+        String respond = respondLink(item);
+        String settings = "<sub>[Why you see this and how to stop it](" + preferencesUrl + ")</sub>\n";
+        return new Footer(
+                item.workspaceId(),
+                "<sub>Practice review. This feedback is AI-generated and can be inaccurate. " + respond + "</sub>\n"
+                        + settings,
+                "<sub>AI-generated feedback. " + respond + "</sub>\n" + settings);
     }
 
-    public String appendDisclosure(String sanitizedBody, ItemRef item, @Nullable String modelName) {
-        var sb = new StringBuilder(sanitizedBody.length() + 420);
-        sb.append(sanitizedBody).append("\n\n");
-        appendMetadataFooter(sb, item, modelName);
-        appendWhyAndSettingsLink(sb);
-        return sb.toString();
-    }
-
-    public String appendLineNotePrompt(String sanitizedBody, ItemRef item) {
-        var sb = new StringBuilder(sanitizedBody.length() + 240);
-        sb.append(sanitizedBody).append("\n\n");
-        sb.append("<sub>AI-generated feedback. ").append(respondLink(item)).append("</sub>\n");
-        return sb.toString();
-    }
-
-    private void appendWhyAndSettingsLink(StringBuilder sb) {
-        sb.append("<sub>[Why you see this and how to stop it](")
-                .append(preferencesUrl)
-                .append(")</sub>\n");
-    }
-
-    private void appendMetadataFooter(StringBuilder sb, ItemRef item, @Nullable String modelName) {
-        sb.append("<sub>Practice review");
-
-        if (modelName != null && !modelName.isBlank()) {
-            sb.append(" &middot; ").append(HtmlUtils.htmlEscape(modelName));
+    /** Immutable rendering for one target; it does not read settings or workspace data again. */
+    public record Footer(long workspaceId, String summary, String lineNote) {
+        public String summary(SummaryContent content) {
+            String body = PostedText.summary(content);
+            String marker = Objects.requireNonNullElse(content.writeMarker(), "");
+            if (marker.isBlank()) return appendDisclosure(body).stripTrailing();
+            body = body.substring(0, body.length() - marker.length()).stripTrailing();
+            return appendDisclosure(body) + "\n" + marker;
         }
-        sb.append(". This feedback is AI-generated and can be inaccurate. ")
-                .append(respondLink(item))
-                .append("</sub>\n");
+
+        private String appendDisclosure(String sanitizedBody) {
+            return sanitizedBody + "\n\n" + summary;
+        }
+
+        public String appendLineNotePrompt(String sanitizedBody) {
+            return sanitizedBody + "\n\n" + lineNote;
+        }
     }
 
     private String respondLink(ItemRef item) {

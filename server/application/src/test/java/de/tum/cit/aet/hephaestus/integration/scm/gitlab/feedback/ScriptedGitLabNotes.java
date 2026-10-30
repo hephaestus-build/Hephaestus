@@ -46,7 +46,8 @@ public final class ScriptedGitLabNotes {
     ScriptedGitLabNotes(OutboundEgressGuard egressGuard, ScmFeedbackTargetResolver targets) {
         provider = mock(GitLabGraphQlClientProvider.class);
         when(provider.forScope(anyLong())).thenReturn(ScriptedGraphQlClient.of(this::answer));
-        channel = new GitLabSummaryWriter(provider, new GitLabMrResolver(provider), egressGuard, targets);
+        channel = new GitLabSummaryWriter(
+                provider, new GitLabMrResolver(provider), egressGuard, targets, ScmFeedbackFixtures.formatter());
     }
 
     void rejectPositions(boolean reject) {

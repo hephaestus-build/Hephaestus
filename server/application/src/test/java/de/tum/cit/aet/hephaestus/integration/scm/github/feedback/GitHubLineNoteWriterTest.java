@@ -11,6 +11,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
@@ -81,7 +83,27 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         channel = new GitHubLineNoteWriter(
-                gitHubProvider, prNodeIdResolver, egressGuard, ScmFeedbackFixtures.resolver(), summaries);
+                gitHubProvider,
+                prNodeIdResolver,
+                egressGuard,
+                ScmFeedbackFixtures.resolver(),
+                summaries,
+                ScmFeedbackFixtures.formatter());
+    }
+
+    @Test
+    void shouldLeaveTheCopyUnsentBeforeItsFenceWhenDisclosureLinksAreUnavailable() {
+        var formatter = mock(ScmFeedbackFormatter.class);
+        when(formatter.footer(any())).thenThrow(new IllegalStateException("Workspace unavailable"));
+        var writer = new GitHubLineNoteWriter(
+                gitHubProvider, prNodeIdResolver, egressGuard, ScmFeedbackFixtures.resolver(), summaries, formatter);
+        var result = writer.postImmutablePackage(githubTarget(), List.of(item("Words", "key")), fence);
+        assertThat(result.receipts()).singleElement().satisfies(copy -> {
+            assertThat(copy.writeMayHaveStarted()).isFalse();
+            assertThat(copy.acknowledged()).isFalse();
+        });
+        assertThat(fence.attempts).isEmpty();
+        verifyNoInteractions(gitHubProvider);
     }
 
     @Test
@@ -250,7 +272,12 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
 
         channel.postImmutablePackage(githubTarget(), List.of(item("Ask @alice", "result:a:0")), fence);
 
-        assertThat(threads.bodies()).singleElement().asString().startsWith("Ask <code>\\@alice</code>\n\n");
+        assertThat(threads.bodies())
+                .containsExactly("Ask <code>\\@alice</code>\n\n"
+                        + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                        + githubTarget().item().itemId() + ").</sub>\n"
+                        + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                        + MARKER + "\n<!-- hephaestus-diff-note-ck=result:a:0 -->");
     }
 
     @Test
@@ -443,7 +470,10 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return PostedText.of(item.body()) + "\n\n" + item.writeMarker() + "\n" + ckTag(String.valueOf(item.writeKey()));
+        return ScmFeedbackFixtures.formatter()
+                        .footer(githubTarget().item())
+                        .appendLineNotePrompt(PostedText.of(item.body()))
+                + "\n" + item.writeMarker() + "\n" + ckTag(String.valueOf(item.writeKey()));
     }
 
     private static Map<String, Object> authored(LineNote item) {
@@ -585,9 +615,11 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
                 .orElseThrow(() -> new AssertionError("no signal for key " + key));
     }
 
+    private static final FeedbackTarget TARGET =
+            ScmFeedbackFixtures.target(new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo#42", COMMIT);
+
     private static FeedbackTarget githubTarget() {
-        return ScmFeedbackFixtures.target(
-                new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo#42", COMMIT);
+        return TARGET;
     }
 
     private static final class ThreadsCaptor {

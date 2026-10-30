@@ -15,6 +15,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -29,8 +30,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
-import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.HashMap;
@@ -62,8 +63,12 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        channel =
-                new GitHubSummaryWriter(gitHubProvider, prNodeIdResolver, egressGuard, ScmFeedbackFixtures.resolver());
+        channel = new GitHubSummaryWriter(
+                gitHubProvider,
+                prNodeIdResolver,
+                egressGuard,
+                ScmFeedbackFixtures.resolver(),
+                ScmFeedbackFixtures.formatter());
     }
 
     @Test
@@ -89,7 +94,14 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         assertNotNull(handle);
         assertThat(handle.externalRef()).isEqualTo("IC_comment456");
         assertThat(handle.url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
-        verify(spec).variable("body", "body for <code>\\@alice</code>\n\nmarker");
+        verify(spec)
+                .variable(
+                        "body",
+                        "body for <code>\\@alice</code>\n\n"
+                                + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
+                                + "[Hephaestus](https://hephaestus.example/w/team/feedback/"
+                                + target.item().itemId() + ").</sub>\n"
+                                + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\nmarker");
     }
 
     @Test
@@ -206,7 +218,10 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         assertThat(outcome.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec).variable("id", "IC_prior");
         // An edit that adds a name notifies that person, so the edited body mentions no one either.
-        verify(spec).variable("body", "new body for <code>\\@alice</code>\n\nmarker");
+        String expectedBody = ScmFeedbackFixtures.formatter()
+                .footer(target.item())
+                .summary(ScmFeedbackFixtures.summary("new body for @alice", "marker"));
+        verify(spec).variable("body", expectedBody);
     }
 
     @Test
@@ -365,11 +380,39 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         return spec;
     }
 
+    @Test
+    void shouldRefuseACreateBeforeAnyProviderCallWhenDisclosureLinksAreUnavailable() {
+        var formatter = mock(ScmFeedbackFormatter.class);
+        when(formatter.footer(any())).thenThrow(new IllegalStateException("Workspace unavailable"));
+        var writer = new GitHubSummaryWriter(
+                gitHubProvider, prNodeIdResolver, egressGuard, ScmFeedbackFixtures.resolver(), formatter);
+        assertThatThrownBy(() -> writer.postSummary(PR_TARGET, ScmFeedbackFixtures.summary("Words", "marker")))
+                .isInstanceOf(FeedbackNotSentException.class);
+        verifyNoInteractions(gitHubProvider, prNodeIdResolver);
+    }
+
+    @Test
+    void shouldKeepReadbackUnknownAfterAWorkspaceRenameWithoutCreatingAnotherComment() {
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        var page = mockCommentsPageResponse(
+                "repository.pullRequest.comments", List.of(comment("IC_1", EXACT)), false, null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+        var writer = new GitHubSummaryWriter(
+                gitHubProvider,
+                prNodeIdResolver,
+                egressGuard,
+                ScmFeedbackFixtures.resolver(),
+                ScmFeedbackFixtures.formatter("renamed-team"));
+        assertThat(writer.findExistingSummary(PR_TARGET, EXPECTED).presence()).isEqualTo(LookupPresence.UNKNOWN);
+        verify(graphQlClient, never()).documentName("AddPullRequestComment");
+    }
+
     private static final String MARKER = "<!-- marker:job-1 -->";
 
     private static final SummaryContent EXPECTED = ScmFeedbackFixtures.summary("Summary text", MARKER);
 
-    private static final String EXACT = PostedText.summary(EXPECTED);
+    private static final String EXACT =
+            ScmFeedbackFixtures.formatter().footer(PR_TARGET.item()).summary(EXPECTED);
 
     private ClientGraphQlResponse mockCommentsPageResponse(
             String commentsPath,
@@ -476,8 +519,15 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
                 new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo/issues/42", null);
         when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
         GraphQlClient.RequestSpec spec = mockRequestChain();
-        ClientGraphQlResponse response =
-                mockCommentsPageResponse("repository.issue.comments", List.of(comment("IC_1", EXACT)), false, null);
+        ClientGraphQlResponse response = mockCommentsPageResponse(
+                "repository.issue.comments",
+                List.of(comment(
+                        "IC_1",
+                        ScmFeedbackFixtures.formatter()
+                                .footer(issueTarget.item())
+                                .summary(EXPECTED))),
+                false,
+                null);
         when(spec.execute()).thenReturn(Mono.just(response));
 
         SummaryLookup result = channel.findExistingSummary(issueTarget, EXPECTED);

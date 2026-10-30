@@ -14,6 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -64,7 +66,12 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        channel = new GitLabSummaryWriter(gitLabProvider, mrResolver, egressGuard, ScmFeedbackFixtures.resolver());
+        channel = new GitLabSummaryWriter(
+                gitLabProvider,
+                mrResolver,
+                egressGuard,
+                ScmFeedbackFixtures.resolver(),
+                ScmFeedbackFixtures.formatter());
     }
 
     @Test
@@ -88,7 +95,14 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         assertThat(handle).isNotNull();
         assertThat(handle.externalRef()).isEqualTo("gid://gitlab/Note/789");
         assertThat(handle.url()).isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
-        verify(spec).variable("body", "hello\n\nmarker");
+        verify(spec)
+                .variable(
+                        "body",
+                        "hello\n\n"
+                                + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
+                                + "[Hephaestus](https://hephaestus.example/w/team/feedback/"
+                                + target.item().itemId() + ").</sub>\n"
+                                + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\nmarker");
     }
 
     @Test
@@ -306,7 +320,10 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         assertThat(outcome.externalUrl())
                 .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         verify(spec).variable(eq("id"), eq("gid://gitlab/Note/789"));
-        verify(spec).variable(eq("body"), eq("updated body\n\nmarker"));
+        String expectedBody = ScmFeedbackFixtures.formatter()
+                .footer(target.item())
+                .summary(ScmFeedbackFixtures.summary("updated body", "marker"));
+        verify(spec).variable(eq("body"), eq(expectedBody));
     }
 
     @Test
@@ -397,12 +414,29 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         assertThat(outcome.kind()).isEqualTo(CopyUpdateKind.GONE);
     }
 
+    @Test
+    void shouldRefuseACreateBeforeAnyProviderCallWhenDisclosureLinksAreUnavailable() {
+        var formatter = mock(ScmFeedbackFormatter.class);
+        when(formatter.footer(any())).thenThrow(new IllegalStateException("Workspace unavailable"));
+        var writer = new GitLabSummaryWriter(
+                gitLabProvider, mrResolver, egressGuard, ScmFeedbackFixtures.resolver(), formatter);
+        assertThatThrownBy(() -> writer.postSummary(gitlabTarget(), ScmFeedbackFixtures.summary("Words", "marker")))
+                .isInstanceOf(FeedbackNotSentException.class);
+        verifyNoInteractions(gitLabProvider, mrResolver);
+    }
+
     private static final String MARKER = "<!-- hephaestus-summary:job-1 -->";
 
     private static final SummaryContent EXPECTED =
             ScmFeedbackFixtures.summary("/approve once fixed\nSummary text", MARKER);
 
-    private static final String EXACT = GitLabSummaryWriter.gitLabSummary(EXPECTED);
+    private static final FeedbackTarget MR_TARGET =
+            ScmFeedbackFixtures.target(new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project!42", null);
+    private static final FeedbackTarget ISSUE_TARGET =
+            ScmFeedbackFixtures.target(new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project#7", null);
+
+    private static final String EXACT =
+            ScmFeedbackFixtures.formatter().footer(MR_TARGET.item()).summary(EXPECTED);
 
     private static final String BOT = "gid://gitlab/User/1";
 
@@ -649,8 +683,16 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         when(spec.variable(any(), any())).thenReturn(spec);
         // Stubbed ONLY on the issue path: reading the merge-request path would yield null nodes →
         // UNKNOWN.
-        ClientGraphQlResponse page =
-                mockNotesPage(ISSUE_NOTES_PATH, List.of(note("gid://gitlab/Note/7", EXACT)), false, null, List.of());
+        ClientGraphQlResponse page = mockNotesPage(
+                ISSUE_NOTES_PATH,
+                List.of(note(
+                        "gid://gitlab/Note/7",
+                        ScmFeedbackFixtures.formatter()
+                                .footer(ISSUE_TARGET.item())
+                                .summary(EXPECTED))),
+                false,
+                null,
+                List.of());
         when(spec.execute()).thenReturn(Mono.just(page));
 
         SummaryLookup result = channel.findExistingSummary(gitlabIssueTarget(), EXPECTED);
@@ -743,13 +785,11 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
     }
 
     private static FeedbackTarget gitlabTarget() {
-        return ScmFeedbackFixtures.target(
-                new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project!42", null);
+        return MR_TARGET;
     }
 
     private static FeedbackTarget gitlabIssueTarget() {
-        return ScmFeedbackFixtures.target(
-                new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project#7", null);
+        return ISSUE_TARGET;
     }
 
     @SuppressWarnings("unchecked")

@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -113,10 +114,32 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                 tokenService,
                 egressGuard,
                 ScmFeedbackFixtures.resolver(),
-                diffVersions);
+                diffVersions,
+                ScmFeedbackFixtures.formatter());
         client = mock(HttpGraphQlClient.class);
         lenient().when(tokenService.resolveServerUrl(1L)).thenReturn(SERVER);
         lenient().when(tokenService.getAccessToken(1L)).thenReturn("glpat-test");
+    }
+
+    @Test
+    void shouldLeaveTheCopyUnsentBeforeItsFenceWhenDisclosureLinksAreUnavailable() {
+        var formatter = mock(ScmFeedbackFormatter.class);
+        when(formatter.footer(any())).thenThrow(new IllegalStateException("Workspace unavailable"));
+        var writer = new GitLabLineNoteWriter(
+                gitLabProvider,
+                rest.builder(),
+                tokenService,
+                egressGuard,
+                ScmFeedbackFixtures.resolver(),
+                diffVersions,
+                formatter);
+        var result = writer.postImmutablePackage(target(), List.of(item("Words", "key")), fence);
+        assertThat(result.receipts()).singleElement().satisfies(copy -> {
+            assertThat(copy.writeMayHaveStarted()).isFalse();
+            assertThat(copy.acknowledged()).isFalse();
+        });
+        assertThat(fence.attempts).isEmpty();
+        verifyNoInteractions(gitLabProvider);
     }
 
     @Test
@@ -138,7 +161,8 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                     tokenService,
                     egressGuard,
                     ScmFeedbackFixtures.resolver(),
-                    diffVersions);
+                    diffVersions,
+                    ScmFeedbackFixtures.formatter());
             stubDiscussions(List.of(), BOT);
             when(diffVersions.read(eq(1L), any(), any())).thenReturn(GitLabDiffPositionsTest.VERSION);
             rest.answer(call -> ScriptedGitLabRest.respond(
@@ -190,7 +214,10 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
             assertThat(call.json())
                     .isEqualTo(Map.of(
                             "body",
-                            posted(selected),
+                            "fix\n\n<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                                    + target().item().itemId() + ").</sub>\n"
+                                    + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                                    + MARKER + "\n" + "<!-- hephaestus-diff-note-ck=selected -->",
                             "position",
                             Map.of(
                                     "position_type",
@@ -232,7 +259,11 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                 .satisfies(call -> assertThat(call.json())
                         .isEqualTo(Map.of(
                                 "body",
-                                placed(selected),
+                                "fix\n\n<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                                        + target().item().itemId() + ").</sub>\n"
+                                        + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                                        + MARKER + "\n" + "<!-- hephaestus-gitlab-placement=line-range -->\n"
+                                        + "<!-- hephaestus-diff-note-ck=selected -->",
                                 "position",
                                 Map.of(
                                         "position_type",
@@ -549,7 +580,13 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
             assertThat(receipt.externalUrl()).isEqualTo(NOTE_URL);
         });
         assertThat(rest.calls()).allSatisfy(call -> assertThat(call.json()).doesNotContainKey("position"));
-        assertThat(bodies().getFirst()).contains("\\/approve once fixed", MARKER, "hephaestus-diff-note-ck=result:a:0");
+        assertThat(bodies().getFirst())
+                .isEqualTo("**[View code at line 10](" + SERVER
+                        + "/group/project/-/blob/" + REVIEWED + "/src/Foo.java#L10)**\n\n\\/approve once fixed\n\n"
+                        + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                        + target().item().itemId() + ").</sub>\n"
+                        + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                        + MARKER + "\n<!-- hephaestus-diff-note-ck=result:a:0 -->");
         assertThat(bodies().getLast())
                 .isEqualTo("**[View code at line 10]("
                         + SERVER
@@ -568,11 +605,9 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
         LineNote ranged = ScmFeedbackFixtures.line(
                 ScmFeedbackFixtures.range("docs/My Notes (draft).md", 3, 7), "fix", MARKER, "result:a:0");
 
-        channel.postImmutablePackage(
-                ScmFeedbackFixtures.target(
-                        new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/sub.group/project!42", REVIEWED),
-                List.of(ranged),
-                fence);
+        var projectTarget = ScmFeedbackFixtures.target(
+                new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/sub.group/project!42", REVIEWED);
+        channel.postImmutablePackage(projectTarget, List.of(ranged), fence);
 
         assertThat(rest.calls()).singleElement().satisfies(call -> {
             assertThat(call.path())
@@ -583,7 +618,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                             + "/group/sub.group/project/-/blob/"
                             + REVIEWED
                             + "/docs/My%20Notes%20%28draft%29.md#L3-7)**\n\n"
-                            + posted(ranged));
+                            + posted(ranged, projectTarget));
         });
     }
 
@@ -1378,13 +1413,19 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return GitLabSummaryWriter.gitLabBody(item.body()) + "\n" + item.writeMarker()
-                + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
+        return posted(item, target());
+    }
+
+    private static String posted(LineNote item, FeedbackTarget target) {
+        return ScmFeedbackFixtures.formatter().footer(target.item()).appendLineNotePrompt(PostedText.of(item.body()))
+                + "\n" + item.writeMarker() + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
     }
 
     private static String placed(LineNote item) {
-        return GitLabSummaryWriter.gitLabBody(item.body()) + "\n" + item.writeMarker() + "\n"
-                + GitLabLineNoteWriter.RANGE_PLACEMENT + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
+        return ScmFeedbackFixtures.formatter().footer(target().item()).appendLineNotePrompt(PostedText.of(item.body()))
+                + "\n"
+                + item.writeMarker() + "\n" + GitLabLineNoteWriter.RANGE_PLACEMENT + "\n<!-- hephaestus-diff-note-ck="
+                + item.writeKey() + " -->";
     }
 
     private List<String> bodies() {
@@ -1521,9 +1562,11 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
         return disc;
     }
 
+    private static final FeedbackTarget TARGET = ScmFeedbackFixtures.target(
+            new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project!42", REVIEWED);
+
     private static FeedbackTarget target() {
-        return ScmFeedbackFixtures.target(
-                new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project!42", REVIEWED);
+        return TARGET;
     }
 
     private static final class RecordingFence implements CopyWriteFence {

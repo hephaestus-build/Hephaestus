@@ -15,7 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
-import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter.Footer;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
@@ -41,16 +42,19 @@ public class GitLabSummaryWriter implements SummaryWriter {
     private final GitLabMrResolver mrResolver;
     private final OutboundEgressGuard egressGuard;
     private final ScmFeedbackTargetResolver targets;
+    private final ScmFeedbackFormatter formatter;
 
     public GitLabSummaryWriter(
             GitLabGraphQlClientProvider gitLabProvider,
             GitLabMrResolver mrResolver,
             OutboundEgressGuard egressGuard,
-            ScmFeedbackTargetResolver targets) {
+            ScmFeedbackTargetResolver targets,
+            ScmFeedbackFormatter formatter) {
         this.gitLabProvider = gitLabProvider;
         this.mrResolver = mrResolver;
         this.egressGuard = egressGuard;
         this.targets = targets;
+        this.formatter = formatter;
     }
 
     @Override
@@ -62,12 +66,14 @@ public class GitLabSummaryWriter implements SummaryWriter {
     public SummaryHandle postSummary(FeedbackTarget target, SummaryContent content) {
         long scopeId = target.integration().workspaceId();
         String noteableGid;
+        Footer footer;
         try {
+            footer = formatter.footer(target.item());
             noteableGid = resolveNoteable(scopeId, targets.subject(target, IntegrationKind.GITLAB));
         } catch (RuntimeException e) {
             throw new FeedbackNotSentException("GitLab note not sent: " + e.getMessage(), e);
         }
-        String body = gitLabSummary(content);
+        String body = footer.summary(content);
 
         ClientGraphQlResponse response;
         try {
@@ -148,10 +154,9 @@ public class GitLabSummaryWriter implements SummaryWriter {
             return CopyUpdateReceipt.transientFailure(
                     content.copyId(), "The GitLab rate limit is critical for scope " + scopeId);
         }
-        String body = gitLabSummary(content);
-
         ClientGraphQlResponse response;
         try {
+            String body = formatter.footer(target.item()).summary(content);
             egressGuard.requireDeliveryAllowed("gitlab.update-summary");
             response = gitLabProvider
                     .forScope(scopeId)
@@ -230,7 +235,12 @@ public class GitLabSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody = gitLabSummary(expected);
+        String expectedBody;
+        try {
+            expectedBody = formatter.footer(target.item()).summary(expected);
+        } catch (RuntimeException unavailable) {
+            return SummaryLookup.unknown();
+        }
         long scopeId = target.integration().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();
@@ -328,14 +338,5 @@ public class GitLabSummaryWriter implements SummaryWriter {
                         || e.contains("does not exist")
                         || e.contains("could not be found")
                         || e.contains("couldn't be found"));
-    }
-
-    /** The body as GitLab receives it: plain Markdown, no quick action runs and no one is mentioned. */
-    static String gitLabBody(String body) {
-        return PostedText.of(body);
-    }
-
-    static String gitLabSummary(SummaryContent content) {
-        return PostedText.summary(content);
     }
 }

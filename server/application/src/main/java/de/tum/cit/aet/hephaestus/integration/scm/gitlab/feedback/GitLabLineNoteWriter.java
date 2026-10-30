@@ -23,7 +23,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter.Footer;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
@@ -92,6 +94,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     private final GitLabDiffVersionReader diffVersions;
     private final OutboundEgressGuard egressGuard;
     private final ScmFeedbackTargetResolver targets;
+    private final ScmFeedbackFormatter formatter;
 
     public GitLabLineNoteWriter(
             GitLabGraphQlClientProvider gitLabProvider,
@@ -99,13 +102,15 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             GitLabTokenService tokenService,
             OutboundEgressGuard egressGuard,
             ScmFeedbackTargetResolver targets,
-            GitLabDiffVersionReader diffVersions) {
+            GitLabDiffVersionReader diffVersions,
+            ScmFeedbackFormatter formatter) {
         this.gitLabProvider = gitLabProvider;
         this.rest = rest.clone().build();
         this.tokenService = tokenService;
         this.egressGuard = egressGuard;
         this.targets = targets;
         this.diffVersions = diffVersions;
+        this.formatter = formatter;
     }
 
     @Override
@@ -118,6 +123,12 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             FeedbackTarget target, List<LineNote> feedbackItems, CopyWriteFence fence) {
         if (feedbackItems.isEmpty()) {
             return CopyWriteResult.of(List.of());
+        }
+        Footer footer;
+        try {
+            footer = formatter.footer(target.item());
+        } catch (RuntimeException unavailable) {
+            return CopyWriteResult.of(notSent(feedbackItems));
         }
         long scopeId = target.integration().workspaceId();
         String revision;
@@ -138,7 +149,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         }
         MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITLAB));
         String projectUrl = projectUrl(scopeId, mr);
-        Scan scan = indexCopies(scopeId, mr, feedbackItems, target.version(), projectUrl);
+        Scan scan = indexCopies(scopeId, mr, feedbackItems, target, projectUrl, footer);
         Map<String, Copy> copies = scan.copies();
 
         // An unread diff version stops the package before any create instead of posting plain comments.
@@ -197,7 +208,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             }
             Attempt attempt = position == null
                     ? null
-                    : createDiffThread(scopeId, request, mr, projectUrl, scan.author(), item, position);
+                    : createDiffThread(footer, request, mr, projectUrl, scan.author(), item, position);
             if (attempt == null) {
                 // The committed copy fence covers the fallback after a confirmed position rejection.
                 if (position != null) {
@@ -214,7 +225,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                         mr,
                         projectUrl,
                         scan.author(),
-                        locationBody(projectUrl, anchorVersion, diff, item),
+                        locationBody(footer, projectUrl, anchorVersion, diff, item),
                         diff,
                         item.copyId());
             }
@@ -238,9 +249,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             return null;
         }
         try {
+            Footer footer = formatter.footer(target.item());
             MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITLAB));
-            Map<String, Copy> copies = indexCopies(
-                            scopeId, mr, feedbackItems, target.version(), projectUrl(scopeId, mr))
+            Map<String, Copy> copies = indexCopies(scopeId, mr, feedbackItems, target, projectUrl(scopeId, mr), footer)
                     .copies();
             List<CopyReceipt> found = new ArrayList<>();
             for (LineNote item : feedbackItems) {
@@ -257,14 +268,15 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     // Only an explicit position rejection proves that a fallback cannot duplicate a created note.
     private @Nullable Attempt createDiffThread(
-            long scopeId,
+            Footer footer,
             Request request,
             MrCoordinates mr,
             String projectUrl,
             long author,
             LineNote item,
             GitLabDiffPositions.Position position) {
-        String body = lineBody(item);
+        long scopeId = footer.workspaceId();
+        String body = lineBody(footer, item);
         Answer answer;
         try {
             answer = exchange(scopeId, HttpMethod.POST, request, Map.of("body", body, "position", position.request()));
@@ -466,7 +478,12 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     // Partial discussions, missing identity, or incomplete pagination cannot prove a copy absent.
     private Scan indexCopies(
-            long scopeId, MrCoordinates mr, List<LineNote> items, ItemVersion version, String projectUrl) {
+            long scopeId,
+            MrCoordinates mr,
+            List<LineNote> items,
+            FeedbackTarget target,
+            String projectUrl,
+            Footer footer) {
         Map<String, LineNote> expected = new HashMap<>();
         for (LineNote item : items) {
             expected.putIfAbsent(item.writeKey(), item);
@@ -498,7 +515,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     throw new FeedbackDeliveryException("GitLab discussion lookup was incomplete");
                 }
                 for (Object discussion : discussions) {
-                    indexDiscussion(discussion, currentUserId, version, projectUrl, expected, copies);
+                    indexDiscussion(discussion, currentUserId, target, projectUrl, expected, copies, footer);
                 }
                 Object hasNextPage = pageInfo.get("hasNextPage");
                 if (Boolean.FALSE.equals(hasNextPage)) {
@@ -527,13 +544,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private static void indexDiscussion(
+    private void indexDiscussion(
             @Nullable Object node,
             String currentUserId,
-            ItemVersion version,
+            FeedbackTarget target,
             String projectUrl,
             Map<String, LineNote> expected,
-            Map<String, Copy> copies) {
+            Map<String, Copy> copies,
+            Footer footer) {
         if (!(node instanceof Map<?, ?> discussion)
                 || !(discussion.get("notes") instanceof Map<?, ?> connection)
                 || !(connection.get("nodes") instanceof List<?> notes)
@@ -560,8 +578,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             if (item != null
                     && note.get("author") instanceof Map<?, ?> author
                     && currentUserId.equals(author.get("id"))) {
-                copyForm = copyForm(note, body, item, version, projectUrl);
-                rangePending = copyForm == CopyForm.LINE_NOTE && placesRange(body, item);
+                copyForm = copyForm(note, body, item, target, projectUrl, footer);
+                rangePending = copyForm == CopyForm.LINE_NOTE && placesRange(body, footer, item);
             }
             String url = note.get("url") instanceof String noteUrl ? noteUrl : null;
             Copy previous = copies.get(key);
@@ -573,20 +591,21 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private static @Nullable CopyForm copyForm(
-            Map<?, ?> note, String body, LineNote item, ItemVersion version, String projectUrl) {
+    private @Nullable CopyForm copyForm(
+            Map<?, ?> note, String body, LineNote item, FeedbackTarget target, String projectUrl, Footer footer) {
+        ItemVersion version = target.version();
         FeedbackAnchor diff = item.anchor();
         String revision = diff.side() == CitationSide.OLD ? version.baseVersion() : ScmVersion.reviewedHead(version);
         if (diff.endLine() != null && diff.side() == null) return null;
         // Only a position the response answered with null proves an ordinary comment; a missing one
         // proves nothing.
         boolean unpositioned = note.containsKey("position") && note.get("position") == null;
-        if (unpositioned && revision != null && body.equals(locationBody(projectUrl, revision, diff, item))) {
+        if (unpositioned && revision != null && body.equals(locationBody(footer, projectUrl, revision, diff, item))) {
             return CopyForm.FILE_NOTE;
         }
         boolean lineCopy = diff.endLine() != null
                 && revision != null
-                && (body.equals(postedBody(item)) || placesRange(body, item))
+                && (body.equals(postedBody(footer, item)) || placesRange(body, footer, item))
                 && note.get("position") instanceof Map<?, ?> position
                 && diff.path().equals(position.get(diff.side() == CitationSide.OLD ? "oldPath" : "newPath"))
                 && position.get(diff.side() == CitationSide.OLD ? "oldLine" : "newLine") instanceof Number line
@@ -625,9 +644,9 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     // A range copy names its placement; a body without it is an end-line copy, as written before ranges.
-    private static String lineBody(LineNote item) {
-        if (!ranged(item.anchor())) return postedBody(item);
-        return GitLabSummaryWriter.gitLabBody(item.body())
+    private String lineBody(Footer footer, LineNote item) {
+        if (!ranged(item.anchor())) return postedBody(footer, item);
+        return footer.appendLineNotePrompt(PostedText.of(item.body()))
                 + "\n"
                 + item.writeMarker()
                 + "\n"
@@ -636,8 +655,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 
-    private static boolean placesRange(String body, LineNote item) {
-        return ranged(item.anchor()) && body.equals(lineBody(item));
+    private boolean placesRange(String body, Footer footer, LineNote item) {
+        return ranged(item.anchor()) && body.equals(lineBody(footer, item));
     }
 
     private static boolean ranged(FeedbackAnchor anchor) {
@@ -670,15 +689,15 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 && Objects.equals(anchor.endLine(), line(range.path("end"), side)));
     }
 
-    private static String postedBody(LineNote item) {
-        String body = GitLabSummaryWriter.gitLabBody(item.body());
+    private String postedBody(Footer footer, LineNote item) {
+        String body = footer.appendLineNotePrompt(PostedText.of(item.body()));
         body = body + "\n" + item.writeMarker();
         String key = item.writeKey();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(key);
     }
 
     // File names stay inside the encoded URL; link text contains only line coordinates.
-    private static String locationBody(String projectUrl, String revision, FeedbackAnchor diff, LineNote item) {
+    private String locationBody(Footer footer, String projectUrl, String revision, FeedbackAnchor diff, LineNote item) {
         if (diff.endLine() == null)
             return "**[View file]("
                     + projectUrl
@@ -687,14 +706,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     + "/"
                     + encodedPath(diff.path())
                     + ")**\n\n"
-                    + postedBody(item);
+                    + postedBody(footer, item);
         Integer start = diff.startLine();
         boolean range = start != null && start < diff.endLine();
         String lines = range ? start + "-" + diff.endLine() : String.valueOf(diff.endLine());
         String label =
                 range ? "View code at lines " + start + "–" + diff.endLine() : "View code at line " + diff.endLine();
         String link = projectUrl + "/-/blob/" + revision + "/" + encodedPath(diff.path()) + "#L" + lines;
-        return "**[" + label + "](" + link + ")**\n\n" + postedBody(item);
+        return "**[" + label + "](" + link + ")**\n\n" + postedBody(footer, item);
     }
 
     private static String encodedPath(String path) {
