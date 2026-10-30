@@ -6,17 +6,28 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.nats.client.Message;
+import java.io.IOException;
+import java.sql.SQLException;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-/** Retries unclassified failures indefinitely; parsing failures require a committed dead letter before TERM. */
+/** Retries operational failures; permanent or exhausted unknown failures require durable capture before TERM. */
 @Component
 @ConditionalOnServerRole
 public class IntegrationPoisonHandler {
@@ -86,8 +97,11 @@ public class IntegrationPoisonHandler {
         }
     }
 
-    public void handleFailure(@Nullable Long workspaceId, Message msg, Exception failure) {
-        if (failure instanceof PayloadParsingException) {
+    public void handleFailure(@Nullable Long workspaceId, Message msg, Throwable failure) {
+        FailureKind kind = classify(failure);
+        if (kind == FailureKind.PERMANENT
+                || (kind == FailureKind.UNKNOWN
+                        && readDeliveredCount(msg) >= properties.poison().maxRedeliver())) {
             try {
                 deadLetters.capture(workspaceId, msg, failure);
                 msg.term();
@@ -100,6 +114,50 @@ public class IntegrationPoisonHandler {
             }
         }
         nakWithBackoff(msg);
+    }
+
+    private enum FailureKind {
+        PERMANENT,
+        TRANSIENT,
+        UNKNOWN
+    }
+
+    private static FailureKind classify(Throwable failure) {
+        boolean transientFailure = false;
+        Set<Throwable> seen = new HashSet<>();
+        for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
+            if (cause instanceof PayloadParsingException) return FailureKind.PERMANENT;
+            if (cause instanceof IOException
+                    || cause instanceof TransientDataAccessException
+                    || cause instanceof DataAccessResourceFailureException
+                    || cause instanceof WebClientRequestException) {
+                transientFailure = true;
+            }
+            if (cause instanceof WebClientResponseException response) {
+                transientFailure |= isTransientResponse(response.getStatusCode(), response.getHeaders());
+            }
+            if (cause instanceof RestClientResponseException response) {
+                transientFailure |= isTransientResponse(response.getStatusCode(), response.getResponseHeaders());
+            }
+            if (cause instanceof SQLException sql) {
+                String state = sql.getSQLState();
+                transientFailure |= state != null
+                        && (state.startsWith("08")
+                                || Set.of("40001", "40P01", "53300", "55P03", "57P01", "57P02", "57P03")
+                                        .contains(state));
+            }
+        }
+        return transientFailure ? FailureKind.TRANSIENT : FailureKind.UNKNOWN;
+    }
+
+    private static boolean isTransientResponse(HttpStatusCode status, @Nullable HttpHeaders headers) {
+        return status.is5xxServerError()
+                || status.value() == 429
+                || status.value() == 408
+                || (status.value() == 403
+                        && headers != null
+                        && (headers.containsHeader(HttpHeaders.RETRY_AFTER)
+                                || "0".equals(headers.getFirst("X-RateLimit-Remaining"))));
     }
 
     static long readDeliveredCount(Message msg) {

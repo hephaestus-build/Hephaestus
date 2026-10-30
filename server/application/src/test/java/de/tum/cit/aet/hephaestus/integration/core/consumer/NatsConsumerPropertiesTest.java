@@ -39,7 +39,7 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
         @Test
         void explicitPoisonBlockKept() {
             NatsConsumerProperties.PoisonProperties custom =
-                    new NatsConsumerProperties.PoisonProperties(Duration.ofSeconds(5), Duration.ofMinutes(1));
+                    new NatsConsumerProperties.PoisonProperties(10, Duration.ofSeconds(5), Duration.ofMinutes(1));
             NatsConsumerProperties props = new NatsConsumerProperties(
                     Duration.ofMinutes(5), Duration.ofSeconds(2), Duration.ofDays(30), custom);
 

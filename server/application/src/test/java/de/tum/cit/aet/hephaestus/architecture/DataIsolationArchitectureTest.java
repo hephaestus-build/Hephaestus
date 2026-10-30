@@ -261,6 +261,10 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             ArchRule rule = fields().that()
                     .areDeclaredInClassesThat()
                     .areAnnotatedWith(Entity.class)
+                    // Installation lifecycle events arrive before a workspace exists.
+                    .and()
+                    .areDeclaredInClassesThat()
+                    .doNotHaveSimpleName("ConsumerDeadLetter")
                     .should(beNotNullableIfWorkspaceType())
                     .because("Workspace relationships should be required to prevent orphaned data");
 

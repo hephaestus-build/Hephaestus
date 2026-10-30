@@ -6,7 +6,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -17,12 +16,15 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.Message;
 import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 class IntegrationPoisonHandlerTest extends BaseUnitTest {
     private final ConsumerDeadLetterService deadLetters = mock(ConsumerDeadLetterService.class);
@@ -59,11 +61,52 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRetryProviderOutageAndUnknownFailure() {
+    void shouldRetryProviderOutage() {
         Message message = message(100);
         handler.handleFailure(42L, message, new IOException("provider unavailable"));
-        handler.handleFailure(42L, message, new IllegalStateException("unclassified"));
-        verify(message, times(2)).nakWithDelay(any(Duration.class));
+        verify(message).nakWithDelay(any(Duration.class));
+        verifyNoInteractions(deadLetters);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1, 9})
+    void shouldRetryUnknownFailureBeforeItsBudgetIsExhausted(long deliveries) {
+        Message message = message(deliveries);
+        handler.handleFailure(42L, message, new IllegalStateException("unknown"));
+        verify(message).nakWithDelay(any(Duration.class));
+        verifyNoInteractions(deadLetters);
+    }
+
+    @Test
+    void shouldCaptureUnknownFailureAtTheBudgetBeforeTermination() {
+        Message message = message(10);
+        var failure = new IllegalStateException("unknown");
+        handler.handleFailure(42L, message, failure);
+        var order = inOrder(deadLetters, message);
+        order.verify(deadLetters).capture(42L, message, failure);
+        order.verify(message).term();
+    }
+
+    @Test
+    void shouldFindParsingFailureInTheCauseChain() {
+        Message message = mock(Message.class);
+        when(message.getSubject()).thenReturn("github.acme.repo.issues");
+        var failure = new IllegalStateException("wrapper", new PayloadParsingException("invalid JSON"));
+        handler.handleFailure(42L, message, failure);
+        verify(deadLetters).capture(42L, message, failure);
+        verify(message).term();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {403, 408, 429, 503})
+    void shouldRetryWrappedProviderOutagesAndConfirmedRateLimits(int status) {
+        var headers = new HttpHeaders();
+        headers.set("X-RateLimit-Remaining", "0");
+        var response =
+                WebClientResponseException.create(status, "provider", headers, new byte[0], StandardCharsets.UTF_8);
+        Message message = message(100);
+        handler.handleFailure(42L, message, new IllegalStateException("wrapper", response));
+        verify(message).nakWithDelay(any(Duration.class));
         verifyNoInteractions(deadLetters);
     }
 

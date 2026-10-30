@@ -202,6 +202,7 @@ paths:
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
+            - INSTALLATION_EVENT_REPLAYED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -294,6 +295,7 @@ paths:
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
+            - INSTALLATION_EVENT_REPLAYED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -13851,9 +13853,15 @@ components:
         id:
           type: integer
           format: int64
+        receivedAt:
+          type: string
+          format: date-time
         replayedAt:
           type: string
           format: date-time
+        replayedBy:
+          type: integer
+          format: int64
         sequence:
           type: integer
           format: int64
@@ -13863,6 +13871,7 @@ components:
       - errorClass
       - failedAt
       - id
+      - receivedAt
       - sequence
       - stream
     Contributor:

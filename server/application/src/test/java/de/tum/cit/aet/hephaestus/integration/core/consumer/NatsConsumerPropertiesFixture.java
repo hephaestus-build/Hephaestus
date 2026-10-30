@@ -17,14 +17,14 @@ final class NatsConsumerPropertiesFixture {
     static NatsConsumerProperties withInactiveThreshold(Duration inactiveThreshold) {
         return build(
                 inactiveThreshold,
-                new NatsConsumerProperties.PoisonProperties(Duration.ofSeconds(2), Duration.ofMinutes(5)));
+                new NatsConsumerProperties.PoisonProperties(10, Duration.ofSeconds(2), Duration.ofMinutes(5)));
     }
 
     /** Poison backoff short enough that a redelivery loop finishes inside a unit test. */
     static NatsConsumerProperties withFastPoisonBackoff() {
         return build(
                 SHIPPED_INACTIVE_THRESHOLD,
-                new NatsConsumerProperties.PoisonProperties(Duration.ofMillis(1), Duration.ofSeconds(1)));
+                new NatsConsumerProperties.PoisonProperties(10, Duration.ofMillis(1), Duration.ofSeconds(1)));
     }
 
     private static NatsConsumerProperties build(

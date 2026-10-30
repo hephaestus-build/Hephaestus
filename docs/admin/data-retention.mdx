@@ -18,10 +18,21 @@ The times of the scheduled jobs are in the time zone of the server process.
 
 ## Webhook dead letters
 
-Events that cannot be parsed retain their payload and routing envelope in PostgreSQL for administrator replay.
+Failed events retain only broker coordinates, a subject, timestamps and an error class in PostgreSQL.
+No payload, headers, exception text or routing credential is copied into this table.
+The original event remains in NATS under the stream retention limits below.
+Replay cannot recover an expired event.
+
 Workspace deletion removes that workspace's dead-letter records through the workspace foreign key.
 Unassigned installation events have no workspace and remain until the instance is removed.
-Replay completion does not delete the record.
+
+Replay completion records the requesting account ID and time without deleting the metadata.
+Person export includes the replay actor's metadata, without subjects or payloads.
+Person erasure clears the actor reference through the integration store contributor.
+Account deletion also clears it through the foreign key.
+
+Person erasure does not extend the broker retention period or create another payload copy.
+Replay still uses the current adapter admission checks.
 Restrict database and backup access as for other provider data.
 See [Replay a failed webhook event](./webhook-replay.mdx).
 

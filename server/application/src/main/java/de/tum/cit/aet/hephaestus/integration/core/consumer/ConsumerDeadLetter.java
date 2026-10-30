@@ -40,33 +40,30 @@ public class ConsumerDeadLetter {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private @Nullable Workspace workspace;
 
-    @Column(name = "consumer_name")
+    @Column(name = "consumer_name", nullable = false)
     private String consumerName;
 
-    @Column(name = "stream_name")
+    @Column(name = "stream_name", nullable = false)
     private String streamName;
 
-    @Column(name = "stream_sequence")
+    @Column(name = "stream_sequence", nullable = false)
     private long streamSequence;
 
-    @Column(columnDefinition = "text")
+    @Column(columnDefinition = "text", nullable = false)
     private String subject;
 
-    @Column(columnDefinition = "bytea")
-    private byte[] payload;
+    @Column(name = "received_at", nullable = false)
+    private Instant receivedAt;
 
-    @Column(columnDefinition = "text")
-    private String headers;
-
-    @Column(name = "ack_reply", columnDefinition = "text")
-    private String ackReply;
-
-    @Column(name = "error_class")
+    @Column(name = "error_class", nullable = false)
     private String errorClass;
 
-    @Column(name = "failed_at")
+    @Column(name = "failed_at", nullable = false)
     private Instant failedAt;
 
     @Column(name = "replayed_at")
     private @Nullable Instant replayedAt;
+
+    @Column(name = "replayed_by")
+    private @Nullable Long replayedBy;
 }

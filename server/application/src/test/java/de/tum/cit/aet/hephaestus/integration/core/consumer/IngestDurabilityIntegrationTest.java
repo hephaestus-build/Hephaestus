@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -79,12 +82,13 @@ class IngestDurabilityIntegrationTest {
                     Duration.ofMillis(100),
                     Duration.ofMillis(20),
                     Duration.ZERO,
-                    new NatsConsumerProperties.PoisonProperties(Duration.ofMillis(20), Duration.ofMillis(50)));
+                    new NatsConsumerProperties.PoisonProperties(10, Duration.ofMillis(20), Duration.ofMillis(50)));
             var context = connection.getStreamContext(stream);
             var durable = context.createOrUpdateConsumer(IntegrationNatsConsumer.newConsumerConfiguration(
-                    new String[] {stream + ".>"}, properties, "ordered"));
+                    new String[] {stream + ".issues"}, properties, "ordered"));
             IntegrationMessageDispatcher dispatcher = mock(IntegrationMessageDispatcher.class);
             when(dispatcher.dispatch(anyString())).thenReturn(Optional.of(handler));
+            var deadLetters = mock(ConsumerDeadLetterService.class);
             var fleet = new IntegrationNatsConsumer(
                     new NatsConnectionProperties(
                             true,
@@ -94,8 +98,7 @@ class IngestDurabilityIntegrationTest {
                     properties,
                     id -> Optional.empty(),
                     dispatcher,
-                    new IntegrationPoisonHandler(
-                            properties, new SimpleMeterRegistry(), mock(ConsumerDeadLetterService.class)),
+                    new IntegrationPoisonHandler(properties, new SimpleMeterRegistry(), deadLetters),
                     new IntegrationConsumerStats(),
                     mock(ConnectionActivityRecorder.class),
                     List.of());
@@ -105,8 +108,22 @@ class IngestDurabilityIntegrationTest {
                     stream,
                     durable,
                     context,
-                    new String[] {stream + ".>"},
+                    new String[] {stream + ".issues"},
                     message -> fleet.handleMessage(42L, message));
+            var independentContext = context.createOrUpdateConsumer(IntegrationNatsConsumer.newConsumerConfiguration(
+                    new String[] {stream + ".other"}, properties, "independent"));
+            CountDownLatch independentApplied = new CountDownLatch(1);
+            ScopeConsumer independent = new ScopeConsumer(
+                    43L,
+                    "independent",
+                    stream,
+                    independentContext,
+                    context,
+                    new String[] {stream + ".other"},
+                    message -> {
+                        message.ack();
+                        independentApplied.countDown();
+                    });
             boolean paused = false;
             try {
                 postgres.getDockerClient()
@@ -114,11 +131,14 @@ class IngestDurabilityIntegrationTest {
                         .exec();
                 paused = true;
                 consumer.start();
+                independent.start();
                 connection.jetStream().publish(stream + ".issues", "first".getBytes(StandardCharsets.UTF_8));
                 connection.jetStream().publish(stream + ".issues", "second".getBytes(StandardCharsets.UTF_8));
                 // Cross the previous poison threshold against a genuinely unreachable PostgreSQL server.
                 await().atMost(Duration.ofSeconds(45)).until(() -> failures.get() >= 12);
                 assertThat(attempted).containsOnly("first");
+                connection.jetStream().publish(stream + ".other", "other-workspace".getBytes(StandardCharsets.UTF_8));
+                assertThat(independentApplied.await(5, TimeUnit.SECONDS)).isTrue();
                 consumer.stop();
                 consumer = new ScopeConsumer(
                         42L,
@@ -126,7 +146,7 @@ class IngestDurabilityIntegrationTest {
                         stream,
                         context.getConsumerContext("ordered"),
                         context,
-                        new String[] {stream + ".>"},
+                        new String[] {stream + ".issues"},
                         message -> fleet.handleMessage(42L, message));
                 consumer.start();
                 postgres.getDockerClient()
@@ -144,6 +164,7 @@ class IngestDurabilityIntegrationTest {
                         assertThat(rows.next()).isFalse();
                     }
                 });
+                verifyNoInteractions(deadLetters);
                 assertThat(durable.getConsumerInfo().getConsumerConfiguration().getMaxDeliver())
                         .isEqualTo(-1);
             } finally {
@@ -152,6 +173,7 @@ class IngestDurabilityIntegrationTest {
                             .unpauseContainerCmd(postgres.getContainerId())
                             .exec();
                 consumer.stop();
+                independent.stop();
                 fleet.shutdown();
                 connection.jetStreamManagement().deleteStream(stream);
             }

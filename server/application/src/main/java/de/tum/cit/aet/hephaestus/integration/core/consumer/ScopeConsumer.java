@@ -73,7 +73,7 @@ public final class ScopeConsumer {
 
     /**
      * Sequential dispatch queue. Unbounded by design — the JetStream
-     * {@code max-ack-pending} knob already caps in-flight work upstream.
+     * {@code MaxAckPending=1} setting already caps in-flight work upstream.
      */
     private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
     // MaxAckPending bounds unique sequences, but a slow handler can receive many copies of its current sequence.
@@ -280,11 +280,16 @@ public final class ScopeConsumer {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
-            } catch (Exception e) {
+            } catch (Throwable e) {
+                if (e instanceof VirtualMachineError) throw e;
                 // Per-message failures must not kill the loop; the handler is responsible
                 // for ACK/NAK and surfaces ITS errors via the poison handler. Anything that
                 // escapes the handler here is an UNEXPECTED bug we log loudly.
-                log.error("Unexpected error in dispatch loop: consumerName={}, scopeId={}", consumerName, scopeId, e);
+                log.error(
+                        "Unexpected error in dispatch loop: consumerName={}, scopeId={}, error.type={}",
+                        consumerName,
+                        scopeId,
+                        e.getClass().getName());
             }
         }
         log.debug("Dispatch loop stopped: consumerName={}, scopeId={}", consumerName, scopeId);

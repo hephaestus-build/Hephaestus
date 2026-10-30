@@ -10,7 +10,7 @@ import org.testcontainers.utility.DockerImageName;
 public final class NatsTestContainer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NatsTestContainer.class);
-    private static final DockerImageName IMAGE = DockerImageName.parse("nats:2.10-alpine");
+    private static final DockerImageName IMAGE = DockerImageName.parse("nats:2.10.27-alpine");
     private static final int CLIENT_PORT = 4222;
 
     private static @Nullable GenericContainer<?> container;
