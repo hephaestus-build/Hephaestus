@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
@@ -74,6 +77,7 @@ public class SandboxAttemptRunner implements SandboxManager {
             Map.entry("protocol.ext.allow", "never"));
 
     private final SandboxBackend backend;
+    private final AgentPhaseObservations phases;
     private final SandboxWorkspaceManager workspaceManager;
     private final SandboxGatewaySessions gatewaySessions;
     private final MeterRegistry meterRegistry;
@@ -94,7 +98,9 @@ public class SandboxAttemptRunner implements SandboxManager {
             SandboxBackend backend,
             SandboxWorkspaceManager workspaceManager,
             SandboxGatewaySessions gatewaySessions,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            AgentPhaseObservations phases) {
+        this.phases = phases;
         this.backend = backend;
         this.workspaceManager = workspaceManager;
         this.gatewaySessions = gatewaySessions;
@@ -168,22 +174,34 @@ public class SandboxAttemptRunner implements SandboxManager {
             command.addAll(spec.command());
             UUID sessionId = session.id();
             Instant work = workDeadline;
-            handle = backend.launch(new SandboxBackend.Launch(
-                    SandboxBackend.Kind.REVIEW,
-                    jobId,
-                    spec.attempt(),
-                    spec.image(),
-                    command,
-                    spec.resourceLimits(),
-                    uploadDeadline,
-                    gateway -> environment(spec, gateway, sessionId, work, uploadDeadline)));
-            activeSandboxes.put(jobId, handle);
-            MDC.put(MDC_SANDBOX, handle.id());
-            // Cancellation during the launch could not kill the sandbox until it was registered.
-            checkCancelled(cancelled, jobId);
+            SandboxBackend.Observation initialized;
+            var startup = phases.start(Workload.REVIEW, Phase.SANDBOX_START);
+            try {
+                handle = backend.launch(new SandboxBackend.Launch(
+                        SandboxBackend.Kind.REVIEW,
+                        jobId,
+                        spec.attempt(),
+                        spec.image(),
+                        command,
+                        spec.resourceLimits(),
+                        uploadDeadline,
+                        gateway -> environment(spec, gateway, sessionId, work, uploadDeadline)));
+                activeSandboxes.put(jobId, handle);
+                MDC.put(MDC_SANDBOX, handle.id());
+                // Cancellation during the launch could not kill the sandbox until it was registered.
+                checkCancelled(cancelled, jobId);
 
-            SandboxBackend.Observation initialized =
-                    backend.observe(handle, SandboxBackend.Stage.INITIALIZED, workDeadline);
+                initialized = backend.observe(handle, SandboxBackend.Stage.INITIALIZED, workDeadline);
+                if (!initialized.timedOut() && Integer.valueOf(0).equals(initialized.exitCode())) startup.completed();
+            } catch (SandboxCapacityException full) {
+                if (full.reason() == SandboxCapacityException.Reason.QUOTA_EXCEEDED) startup.cancelled();
+                throw full;
+            } catch (SandboxCancelledException cancelledStart) {
+                startup.cancelled();
+                throw cancelledStart;
+            } finally {
+                startup.close();
+            }
             checkCancelled(cancelled, jobId);
             // Before any model call, an initializer that fails or hangs is the infrastructure's failure: the job may
             // run again within its retry budget.

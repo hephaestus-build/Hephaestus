@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.observedPhaseObservations;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -20,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
@@ -76,7 +79,30 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
                         Files.writeString(temporary.resolve("input-" + UUID.randomUUID() + ".tar"), "input"));
         meterRegistry = new SimpleMeterRegistry();
         backend = new FakeSandboxBackend(gatewaySessions);
-        runner = new SandboxAttemptRunner(backend, workspaceManager, gatewaySessions, meterRegistry);
+        runner = new SandboxAttemptRunner(
+                backend, workspaceManager, gatewaySessions, meterRegistry, observedPhaseObservations(meterRegistry));
+    }
+
+    @Test
+    void shouldNotReportAQuotaRefusalAsAFailedStart() {
+        var full = new SandboxCapacityException("No room", SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+        backend.onLaunch = () -> {
+            throw full;
+        };
+
+        assertThatThrownBy(() -> runner.execute(createSpec())).isSameAs(full);
+
+        assertThat(meterRegistry
+                        .get("agent.phase.duration")
+                        .tags("phase", "sandbox_start", "outcome", "cancelled")
+                        .timer()
+                        .count())
+                .isEqualTo(1);
+        assertThat(meterRegistry
+                        .find("agent.phase.duration")
+                        .tags("phase", "sandbox_start", "outcome", "failed")
+                        .timer())
+                .isNull();
     }
 
     @Test
@@ -84,7 +110,8 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
         SandboxBackend bounded = mock(SandboxBackend.class, withSettings().extraInterfaces(SandboxRoom.class));
         when(((SandboxRoom) bounded).roomFor(any())).thenReturn(3);
 
-        assertThat(new SandboxAttemptRunner(bounded, workspaceManager, gatewaySessions, meterRegistry)
+        assertThat(new SandboxAttemptRunner(
+                                bounded, workspaceManager, gatewaySessions, meterRegistry, noopPhaseObservations())
                         .roomFor(SandboxTestLimits.ATTEMPT))
                 .isEqualTo(3);
     }
@@ -93,7 +120,8 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
     void shouldSetNoBoundWhenTheBackendSetsNone() {
         SandboxBackend unbounded = mock(SandboxBackend.class);
 
-        assertThat(new SandboxAttemptRunner(unbounded, workspaceManager, gatewaySessions, meterRegistry)
+        assertThat(new SandboxAttemptRunner(
+                                unbounded, workspaceManager, gatewaySessions, meterRegistry, noopPhaseObservations())
                         .roomFor(SandboxTestLimits.ATTEMPT))
                 .isEqualTo(Integer.MAX_VALUE);
     }
@@ -490,6 +518,17 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
                     .hasMessageContaining("cancelled");
             assertThat(executions("cancelled")).isEqualTo(1.0);
             assertThat(executions("failure")).isZero();
+            assertThat(meterRegistry
+                            .get("agent.phase.duration")
+                            .tags("phase", "sandbox_start", "outcome", "cancelled", "error", "none")
+                            .timer()
+                            .count())
+                    .isEqualTo(1);
+            assertThat(meterRegistry
+                            .find("agent.phase.duration")
+                            .tags("phase", "sandbox_start", "outcome", "failed")
+                            .timer())
+                    .isNull();
             assertThat(backend.calls).doesNotContain("observe INITIALIZED").endsWith("remove");
         }
 

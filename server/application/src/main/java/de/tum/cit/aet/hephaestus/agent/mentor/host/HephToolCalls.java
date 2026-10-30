@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Outcome;
 import java.time.Duration;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -23,26 +25,33 @@ final class HephToolCalls {
      *
      * @param outcome names how an answered call ended, for example {@code ok} or a refusal code
      */
-    static <T> T logged(TurnAttempt turn, String tool, Supplier<T> call, Function<T, String> outcome) {
+    static <T> T logged(
+            BiConsumer<Duration, Outcome> timing,
+            TurnAttempt turn,
+            String tool,
+            Supplier<T> call,
+            Function<T, String> outcome) {
         long started = System.nanoTime();
         String ended = "error";
+        Outcome phaseOutcome = Outcome.FAILED;
         try {
             T answer = call.get();
             ended = outcome.apply(answer);
+            phaseOutcome = Outcome.COMPLETED;
             return answer;
         } catch (ResponseStatusException refused) {
             ended = "refused";
             throw refused;
         } finally {
+            Duration duration = Duration.ofNanos(System.nanoTime() - started);
+            timing.accept(duration, phaseOutcome);
             log.atInfo()
                     .addKeyValue("event.name", "heph.turn.tool_call")
                     .addKeyValue("turn.id", turn.turnId())
                     .addKeyValue("turn.attempt", turn.attempt())
                     .addKeyValue("gen_ai.tool.name", tool)
                     .addKeyValue("outcome", ended)
-                    .addKeyValue(
-                            "duration.ms",
-                            Duration.ofNanos(System.nanoTime() - started).toMillis())
+                    .addKeyValue("duration.ms", duration.toMillis())
                     .log("Hephaestus tool call");
         }
     }

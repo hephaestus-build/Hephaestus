@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
@@ -137,7 +138,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private HephTurnController controller;
     private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(3);
     private final FakeExecSandboxes runtime = new FakeExecSandboxes();
-    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
+    private final TurnSandboxes sandboxes =
+            new TurnSandboxes(runtime, 0, new SimpleMeterRegistry(), noopPhaseObservations());
     private Workspace workspace;
     private MentorConversation conversation;
 
@@ -374,7 +376,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         };
         var configuration = new HephHostConfiguration();
         ScheduledTaskRegistrar reconciles = configuration.turnSandboxReconciles(
-                dispatcher, new TurnSandboxes(stalled, 0, new SimpleMeterRegistry()));
+                dispatcher, new TurnSandboxes(stalled, 0, new SimpleMeterRegistry(), noopPhaseObservations()));
         ScheduledTaskRegistrar ticks = configuration.hephTurnTicks(dispatcher);
         reconciles.afterPropertiesSet();
         ticks.afterPropertiesSet();

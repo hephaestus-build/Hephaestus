@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -468,7 +469,15 @@ class LlmProxyService {
                     return errors.providerError(
                             HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
                 }
-                upstream = callUpstream(exchange, prepared.body(), span, response, tap, deadline, reviewStream);
+                upstream = callUpstream(
+                        exchange,
+                        prepared.body(),
+                        span,
+                        response,
+                        tap,
+                        deadline,
+                        reviewStream,
+                        routing.hephTurn() ? Workload.CONVERSATION : Workload.REVIEW);
                 if (rejectedOurUsageRequest(upstream, prepared)) {
                     // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
                     log.info(
@@ -498,7 +507,8 @@ class LlmProxyService {
                             response,
                             tap,
                             deadline,
-                            reviewStream);
+                            reviewStream,
+                            routing.hephTurn() ? Workload.CONVERSATION : Workload.REVIEW);
                 }
             } catch (Exception e) {
                 // Only a failure before a stream's head reaches here, so nothing has been written to the client.
@@ -685,7 +695,8 @@ class LlmProxyService {
             @Nullable HttpServletResponse response,
             ProxyStreamUsageTap tap,
             @Nullable Instant deadline,
-            boolean reviewStream) {
+            boolean reviewStream,
+            Workload workload) {
         Duration limit = exchangeWait(deadline, reviewStream);
         Duration bodyLimit = deadline == null ? ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT : null;
         span.event("upstream.request");
@@ -720,17 +731,29 @@ class LlmProxyService {
                     cancelledFirst.set(true);
                     return Mono.just(Boolean.TRUE);
                 })));
+        long sentAt = System.nanoTime();
+        tap.observeFirstToken(() -> accounting.modelFirstToken(workload, Duration.ofNanos(System.nanoTime() - sentAt)));
+        var model = accounting.startModelCall(workload);
         boolean completed = false;
         try {
             UpstreamResult result = ProxyStreamingUtils.forward(parts, limit, response, tap);
             completed = !cancelled.get()
                     && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
+            if (cancelled.get() || result.streamOutcome() == StreamOutcome.CLIENT_DISCONNECTED) model.cancelled();
+            else if (completed && result.status() >= 200 && result.status() < 300) model.completed();
             return cancelled.get() && !result.streamed() ? null : result;
         } catch (IllegalStateException noHead) {
-            if (cancelledFirst.get()) return null;
+            if (cancelledFirst.get()) {
+                model.cancelled();
+                return null;
+            }
             throw noHead;
         } finally {
-            transport.finish(completed);
+            try {
+                transport.finish(completed);
+            } finally {
+                model.close();
+            }
         }
     }
 

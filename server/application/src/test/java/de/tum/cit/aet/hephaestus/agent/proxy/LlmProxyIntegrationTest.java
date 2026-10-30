@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -1050,7 +1051,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         accumulator(),
                         mock(MentorTurnUsageAccumulator.class),
                         meterRegistry,
-                        objectMapper),
+                        objectMapper,
+                        noopPhaseObservations()),
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),

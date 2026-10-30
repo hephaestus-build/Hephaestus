@@ -9,6 +9,10 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Outcome;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
@@ -89,6 +93,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private final Duration drainTimeout;
 
     private final Counter claimFailures;
+    private final MeterRegistry meters;
 
     /** The attempt of each turn that runs here. Removals notify its monitor, which the drain waits on. */
     private final Map<UUID, Running> running = new ConcurrentHashMap<>();
@@ -124,6 +129,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         this.issuer = issuer;
         this.mapper = mapper;
         this.clock = clock;
+        this.meters = meters;
         this.workerId = workerId;
         this.capacity = capacity;
         this.lease = lease;
@@ -139,6 +145,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         this.claimFailures = Counter.builder(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE)
                 .description("conversation turns this worker could not claim or start because of an error")
                 .register(meters);
+    }
+
+    void recordToolDuration(Duration duration, Outcome outcome) {
+        AgentPhaseObservations.record(meters, Workload.CONVERSATION, Phase.TOOL_CALL, duration, outcome);
     }
 
     private static final class Running {

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -325,8 +326,9 @@ class KubernetesSandboxLiveTest {
         exits = configuration.sandboxExits(pods, meters);
         cache = configuration.kubernetesSandboxCache(client, worker);
         backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
-        reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
-        hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
+        reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters, noopPhaseObservations());
+        hosts = new SandboxHosts(
+                backend, workspaces, gateway.sessions(), agentImage.reference(), noopPhaseObservations());
         turns = configuration.kubernetesExecSandboxes(pods, worker, agentImage, liveWorkers, exits, cache);
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
@@ -906,7 +908,7 @@ class KubernetesSandboxLiveTest {
 
     @Test
     void shouldGiveTheNextCallANewSandboxWhenTheContextFolderLosesItsSandbox() throws Exception {
-        TurnSandboxes sandboxes = new TurnSandboxes(turns, 0, new SimpleMeterRegistry());
+        TurnSandboxes sandboxes = new TurnSandboxes(turns, 0, new SimpleMeterRegistry(), noopPhaseObservations());
         try {
             var folder = new TurnContextFolder(
                     sandboxes,
@@ -1626,7 +1628,7 @@ class KubernetesSandboxLiveTest {
         @BeforeEach
         void setUp() throws Exception {
             runtime = turns;
-            sandboxes = new TurnSandboxes(runtime, 1, new SimpleMeterRegistry());
+            sandboxes = new TurnSandboxes(runtime, 1, new SimpleMeterRegistry(), noopPhaseObservations());
             repository = repository(temp.resolve("api"));
             var beans = new DefaultListableBeanFactory();
             beans.registerSingleton("loader", new FixedLoader(repository));

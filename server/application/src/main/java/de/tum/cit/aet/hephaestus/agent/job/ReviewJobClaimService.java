@@ -10,6 +10,9 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -273,6 +276,11 @@ public class ReviewJobClaimService {
         // The first claim only: a requeued review would sample its submission again, later each time.
         if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
             claimLatency.record(Duration.between(job.getSubmittedAt(), claimedAt));
+            AgentPhaseObservations.record(
+                    meterRegistry,
+                    Workload.REVIEW,
+                    Phase.ADMISSION_WAIT,
+                    Duration.between(job.getSubmittedAt(), claimedAt));
         }
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(claimedAt);

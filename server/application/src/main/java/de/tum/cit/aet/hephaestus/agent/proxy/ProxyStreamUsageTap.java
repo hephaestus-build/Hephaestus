@@ -50,6 +50,7 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     private ProxyTokenUsage observed;
 
     private boolean malformedUsage;
+    private @Nullable Runnable firstToken;
 
     ProxyStreamUsageTap(ObjectMapper objectMapper, boolean responsesProtocol) {
         this(objectMapper, responsesProtocol ? LlmApiProtocol.OPENAI_RESPONSES : LlmApiProtocol.OPENAI_COMPLETIONS);
@@ -59,6 +60,11 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
         this.objectMapper = objectMapper;
         this.protocol = protocol;
         this.anthropicUsage = objectMapper.createObjectNode();
+    }
+
+    /** One callback for generated content; role frames, usage and keep-alives are not tokens. */
+    void observeFirstToken(Runnable observer) {
+        firstToken = observer;
     }
 
     @Override
@@ -92,51 +98,116 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
 
     private void handleLine(byte[] line) {
         int from = startsWith(line, DATA_PREFIX) ? DATA_PREFIX.length : -1;
-        if (from < 0 || !contains(line, USAGE_MARKER)) {
+        if (from < 0) return;
+        boolean usageCandidate = contains(line, USAGE_MARKER);
+        if (!usageCandidate && firstToken == null) return;
+        JsonNode event;
+        try {
+            event = objectMapper.readTree(new String(line, from, line.length - from, StandardCharsets.UTF_8));
+            if (!event.isObject()) return;
+        } catch (RuntimeException exception) {
+            if (usageCandidate) malformedUsage(exception);
             return;
         }
-        try {
-            JsonNode event = objectMapper.readTree(new String(line, from, line.length - from, StandardCharsets.UTF_8));
-            if (!event.isObject()) {
-                return;
+        if (usageCandidate) {
+            try {
+                readUsage(event);
+            } catch (RuntimeException exception) {
+                malformedUsage(exception);
             }
-            if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) {
-                String type = event.path("type").asString("");
-                JsonNode usage = switch (type) {
-                    case "message_start" -> event.path("message").path("usage");
-                    case "message_delta" -> event.path("usage");
-                    default -> null;
-                };
-                if (usage != null && usage.isObject()) {
-                    ObjectNode merged = anthropicUsage.deepCopy();
-                    for (String field : new String[] {
-                        "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"
-                    }) {
-                        if (usage.hasNonNull(field)) merged.set(field, usage.get(field));
-                    }
-                    ProxyTokenUsage parsed =
-                            ProxyTokenUsage.from(objectMapper.createObjectNode().set("usage", merged), protocol);
-                    anthropicUsage.setAll(merged);
-                    observed = parsed;
+        }
+        Runnable observer = firstToken;
+        if (observer != null && generatedContent(event)) {
+            firstToken = null;
+            try {
+                observer.run();
+            } catch (RuntimeException exception) {
+                log.debug(
+                        "Could not record first-token timing: {}",
+                        exception.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private void malformedUsage(RuntimeException exception) {
+        malformedUsage = true;
+        // A parser message can quote the model's answer, so log only its type.
+        log.debug(
+                "Unparseable SSE frame while looking for usage: {}",
+                exception.getClass().getName());
+    }
+
+    private void readUsage(JsonNode event) {
+        if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) {
+            String type = event.path("type").asString("");
+            JsonNode usage = switch (type) {
+                case "message_start" -> event.path("message").path("usage");
+                case "message_delta" -> event.path("usage");
+                default -> null;
+            };
+            if (usage != null && usage.isObject()) {
+                ObjectNode merged = anthropicUsage.deepCopy();
+                for (String field : new String[] {
+                    "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"
+                }) {
+                    if (usage.hasNonNull(field)) merged.set(field, usage.get(field));
                 }
-                return;
-            }
-            boolean responsesProtocol = protocol == LlmApiProtocol.OPENAI_RESPONSES;
-            // The responses API nests usage under the `response` envelope of the terminal event.
-            ProxyTokenUsage parsed = ProxyTokenUsage.from(event, responsesProtocol);
-            if (parsed == null) {
-                parsed = ProxyTokenUsage.from(event.get("response"), responsesProtocol);
-            }
-            if (parsed != null) {
+                ProxyTokenUsage parsed =
+                        ProxyTokenUsage.from(objectMapper.createObjectNode().set("usage", merged), protocol);
+                anthropicUsage.setAll(merged);
                 observed = parsed;
             }
-        } catch (RuntimeException e) {
-            malformedUsage = true;
-            // The type only: a parser's message quotes the frame, which carries the model's answer.
-            log.debug(
-                    "Unparseable SSE frame while looking for usage: {}",
-                    e.getClass().getName());
+            return;
         }
+        boolean responsesProtocol = protocol == LlmApiProtocol.OPENAI_RESPONSES;
+        // The responses API nests usage under the `response` envelope of the terminal event.
+        ProxyTokenUsage parsed = ProxyTokenUsage.from(event, responsesProtocol);
+        if (parsed == null) {
+            parsed = ProxyTokenUsage.from(event.get("response"), responsesProtocol);
+        }
+        if (parsed != null) {
+            observed = parsed;
+        }
+    }
+
+    private boolean generatedContent(JsonNode event) {
+        if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) {
+            JsonNode delta = event.path("delta");
+            if (event.path("type").asString("").equals("content_block_delta")) {
+                return nonempty(delta.path("text"))
+                        || nonempty(delta.path("thinking"))
+                        || nonempty(delta.path("partial_json"));
+            }
+            return event.path("type").asString("").equals("content_block_start")
+                    && (nonempty(event.path("content_block").path("text"))
+                            || nonempty(event.path("content_block").path("name")));
+        }
+        if (protocol == LlmApiProtocol.OPENAI_RESPONSES) {
+            return switch (event.path("type").asString("")) {
+                case "response.output_text.delta",
+                        "response.refusal.delta",
+                        "response.reasoning_text.delta",
+                        "response.reasoning_summary_text.delta",
+                        "response.function_call_arguments.delta" -> nonempty(event.path("delta"));
+                default -> false;
+            };
+        }
+        for (JsonNode choice : event.path("choices")) {
+            JsonNode delta = choice.path("delta");
+            if (nonempty(delta.path("refusal"))
+                    || nonempty(delta.path("content"))
+                    || nonempty(delta.path("reasoning_content"))
+                    || nonempty(delta.path("reasoning"))) return true;
+            for (JsonNode tool : delta.path("tool_calls")) {
+                if (nonempty(tool.path("function").path("name"))
+                        || nonempty(tool.path("function").path("arguments"))) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean nonempty(JsonNode value) {
+        return value.isString() && !value.asString().isEmpty();
     }
 
     /** The last usage the stream reported, or {@code null} when it reported none. */

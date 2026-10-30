@@ -155,6 +155,11 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
         assertThat(meters.get(AgentMetrics.MENTOR_TURN_QUEUE_WAIT).timer().count())
                 .isEqualTo(1);
+        assertThat(meters.get(AgentMetrics.AGENT_PHASE_REPORTED_DURATION)
+                        .tags("phase", "admission_wait", "workload", "conversation", "outcome", "completed")
+                        .timer()
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test

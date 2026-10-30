@@ -194,6 +194,9 @@ server:
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
     metrics:
+        distribution:
+            slo:
+                agent.phase: 1ms,5ms,10ms,50ms,100ms,500ms,1s,3s,5s,10s,30s,1m,5m,15m
         web:
             server:
                 # The API has more route templates than Boot's default 100. The integration test

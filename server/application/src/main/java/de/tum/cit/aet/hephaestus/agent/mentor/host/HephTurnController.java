@@ -93,6 +93,7 @@ public class HephTurnController {
             @PathVariable UUID turnId, @Valid @RequestBody ResultLink request, Authentication authentication) {
         TurnAttempt turn = turn(turnId, authentication);
         return HephToolCalls.logged(
+                dispatcher::recordToolDuration,
                 turn,
                 "link_result",
                 () -> {
@@ -112,6 +113,7 @@ public class HephTurnController {
             @PathVariable UUID turnId, @Valid @RequestBody ProblemLink request, Authentication authentication) {
         TurnAttempt turn = turn(turnId, authentication);
         return HephToolCalls.logged(
+                dispatcher::recordToolDuration,
                 turn,
                 "link_problem",
                 () -> {
@@ -134,6 +136,7 @@ public class HephTurnController {
             @PathVariable UUID turnId, @Valid @RequestBody FeedbackShow request, Authentication authentication) {
         TurnAttempt turn = turn(turnId, authentication);
         return HephToolCalls.logged(
+                dispatcher::recordToolDuration,
                 turn,
                 "show_feedback",
                 () -> {
@@ -183,7 +186,11 @@ public class HephTurnController {
                 request.after(),
                 limit == null ? MentorEntryService.MAX_SEARCH_HITS : limit);
         return HephToolCalls.logged(
-                turn, "search_conversation", () -> new SearchResponse(contexts.search(turn, query)), found -> "ok");
+                dispatcher::recordToolDuration,
+                turn,
+                "search_conversation",
+                () -> new SearchResponse(contexts.search(turn, query)),
+                found -> "ok");
     }
 
     @PutMapping("/partial")

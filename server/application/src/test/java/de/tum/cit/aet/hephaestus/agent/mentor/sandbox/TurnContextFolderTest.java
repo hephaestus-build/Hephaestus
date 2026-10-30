@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -45,7 +46,8 @@ class TurnContextFolderTest extends BaseUnitTest {
     Path temp;
 
     private final FakeExecSandboxes runtime = new FakeExecSandboxes();
-    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
+    private final TurnSandboxes sandboxes =
+            new TurnSandboxes(runtime, 0, new SimpleMeterRegistry(), noopPhaseObservations());
     private final List<List<String>> staged = new ArrayList<>();
     private final Map<String, String> stagedFiles = new LinkedHashMap<>();
     private final DefaultListableBeanFactory beans = new DefaultListableBeanFactory();

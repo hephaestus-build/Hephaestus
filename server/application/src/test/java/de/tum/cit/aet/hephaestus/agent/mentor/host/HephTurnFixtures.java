@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
+
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
@@ -42,7 +44,10 @@ final class HephTurnFixtures {
                 beans,
                 results,
                 feedback,
-                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())));
+                folder(
+                        beans,
+                        new TurnSandboxes(
+                                new FakeExecSandboxes(), 0, new SimpleMeterRegistry(), noopPhaseObservations())));
     }
 
     /** The worker's turn contexts with the context folder a test chooses. */
@@ -66,7 +71,10 @@ final class HephTurnFixtures {
                 beans,
                 beans.getBean(ResultHistoryQuery.class),
                 beans.getBean(FeedbackStore.class),
-                folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())),
+                folder(
+                        beans,
+                        new TurnSandboxes(
+                                new FakeExecSandboxes(), 0, new SimpleMeterRegistry(), noopPhaseObservations())),
                 generations);
     }
 

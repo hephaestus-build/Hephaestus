@@ -513,6 +513,76 @@ An increase in `mentor_turn_claim_failure_total` shows a worker that claims turn
 The worker fails each such turn and continues to claim.
 [Runtime roles](./runtime-roles.mdx#the-conversation-host) tells when a worker replaces its conversation host, what it logs, and what happens to the turns of that host.
 
+## Turn and review phase SLIs
+
+`admission_wait` starts when the question or review job is stored and ends at its first worker claim.
+It includes waits behind an earlier question in the conversation and review selection quiet periods.
+It ends before the conversation admission checks and each model call's provider-permit wait.
+Retries have no retained requeue timestamp and do not produce this phase sample.
+The existing `mentor_turn_queue_wait_seconds` and `agent_job_claim_latency_seconds` retain these first-claim measurements too.
+The older review lifecycle queue timer includes prior work on retries, so it is not an attempt queue SLI.
+
+`agent_phase_duration_seconds` measures in-process observations for model calls and sandbox phases.
+`agent_phase_reported_duration_seconds` records admission wait, model first-token latency and completed tool spans from their timestamps.
+Both use fixed `workload`, `phase`, `outcome`, `acquisition` and `error` tags.
+The separate families prevent observation-wide custom tags from conflicting with the reported timers in Prometheus.
+
+The workload is `conversation` or `review`.
+No workspace, account, job, turn, model, endpoint or tool name is a phase metric tag.
+The [Micrometer Observation handler](https://docs.micrometer.io/micrometer/reference/observation/components.html) records model-call and sandbox durations.
+The timer includes completed and failed operations.
+
+Filter `outcome` as `completed`, `failed` or `cancelled`.
+The `error` value is `none` for completed or cancelled samples, or the fixed `PhaseFailure` type for failures.
+Private exception types and messages do not enter phase observations.
+A start refused because the quota is full has outcome `cancelled`.
+
+| Phase | Boundary |
+| --- | --- |
+| `admission_wait` | Submission until the first worker claim, measured from persisted timestamps. |
+| `sandbox_acquire` | A conversation tool asks for its sandbox until assignment or failure. It includes any wait for the tools quota and can include a start. |
+| `sandbox_start` | A conversation sandbox is created. A review launches until initialization ends or fails. |
+| `host_start` | The worker launches its conversation host and waits for readiness. This is a worker-level event. |
+| `model_call` | Each physical upstream exchange, after provider admission, until transport closure. A retry is a separate sample. |
+| `model_first_token` | Exchange start until the first generated text, reasoning or tool delta reaches the proxy. Metadata and keep-alives do not count. |
+| `tool_call` | Each conversation tool executes on the worker, or each review tool executes between matched SDK start/end events. |
+
+Buffered replies have no first-token sample.
+A stream that ends before generated content also has no first-token sample.
+Compare the first-token timer count with the call count before interpreting its latency.
+First generated content at the proxy differs from first visible answer text at the browser.
+A completed first-token sample means content arrived, regardless of how the call later ends.
+A completed model call means a complete 2xx transport response, not an accepted answer.
+
+Review tool spans arrive with the attempt's retained debug output.
+They become timer samples only after that output is collected.
+The parser consumes the timing field before it retains the debug output, so raw tool samples do not enter the job output column.
+Overlapping calls retain separate durations, so their sum can exceed elapsed time.
+Each attempt retains at most 4,096 complete or active tool spans.
+A refused conversation tool call counts as failed.
+
+`agent_phase_tool_timing_censored_total{reason=~"unfinished|omitted"}` exposes incomplete and bounded-out spans.
+`agent_phase_tool_timing_unavailable_total` counts attempts with debug output that has no timing field.
+`agent_phase_tool_timing_invalid_total` counts malformed timing reports.
+
+An attempt whose debug output is not collected has no tool samples.
+Check its terminal outcome too.
+Treat missing samples as unavailable, not as zero-duration tools.
+
+A conversation tool contains sandbox acquisition, and a cold acquisition contains sandbox start.
+These are nested intervals, not additive phases.
+The acquisition tag is `assigned`, `warm` or `cold` for acquisition samples, and `none` for other phases.
+Filter it to separate pool hits from starts.
+
+Micrometer also records `agent.phase.duration.active` for active in-process observations.
+Its outcome is `active` and its acquisition is `none`, because those values are known only when the observation ends.
+These observations become trace spans when tracing is enabled.
+
+Both phase timer families have fixed service-level buckets from 1 ms through 15 minutes.
+The `agent.phase` name prefix configures their [per-meter properties](https://docs.spring.io/spring-boot/reference/actuator/metrics.html#actuator.metrics.customizing.per-meter-properties).
+Use a histogram quantile over the selected phase and workload.
+Do not add phase percentiles or label gaps between model calls as tool execution.
+
 ## Call pool metrics
 
 Each worker reports the [call pools](./runtime-roles.mdx#call-pools) whose models it calls.

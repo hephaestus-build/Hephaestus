@@ -5,6 +5,9 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -69,6 +72,11 @@ public class MentorTurnStarter {
         Instant startedAt = turn.getStartedAt();
         if (turn.getAttempt() == 1 && startedAt != null) {
             // A retry waited since its lease expired, which the row does not keep.
+            AgentPhaseObservations.record(
+                    meters,
+                    Workload.CONVERSATION,
+                    Phase.ADMISSION_WAIT,
+                    Duration.between(turn.getCreatedAt(), startedAt));
             Timer.builder(AgentMetrics.MENTOR_TURN_QUEUE_WAIT)
                     .description("From a question to the start of its first attempt")
                     .publishPercentileHistogram()

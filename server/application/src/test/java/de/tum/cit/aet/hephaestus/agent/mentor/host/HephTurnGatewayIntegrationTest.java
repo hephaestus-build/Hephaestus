@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -138,7 +139,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 contexts,
                 dispatcher,
                 HephTurnFixtures.folder(
-                        beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())));
+                        beans,
+                        new TurnSandboxes(
+                                new FakeExecSandboxes(), 0, new SimpleMeterRegistry(), noopPhaseObservations())));
         var application = new SpringApplication(
                 GatewayApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));

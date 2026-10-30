@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,54 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
 
                 """);
         assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(13, 7, 0, 1200, 300));
+        assertThat(tap.hasMalformedUsage()).isFalse();
+    }
+
+    @Test
+    void shouldObserveOnlyTheFirstGeneratedContentAndPreserveUsage() {
+        var count = new AtomicInteger();
+        var tap = completionsTap();
+        tap.observeFirstToken(count::incrementAndGet);
+        feed(tap, ": ping\n\ndata: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n");
+        assertThat(count).hasValue(0);
+        String content = "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n";
+        for (byte value : content.getBytes(StandardCharsets.UTF_8)) tap.accept(new byte[] {value});
+        feed(tap, content);
+        feed(tap, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":5}}\n\n");
+        assertThat(count).hasValue(1);
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(12, 5, 0, 0, 0));
+        assertThat(tap.hasMalformedUsage()).isFalse();
+    }
+
+    @Test
+    void shouldObserveGeneratedResponsesAndAnthropicTokensButNotTheirMetadata() {
+        for (LlmApiProtocol protocol :
+                new LlmApiProtocol[] {LlmApiProtocol.OPENAI_RESPONSES, LlmApiProtocol.ANTHROPIC_MESSAGES}) {
+            var count = new AtomicInteger();
+            var tap = new ProxyStreamUsageTap(MAPPER, protocol);
+            tap.observeFirstToken(count::incrementAndGet);
+            feed(tap, "data: {\"type\":\"response.created\"}\n\ndata: {\"type\":\"message_start\",\"message\":{}}\n\n");
+            assertThat(count).hasValue(0);
+            feed(
+                    tap,
+                    protocol == LlmApiProtocol.OPENAI_RESPONSES
+                            ? "data: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{}\"}\n\n"
+                            : "data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n\n");
+            assertThat(count).hasValue(1);
+        }
+    }
+
+    @Test
+    void shouldKeepUsageWhenTheTimingObserverThrowsOnTheSameFrame() {
+        var tap = completionsTap();
+        tap.observeFirstToken(() -> {
+            throw new IllegalStateException("private provider content");
+        });
+        feed(tap, """
+                data: {"choices":[{"delta":{"content":"hi"}}],"usage":{"prompt_tokens":12,"completion_tokens":5}}
+
+                """);
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(12, 5, 0, 0, 0));
         assertThat(tap.hasMalformedUsage()).isFalse();
     }
 

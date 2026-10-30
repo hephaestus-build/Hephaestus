@@ -2,6 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Outcome;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.Need;
@@ -12,6 +16,7 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -33,6 +38,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** Malformed primary output cannot establish success; malformed auxiliary output drops only that auxiliary data. */
 @Service
@@ -204,10 +210,77 @@ public class PiResultParser {
             return;
         }
         try {
-            output.put("runnerDebug", objectMapper.readValue(runnerDebugFile, Object.class));
+            JsonNode debug = objectMapper.readTree(runnerDebugFile);
+            if (debug == null) return;
+            JsonNode timings = debug.path("toolTimings");
+            if (debug instanceof ObjectNode object) object.remove("toolTimings");
+            output.put("runnerDebug", objectMapper.convertValue(debug, Object.class));
+            try {
+                recordToolTimings(timings);
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Could not record review tool timing: {}",
+                        exception.getClass().getSimpleName());
+            }
         } catch (JacksonException e) {
             recordFailure("runner_debug", e);
         }
+    }
+
+    /** Only complete SDK tool spans become samples; missing or bounded-out spans remain visible. */
+    void recordToolTimings(JsonNode timings) {
+        if (timings.isMissingNode()) {
+            meterRegistry
+                    .counter(AgentMetrics.AGENT_PHASE_TOOL_TIMING_UNAVAILABLE)
+                    .increment();
+            return;
+        }
+        JsonNode durations = timings.path("spans");
+        JsonNode unfinished = timings.path("unfinished");
+        JsonNode omitted = timings.path("omitted");
+        boolean valid = durations.isArray()
+                && durations.size() <= 4096
+                && validToolCount(unfinished)
+                && validToolCount(omitted);
+        if (valid) {
+            for (JsonNode duration : durations) {
+                double millis = duration.path("durationMs").asDouble(Double.NaN);
+                if (!duration.path("durationMs").isNumber()
+                        || !Double.isFinite(millis)
+                        || millis < 0
+                        || millis > 86_400_000
+                        || !(duration.path("outcome").asString("").equals("completed")
+                                || duration.path("outcome").asString("").equals("failed"))) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if (!valid) {
+            meterRegistry.counter(AgentMetrics.AGENT_PHASE_TOOL_TIMING_INVALID).increment();
+            return;
+        }
+        for (JsonNode duration : durations) {
+            AgentPhaseObservations.record(
+                    meterRegistry,
+                    Workload.REVIEW,
+                    Phase.TOOL_CALL,
+                    Duration.ofNanos(Math.round(duration.path("durationMs").asDouble() * 1_000_000d)),
+                    duration.path("outcome").asString().equals("completed") ? Outcome.COMPLETED : Outcome.FAILED);
+        }
+        meterRegistry
+                .counter(AgentMetrics.AGENT_PHASE_TOOL_TIMING_CENSORED, "reason", "unfinished")
+                .increment((double) unfinished.longValue());
+        meterRegistry
+                .counter(AgentMetrics.AGENT_PHASE_TOOL_TIMING_CENSORED, "reason", "omitted")
+                .increment((double) omitted.longValue());
+    }
+
+    private static boolean validToolCount(JsonNode count) {
+        return count.isIntegralNumber()
+                && count.canConvertToLong()
+                && count.longValue() >= 0
+                && count.longValue() <= 1_000_000;
     }
 
     void addWatchdogState(Map<String, Object> output, byte @Nullable [] watchdogFile) {

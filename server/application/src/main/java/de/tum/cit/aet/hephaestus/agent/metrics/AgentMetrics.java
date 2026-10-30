@@ -26,6 +26,11 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_SNAPSHOT_UNREADABLE = "agent.job.snapshot.unreadable";
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
     public static final String AGENT_JOB_ZOMBIE_REAPED = "agent.job.zombie.reaped";
+    public static final String AGENT_PHASE_DURATION = "agent.phase.duration";
+    public static final String AGENT_PHASE_REPORTED_DURATION = "agent.phase.reported.duration";
+    public static final String AGENT_PHASE_TOOL_TIMING_CENSORED = "agent.phase.tool_timing.censored";
+    public static final String AGENT_PHASE_TOOL_TIMING_INVALID = "agent.phase.tool_timing.invalid";
+    public static final String AGENT_PHASE_TOOL_TIMING_UNAVAILABLE = "agent.phase.tool_timing.unavailable";
     public static final String AGENT_PI_ENVELOPE_MISMATCH = "agent.pi.envelope.mismatch";
     public static final String AGENT_PI_RESULT_PARSE_FAILURE = "agent.pi.result.parse.failure";
     public static final String AGENT_QUEUE_DEPTH = "agent.queue.depth";

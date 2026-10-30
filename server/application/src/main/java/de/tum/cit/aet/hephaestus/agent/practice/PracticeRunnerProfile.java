@@ -29,6 +29,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-result-tools.ts",
             "pi-problem-drafts.ts",
             "pi-practice-coverage.ts",
+            "pi-tool-timings.ts",
             "pi-review-brief.ts",
             "pi-folder-index.ts",
             "pi-review-turns.ts",

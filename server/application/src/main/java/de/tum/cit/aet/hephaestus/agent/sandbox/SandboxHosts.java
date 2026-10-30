@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
@@ -26,6 +29,7 @@ public class SandboxHosts implements HostSandbox {
     private static final Logger log = LoggerFactory.getLogger(SandboxHosts.class);
 
     private final SandboxBackend backend;
+    private final AgentPhaseObservations phases;
     private final SandboxWorkspaceManager workspaces;
     private final SandboxGatewaySessions gatewaySessions;
     private final String image;
@@ -35,7 +39,9 @@ public class SandboxHosts implements HostSandbox {
             SandboxBackend backend,
             SandboxWorkspaceManager workspaces,
             SandboxGatewaySessions gatewaySessions,
-            String image) {
+            String image,
+            AgentPhaseObservations phases) {
+        this.phases = phases;
         this.backend = backend;
         this.workspaces = workspaces;
         this.gatewaySessions = gatewaySessions;
@@ -56,6 +62,7 @@ public class SandboxHosts implements HostSandbox {
         String token = ReviewJob.generateJobToken();
         SandboxGatewaySessions.Session session = null;
         SandboxBackend.Handle handle = null;
+        var observation = phases.start(Workload.CONVERSATION, Phase.HOST_START);
         try {
             session = openSession(id, token, spec);
             UUID sessionId = session.id();
@@ -87,6 +94,7 @@ public class SandboxHosts implements HostSandbox {
             }
             running.put(id, new Resources(handle, session));
             log.info("Started host {}", id);
+            observation.completed();
             return new Host(id);
         } catch (SandboxException e) {
             remove(id, new Resources(handle, session));
@@ -95,6 +103,8 @@ public class SandboxHosts implements HostSandbox {
         } catch (IOException | RuntimeException e) {
             remove(id, new Resources(handle, session));
             throw e;
+        } finally {
+            observation.close();
         }
     }
 

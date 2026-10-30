@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -70,6 +72,7 @@ class SandboxRuntimeSelectionTest {
             .withBean(ReviewJobRepository.class, () -> mock(ReviewJobRepository.class))
             .withBean(WorkerRegistryRepository.class, () -> mock(WorkerRegistryRepository.class))
             .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+            .withBean(AgentPhaseObservations.class, AgentPhaseTestSupport::noopPhaseObservations)
             .withBean(Clock.class, Clock::systemUTC)
             .withBean(
                     AgentImageProperties.class,

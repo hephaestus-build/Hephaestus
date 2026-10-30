@@ -3,6 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Acquisition;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
@@ -116,6 +120,7 @@ public class TurnSandboxes implements AutoCloseable {
     private final ExecSandboxes sandboxes;
     private final int poolSize;
     private final MeterRegistry meters;
+    private final AgentPhaseObservations phases;
     private final Map<Attempt, Integer> quotaWaiting = new ConcurrentHashMap<>();
 
     /**
@@ -139,10 +144,11 @@ public class TurnSandboxes implements AutoCloseable {
     private volatile boolean lastStartFailed;
     private boolean closed;
 
-    public TurnSandboxes(ExecSandboxes sandboxes, int poolSize, MeterRegistry meters) {
+    public TurnSandboxes(ExecSandboxes sandboxes, int poolSize, MeterRegistry meters, AgentPhaseObservations phases) {
         this.sandboxes = sandboxes;
         this.poolSize = poolSize;
         this.meters = meters;
+        this.phases = phases;
     }
 
     /**
@@ -167,26 +173,34 @@ public class TurnSandboxes implements AutoCloseable {
      * @throws SandboxException when no sandbox can start, or the attempt ended
      */
     public Sandbox acquire(Attempt attempt, long workspaceId, BooleanSupplier expired) {
+        var observation = phases.start(Workload.CONVERSATION, Phase.SANDBOX_ACQUIRE);
         Timer.Sample wait = null;
         boolean ready = false;
         try {
             while (true) {
-                if (expired.getAsBoolean() || Thread.currentThread().isInterrupted())
+                if (expired.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+                    observation.cancelled();
                     throw new SandboxCancelledException("The tools request ended while waiting for tools");
+                }
                 synchronized (lifecycle) {
-                    Sandbox held = admitted(attempt);
+                    Sandbox held = admitted(attempt, observation);
                     if (held != null) {
+                        observation.acquisition(Acquisition.ASSIGNED);
                         ready = true;
+                        observation.completed();
                         return held;
                     }
                     Sandbox pooled = pool.pollFirst();
                     if (pooled != null) {
+                        observation.acquisition(Acquisition.WARM);
                         assign(attempt, workspaceId, pooled);
                         refill();
                         ready = true;
+                        observation.completed();
                         return pooled;
                     }
                 }
+                observation.acquisition(Acquisition.COLD);
                 Sandbox started;
                 try {
                     started = start();
@@ -200,12 +214,13 @@ public class TurnSandboxes implements AutoCloseable {
                         quotaWaiting.merge(attempt, 1, Integer::sum);
                     }
                     synchronized (lifecycle) {
-                        if (admitted(attempt) != null || !pool.isEmpty()) continue;
+                        if (admitted(attempt, observation) != null || !pool.isEmpty()) continue;
                         try {
                             // A local release wakes this wait; the timeout also sees room freed by another worker.
                             lifecycle.wait(1000);
                         } catch (InterruptedException cancelled) {
                             Thread.currentThread().interrupt();
+                            observation.cancelled();
                             throw new SandboxException("The turn stopped while waiting for tools", cancelled);
                         }
                     }
@@ -214,9 +229,11 @@ public class TurnSandboxes implements AutoCloseable {
                 synchronized (lifecycle) {
                     Sandbox held;
                     try {
-                        held = admitted(attempt);
-                        if (expired.getAsBoolean())
+                        held = admitted(attempt, observation);
+                        if (expired.getAsBoolean()) {
+                            observation.cancelled();
                             throw new SandboxCancelledException("The tools request ended while tools started");
+                        }
                     } catch (RuntimeException ended) {
                         // Release or context change won while the Pod started.
                         removeLater(started);
@@ -226,12 +243,14 @@ public class TurnSandboxes implements AutoCloseable {
                         // A parallel call of this attempt was first; keep this empty Pod in the warm pool.
                         pool.addLast(started);
                         ready = true;
+                        observation.completed();
                         return held;
                     }
                     assign(attempt, workspaceId, started);
                 }
                 refill();
                 ready = true;
+                observation.completed();
                 return started;
             }
         } finally {
@@ -243,6 +262,7 @@ public class TurnSandboxes implements AutoCloseable {
                         .publishPercentileHistogram()
                         .register(meters));
             }
+            observation.close();
         }
     }
 
@@ -252,11 +272,13 @@ public class TurnSandboxes implements AutoCloseable {
     }
 
     /** The attempt's live sandbox, or null when it may take one. Holds {@link #lifecycle}. */
-    private @Nullable Sandbox admitted(Attempt attempt) {
+    private @Nullable Sandbox admitted(Attempt attempt, AgentPhaseObservations.Sample observation) {
         if (closed || ended.getIfPresent(attempt) != null) {
+            observation.cancelled();
             throw new SandboxException("The attempt ended");
         }
         if (changed.remove(attempt)) {
+            observation.cancelled();
             throw new ContextChanged();
         }
         Sandbox held = assigned.get(attempt);
@@ -431,7 +453,16 @@ public class TurnSandboxes implements AutoCloseable {
             known.put(sandbox.sandboxId, sandbox);
         }
         try {
-            sandbox.containerId = sandboxes.create(sandbox.sandboxId, LIMITS);
+            var observation = phases.start(Workload.CONVERSATION, Phase.SANDBOX_START);
+            try {
+                sandbox.containerId = sandboxes.create(sandbox.sandboxId, LIMITS);
+                observation.completed();
+            } catch (SandboxCapacityException full) {
+                if (full.reason() == SandboxCapacityException.Reason.QUOTA_EXCEEDED) observation.cancelled();
+                throw full;
+            } finally {
+                observation.close();
+            }
             lastStartFailed = false;
         } catch (RuntimeException e) {
             lastStartFailed = !(e instanceof SandboxCapacityException);

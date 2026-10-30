@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 import static org.mockito.Mockito.when;
@@ -107,7 +108,12 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         context.refresh();
         var config = new LlmProxySecurityConfig();
         var accounting = new ProxyAccounting(
-                budgetGate, usageAccumulator, mentorTurnUsageAccumulator, new SimpleMeterRegistry(), OBJECT_MAPPER);
+                budgetGate,
+                usageAccumulator,
+                mentorTurnUsageAccumulator,
+                new SimpleMeterRegistry(),
+                OBJECT_MAPPER,
+                noopPhaseObservations());
         BucketResolver resolver = (key, configuration) -> buckets.computeIfAbsent(
                 key,
                 ignored -> Bucket.builder()

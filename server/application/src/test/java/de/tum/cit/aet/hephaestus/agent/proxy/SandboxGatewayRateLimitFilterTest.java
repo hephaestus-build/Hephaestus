@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -152,7 +153,12 @@ class SandboxGatewayRateLimitFilterTest extends BaseUnitTest {
                 resolver,
                 OBJECT_MAPPER,
                 new ProxyAccounting(
-                        budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER),
+                        budgetGate,
+                        usageAccumulator,
+                        mentorTurnUsageAccumulator,
+                        meterRegistry,
+                        OBJECT_MAPPER,
+                        noopPhaseObservations()),
                 request -> TURN_BOOKKEEPING.equals(request.getRequestURI()));
     }
 

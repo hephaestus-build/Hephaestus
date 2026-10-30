@@ -56,6 +56,7 @@ public class HephTurnSandboxController {
             @PathVariable UUID turnId, @Valid @RequestBody ReadRequest request, Authentication authentication) {
         TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
         return HephToolCalls.logged(
+                dispatcher::recordToolDuration,
                 turn,
                 "read",
                 () -> folder.read(
@@ -77,6 +78,7 @@ public class HephTurnSandboxController {
             @PathVariable UUID turnId, @Valid @RequestBody ExecRequest request, Authentication authentication) {
         TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
         return HephToolCalls.logged(
+                dispatcher::recordToolDuration,
                 turn,
                 "exec",
                 () -> folder.exec(
@@ -95,6 +97,7 @@ public class HephTurnSandboxController {
             @PathVariable UUID turnId, @Valid @RequestBody LoadRequest request, Authentication authentication) {
         TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
         return HephToolCalls.logged(
+                dispatcher::recordToolDuration,
                 turn,
                 "load",
                 () -> folder.load(

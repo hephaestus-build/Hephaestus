@@ -115,6 +115,7 @@ import {
 } from "./pi-session-reads.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
+import { ToolCallTimings } from "./pi-tool-timings.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
 import { parseDiff } from "./work/practice-scripts/kits/scm/diff-parser.ts";
 import { fileRecordSchema } from "./work/practice-scripts/kits/scm/records.ts";
@@ -777,6 +778,7 @@ export async function runReviewJob(): Promise<void> {
 		loop: "off-format",
 	};
 
+	const toolTimings = new ToolCallTimings();
 	const runnerDebug: {
 		attempts: AttemptDebug[];
 		turns: TurnTrace[];
@@ -840,7 +842,10 @@ export async function runReviewJob(): Promise<void> {
 				? compareSlugs(a.practiceSlug, b.practiceSlug)
 				: 0,
 		);
-		writeFileSync(RUNNER_DEBUG_PATH, JSON.stringify({ ...runnerDebug, turns }, null, 2));
+		writeFileSync(
+			RUNNER_DEBUG_PATH,
+			JSON.stringify({ ...runnerDebug, turns, toolTimings: toolTimings.snapshot() }, null, 2),
+		);
 	}
 	function persistReviewState() {
 		writeFileSync(REVIEW_STATE_PATH, JSON.stringify(admissionRequest(), null, 2));
@@ -2302,6 +2307,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					) {
 						releaseOpening?.(JSON.stringify([...declaredOf(scope.activePractice)].toSorted()));
 					}
+					toolTimings.observe(event);
 					chargeWork(event);
 					const label = practiceLogLabel();
 					if (event.type === "tool_execution_start") {

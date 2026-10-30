@@ -2,12 +2,16 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Phase;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations.Workload;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +32,7 @@ public class ProxyAccounting {
     private final MentorTurnUsageAccumulator mentorTurnUsageAccumulator;
     private final MeterRegistry meterRegistry;
     private final ObjectMapper objectMapper;
+    private final AgentPhaseObservations phases;
 
     // Only the request meters are the LLM capability's own; the rate limiter guards every capability
     // the gateway chain carries, so its meters take no capability tag.
@@ -43,7 +48,9 @@ public class ProxyAccounting {
             ProxyUsageAccumulator usageAccumulator,
             MentorTurnUsageAccumulator mentorTurnUsageAccumulator,
             MeterRegistry meterRegistry,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AgentPhaseObservations phases) {
+        this.phases = phases;
         this.budgetGate = budgetGate;
         this.usageAccumulator = usageAccumulator;
         this.mentorTurnUsageAccumulator = mentorTurnUsageAccumulator;
@@ -70,6 +77,14 @@ public class ProxyAccounting {
         this.practiceScriptUnattributed = Counter.builder(AgentMetrics.LLM_PROXY_PRACTICE_SCRIPT_UNATTRIBUTED)
                 .description("Practice script calls refused because they named no valid practice")
                 .register(meterRegistry);
+    }
+
+    AgentPhaseObservations.Sample startModelCall(Workload workload) {
+        return phases.start(workload, Phase.MODEL_CALL);
+    }
+
+    void modelFirstToken(Workload workload, Duration duration) {
+        phases.record(workload, Phase.MODEL_FIRST_TOKEN, duration);
     }
 
     /**

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.observedPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -26,7 +28,8 @@ class TurnSandboxesTest extends BaseUnitTest {
     private static final long WORKSPACE = 7;
 
     private final FakeExecSandboxes runtime = new FakeExecSandboxes();
-    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 2, new SimpleMeterRegistry());
+    private final TurnSandboxes sandboxes =
+            new TurnSandboxes(runtime, 2, new SimpleMeterRegistry(), noopPhaseObservations());
 
     @AfterEach
     void close() {
@@ -46,7 +49,7 @@ class TurnSandboxesTest extends BaseUnitTest {
     void shouldRemoveToolsThatStartAfterTheRequestDeadline() throws Exception {
         var expired = new AtomicBoolean();
         runtime.createGate = new CountDownLatch(1);
-        try (var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry())) {
+        try (var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry(), noopPhaseObservations())) {
             var waiting = CompletableFuture.supplyAsync(() -> unpooled.acquire(attempt(), WORKSPACE, expired::get));
             await().atMost(Duration.ofSeconds(5)).until(() -> unpooled.held() == 1);
             expired.set(true);
@@ -62,7 +65,7 @@ class TurnSandboxesTest extends BaseUnitTest {
     @Test
     void shouldStopWaitingWhenTheToolsRequestDeadlineExpires() {
         var expired = new AtomicBoolean();
-        try (var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry())) {
+        try (var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry(), noopPhaseObservations())) {
             runtime.quotaFull = true;
             var attempt = attempt();
             var waiting = CompletableFuture.supplyAsync(() -> unpooled.acquire(attempt, WORKSPACE, expired::get));
@@ -77,7 +80,7 @@ class TurnSandboxesTest extends BaseUnitTest {
     @Test
     void shouldWaitForToolsQuotaWithoutCreatingAPodOrDisablingTheWorker() throws Exception {
         var meters = new SimpleMeterRegistry();
-        try (var unpooled = new TurnSandboxes(runtime, 0, meters)) {
+        try (var unpooled = new TurnSandboxes(runtime, 0, meters, observedPhaseObservations(meters))) {
             runtime.quotaFull = true;
             var attempt = attempt();
             var waiting = CompletableFuture.supplyAsync(() -> unpooled.acquire(attempt, WORKSPACE, () -> false));
@@ -92,13 +95,22 @@ class TurnSandboxesTest extends BaseUnitTest {
                             .timer()
                             .count())
                     .isEqualTo(1);
+            assertThat(meters.get("agent.phase.duration")
+                            .tags("phase", "sandbox_start", "outcome", "cancelled")
+                            .timer()
+                            .count())
+                    .isPositive();
+            assertThat(meters.find("agent.phase.duration")
+                            .tags("phase", "sandbox_start", "outcome", "failed")
+                            .timer())
+                    .isNull();
         }
     }
 
     @Test
     void shouldEndAQuotaWaitWithoutCreatingToolsAfterTheAttemptEnds() {
         var meters = new SimpleMeterRegistry();
-        try (var unpooled = new TurnSandboxes(runtime, 0, meters)) {
+        try (var unpooled = new TurnSandboxes(runtime, 0, meters, noopPhaseObservations())) {
             runtime.quotaFull = true;
             var attempt = attempt();
             var waiting = CompletableFuture.supplyAsync(() -> unpooled.acquire(attempt, WORKSPACE, () -> false));
@@ -128,7 +140,7 @@ class TurnSandboxesTest extends BaseUnitTest {
 
     @Test
     void shouldStartASandboxAtOnceWhenThePoolIsEmpty() {
-        var sandboxesWithoutPool = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
+        var sandboxesWithoutPool = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry(), noopPhaseObservations());
 
         TurnSandboxes.Sandbox taken = sandboxesWithoutPool.acquire(attempt(), WORKSPACE, () -> false);
 
@@ -156,7 +168,8 @@ class TurnSandboxesTest extends BaseUnitTest {
 
     @Test
     void shouldRemoveTheSandboxThatStartsWhenTheAttemptEndedWhileItStarted() throws Exception {
-        var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
+        var meters = new SimpleMeterRegistry();
+        var unpooled = new TurnSandboxes(runtime, 0, meters, observedPhaseObservations(meters));
         CountDownLatch gate = new CountDownLatch(1);
         runtime.createGate = gate;
         TurnSandboxes.Attempt attempt = attempt();
@@ -169,12 +182,21 @@ class TurnSandboxesTest extends BaseUnitTest {
 
         assertThatThrownBy(acquiring::join).hasCauseInstanceOf(SandboxException.class);
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.running.isEmpty() && runtime.removed.size() == 1);
+        assertThat(meters.get("agent.phase.duration")
+                        .tags("phase", "sandbox_acquire", "outcome", "cancelled", "error", "none")
+                        .timer()
+                        .count())
+                .isEqualTo(1);
+        assertThat(meters.find("agent.phase.duration")
+                        .tags("phase", "sandbox_acquire", "outcome", "failed")
+                        .timer())
+                .isNull();
         unpooled.close();
     }
 
     @Test
     void shouldRemoveTheSandboxThatStartsWhenTheWorkerStopsWhileItStarts() throws Exception {
-        var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
+        var unpooled = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry(), noopPhaseObservations());
         CountDownLatch gate = new CountDownLatch(1);
         runtime.createGate = gate;
         CompletableFuture<TurnSandboxes.Sandbox> acquiring =

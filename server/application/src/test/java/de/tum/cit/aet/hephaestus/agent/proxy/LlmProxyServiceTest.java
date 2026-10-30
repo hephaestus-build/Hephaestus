@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.observedPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -147,7 +149,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 resolver,
                 OBJECT_MAPPER,
                 new ProxyAccounting(
-                        budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, OBJECT_MAPPER),
+                        budgetGate,
+                        usageAccumulator,
+                        mentorTurnUsageAccumulator,
+                        meterRegistry,
+                        OBJECT_MAPPER,
+                        noopPhaseObservations()),
                 requestPolicy,
                 mock(ScanCallGuard.class),
                 routingService,
@@ -634,7 +641,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             new SimpleMeterRegistry(),
-                            OBJECT_MAPPER),
+                            OBJECT_MAPPER,
+                            noopPhaseObservations()),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -730,7 +738,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             new SimpleMeterRegistry(),
-                            OBJECT_MAPPER),
+                            OBJECT_MAPPER,
+                            noopPhaseObservations()),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -803,7 +812,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             streamingMeterRegistry,
-                            OBJECT_MAPPER),
+                            OBJECT_MAPPER,
+                            observedPhaseObservations(streamingMeterRegistry)),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -1663,7 +1673,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             usageAccumulator,
                             mentorTurnUsageAccumulator,
                             streamingMeterRegistry,
-                            OBJECT_MAPPER),
+                            OBJECT_MAPPER,
+                            observedPhaseObservations(streamingMeterRegistry)),
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
@@ -1729,6 +1740,18 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(usage.getValue().outputTokens()).isEqualTo(40);
             assertThat(usage.getValue().cacheReadTokens()).isEqualTo(25);
             assertThat(missingUsage()).isZero();
+            assertThat(streamingMeterRegistry
+                            .get(AgentMetrics.AGENT_PHASE_DURATION)
+                            .tags("phase", "model_call", "outcome", "completed")
+                            .timer()
+                            .count())
+                    .isEqualTo(1);
+            assertThat(streamingMeterRegistry
+                            .get(AgentMetrics.AGENT_PHASE_REPORTED_DURATION)
+                            .tags("phase", "model_first_token", "outcome", "completed")
+                            .timer()
+                            .count())
+                    .isEqualTo(1);
         }
 
         @Test

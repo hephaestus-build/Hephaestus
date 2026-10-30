@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextRevocations;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentPhaseObservations;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
@@ -68,8 +69,9 @@ public class HephHostConfiguration {
             ExecSandboxes sandboxes,
             MentorLedgerNotifications notifications,
             TurnContextGenerations generations,
-            MeterRegistry meters) {
-        TurnSandboxes turnSandboxes = new TurnSandboxes(sandboxes, SANDBOX_POOL, meters);
+            MeterRegistry meters,
+            AgentPhaseObservations phases) {
+        TurnSandboxes turnSandboxes = new TurnSandboxes(sandboxes, SANDBOX_POOL, meters, phases);
         notifications.subscribe(new TurnContextRevocations(generations, turnSandboxes));
         return turnSandboxes;
     }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
@@ -945,7 +946,8 @@ class KubernetesSandboxRuntimeTest {
                         cache()),
                 new SandboxWorkspaceManager(),
                 sessions,
-                meters);
+                meters,
+                noopPhaseObservations());
         HealthIndicator readiness =
                 new KubernetesSandboxConfiguration().kubernetesSandboxHealthIndicator(cache(), unproved);
 
@@ -1162,7 +1164,8 @@ class KubernetesSandboxRuntimeTest {
     }
 
     private SandboxAttemptRunner adapter() {
-        return new SandboxAttemptRunner(backend(), new SandboxWorkspaceManager(), sessions, meters);
+        return new SandboxAttemptRunner(
+                backend(), new SandboxWorkspaceManager(), sessions, meters, noopPhaseObservations());
     }
 
     private Pod storedPod(String name) {

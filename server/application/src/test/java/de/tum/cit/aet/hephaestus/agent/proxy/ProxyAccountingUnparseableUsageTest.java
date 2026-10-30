@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import static de.tum.cit.aet.hephaestus.testconfig.AgentPhaseTestSupport.noopPhaseObservations;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,7 +32,12 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private final ProxyAccounting accounting = new ProxyAccounting(
-            budgetGate, usageAccumulator, mentorTurnUsageAccumulator, meterRegistry, new ObjectMapper());
+            budgetGate,
+            usageAccumulator,
+            mentorTurnUsageAccumulator,
+            meterRegistry,
+            new ObjectMapper(),
+            noopPhaseObservations());
 
     @Test
     @DisplayName("an unreadable 2xx body is counted, not silently dropped")
