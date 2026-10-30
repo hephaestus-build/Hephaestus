@@ -71,7 +71,7 @@ Check the [database prerequisites](./compatibility-policy#database-baseline-prer
 1. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), pause reconciliation before manual changes.
 2. Wait for any active service run to finish.
 3. Before starting target images, read that release's migration instructions.
-4. If an intermediate release is required, first complete its [versioned upgrade procedure](./liquibase-baseline-runbook.md).
+4. If an intermediate release is required, first complete its [intermediate upgrade procedure](./liquibase-baseline-runbook.md).
 5. Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) through backup and staging validation.
 6. Acquire the tested release:
 
@@ -187,6 +187,6 @@ Each worker and webhook server reports its own identity in `/actuator/info` only
 Some releases need a procedure of their own before the new runtime roles start.
 The [database migration instructions](./compatibility-policy#database-migrations) say when one applies.
 
-- [Baseline synchronization runbook](./liquibase-baseline-runbook.md): intermediate upgrades for older databases.
+- [Prepare an older database](./liquibase-baseline-runbook.md): intermediate upgrades for older databases.
 - [Native Hibernate JSON cutover](./native-hibernate-json-cutover): the stopped-writer accounting cutover.
 - [Practice model cutover checks](./practice-model-cutover): the pilot rehearsal and a refused practice model upgrade.

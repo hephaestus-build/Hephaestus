@@ -127,7 +127,7 @@ class LiquibaseBaselineIntegrationTest {
     @ValueSource(strings = {"dev", "prod"})
     void shouldRejectPreCutPointHistoryForUpdateAndSynchronization(String context) throws Exception {
         TestDatabase database = emptyDatabase();
-        update(database, BASELINE, context);
+        initializeThrough(database, context, "1793208610071-2");
         List<String> history =
                 query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
         execute(database, """
@@ -162,7 +162,7 @@ class LiquibaseBaselineIntegrationTest {
     @ValueSource(strings = {"author", "filename"})
     void shouldRejectCutPointWithWrongMigrationIdentity(String field) throws Exception {
         TestDatabase database = emptyDatabase();
-        initializeThroughCutPoint(database, "prod");
+        initializeThrough(database, "prod", "1793208610071-3");
         // Only the identity is false: a complete schema must not turn a false history into proof.
         execute(
                 database,
@@ -206,25 +206,26 @@ class LiquibaseBaselineIntegrationTest {
     @ValueSource(strings = {"dev", "prod"})
     void shouldUpgradeTheReleasedCutPointAndPreserveSettings(String context) throws Exception {
         TestDatabase database = emptyDatabase();
-        initializeThroughCutPoint(database, context);
+        initializeThrough(database, context, "1793208610071-3");
         execute(database, "UPDATE instance_settings SET silent_mode_engaged = false WHERE id = 1");
         update(database, "db/master.xml", context);
         assertThat(query(database, "SELECT silent_mode_engaged::text FROM instance_settings WHERE id = 1"))
                 .containsExactly("false");
     }
 
-    private static void initializeThroughCutPoint(TestDatabase database, String context) throws Exception {
+    private static void initializeThrough(TestDatabase database, String context, String lastChangeSet)
+            throws Exception {
         try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
             var changes = liquibase.getDatabaseChangeLog().getChangeSets();
             int cutPoint = -1;
             for (int index = 0; index < changes.size(); index++) {
-                if (changes.get(index).getId().equals("1793208610071-3")) {
+                if (changes.get(index).getId().equals(lastChangeSet)) {
                     cutPoint = index;
                     break;
                 }
             }
             assertThat(cutPoint)
-                    .as("the final v0.95.0 changeset remains in the released chain")
+                    .as("the requested changeset remains in the released chain")
                     .isNotNegative();
             changes.subList(cutPoint + 1, changes.size()).clear();
             liquibase.update(new Contexts(context));

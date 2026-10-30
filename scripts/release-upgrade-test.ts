@@ -9,11 +9,8 @@ import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
 	deliveryDifference,
-	PEOPLE_LAYOUT_SQL,
 	partialMigration,
-	peopleLayout,
 	preservationSql,
-	type PeopleLayout,
 	type PreservedPeopleIds,
 	type StoredDelivery,
 } from "./lib/release-upgrade-fingerprint.ts";
@@ -476,18 +473,12 @@ async function assertInstalledCatalog(port: number, session: Session): Promise<v
 	}
 }
 
-function linkWorkspaceIdentity(layout: PeopleLayout): void {
+function linkWorkspaceIdentity(): void {
 	// Native entity initializers and @CreationTimestamp are not database defaults, so every
 	// non-null identity column is written.
-	const link =
-		layout === "legacy"
-			? `INSERT INTO identity_link
-		   (account_id, provider_id, subject, external_actor_id, username_at_signup, linked_via)
-		 SELECT fixture.account_id, created.provider_id, created.native_id::text, created.id,
-		        'account:' || fixture.account_id, 'MANUAL_LINK'`
-			: `INSERT INTO identity
-		   (account_id, provider_id, provider_user_key, team_key, linked_at, linked_via)
-		 SELECT fixture.account_id, created.provider_id, created.native_id::text, '', now(), 'MANUAL'`;
+	const link = `INSERT INTO identity
+        (account_id, provider_id, provider_user_key, team_key, linked_at, linked_via)
+        SELECT fixture.account_id, created.provider_id, created.native_id::text, '', now(), 'MANUAL'`;
 	const linked = query(`WITH fixture AS (
 		   SELECT account.id AS account_id, identity_provider.id AS provider_id
 		   FROM account CROSS JOIN identity_provider
@@ -526,8 +517,8 @@ function query(sql: string, database = "hephaestus"): string {
 	);
 }
 
-function dataFingerprint(layout: PeopleLayout, preserved?: PreservedPeopleIds): string {
-	return query(preservationSql(layout, preserved));
+function dataFingerprint(preserved: PreservedPeopleIds): string {
+	return query(preservationSql(preserved));
 }
 
 const rows = (table: string) => {
@@ -535,10 +526,10 @@ const rows = (table: string) => {
 	return value === "" ? [] : value.split("\n");
 };
 
-function preservedPeople(layout: PeopleLayout): PreservedPeopleIds {
+function preservedPeople(): PreservedPeopleIds {
 	return {
 		accounts: rows("account"),
-		identities: rows(layout === "legacy" ? "identity_link" : "identity"),
+		identities: rows("identity"),
 	};
 }
 
@@ -1198,23 +1189,14 @@ try {
 	let port = startApplication(application, previousImage);
 	// A previous release without the management port answers readiness only on the actuator path.
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
-	const layout = peopleLayout(query(PEOPLE_LAYOUT_SQL));
-	console.log(`Previous release people layout: ${layout}.`);
 	const previousSession = await login(port, "alice");
 	await completeTransparencyNotice(port, previousSession);
 	await login(port, "root");
-	linkWorkspaceIdentity(layout);
+	linkWorkspaceIdentity();
 	await seedWorkspace(port, previousSession, WORKSPACE_SLUG);
 	await assertCoreReads(port, previousSession);
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
-	// The released-schema marker survives the cutover, so only a legacy layout takes the seed.
-	const exactMainSource =
-		layout === "legacy" &&
-		count("SELECT count(*) FROM databasechangelog WHERE id='1791941746633-2'") === 1;
-	if (exactMainSource) {
-		executeFixture("released-seed.sql");
-	}
 	const hephChatSource = keepsHephChatHistory();
 	if (hephChatSource) {
 		executeFixture("released-seed.sql", "heph-upgrade");
@@ -1223,9 +1205,8 @@ try {
 			"The required heph-chat seed was not admitted: the previous release keeps no Heph chat history",
 		);
 	}
-	const preserved = preservedPeople(layout);
-	const seededData =
-		layout === "legacy" ? dataFingerprint("legacy") : dataFingerprint("native", preserved);
+	const preserved = preservedPeople();
+	const seededData = dataFingerprint(preserved);
 	for (const kind of ["account", "identity", "user", "workspace", "membership", "connection"]) {
 		if (!seededData.includes(`${kind}|`)) {
 			throw new Error(`Previous release did not seed ${kind} data`);
@@ -1251,10 +1232,7 @@ try {
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage, "hephaestus", false);
 	await waitUntilReady(application, port);
-	if (peopleLayout(query(PEOPLE_LAYOUT_SQL)) !== "native") {
-		throw new Error("Candidate did not reach the native people layout");
-	}
-	const upgradedData = dataFingerprint("native", preserved);
+	const upgradedData = dataFingerprint(preserved);
 	executeFixture("assert-migrated.sql");
 	if (hephChatSource) {
 		executeFixture("assert-upgraded.sql", "heph-upgrade");
@@ -1308,9 +1286,7 @@ try {
 		candidateChanges - previousChanges,
 	);
 	await assertFreshSchemaEqualsUpgraded(candidateImage);
-	console.log(
-		`Seeded release upgrade passed (origin/main review seed: ${exactMainSource}, Heph chat seed: ${hephChatSource}).`,
-	);
+	console.log(`Seeded release upgrade passed (Heph chat seed: ${hephChatSource}).`);
 } catch (error) {
 	for (const name of [application, postgres]) {
 		printLogs(name);

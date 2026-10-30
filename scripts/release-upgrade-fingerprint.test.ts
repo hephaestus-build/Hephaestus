@@ -4,34 +4,14 @@ import { test } from "node:test";
 import {
 	deliveryDifference,
 	partialMigration,
-	peopleLayout,
 	preservationSql,
 } from "./lib/release-upgrade-fingerprint.ts";
 
-void test("native comparison requires exact preserved ids and rejects SQL-shaped ids", () => {
-	assert.throws(() => preservationSql("native"), /preserved people ids/u);
+void test("preserved people ids reject SQL-shaped values", () => {
 	assert.throws(
-		() => preservationSql("native", { accounts: ["1); DROP TABLE account"], identities: [] }),
+		() => preservationSql({ accounts: ["1); DROP TABLE account"], identities: [] }),
 		/decimal/u,
 	);
-});
-
-void test("people layout is decided by the exact table set in any order", () => {
-	assert.equal(peopleLayout("workspace_membership\nuser\nidentity_link"), "legacy");
-	assert.equal(peopleLayout("user\nmembership\nidentity"), "native");
-});
-
-void test("people layout refuses a mixed, partial, or empty table set", () => {
-	for (const tables of [
-		"",
-		"identity\nidentity_link\nmembership\nuser\nworkspace_membership",
-		"identity_link\nworkspace_membership",
-		"identity\nmembership",
-		"identity\nuser",
-		"identity\nuser\nworkspace_membership",
-	]) {
-		assert.throws(() => peopleLayout(tables), /Unknown or ambiguous people layout/u, tables);
-	}
 });
 
 void test("the candidate may add a webhook header, but not change the subject, body or a header", () => {

@@ -224,7 +224,7 @@ Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/
 A branch has one changelog, written by `db:draft-changelog`.
 Never edit, rename, or delete a file under `db/changelog/` that reached `main`.
 `master.xml` is append-only.
-Bring an older local database to the baseline (`docs/admin/liquibase-baseline-runbook.md`) or wipe it with `vp run dev:reset`.
+Wipe an older local database with `vp run dev:reset`.
 
 ## Command caveats
 

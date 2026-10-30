@@ -64,7 +64,7 @@ A clean query does not prove that every guard in its category passes.
 
 | Guard category | Meaning and row diagnosis | Supported action |
 | --- | --- | --- |
-| PostgreSQL or baseline | PostgreSQL 18 or the required baseline cut-point is absent. Check [release and schema](#release-and-schema). | Follow the [baseline prerequisites](./liquibase-baseline-runbook#before-deployment). An installation already at the complete released tail needs no repeat synchronization. |
+| PostgreSQL or baseline | PostgreSQL 18 or the required baseline cut-point is absent. Check [release and schema](#release-and-schema). | Follow the [database prerequisites](./compatibility-policy#database-baseline-prerequisites). |
 | Released tail or table state | Required released history/tables are absent, or final `item`/`result` tables already exist. Check [release and schema](#release-and-schema). | Confirm the installed release and migration history. For unexplained schema changes, keep the old release and escalate. Do not force the cutover. |
 | Dispatch ownership | A `lease_owner` or `projection_owner` remains, even after containers stop. Use the [ownership query](#dispatch-ownership-and-job-purpose). | Keep inputs paused. Let the old server's delivery recovery settle actual writes and projection. Follow the migration guide's drain/retry procedure. Never clear ownership manually. |
 | Unsupported job purpose | A retained job has a non-null purpose other than `PRACTICE_REVIEW`. Use the [purpose query](#dispatch-ownership-and-job-purpose). | Keep the old release and escalate with job IDs and purpose values. Stopping containers does not convert retained jobs. |
@@ -92,7 +92,7 @@ ROLLBACK;
 ```
 
 The required tail uses author `hephaestus` and filename `db/changelog/1791941746633_changelog.xml`.
-Check the older baseline with its [own procedure](./liquibase-baseline-runbook).
+Prepare an older database with the [intermediate upgrade procedure](./liquibase-baseline-runbook).
 Do not release a lock by hand except as [One migration at a time](./runtime-roles#one-migration-at-a-time) allows.
 
 ### Dispatch ownership and job purpose

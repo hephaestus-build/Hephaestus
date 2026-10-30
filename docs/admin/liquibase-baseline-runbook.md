@@ -12,4 +12,4 @@ That release includes the [historical baseline synchronization procedure](https:
 Run the intermediate release to completion before you upgrade to the target release.
 
 Then follow the target release's [upgrade guide](./upgrade.mdx).
-Do not use its synchronization command to skip an intermediate migration.
+Do not synchronize the target changelog to skip an intermediate migration.
