@@ -30,6 +30,11 @@ export interface DetailDrawerStackProps<TKind extends string = string> {
 	 * footer every level of a surface shares, so no level has to carry it.
 	 */
 	footer?: (entry: DetailStackEntry<TKind>) => ReactNode;
+	/**
+	 * False leaves the page around the levels usable, such as the product tour's own controls; the
+	 * caller then opens and closes the levels.
+	 */
+	modal?: boolean;
 }
 
 /**
@@ -58,6 +63,7 @@ export function DetailDrawerStack<TKind extends string>({
 	onClose,
 	footer,
 	children,
+	modal = true,
 }: DetailDrawerStackProps<TKind>) {
 	const [closing, setClosing] = useState<{ depth: number; key: string } | null>(null);
 
@@ -88,6 +94,7 @@ export function DetailDrawerStack<TKind extends string>({
 			parentEntered
 			stack={stack}
 			guardedKinds={guardedKinds}
+			modal={modal}
 			closingDepth={closingDepth}
 			setClosingDepth={setClosingDepth}
 			onClose={onClose}
@@ -116,6 +123,7 @@ function DetailDrawerLevelView<TKind extends string>({
 	onClose,
 	footer,
 	children,
+	modal = true,
 }: DetailDrawerLevelViewProps<TKind>) {
 	const entry = stack[depth];
 	const arrived = useArrived();
@@ -132,9 +140,11 @@ function DetailDrawerLevelView<TKind extends string>({
 		<Drawer
 			// Base UI shuts a parent's children anyway; this keeps the React tree in step.
 			open={arrived && parentEntered && (closingDepth === null || depth < closingDepth)}
+			modal={modal}
 			swipeDirection="right"
 			onOpenChange={(next, details) => {
-				if (next) {
+				// A non-modal stack is driven by its caller, such as the product tour, so nothing closes it here.
+				if (next || !modal) {
 					return;
 				}
 				// Every way out is the same way out: Escape, a press outside, a swipe and the panel's
@@ -167,6 +177,7 @@ function DetailDrawerLevelView<TKind extends string>({
 						parentEntered={entered}
 						stack={stack}
 						guardedKinds={guardedKinds}
+						modal={modal}
 						closingDepth={closingDepth}
 						setClosingDepth={setClosingDepth}
 						onClose={onClose}

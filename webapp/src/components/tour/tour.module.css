@@ -1,0 +1,134 @@
+/*
+ * The tour's few movements: a fade in, a line growing, a level sliding in, the stage icons arriving
+ * and the pointer pressing a spot. A delay comes in through `--tour-delay`, so one element can wait
+ * for the one before it.
+ *
+ * Vite emits these rules unlayered while Tailwind utilities sit in `@layer utilities`, so anything
+ * declared here beats a utility on the same element. Own a property in one place or the other.
+ */
+
+.fadeIn {
+	animation: fade-in 0.5s ease-out both;
+	animation-delay: var(--tour-delay, 0s);
+}
+
+.grow {
+	animation: grow 0.4s ease-out both;
+	animation-delay: var(--tour-delay, 0s);
+}
+
+.press {
+	animation: press 1.6s ease-in-out infinite;
+}
+
+.ripple {
+	animation: ripple 1.6s ease-out infinite;
+}
+
+.stagesIn {
+	animation: stages-in 0.9s cubic-bezier(0.3, 0.8, 0.2, 1) both;
+}
+
+/* The second place feedback reaches you comes forward. */
+.lifted {
+	transform: scale(1.06);
+}
+
+/* A level that is not open waits just past the right edge. */
+.offRight {
+	transform: translateX(105%);
+}
+
+/* One practice chip, flowing from the loose list into its group. */
+.chip {
+	width: var(--tour-width);
+	transform: translate(var(--tour-x), var(--tour-y));
+	transition:
+		transform 1s cubic-bezier(0.6, 0, 0.2, 1),
+		width 1s;
+}
+
+/*
+ * The dimming around the one bright spot. A mask reads luminance, not a theme color: white keeps
+ * the dimming, black cuts the hole.
+ */
+.maskKeep {
+	fill: #fff;
+}
+
+.maskCut {
+	fill: #000;
+}
+
+/* Darker than the drawers' `--scrim`, so the one spot the tour points at stands out. */
+.dim {
+	fill: rgb(17 24 39 / 0.6);
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes grow {
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: none;
+	}
+}
+
+@keyframes press {
+	0%,
+	60%,
+	100% {
+		transform: scale(1);
+	}
+	75% {
+		transform: scale(0.82);
+	}
+}
+
+@keyframes ripple {
+	0%,
+	70% {
+		opacity: 0;
+		transform: scale(0.6);
+	}
+	80% {
+		opacity: 0.9;
+	}
+	100% {
+		opacity: 0;
+		transform: scale(1.6);
+	}
+}
+
+@keyframes stages-in {
+	from {
+		transform: translateY(70px) scale(1.7);
+		opacity: 0.3;
+	}
+	to {
+		transform: none;
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.scene * {
+		animation: none !important;
+		transition: none !important;
+	}
+
+	.stagesIn {
+		animation: none;
+	}
+}
