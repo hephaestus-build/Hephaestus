@@ -39,6 +39,21 @@ beforeEach(() => {
 	);
 });
 
+it("names Catalog updates the same from Practice setup, on its page, and on the way back", async () => {
+	renderRouteAt("/w/acme/admin/practices");
+	const open = await screen.findByRole(
+		"button",
+		{ name: "Catalog updates (1)" },
+		ROUTE_RENDER_WAIT,
+	);
+	expect(open.getAttribute("href")).toBe("/w/acme/admin/practices/releases");
+
+	fireEvent.click(open);
+	await screen.findByRole("heading", { name: "Catalog updates", level: 1 }, ROUTE_RENDER_WAIT);
+	const back = screen.getByRole("button", { name: "Back to practice setup" });
+	expect(back.getAttribute("href")).toBe("/w/acme/admin/practices");
+});
+
 it("accepts a workspace update with explicit field choice and the reviewed version", async () => {
 	const queryClient = testQueryClient();
 	const guidanceOptions = {

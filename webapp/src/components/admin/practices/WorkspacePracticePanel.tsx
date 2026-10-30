@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ClipboardCheck, Pencil, RotateCcw } from "lucide-react";
+import { ClipboardCheck, Inbox, Pencil, RotateCcw } from "lucide-react";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 
 import { cn } from "cn";
@@ -137,16 +137,28 @@ export function WorkspacePracticePanel({
 					practice={practice}
 					definitionOptions={definitionOptions}
 					groupName={groupName}
-					resetAction={
+					originActions={
 						canResetToCatalog(practice.catalogOrigin) && (
-							<Button
-								size="sm"
-								variant="outline"
-								className="mt-2 self-start"
-								onClick={onResetToCatalog}
-							>
-								<RotateCcw /> Reset to catalog
-							</Button>
+							<div className="mt-2 flex flex-wrap gap-2">
+								{practice.catalogOrigin.state === "UPDATE_WAITING" && (
+									<Button
+										size="sm"
+										variant="outline"
+										nativeButton={false}
+										render={
+											<Link
+												to="/w/$workspaceSlug/admin/practices/releases"
+												params={{ workspaceSlug }}
+											/>
+										}
+									>
+										<Inbox /> Catalog updates
+									</Button>
+								)}
+								<Button size="sm" variant="outline" onClick={onResetToCatalog}>
+									<RotateCcw /> Reset to catalog
+								</Button>
+							</div>
 						)
 					}
 					notice={

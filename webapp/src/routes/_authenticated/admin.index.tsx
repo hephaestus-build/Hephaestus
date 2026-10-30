@@ -30,7 +30,7 @@ import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
-	head: instanceAdminHead("Overview"),
+	head: instanceAdminHead("Instance overview"),
 	component: AdminOverviewPage,
 });
 

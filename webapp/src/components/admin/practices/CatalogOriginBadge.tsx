@@ -31,7 +31,7 @@ function describeOrigin({ origin, kind }: CatalogOriginProps) {
 				label: "Catalog update waiting",
 				explanation:
 					kind === "practice"
-						? "The catalog has a newer version. Your copy is untouched. Review it in Practice updates."
+						? "The catalog has a newer version. Your copy is untouched until you decide in Catalog updates."
 						: "The catalog now has different group details. Your copy is untouched. Reset to catalog brings them across.",
 			};
 		}

@@ -153,6 +153,24 @@ export const EditedHere: Story = {
 	},
 };
 
+export const UpdateWaiting: Story = {
+	args: {
+		state: ready({
+			practice: { ...practice, catalogOrigin: catalogOrigin(practice.slug, "UPDATE_WAITING") },
+		}),
+	},
+	play: async () => {
+		// The note says where the update is decided, and the link there carries that page's title.
+		const updates = await screen.findByRole("button", { name: "Catalog updates" });
+		await expectSettledVisible(updates);
+		await expect(updates).toHaveAttribute(
+			"href",
+			expect.stringMatching(/\/admin\/practices\/releases$/u),
+		);
+		await expect(screen.getByRole("button", { name: "Reset to catalog" })).toBeVisible();
+	},
+};
+
 export const InheritedFeedbackMode: Story = {
 	args: {
 		state: ready({

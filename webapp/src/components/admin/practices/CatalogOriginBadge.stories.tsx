@@ -81,3 +81,17 @@ export const Explained: Story = {
 		await expect(canvas.getByRole("button", { name: "Reset to catalog" })).toBeVisible();
 	},
 };
+
+// The note names the page where the update is decided, with the title that page carries.
+export const UpdateWaitingExplained: Story = {
+	args: { origin: catalogOrigin("clear-pr-description", "UPDATE_WAITING") },
+	render: (args) => (
+		<ItemGroup>
+			<CatalogOriginNote {...args} />
+		</ItemGroup>
+	),
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Catalog update waiting")).toBeVisible();
+		await expect(canvas.getByText(/until you decide in Catalog updates\./u)).toBeVisible();
+	},
+};

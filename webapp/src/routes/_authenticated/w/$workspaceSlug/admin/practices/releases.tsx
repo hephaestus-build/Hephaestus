@@ -35,7 +35,7 @@ import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/releases")({
-	head: workspaceAdminHead("Practice updates"),
+	head: workspaceAdminHead("Catalog updates"),
 	component: PracticeReleaseInbox,
 });
 
@@ -175,7 +175,7 @@ function PracticeReleaseInbox() {
 		<PageLayout>
 			<PageHeader
 				icon={<Inbox />}
-				title="Practice updates"
+				title="Catalog updates"
 				description="Review catalog changes before they affect this workspace. Each workspace decides for itself."
 				actions={
 					<Button
@@ -183,7 +183,7 @@ function PracticeReleaseInbox() {
 						nativeButton={false}
 						render={<Link to="/w/$workspaceSlug/admin/practices" params={{ workspaceSlug }} />}
 					>
-						Back to practices
+						Back to practice setup
 					</Button>
 				}
 			/>

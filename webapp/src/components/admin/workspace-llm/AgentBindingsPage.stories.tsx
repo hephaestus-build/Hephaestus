@@ -590,7 +590,7 @@ export const ProjectReviewsDisabled: Story = {
 		await expect(
 			canvas.getByText(/Practice reviews are off, so these models are not used\./u),
 		).toBeVisible();
-		for (const link of canvas.getAllByRole("link", { name: "Open Review: Automated review" })) {
+		for (const link of canvas.getAllByRole("link", { name: "Open Review settings" })) {
 			await expect(link).toHaveAttribute(
 				"href",
 				"/w/acme/admin/practices/review?section=automated-review",
