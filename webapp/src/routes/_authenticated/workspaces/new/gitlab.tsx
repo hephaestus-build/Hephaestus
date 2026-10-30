@@ -328,10 +328,10 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	const canAdvanceFromStep2 = state.selectedGroup !== null;
 	// A name or slug problem does not turn the button off: a press shows every problem and focuses the
 	// first. A turned-off button cannot take focus, so it cannot say what stops it.
-	const detailsValid = workspaceDetailsSchema.safeParse({
+	const details = workspaceDetailsSchema.safeParse({
 		displayName: state.displayName,
 		workspaceSlug: state.workspaceSlug,
-	}).success;
+	});
 	const canSubmit = state.step === 3 && state.selectedGroup !== null && hasProjectChoice(state);
 
 	const handleNext = () => {
@@ -375,7 +375,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) {
 			return;
 		}
-		if (!detailsValid) {
+		if (!details.success) {
 			flushSync(() => setShowDetailErrors(true));
 			const firstInvalid = [...event.currentTarget.elements].find(
 				(element) => element.getAttribute("aria-invalid") === "true",
@@ -387,7 +387,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 		}
 		createWorkspace.mutate({
 			body: {
-				workspaceSlug: state.workspaceSlug,
+				workspaceSlug: details.data.workspaceSlug,
 				displayName: state.displayName,
 				accountLogin: state.selectedGroup.fullPath,
 				accountType: "ORG",
