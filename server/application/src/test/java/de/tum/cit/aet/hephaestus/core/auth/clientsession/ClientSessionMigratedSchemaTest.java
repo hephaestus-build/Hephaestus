@@ -41,7 +41,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * The installed-client schema as Liquibase creates it, not as Hibernate's {@code ddl-auto} does: the
  * integration tier cannot see the scalar {@code sfk_*} foreign keys, so the cascade from a session to its
  * token rows, refresh-secret uniqueness, and the cleanup and account erasure that rely on them are proven
- * here against the migrated chain, with the entities validated against it.
+ * here against the migrated chain, with the entities validated against it. The shared token ledger
+ * also enforces browser successor ownership and uniqueness.
  */
 @DataJpaTest(
         properties = {
@@ -227,9 +228,63 @@ class ClientSessionMigratedSchemaTest {
         return issuedJwtRepository.saveAndFlush(row).getJti();
     }
 
+    @Test
+    void shouldPermitReplacementOnlyAfterThePreviousSuccessorIsRevoked() {
+        Long account = Objects.requireNonNull(
+                accountRepository.saveAndFlush(new Account("Unique successor")).getId());
+        var predecessor = issuedJwtRepository.saveAndFlush(row(account, null, null));
+        var first = browserSuccessor(account, predecessor.getJti());
+        issuedJwtRepository.saveAndFlush(first);
+
+        assertThatThrownBy(() -> issuedJwtRepository.saveAndFlush(browserSuccessor(account, predecessor.getJti())))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(status -> issuedJwtRepository.revokeOwned(
+                        first.getJti(), account, Instant.now(), IssuedJwt.RevokedReason.SUPERSEDED));
+        var replacement = issuedJwtRepository.saveAndFlush(browserSuccessor(account, predecessor.getJti()));
+        assertThat(issuedJwtRepository.findById(replacement.getJti())).isPresent();
+    }
+
+    @Test
+    void shouldExcludeUnlinkedAndRevokedRowsFromTheUniqueIndex() {
+        assertThat(jdbc.queryForObject("""
+            SELECT indisunique AND pg_get_expr(indpred, indrelid) LIKE '%predecessor_jti IS NOT NULL%'
+                   AND pg_get_expr(indpred, indrelid) LIKE '%revoked_at IS NULL%'
+              FROM pg_index JOIN pg_class ON pg_class.oid = indexrelid
+             WHERE relname = 'uq_issued_jwt_live_successor'
+            """, Boolean.class)).isTrue();
+    }
+
+    @Test
+    void shouldScopeSuccessorLookupAndRevocationToItsAccount() {
+        Long owner = Objects.requireNonNull(
+                accountRepository.saveAndFlush(new Account("Successor owner")).getId());
+        Long other = Objects.requireNonNull(
+                accountRepository.saveAndFlush(new Account("Other owner")).getId());
+        UUID predecessor = UUID.randomUUID();
+        var token = issuedJwtRepository.saveAndFlush(browserSuccessor(owner, predecessor));
+
+        assertThat(issuedJwtRepository.findUnusedSuccessor(other, predecessor)).isEmpty();
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(status -> assertThat(issuedJwtRepository.revokeUnusedSuccessors(
+                                other, predecessor, Instant.now(), IssuedJwt.RevokedReason.LOGOUT))
+                        .isZero());
+        assertThat(issuedJwtRepository.findById(token.getJti()).orElseThrow().getRevokedAt())
+                .isNull();
+        assertThat(issuedJwtRepository.findUnusedSuccessor(owner, predecessor)).isPresent();
+    }
+
+    private static IssuedJwt browserSuccessor(Long account, UUID predecessor) {
+        var token = new IssuedJwt(
+                UUID.randomUUID(), account, Instant.now(), Instant.now().plusSeconds(3600));
+        token.setPredecessorJti(predecessor);
+        return token;
+    }
+
     private static IssuedJwt row(Long accountId, @Nullable UUID sessionId, @Nullable String refreshTokenHash) {
-        IssuedJwt row =
-                new IssuedJwt(UUID.randomUUID(), accountId, Instant.now().plus(Duration.ofHours(1)));
+        IssuedJwt row = new IssuedJwt(
+                UUID.randomUUID(), accountId, Instant.now(), Instant.now().plus(Duration.ofHours(1)));
         row.setSessionId(sessionId);
         row.setRefreshTokenHash(refreshTokenHash);
         return row;

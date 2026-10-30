@@ -10,10 +10,10 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -34,16 +34,22 @@ import org.jspecify.annotations.Nullable;
  * refresh secret issued with it. Those rows outlive their access-token expiry for as long as the session
  * row exists, so any refresh secret or JTI the session ever handed out still resolves its family: a
  * replayed old secret revokes the live session, and revoking a stale session-list entry ends it.
+ *
+ * <p>A refreshed browser token keeps its predecessor link after first use so a racing logout can end the chain. The rotation
+ * contract is in {@code docs/auth-architecture.md} § Browser session coordination.
  */
 @Entity
 @Table(
         name = "issued_jwt",
-        indexes = @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
+        indexes = {
+            @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
+            @Index(name = "ix_issued_jwt_predecessor_jti", columnList = "account_id,predecessor_jti,issued_at")
+        },
         uniqueConstraints =
                 @UniqueConstraint(name = "uq_issued_jwt_refresh_token_hash", columnNames = "refresh_token_hash"))
 @Getter
 @Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class IssuedJwt {
 
     @Id
@@ -53,9 +59,8 @@ public class IssuedJwt {
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    @CreationTimestamp
     @Column(name = "issued_at", nullable = false, updatable = false)
-    private @Nullable Instant issuedAt;
+    private Instant issuedAt;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -91,15 +96,29 @@ public class IssuedJwt {
     @Nullable
     private String refreshTokenHash;
 
-    public IssuedJwt(UUID jti, Long accountId, Instant expiresAt) {
+    /** The browser predecessor, retained after first use so revocation can follow the chain. */
+    @Column(name = "predecessor_jti", columnDefinition = "uuid")
+    @Nullable
+    private UUID predecessorJti;
+
+    /** The first admitted use of a browser successor; null while it is unused. */
+    @Column(name = "used_at")
+    @Nullable
+    private Instant usedAt;
+
+    public IssuedJwt(UUID jti, Long accountId, Instant issuedAt, Instant expiresAt) {
         this.jti = jti;
         this.accountId = accountId;
+        this.issuedAt = issuedAt;
         this.expiresAt = expiresAt;
     }
 
     public enum RevokedReason {
         LOGOUT,
         ROTATE,
+        SUPERSEDED,
+        ACCOUNT_INACTIVE,
+        PASSKEY_STEP_UP,
         SIGN_OUT_EVERYWHERE,
         /** A user revoked one of their OWN sessions ("sign out this device"). */
         SELF_REVOKE,

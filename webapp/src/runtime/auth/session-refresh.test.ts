@@ -1,13 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { refresh } from "@/api/sdk.gen";
 import { deferred } from "@/test/async";
 
-import { refreshAccessToken } from "./session-refresh";
+import {
+	SESSION_COOLDOWN_MS,
+	refreshAccessToken,
+	sessionRefreshedRecently,
+} from "./session-refresh";
 
 vi.mock("@/api/sdk.gen", () => ({ refresh: vi.fn() }));
 
 const refreshMock = vi.mocked(refresh);
+const NOW = Date.parse("2026-10-28T05:17:00Z");
 
 const rotated = {
 	data: undefined,
@@ -19,6 +24,33 @@ const rotated = {
 describe("refreshAccessToken", () => {
 	beforeEach(() => {
 		refreshMock.mockReset();
+		window.localStorage.clear();
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(NOW);
+	});
+
+	afterEach(() => vi.useRealTimers());
+
+	it("starts the cooldown that every tab shares only when a renewal succeeds", async () => {
+		refreshMock.mockResolvedValueOnce({
+			...rotated,
+			response: new Response(null, { status: 401 }),
+		});
+		await refreshAccessToken();
+		expect(sessionRefreshedRecently()).toBe(false);
+
+		refreshMock.mockResolvedValueOnce(rotated);
+		await refreshAccessToken();
+		expect(sessionRefreshedRecently()).toBe(true);
+		expect(window.localStorage.getItem("hephaestus:session-refreshed")).not.toBeNull();
+	});
+
+	it("does not count a renewal stamped in the future after the clock was set back", async () => {
+		refreshMock.mockResolvedValueOnce(rotated);
+		await refreshAccessToken();
+		vi.setSystemTime(NOW - 60 * 60_000);
+
+		expect(sessionRefreshedRecently()).toBe(false);
 	});
 
 	it("collapses callers that overlap a rotation onto one POST /auth/refresh", async () => {
@@ -36,13 +68,17 @@ describe("refreshAccessToken", () => {
 		expect(refreshMock).toHaveBeenCalledOnce();
 	});
 
-	it("rotates again once the previous rotation has settled", async () => {
+	it("can renew again after the previous caller completed", async () => {
 		refreshMock.mockResolvedValue(rotated);
 
 		await refreshAccessToken();
 		await refreshAccessToken();
 
 		expect(refreshMock).toHaveBeenCalledTimes(2);
+
+		vi.setSystemTime(NOW + SESSION_COOLDOWN_MS);
+		await refreshAccessToken();
+		expect(refreshMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("reports unavailable rather than throwing when the rotation fails", async () => {

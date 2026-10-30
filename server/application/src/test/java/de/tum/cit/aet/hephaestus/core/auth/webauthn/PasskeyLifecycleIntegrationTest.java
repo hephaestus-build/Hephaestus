@@ -2,9 +2,11 @@ package de.tum.cit.aet.hephaestus.core.auth.webauthn;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthSessionService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
@@ -29,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -37,6 +40,12 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private JwtDecoder decoder;
+
+    @Autowired
+    private AuthSessionService sessions;
+
+    @Autowired
+    private IssuedJwtRepository tokens;
 
     @Autowired
     private WebTestClient client;
@@ -73,6 +82,53 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                     END IF;
                 END $$
                 """);
+    }
+
+    @Test
+    void shouldEndThePendingRefreshSuccessorWhenStepUpIsFollowedByLogout() throws GeneralSecurityException {
+        assertStepUpEndsPendingSuccessor(false);
+    }
+
+    @Test
+    void shouldEndThePendingRefreshSuccessorWhenTheSteppedUpSessionIsRevoked() throws GeneralSecurityException {
+        assertStepUpEndsPendingSuccessor(true);
+    }
+
+    private void assertStepUpEndsPendingSuccessor(boolean revoke) throws GeneralSecurityException {
+        Account account = account();
+        Long accountId = Objects.requireNonNull(account.getId());
+        String held = token(account, null);
+        String csrf = csrf();
+        var authenticator = new PasskeyTestAuthenticator();
+        enroll(held, csrf, authenticator, "Laptop");
+        var refresh = post("/auth/refresh", held, csrf)
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .returnResult(Void.class);
+        String unused = Objects.requireNonNull(refresh.getResponseCookies().getFirst(cookie))
+                .getValue();
+
+        String steppedUp = verify(held, csrf, account, authenticator, 1);
+        UUID current =
+                UUID.fromString(Objects.requireNonNull(decoder.decode(steppedUp).getId()));
+        assertThat(sessions.activeSessions(accountId))
+                .extracting(AuthSessionService.SessionEntry::jti)
+                .containsExactly(current);
+        if (revoke) {
+            sessions.revokeSession(accountId, current);
+        } else {
+            sessions.logout(accountId, current, null, new MockHttpServletResponse());
+        }
+
+        client.get()
+                .uri("/user")
+                .header(HttpHeaders.COOKIE, cookie + "=" + unused)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        assertThat(tokens.findActiveByAccountId(accountId, Instant.now())).isEmpty();
     }
 
     private long auditCount(Account account, String type, String result, @Nullable String reason) {

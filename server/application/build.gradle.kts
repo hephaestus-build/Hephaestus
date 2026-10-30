@@ -589,8 +589,10 @@ for ((taskName, command) in
                 // Pending contractions are listed in docs/contributor/database-migration.mdx.
                 // event_publication is the JDBC registry.
                 // INCLUDE columns are native index metadata; database contracts verify the covering
-                // index.
-                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering",
+                // index. Partial successor uniqueness is also native;
+                // ClientSessionMigratedSchemaTest
+                // verifies it.
+                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor",
             )
         }
     }

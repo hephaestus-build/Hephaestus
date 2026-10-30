@@ -58,7 +58,7 @@ beforeEach(() => {
 	vi.stubGlobal("navigator", {
 		credentials: { create, get },
 		locks: {
-			request: async (_name: string, operation: () => Promise<unknown>) => {
+			request: async (_name: string, _options: LockOptions, operation: () => Promise<unknown>) => {
 				sessionLocked = true;
 				try {
 					return await operation();

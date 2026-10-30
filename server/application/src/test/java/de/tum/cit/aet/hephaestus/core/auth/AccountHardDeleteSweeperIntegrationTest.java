@@ -367,8 +367,8 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         link.setProviderUserKey(Long.toString(100_000L + accountId));
         identityRepository.save(link);
 
-        IssuedJwt jwt =
-                new IssuedJwt(UUID.randomUUID(), accountId, clock.instant().plus(Duration.ofHours(1)));
+        IssuedJwt jwt = new IssuedJwt(
+                UUID.randomUUID(), accountId, clock.instant(), clock.instant().plus(Duration.ofHours(1)));
         issuedJwtRepository.save(jwt);
 
         accountExportRepository.save(new AccountExport(accountId));

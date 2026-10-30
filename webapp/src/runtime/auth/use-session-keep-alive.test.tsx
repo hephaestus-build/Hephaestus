@@ -7,6 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
+import * as sessionRefresh from "./session-refresh";
+import { SESSION_COOLDOWN_MS } from "./session-refresh";
 import { useSessionKeepAlive } from "./use-session-keep-alive";
 
 function userPayload(expiresInSec: number) {
@@ -22,6 +25,7 @@ function userPayload(expiresInSec: number) {
 }
 
 beforeEach(() => {
+	window.localStorage.clear();
 	vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
 	vi.setSystemTime(new Date("2026-09-07T12:00:00Z"));
 });
@@ -71,7 +75,7 @@ describe("useSessionKeepAlive", () => {
 		const session = mountSession();
 		await advance(1000);
 		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
-		await advance(5000);
+		await advance(SESSION_COOLDOWN_MS + 1);
 		expect(session.refreshCalls()).toBe(1);
 		act(() => {
 			window.dispatchEvent(new Event("pointerdown"));
@@ -83,11 +87,20 @@ describe("useSessionKeepAlive", () => {
 	});
 
 	it("can renew after a transient failure without retrying an idle session", async () => {
+		const settled = deferred();
+		const refresh = sessionRefresh.refreshAccessToken;
+		vi.spyOn(sessionRefresh, "refreshAccessToken").mockImplementation(async () => {
+			const result = await refresh();
+			settled.resolve();
+			return result;
+		});
 		const session = mountSession();
 		server.use(
 			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
 		);
 		await advance(1000);
+		// Advancing timers does not drain the failed request; finish it before later activity.
+		await act(async () => settled.promise);
 		await advance(5000);
 		expect(session.userCalls()).toBe(0);
 		expect(session.refreshCalls()).toBe(0);
@@ -175,6 +188,43 @@ describe("useSessionKeepAlive", () => {
 			document.dispatchEvent(new Event("visibilitychange"));
 		});
 		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+	});
+
+	it.each([
+		[
+			"stays signed in when another address already renewed the cookie",
+			() => HttpResponse.json(userPayload(3600)),
+			0,
+		],
+		[
+			"signs out when the identity is refused as well",
+			() => new HttpResponse(null, { status: 401 }),
+			1,
+		],
+	])("after a refused renewal, %s", async (_name, identity, signOuts) => {
+		const assign = vi.fn();
+		const realLocation = window.location;
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { assign, pathname: "/w/acme/overview", search: "", origin: "http://localhost" },
+		});
+		try {
+			mountSession();
+			let refused = 0;
+			server.use(
+				http.post("*/auth/refresh", () => {
+					refused += 1;
+					return new HttpResponse(null, { status: 401 });
+				}),
+				http.get("*/user", identity),
+			);
+			await advance(1000);
+			await act(async () => vi.waitFor(() => expect(refused).toBe(1)));
+			await advance(1000);
+			expect(assign).toHaveBeenCalledTimes(signOuts);
+		} finally {
+			Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+		}
 	});
 
 	it("removes the timer and activity listeners when unmounted", async () => {

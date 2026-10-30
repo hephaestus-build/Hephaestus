@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -30,6 +32,11 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.PlainJWT;
 import com.nimbusds.jwt.SignedJWT;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -43,12 +50,27 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.caffeine.CaffeineCache;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.cache.support.SimpleCacheManager;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.BadJwtException;
@@ -60,6 +82,8 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 class RevocationAwareJwtDecoderTest extends BaseUnitTest {
 
@@ -76,6 +100,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     private Clock clock;
     private SimpleMeterRegistry meterRegistry;
     private AuthMetrics metrics;
+    private AuthEventWriter authEventWriter;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -94,6 +119,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
 
         meterRegistry = new SimpleMeterRegistry();
         metrics = new AuthMetrics(meterRegistry);
+        authEventWriter = mock(AuthEventWriter.class);
     }
 
     /** A JwtSigningKeyService stub that exposes the test JWK source — the decoder's only key boundary. */
@@ -104,7 +130,14 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     }
 
     private RevocationAwareJwtDecoder decoder(IssuedJwtRepository repo, CacheManager cacheManager) {
-        return new RevocationAwareJwtDecoder(keyService(jwkSource), repo, properties, cacheManager, clock, metrics);
+        return new RevocationAwareJwtDecoder(
+                keyService(jwkSource),
+                new AccessTokenAdmission(repo, mock(AccountRepository.class)),
+                new AuthEventLogger(authEventWriter),
+                properties,
+                cacheManager,
+                clock,
+                metrics);
     }
 
     private static CacheManager cacheManager() {
@@ -189,7 +222,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     void acceptsValidNonRevokedToken() {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.of(row));
 
         Jwt decoded = decoder(repo, cacheManager()).decode(validToken(jti));
@@ -220,7 +253,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
         lenient()
                 .when(repo.findActive(eq(jti), any()))
-                .thenReturn(Optional.of(new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)))));
+                .thenReturn(Optional.of(new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)))));
 
         String token = validToken(jti);
         // Flip the FIRST character of the signature segment. (Flipping the LAST char is flaky: the
@@ -323,7 +356,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         CacheManager cm = cacheManager();
         Cache cache = cm.getCache(RevocationAwareJwtDecoder.CACHE_NAME);
         assertNotNull(cache);
-        cache.put(jti, true); // negative cache: only the REVOKED verdict is stored
+        cache.put(jti, new AccessTokenAdmission.Refusal(null));
 
         RevocationAwareJwtDecoder decoder = decoder(repo, cm);
         assertThatThrownBy(() -> decoder.decode(validToken(jti))).isInstanceOf(JwtException.class);
@@ -334,7 +367,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     void activeTokenIsNeverCached_alwaysHitsDb() {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.of(row));
         CacheManager cm = cacheManager();
 
@@ -353,7 +386,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     void revokeAfterActiveDecodeTakesEffectImmediately() {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         // First request: active. Second request (after a revoke between requests): gone.
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.of(row)).thenReturn(Optional.empty());
         RevocationAwareJwtDecoder decoder = decoder(repo, cacheManager());
@@ -363,6 +396,212 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         assertThatThrownBy(() -> decoder.decode(validToken(jti)))
                 .isInstanceOf(BadJwtException.class)
                 .hasMessageContaining("revoked");
+    }
+
+    private static IssuedJwt revokedRow(UUID jti, IssuedJwt.RevokedReason reason) {
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
+        row.setRevokedAt(NOW.minusSeconds(5));
+        row.setRevokedReason(reason);
+        return row;
+    }
+
+    private List<AuthEventData> recordedEvents() {
+        ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
+        verify(authEventWriter, atLeast(0)).write(captor.capture());
+        return captor.getAllValues();
+    }
+
+    @Test
+    void shouldRetireThePredecessorOnTheSuccessorsFirstUse() {
+        UUID successor = UUID.randomUUID();
+        UUID predecessor = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        IssuedJwt row = new IssuedJwt(successor, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
+        row.setPredecessorJti(predecessor);
+        when(repo.findActive(eq(successor), any())).thenReturn(Optional.of(row));
+        when(repo.markUsed(eq(successor), any())).thenReturn(1);
+
+        decoder(repo, cacheManager()).decode(validToken(successor));
+
+        verify(repo).revokeOwned(eq(predecessor), eq(42L), any(), eq(IssuedJwt.RevokedReason.ROTATE));
+    }
+
+    @Test
+    void shouldRefuseASuccessorThatWasRevokedWhileItWasRead() {
+        UUID successor = UUID.randomUUID();
+        UUID predecessor = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        IssuedJwt row = new IssuedJwt(successor, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
+        row.setPredecessorJti(predecessor);
+        when(repo.findActive(eq(successor), any())).thenReturn(Optional.of(row));
+        when(repo.markUsed(eq(successor), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> decoder(repo, cacheManager()).decode(validToken(successor)))
+                .isInstanceOf(BadJwtException.class);
+    }
+
+    @Test
+    void shouldRecordARotatedBrowserTokenPresentedAgainOnceAsReuse() {
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(new MockHttpServletRequest("POST", "/auth/refresh")));
+        UUID jti = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(eq(jti), any())).thenReturn(Optional.empty());
+        when(repo.findById(jti)).thenReturn(Optional.of(revokedRow(jti, IssuedJwt.RevokedReason.ROTATE)));
+        CacheManager cm = cacheManager();
+
+        for (int tab = 0; tab < 3; tab++) {
+            assertThatThrownBy(() -> decoder(repo, cm).decode(validToken(jti))).isInstanceOf(BadJwtException.class);
+        }
+
+        assertThat(recordedEvents()).singleElement().satisfies(event -> {
+            assertThat(event.type()).isEqualTo(AuthEvent.EventType.JWT_REVOKED);
+            assertThat(event.result()).isEqualTo(AuthEvent.Result.FAILURE);
+            assertThat(event.accountId()).isEqualTo(42L);
+            assertThat(event.failureReason()).isEqualTo("browser_token_reuse");
+            assertThat(event.details()).doesNotContain(jti.toString());
+        });
+    }
+
+    @AfterEach
+    void clearRequest() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IssuedJwt.RevokedReason.class,
+            names = {"ROTATE", "SUPERSEDED"})
+    @ExtendWith(OutputCaptureExtension.class)
+    void shouldAuditARefreshReplayEvenAfterALateRequestFilledTheRevocationCache(
+            IssuedJwt.RevokedReason revokedReason, CapturedOutput output) {
+        UUID jti = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(eq(jti), any())).thenReturn(Optional.empty());
+        when(repo.findById(jti)).thenReturn(Optional.of(revokedRow(jti, revokedReason)));
+        RevocationAwareJwtDecoder decoder = decoder(repo, cacheManager());
+        String token = validToken(jti);
+        String lateReason = revokedReason == IssuedJwt.RevokedReason.ROTATE
+                ? "rotated_token_presented"
+                : "superseded_token_presented";
+        var late = new MockHttpServletRequest("GET", "/user");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(late));
+        assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
+        assertThat(recordedEvents()).extracting(AuthEventData::failureReason).containsExactly(lateReason);
+        assertThat(output.getAll()).doesNotContain("a retired browser token was presented for refresh");
+
+        var replay = new MockHttpServletRequest("POST", "/auth/refresh");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(replay));
+        assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
+        assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
+
+        assertThat(recordedEvents())
+                .extracting(AuthEventData::failureReason)
+                .containsExactly(lateReason, "browser_token_reuse");
+        assertThat(output.getAll()).containsOnlyOnce("a retired browser token was presented for refresh; accountId=42");
+        verify(repo, times(1)).findActive(any(), any());
+    }
+
+    @Test
+    void shouldRecordABrowserTokenRevokedForAnotherReason() {
+        UUID jti = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(eq(jti), any())).thenReturn(Optional.empty());
+        when(repo.findById(jti)).thenReturn(Optional.of(revokedRow(jti, IssuedJwt.RevokedReason.LOGOUT)));
+
+        assertThatThrownBy(() -> decoder(repo, cacheManager()).decode(validToken(jti)))
+                .isInstanceOf(BadJwtException.class);
+
+        assertThat(recordedEvents()).singleElement().satisfies(event -> {
+            assertThat(event.failureReason()).isEqualTo("revoked_token_presented");
+            assertThat(event.details()).isEqualTo("{\"revokedReason\":\"LOGOUT\"}");
+        });
+    }
+
+    @Test
+    void shouldRecordOneFailureWhenManyRequestsReplayTheSameBrowserTokenAtOnce() throws Exception {
+        UUID jti = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(eq(jti), any())).thenReturn(Optional.empty());
+        when(repo.findById(jti)).thenReturn(Optional.of(revokedRow(jti, IssuedJwt.RevokedReason.ROTATE)));
+        RevocationAwareJwtDecoder decoder = decoder(repo, cacheManager());
+        String token = validToken(jti);
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(8)) {
+            var calls = IntStream.range(0, 64)
+                    .mapToObj(ignored -> pool.submit(() -> {
+                        assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+                        RequestContextHolder.setRequestAttributes(
+                                new ServletRequestAttributes(new MockHttpServletRequest("POST", "/auth/refresh")));
+                        try {
+                            assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
+                            return true;
+                        } finally {
+                            RequestContextHolder.resetRequestAttributes();
+                        }
+                    }))
+                    .toList();
+            start.countDown();
+            for (var call : calls) {
+                assertThat(call.get(20, TimeUnit.SECONDS)).isTrue();
+            }
+        }
+
+        assertThat(recordedEvents()).singleElement().satisfies(event -> {
+            assertThat(event.failureReason()).isEqualTo("browser_token_reuse");
+            assertThat(event.details()).doesNotContain(token);
+        });
+    }
+
+    @Test
+    void shouldRecordNothingForAnExpiredOrInstalledClientToken() {
+        UUID expired = UUID.randomUUID();
+        UUID clientToken = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(any(), any())).thenReturn(Optional.empty());
+        IssuedJwt expiredRow = revokedRow(expired, IssuedJwt.RevokedReason.LOGOUT);
+        expiredRow.setExpiresAt(NOW.minusSeconds(1));
+        when(repo.findById(expired)).thenReturn(Optional.of(expiredRow));
+        IssuedJwt client = revokedRow(clientToken, IssuedJwt.RevokedReason.ROTATE);
+        client.setSessionId(UUID.randomUUID());
+        when(repo.findById(clientToken)).thenReturn(Optional.of(client));
+        RevocationAwareJwtDecoder decoder = decoder(repo, cacheManager());
+
+        assertThatThrownBy(() -> decoder.decode(validToken(expired))).isInstanceOf(BadJwtException.class);
+        assertThatThrownBy(() -> decoder.decode(validToken(clientToken))).isInstanceOf(BadJwtException.class);
+
+        assertThat(recordedEvents()).isEmpty();
+    }
+
+    @Test
+    void shouldAuditAnotherTokenIndependentlyAndReauditAfterTheRefusalCacheExpires() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
+        when(repo.findActive(any(), any())).thenReturn(Optional.empty());
+        when(repo.findById(first)).thenReturn(Optional.of(revokedRow(first, IssuedJwt.RevokedReason.ROTATE)));
+        when(repo.findById(second)).thenReturn(Optional.of(revokedRow(second, IssuedJwt.RevokedReason.LOGOUT)));
+        var elapsed = new AtomicLong();
+        var cache = new CaffeineCache(
+                RevocationAwareJwtDecoder.CACHE_NAME,
+                Caffeine.newBuilder()
+                        .expireAfterWrite(Duration.ofMinutes(15))
+                        .ticker(elapsed::get)
+                        .build());
+        var manager = new SimpleCacheManager();
+        manager.setCaches(List.of(cache));
+        manager.initializeCaches();
+        RevocationAwareJwtDecoder decoder = decoder(repo, manager);
+        String replay = validToken(first);
+
+        assertThatThrownBy(() -> decoder.decode(replay)).isInstanceOf(BadJwtException.class);
+        assertThatThrownBy(() -> decoder.decode(replay)).isInstanceOf(BadJwtException.class);
+        assertThatThrownBy(() -> decoder.decode(validToken(second))).isInstanceOf(BadJwtException.class);
+        assertThat(recordedEvents()).hasSize(2);
+        elapsed.set(Duration.ofMinutes(15).toNanos());
+        assertThatThrownBy(() -> decoder.decode(replay)).isInstanceOf(BadJwtException.class);
+
+        assertThat(recordedEvents()).hasSize(3);
     }
 
     /**

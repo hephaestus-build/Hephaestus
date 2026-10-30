@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 
 import { currentUserQueryOptions } from "./guard";
-import { redirectToLogin } from "./session-expiry";
+import { redirectToLogin, sessionRefused } from "./session-expiry";
 import { refreshAccessToken } from "./session-refresh";
 
 const REFRESH_SKEW_MS = 60_000;
@@ -54,7 +54,11 @@ export function useSessionKeepAlive() {
 				return;
 			}
 			if (result === "expired") {
-				redirectToLogin();
+				const refused = await sessionRefused(queryClient);
+				// oxlint-disable-next-line typescript/no-unnecessary-condition -- TypeScript keeps `disposed` narrowed across the `await` (microsoft/TypeScript#9998); cleanup can set it during the identity read.
+				if (refused && !disposed) {
+					redirectToLogin();
+				}
 				return;
 			}
 			// Rotation can succeed without extending exp at the absolute session ceiling.

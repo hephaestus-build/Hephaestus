@@ -49,7 +49,7 @@ public class AuthLifecycleController {
 
     @PostMapping("/refresh")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Rotate the access token (new jti, old revoked)", operationId = "refresh")
+    @Operation(summary = "Renew the browser session", operationId = "refresh")
     @ApiResponse(responseCode = "204", description = "Session renewal completed")
     @ApiResponse(responseCode = "400", description = "The token belongs to an installed-client session")
     @ApiResponse(responseCode = "401", description = "Session has ended")

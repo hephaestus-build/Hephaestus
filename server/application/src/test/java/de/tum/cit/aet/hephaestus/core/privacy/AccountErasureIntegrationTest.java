@@ -590,10 +590,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 targetOAuthBinding.issuedAt(),
                 targetOAuthBinding.actorAccountId());
         UUID targetTokenId = UUID.randomUUID();
-        issuedTokens.saveAndFlush(new IssuedJwt(
+        var targetToken = new IssuedJwt(
                 targetTokenId,
                 Objects.requireNonNull(targetAccount.getId()),
-                Instant.now().plusSeconds(3600)));
+                Instant.now(),
+                Instant.now().plusSeconds(3600));
+        issuedTokens.saveAndFlush(targetToken);
         UUID targetSession = UUID.randomUUID();
         UUID otherSession = UUID.randomUUID();
         for (var entry :

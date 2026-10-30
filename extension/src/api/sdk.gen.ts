@@ -1317,7 +1317,7 @@ export const logout = <ThrowOnError extends boolean = false>(options?: Options<L
 });
 
 /**
- * Rotate the access token (new jti, old revoked)
+ * Renew the browser session
  */
 export const refresh = <ThrowOnError extends boolean = false>(options?: Options<RefreshData, ThrowOnError>): RequestResult<RefreshResponses, RefreshErrors, ThrowOnError> => (options?.client ?? client).post<RefreshResponses, RefreshErrors, ThrowOnError>({
     security: [{
