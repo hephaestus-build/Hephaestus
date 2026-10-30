@@ -651,9 +651,11 @@ public class KubernetesPods {
                 throw new SandboxException("A sandbox Pod of this name already exists", e);
             }
             if (e.getCode() == 403 && e.getMessage() != null && e.getMessage().contains("exceeded quota")) {
-                throw new SandboxCapacityException(
+                var full = new SandboxCapacityException(
                         "The sandbox quota has no room for another Pod",
                         SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+                full.initCause(e);
+                throw full;
             }
             throw failure("Could not create a sandbox Pod", e);
         }

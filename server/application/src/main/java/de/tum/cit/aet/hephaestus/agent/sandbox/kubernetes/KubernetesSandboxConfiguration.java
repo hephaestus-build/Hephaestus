@@ -124,8 +124,7 @@ public class KubernetesSandboxConfiguration {
             KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
             KubernetesSandboxCache cache) {
-        return new KubernetesExecSandboxes(
-                pods, worker, agentImageProperties.reference(), liveWorkers, exits, cache);
+        return new KubernetesExecSandboxes(pods, worker, agentImageProperties.reference(), liveWorkers, exits, cache);
     }
 
     @Bean

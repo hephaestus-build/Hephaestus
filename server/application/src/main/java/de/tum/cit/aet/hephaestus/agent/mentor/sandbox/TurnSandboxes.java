@@ -193,6 +193,9 @@ public class TurnSandboxes implements AutoCloseable {
                     started = start();
                 } catch (SandboxCapacityException full) {
                     if (full.reason() != SandboxCapacityException.Reason.QUOTA_EXCEEDED) throw full;
+                    started = null;
+                }
+                if (started == null) {
                     if (wait == null) {
                         wait = Timer.start(meters);
                         quotaWaiting.merge(attempt, 1, Integer::sum);
