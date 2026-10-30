@@ -41,38 +41,43 @@ await test("a receipt for an ended child or a reused PID does not signal another
 	}
 });
 
-await test("two stop signals preserve a receipt while asynchronous cleanup runs", async () => {
-	const root = await mkdtemp(path.join(os.tmpdir(), "capacity-signals-"));
-	const receipt = path.join(root, "summary.json");
-	const module = new URL("lib/capacity-child.ts", import.meta.url).href;
-	const source = `import { once } from 'node:events'; import { writeFile } from 'node:fs/promises'; const { installCapacitySignals } = await import(${JSON.stringify(module)}); const abort = new AbortController(); installCapacitySignals(abort); const finish = once(process,'message'); process.stdout.write('ready'); await once(abort.signal,'abort'); process.stdout.write('cleaning'); await finish; await writeFile(${JSON.stringify(receipt)},'cleanup complete'); process.disconnect();`;
-	const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
-		stdio: ["ignore", "pipe", "ignore", "ipc"],
-	});
-	const ended = once(child, "exit");
-	const { stdout } = child;
-	if (stdout === null) {
-		throw new Error("Child stdout missing");
-	}
-	try {
-		await once(stdout, "data");
-		const cleaning = once(stdout, "data");
-		child.kill("SIGTERM");
-		await cleaning;
-		child.kill("SIGTERM");
-		await sleep(30);
-		if (child.connected) {
-			child.send("finish", () => undefined);
+// Windows kill unconditionally terminates its target; catchable signal delivery is POSIX-only.
+await test(
+	"two stop signals preserve a receipt while asynchronous cleanup runs",
+	{ skip: process.platform === "win32" },
+	async () => {
+		const root = await mkdtemp(path.join(os.tmpdir(), "capacity-signals-"));
+		const receipt = path.join(root, "summary.json");
+		const module = new URL("lib/capacity-child.ts", import.meta.url).href;
+		const source = `import { once } from 'node:events'; import { writeFile } from 'node:fs/promises'; const { installCapacitySignals } = await import(${JSON.stringify(module)}); const abort = new AbortController(); installCapacitySignals(abort); const finish = once(process,'message'); process.stdout.write('ready'); await once(abort.signal,'abort'); process.stdout.write('cleaning'); await finish; await writeFile(${JSON.stringify(receipt)},'cleanup complete'); process.disconnect();`;
+		const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
+			stdio: ["ignore", "pipe", "ignore", "ipc"],
+		});
+		const ended = once(child, "exit");
+		const { stdout } = child;
+		if (stdout === null) {
+			throw new Error("Child stdout missing");
 		}
-		const result: unknown = await ended;
-		assert.equal(asArray(result, "child exit")[0], 0);
-		assert.equal(await readFile(receipt, "utf8"), "cleanup complete");
-	} finally {
-		child.kill("SIGKILL");
-		await ended;
-		await rm(root, { recursive: true });
-	}
-});
+		try {
+			await once(stdout, "data");
+			const cleaning = once(stdout, "data");
+			child.kill("SIGTERM");
+			await cleaning;
+			child.kill("SIGTERM");
+			await sleep(30);
+			if (child.connected) {
+				child.send("finish", () => undefined);
+			}
+			const result: unknown = await ended;
+			assert.equal(asArray(result, "child exit")[0], 0);
+			assert.equal(await readFile(receipt, "utf8"), "cleanup complete");
+		} finally {
+			child.kill("SIGKILL");
+			await ended;
+			await rm(root, { recursive: true });
+		}
+	},
+);
 
 await test(
 	"Linux start-time identity stops the recorded child and tolerates a repeated stop",
