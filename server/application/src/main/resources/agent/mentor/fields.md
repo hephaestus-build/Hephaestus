@@ -151,6 +151,7 @@ piece's `reviewId`, `practiceSlugs`, `resultIds` and `problemIds`. No other stat
 them, and one copy can have a receipt while another stays uncertain. `destination` is `ON_WORK` (on the reviewed
 work), `PRACTICE_PAGE` (their practice page) or `CONVERSATION` (a conversation with you). When a piece has no words
 available, do not guess what it said. A piece missing from the sample is only not visible here.
+A `FAILED` or `UNCONFIRMED` piece with a `deliveredAt` receipt is partly delivered: say that part of it appeared.
 
 ## inputs/context/prepared_conversation_feedback.json
 
