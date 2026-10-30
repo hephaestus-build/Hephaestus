@@ -15,7 +15,8 @@ import {
 	rmSync,
 	statSync,
 	symlinkSync,
-	watch,
+	unwatchFile,
+	watchFile,
 	writeFileSync,
 } from "node:fs";
 import fs from "node:fs/promises";
@@ -1129,7 +1130,6 @@ process.on('message', () => { sample(); process.send({peak}); });
 		env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
 		stdio: ["ignore", "inherit", "inherit", "ipc"],
 	});
-	let extraction: ReturnType<typeof watch> | undefined;
 	let tools: ToolClient | undefined;
 	let uploads: Promise<PromiseSettledResult<void>[]> | undefined;
 	try {
@@ -1143,7 +1143,8 @@ process.on('message', () => { sample(); process.send({peak}); });
 		);
 		tools = await ToolClient.open(address, nonce);
 		const extractionStarted = Promise.withResolvers<undefined>();
-		extraction = watch(root, () => {
+		// Poll the persistent gate file: filesystem events can be lost on virtualized filesystems.
+		const extraction = watchFile(started, { interval: 20 }, () => {
 			if (existsSync(started)) {
 				extractionStarted.resolve(undefined);
 			}
@@ -1160,7 +1161,7 @@ process.on('message', () => { sample(); process.send({peak}); });
 				throw new Error("The first extraction finished before its gate was released");
 			}),
 		]);
-		extraction.close();
+		unwatchFile(started);
 		const size = 128 * 1024 * 1024;
 		const chunk = Buffer.alloc(64 * 1024);
 		const header = tarMember("large", { size });
@@ -1226,7 +1227,7 @@ process.on('message', () => { sample(); process.send({peak}); });
 			assert.equal(statSync(path.join(repos, `large-${i}`, "large")).size, size);
 		}
 	} finally {
-		extraction?.close();
+		unwatchFile(started);
 		writeFileSync(release, "");
 		tools?.close();
 		await uploads;
