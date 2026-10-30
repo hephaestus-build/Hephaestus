@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
@@ -476,7 +477,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         assertThat(parentStatus(job)).isEqualTo("QUEUED");
 
-        assertThat(claimService(jobs).claimJob(job.getId(), () -> true))
+        assertThat(claimService(jobs).claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOf(ReviewJobClaimService.ClaimResult.class);
 
         var claimed = jobs.findById(job.getId()).orElseThrow();
@@ -498,7 +499,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var failing = mock(ReviewJobRepository.class, delegatesTo(jobs));
         doReturn(0).when(failing).lease(eq(job.getId()), anyLong());
 
-        assertThatThrownBy(() -> claimService(failing).claimJob(job.getId(), () -> true))
+        assertThatThrownBy(() -> claimService(failing).claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("The claimed attempt is no longer running");
 
@@ -521,7 +522,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 job.getWorkspaceId(),
                 job.getReviewId());
 
-        assertThat(claimService(jobs).claimJob(job.getId(), () -> true))
+        assertThat(claimService(jobs).claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOfSatisfying(
                         ReviewJobClaimService.TerminalClaim.class,
                         terminal -> assertThat(terminal.status()).isEqualTo(ReviewJobStatus.CANCELLED));
@@ -548,7 +549,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                                 job.getWorkspaceId(),
                                 job.getReviewId()))
                         .isEqualTo("QUEUED");
-                assertThat(CompletableFuture.supplyAsync(() -> claims.claimJob(job.getId(), () -> true), requests)
+                assertThat(CompletableFuture.supplyAsync(() -> claims.claimJob(job.getId(), () -> true, properties.maxRetries()), requests)
                                 .orTimeout(10, TimeUnit.SECONDS)
                                 .join())
                         .isEqualTo(ReviewJobClaimService.ClaimOutcome.ALREADY_CLAIMED);
@@ -704,7 +705,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                                     poolId))
                             .isEqualTo(1L));
             try {
-                assertThat(claims.claimJob(job.getId(), () -> true))
+                assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                         .isNotInstanceOf(ReviewJobClaimService.ClaimResult.class);
                 assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
                 assertThat(jobs.findById(job.getId()).orElseThrow().getLeaseId())
@@ -712,7 +713,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 busy.close();
                 var granted = Objects.requireNonNull(repeated.get(12, TimeUnit.SECONDS));
                 assertThat(granted.isRevoked()).isFalse();
-                assertThat(claims.claimJob(job.getId(), () -> true))
+                assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                         .isInstanceOf(ReviewJobClaimService.ClaimResult.class);
                 assertThat(context.getBean(LlmCallPermitRepository.class).countActive(poolId))
                         .isEqualTo(1);
@@ -759,6 +760,72 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldHoldPartlyStagedWorkWhileItsBudgetCanBeRaised() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong()))
+                .thenReturn(new LlmBudgetDecision(LlmBudgetBlockReason.EXHAUSTED, LlmBudgetBlockReason.EXHAUSTED));
+        var snapshots = mock(ReviewJobAssignments.class);
+        when(snapshots.hasStaged(any())).thenReturn(true);
+        var metrics = new SimpleMeterRegistry();
+        var permits = mock(LlmCallPermits.class);
+        var modelAdmission = mock(LlmAdmissionService.class);
+        var claims = new ReviewJobClaimService(
+                jobs,
+                policy,
+                methods,
+                snapshots,
+                transactions,
+                mapper,
+                metrics,
+                budgets,
+                modelAdmission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.empty(),
+                permits);
+        assertThat(claims.claimJob(job.getId(), properties.maxRetries()))
+                .isEqualTo(ReviewJobClaimService.ClaimOutcome.BUDGET_HELD);
+        var held = jobs.findById(job.getId()).orElseThrow();
+        assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_BUDGET);
+        assertThat(held.getAttempt()).isZero();
+        verifyNoInteractions(modelAdmission);
+    }
+
+    @Test
+    void shouldClaimTheLastStagedHandoffOnlyToWithholdWithoutAdmittingAnyModelCall() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        job.setAttempt(properties.maxRetries() + 1);
+        jobs.saveAndFlush(job);
+        var budgets = mock(LlmBudgetService.class);
+        var snapshots = mock(ReviewJobAssignments.class);
+        when(snapshots.hasStaged(any())).thenReturn(true);
+        when(snapshots.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var metrics = new SimpleMeterRegistry();
+        var permits = mock(LlmCallPermits.class);
+        var modelAdmission = mock(LlmAdmissionService.class);
+        var claims = new ReviewJobClaimService(
+                jobs,
+                policy,
+                methods,
+                snapshots,
+                transactions,
+                mapper,
+                metrics,
+                budgets,
+                modelAdmission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.empty(),
+                permits);
+        assertThat(claims.claimJob(job.getId(), properties.maxRetries()))
+                .isInstanceOfSatisfying(ReviewJobClaimService.ClaimResult.class, claimed -> {
+                    assertThat(claimed.withholdOnly()).isEqualTo(CompositionStop.RETRIES_EXHAUSTED);
+                    assertThat(claimed.job().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+                });
+        verifyNoInteractions(budgets, modelAdmission, permits);
+    }
+
+    @Test
     void shouldLeaseTheAttemptThatAClaimStartsOnTheDatabaseClock() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var budgets = mock(LlmBudgetService.class);
@@ -779,7 +846,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
                 unpooledCalls());
 
-        var claim = claims.claimJob(job.getId(), () -> true);
+        var claim = claims.claimJob(job.getId(), () -> true, properties.maxRetries());
 
         assertThat(claim).isInstanceOf(ReviewJobClaimService.ClaimResult.class);
         var claimed = jobs.findById(job.getId()).orElseThrow();
@@ -815,7 +882,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
                 capacity);
 
-        var claim = claims.claimJob(job.getId(), () -> true);
+        var claim = claims.claimJob(job.getId(), () -> true, properties.maxRetries());
 
         assertThat(claim).hasFieldOrPropertyWithValue("poolId", 42L);
         var queued = jobs.findById(job.getId()).orElseThrow();
@@ -925,7 +992,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
                 unpooledCalls());
 
-        assertThat(claims.claimJob(job.getId(), () -> true))
+        assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOfSatisfying(
                         ReviewJobClaimService.ClaimResult.class,
                         claim -> assertThat(claim.withholdOnly()).isEqualTo(CompositionStop.BUDGET));
@@ -957,7 +1024,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
                 unpooledCalls());
 
-        assertThat(claims.claimJob(job.getId(), () -> true))
+        assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOfSatisfying(
                         ReviewJobClaimService.TerminalClaim.class,
                         terminal -> assertThat(terminal.status()).isEqualTo(ReviewJobStatus.FAILED));
@@ -970,7 +1037,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         .path("stage")
                         .asString())
                 .isEqualTo("INPUTS");
-        assertThat(claims.claimJob(job.getId(), () -> true))
+        assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isEqualTo(ReviewJobClaimService.ClaimOutcome.ALREADY_CLAIMED);
     }
 

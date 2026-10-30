@@ -80,5 +80,8 @@ public class ReviewItem {
     @Column(name = "detail", columnDefinition = "jsonb")
     private @Nullable JsonNode detail;
 
+    @Column(name = "staged_attempt")
+    private @Nullable Integer stagedAttempt;
+
     public record Id(UUID reviewId, long practiceId, long itemId) implements Serializable {}
 }

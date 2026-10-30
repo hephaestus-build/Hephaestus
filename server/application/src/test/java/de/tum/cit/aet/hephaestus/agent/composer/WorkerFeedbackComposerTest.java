@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
@@ -92,7 +91,6 @@ class WorkerFeedbackComposerTest {
 
     private final JsonMapper mapper = new JsonMapper();
     private final ResultAdmissionService admission = mock(ResultAdmissionService.class);
-    private final JobEvidenceFiles evidence = mock(JobEvidenceFiles.class);
     private final ReviewCompositionContinuation continuation = mock(ReviewCompositionContinuation.class);
     private final ReviewModelGateway gateway = mock(ReviewModelGateway.class);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
@@ -158,7 +156,7 @@ class WorkerFeedbackComposerTest {
         when(admission.prepareFeedback(any(), any())).thenAnswer(invocation -> accept(invocation.getArgument(1)));
         var inputs = workspace(scenario.resolve("workspace"));
         inputs.remove(SandboxLayout.FEEDBACK_COMPOSITION_PATH);
-        when(evidence.originalCompositionInputs(any())).thenReturn(Optional.of(inputs));
+        when(continuation.retainedInputs(job)).thenReturn(inputs);
         when(gateway.call(any(), any())).thenAnswer(invocation -> {
             requests.add(mapper.readTree((byte[]) invocation.getArgument(1)));
             return replies.isEmpty() ? text("Nothing more.") : replies.removeFirst();
@@ -172,7 +170,6 @@ class WorkerFeedbackComposerTest {
     private WorkerFeedbackComposer composer(CompositionCapacity capacity) {
         return new WorkerFeedbackComposer(
                 admission,
-                evidence,
                 continuation,
                 gateway,
                 assignments,
@@ -378,7 +375,8 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdWithoutCallingTheModelWhenTheInputsAreGone() {
-        when(evidence.originalCompositionInputs(any())).thenReturn(Optional.empty());
+        when(continuation.retainedInputs(job))
+                .thenThrow(new ReviewCompositionContinuation.InputsUnavailableException("Gone", false));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 

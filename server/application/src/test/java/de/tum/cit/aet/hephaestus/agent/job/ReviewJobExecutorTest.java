@@ -71,6 +71,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -855,6 +856,38 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(composer).withholdResumed(any(), any(UUID.class), eq(CompositionStop.NO_AI));
         verify(composer, never()).composeResumed(any(), any(), any());
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+    }
+
+    @Test
+    void shouldKeepStagedResultsAndRecordModelUnavailableForTheRemainingPractices() {
+        var job = configuredJob();
+        job.setAttempt(1);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(assignments.hasStaged(job)).thenReturn(true);
+        when(handler.hasStaged(job)).thenReturn(true);
+        when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), eq(1), any()))
+                .thenAnswer(call -> {
+                    job.setWorkerId("worker-1");
+                    return 1;
+                });
+        doAnswer(call -> {
+                    job.setAdmissionAttempt(1);
+                    job.setAdmissionDigest("sealed");
+                    return null;
+                })
+                .when(handler)
+                .finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
+        var composer = mock(WorkerFeedbackComposer.class);
+        var executor = executor(inlinePool());
+        executor.setFeedbackComposer(composer);
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        verify(handler).finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
+        verify(composer).withholdResumed(any(), eq("worker-1"), eq(CompositionStop.MODEL_UNAVAILABLE));
+        verifyNoInteractions(sandbox);
     }
 
     /** An admitted job queued again to compose what its lost attempt left open, claimable by this worker. */

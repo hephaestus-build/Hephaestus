@@ -35,6 +35,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
     private final ReviewRepository reviews;
     private final ReviewItemRepository items;
+    private final ReviewStagedPayloadRepository payloads;
     private final ReviewPracticeRepository practices;
     private final ReviewInvocationFence fence;
     private final Clock clock;
@@ -91,6 +92,13 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 .filter(member -> member.getState() != ReviewItemState.LISTED)
                 .map(ReviewItem::getPracticeId)
                 .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasStaged(long workspaceId, UUID reviewId, UUID jobId) {
+        return items.existsByWorkspaceIdAndReviewIdAndJobIdAndState(
+                workspaceId, reviewId, jobId, ReviewItemState.STAGED);
     }
 
     @Override
@@ -178,7 +186,8 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 .orElseThrow();
         var member = items.lockAssignment(workspaceId, id.reviewId(), id.practiceId(), id.itemId())
                 .orElseThrow();
-        if (member.getState() != ReviewItemState.LISTED) return;
+        if (member.getState() != ReviewItemState.LISTED
+                && !(terminalFailure && member.getState() == ReviewItemState.STAGED)) return;
         if (terminalFailure
                 && (member.getJobId() == null
                         || !runtime.unsettledJobIds(workspaceId, id.reviewId()).contains(member.getJobId())))
@@ -186,6 +195,10 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
         member.setState(ReviewItemState.WITHHELD);
         member.setReason(reason);
         member.setAttemptedAt(clock.instant());
+        if (member.getStagedAttempt() != null) {
+            member.setStagedAttempt(null);
+            payloads.write(workspaceId, id.reviewId(), id.practiceId(), id.itemId(), null);
+        }
         var detail = member.getDetail() == null
                 ? JsonNodeFactory.instance.objectNode()
                 : (ObjectNode) member.getDetail().deepCopy();

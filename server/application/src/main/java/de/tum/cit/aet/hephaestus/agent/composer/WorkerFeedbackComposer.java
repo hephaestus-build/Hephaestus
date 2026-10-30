@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
@@ -81,7 +80,6 @@ public class WorkerFeedbackComposer {
             "The review on this work is final; this composition accepts nothing more.";
 
     private final ResultAdmissionService admission;
-    private final JobEvidenceFiles files;
     private final ReviewCompositionContinuation continuation;
     private final ReviewModelGateway gateway;
     private final ReviewJobAssignments assignments;
@@ -98,7 +96,6 @@ public class WorkerFeedbackComposer {
     @Autowired
     public WorkerFeedbackComposer(
             ResultAdmissionService admission,
-            JobEvidenceFiles files,
             ReviewCompositionContinuation continuation,
             ReviewModelGateway gateway,
             ReviewJobAssignments assignments,
@@ -110,7 +107,6 @@ public class WorkerFeedbackComposer {
             CompositionCapacity capacity) {
         this(
                 admission,
-                files,
                 continuation,
                 gateway,
                 assignments,
@@ -125,7 +121,6 @@ public class WorkerFeedbackComposer {
 
     WorkerFeedbackComposer(
             ResultAdmissionService admission,
-            JobEvidenceFiles files,
             ReviewCompositionContinuation continuation,
             ReviewModelGateway gateway,
             ReviewJobAssignments assignments,
@@ -138,7 +133,6 @@ public class WorkerFeedbackComposer {
             CompositionCapacity capacity) {
         this.admission = admission;
         this.capacity = capacity;
-        this.files = files;
         this.continuation = continuation;
         this.gateway = gateway;
         this.assignments = assignments;
@@ -176,11 +170,14 @@ public class WorkerFeedbackComposer {
         var slot = capacity.acquire(deadline(notAfter));
         try {
 
-            var identity = new ResultAdmissionService.AdmissionIdentity(
-                    job.getId(), job.getWorkspaceId(), job.getAttempt(), leaseId);
-            var inputs = files.originalCompositionInputs(identity).orElse(null);
-            if (inputs == null) withholdOpen(job, leaseId, CompositionStop.INPUTS_GONE);
-            else compose(job, leaseId, inputs, deadline(notAfter));
+            try {
+                compose(job, leaseId, continuation.retainedInputs(job), deadline(notAfter));
+            } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
+                withholdOpen(
+                        job,
+                        leaseId,
+                        unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE);
+            }
 
         } finally {
             slot.close();

@@ -70,7 +70,7 @@ public class ResultAdmissionWriter {
                 throw conflict("The candidate does not match its frozen assignment.");
             var currentReason = assessment.reason(c.developerId());
             if (currentReason != null) {
-                if (member.getState() != ReviewItemState.LISTED)
+                if (member.getState() != ReviewItemState.LISTED && member.getState() != ReviewItemState.STAGED)
                     throw conflict("Current processing policy no longer permits this proof.");
                 member.setState(ReviewItemState.WITHHELD);
                 member.setReason(currentReason);
@@ -94,7 +94,8 @@ public class ResultAdmissionWriter {
                 withheld.add(new WithheldItem(c.practiceId(), c.itemId(), Objects.requireNonNull(member.getReason())));
                 continue;
             }
-            if (member.getState() != ReviewItemState.LISTED) throw conflict("This assignment is already terminal.");
+            if (member.getState() != ReviewItemState.LISTED && member.getState() != ReviewItemState.STAGED)
+                throw conflict("This assignment is already terminal.");
             var refusal = refusal(c);
             if (refusal != null) {
                 member.setState(ReviewItemState.WITHHELD);
@@ -120,7 +121,7 @@ public class ResultAdmissionWriter {
         return new AdmissionReceipt(admitted, withheld);
     }
 
-    private static @Nullable CandidateRefusal refusal(ResultCandidate c) {
+    static @Nullable CandidateRefusal refusal(ResultCandidate c) {
         if (c.summary().isBlank()
                 || c.summary().length() > 160
                 || c.explanation().isBlank()

@@ -8,12 +8,14 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import java.io.Serial;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -29,16 +31,23 @@ public class ReviewCompositionContinuation {
     private final JobEvidenceFiles files;
     private final ReviewJobRepository jobs;
     private final ObjectMapper mapper;
+    private final ReviewAssignmentStore membership;
 
     public ReviewCompositionContinuation(
             ReviewCompositionBasisRepository bases,
             JobEvidenceFiles files,
             ReviewJobRepository jobs,
-            ObjectMapper mapper) {
+            ObjectMapper mapper,
+            ReviewAssignmentStore membership) {
         this.bases = bases;
         this.files = files;
         this.jobs = jobs;
         this.mapper = mapper;
+        this.membership = membership;
+    }
+
+    public boolean hasStaged(ReviewJob job) {
+        return membership.hasStaged(job.getWorkspaceId(), job.getReviewId(), job.getId());
     }
 
     public void holdRecoveryCustody() {
@@ -63,17 +72,49 @@ public class ReviewCompositionContinuation {
      * @throws InputsUnavailableException when the inputs were erased, removed, expired or no longer match
      */
     public Restored restore(ReviewJob job) {
+        var staged = retainedInputs(job);
+        byte[] manifestBytes = Objects.requireNonNull(staged.get(SandboxLayout.MANIFEST_PATH));
+        var manifest = mapper.readValue(manifestBytes, JobFolderIndex.class);
+        files.beginPersonCapture(job);
+        try {
+            var basis = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId())
+                    .orElseThrow();
+            files.inheritPersonCapture(job, basis.getCopyId(), basis.getAdmissionAttempt());
+            for (var copy : basis.getPayload().path("copies"))
+                files.inheritPersonCapture(
+                        job,
+                        UUID.fromString(copy.path("copyId").asString()),
+                        copy.path("attempt").asInt());
+            var prepared = files.prepare(
+                    job, new PreparedEvidence(new TreeMap<>(staged), Map.of(), List.of(), manifest, List.of()), null);
+            return new Restored(prepared, Collections.unmodifiableMap(staged));
+        } catch (RuntimeException failed) {
+            files.abortPersonCapture(job);
+            throw failed;
+        }
+    }
+
+    public Map<String, byte[]> retainedInputs(ReviewJob job) {
         var basis = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId())
                 .orElseThrow(() -> gone("The original inputs were removed"));
         if (!files.vouchesForOriginalCopy(
                 basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt()))
             throw new InputsUnavailableException("The original capture was erased", true);
-        if (basis.getBasisVersion() != ReviewCompositionBasis.VERSION
+        if (!ResultAdmissionService.isAdmitted(job)
+                || basis.getAdmissionDigest() == null
+                || basis.getBasisVersion() != ReviewCompositionBasis.VERSION
                 || !basis.getExpiresAt().isAfter(Instant.now())
                 || !basis.getAdmissionDigest().equals(job.getAdmissionDigest())
-                || basis.getAdmissionAttempt() != ResultAdmissionService.citationAttempt(job)) {
+                || basis.getAdmissionAttempt() > ResultAdmissionService.citationAttempt(job)) {
             throw gone("The original capture no longer permits composition");
         }
+        for (var copy : basis.getPayload().path("copies"))
+            if (!files.vouchesForOriginalCopy(
+                    UUID.fromString(copy.path("copyId").asString()),
+                    job.getId(),
+                    job.getWorkspaceId(),
+                    copy.path("attempt").asInt()))
+                throw new InputsUnavailableException("A staged capture was erased", true);
         var staged = new TreeMap<String, byte[]>();
         basis.getPayload()
                 .path("files")
@@ -92,15 +133,7 @@ public class ReviewCompositionContinuation {
                 throw gone("The original citable text is unavailable");
             }
         }
-        files.beginPersonCapture(job);
-        try {
-            var prepared = files.prepare(
-                    job, new PreparedEvidence(new TreeMap<>(staged), Map.of(), List.of(), manifest, List.of()), null);
-            return new Restored(prepared, Collections.unmodifiableMap(staged));
-        } catch (RuntimeException failed) {
-            files.abortPersonCapture(job);
-            throw failed;
-        }
+        return Collections.unmodifiableMap(staged);
     }
 
     /**

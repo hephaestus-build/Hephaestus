@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSou
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
@@ -42,6 +42,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import java.time.Clock;
 import java.time.Instant;
@@ -343,11 +344,28 @@ public class DefaultReviewExecutionHandler {
         return facts;
     }
 
+    public boolean hasStaged(ReviewJob job) {
+        return admission.hasStaged(job);
+    }
+
+    public void finishInterrupted(ReviewJob job, ReviewStopReason reason) {
+        admission.finishInterrupted(
+                new ResultAdmissionService.AdmissionIdentity(
+                        job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId())),
+                reason);
+    }
+
+    public boolean completeStaged(ReviewJob job) {
+        return admission.sealIfComplete(new ResultAdmissionService.AdmissionIdentity(
+                job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId())));
+    }
+
     public void completeWithoutExecution(ReviewJob job) {
         admission.admit(
                 new ResultAdmissionService.AdmissionIdentity(
                         job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId())),
-                new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), job.getAttempt(), List.of(), List.of()));
+                new SealResultsRequestDTO(
+                        SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
     }
 
     private JsonNode previousCitations(JsonNode evidence) {

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceAuthority;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.InapplicabilityWarrant;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemCandidate;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -72,7 +74,8 @@ public class ReviewOutputService {
         this.assignmentStore = assignmentStore;
     }
 
-    public PreparedResults prepare(ReviewJob job, AdmissionRequestDTO submission) {
+    public PreparedResults prepareStage(
+            ReviewJob job, AdmissionRequestDTO submission, BiConsumer<ReviewJob, List<ResultCandidate>> record) {
         if (!job.getReviewId().equals(submission.reviewId())
                 || !job.getId().equals(submission.jobId())
                 || job.getAttempt() != submission.attempt()) throw new ResultAdmissionService.StaleAttemptException();
@@ -97,9 +100,7 @@ public class ReviewOutputService {
             if (!pinned.containsKey(nonResult.practiceSlug()))
                 throw new ResultsRefusedException("practice_not_admitted", "The practice is not assigned to this job");
         }
-        if (!seen.equals(pinned.keySet()))
-            throw new ResultsRefusedException(
-                    "unaccounted_practices", "Each assigned practice needs a candidate or a runtime non-result reason");
+
         var review = assignments.review(job);
         JsonNode originalCapture = Objects.requireNonNull(job.getCapture());
         var manifest = mapper.treeToValue(originalCapture.path("manifest"), JobFolderIndex.class);
@@ -108,36 +109,6 @@ public class ReviewOutputService {
                 .toList();
         var resolvedManifest = manifest;
         var admitted = new ArrayList<ResultCandidate>();
-        var assigned = assignments.load(job);
-        var applicability = originalCapture.path("readiness").path("applicability");
-        for (var assignment : assigned) {
-            var recorded = applicability.path(assignment.practiceSlug());
-            if (!recorded.path("absent").asBoolean(false)) continue;
-            var check = mapper.treeToValue(recorded, AppliesWhenCheck.class);
-            admitted.add(new ResultCandidate(
-                    assignment.practice().practiceId(),
-                    assignment.practice().practiceVersionId(),
-                    assignment.item().itemId(),
-                    assignment.version().value(),
-                    assignment.developerId(),
-                    ResultOutcome.DOES_NOT_APPLY,
-                    "This practice does not apply",
-                    check.otherwise(),
-                    new ResultEvidence(
-                            List.of(),
-                            null,
-                            new InapplicabilityWarrant(
-                                    check.clauses().stream()
-                                            .map(AppliesWhenCheck.Clause::readFrom)
-                                            .distinct()
-                                            .toList(),
-                                    "At least one Applies when condition must match",
-                                    check.otherwise()),
-                            List.of()),
-                    null,
-                    new HostCoverage(true, List.of(), 0, 0, 0, List.of()),
-                    List.of()));
-        }
         var withheld = new LinkedHashMap<String, AdmissionResponseDTO.Withheld>();
         var refusals = new ArrayList<WithheldAssignment>();
         for (var entry : submission.results()) {
@@ -189,8 +160,6 @@ public class ReviewOutputService {
                         assignment, refusal.refusal(), Objects.requireNonNull(refusal.getMessage())));
             }
         }
-        if (submission.results().isEmpty() && admitted.isEmpty())
-            throw new ResultsRefusedException("no_admissible_results", "The submission contains no practice results");
         int attempt = job.getAttempt();
         UUID lease = job.getLeaseId();
         JsonNode capture = Objects.requireNonNull(job.getCapture()).deepCopy();
@@ -211,27 +180,59 @@ public class ReviewOutputService {
                         refusal.reason().wireValue());
                 withheld.put(entry.practiceSlug(), entry);
             }
-            var receipt = results.admit(
-                    owned.getWorkspaceId(), owned.getReviewId(), owned.getId(), attempt, List.copyOf(admitted));
-            for (var item : receipt.withheldItems()) {
-                var assignment = assigned.stream()
-                        .filter(value -> value.practice().practiceId() == item.practiceId()
-                                && value.item().itemId() == item.itemId())
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalStateException("Admission withheld an unassigned item"));
-                withheld.putIfAbsent(
-                        assignment.practiceSlug(),
-                        new AdmissionResponseDTO.Withheld(
-                                assignment.practiceSlug(), Long.toString(item.itemId()), item.reason()));
+            for (var nonResult : submission.nonResults()) {
+                var assignment = Objects.requireNonNull(pinned.get(nonResult.practiceSlug()));
+                assignmentStore.fail(
+                        owned.getWorkspaceId(),
+                        assignment.id(),
+                        nonResult.reason(),
+                        "The runtime ended this practice without a result.");
             }
             ObjectNode retained = (ObjectNode) capture.deepCopy();
             retained.set("manifest", mapper.valueToTree(retainedManifest));
             retained.set("readReceipts", mapper.valueToTree(receipts));
             retained.set("withheld", mapper.valueToTree(withheld.values()));
             retained.set("nonResults", mapper.valueToTree(submission.nonResults()));
-            retained.set("admission", mapper.valueToTree(receipt));
             owned.setCapture(retained);
+            record.accept(owned, List.copyOf(admitted));
         };
+    }
+
+    public AdmissionReceipt seal(ReviewJob job, List<ResultCandidate> staged) {
+        var admitted = new ArrayList<>(staged);
+        var assigned = assignments.load(job);
+        var applicability =
+                Objects.requireNonNull(job.getCapture()).path("readiness").path("applicability");
+        for (var assignment : assigned) {
+            var recorded = applicability.path(assignment.practiceSlug());
+            if (!recorded.path("absent").asBoolean(false)) continue;
+            var check = mapper.treeToValue(recorded, AppliesWhenCheck.class);
+            admitted.add(new ResultCandidate(
+                    assignment.practice().practiceId(),
+                    assignment.practice().practiceVersionId(),
+                    assignment.item().itemId(),
+                    assignment.version().value(),
+                    assignment.developerId(),
+                    ResultOutcome.DOES_NOT_APPLY,
+                    "This practice does not apply",
+                    check.otherwise(),
+                    new ResultEvidence(
+                            List.of(),
+                            null,
+                            new InapplicabilityWarrant(
+                                    check.clauses().stream()
+                                            .map(AppliesWhenCheck.Clause::readFrom)
+                                            .distinct()
+                                            .toList(),
+                                    "At least one Applies when condition must match",
+                                    check.otherwise()),
+                            List.of()),
+                    null,
+                    new HostCoverage(true, List.of(), 0, 0, 0, List.of()),
+                    List.of()));
+        }
+        return results.admit(
+                job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt(), List.copyOf(admitted));
     }
 
     /**

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -30,6 +31,7 @@ public class ReviewJobRetentionService {
 
     private final ReviewJobRepository jobRepository;
     private final ReviewCompositionBasisRepository basisRepository;
+    private final PracticeStagingStore staging;
     private final EvidenceFolderPersonDataCatalog evidenceCopies;
     private final AgentProperties agentProperties;
     private final Clock clock;
@@ -41,6 +43,7 @@ public class ReviewJobRetentionService {
     public ReviewJobRetentionService(
             ReviewJobRepository jobRepository,
             ReviewCompositionBasisRepository basisRepository,
+            PracticeStagingStore staging,
             EvidenceFolderPersonDataCatalog evidenceCopies,
             AgentProperties agentProperties,
             Clock clock,
@@ -48,6 +51,7 @@ public class ReviewJobRetentionService {
             MeterRegistry meterRegistry) {
         this.jobRepository = jobRepository;
         this.basisRepository = basisRepository;
+        this.staging = staging;
         this.evidenceCopies = evidenceCopies;
         this.agentProperties = agentProperties;
         this.clock = clock;
@@ -69,6 +73,7 @@ public class ReviewJobRetentionService {
     @Scheduled(fixedDelay = 6, initialDelay = 1, timeUnit = TimeUnit.HOURS)
     @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT25M", lockAtLeastFor = "PT10S")
     public void runRetention() {
+        pass.run(log, "staged-practices", () -> staging.discardUnusable(clock.instant(), pass.batchSize()));
         deleteUnusableCompositionInputs();
         stripPayloads();
         deleteOldRows();

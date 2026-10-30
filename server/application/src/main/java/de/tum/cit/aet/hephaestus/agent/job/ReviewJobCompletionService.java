@@ -77,25 +77,25 @@ public class ReviewJobCompletionService {
                 ? job.getCancellationReason() == ReviewJobCancellationReason.NO_SANDBOX_ROOM
                         ? ReviewStopReason.NO_SANDBOX_ROOM
                         : ReviewStopReason.CANCELLED
-                : job.getExecutionStartedAt() == null
-                        ? ReviewStopReason.PREPARATION_FAILED
-                        : ReviewStopReason.EXECUTION_FAILED;
+                : job.getStatus() == ReviewJobStatus.TIMED_OUT
+                        ? ReviewStopReason.TIMED_OUT
+                        : job.getExecutionStartedAt() == null
+                                ? ReviewStopReason.PREPARATION_FAILED
+                                : ReviewStopReason.EXECUTION_FAILED;
         // A cancel for room ends the practices whether or not a worker claimed the job, so a scan stops binding them.
         if (!admitted
                 && (job.getStatus() != ReviewJobStatus.CANCELLED
                         || job.getStartedAt() != null
-                        || reason == ReviewStopReason.NO_SANDBOX_ROOM))
-            for (var assignment : assignments.admissible(job))
+                        || reason == ReviewStopReason.NO_SANDBOX_ROOM
+                        || assignments.hasStaged(job)))
+            for (var assignment : job.getInput().assignments())
                 members.fail(
-                        job.getWorkspaceId(),
-                        assignment.id(),
-                        reason,
-                        "The execution ended without an admitted result");
+                        job.getWorkspaceId(), assignment, reason, "The execution ended without an admitted result");
         var capture = job.getCapture();
         boolean runtimeIncomplete =
                 admitted && capture != null && !capture.path("nonResults").isEmpty();
         if (runtimeIncomplete) {
-            var pinned = assignments.admissible(job);
+            var pinned = assignments.load(job);
             for (var nonResult : Objects.requireNonNull(capture).path("nonResults")) {
                 var assignment = pinned.stream()
                         .filter(value -> value.practiceSlug()

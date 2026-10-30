@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
 	admittedResultSchema,
 	admit,
+	stagePractice,
 	parseAdmission,
 } from "../../../main/resources/agent/pi-admitted-results.ts";
 
@@ -102,3 +103,34 @@ for (const [field, value, path] of [
 		);
 	});
 }
+
+void test("staging repeats the same completed practice after its committed answer is lost", async () => {
+	const request = { results: [{ practiceSlug: "names" }] };
+	const sent: string[] = [];
+	await stagePractice("names", request, async (body) => {
+		sent.push(body);
+		if (sent.length === 1) {
+			request.results.push({ practiceSlug: "later" });
+			return new Response("{", { status: 200 });
+		}
+		return Response.json({ practiceSlug: "names", digest: "a".repeat(64) });
+	});
+	assert.deepEqual(sent, [sent[0], sent[0]]);
+	assert.equal(sent[0], JSON.stringify({ results: [{ practiceSlug: "names" }] }));
+});
+
+void test("staging refuses another practice's acknowledgement and never retries an expired fence", async () => {
+	await assert.rejects(
+		stagePractice("names", {}, async () =>
+			Response.json({ practiceSlug: "other", digest: "a".repeat(64) }),
+		),
+	);
+	let calls = 0;
+	await assert.rejects(
+		stagePractice("names", {}, async () => {
+			calls += 1;
+			return new Response(null, { status: 409 });
+		}),
+	);
+	assert.equal(calls, 1);
+});

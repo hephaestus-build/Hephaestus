@@ -36,7 +36,7 @@ public interface ScanReportRepository extends Repository<Review, UUID> {
          COUNT(*) FILTER(WHERE r.outcome='DOES_NOT_APPLY') AS doesNotApply,
          COUNT(*) FILTER(WHERE r.outcome='COULD_NOT_DETERMINE') AS couldNotDetermine,
          COUNT(*) FILTER(WHERE m.state='WITHHELD') AS withheld,
-         COUNT(*) FILTER(WHERE m.state='LISTED') AS pending
+         COUNT(*) FILTER(WHERE m.state IN ('LISTED','STAGED')) AS pending
         FROM review_item m LEFT JOIN result r ON r.id=m.result_id AND r.workspace_id=m.workspace_id
         WHERE m.workspace_id=:ws AND m.review_id=:scan
           AND (CAST(:practice AS bigint) IS NULL OR m.practice_id=:practice)
@@ -52,7 +52,7 @@ public interface ScanReportRepository extends Repository<Review, UUID> {
 
     @Query(value = """
         SELECT COALESCE(reason,:fallback) AS reason,COUNT(*) AS count FROM review_item
-        WHERE workspace_id=:ws AND review_id=:scan AND state=:state GROUP BY 1 ORDER BY 1
+        WHERE workspace_id=:ws AND review_id=:scan AND (state=:state OR (:state='LISTED' AND state='STAGED')) GROUP BY 1 ORDER BY 1
         """, nativeQuery = true)
     List<ReasonCount> reasons(long ws, UUID scan, String state, String fallback);
 
