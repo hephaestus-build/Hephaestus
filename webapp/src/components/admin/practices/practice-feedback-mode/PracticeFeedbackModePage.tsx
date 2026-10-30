@@ -8,6 +8,10 @@ import type {
 	PracticeReviewSettings,
 } from "@/api/types.gen";
 import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
+import {
+	FeedbackSendingSettings,
+	type FeedbackSendingUpdate,
+} from "@/components/admin/practices/FeedbackSendingSettings";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
@@ -107,6 +111,8 @@ export interface PracticeFeedbackModePageProps {
 	onOverridesOnlyChange: (next: boolean) => void;
 	onSetWorkspaceDefault: (feedbackMode: FeedbackMode) => void;
 	onClearWorkspaceDefault: () => void;
+	onSetSending: (update: FeedbackSendingUpdate) => void;
+	onClearDeliverToMerged: () => void;
 	onSetGroupFeedbackMode: (groupSlug: string, feedbackMode: FeedbackMode) => void;
 	onClearGroupFeedbackMode: (groupSlug: string) => void;
 	onSetPracticeFeedbackMode: (practiceSlug: string, feedbackMode: FeedbackMode) => void;
@@ -126,6 +132,8 @@ export function PracticeFeedbackModePage({
 	onOverridesOnlyChange,
 	onSetWorkspaceDefault,
 	onClearWorkspaceDefault,
+	onSetSending,
+	onClearDeliverToMerged,
 	onSetGroupFeedbackMode,
 	onClearGroupFeedbackMode,
 	onSetPracticeFeedbackMode,
@@ -209,6 +217,12 @@ export function PracticeFeedbackModePage({
 					onSetWorkspaceDefault(feedbackMode);
 				}}
 				onClearWorkspaceDefault={onClearWorkspaceDefault}
+			/>
+			<FeedbackSendingSettings
+				settings={settings}
+				saving={pending.workspace}
+				onSet={onSetSending}
+				onClearDeliverToMerged={onClearDeliverToMerged}
 			/>
 			<div className="sticky top-0 z-20 space-y-3 border-b bg-background/95 py-3 backdrop-blur supports-backdrop-filter:bg-background/80">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

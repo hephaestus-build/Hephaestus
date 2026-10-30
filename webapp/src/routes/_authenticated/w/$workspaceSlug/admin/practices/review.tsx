@@ -184,6 +184,13 @@ function FeedbackModeSection({
 					body: { reset: ["DEFAULT_FEEDBACK_MODE"] },
 				})
 			}
+			onSetSending={(update) => updateSettings.mutate({ path: { workspaceSlug }, body: update })}
+			onClearDeliverToMerged={() =>
+				updateSettings.mutate({
+					path: { workspaceSlug },
+					body: { reset: ["DELIVER_TO_MERGED"] },
+				})
+			}
 			onSetGroupFeedbackMode={(groupSlug, feedbackMode) =>
 				feedbackModes.setGroupFeedbackMode.mutate({
 					path: { workspaceSlug, groupSlug },

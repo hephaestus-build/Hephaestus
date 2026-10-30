@@ -9,8 +9,6 @@ import type {
 	UpdatePracticeReviewSettingsRequest,
 	UpdateWorkspaceFeaturesRequest,
 } from "@/api/types.gen";
-import { StatusBadge } from "@/components/common/StatusBadge";
-import { WORKSPACE_DELIVERY_STATUS_DEFS } from "@/components/practice-vocabulary/workspace-delivery-status-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -23,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { GeneratedPathsSettings } from "./GeneratedPathsSettings";
+import { InheritedSettingHint } from "./InheritedSettingHint";
 import {
 	PracticeReviewScopeSettings,
 	type PracticeReviewScopeSettingsProps,
@@ -81,7 +80,6 @@ export function PracticeReviewSettings({
 				isSaving={policy.isSaving}
 				onSave={policy.onUpdate}
 			/>
-			<FeedbackDeliverySection policy={policy} />
 		</div>
 	);
 }
@@ -303,118 +301,10 @@ function CooldownField({
 			<InheritedSettingHint
 				label="Time between reviews"
 				overridden={overridden}
-				field="COOLDOWN_MINUTES"
 				inheritedValue={`${value} min`}
-				policy={policy}
+				disabled={policy.isSaving}
+				onReset={() => policy.onReset("COOLDOWN_MINUTES")}
 			/>
 		</Field>
-	);
-}
-
-function FeedbackDeliverySection({ policy }: Pick<PracticeReviewSettingsProps, "policy">) {
-	const { settings } = policy;
-	const paused = settings.deliveryStatus === "PAUSED";
-
-	return (
-		<section className="space-y-4" aria-labelledby="feedback-delivery-heading">
-			<div className="space-y-1">
-				<h2 id="feedback-delivery-heading" className="text-lg font-semibold">
-					Sending feedback
-				</h2>
-				<p className="text-sm text-muted-foreground">
-					These settings apply to all comments and feedback from Hephaestus in the workspace. Each
-					practice’s feedback mode still decides whether its feedback waits for approval.
-				</p>
-			</div>
-			{paused ? (
-				<Alert variant="warning" role="status">
-					<AlertCircle />
-					<AlertTitle>Sending is paused</AlertTitle>
-					<AlertDescription>
-						Reviews and in-app feedback continue, but no comments or feedback leave Hephaestus.
-						Automatic feedback is not queued for later delivery. Pending approvals remain in the
-						review queue, and a workspace owner or admin can decide them after resuming.
-					</AlertDescription>
-				</Alert>
-			) : null}
-			<Field orientation="horizontal">
-				<FieldContent>
-					<div className="flex flex-wrap items-center gap-2">
-						<FieldLabel htmlFor="policy-delivery-active">Send feedback</FieldLabel>
-						<StatusBadge def={WORKSPACE_DELIVERY_STATUS_DEFS[settings.deliveryStatus]} />
-					</div>
-					<FieldDescription>
-						Pause all comments and feedback from Hephaestus without stopping reviews or changing the
-						review scope.
-					</FieldDescription>
-				</FieldContent>
-				<Switch
-					id="policy-delivery-active"
-					checked={!paused}
-					disabled={policy.isSaving}
-					onCheckedChange={(checked) => {
-						void policy.onUpdate({ deliveryStatus: checked ? "ACTIVE" : "PAUSED" });
-					}}
-				/>
-			</Field>
-			<Field orientation="horizontal">
-				<FieldContent>
-					<FieldLabel htmlFor="policy-deliver-merged">Post feedback after merge</FieldLabel>
-					<FieldDescription>
-						When on, a review that finishes after the work merged still posts its feedback.
-					</FieldDescription>
-					<InheritedSettingHint
-						label="Post feedback after merge"
-						overridden={settings.deliverToMergedOverride != null}
-						field="DELIVER_TO_MERGED"
-						inheritedValue={settings.deliverToMerged ? "On" : "Off"}
-						policy={policy}
-					/>
-				</FieldContent>
-				<Switch
-					id="policy-deliver-merged"
-					checked={settings.deliverToMerged}
-					disabled={policy.isSaving}
-					onCheckedChange={(checked) => {
-						void policy.onUpdate({ deliverToMerged: checked });
-					}}
-				/>
-			</Field>
-		</section>
-	);
-}
-
-function InheritedSettingHint({
-	label,
-	overridden,
-	field,
-	inheritedValue,
-	policy,
-}: {
-	label: string;
-	overridden: boolean;
-	field: PracticeReviewField;
-	inheritedValue: string;
-	policy: PracticeReviewSettingsProps["policy"];
-}) {
-	if (!overridden) {
-		return (
-			<span className="self-start text-xs text-muted-foreground">Default: {inheritedValue}</span>
-		);
-	}
-
-	return (
-		<div className="text-left">
-			<Button
-				variant="link"
-				size="inline"
-				className="text-xs"
-				aria-label={`Use default for ${label}`}
-				disabled={policy.isSaving}
-				onClick={() => policy.onReset(field)}
-			>
-				Use default
-			</Button>
-		</div>
 	);
 }

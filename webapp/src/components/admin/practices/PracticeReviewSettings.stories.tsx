@@ -92,7 +92,8 @@ export const Configured: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Review changes" }));
-		await expect(canvas.getByRole("switch", { name: "Send feedback" })).toBeChecked();
+		// Sending feedback lives in the Feedback mode tab.
+		await expect(canvas.queryByRole("switch", { name: "Send feedback" })).not.toBeInTheDocument();
 		await expectNoPageOverflow();
 	},
 };
@@ -392,19 +393,5 @@ export const ScopeSaveRollsBack: Story = {
 		);
 		await expect(canvas.getByRole("radio", { name: "Selected repositories" })).toBeChecked();
 		await expect(canvas.getByRole("radio", { name: "Selected people" })).toBeChecked();
-	},
-};
-
-export const SendingPausedInDarkMode: Story = {
-	args: { policy: { ...policy, settings: { ...settings, deliveryStatus: "PAUSED" } } },
-	globals: { theme: "dark" },
-	parameters: {
-		viewport: { defaultViewport: "reflow" },
-		chromatic: { viewports: [320, 1440] },
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Sending is paused")).toBeVisible();
-		await expect(canvas.getByRole("switch", { name: "Send feedback" })).not.toBeChecked();
-		await expectNoPageOverflow();
 	},
 };

@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { BookUser } from "lucide-react";
 import type { ComponentProps, ReactElement } from "react";
 
@@ -13,6 +14,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
 
 interface WorkspaceMembersPageProps {
+	workspaceSlug: string;
 	members: WorkspaceMemberRow[];
 	rowCount: number;
 	teams: TeamInfo[];
@@ -34,6 +36,7 @@ interface WorkspaceMembersPageProps {
 }
 
 export function WorkspaceMembersPage({
+	workspaceSlug,
 	members,
 	rowCount,
 	teams,
@@ -57,7 +60,21 @@ export function WorkspaceMembersPage({
 			<PageHeader
 				icon={<BookUser />}
 				title="Members"
-				description="Browse workspace members, filter by team, and change their roles."
+				description={
+					<>
+						Browse workspace members, filter by team, and change their roles. Review scope shows
+						whose work Hephaestus reviews.{" "}
+						<Link
+							to="/w/$workspaceSlug/admin/practices/review"
+							params={{ workspaceSlug }}
+							search={{ section: "automated-review" }}
+							hash="review-scope-heading"
+							className="underline underline-offset-4"
+						>
+							Change in review settings
+						</Link>
+					</>
+				}
 			/>
 			{error == null ? (
 				<div className="space-y-4">

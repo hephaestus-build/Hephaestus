@@ -395,25 +395,4 @@ describe("PracticeReviewSettings", () => {
 			screen.getByRole("radio", { name: "Selected repositories" }).getAttribute("aria-disabled"),
 		).not.toBe("true");
 	});
-
-	it("keeps the send switch accessible name stable across delivery states", async () => {
-		const view = await renderSettings();
-		const active = await screen.findByRole("switch", { name: "Send feedback" });
-		expect(active.getAttribute("aria-checked")).toBe("true");
-		expect(screen.queryByRole("switch", { name: /Active/u })).toBeNull();
-		view.unmount();
-		await renderSettings({
-			policy: {
-				settings: { ...settings, deliveryStatus: "PAUSED" },
-				isSaving: false,
-				onUpdate: vi.fn(),
-				onReset: vi.fn(),
-			},
-		});
-
-		expect(screen.getByRole("switch", { name: "Send feedback" }).getAttribute("aria-checked")).toBe(
-			"false",
-		);
-		expect(screen.queryByRole("switch", { name: /Paused/u })).toBeNull();
-	});
 });
