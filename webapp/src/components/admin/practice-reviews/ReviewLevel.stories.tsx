@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
 import type { PracticeScriptRun, ReviewDetail, ReviewJob } from "@/api/types.gen";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
@@ -137,9 +137,6 @@ export const Default: Story = {
 			}
 		}
 		await userEvent.click(panel.getByRole("button", { name: "Request another review" }));
-		await expect(args.onRequestReview).not.toHaveBeenCalled();
-		const confirm = await screen.findByRole("alertdialog");
-		await userEvent.click(within(confirm).getByRole("button", { name: "Request review" }));
 		await expect(args.onRequestReview).toHaveBeenCalledOnce();
 	},
 };

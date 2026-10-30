@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, waitFor, within } from "storybook/test";
+import { expect, fn, screen, waitFor } from "storybook/test";
 
 import type { ReviewSummary } from "@/api/types.gen";
 import { ReviewDayTable } from "@/components/practice-trace/ReviewDayTable";
@@ -107,13 +107,10 @@ export const RequestAnotherReview: Story = {
 	args: { request: { work: "pull request #1423", onRequest: requestReview } },
 	play: async ({ canvas, userEvent }) => {
 		requestReview.mockClear();
-		await userEvent.click(canvas.getByRole("button", { name: /^Request review of /u }));
-		const dialog = await screen.findByRole("alertdialog", {
-			name: "Request a review of pull request #1423?",
-		});
-		await userEvent.click(within(dialog).getByRole("button", { name: "Request review" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Request review of pull request #1423" }),
+		);
 		await expect(requestReview).toHaveBeenCalledOnce();
-		await waitFor(async () => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
 	},
 };
 

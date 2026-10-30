@@ -43,7 +43,7 @@ import { browserTimeZone } from "@/lib/dates";
 import { itemName } from "@/lib/item-kinds";
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
-import { deferred } from "@/test/async";
+import { deferred, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -474,8 +474,9 @@ const listReads = () =>
 describe("a new review from a row of the Reviews table", () => {
 	const REQUESTS = "*/workspaces/:workspaceSlug/practices/review-requests";
 
-	it("asks for a review of the row's item after the confirmation, and reads the reviews again", async () => {
+	it("asks for a review of the row's item on one press, says it is requesting, and reads the reviews again", async () => {
 		const bodies: unknown[] = [];
+		const answer = deferred();
 		const completed = reviewDetail();
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/reviews", () =>
@@ -493,6 +494,7 @@ describe("a new review from a row of the Reviews table", () => {
 			),
 			http.post(REQUESTS, async ({ request }) => {
 				bodies.push(await request.json());
+				await answer.promise;
 				return HttpResponse.json({
 					status: "SUBMITTED",
 					reviewId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01",
@@ -510,19 +512,21 @@ describe("a new review from a row of the Reviews table", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		assert(button !== undefined);
-		await userEvent.click(button);
-		const dialog = await screen.findByRole("alertdialog", {
-			name: `Request a review of ${name}?`,
-		});
-		// Nothing is asked for until the reader confirms.
-		expect(bodies).toHaveLength(0);
 		const before = listReads().length;
-		await userEvent.click(within(dialog).getByRole("button", { name: "Request review" }));
+		await userEvent.click(button);
 
 		await waitFor(() => expect(bodies).toHaveLength(1), ROUTE_RENDER_WAIT);
 		expect(bodies[0]).toStrictEqual({ itemId: reviewItem.id });
-		await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("alertdialog")).toBeNull();
+		// While the answer is out, the row's button waits and says why.
+		await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
+		await userEvent.unhover(button);
+		await userEvent.hover(button);
+		await screen.findByText("Requesting review…", undefined, ROUTE_RENDER_WAIT);
+
+		answer.resolve();
+		await screen.findByText("Review requested", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(listReads().length).toBeGreaterThan(before), ROUTE_RENDER_WAIT);
 	});
 });
@@ -939,8 +943,12 @@ describe("another review of the work from a review's sheet", () => {
 			await vi.advanceTimersByTimeAsync(2 * ACTIVE_REVIEW_POLL_MS);
 			expect(activeReads()).toHaveLength(settled);
 
+			// One press asks at once; the answer is held, since only the ask is under test.
+			server.use(
+				http.post("*/workspaces/:workspaceSlug/practices/review-requests", async () => pending()),
+			);
 			await userEvent.click(requestButton());
-			await screen.findByRole("alertdialog", { name: /^Request a review of/u });
+			await vi.waitFor(() => expect(requestsTo("/practices/review-requests")).toHaveLength(1));
 		} finally {
 			vi.useRealTimers();
 		}
@@ -970,7 +978,7 @@ describe("another review of the work from a review's sheet", () => {
 			expect(requestButton().getAttribute("aria-disabled")).toBe("true");
 			expect(activeReads().length).toBeGreaterThan(reads);
 			await userEvent.click(requestButton());
-			expect(screen.queryByRole("alertdialog")).toBeNull();
+			expect(requestsTo("/practices/review-requests")).toHaveLength(0);
 
 			active = [];
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
@@ -1024,8 +1032,6 @@ const opens = async (router: Located, level: string) =>
 async function askFrom(level: HTMLElement, label: string) {
 	const button = await within(level).findByRole("button", { name: label }, ROUTE_RENDER_WAIT);
 	await userEvent.click(button);
-	const confirm = await screen.findByRole("alertdialog", { name: /^Request a review of/u });
-	await userEvent.click(within(confirm).getByRole("button", { name: "Request review" }));
 }
 
 /** Every read of one review, in any workspace. */
@@ -1150,10 +1156,6 @@ describe("the way to a review an accepted ask created", () => {
 		);
 		assert(button !== undefined);
 		await userEvent.click(button);
-		const confirm = await screen.findByRole("alertdialog", {
-			name: `Request a review of ${work}?`,
-		});
-		await userEvent.click(within(confirm).getByRole("button", { name: "Request review" }));
 
 		const note = await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
 		expect(bodies).toStrictEqual([{ itemId: base.item.id }]);
