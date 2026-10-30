@@ -66,7 +66,7 @@ function endOf(root: HTMLElement): HTMLElement | null {
 export const ResultStory: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		await expect(verdictOf(canvasElement)).toHaveTextContent(
-			"This observation led to 3 pieces of feedback; one was delivered, then withdrawn, one was delivered, and one was replaced by newer feedback.",
+			"This observation led to 4 pieces of feedback; two were delivered, and two did not arrive.",
 		);
 		await expect(hereOf(canvasElement)).toHaveAttribute(
 			"data-lineage-node",
@@ -83,12 +83,12 @@ export const ResultStory: Story = {
 		await expect(stepsOf(canvasElement).querySelector('[data-step="start"]')).toHaveTextContent(
 			"Event",
 		);
-		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(3);
+		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(4);
 		await expect(
 			canvas.getByRole("button", { name: "3 other observations, 5 other pieces of feedback" }),
 		).toBeVisible();
 		await expect(endOf(canvasElement)).toHaveTextContent(
-			"3 pieces of feedback: 1 withdrawn by an admin, 1 delivered, 1 replaced by newer feedback.",
+			"4 pieces of feedback: 2 delivered, 2 did not arrive.",
 		);
 		// The trace links nowhere: a step opens its record over it.
 		await expect(within(stepsOf(canvasElement)).queryAllByRole("link")).toHaveLength(0);
@@ -101,10 +101,10 @@ export const ResultStorySiblingsShown: Story = {
 			canvas.getByRole("button", { name: "3 other observations, 5 other pieces of feedback" }),
 		);
 		await expect(showToggle(canvasElement, "Siblings")).toHaveAttribute("aria-pressed", "false");
-		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(8);
+		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(9);
 		await expect(canvas.getAllByText("Withheld")[0]).toBeVisible();
 		await expect(endOf(canvasElement)).toHaveTextContent(
-			"3 pieces of feedback: 1 withdrawn by an admin, 1 delivered, 1 replaced by newer feedback.",
+			"4 pieces of feedback: 2 delivered, 2 did not arrive.",
 		);
 	},
 };
@@ -170,7 +170,7 @@ export const WorkStory: Story = {
 	args: { lineage: wholeReview, here: { kind: "work" } },
 	play: async ({ canvasElement }) => {
 		await expect(hereOf(canvasElement)).toHaveAttribute("data-lineage-node", "work");
-		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(8);
+		await expect(stepsOf(canvasElement).querySelectorAll('[data-step="feedback"]')).toHaveLength(9);
 	},
 };
 
@@ -179,11 +179,11 @@ export const AllShown: Story = {
 	play: async ({ canvas, canvasElement, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
 		await expect(verdictOf(canvasElement)).toHaveTextContent(
-			"This review completed after 5 min and composed 8 pieces of feedback; 5 reached the developer.",
+			"This review completed after 5 min and composed 9 pieces of feedback; 6 reached the developer.",
 		);
-		// Eight edges: 2 + 3 + 1 + 1 + 1; the earlier review's comment rests on nothing listed here.
+		// The partial package adds two basis edges; the earlier review’s comment has none here.
 		await waitFor(async () => {
-			await expect(canvasElement.querySelectorAll("path[data-connector-line]")).toHaveLength(9);
+			await expect(canvasElement.querySelectorAll("path[data-connector-line]")).toHaveLength(11);
 		});
 		await expect(canvas.getByRole("list", { name: "Observations of this review" })).toBeVisible();
 		// Said once, in the facts "Expand all" opens under the piece, not again on its line.
@@ -219,7 +219,7 @@ export const ResultTable: Story = {
 		await expect(rows()).toHaveLength(4);
 		await expect(
 			table()?.querySelector(`[data-lineage-node="result:${LINEAGE_RESULT.cache404}"]`),
-		).toHaveTextContent(/Not met.*Major.*B, C, E/u);
+		).toHaveTextContent(/Not met.*Major.*B, C, D, F/u);
 		await userEvent.click(canvas.getByRole("button", { name: "Fold the table" }));
 		await expect(table()).toBeNull();
 		await expect(canvas.getByRole("list", { name: "Observations by number" })).toBeVisible();
@@ -355,7 +355,7 @@ export const OnlyLosses: Story = {
 			await expect(piece).not.toHaveTextContent(/^Delivered/u);
 		}
 		// The verdict still speaks of the whole review.
-		await expect(verdictOf(canvasElement)).toHaveTextContent(/composed 8 pieces of feedback/u);
+		await expect(verdictOf(canvasElement)).toHaveTextContent(/composed 9 pieces of feedback/u);
 	},
 };
 

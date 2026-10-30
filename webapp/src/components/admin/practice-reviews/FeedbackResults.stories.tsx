@@ -78,14 +78,14 @@ export const Default: Story = {
 		const names = canvas
 			.getAllByRole("link", { name: /^Open feedback /u })
 			.map((link) => link.getAttribute("aria-label"));
-		await expect(names).toHaveLength(20);
+		await expect(names).toHaveLength(21);
 		await expect(
 			new Set(
 				canvas
 					.getAllByRole("link", { name: /^Open feedback /u })
 					.map((link) => link.getAttribute("href")),
 			).size,
-		).toBe(20);
+		).toBe(21);
 		await expect(names[0]).toMatch(/^Open feedback .+/u);
 		// A row opens its feedback over the list rather than navigating away from it.
 		await expect(canvas.getAllByRole("link").map(levelsOpenedBy)).toContainEqual([
@@ -104,7 +104,7 @@ export const LongFeedback: Story = {
 	},
 	parameters: { chromatic: { viewports: [320, 1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByRole("link", { name: /^Open feedback /u });
+		await expect(await canvas.findAllByRole("link", { name: /^Open feedback /u })).toHaveLength(2);
 		await expect(canvas.queryByText(/2 issues to tighten/u)).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/```/u)).not.toBeInTheDocument();
 		await expectNoPageOverflow();

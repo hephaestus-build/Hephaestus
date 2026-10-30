@@ -154,7 +154,7 @@ function comboboxes(group: HTMLElement) {
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		// The same order as on every tab: the scope, which applies to every tab, with the time order
 		// after its date, then this list's own facets, all in one row.
 		const scope = canvas.getByRole("group", { name: "Applies to every tab" });
@@ -188,7 +188,7 @@ export const LongFeedbackReadsAsProse: Story = {
 export const FilterToOneDeveloper: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		const listbox = await screen.findByRole("listbox");
 		await userEvent.click(
@@ -251,7 +251,7 @@ export const DeveloperSummaryFailed: Story = {
 export const EveryRowNamesItsLocation: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		const table = within(canvas.getByRole("table", { name: "Feedback" }));
 		await expect(table.getAllByText("On GitHub").length).toBeGreaterThan(0);
 		await expect(table.getAllByText("On GitLab").length).toBeGreaterThan(0);
@@ -263,7 +263,7 @@ export const EveryRowNamesItsLocation: Story = {
 export const FilterToOneDestination: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		const trigger = canvas.getByRole("combobox", { name: "Destination" });
 		await userEvent.click(trigger);
 		const listbox = await screen.findByRole("listbox", { name: "Destination options" });
@@ -297,7 +297,7 @@ export const WhyWithheldFacetOpen: Story = {
 export const FilterToOneWithholdingFamily: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		const trigger = canvas.getByRole("combobox", { name: "Why withheld" });
 		await userEvent.click(trigger);
 		const listbox = await screen.findByRole("listbox", { name: "Why withheld options" });
@@ -316,7 +316,7 @@ export const FilterToOneWithholdingFamily: Story = {
 		await userEvent.keyboard("{Escape}");
 		await canvas.findByText("No feedback matches these filters");
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 	},
 };
 
@@ -327,7 +327,7 @@ export const FilterToOneWithholdingFamily: Story = {
 export const SortOldestFirst: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ args, canvas, userEvent }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
 		await userEvent.click(await screen.findByRole("option", { name: "Oldest first" }));
 		await expect(args.onSearchChange).toHaveBeenLastCalledWith(
@@ -366,7 +366,7 @@ export const Mobile: Story = {
 		viewport: { defaultViewport: "reflow" },
 	},
 	play: async ({ canvas }) => {
-		await canvas.findByText("20 pieces of feedback.");
+		await canvas.findByText("21 pieces of feedback.");
 		await expectNoPageOverflow();
 	},
 };
