@@ -431,7 +431,9 @@ In the cluster, follow the logs of a role with the `kubectl` command that `dev:k
 
 `vp run dev:kubernetes` does these steps:
 
-1. It creates the k3d cluster `hephaestus` with two nodes and publishes port 443 on the loopback address only.
+1. It creates the k3d cluster `hephaestus` with two nodes and publishes HTTPS on the loopback address only.
+   The Kubernetes API uses a free port on `127.0.0.1`.
+   An older cluster with a non-loopback API binding requires `vp run dev:kubernetes:reset`.
    Port 443 must be free. The check stops the command when a program holds it.
    It also creates a local registry, which the nodes use as a mirror of `ghcr.io`.
 2. It builds the server, webapp, agent and PostgreSQL images, and pushes them to that registry.
