@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.95.1
+
+### Patch Changes
+
+- Model endpoint capacity recovers when a worker stops renewing its call permits. Expired calls keep their provider rate charges, and an expired owner cannot renew the old grant or charge a retry. Administrators can edit or delete the pool after its leases, rate window, and cooldown have ended.
+
+  Lease recovery cannot confirm closure of a suspended worker’s provider connections. Those connections can exceed the pool limit until they close.
+
+- Bundled PostgreSQL and its backup containers now reserve their full existing memory limits. The scheduler accounts for their maximum memory before admitting more work. CPU can still burst, and database settings and connection pools stay the same.
+
+  The PostgreSQL Pod restarts once on upgrade to apply the new request. The default database request rises from 512 MiB to 2 GiB. Dev and preview requests rise from 256 MiB to their existing 1 GiB limits. With backups enabled, the resident backup container and each backup, stanza, or restore Job request 512 MiB instead of 128 MiB.
+
+- Publish numbered release candidates without changing the stable image aliases or GitHub's latest release. Promote a qualified candidate to a stable release with the same signed image digests and stable chart metadata.
+
+  The images keep their candidate build metadata.
+
+- Practice feedback on GitHub and GitLab now identifies itself as AI-generated. Summaries and line notes include links to answer or disagree in Hephaestus and to change comment settings.
+- A reload during a session refresh no longer signs you out, and neither does a renewal that arrives after another tab or workspace address already renewed the session. A stalled renewal in another tab no longer blocks your renewal. Signing out also ends the session when another tab has just used its refreshed cookie.
+
+  After a rollback, stale browser tokens can stay live for up to the configured access-token lifetime (24 hours by default).
+
+- Release channels can now apply a verified signed Helm chart. The installed reconciler checks the chart digest, source, and image pins before it applies the release. It can adopt the next release's tooling after the Compose files are removed. An interrupted tooling update resumes on the next tick.
+
+  For a major upgrade, stop the writers with the source chart first. The reconciler starts the target server with workers stopped and does not roll back a failed migration. Follow the stopped upgrade and database recovery procedures.
+
+  **Operators:** before promoting 1.0, install the verified 0.95.1 reconciler and its units from `deploy/reconcile/`. Follow [Pull-based deployment](https://docs.hephaestus.build/admin/pull-based-deployment#follow-a-channel-with-the-chart) for the one-time tooling update.
+
 ## 0.95.0
 
 ### Minor Changes
