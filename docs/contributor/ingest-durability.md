@@ -12,6 +12,8 @@ Unknown exceptions retry up to `hephaestus.integration.consumer.poison.max-redel
 At that limit, the consumer commits a dead-letter record before termination.
 Only a `PayloadParsingException` in the cause chain proves a permanent failure and terminates early, also after capture.
 Capture failure always leaves the event retryable.
+Stack overflows use the unknown-failure budget.
+Other fatal JVM errors stop the local subscription and mark the consumer stopped, so reconciliation can restart it.
 
 Each durable uses explicit acknowledgements, `MaxDeliver=-1` and `MaxAckPending=1`.
 The broker delivery limit stays unlimited so an outage cannot exhaust it before PostgreSQL can record the failure.
@@ -27,12 +29,13 @@ The server runs as one replica with Recreate; this contract requires no consumer
 Copies of a sequence already queued or in progress share one queue entry.
 A redelivery after dispatch can repeat a committed handler.
 Existing event identities must keep those handlers idempotent.
-The broker acknowledgement timeout remains the configured `ack-wait` on every attempt.
+A missing acknowledgement times out after the configured `ack-wait`.
 Explicit negative acknowledgements carry their own retry delay.
 See [NATS pull consumers](https://docs.nats.io/learn/jetstream/pull-consumers).
 
-`consumer_dead_letter` stores the workspace, consumer, stream, sequence, subject, broker arrival time and error class.
+`consumer_dead_letter` stores the workspace, consumer, stream, sequence, subject, broker arrival time and diagnostic cause class.
 It stores no payload, headers, exception message or routing credential.
+Sanitized cause types and stack frames are logged on the first delivery and after each committed capture.
 The unique consumer, stream and sequence key makes capture idempotent across a crash between commit and termination.
 Workspace deletion cascades to its rows.
 Installation rows use NULL and separate instance-admin queries.

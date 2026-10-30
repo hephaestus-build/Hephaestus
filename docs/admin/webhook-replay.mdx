@@ -20,11 +20,16 @@ Restore service before that retention expires.
 A permanent failure or exhausted unknown failure has a dead-letter record in PostgreSQL before NATS stops delivering it.
 The `integration.consumer.poison` counter counts these terminations.
 `HephaestusConsumerRetryStalled` alerts when retries continue for 15 minutes.
-For a repeated non-parse failure, inspect `error.type` and the sanitized first-delivery stack frames.
+It requires retries within each 10-minute window.
+Longer retry delays and a handler that does not return can prevent this alert from firing.
+For a repeated non-parse failure, inspect `error.root_type` and the sanitized stack frames.
+These diagnostics appear on the first delivery and when a dead-letter record commits.
 Fix the cause, then replay its dead-letter record.
 If capture cannot commit, restore PostgreSQL; the original sequence stays retryable.
 A database outage also delays this capture and termination.
 A process crash or fatal JVM failure leaves the event unacknowledged for delivery after restart.
+Stack overflows use the unknown-failure budget and can have a dead-letter record.
+Other fatal JVM errors stop the consumer's local subscription; reconciliation can restart it.
 
 ## Inspect the records
 

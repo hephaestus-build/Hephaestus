@@ -51,7 +51,7 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0010](0010-outbound-oauth-state-handrolled.md) | Hand-roll OAuth state for outbound per-workspace integrations | Accepted (amended 2026-05-30 — PKCE primitive removed) |
 | [0011](0011-integration-identity-not-wired-from-sync.md) | `integration_identity` is OAuth-fed, not sync-fed (tombstone) | Superseded by [0016](0016-unified-identity-keycloak-as-truth.md) |
 | [0012](0012-cross-instance-identity-safety-on-sync-paths.md) | Cross-instance identity safety on sync paths | Accepted (amended 2026-09-17 — definitive-404 removal narrowed by [0024](0024-integration-sync-lifecycle-and-two-deletion-semantics.md)) |
-| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Accepted |
+| [0013](0013-no-jetstream-dlq-stream.md) | No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries | Accepted (amended 2026-10-30 — unlimited transient retries and metadata-only replay records, #3463) |
 | [0014](0014-per-row-aes-gcm-aad-binding.md) | Per-row AES-GCM AAD binds ciphertext to record identity | Accepted (amended 2026-09-17 — key rotation realised with a per-row key version) |
 | [0015](0015-unified-integration-framework.md) | Unified integration framework — package layout and SPI surface | Accepted (amended 2026-05-27 for Phase 1-4 restructure; 2026-09-17 — names and paths corrected) |
 | [0016](0016-unified-identity-keycloak-as-truth.md) | Unified identity — SCM `User` is the authoritative person row, Keycloak `sub` is the persisted join key | Superseded by [0017](0017-replace-keycloak-with-spring-native-auth.md) |

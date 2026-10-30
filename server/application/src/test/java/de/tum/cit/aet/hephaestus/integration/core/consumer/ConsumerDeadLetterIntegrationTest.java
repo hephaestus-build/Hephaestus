@@ -131,10 +131,14 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     @WithAdminUser
     void shouldDeduplicateCaptureAndKeepWorkspaceRecordsOutOfOtherScopes() throws Exception {
         Message message = delivery("github.acme.repo.issues", "not-json", "scope-a");
-        service.capture(workspace.getId(), message, new PayloadParsingException("private-canary"));
+        service.capture(
+                workspace.getId(),
+                message,
+                new IllegalStateException("wrapper", new PayloadParsingException("private-canary")));
         service.capture(workspace.getId(), message, new PayloadParsingException("private-canary"));
         var rows = service.listWorkspace(workspace.getId(), 0);
         assertThat(rows).hasSize(1);
+        assertThat(rows.getFirst().errorClass()).isEqualTo(PayloadParsingException.class.getName());
         assertThat(service.listWorkspace(other.getId(), 0)).isEmpty();
         client.get()
                 .uri("/workspaces/deadletters-a/integrations/dead-letters")
