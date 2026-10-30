@@ -213,7 +213,6 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    Release publication depends on this upgrade. The same procedure runs weekly.
    [Previous release on the new schema](#previous-release-on-the-new-schema) describes its other checks.
 
-
 The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
 skip changesets. A successful replay does not prove that every change ran. It also does not reproduce
 the context selection of a `dev` or `prod` boot (`spring.liquibase.contexts`).
