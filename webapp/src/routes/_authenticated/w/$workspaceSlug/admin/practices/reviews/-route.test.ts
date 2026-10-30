@@ -222,6 +222,7 @@ describe("practice review routes", () => {
 describe("practice review page titles", () => {
 	it.each([
 		["the tab, with nothing open", REVIEWS, "Reviews · Admin · Hephaestus"],
+		["the overview tab", `${REVIEWS}/overview`, "Overview · Admin · Hephaestus"],
 		[
 			"the record open in front",
 			`${REVIEWS}?detail=feedback:${FEEDBACK}`,

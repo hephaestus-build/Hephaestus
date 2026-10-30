@@ -19,6 +19,8 @@ const PATHS = [
 	"w/$workspaceSlug/admin/practices",
 	"w/$workspaceSlug/admin/practices/review",
 	"w/$workspaceSlug/admin/practices/reviews",
+	"w/$workspaceSlug/admin/practices/reviews/overview",
+	"w/$workspaceSlug/admin/practices/reviews/feedback",
 	"w/$workspaceSlug/admin/practices/scans",
 	"w/$workspaceSlug/admin/practices/scans/$scanId",
 	"w/$workspaceSlug/admin/integrations",
@@ -64,6 +66,8 @@ describe("NavAdmin", () => {
 		// Both directions, because the two paths differ by one trailing character and a matcher that
 		// compared strings rather than whole segments would light both entries up on either.
 		["/w/acme/admin/practices/reviews", "Practice reviews"],
+		["/w/acme/admin/practices/reviews/overview", "Practice reviews"],
+		["/w/acme/admin/practices/reviews/feedback", "Practice reviews"],
 		["/w/acme/admin/practices/scans", "Scans"],
 		["/w/acme/admin/practices/scans/6f1c2a7e-0d4b-4a8e-9b51-1a2b3c4d5e6f", "Scans"],
 		["/w/acme/admin/integrations/scm", "GitHub"],
@@ -73,6 +77,26 @@ describe("NavAdmin", () => {
 		await screen.findByRole("link", { name: currentLabel });
 		await waitFor(() => expect(screen.getAllByRole("link", { current: "page" })).toHaveLength(1));
 		expect(screen.getByRole("link", { current: "page" }).textContent).toContain(currentLabel);
+	});
+
+	// The count beside Practice reviews is feedback awaiting approval, and the overview is the tab
+	// that holds the approval queue.
+	it("opens Practice reviews on the overview", async () => {
+		renderNavigation("/w/acme/admin/settings");
+		fireEvent.click(await screen.findByRole("button", { name: "Practices" }));
+
+		const reviews = await screen.findByRole<HTMLAnchorElement>("link", {
+			name: "Practice reviews",
+		});
+		expect(new URL(reviews.href).pathname).toBe("/w/acme/admin/practices/reviews/overview");
+	});
+
+	it("opens the folded Practices section on the overview, current on every reviews tab", async () => {
+		renderNavigation("/w/acme/admin/practices/reviews/feedback", false);
+
+		const practices = await screen.findByRole<HTMLAnchorElement>("link", { name: "Practices" });
+		expect(new URL(practices.href).pathname).toBe("/w/acme/admin/practices/reviews/overview");
+		expect(practices.getAttribute("aria-current")).toBe("page");
 	});
 
 	it("keeps the active section visible when its children are collapsed", async () => {
