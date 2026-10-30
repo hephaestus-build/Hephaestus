@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793363841456-1" author="hephaestus">
+        <createTable tableName="consumer_dead_letter">
+            <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" primaryKeyName="consumer_dead_letter_pkey" nullable="false"/></column>
+            <column name="workspace_id" type="BIGINT"/>
+            <column name="consumer_name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="stream_name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="stream_sequence" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="subject" type="TEXT"><constraints nullable="false"/></column>
+            <column name="payload" type="BYTEA"><constraints nullable="false"/></column>
+            <column name="headers" type="TEXT"><constraints nullable="false"/></column>
+            <column name="ack_reply" type="TEXT"><constraints nullable="false"/></column>
+            <column name="error_class" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="failed_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="replayed_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="consumer_dead_letter" columnNames="consumer_name,stream_name,stream_sequence" constraintName="uk_consumer_dead_letter_delivery"/>
+        <addForeignKeyConstraint baseTableName="consumer_dead_letter" baseColumnNames="workspace_id" referencedTableName="workspace" referencedColumnNames="id" constraintName="fk_consumer_dead_letter_workspace" onDelete="CASCADE"/>
+        <createIndex tableName="consumer_dead_letter" indexName="idx_consumer_dead_letter_workspace_id"><column name="workspace_id"/><column name="id"/></createIndex>
+        <rollback><dropTable tableName="consumer_dead_letter"/></rollback>
+    </changeSet>
+</databaseChangeLog>

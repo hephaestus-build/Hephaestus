@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -15,6 +16,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.OutlineSubscription;
+import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -192,13 +194,13 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         return Stream.of("not json at all {{{".getBytes(StandardCharsets.UTF_8), new byte[0], (byte[]) null);
     }
 
-    @ParameterizedTest(name = "malformed body [{index}] is acked without crash or dispatch")
+    @ParameterizedTest(name = "malformed body [{index}] becomes a replayable parsing failure")
     @MethodSource("malformedBodies")
-    void malformedBody_isAcknowledgedWithoutCrashOrDispatch(byte[] body) {
+    void shouldRejectMalformedBodyForDurableCapture(byte[] body) {
         Message msg = routedMessage(ROUTE);
         when(msg.getData()).thenReturn(body);
 
-        handler().onMessage(msg);
+        assertThatThrownBy(() -> handler().onMessage(msg)).isInstanceOf(PayloadParsingException.class);
 
         verifyNoInteractions(syncScheduler);
     }

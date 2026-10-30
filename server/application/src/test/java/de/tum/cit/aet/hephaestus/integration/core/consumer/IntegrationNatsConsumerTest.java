@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -259,7 +261,7 @@ class IntegrationNatsConsumerTest {
 
             verify(handler, never()).onMessage(message);
             verify(message, never()).ack();
-            verify(poisonHandler).nakWithBackoff(message);
+            verify(poisonHandler).handleFailure(eq(5L), eq(message), any());
         }
 
         @Test

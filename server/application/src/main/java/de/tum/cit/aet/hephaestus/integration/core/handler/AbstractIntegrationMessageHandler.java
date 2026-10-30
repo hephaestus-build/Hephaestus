@@ -112,7 +112,7 @@ public abstract class AbstractIntegrationMessageHandler<T> implements Integratio
             T eventPayload = deserializer.deserialize(msg, payloadType);
             dispatchEvent(eventPayload, arrivedAt(msg));
         } catch (IOException e) {
-            log.error("Failed to parse payload: subject={}", safeSubject, e);
+            log.error("Failed to parse payload: subject={}", safeSubject);
             throw new PayloadParsingException("Payload parsing failed for subject: " + safeSubject, e);
         }
         // Other exceptions intentionally propagate so the consumer dispatcher can

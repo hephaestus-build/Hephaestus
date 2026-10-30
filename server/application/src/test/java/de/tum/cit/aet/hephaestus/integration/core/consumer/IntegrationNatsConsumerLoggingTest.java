@@ -30,7 +30,7 @@ class IntegrationNatsConsumerLoggingTest {
     private static final String SUBJECT = "github.acme.private-repo-canary.push";
 
     @Test
-    void shouldLogTheRouteAndDeliveryAndAttachTheStackOnlyOnce() {
+    void shouldLogOnlyTheRouteDeliveryAndFailureType() {
         IntegrationMessageDispatcher dispatcher = mock(IntegrationMessageDispatcher.class);
         IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
         when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "push"));
@@ -80,7 +80,7 @@ class IntegrationNatsConsumerLoggingTest {
             assertThat(event.getFormattedMessage() + fields(event)).doesNotContain("canary");
         }
         assertThat(fields(failures.get(0))).containsEntry("integration.delivery", 1L);
-        assertThat(failures.get(0).getThrowableProxy()).isNotNull();
+        assertThat(failures.get(0).getThrowableProxy()).isNull();
         assertThat(fields(failures.get(1))).containsEntry("integration.delivery", 2L);
         assertThat(failures.get(1).getThrowableProxy()).isNull();
     }

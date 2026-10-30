@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.RouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -46,6 +47,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -185,7 +187,12 @@ public class GitLabRouteAdmission implements RouteAdmission {
         if (route == null) {
             return false;
         }
-        JsonNode payload = objectMapper.readTree(msg.getData());
+        JsonNode payload;
+        try {
+            payload = objectMapper.readTree(msg.getData());
+        } catch (JacksonException failure) {
+            throw new PayloadParsingException("GitLab webhook payload cannot be parsed", failure);
+        }
         var read = projectAdmission
                 .captureConnection(route.workspaceId(), route.providerId())
                 .orElse(null);

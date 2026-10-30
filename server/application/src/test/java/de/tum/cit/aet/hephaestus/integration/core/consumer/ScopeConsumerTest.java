@@ -18,6 +18,7 @@ import io.nats.client.MessageHandler;
 import io.nats.client.StreamContext;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.ConsumerInfo;
+import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -50,6 +51,52 @@ class ScopeConsumerTest {
     private static final String CONSUMER_NAME = "hephaestus-scope-7";
     private static final long SCOPE_ID = 7L;
     private static final String[] SUBJECTS = new String[] {"github.acme.repo.>"};
+
+    @Test
+    void shouldDispatchOneCopyWhenTheBrokerRedeliversWhileTheHandlerIsBlocked() throws Exception {
+        ConsumerContext context = mock(ConsumerContext.class);
+        when(context.consume(any(MessageHandler.class))).thenReturn(mock(MessageConsumer.class));
+        CountDownLatch handling = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch following = new CountDownLatch(1);
+        AtomicInteger handled = new AtomicInteger();
+        ScopeConsumer consumer = new ScopeConsumer(
+                SCOPE_ID, CONSUMER_NAME, STREAM, context, mock(StreamContext.class), SUBJECTS, message -> {
+                    handled.incrementAndGet();
+                    if (message.metaData().streamSequence() == 1) {
+                        handling.countDown();
+                        try {
+                            release.await();
+                        } catch (InterruptedException failure) {
+                            Thread.currentThread().interrupt();
+                        }
+                    } else following.countDown();
+                });
+        try {
+            consumer.start();
+            var callback = ArgumentCaptor.forClass(MessageHandler.class);
+            verify(context).consume(callback.capture());
+            callback.getValue().onMessage(sequencedMessage(1));
+            assertThat(handling.await(5, TimeUnit.SECONDS)).isTrue();
+            for (int copy = 0; copy < 1000; copy++) callback.getValue().onMessage(sequencedMessage(1));
+            callback.getValue().onMessage(sequencedMessage(2));
+            release.countDown();
+            assertThat(following.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(handled.get()).isEqualTo(2);
+        } finally {
+            release.countDown();
+            consumer.stop();
+        }
+    }
+
+    private static Message sequencedMessage(long sequence) {
+        Message message = mock(Message.class);
+        NatsJetStreamMetaData metadata = mock(NatsJetStreamMetaData.class);
+        when(message.isJetStream()).thenReturn(true);
+        when(message.metaData()).thenReturn(metadata);
+        when(metadata.streamSequence()).thenReturn(sequence);
+        return message;
+    }
 
     @Nested
     class ConstructorArgs {

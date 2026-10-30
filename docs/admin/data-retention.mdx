@@ -16,6 +16,15 @@ Otherwise, it names the Spring property, and the value is fixed in the supported
 The [configuration reference](./configuration-reference) lists the settings that have an environment variable.
 The times of the scheduled jobs are in the time zone of the server process.
 
+## Webhook dead letters
+
+Events that cannot be parsed retain their payload and routing envelope in PostgreSQL for administrator replay.
+Workspace deletion removes that workspace's dead-letter records through the workspace foreign key.
+Unassigned installation events have no workspace and remain until the instance is removed.
+Replay completion does not delete the record.
+Restrict database and backup access as for other provider data.
+See [Replay a failed webhook event](./webhook-replay.mdx).
+
 ## Worker disk
 
 The worker keeps these files under `/data/worker-git-repos`, on the `worker-git-repos` volume.
