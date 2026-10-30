@@ -1,0 +1,9 @@
+# TEST ONLY. Keep HELM_PLUGINS scoped to the disposable capacity harness directory.
+apiVersion: v1
+name: capacity-bench
+version: 0.1.0
+type: postrenderer/v1
+runtime: subprocess
+runtimeConfig:
+  platformCommand:
+    - command: node ${HELM_PLUGIN_DIR}/../post-render.ts

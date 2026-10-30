@@ -12,12 +12,17 @@ export const k6Image =
 const dockerUser =
 	process.getuid && process.getgid ? ["--user", `${process.getuid()}:${process.getgid()}`] : [];
 /** The scenarios under `load-tests/`, each run by `vp run test:load:<name>`. */
-export const loadScenarios = ["webhook-burst", "detection-mentor", "heph"] as const;
+export const loadScenarios = ["webhook-burst", "detection-mentor", "heph", "course"] as const;
 
 function isLoadScenario(value: unknown): value is (typeof loadScenarios)[number] {
 	return loadScenarios.some((known) => known === value);
 }
 const inputs = [
+	"COURSE_SCENARIO",
+	"COURSE_REVIEW_RATE",
+	"COURSE_CHAT_RATE",
+	"COURSE_TURNS",
+	"COURSE_THINK_SECONDS",
 	"BASE_URL",
 	"API_PREFIX",
 	"WEBHOOK_SECRET",
@@ -57,6 +62,9 @@ function workloadInputs(
 	scenario: (typeof loadScenarios)[number],
 	env: NodeJS.ProcessEnv,
 ): string[] {
+	if (scenario === "course") {
+		return ["AUTH_TOKENS", "AUTH_TOKEN", "WORKSPACE_SLUG", "ARTIFACT_IDS", "WEBHOOK_SECRET"];
+	}
 	if (scenario === "webhook-burst") {
 		return ["WEBHOOK_SECRET"];
 	}
@@ -161,13 +169,18 @@ async function checkScenarios(root: string) {
 	];
 	try {
 		for (const scenario of loadScenarios) {
-			if (docker([...container, "inspect", ...env, `/tests/${scenario}.js`], true).status !== 0) {
+			const courseEnv = scenario === "course" ? ["-e", "THREADS_PER_DEVELOPER=0"] : [];
+			if (
+				docker([...container, "inspect", ...env, ...courseEnv, `/tests/${scenario}.js`], true)
+					.status !== 0
+			) {
 				throw new Error(`Cannot inspect ${scenario}`);
 			}
 		}
 		for (const [name, expected] of [
 			["contracts", 0],
 			["unfinished", 99],
+			["unanswered", 99],
 		] as const) {
 			const result = docker([
 				...container,
@@ -182,7 +195,7 @@ async function checkScenarios(root: string) {
 					`${name}: expected exit ${expected}, got ${exitStatus(result.status, result.signal)}`,
 				);
 			}
-			if (name !== "unfinished") {
+			if (name === "contracts") {
 				continue;
 			}
 			const summary = asRecord(
@@ -190,13 +203,14 @@ async function checkScenarios(root: string) {
 				"summary",
 			);
 			const metrics = asRecord(summary.metrics, "metrics");
-			const metric = asRecord(metrics.review_jobs_finished, "review_jobs_finished");
+			const metricName = name === "unfinished" ? "review_jobs_finished" : "heph_turns_finished";
+			const metric = asRecord(metrics[metricName], metricName);
 			const verdicts = Object.values(asRecord(metric.thresholds, "thresholds"));
 			if (
 				verdicts.length === 0 ||
 				verdicts.some((verdict) => asRecord(verdict, "threshold").ok !== false)
 			) {
-				throw new Error("Unfinished review threshold did not fail in the k6 summary");
+				throw new Error(`Unfinished ${name} threshold did not fail in the k6 summary`);
 			}
 		}
 	} finally {
