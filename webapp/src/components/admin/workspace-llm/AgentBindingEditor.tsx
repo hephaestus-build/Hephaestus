@@ -50,7 +50,7 @@ function timeoutCeiling(purpose: BindingTarget["purpose"]) {
 			}
 		: {
 				max: MAX_TIMEOUT_SECONDS,
-				error: `Runs stop after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
+				error: `Reviews stop after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
 			};
 }
 
@@ -87,9 +87,9 @@ const runLimitsSchema = (ceiling: ReturnType<typeof timeoutCeiling>) =>
 		maxConcurrentJobs: z.preprocess(
 			numberInput,
 			z.coerce
-				.number({ error: "Enter a number of runs." })
-				.int({ error: "Enter a whole number of runs, 1 or more." })
-				.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of runs, 1 or more." }),
+				.number({ error: "Enter a number of reviews." })
+				.int({ error: "Enter a whole number of reviews, 1 or more." })
+				.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of reviews, 1 or more." }),
 		),
 	});
 

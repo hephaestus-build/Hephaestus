@@ -180,7 +180,7 @@ describe("AgentBindingsPage", () => {
 		fireEvent.change(timeout, { target: { value: "14400" } });
 		fireEvent.click(saveButton(inHouse));
 
-		inHouse.getByText("Runs stop after three hours, so enter 10800 seconds or less.");
+		inHouse.getByText("Reviews stop after three hours, so enter 10800 seconds or less.");
 		expect(timeout.getAttribute("aria-invalid")).toBe("true");
 		expect(onSave).not.toHaveBeenCalled();
 
@@ -206,7 +206,7 @@ describe("AgentBindingsPage", () => {
 
 		fireEvent.click(saveButton(inHouse));
 
-		inHouse.getByText("Enter a whole number of runs, 1 or more.");
+		inHouse.getByText("Enter a whole number of reviews, 1 or more.");
 		expect(document.activeElement).toBe(inHouse.getByLabelText(/^Max concurrent reviews/u));
 	});
 
@@ -224,7 +224,7 @@ describe("AgentBindingsPage", () => {
 		fireEvent.change(timeout, { target: { value: "60" } });
 
 		expect(inHouse.queryByText("Enter a number of seconds.")).toBeNull();
-		inHouse.getByText("Enter a whole number of runs, 1 or more.");
+		inHouse.getByText("Enter a whole number of reviews, 1 or more.");
 	});
 
 	it("offers Clear assignment only for a row that is actually bound", () => {
