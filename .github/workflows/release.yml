@@ -81,8 +81,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      notes: ${{ steps.render.outputs.notes }}
     steps:
       - name: Check out the released tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,11 +100,23 @@ jobs:
         env:
           VERSION: ${{ needs.release.outputs.version }}
           PREVIOUS_VERSION: ${{ needs.release.outputs.previous_version }}
+          RELEASE: ${{ needs.release.outputs.tag_name }}
+          COMMIT: ${{ needs.release.outputs.sha }}
+          MIGRATIONS: ${{ needs.release.outputs.migrations }}
         run: |
           set -euo pipefail
           node scripts/plan-release.ts --notes "$PREVIOUS_VERSION" "$VERSION" CHANGELOG.md notes.md
-          delimiter="notes-$(openssl rand -hex 16)"
-          { echo "notes<<$delimiter"; cat notes.md; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
+          node scripts/github-release-notes.ts notes.md release-body.md
+
+      - name: Keep the complete notes and bounded description
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          overwrite: true
+          path: |
+            notes.md
+            release-body.md
+          if-no-files-found: error
 
   tag-images:
     needs: [release, release-notes]
@@ -133,6 +143,12 @@ jobs:
           ref: ${{ needs.release.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Download the rendered release notes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-notes
+          path: release-notes
 
       - name: Log in to GitHub Container Registry
         uses: ./.github/actions/ghcr-login
@@ -203,6 +219,7 @@ jobs:
             suffix=${platform//\//-}
             node scripts/keyless-sign.ts attest --signing-config "$RUNNER_TEMP/rekor-v2-signing.json" --yes --type spdxjson --predicate "evidence/$image-$suffix.spdx.json" "$repository@$digest"
           done
+          cp release-notes/notes.md evidence/release-notes.md
           (cd evidence && sha256sum -- * > SHA256SUMS)
           node scripts/keyless-sign.ts sign-blob --yes --bundle evidence/SHA256SUMS.sigstore.json evidence/SHA256SUMS
 
@@ -340,8 +357,6 @@ jobs:
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
           VERSION: ${{ needs.release.outputs.version }}
           SHA: ${{ needs.release.outputs.sha }}
-          MIGRATIONS: ${{ needs.release.outputs.migrations }}
-          RELEASE_NOTES: ${{ needs.release-notes.outputs.notes }}
         run: |
           set -euo pipefail
           # The release job planned outside the promotion lock, so another run may have written this
@@ -353,24 +368,11 @@ jobs:
             exit 0
           fi
 
-          NOTES=$(mktemp)
-          # Invisible in GitHub's rendering; the server's update check reads it (core/release/ReleaseCheckClient).
-          echo "<!-- hephaestus:schema-migrations=$MIGRATIONS -->" >> "$NOTES"
-          if [ "$MIGRATIONS" = true ]; then
-            {
-              echo "> [!WARNING]"
-              echo "> This release contains **schema migrations**. Before upgrading, complete the release-specific steps in the [migration guide](${{ github.server_url }}/${{ github.repository }}/blob/$SHA/MIGRATION.md) and verify your database backup."
-              echo ""
-            } >> "$NOTES"
-          fi
-          # Rendered by the release-notes job; an empty body means its output did not arrive.
-          [ -n "$RELEASE_NOTES" ] || { echo "::error::No release notes for $TAG_NAME"; exit 1; }
-          printf '%s\n' "$RELEASE_NOTES" >> "$NOTES"
-          echo "----- release notes -----"; cat "$NOTES"; echo "-------------------------"
+          [ -s release-notes/release-body.md ] || { echo "::error::No release description for $TAG_NAME"; exit 1; }
 
           gh release create "$TAG_NAME" --draft \
             --title "$TAG_NAME" \
-            --notes-file "$NOTES" \
+            --notes-file release-notes/release-body.md \
             --target "$SHA" \
             --repo "${{ github.repository }}"
 

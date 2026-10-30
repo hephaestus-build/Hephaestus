@@ -105,6 +105,10 @@ They contain every `CHANGELOG.md` section above that release, newest first, as t
 Thus, the notes of an unpublished version appear in the next published release.
 The draft is not created when these sections are missing, repeated, out of order, or not stable versions.
 
+The complete notes are also a release asset, covered by the signed evidence checksums.
+If the description exceeds GitHub's size limit, it links to that asset and the changelog at the released commit.
+The schema-migration notice stays in the description.
+
 An ordinary merge of an already-published version does not cut a release.
 
 The resume path covers failures *after* draft creation: seeded-upgrade, supported-host, or publication failures.
