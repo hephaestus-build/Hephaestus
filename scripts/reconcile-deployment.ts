@@ -162,7 +162,9 @@ export function parseChannel(value: unknown): Channel {
 
 	const release = asString(record.release, "channel.release");
 	if (!RELEASE_TAG.test(release)) {
-		throw new Error(`channel.release must be an immutable vX.Y.Z tag, not ${release}`);
+		throw new Error(
+			`channel.release must be an immutable vX.Y.Z or vX.Y.Z-rc.N tag, not ${release}`,
+		);
 	}
 	return { release, allowRollback, freeze };
 }

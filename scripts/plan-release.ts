@@ -52,7 +52,7 @@ export interface ReleaseCut {
 	readonly sha: string;
 	readonly tag: string;
 	readonly version: string;
-	/** An immutable RC whose exact image and chart digests this stable release promotes. */
+	/** An immutable RC whose source and image digests this stable release promotes. */
 	readonly candidate?: string;
 }
 

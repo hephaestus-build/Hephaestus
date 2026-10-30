@@ -181,7 +181,7 @@ jobs:
         with:
           install: "none"
 
-      - name: Verify candidate signatures before selecting artifacts
+      - name: Install cosign for candidate verification
         if: needs.release.outputs.candidate != ''
         uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
         with:
@@ -289,7 +289,8 @@ jobs:
           if [ -n "$CANDIDATE" ]; then
             node scripts/plan-release.ts --candidate-source "$CANDIDATE" "$SHA"
             source="$RUNNER_TEMP/candidate/release-${CANDIDATE}.chart.json"
-            node scripts/release-chart.ts verify "$source" "$CANDIDATE" security/release-images.json "$RUNNER_TEMP/chart" >/dev/null
+            mkdir "$RUNNER_TEMP/candidate-chart"
+            node scripts/release-chart.ts verify "$source" "$CANDIDATE" security/release-images.json "$RUNNER_TEMP/candidate-chart" >/dev/null
           fi
           # The source commit and image digests match the candidate; only release metadata changes.
           node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \

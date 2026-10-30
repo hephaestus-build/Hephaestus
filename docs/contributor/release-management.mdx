@@ -470,8 +470,7 @@ A stable draft from another source blocks promotion. Delete only that unpublishe
 
 The stable lock names the new chart digest and stable chart version.
 Image build metadata keeps the candidate version.
-The installer and deployment reconciler set the logical release identity from the signed stable lock.
-Manual Helm operators follow [Verify the release chart](/admin/kubernetes#verify-the-release-chart), including its release values file.
+The stable chart's values name the stable release and source commit.
 
 After stable publication succeeds, run `vp exec changeset pre exit` in a pull request.
 Let the Version PR consume the archived notes and set the stable package version.

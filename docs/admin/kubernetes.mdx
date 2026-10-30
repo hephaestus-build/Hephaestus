@@ -87,8 +87,6 @@ You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 
 The release signs the chart with Cosign 3.1 in the Sigstore bundle format.
 Cosign 2 reads that format only from version 2.6 and only with `--new-bundle-format`, and CI does not test it.
 You do not need Node.js or a checkout of the repository.
-If you supply `--lock FILE` to the installer, put its signature bundle at `FILE.sigstore.json`.
-For a public release, the installer can download the bundle when it is absent.
 Use the Helm version that [`.github/actions/setup-helm`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
 CI and the release workflow install that version.
 Contributors also need it: see the [local development prerequisites](/contributor/local-development#prerequisites).
@@ -102,16 +100,8 @@ If one command fails, stop: do not install the chart.
 VERSION=X.Y.Z
 CHART=ghcr.io/hephaestus-build/charts/hephaestus
 # 1. The chart digest, from the joint lock of the release.
-LOCK="release-v$VERSION.chart.json"
-URL="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
-curl -fsSL "$URL/$LOCK" -o "$LOCK"
-curl -fsSL "$URL/$LOCK.sigstore.json" -o "$LOCK.sigstore.json"
-cosign verify-blob --bundle "$LOCK.sigstore.json" \
-  --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com "$LOCK"
-jq -e --arg release "v$VERSION" --arg version "$VERSION" \
-  '.schemaVersion == 2 and .release == $release and .chart.version == $version' "$LOCK" >/dev/null
-DIGEST=$(jq -er .chart.digest "$LOCK")
+DIGEST=$(curl -fsSL "https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION/release-v$VERSION.chart.json" |
+  jq -er .chart.digest)
 # 2. The release workflow signed that digest.
 cosign verify "$CHART@$DIGEST" \
   --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
@@ -120,15 +110,12 @@ cosign verify "$CHART@$DIGEST" \
 helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
 # 4. The signed chart is the chart of this release.
 helm show chart "chart-$VERSION/hephaestus" | grep -x "version: $VERSION" >/dev/null
-# 5. The release identity from the signed lock.
-jq '{release: {version: .release, commit: .commit}}' "$LOCK" > release-values.yaml
 ```
 
-Step 1 verifies the signed joint lock and its release name.
+The joint lock in step 1 is only a lookup for the chart digest.
+You do not verify it.
 Step 2 refuses every digest that the release workflow did not sign.
-Step 4 checks that the chart names the requested release version.
-Keep `release-values.yaml` and pass it after your site values on every Helm install or upgrade.
-It sets the logical release identity without changing the chart or its images.
+That identity is the same for every release, so step 4 binds the chart to the release that you asked for.
 A version tag can move, and it is not a release signal.
 
 The `chart-$VERSION/hephaestus` directory is the verified chart, with its `profiles/`.
@@ -861,7 +848,7 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
 
    ```bash
    helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
-     -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml -f release-values.yaml \
+     -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
      --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
    ```
 
@@ -1256,7 +1243,7 @@ Then upgrade:
 
 ```bash
 helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
-  -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml -f release-values.yaml \
+  -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
   --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
 ```
 

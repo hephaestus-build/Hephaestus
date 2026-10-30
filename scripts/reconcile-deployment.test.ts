@@ -70,9 +70,18 @@ await test("a channel names an immutable release", () => {
 		allowRollback: false,
 		freeze: false,
 	});
-	assert.throws(() => parseChannel({ release: "main" }), /immutable vX\.Y\.Z tag/u);
-	assert.throws(() => parseChannel({ release: "v01.2.3" }), /immutable vX\.Y\.Z tag/u);
-	assert.throws(() => parseChannel({ release: "v1.2.3-rc.01" }), /immutable vX\.Y\.Z tag/u);
+	assert.throws(
+		() => parseChannel({ release: "main" }),
+		/immutable vX\.Y\.Z or vX\.Y\.Z-rc\.N tag/u,
+	);
+	assert.throws(
+		() => parseChannel({ release: "v01.2.3" }),
+		/immutable vX\.Y\.Z or vX\.Y\.Z-rc\.N tag/u,
+	);
+	assert.throws(
+		() => parseChannel({ release: "v1.2.3-rc.01" }),
+		/immutable vX\.Y\.Z or vX\.Y\.Z-rc\.N tag/u,
+	);
 	assert.throws(() => parseChannel({}), /channel\.release/u);
 	assert.throws(() => parseChannel({ release: "v1.2.3", freeze: "yes" }), /must be a boolean/u);
 });
@@ -1463,7 +1472,7 @@ await test(
 );
 
 await test(
-	"installed 0.95.1 reconciler applies the rc.1 chart on Kubernetes",
+	"this tree's installed reconciler applies the rc.1 chart on Kubernetes",
 	{
 		skip:
 			process.env.RECONCILER_TEST_CONTEXT === undefined &&

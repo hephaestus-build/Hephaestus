@@ -1095,7 +1095,7 @@ void test(
 			/packaged at 1\.0\.0\n/u,
 		);
 		assert.equal(
-			await readFile(path.join(directory, "chart/hephaestus-1.0.0-rc.2.tgz"), "utf8"),
+			await readFile(path.join(directory, "candidate-chart/hephaestus-1.0.0-rc.2.tgz"), "utf8"),
 			Buffer.from(
 				String(
 					asRecord(

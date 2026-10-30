@@ -31,9 +31,10 @@ The release workflow signs each asset with the same keyless identity, `release.y
 | `host-smoke-amd64.json`, `host-smoke-arm64.json` | The supported-host smoke records. | Operators who check the hosts that the release passed on. |
 
 When a stable release promotes a qualified candidate, image digests stay unchanged.
-The chart is packaged from the same source with stable release metadata; the joint lock names its new digest.
+The chart is packaged from the same source with stable release metadata.
+The joint lock names its new digest.
 Image build metadata retains the candidate version.
-The logical stable release identity comes from the signed stable lock, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes.
+The stable chart's values name the stable release and source commit.
 
 ## Independent verification
 

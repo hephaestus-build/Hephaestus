@@ -10,8 +10,7 @@ const version =
 	/^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-rc\.(?<rc>0|[1-9]\d*))?$/u;
 
 export function parseVersion(value: string): Version | undefined {
-	const match = version.exec(value);
-	const groups = match?.[0] === value ? match.groups : undefined;
+	const groups = version.exec(value)?.groups;
 	if (
 		groups === undefined ||
 		[groups.major, groups.minor, groups.patch, groups.rc].some(
