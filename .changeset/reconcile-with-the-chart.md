@@ -1,5 +1,0 @@
----
-"hephaestus": minor
----
-
-A pull-based host that follows a commit channel can now apply it with the Helm chart. Set `HEPHAESTUS_STACKS=chart` and put your chart values in `/etc/hephaestus/chart.yaml`. Each promotion still verifies the signed channel and its commit lock first, and then runs one `helm upgrade --install` with the images that the lock names. When the migration or a Pod fails, Helm rolls the workloads back; it does not roll back the database. An upgrade that a reboot or a timeout cut off is rolled back on the next tick before it runs again. The chart stack refuses a release channel, because it cannot verify the release's signed chart package yet. The optional settings `HEPHAESTUS_CHART_RELEASE`, `HEPHAESTUS_CHART_NAMESPACE`, `HEPHAESTUS_CHART_PROFILE` and `HEPHAESTUS_HELM` name the release, its namespace, the chart profiles in the order they apply (for example `"small small-16gib"`) and the Helm binary. The reconcile unit no longer requires Docker, so a host without it can run the reconciler.

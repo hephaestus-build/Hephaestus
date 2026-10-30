@@ -1,5 +1,0 @@
----
-"hephaestus": minor
----
-
-The worker now writes a review's feedback after the review sandbox ends, with the same model and budget, and the sandbox slot is free for the next review while it writes. A review whose results were admitted never fails because of its feedback. Feedback that cannot be written is withheld with the most specific reason, such as **No AI** or **Evidence not permitted**, or as **Not composed** when the time or budget runs out. A provider outage or an unexpected failure instead hands the review to a new attempt, which starts no sandbox and writes only the feedback that is still open. The new `agent.job.composition.stopped` metric counts each cause. The new optional setting `PRACTICE_REVIEW_COMPOSITION_TIMEOUT` (default 10 minutes) bounds this step, so a review can take up to that much longer than its configured timeout, and never longer than the stale-job sweep allows. The new optional setting `AGENT_MAX_CONCURRENT_COMPOSITIONS` (default 16) bounds how many reviews one worker runs at once, including those that only write feedback. API clients can now receive the new `NOT_COMPOSED` stop reason on feedback, its copies and its checks.

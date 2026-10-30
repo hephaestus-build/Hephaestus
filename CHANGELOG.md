@@ -1,5 +1,729 @@
 # Changelog
 
+## 0.95.0
+
+### Minor Changes
+
+- Practices across the workspace now offers Last 7 days beside Last 30 days, Last 90 days and All time.
+- The review, result, problem, feedback, practice and work sheets of Practice reviews now part their sections with a thin line. Admins can fold every section by its heading, and the choice is remembered. Section headings take the size of the practice pages' sections.
+- Protect admin access with passkeys. Workspace owners can require passkeys for their admins and owners. Instance policy takes precedence over workspace and personal choices.
+
+  **Operators:** Production instance administration now requires passkeys by default. Before upgrade, read the passkey enrollment and recovery procedure. Configure the trusted browser origin if it differs from the instance URL. You can explicitly select optional instance-admin protection through `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED=false`.
+
+- New and changed alert rules. Load the new rule file from this release to use them.
+
+  - New alerts: no available webhook receiver, an unavailable receiver replica, a high share of GitHub redelivery requests, and review failures by cause (sandbox, unreachable server or model provider, preparation, lost workers).
+  - The webhook receiver alerts select the `<release>-webhook` Deployment by its chart labels. kube-state-metrics must export them: allow `deployments=[app.kubernetes.io/name,app.kubernetes.io/component]` with `--metric-labels-allowlist`. Without it, these alerts never fire.
+  - `agent_job_infra_retry_requeued_total` has a new `cause` label, and `webhook_publish_total` a new `stream` label.
+  - The WAL archive alert also fires when the server cannot read the archiver.
+  - Agent-job failure alerts fire at three failures in one hour, so a small instance alerts too.
+  - The PostgreSQL volume warning covers 5 % to 15 % free space and no longer fires beside the critical alert.
+
+- The conversation area is now **Ask Hephaestus**, and answers in the app and Slack come from Hephaestus. Replies carry an AI badge. Links in Slack messages, weekly digest emails and bookmarks still open your conversation.
+
+  **Operators:** to update the Slack agent description, paste it again from the Slack app manifest template.
+
+- The broker's client port is now published on the host's loopback address only, and the `NATS_BIND_HOST` setting is gone. Stacks on the same host, such as preview environments, keep connecting over the shared Docker network. **Operators:** if you set `NATS_BIND_HOST` so that another host could reach the broker, that host can no longer connect. Remove the setting from your environment file.
+- The one-host Kubernetes platform now issues and renews the client certificate that PostgreSQL backup Jobs need. The chart reads it from `postgresql.backup.clientTlsSecret`, separately from the database server certificate. The one-host values select `hephaestus-postgresql-backup-tls`. Configure the off-host repository and backup credentials before you enable backups.
+- The released Helm chart now names the release's images by digest, and the release signs the chart in the registry. To install or upgrade on Kubernetes, verify the chart digest with `cosign verify` (Cosign 3.1 or later), pull the chart by that digest, and run `helm upgrade --install` with a profile and your own values. You no longer need Node.js, a checkout of the repository, or a prepared values file.
+- The Kubernetes restore procedure now starts PostgreSQL alone so you can lock down a restored clone before migrations or application roles start. Set `migration.enabled=false` and all application replica counts to zero for this phase. The verified chart contains the lockdown SQL. **Operators:** update custom restore scripts that read `docker/self-host/restore-clone-lockdown.sql` to use `deploy/chart/hephaestus/files/restore-clone-lockdown.sql`, or the `files` directory of the verified release chart. Keep external destinations denied until the isolated restore checks pass.
+- The Helm chart can now serve workspace subdomains with `workspaceSubdomains.enabled`. The base domain is the installation's `host`. Sign-in and the API stay on the apex. Workspace links redirect to the workspace host, with their path and query intact.
+
+  Prepare wildcard DNS and a DNS-01 certificate before you enable the setting. On one host, `k3s-install.sh --workspace-subdomains --dns01-issuer <issuer>` selects your DNS-01 issuer. Set the chart value back to `false` to return to workspace paths on the apex.
+
+- Practice reviews of GitHub pull requests can now read the single check runs and commit statuses of the reviewed commit. A practice can also review a pull request again when its checks have finished, with the new **Checks finished** event: when every check GitHub had listed has ended. A re-run on the same push starts a new review when its checks finish again, even if the results match. A check run that has not finished yet never counts as passed or failed, and when Hephaestus has not read the check runs, a practice reports that it could not determine them instead of reporting missing checks. Checks that wait for a maintainer to approve them, as on a pull request from a fork, count as not finished, and Hephaestus's own check run is never counted as one of the pull request's checks. GitLab pipelines are not read yet.
+- Practice reviews can select CI evidence separately from pull request details. Checks and merge status now have their own source. Review decisions belong to the review discussion source.
+
+  **Operators:** Before reviews resume after the upgrade, update custom scripts and criteria that read these fields from `metadata.json`. Read CI fields from `checks.json` and the aggregate review decision from `review_threads.json`. The upgrade moves current practice definitions and catalog comparison bases to source contract 3.0.0. It preserves custom criteria, scripts, and historical versions.
+
+  Queued reviews and unfinished scans without results continue with upgraded source pins. Work with existing results or staged output stops with the recorded reason `CONTRACT_CHANGED`. **Operators:** request the remaining reviews or scans again after the upgrade. Existing results and historical references stay unchanged. Adopted catalog scripts keep the existing `mergeLead` API.
+
+- The Docker Compose deployment is deprecated. From 1.0.0, the Helm chart is the only supported deployment, on a Kubernetes cluster or on one host with k3s. Compose stays supported for the rest of the 0.x releases. Move your install to the chart before you upgrade to 1.0.0. A migration guide for the move follows before 1.0.0. This notice needs no action now. [Supported deployment](https://docs.hephaestus.build/admin/compatibility-policy#supported-deployment) has the details.
+- Instance admins can export consented practice-review metadata for research after a fresh passkey check. Each dataset uses new participant keys and records its permitted use period. Removal and closure records help admins track withdrawn consent and downstream deletion. Exports exclude source content, private notes and model transcripts.
+- Database migrations now run once per release, before the new application starts, so an upgrade is one rollout. The bundled Compose stacks run a one-shot `database-migration` service, and the server and worker wait for it instead of migrating at start. A killed migration run no longer leaves a lock that blocks the next run. **Operators:** if you start the application image outside the bundled Compose stacks, run it once per release with `SPRING_PROFILES_ACTIVE=prod,migrate` and the database settings before you start the new roles.
+- Practices across the workspace again compares developers' standings, with your marker, time ranges and typical ranges. Earlier assessments remain visible and are marked when their criterion version is unknown. Requested reviews and reviews of past work keep a valid standing when they return no verdict. Turning feedback off stops delivery and keeps standing.
+
+  **Operators:** The practice comparison API responses change. Update clients that consume `/practices/workspace-overview` or `/practices/tiles` with this release.
+
+- The worker now writes a review's feedback after the review sandbox ends, with the same model and budget, and the sandbox slot is free for the next review while it writes. A review whose results were admitted never fails because of its feedback. Feedback that cannot be written is withheld with the most specific reason, such as **No AI** or **Evidence not permitted**, or as **Not composed** when the time or budget runs out. A provider outage or an unexpected failure instead hands the review to a new attempt, which starts no sandbox and writes only the feedback that is still open. The new `agent.job.composition.stopped` metric counts each cause. The new optional setting `PRACTICE_REVIEW_COMPOSITION_TIMEOUT` (default 10 minutes) bounds this step, so a review can take up to that much longer than its configured timeout, and never longer than the stale-job sweep allows. The new optional setting `AGENT_MAX_CONCURRENT_COMPOSITIONS` (default 16) bounds how many reviews one worker runs at once, including those that only write feedback. API clients can now receive the new `NOT_COMPOSED` stop reason on feedback, its copies and its checks.
+- On the Practice reviews overview, Queue, What the reviews did, Delivery and Practices can now be folded. Each choice is kept in this browser.
+- GitHub events that the webhook receiver could not accept, for example while the message broker was slow or restarting, are now redelivered automatically. Every 10 minutes the server reads deliveries of the past two hours and asks GitHub for up to five redeliveries on the [documented schedule](https://docs.hephaestus.build/admin/webhook-ingestion-operations#failed-github-deliveries). The new `github.webhook.unrecovered` metric counts GitHub events that failed every attempt, and the example alert rules include it.
+- Workspace admins can now change which GitLab projects a workspace follows after setup. Under **Integrations → GitLab → Projects to follow**, choose all projects in the group or only the projects already listed. Changing to all projects asks for confirmation first, and stopped projects stay stopped. Neither choice removes synced work or changes group membership. Each change is recorded in the connection's audit history.
+- Stopping a GitLab project now keeps the work Hephaestus already synced from it. The project appears under **Integrations → GitLab → Stopped projects**, stays out of later syncs, and comes back when you add its current path again. To remove the kept work, select **Remove synced work** there while the connection is active. The project on GitLab does not change, and practice reviews, feedback, and conversations keep their usual retention. Each removal is recorded in the connection's audit history.
+- When you create a GitLab workspace, you can now choose which projects it monitors: all projects of the group, including ones added later, or only the projects you select. Search and page through the group's projects to choose them. The choice covers project content such as merge requests and issues; workspace members and teams still come from the whole group.
+- One long Hephaestus answer no longer keeps every other question waiting. An answer stops after five minutes or 40 model calls. In Slack, a question that has not started after 10 seconds gets a short notice instead of silence. When Hephaestus cannot open its files for a reply, it says what it could not check instead of trying again and again.
+
+  The Hephaestus timeout of a model assignment now accepts at most 300 seconds. A stored Hephaestus timeout above 300 seconds acts as 300 without any change, and a request that sets a longer one is refused.
+
+- Hephaestus now keeps one conversation with you in each workspace. The Ask Hephaestus page and panel show all of it, with a Slack marker on the messages written in Slack. Your Slack direct message shows what you asked there and Hephaestus's answers. You can reply to any message in a thread.
+
+  Hephaestus answers where you asked. A question from the app gets its answer only in the app. You can send another message while Hephaestus answers and delete your own messages. You stop an answer in the app, also an answer that Hephaestus writes in Slack. You rate an answer as **Helpful** or **Not helpful**, also in a Slack thread. **New chat**, the chat history list and editing a sent message are gone. The upgrade deletes earlier Hephaestus chat history.
+
+  Hephaestus can point to a result or a problem in your work, and it can show you feedback that a review prepared for your conversation. That feedback counts as delivered only when Hephaestus shows it in an answer that you can see. Hephaestus does not post an answer to Slack a second time. If an answer does not fully reach Slack, the app shows "Not fully delivered to Slack. The full answer is here."
+
+  Hephaestus can now read the code of the repositories that your workspace monitors, with their history and changes. It reads them at a branch, a commit, a pull request or a merge request. It can search the files and compare two versions, and it names the commit that it read. Hephaestus only reads: it cannot run, build or change your code.
+
+  **Operators:** Stop every role before you upgrade. The upgrade drops the Hephaestus chat tables and deletes earlier Hephaestus chat history. Back up the database and keep the release lock of the previous release for a restore. Update the Slack app from the manifest template, reinstall it, and select **Reconnect Slack** in each workspace that uses it. Rename `HEPHAESTUS_RATE_LIMIT_MENTOR_CHAT_*` to `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_*`. Remove the Traefik sticky-cookie labels and the removed `hephaestus.mentor.*` settings. The **Internet access** switch of the conversation model assignment is removed, and Hephaestus has no internet access. If you pin a custom agent image, rebuild it from the matching release source. Each worker starts one Hephaestus host container, and the recommended single host has 24 GB of memory. Hephaestus reads your work and code in a short-lived sandbox on the worker, with no network and no credentials. With the Docker sandbox runtime, each worker keeps 2 empty sandboxes ready and starts one for each running answer, with 1 CPU and 1 GiB of memory each. With Kubernetes, use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/kubernetes#sandbox-sizes). Hephaestus reads code only where Git mirrors are enabled. Hephaestus refuses a model with a context window below 32,768 tokens or an output limit below 4,096 tokens. Preview operators must recreate existing preview environments before they use this release. The migration guide lists the removed settings, the new settings and the changed metrics.
+
+- Hephaestus now knows more about your work. It can read what you did in the last 14 days, with dates: the pull requests and issues you opened, merged or closed, the reviews and comments you wrote, and your commits. For your own pull requests it sees the requested reviewers, labels, commits and changed files. For issues you opened or that are assigned to you, it sees the description, the comments and related issues. It can also show your standing in each practice, as your Practice profile shows it, and it links the team documents it quotes. Hephaestus knows your handle in each connected system and today's date in your time zone, so questions such as "what did I do last week?" get answers about the right days. Hephaestus keeps reviews by Hephaestus apart from reviews by people, says when it cannot see something, and never reads repositories that your team hides from contributions. Hephaestus reads only from the GitHub or GitLab instance your workspace is connected to.
+- When Hephaestus is answering as many questions as it can at once, a question that waits now says so in the app and in Slack. The server learns that number from the new optional `HEPHAESTUS_MENTOR_TURN_CAPACITY`. The Helm chart sets it from `worker.replicas` and `worker.conversationTurns`. Without the chart, set it on the server to the conversation turns that all your workers run at once. If it is not set, a waiting question does not say why it waits.
+- While Hephaestus works on an answer, it now says what it is reading, for example "Reading your practice feedback…". Hephaestus answers about your work only from what it read in that answer, and it fails an answer that holds no words instead of showing you an empty one.
+
+  If Hephaestus shows no text for a long time and then the whole answer at once, a proxy in front of the model buffers its stream. The AI providers guide says how to turn that buffering off.
+
+- Hephaestus can add a weekly digest to your Hephaestus conversation. Turn it on in **User settings**. Each Monday from 09:00 in your time zone, Hephaestus adds a digest of the week before to your conversation in each workspace where Hephaestus can answer you. It lists the practice feedback that reached you on your work or in your Hephaestus conversation, and what changed on your Practice profile. It also counts the new feedback that waits for you on your Practice profile. Quiet weeks send nothing.
+
+  A short note in Slack tells you that the digest is ready. Without a connected Slack account, you get an email instead. If Hephaestus cannot reach you either way, the digest is only in your conversation. The note contains no feedback. Reply in the digest's thread to go through it with Hephaestus. The setting **Comments and Slack reminders** is now **Comments on your work**, and the Slack reminder about prepared feedback is gone.
+
+- A practice script can no longer report Met or Does not apply on coverage that it typed itself. Hephaestus now measures what the script read, so a script that ignored a failed read, or quoted a source without reading it, gets no Met.
+
+  **Operators:** a custom practice script that returns a result with `coverage` now stops as an invalid result. Remove `coverage` from the result. Scripts that return what `ctx.review` returned need no change.
+
+- The multi-file Compose stack now takes the Let's Encrypt contact from `ACME_EMAIL`, as the single-host stack does, instead of a fixed address. **Operators:** if you run the multi-file stack, set `ACME_EMAIL` in the proxy stack's environment before you upgrade.
+- One-host installs verify effective kubelet reservations and allocatable memory before upgrading the application. Hard eviction thresholds, log rotation, image garbage collection, and bounded host journals now have explicit policies. Soft eviction stays disabled until stateful-service request sizing is qualified. The optional `--verify-kubelet` flag repeats the read-only cluster checks.
+
+  **Operators:** Disable host swap and its boot configuration before running the installer. An effective policy or allocatable mismatch stops the upgrade until the kubelet configuration is corrected. Hosts outside Ubuntu 24.04 with the 6.8 GA kernel require the explicit `--allow-unqualified-host` qualification override. This override retains resource-policy checks.
+
+- The Helm chart now requires Kubernetes 1.35 or later, the oldest minor version that the Kubernetes project still maintains. Upgrade a cluster at 1.34 or older before you install or upgrade Hephaestus.
+- You can install Hephaestus on Kubernetes with its Helm chart.
+  Workers run practice reviews and conversation turns in sandboxes on the cluster.
+  The single-node profile enables them. The install guide shows how to name the sandbox namespace and Kubernetes API endpoint.
+
+  The small profile starts the new worker before the old worker drains. The server pauses while its replacement starts.
+  Each worker checks isolation at startup and every 15 minutes.
+
+  When `migration.enabled=true` and the release is not restoring, the chart runs the database migration once per revision in a Job.
+  The 0.95.0 schema upgrade requires every old runtime role to stop first, as the migration guide describes.
+  A failed schema migration needs the documented recovery procedure. An image rollback cannot undo it.
+
+  The chart can back up bundled PostgreSQL to an S3-compatible bucket with pgBackRest.
+  Kubernetes 1.35 or later, a network plugin that enforces NetworkPolicy and a Gateway API controller are required.
+  Each release publishes the signed chart beside its images.
+
+  To move an existing Compose installation, use [Move from Compose to the Helm chart](https://docs.hephaestus.build/admin/compose-to-kubernetes).
+  Upgrade Compose to 0.95.0 first, then keep that version during the move.
+
+- The webapp image no longer bundles a legal profile, so `/imprint` and `/privacy` show your own pages from `/legal-overrides/`, or the built-in "not configured" placeholder. On the Helm chart, the new value `webapp.legalOverrides` mounts your pages from a ConfigMap.
+
+  **Operators:** `LEGAL_PROFILE` is no longer read, and the chart refuses `webapp.legalProfile`. Before you upgrade, remove `webapp.legalProfile` from your Helm values. If you used a legal profile, put your imprint and privacy Markdown files in a ConfigMap and name it in `webapp.legalOverrides`, as the legal pages guide describes.
+
+- Models that share provider capacity can now share one call pool across workers and workspaces. Reserve capacity for conversations, serve background work fairly, and set shared request and token rates. Reviews wait for admission before they start a sandbox. Cancellation keeps capacity counted until the model connection closes.
+
+  The optional `AGENT_MAX_ACTIVE_COMPOSITIONS` setting bounds loaded compositions per worker and defaults to 4. `AGENT_MAX_CONCURRENT_COMPOSITIONS` continues to bound all review attempts.
+
+  Queued review claims take part in fair scheduling before a sandbox starts. Unused first-call reservations recover when a worker stops renewing them. Active calls retain their fenced permits until their transport closes, including cancellation after JSON response headers.
+
+  A new review cannot hide the claim that owns the pool's next turn. A first call to another pool releases only its unused primary reservation before it waits.
+  Refunds for unused reservations preserve scheduling order, so an older composition retains its turn.
+
+  Queued calls keep their scheduling position while they wait for local admission. Completed JSON answers retain their usage charge if capacity is revoked before settlement. Exhausted retries record withheld feedback without waiting for a composition slot.
+
+  Changing a busy call pool returns a conflict with the `llm-call-pool-in-use` problem type and a message that explains when to retry.
+
+- Instance and workspace admins can connect Anthropic through its Messages API. Reviews, practice scripts, feedback composition, and conversations use the native protocol. Reviews reuse stable prompt layers with a five-minute cache lifetime. Cache reads and writes appear in usage with Anthropic's separate token counts.
+
+  Model tool choice follows a capability test instead of the model name. Untested models choose when to call tools. In each admin console, edit a saved OpenAI-protocol chat model and select **Test tool choice** to test its endpoint. The test sends two short requests that the provider may charge for. An inconclusive test keeps the previous result. Anthropic sessions always let the model choose, so a repair keeps the same cache prefix.
+
+  Native feedback composition uses the provider’s thinking and sampling defaults. The review runner uses its SDK’s native model metadata. An unrecognized native model alias also keeps the provider defaults for those options.
+
+  **API clients:** Instance and workspace AI connection responses can now return `anthropic-messages` in `apiProtocol`. Update generated clients or response validation that uses a fixed protocol enum before using Anthropic connections.
+
+- A practice review no longer spends a retry for a reason that is not its own. When a worker's drain stops it, for example during an upgrade, it runs again on another worker without spending a retry; after 3 drains, the next one cancels it. On Kubernetes, a review whose Pod the sandbox quota refuses waits in the queue instead of failing after two minutes. Queued reviews end with "Hephaestus had no room to run this review in time." only when they have waited for an hour while the quota had no room for one and no review ran, for example because Hephaestus's sandboxes held it; waiting behind running reviews never ends a review. A quota smaller than one review sandbox cancels the queued reviews at once with "The sandbox quota is smaller than one review sandbox." A scan ends with the same reason instead of queueing its next file. The metrics `agent_job_drained_total`, `sandbox_start_failures_total` and `sandbox_review_starved_seconds` show these. The worker needs `get` and `list` on `events` and `resourcequotas` in the sandbox namespace, which the chart's Role grants; a Role of your own needs them too. API clients can now receive the new `NO_SANDBOX_ROOM` stop reason on reviews and scans; a client that maps stop reasons must accept it. The upgrade to 0.95.0 stops every runtime role before migration, as the migration guide requires.
+- You can install Hephaestus on one Linux host with one command. Each release publishes a signed `k3s-install.sh` and the files it installs. The installer checks the host first: the host name must reach this host on port 80, ports 80 and 443 must be free, the host needs 4 CPUs and 32 GiB of memory, or 16 GiB with the planned-outage profile for small hosts, and NTP must keep the clock in sync. Then it installs a pinned k3s, Traefik and cert-manager, gets a `Let's Encrypt` certificate, issues and renews the PostgreSQL certificates, verifies the signed release chart, and installs it with reviews turned on. Run it again to repair or upgrade the host: it keeps every key of the release Secret and generates only the missing ones. If your model endpoint is served by the same cluster's Gateway, the new chart value `networkPolicy.workerGatewayPorts` lets the worker reach it.
+- 0.95.0 is the last 0.x release and the required source for 1.0.
+
+  The worker hub, its `POST /api/workers/exchange` and WebSocket `/api/workers/connect` endpoints, and its control and token settings are already removed in 0.95.0.
+  Apply **Workers no longer connect to the server** in [this release's migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) now.
+  Workers use the database for coordination.
+
+  1.0 supports the Helm chart on Kubernetes, including one host with k3s.
+  The following settings, values and interfaces are deprecated for removal in 1.0.
+  This notice does not remove them from 0.95.
+
+  **Operators:** first upgrade to 0.95 on Compose, then move to the chart at the same version.
+  Before 1.0, remove the settings below from your deployment and update callers of the affected interfaces.
+  Stop every old runtime role before the 1.0 migration.
+  Keep a verified PostgreSQL and JetStream backup, the encryption keys and the signed 0.95 release lock.
+  An image rollback cannot undo that migration.
+
+  - **Compose self-hosting and Docker sandboxes:** the self-host Compose bundle, its host backup timers, the Compose reconciler path and `HEPHAESTUS_STACKS` go.
+    Compose remains for local development infrastructure only.
+    The `docker` value of `HEPHAESTUS_SANDBOX_RUNTIME` (`hephaestus.sandbox.runtime`) goes. Use the chart's Kubernetes sandbox runtime.
+    Remove `SANDBOX_MEMORY_BYTES` (`hephaestus.sandbox.default-resource-limits.memory-bytes`), `DOCKER_GROUP_ID`, `SANDBOX_DOCKER_HOST`, `SANDBOX_DOCKER_TLS_VERIFY`, `SANDBOX_DOCKER_CERT_PATH`, `SANDBOX_DOCKER_OWNER` and `SANDBOX_DOCKER_CONTAINER_RUNTIME`.
+    The `SANDBOX_DOCKER_*` properties are `hephaestus.sandbox.docker.host`, `.tls-verify`, `.cert-path`, `.owner` and `.container-runtime`.
+    The already rejected names `SANDBOX_TLS_VERIFY`, `SANDBOX_CONTAINER_RUNTIME`, `hephaestus.sandbox.docker-host`, `hephaestus.sandbox.tls-verify`, `hephaestus.sandbox.cert-path`, `hephaestus.sandbox.container-runtime`, `hephaestus.sandbox.app-server-container-id` and `hephaestus.mentor.docker-cli` have no replacement in 1.0.
+  - **Runtime roles:** the Spring profile aliases `webhook-server` and `worker-node` go. Use `prod,webhook` and `prod,worker`.
+    Remove `NATS_ENABLED` (`hephaestus.sync.nats.enabled`): the runtime role selects whether it uses NATS.
+  - **Capacity:** `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` (`hephaestus.worker.capacity.mentor-max`) moves to the conversation runtime in 1.0.
+    `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` (`hephaestus.worker.capacity.review-max`) moves with review orchestration.
+    The Compose aliases `HEPHAESTUS_WORKER_MENTOR_MAX` and `HEPHAESTUS_WORKER_REVIEW_MAX` go with Compose.
+    Use the capacity values of the target chart. The 1.0 migration notes name their final replacements.
+    The chart already refuses `worker.sandbox.quota.pods`, `worker.sandbox.quota.cpu` and `worker.sandbox.quota.memory` in 0.95.
+    Quotas follow `worker.replicas`, `worker.reviews` and `worker.conversationTurns`.
+  - **Integration switches:** remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` (`hephaestus.integration.github.sync.incremental-sync-enabled`): synchronization is incremental.
+    Remove `GITLAB_WORKSPACE_CREATION` and `HEPHAESTUS_FEATURES_FLAGS_GITLAB_WORKSPACE_CREATION` (`hephaestus.features.flags.gitlab-workspace-creation`, chart `config.gitlab.workspaceCreation`): GitLab workspace creation follows `hephaestus.integration.gitlab.enabled`.
+    Remove the unused `hephaestus.integration.github.meta.auth-token` setting and its environment forms `GH_AUTH_TOKEN` and `HEPHAESTUS_INTEGRATION_GITHUB_META_AUTH_TOKEN`.
+    Contributor lookup uses `hephaestus.contributors.github.auth-token`.
+  - **GitLab hooks:** the shared `POST /webhooks/gitlab` endpoint goes.
+    Re-register each operator-created hook through its workspace connection, then remove the shared hook.
+    GitHub, Slack and Outline hooks keep their connection-specific registration procedures.
+  - **Model requests:** `reasoningEffort` on model creation, update and model responses, and `clearReasoningEffort` on model updates, go.
+    This includes the instance model requests at `/admin/llm/models/{id}` and the workspace model requests at `/workspaces/{workspaceSlug}/llm/models/{id}`.
+    It also includes model creation at `POST /admin/llm/connections/{connectionId}/models` and `POST /workspaces/{workspaceSlug}/llm/connections/{connectionId}/models`.
+    Set reasoning effort on each model assignment instead. One model can then have different effort for each purpose.
+  - **Other API fields and feature values:** `ownerUserId` on workspace creation and the unused `NOTIFICATION_ACCESS` feature value go.
+    The authenticated creator owns the workspace. Remove the ignored owner field and callers' checks for that feature value.
+  - **Earlier UI addresses:** `/landing`, `/w/:slug/user/:username`, the earlier `practice-groups/:groupSlug` person pages, and the old administration review URLs go.
+    Replace bookmarks with links copied from the current UI.
+    The old review filter `range=1y` goes. Use `range=all`.
+    Links in feedback already posted to reviewed work remain supported.
+
+  The [upgrade guide](https://docs.hephaestus.build/admin/upgrade-to-1-0) and the 1.0 migration notes give the stopped upgrade procedure.
+  0.95 retains the older database baseline path. 1.0 accepts an existing database only after it has run 0.95.0.
+
+  The following public operations are also deprecated for removal in 1.0.
+  Update automation that calls them before the upgrade.
+  The current UI uses the retained list, review-detail and trace operations instead.
+  These removals do not delete stored teams, membership, reviews, evidence, usage or provider records.
+  The immediate scan action and the membership-removal action remain available.
+
+  | Operation                   | Request, relative to the API base URL                                                   |
+  | --------------------------- | --------------------------------------------------------------------------------------- |
+  | `renameSlug`                | `PATCH /workspaces/{workspaceSlug}/slug`                                                |
+  | `getTeamSettings`           | `GET /workspaces/{workspaceSlug}/teams/{teamId}/settings`                               |
+  | `updateTeamSettings`        | `PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings`                             |
+  | `getLabelFilters`           | `GET /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters`                 |
+  | `addLabelFilter`            | `POST /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}`      |
+  | `removeLabelFilter`         | `DELETE /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}`    |
+  | `getRepositorySettings`     | `GET /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}`   |
+  | `updateRepositorySettings`  | `PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}` |
+  | `getMembership`             | `GET /workspaces/{workspaceSlug}/members/{accountId}`                                   |
+  | `reorderPractices`          | `PATCH /workspaces/{workspaceSlug}/practices/reorder`                                   |
+  | `getReviewBatch`            | `GET /workspaces/{workspaceSlug}/practices/review-batches/{batchId}`                    |
+  | `getReviewEvidenceOutcomes` | `GET /workspaces/{workspaceSlug}/practices/reviews/evidence-outcomes`                   |
+  | `getReviewUsage`            | `GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/usage`                    |
+  | `listItemEvents`            | `GET /workspaces/{workspaceSlug}/practices/items/{itemId}/events`                       |
+  | `listReviewPracticeScripts` | `GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/practice-scripts`         |
+  | `getReviewItem`             | `GET /workspaces/{workspaceSlug}/practices/items/{itemId}`                              |
+  | `getOutlineCollection`      | `GET /workspaces/{workspaceSlug}/outline/collections/{collectionId}`                    |
+  | `adminGetLlmConnection`     | `GET /admin/llm/connections/{id}`                                                       |
+  | `adminGetLlmModel`          | `GET /admin/llm/models/{id}`                                                            |
+  | `workspaceGetLlmConnection` | `GET /workspaces/{workspaceSlug}/llm/connections/{id}`                                  |
+  | `workspaceGetLlmModel`      | `GET /workspaces/{workspaceSlug}/llm/models/{id}`                                       |
+
+  ### Rename conversation interfaces at the 1.0 upgrade
+
+  In 1.0, conversation settings, environment variables, metrics and API paths use `conversation`. Update settings and API callers at the 1.0 upgrade. The old names have no aliases. Update dashboard and alert queries too.
+
+  ### Settings and environment variables
+
+  | Removed in 1.0                                                                                     | Replacement                                                                                                    |
+  | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+  | `hephaestus.mentor.turn.capacity` / `HEPHAESTUS_MENTOR_TURN_CAPACITY`                              | `hephaestus.conversation.turn.capacity` / `HEPHAESTUS_CONVERSATION_TURN_CAPACITY`                              |
+  | `hephaestus.mentor.turn.lease`                                                                     | `hephaestus.conversation.turn.lease`                                                                           |
+  | `hephaestus.mentor.turn.lease-reaper-delay`                                                        | `hephaestus.conversation.turn.lease-reaper-delay`                                                              |
+  | `hephaestus.mentor.turn.max-follow-ups`                                                            | `hephaestus.conversation.turn.max-follow-ups`                                                                  |
+  | `hephaestus.mentor.turn.model-first-byte-timeout`                                                  | `hephaestus.conversation.turn.model-first-byte-timeout`                                                        |
+  | `hephaestus.mentor.turn.model-idle-timeout`                                                        | `hephaestus.conversation.turn.model-idle-timeout`                                                              |
+  | `hephaestus.mentor.agent.max-prompt-chars`                                                         | `hephaestus.conversation.agent.max-prompt-chars`                                                               |
+  | `hephaestus.mentor.slack.projector.enabled`                                                        | `hephaestus.conversation.slack.projector.enabled`                                                              |
+  | `hephaestus.auth.rate-limit.mentor-turns.capacity` / `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` | `hephaestus.auth.rate-limit.conversation-turns.capacity` / `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_CAPACITY` |
+  | `hephaestus.auth.rate-limit.mentor-turns.period` / `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD`     | `hephaestus.auth.rate-limit.conversation-turns.period` / `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_PERIOD`     |
+  | `hephaestus.worker.capacity.mentor-max` / `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`                  | Use the conversation-loop capacity setting named in the 1.0 upgrade guide.                                     |
+  | `HEPHAESTUS_WORKER_MENTOR_MAX`                                                                     | Remove this Compose input when you move to the chart.                                                          |
+
+  The 0.95 chart uses `worker.conversationTurns` for its conversation capacity.
+
+  ### Metrics and spans
+
+  Replace `mentor.` with `conversation.` in these metric names:
+
+  - `mentor.turn.completed`
+  - `mentor.turn.cost`
+  - `mentor.turn.duration`
+  - `mentor.turn.first_token`
+  - `mentor.turn.started`
+  - `mentor.turn.retried`
+  - `mentor.turn.queued`
+  - `mentor.turn.queue_wait`
+  - `mentor.turn.lease_reaper.failure`
+  - `mentor.turn.claim.failure`
+  - `mentor.live.streams`
+
+  Also rename `llm.proxy.usage.mentor.failure` and `llm.proxy.usage.mentor.superseded` to `llm.proxy.usage.conversation.failure` and `llm.proxy.usage.conversation.superseded`. Change `surface=mentor` to `surface=conversation`. Replace `heph.turn.*` span/event names, including `heph.turn.tool_call`, with `conversation.turn.*`.
+
+  In `notification.email.delivery`, the `kind` tag changes from `mentor_digest` to `weekly_digest` in 1.0.
+  In the auth rate-limit blocked metric, the `bucket` tag changes from `mentor-turns` to `conversation-turns` in 1.0.
+
+  `mentor.host.ready`, `mentor.host.turns.active` and `heph.host.id` leave with the old host.
+  Remove queries that use them. Use the replacement instrumentation documented for the conversation runtime.
+
+  ### HTTP paths
+
+  All paths below are relative to `/workspaces/{workspaceSlug}`. Keep the existing HTTP verbs.
+
+  | Removed in 1.0                        | Replacement                              |
+  | ------------------------------------- | ---------------------------------------- |
+  | `/mentor/conversation`                | `/conversation`                          |
+  | `/mentor/conversation/read`           | `/conversation/read`                     |
+  | `/mentor/entries`                     | `/conversation/entries`                  |
+  | `/mentor/entries/{entryId}`           | `/conversation/entries/{entryId}`        |
+  | `/mentor/entries/{entryId}/thread`    | `/conversation/entries/{entryId}/thread` |
+  | `/mentor/entries/{entryId}/vote`      | `/conversation/entries/{entryId}/vote`   |
+  | `/mentor/turns`                       | `/conversation/turns`                    |
+  | `/mentor/turns/{turnId}/status`       | `/conversation/turns/{turnId}/status`    |
+  | `/mentor/events` (server-sent events) | `/conversation/events`                   |
+
+  The 0.95 web page uses `/w/{workspaceSlug}/conversation`. The redirect from the old web page `/w/{workspaceSlug}/mentor` stays because messages that were sent already use it. The 1.0 HTTP API does not redirect the removed endpoints.
+
+  Slack message metadata and button action identifiers `heph_entry`, `heph_notice` and `heph_feedback` keep their names. Existing messages depend on them.
+
+  ### Enum values removed in 1.0
+
+  | Current type / field                                                                                                                                                      | Removed value        | Replacement                |
+  | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | -------------------------- |
+  | `MentorTurn.waitingFor` → `ConversationTurn.waitingFor`                                                                                                                   | `FREE_HEPH`          | `CAPACITY`                 |
+  | `MentorEntry.kind` → `ConversationEntry.kind`                                                                                                                             | `HEPH`               | `ANSWER`                   |
+  | `ReviewFeedback.location`, `ReviewFeedbackDetail.location` (`FeedbackLocation`)                                                                                           | `HEPH`               | `APP`                      |
+  | `AgentBinding.purpose`, `AvailableLlmModel.purposes[]`, `LlmConnection.purposes[]`, `WorkspaceLlmConnection.purposes[]`, `LlmUsageByPractice.purposes[]` (`AgentPurpose`) | `MENTOR`             | `CONVERSATION`             |
+  | `UsageSourceType`, including `LlmUsageByJobType.jobType` string values and stored usage rows                                                                              | `MENTOR_TURN`        | `CONVERSATION_TURN`        |
+  | `Delivered.bodyRole`, `Queued.bodyRole` (`PrivateFeedbackHistory.BodyRole`)                                                                                               | `MENTOR_NOTES`       | `CONVERSATION_NOTES`       |
+  | `ResultDecision.decision` (`ConversationDecision`)                                                                                                                        | `MENTOR_UNAVAILABLE` | `CONVERSATION_UNAVAILABLE` |
+
+  `CAPACITY` means every conversation slot of the deployment is taken.
+  The field name stays `waitingFor`. This value changes only in 1.0.
+
+  ### Data exports in 1.0
+
+  In personal-data exports, `notification_subscription.kind` changes from `MENTOR_DIGEST` to `WEEKLY_DIGEST` in 1.0.
+  Unsubscribe links stay unchanged because they use persisted UUIDs.
+
+  ### DTO fields removed in 1.0
+
+  | Current field                              | Replacement                                      |
+  | ------------------------------------------ | ------------------------------------------------ |
+  | `FeedbackCopy.mentorEntryId`               | `FeedbackCopy.conversationEntryId`               |
+  | `WeeklyDigestFeedback.mentorEntryId`       | `WeeklyDigestFeedback.conversationEntryId`       |
+  | `WeeklyDigestFeedback.mentorParentEntryId` | `WeeklyDigestFeedback.conversationParentEntryId` |
+  | `WorkspaceAiOption.mentorReady`            | `WorkspaceAiOption.conversationReady`            |
+  | `WorkspaceOnboarding.mentorRefusal`        | `WorkspaceOnboarding.conversationRefusal`        |
+
+  ### Schema names removed in 1.0
+
+  | Removed schema            | Replacement                     |
+  | ------------------------- | ------------------------------- |
+  | `MentorConversation`      | `Conversation`                  |
+  | `MentorEntry`             | `ConversationEntry`             |
+  | `MentorEntryPage`         | `ConversationEntryPage`         |
+  | `MentorLink`              | `ConversationLink`              |
+  | `MentorRead`              | `ConversationRead`              |
+  | `MentorReadRequest`       | `ConversationReadRequest`       |
+  | `MentorSubmission`        | `ConversationSubmission`        |
+  | `MentorThread`            | `ConversationThread`            |
+  | `MentorThreadSummary`     | `ConversationThreadSummary`     |
+  | `MentorTurn`              | `ConversationTurn`              |
+  | `MentorTurnPartial`       | `ConversationTurnPartial`       |
+  | `MentorTurnRequest`       | `ConversationTurnRequest`       |
+  | `MentorTurnStatusRequest` | `ConversationTurnStatusRequest` |
+  | `MentorVoteRequest`       | `ConversationVoteRequest`       |
+
+  The API tag `Mentor` becomes `Conversation`. Each operationId that contains `Mentor` uses `Conversation`, with duplicate words removed: `getMentorConversation` becomes `getConversation`, and `markMentorConversationRead` becomes `markConversationRead`.
+
+  The problem-type identifiers `/problems/mentor-refused` and `/problems/mentor-rejected` become `/problems/conversation-refused` and `/problems/conversation-rejected`.
+
+  ### Operation IDs removed in 1.0
+
+  | Removed operation ID         | Replacement                    |
+  | ---------------------------- | ------------------------------ |
+  | `getMentorConversation`      | `getConversation`              |
+  | `markMentorConversationRead` | `markConversationRead`         |
+  | `listMentorEntries`          | `listConversationEntries`      |
+  | `deleteMentorEntry`          | `deleteConversationEntry`      |
+  | `getMentorThread`            | `getConversationThread`        |
+  | `clearMentorVote`            | `clearConversationVote`        |
+  | `setMentorVote`              | `setConversationVote`          |
+  | `submitMentorTurn`           | `submitConversationTurn`       |
+  | `updateMentorTurnStatus`     | `updateConversationTurnStatus` |
+
+- On the Practice reviews overview, the card titles Reviews, Results, Feedback and "Delivered and withheld" now open their tab with the same period.
+- Your Practice profile explains how to read it: what a practice is, what each standing and trend means, and when a feedback card appears and resolves. It is open on your first visit, and **How to read this page** closes it or brings it back.
+- You can now run practice reviews and conversations on a model endpoint inside your own network, for example vLLM or Ollama on your own GPUs. List the endpoint's host names, IP addresses or CIDR ranges in the new optional `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` on the server and the worker.
+
+  To permit plain `http://` for those hosts only, set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP=true`. On Kubernetes, set `config.llmPrivateHosts` and `config.llmPrivateHostsAllowHttp`, and open the network path with `networkPolicy.modelEndpoints`.
+
+  Without these settings, nothing changes: a provider must still be a public HTTPS host. Only private addresses can be allowed. Loopback and link-local addresses stay blocked, and so do the cloud metadata and credential ranges of Alibaba Cloud (100.100.100.200), AWS (fd00:ec2::/32), Google Cloud (fd20:ce::/48), Akamai (fd00:a9fe::/32), Scaleway (fd00:42::/32) and Oracle Cloud (fd00:c1::/32). A range wider than /16 for IPv4 or /48 for IPv6, such as 10.0.0.0/8, or one that covers the server's own address stops startup. List the network your model server is in.
+
+- The waiting, running and on hold figures of the review queue now open exactly the reviews they count, filtered by queue state.
+- A pull-based host that follows a commit channel can now apply it with the Helm chart. Set `HEPHAESTUS_STACKS=chart` and put your chart values in `/etc/hephaestus/chart.yaml`. Each promotion still verifies the signed channel and its commit lock first, and then runs one `helm upgrade --install` with the images that the lock names. When the migration or a Pod fails, Helm rolls the workloads back; it does not roll back the database. An upgrade that a reboot or a timeout cut off is rolled back on the next tick before it runs again. The chart stack refuses a release channel, because it cannot verify the release's signed chart package yet. The optional settings `HEPHAESTUS_CHART_RELEASE`, `HEPHAESTUS_CHART_NAMESPACE`, `HEPHAESTUS_CHART_PROFILE` and `HEPHAESTUS_HELM` name the release, its namespace, the chart profiles in the order they apply (for example `"small small-16gib"`) and the Helm binary. The reconcile unit no longer requires Docker, so a host without it can run the reconciler.
+- **Operators:** `conversation` is now a reserved workspace slug. If a workspace uses this slug, rename it in workspace settings before you upgrade. The database migration stops if it finds this slug.
+- Delayed pull-request, merge-request and submitted-review reviews use the work saved when their event was recorded. Later edits cannot replace those words, state or people. Reviews without that original record are withheld.
+
+  **Operators:** Deploy matching runtime versions through the coordinated upgrade procedure. Earlier events have no saved original. Read the migration guide before upgrading or restoring an earlier release.
+
+- The admin lists of reviews, results and problems can now be read oldest first, as the feedback list already could.
+- Practice reviews start with practices that have no current observation, then the ones reviewed least recently. Practices with the same captured sources wait briefly for the first model response so providers can reuse prompt context. Admins can see how much of each review's input came from cache, with the total input count in its technical details. Missing cache reports and very small percentages have distinct labels.
+- Docker review sandboxes now use the limits that `SANDBOX_MEMORY_BYTES`, `SANDBOX_CPUS` and `SANDBOX_PIDS_LIMIT` set. Before, every review got 4 GiB of memory, 2 CPUs and 512 processes, whatever these settings said. The new defaults are 3 GiB, 1 CPU and 256 processes. The memory limit covers the sandbox's temporary file systems plus room for its processes, measured on one review on release 0.82.0. The CPU limit is a share of CPU time, not a reserved core. Each concurrent review now needs 1 GiB less memory headroom on the host. The number of reviews that run at once does not change. The Compose file now also passes `SANDBOX_PIDS_LIMIT` to the worker.
+
+  **Operators:** with the Docker sandbox runtime, if you set `SANDBOX_MEMORY_BYTES` below 2,751,463,424 bytes (about 2.6 GiB), raise it before you upgrade. The worker now refuses to start with less.
+
+  On Kubernetes, remove `SANDBOX_MEMORY_BYTES` and use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/kubernetes#sandbox-sizes).
+
+- The admin review list can now show only the reviews that wait, are on hold for budget or run, as the queue counts them.
+- The review sandbox no longer carries the feedback composer. A sandbox only measures and admits results. The worker composes all feedback after the sandbox ends. The internal API routes `POST /internal/llm/prepare-feedback` and `POST /internal/llm/public-feedback-history`, which only the review sandbox called, are removed. Run a server and review sandbox image of the same release. No configuration changes.
+- The worker now watches the Pods, Jobs and ResourceQuotas of the sandbox namespace and answers its review claims and readiness checks from that view. It no longer sends the Kubernetes API a request on each claim poll or readiness probe, so a slow API server no longer slows the claim loop. The worker reports not ready while it cannot watch the namespace, and becomes ready by itself once it can.
+
+  **Operators:** the chart's Role adds `watch` on `resourcequotas` in the sandbox namespace. If you replaced the chart's Role with your own, add that verb before you upgrade.
+
+- The chart now writes one sandbox quota for reviews and one for Hephaestus conversations, and derives both from your workers' replicas, reviews and conversation turns. Hephaestus's sandboxes can no longer take the room of a review, and reviews can no longer take Hephaestus's. The quotas count what sandboxes request, so a node holds as many reviews as their measured use allows. The single-node profiles now run up to 8 conversation turns at once, so several people can talk to Hephaestus at the same time. The [profiles guide](https://docs.hephaestus.build/admin/kubernetes#profiles) gives the worker rollout and drain budgets for later schema-compatible upgrades. The upgrade to 0.95.0 stops every runtime role before migration. The Hephaestus host requests 50m of CPU with a limit of one CPU.
+
+  **Operators:** remove `worker.sandbox.quota.pods`, `worker.sandbox.quota.cpu` and `worker.sandbox.quota.memory` from your values before you upgrade. The chart refuses them now. `worker.sandbox.quota.enabled` stays. If your sandbox RuntimeClass adds a Pod overhead, such as gVisor or Kata on some clusters, set `worker.runtime.podOverhead` to it, so that the quotas count it. `priorityClasses.reviews` and `priorityClasses.conversations` must now name different classes; the chart refuses to render otherwise. On the single-node profiles, Hephaestus can wait up to a minute after an upgrade, until the new worker removes the old worker's Hephaestus sandboxes.
+
+- On Kubernetes, sandboxes request the memory they use instead of the memory of files they rarely write, so one node holds many more of them. A review sandbox requests 640 MiB instead of 3 GiB, the Hephaestus host 256 MiB instead of 2 GiB, and a turn sandbox 160 MiB instead of 1.6 GiB. On the 16 GiB profile, the sandbox quota now holds three reviews beside the Hephaestus host and its idle turn sandboxes, and two while a turn runs, where it held one and none; its CPU limit of 8 sets this, so another quota holds another number. Temporary files now sit on the node's disk, and only `/run` stays in memory. Every sandbox volume on the node's disk has a size limit and every sandbox container a disk limit, so no sandbox can fill a node's disk; a review whose sandbox passes them is evicted and spends a retry. `SANDBOX_MEMORY_BYTES` now applies to Docker only.
+
+  **Operators:** sandbox nodes must use encrypted storage, because a review's repository and temporary files are now on their disk. If you set `SANDBOX_MEMORY_BYTES` on Kubernetes, remove it.
+
+- Set the new optional `SECURITY_CONTACT` (chart value `webapp.securityContact`) to publish `/.well-known/security.txt` with your own security contact. When `APPLICATION_CLIENT_URL` is a single `https://` origin and workspace addresses are off, the file also names that address as its canonical location. Without `SECURITY_CONTACT`, the webapp serves no `security.txt`; it no longer ships one that names the project's former host and a personal address. The file renews its expiry date at each start.
+- Practice reviews keep one time order, newest or oldest first, above the tabs for every list. Results still offer "Most actionable first".
+- The sidebar separates your pages under **You**, shared pages under **Workspace**, and workspace setup under **Administration**. Practice profile and Practices across the workspace each have a direct link. The admin Teams page is now **Team setup** so it is distinct from the workspace Teams page.
+- The bundled PostgreSQL now sizes its memory settings and its connection limit from its container's memory limit, 4 GiB by default (`POSTGRES_MEM_LIMIT`), and records statement statistics with `pg_stat_statements`. At the default it allows 256 connections instead of 100, enough for the old and the new roles of a rolling update. **Operators:** the PostgreSQL limit is new; if the host has less free memory, lower `POSTGRES_MEM_LIMIT` before you upgrade.
+- The `small` chart profile bounds GitHub deliveries to 4 GiB and each GitLab, Slack and Outline stream to 512 MiB.
+  All four streams keep deliveries for at most seven days. Byte limits can remove them sooner.
+  The broker file budget is 8 GiB, with a 10 GiB claim for fresh storage and 30-day durable expiry.
+
+  **Operators:** before you upgrade an existing installation, keep its current `nats.jetstream.maxFileBytes` in your site values.
+  This preserves the existing broker budget and immutable claim template. Do not shrink its PVC.
+  Verify an off-host backup and test its restore before you shorten stream limits.
+  Apply smaller stream bounds through the guarded limit-update procedure, then return the destructive-update flag to false.
+  A higher limit cannot recover deleted messages.
+
+- Every runtime role now writes its logs as Elastic Common Schema JSON, with the running version, the deployment environment and the runtime role on each line. Log lines name exceptions by class and frames without their messages, never contain a sandbox transcript, and no longer repeat the database's message for a failed statement. Hephaestus no longer sends errors to Sentry. An optional example ships the service logs to a Loki that you run. **Operators:** remove `SENTRY_DSN`, and update log queries and dashboards for the new field names.
+- Operators can disable additional authentication confirmation on isolated test instances with `HEPHAESTUS_AUTH_ASSURANCE_ENFORCED=false`. Settings show the effective policy. Production protection stays enabled by default; saved passkeys and policies remain intact.
+- The release now includes Prometheus alert rules that you load as they are, in `deploy/observability/hephaestus-alerts.yml`, each with unit tests. Besides the earlier example alerts, they warn when PostgreSQL cannot archive its WAL, when no PostgreSQL backup completed in 30 hours, when the PostgreSQL or NATS JetStream volume or a node disk fills, when provider events stay undelivered on the broker, when an agent job waits more than an hour for a worker, when a worker's sandbox isolation probe fails, and when a certificate that cert-manager manages expires within a week. The server now reports a failing WAL archive in `database_wal_archive_failing`. Alerts that put data at risk have `severity: critical`, the others `warning`. The cluster alerts need kube-state-metrics, the kubelet metrics, node-exporter and cert-manager metrics, as the observability guide lists. If you copied the example rules from the guide, replace them with this file: the agent-job failure rule there read a metric name that does not exist, so it never fired.
+- Your light, dark or system theme now stays the same when you switch between workspace addresses. New visitors start with the system theme instead of dark.
+- Hephaestus no longer keeps five unused stores: the Outline event log, earlier consent notices, earlier survey submissions, review-job idempotency keys and model reasoning flags.
+  Before it removes earlier survey submissions, the 0.95.0 upgrade copies each submission that has no current participation record.
+  Existing participation records keep their current answers.
+
+  **Operators:** stop every runtime role before the 0.95.0 upgrade.
+  Back up the database and verify that it restores first.
+  The upgrade deletes the rows in these unused stores.
+  An image rollback cannot restore those rows. Recovery needs the verified backup.
+
+- The webapp container and the maintenance page now run as an unprivileged user on port 8080, need no added capabilities and work with a read-only root file system. They write only to `/tmp/hephaestus-webapp`. The bundled Compose stacks already use these settings. **Operators:** if your own proxy, health check or `docker run -p` mapping sends traffic to the webapp container's port 80, change it to port 8080, and mount a directory that UID 101 can write at `/tmp/hephaestus-webapp`.
+- The webhook receiver now names why it could not store a delivery. Each `503` it answers has a log record with `event.name=webhook.publish.failed` and a reason: a timeout, no responders, a dropped or closed connection, a full stream, or a rejected message. Within 8 seconds it also retries failures that the event broker answers at once, instead of retrying once. A delivery that GitHub sends again within 3 hours is stored once, which covers the receiver's own redelivery requests; existing streams take the longer window at the next start. A storage stall longer than 8 seconds still ends in `503`.
+
+  **Operators:** if you set `HEPHAESTUS_WEBHOOK_PUBLISH_TIMEOUT` or `HEPHAESTUS_WEBHOOK_PUBLISH_MAX_RETRIES`, delete them; the receiver ignores them now. Set `HEPHAESTUS_WEBHOOK_PUBLISH_DEADLINE` (default `8s`, below `10s`) if you need another limit.
+
+- The webhook receiver no longer needs the database. It starts and keeps accepting GitHub, GitLab, Slack and Outline deliveries while PostgreSQL is down, for example during a restore or a database upgrade, and the server processes them when it is back. The receiver needs no database settings and no encryption keys; you can remove them from the webhook container. Each Outline subscription now posts to its own address, and its signing secret comes from the webhook routing secret; Hephaestus moves existing subscriptions to their new address by itself shortly after the upgrade. Slack channel consent reaches the receiver through NATS.
+- Webhook streams now keep deliveries for 7 days instead of 180 (`HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE`, and `webhook.stream.maxAge` in the Helm chart). A busy stream now stays far below its size limit, so the broker's disk use stays bounded, and the new alert `HephaestusWebhookStreamNearByteBound` warns you when a stream stays above half of that limit for an hour, before it would delete deliveries that were not read yet. This does not make a slow broker faster: that depends on the disk under it.
+
+  **Operators:** an existing stream keeps its 180 days until you apply the new limit once. The webhook receiver logs `limit change withheld` at each start until then. The migration guide gives the steps for Docker Compose and for the Helm chart, which now has `webhook.stream.allowDestructiveLimitUpdates` and `webhook.stream.limitUpdateTimeout`.
+
+- Workers and the server now coordinate only through the database. The WebSocket channel between them is gone, so a worker no longer opens a connection to the server, and a server restart no longer disconnects the workers. A cancelled review stops its model calls at once; its worker stops the sandbox within one heartbeat. Each worker signs its sandboxes' credentials with a key that it keeps in memory.
+
+  **Operators:** delete `HEPHAESTUS_WORKER_REGISTRATION_TOKEN`, `HEPHAESTUS_HUB_URL` and any `hephaestus.worker.hub.token.*`, `hephaestus.worker.control.*` or `hephaestus.worker.heartbeat.*` settings, which Hephaestus no longer reads. Move alerts and dashboards off the removed metrics `worker.control.*`, `worker.heartbeats.*`, `worker.hub.*`, `worker.token.exchange` and `worker.jwt.verify`; `attempt.token.verify` replaces the last one. A practice review that still runs when you upgrade is requeued by the server and spends no retry.
+
+  If the server cannot resume an in-flight review, it ends the claim and closes the review after a fresh timeout, with a recorded upgrade failure. Admitted results stay available. This maintenance also runs when review execution is disabled.
+
+- Workspace hosts work when the base domain contains two consecutive hyphens.
+  **Operators:** On a repeat one-host installation, select standard apex certificates, repeat the workspace-subdomain issuer options, or pass the intended custom certificate manifest.
+  The installer stops before changing the host if this choice is missing, so it cannot replace wildcard TLS with an implicit apex-only certificate.
+
+### Patch Changes
+
+- Practices across the workspace loads with its placeholders alone, as the Practice profile does: no "Counting where everyone stands…" line and no note when the counting takes long.
+- On Practices across the workspace, a group's bar now stands in a bordered box, as the Practice profile's summary does, with a separator below.
+- On Practices across the workspace, the You bracket spans your whole part of the bar. Screen readers hear which part you are in.
+- The Activity page now uses the same width as Workspace activity in every state. Its width stays the same while it loads or when your account is unavailable.
+- You can request a practice review again from your own open work on the Activity page: your own pull requests and the issues assigned to you. Once the review is requested, a link takes you to it on your practice profile.
+- The **Upgrade guide** link on the instance **Release** card now opens the new Upgrade page of the admin guide. That page collects the upgrade procedure, failed-migration recovery, rollback and update checks in one place. The admin guide is now grouped into Deploy, Configure, Operate, Security and Policies.
+- While the next page of an admin review list loads, placeholder rows now continue its table under its columns.
+- An administrator who has not verified a passkey now stays on the workspace page they open, such as Hephaestus or Teams, instead of landing in Settings. Protected administration still requires passkey verification.
+- The wrapper process of each practice review sandbox uses about 20 MiB less memory, because it runs as compiled JavaScript.
+- The AI choice now says which models each answer permits and where requests may go. It no longer promises that one answer gets faster or stronger models, because both answers that allow AI can use the same model. **No AI** now says it stops new AI requests, since earlier feedback stays readable.
+- The proxy now limits the model calls that one practice review or one Hephaestus conversation has in flight at once, to the most that its own runner opens: 2 for a conversation turn, and 12 for a review at the default practice concurrency of 3. A call past the limit is refused before it reaches your provider, so no single review takes more than its share of your provider's capacity. A refused call asks again and keeps its result: practice scripts now wait out such a refusal instead of leaving a call unrated. `sandbox.gateway.calls_in_flight.refused` counts the refusals. No action is needed.
+- Cmd or Ctrl with a number switches browser tabs again, instead of switching workspace. Switch workspaces from the workspace menu in the sidebar.
+- Update the bundled proxy to Traefik 3.7.16 with the Go certificate-verification fix. Image checks now distinguish the supplied NATS broker configuration from custom certificate-verifying deployments.
+- A host that follows a commit with the Helm chart reports the commit as its version, as a Compose host does. Before, it reported `0.0.0-<commit>`, and the promotion's check of the public version failed although the host ran the right commit.
+- On the Helm chart, a practice review that is retried after an upgrade or a lost worker prepares its repository again instead of failing. The server and the worker now keep Git's configuration on a writable volume, because their root filesystem is read-only.
+- An upgrade of the Helm chart no longer restarts the bundled PostgreSQL and NATS when their images did not change. Before, every new release restarted both, so the database and the broker were briefly unavailable on each upgrade.
+- A practice review no longer records a result that says something is missing from the repository, such as an error handler, unless the review searched the whole repository. Before, such a claim could reach feedback when the review had read only the changed file. The check reads every text of the result for a short list of usual wordings, so a claim in other words can still pass. When a repository was captured only in part, no search counts, and such a result is withheld.
+- On Kubernetes, a worker that has just started no longer takes practice reviews or conversation turns before its sandbox isolation probe passed. Until then, the work stays queued, so reviews no longer fail and conversations no longer show "Hephaestus could not start" after a deploy.
+- A review job whose frozen practice assignment is no longer available now fails once with its reason recorded. Before, the worker claimed it again every second and never ended it.
+- Code blocks offer Copy and no longer offer Download. This applies everywhere a code block shows: in Hephaestus's answers, feedback, practice guides, practice reviews and the legal pages.
+- The Read more guide on intent-revealing comments links its code-comment study through the paper's DOI, so the source link keeps working.
+- On your Practice profile, an observation now opens with its available explanation, problems and next steps, evidence, and recorded feedback links. A review links to that exact observation in its practice, including when it is older than the loaded history.
+
+  Recorded activity now shows readable event names.
+
+- When writing a review's feedback runs out of time, Hephaestus now tries again for the feedback still open. Before, it withheld that feedback at once, so a review could post on the pull request while the same review's practice page and conversation feedback were missing.
+- The admin guide has a configuration reference that lists every variable you can set, with the setting it controls, its default, whether it is required, and what it does. Three Compose settings were ignored and now take effect: `ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER`, `ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER` and `ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE` replace the `SIGNAL_LEDGER_*` names, and `PRACTICE_REVIEW_BACKFILL_MAX_ITEMS` replaces `PRACTICE_REVIEW_BACKFILL_MAX_ARTIFACTS`. To apply a value that you set under an old name, rename it in `.env`. `PRACTICE_REVIEW_PROGRESS_FOOTER` and `HEPHAESTUS_RELEASE_PIN_SKIP` are gone from the templates because nothing reads them.
+- Slack describes Hephaestus by what it does, and the channel notice says that channel messages give each person private feedback and help Hephaestus answer them.
+- Pull and merge request reviews now date the title and description they read to the moment they read them. Reviews no longer say these words were kept from an earlier point. If the work changes before the review reads it, that review still stops instead of reviewing the new words.
+- An open observation on your Practice profile now shows each problem's severity after its number: Critical, Major, Minor or Trivial.
+  The badge is the one workspace admins see, so a problem that blocks the work and a small gap no longer look alike.
+- The web app now uses DOMPurify 3.4.17, which fixes security advisories in the HTML and SVG sanitizer of 3.4.16.
+- Separator dots between short facts now sit on the middle line of the text. This covers review results, review cards, sign-in links and integration resources.
+- Separator dots in scans, sync details, review details and list rows now use the same centered style.
+- A standing based only on earlier reviews now reads "Based on earlier reviews, the criteria might have changed" on the Practice profile and on Practices across the workspace, as plain words with no tooltip. The same words show when the original criterion version is unavailable.
+- While the next page of a paged list loads, placeholders in the shape of its rows now continue the list. This covers the activity log, review timelines, audit, user and scan tables, and repositories in the generated-paths settings.
+- Evidence-copy receipts no longer keep the identities of the people a review copied after the review job is deleted. When the job retention removes a review job, 90 days after it ends by default, the worker that held the copy confirms that it is gone, its receipt's identities are cleared, and the receipt is deleted. The data retention page and the record of processing state this period.
+- The next step on open feedback now reads as its call to action.
+  Its band has a light blue wash, a narrow blue line on its left edge and the footprints icon in blue.
+  Feedback you marked, or that closed, keeps the next step on the plain gray ground.
+- A feedback card now says its clean run in one muted line above the bar: "2 clean in a row · 1 more resolves it".
+  The practice's label in its group's table uses the same words.
+  The rule on how the feedback resolves moves into an (i) beside "Work reviewed for this practice".
+  Older work on the timeline is one short line with "…" before the first piece shown, without a count.
+- Feedback cards now name the kind and number of work the pattern recurs in beside their state, such as "Recurring in three pull requests"; hovering, focusing or tapping it lists each piece of work, linked.
+- Feedback cards now stand clearly apart.
+  There is more room between them, each card has a stronger edge and a faint shadow, and the rules inside a card are lighter.
+- Feedback comments on GitHub and GitLab are posted as plain text: formatting, links, images, HTML and comments in the feedback text appear exactly as written. A name that starts with @ and a reference such as `#12` or `!3` appear as code, so they notify no one and add no link to another issue or merge request, also when Hephaestus edits an earlier comment. A line that starts with a slash no longer runs a GitLab quick action.
+- On your Practice profile, each piece of work behind a feedback card now shows its own number, such as #21 or !24, instead of "pull request" for every one.
+- In your Practice profile, an empty Resolved and closed tab now uses the tab's own words.
+- Practice feedback no longer goes out with a link that the review evidence did not supply, an @-mention or Slack mention, raw HTML, an image, or hidden or direction-changing characters. The review on the work is composed again without them in the same review. A practice-page card or conversation note that contains one is not sent.
+- On a feedback card, the dashed line to the work still missing now keeps one even dash pattern across each gap, instead of a longer dash where two dashes met.
+- On a feedback card, the pieces of work that needed attention now show the Not met wrench in its tone under "Work reviewed for this practice", instead of a neutral dot.
+- Pull-based deployment: promoting staging with **freeze** now moves it to the release or commit you name and keeps it there, so one promotion replaces "promote, then freeze". Freezing what a host already runs restarts nothing. Production follows only manual promotions, so it can no longer be frozen; to stop a host from applying anything, disable its reconcile timer. A host on older tooling needs one promotion without **freeze**, to a release that includes this change, before a frozen promotion to a new target applies.
+- A GitHub webhook delivery that the receiver answered with a redirect now counts as failed and is redelivered, as GitHub counts it. The example alert rules now also warn when GitHub refuses redeliveries or when the server cannot read the GitHub App's deliveries.
+- Issues and pull requests of a GitHub repository that took the name of a renamed repository no longer stop its sync. Before, events for the new repository could be stored under the renamed one, and the sync of the new repository then stopped at every start. The next sync moves such work to the right repository. Work that a workspace already tracks, or whose number the right repository already uses, stays where it is, is counted in the new `github.misfiled.work` metric, and the rest of the sync continues. New reviews and comments on such work are not stored until a maintainer moves it.
+- A GitLab workspace that follows selected projects no longer adds people only because they belong to the group. People become members with Reporter access or higher to a chosen project, or through membership of a subgroup that contains it. Workspace owners always stay, and group admins with such access stay admins. Changes apply at the next successful sync or **Sync now**. If GitLab does not list a chosen project or subgroup completely, the current members stay. Workspaces that follow all projects are unchanged.
+- On the last step of creating a GitLab workspace, Enter in the display name or URL slug field now creates the workspace. If a field has a problem, the focus goes to that field. Enter in the project search still only searches.
+- When you create a GitLab workspace with a short name or a name with no letters from a to z, **Create workspace** no longer turns off with no reason. When you press it, the form says how to fix the URL slug and takes you to the field.
+- Opening user settings or instance administration keeps the selected workspace in the navigation.
+- GitLab syncs now respect it when GitLab says something is not there. A sub-issue moved out from under its parent no longer keeps the old parent. A project with a pending e-mail invitation still syncs its members. A merge request whose head has no pipeline no longer shows the pipeline of an earlier read.
+- Under the practice groups, Practices across the workspace and the Practice profile now say that group colors are not a rating.
+  The colors only tell the groups apart.
+- In All practice groups, a practice named in a group's summary now shows the same gray pill with the group's icon as in the tables. Prose and the weekly digest keep the plain pill.
+- The server now uses Guava 33.7.2, which fixes the security advisory CVE-2026-102554. graphql-java still bundles its own copy of Guava 32.1.2. The release's vulnerability policy records that copy as not affected: the flaw is reachable only through Java deserialization, and a build check prevents any Java deserialization in the server. No action is needed.
+- Links to other sites in practice guides, feedback and Hephaestus's replies now show the outbound icon and keep the text colour until you hover them. A screen reader announces that they open in a new tab.
+- The bullets of a practice guide's lists now have the same gray as the bullets under a practice in the Practice profile's tables, so a line is easier to find.
+- When the cluster is slow to answer, Hephaestus keeps working on your question. Before, Hephaestus could lose its place and start your answer again, which made you wait twice as long.
+- On a phone, the Ask Hephaestus panel's message field keeps the page's remove button, Stop and Send apart while Hephaestus answers. Empty message fields leave more room for reading and still grow as you type. A thread closes before you return to the conversation, including when its reply field had focus. Retry shows when older messages are loading. Hephaestus waits until the conversation is loaded before accepting a question, and preserves your draft if a later load fails. Screen readers hear when the thread is loading.
+- Hephaestus's context folder separates file staging from the commands run for a turn. Those commands cannot request the rights used to add files.
+- Deleting a message in Hephaestus now says that you cannot undo it. When you view another member's empty Hephaestus conversation, it says whose conversation it is and what appears there.
+- Hephaestus now sees when a past practice review result was ended and the reason Hephaestus recorded for ending it. The result keeps the outcome it recorded.
+- Hephaestus marks an answer that failed and a message that was not sent, so the line that needs you stands out. Try again, Retry and the other recovery buttons in the conversation are easier to tap.
+- Hephaestus no longer fails a question with "Hephaestus could not start" when its host starts quickly: the worker now accepts the host's connection as soon as it launches the host. A question whose host still does not start tries one fresh host before it fails. When a sandbox ends abnormally, the worker logs why, for example out of memory, an image that does not pull, or an exit code, and the new `sandbox_exits_total` metric counts each end by sandbox kind and reason.
+- A Hephaestus conversation or thread that loads quickly no longer flashes a loading placeholder, and the placeholder fits a narrow phone screen.
+- Hephaestus keeps answering in a long conversation. When the conversation grows past what the AI model can read, Hephaestus summarizes the earlier part, also with a reasoning model. When the AI model stops in the middle of an answer, Hephaestus says that the model stopped responding.
+- While Hephaestus answers, one Stop button sits beside Send. It names itself when you point at it.
+- In the Ask Hephaestus panel, Escape in a thread goes back to the conversation. Press Escape again to close the panel.
+- Hephaestus reads a shorter record of your recent feedback. When it needs more of a long delivered piece, it reads that piece on its own.
+- Hephaestus answers questions about your review runs faster in workspaces with many reviews.
+- Hephaestus now sees when Hephaestus captured the work a past practice review read, when that time is known. Hephaestus also sees whether that pull request or issue as Hephaestus stores it now still matches the reviewed version, including after an edit of only its title or description. Reading this history ends no result and changes no recorded outcome.
+
+  Marking feedback Addressed records your response. Only a later practice review can record a new result.
+
+- Earlier practice review history that is kept in a workspace no longer stops Hephaestus from answering. When Hephaestus cannot tell whose work a kept review run was about, it leaves that run out and treats its list of review runs as incomplete.
+- Hephaestus now has the completion state of a practice review alongside the status of its run. Its review history also supplies counts of practices judged, reused, withheld or pending for you on the reviewed work. Unavailable counts remain unknown.
+- When Hephaestus cannot be shown, a message says so instead of Hephaestus disappearing. It offers Retry, and Reload page when Retry did not help or Hephaestus did not load. The message goes when Hephaestus is back.
+- Hephaestus's record of your feedback no longer holds feedback that waits for a reviewer's approval, that a reviewer rejected, that was withheld or replaced, or that an admin withdrew. It holds only feedback that is ready for you, delivered, failed to deliver, or whose delivery is not confirmed yet.
+- Hephaestus answers in a few plain sentences and offers to go deeper, instead of explaining how feedback is prepared or delivered. When it cannot see something, it says so in one sentence.
+- Opening the Ask Hephaestus panel again on a thread you replied in no longer brings up the keyboard on a phone. A thread now says when live updates are paused, as the conversation does.
+- On a touch screen, including a tablet with a keyboard, Enter in the Hephaestus message field starts a new line. Select Send message, or press Cmd+Enter or Ctrl+Enter, to send.
+- A failed Hephaestus reply now records why it failed, in the `failure_cause`, `failed_call` and `failed_call_status` columns of its `mentor_turn` row: the Hephaestus host's reason, or the kind and status of its last failed model call. The cause stays after the worker restarts. Each failed model call of a conversation turn is logged as one warning with its turn. [Observability](https://docs.hephaestus.build/admin/observability) describes the columns and the log lines.
+- A Hephaestus reply no longer fails when the usage of one of its model calls cannot be recorded. The call is counted as unbilled in the worker's metrics instead.
+- The dots in a record's "State and history" now sit exactly on the line. Each dot is centered on its first text line, also next to an icon.
+- Requests to GitHub, GitLab, Outline, Slack sign-in, the release check and the ECB rate feed now appear in the server's HTTP client metrics, and in its traces when tracing is on, like its other outbound requests.
+- The server's check for finished reviews to process, a developer's newest result and the reviews of an item now use indexes, so they stay fast as review history grows. The upgrade builds the new indexes without blocking writes; on a large database, the first start after the upgrade takes longer while it builds them. It also removes two `activity_event` indexes that duplicated others.
+- On the instance **AI models** page, the models table and the settings card keep their shape while they load, so the page no longer jumps when they arrive.
+- In instance administration, you can close the role change dialog while the change saves. If the change then fails, a message tells you.
+- On Kubernetes, the sandbox isolation probe no longer leaves Pods behind when a worker stops during a probe, and a probe Pod that never gets a node no longer holds sandbox quota. Each run now takes 768 MiB of the sandbox quota instead of 1.5 GiB. Probe Pods that an earlier version left behind stay until you delete them once: `kubectl -n <sandbox namespace> delete pod -l hephaestus.build/isolation-probe=true --field-selector=status.phase!=Running`.
+- The one-host k3s install now keeps memory and CPU for k3s and the host, and evicts Pods before the host runs out of memory. A host of 16 GiB gives Pods about 13.9 GiB. The next run of the installer applies this and restarts k3s.
+- The Helm chart now runs practice reviews when the worker is enabled: before, the server submitted none and the workers claimed none. On Kubernetes, a review no longer fails at its start with "Workspace extraction failed: 2". A broker outage no longer takes every receiver and server out of service: readiness now reports only whether that Pod can serve, and the broker's state stays in `/actuator/health`, which alerts should read. `worker.conversationTurns` sets how many conversation turns one worker runs at once, and the single-node profile sets 8 so that its sandbox quota holds them. The chart also passes the settings that Compose installations could set and the chart could not: the research organization, public activity, the second currency for AI spend, the passkey requirements, the repository sync schedule, and implicit TLS or an unauthenticated relay for email. A new profile, `small-16gib.yaml`, applied after `small.yaml`, fits a single node of 16 GiB: the worker restarts in place for each upgrade (`worker.rolloutStrategy: Recreate`), so reviews and conversations pause for the drain, while the webhook keeps receiving. Git checkout is now on by default (`config.gitCheckoutEnabled`), because a worker cannot run a practice review without it.
+- The installation guide link on the landing page opens the Helm chart guide, the install for new deployments.
+- The landing and About pages list the six features of Hephaestus under the same names as the README and docs.
+  The About page explains why Hephaestus exists and links the study behind that claim.
+  Link previews show the label "Open-source practice feedback for software teams".
+- A model call that returns after its review was cancelled or retried is now counted in the spending of the attempt that made it, at that attempt's price. It no longer drops, and it never changes the review's result or the attempt that runs now. This covers calls whose provider reported usage. It does not restore usage lost before this change. Before you upgrade, let old workers finish their running reviews with a graceful drain; queued reviews need not wait.
+- Image checks now recognize that the reviewed launch binaries do not contain the certificate-verification code affected by CVE-2026-111943. The assessment is bound to the exact component hashes and advisory, and expires unless reassessed.
+- When you share a link to Hephaestus or its documentation, the preview shows a shorter description. The preview image now names merge requests too.
+- On the AI models pages, a provider, model or workspace-access change that finishes after you moved on no longer closes, locks or opens a sign-in prompt over the form you opened next, so your edits there stay. If a provider change needs a fresh sign-in, a notice says it was not saved. The save button shows "Saving…" while its own save runs.
+- The worker log keeps each review's start, end and preparation failure. These records were dropped before. Each log record of every runtime role now names the release that the deployment runs, not `0.0.0-development`.
+- Adding a repository by hand to a workspace connected with a GitLab or GitHub token now first asks GitLab or GitHub whether that workspace's own token can read it. Another workspace on the same server having synced the repository no longer lets it in. A repository the token cannot read is not added, and none of its work appears in the workspace.
+
+  The token is only ever sent to the server its connection names. If the connection is reconnected, its token replaced or its server changed while the check runs, nothing is added. Try again. A GitHub token for a server other than github.com cannot add repositories by hand.
+
+- On a workspace's **Members** page, searching, sorting, changing pages or rows per page no longer jumps to the top of the page. The members already listed stay on screen until the new list arrives. When you switch to another team or workspace, placeholders show until its members arrive, so you never see the wrong members.
+- A first install no longer fails at random in its database migration. The server and worker roles waited for the migration by reading Liquibase's history in a way that created the change log table, so on an empty database a role could create it while the migration was creating it, and the migration failed. The roles now only read while they wait.
+- A practice no longer fails when its review claims a search of the whole repository that it did not run. Hephaestus asks the review once to run the search or drop the claim. If the review does neither, the result is withheld with its reason, and the practice no longer ends as failed.
+- Date and time fields now follow your light or dark theme, so their calendar icon stays visible in dark mode.
+- A practice that a review never reached, because the review stopped first, now reads Withheld with the reason the review stopped instead of Done. Done again means that the practice recorded its observations.
+- "Next step" on a feedback card and under a problem in an observation now carries a footprints icon, the steps to take next, instead of the card's state icon.
+- Webapp images include nginx security fixes for request processing.
+- Database migrations no longer fetch Liquibase's analytics settings from liquibase.com or send Liquibase usage analytics. Set `LIQUIBASE_ANALYTICS_ENABLED=true` to send them again.
+- When you open an observation from a review, the practice panel now shows that observation directly below its tabs, also on a phone. The practice's introduction, picture and guide are now in the **Guide** tab, so your feedback and observations come first.
+- Observation cards and the problem cards inside an open observation stand off the page with the stronger edge and faint shadow of a feedback card.
+- "What was checked" in an open observation is now a two-column list: each term in its own column, its value aligned beside it, with a rule between pairs.
+- An open observation now reads at a glance. Its section labels stand apart from the review's words, and the note on an unverified or historical observation is shown as a notice. Observation cards sit on the page like feedback cards.
+- "Read it on this practice's Feedback tab" in an open observation now lands on that feedback card and marks it once with a short sheen; back on Observations, the observation is still found and open.
+- An open observation shows the feedback it gave, if any, one box per piece that says where it went (on the work, on the practice page or in your conversation with Hephaestus), its delivery state, and, once it was delivered, a link to read it there. It no longer offers response controls; a response you already gave shows as one line.
+- The dots of an observation's history now sit on the middle of the card's head, and the date beside each dot shares the dot's middle whether it has one line or two.
+- An observation opened from a review now narrows the Observations tab to exactly that work, so "#15" no longer also shows "#150" or another repository's "#15".
+- An observation opened from a review now shows while the rest of its practice's history still loads or could not load, and the tab no longer says "No observations match your filters" while that observation is still on its way.
+- An observation on the developer pages shows only the feedback that was delivered to you. Feedback that is ready, withheld or failed to deliver no longer appears there.
+- In an open observation, each problem now carries its number in a small circle before its title.
+- On a practice's Observations tab every observation the search finds carries the blue bar, not only the one a review's link opened, and observations no longer repeat how their review started ("Requested").
+- The Search field on a practice's Observations tab now clears with its own button in the foreground, instead of the browser's tinted one.
+- A practice's Observations tab filters by outcome with the same chip as a review's practices, so you can keep more than one outcome. Its search field looks like the search in a filter's list.
+- On a practice's Observations tab, the number beside the tab name now counts the observations shown, with the timeframe and the tab's filters applied, as the Feedback tab does. The separate "match your filters" line is gone. Reset appears only for the search or the outcome and clears only those, keeping the timeframe.
+- A practice's level has the timeframe of Reviews of your work in its tab row, right of Guide: Last 7 days, Last 30 days, Last 90 days or All time, which stays the default. It narrows both the Feedback tab's cards and the Observations tab. Your open feedback card always shows, and a timeframe that hides every card says so and offers Show all time.
+- Practice reviews and conversation turns now carry one kind of signed credential, an attempt token. A conversation turn's credential no longer names its conversation or account: the worker reads both from the turn itself. No action is needed.
+- The app, the docs, and the Slack App Home now describe Hephaestus in the same words.
+  Hephaestus reviews the pull requests, issues, and code reviews your team already writes against the engineering practices you choose.
+  It gives each developer feedback that cites their work and names a next step.
+- The About page, the landing page, link previews and the first-run introduction now describe Hephaestus in the same words as the README and the docs. The landing page names only practices that ship in the catalog.
+- On the Practice reviews overview, "27 finished" and "2 running" are now one link each. Number and word are underlined together, as the other counts are.
+- On the Practice reviews overview, the review time row now shows only "finished", which opens its reviews. Counts that no list can open are no longer shown.
+- On the Practice reviews overview, "4 min oldest wait" now links to the review waiting longest. Number and words are underlined together, like "2 running" and "27 finished".
+- The feedback listed under a review of your work now shows only feedback that reached you. Feedback that was withheld, still awaits approval, was rejected or failed no longer appears as if it were posted on the work.
+- Back on a review in Reviews of your work, the row of the observation you opened last keeps the blue bar on its left edge.
+- A review in Reviews of your work filters its practices by outcome, as the admin Observations tab does, instead of sorting them by severity from the Outcome heading.
+- A review in Reviews of your work lists its practices under a gray heading per practice group, so a row names only its practice.
+- Reviews of your work now show each review's status as a label, the same one workspace admins see in their list of reviews. Hover, focus or tap the label to read what the status means, for example that a partial review's results cover only the work it reached.
+- In Reviews of your work, your latest review is framed in blue with "Latest review" in its corner instead of a "Latest" tag, its status stands over its time instead of in a column of its own, and What it saw puts the outcome counts on a line under the practice count.
+- On Reviews of your work, the timeframe keeps its place top right when you track a work or filter the list. The tracked work joins the filters on the left.
+- A page that cannot load now says why. A missing page, or one you cannot access, offers the way to the home page, and only a failed load offers Retry.
+- A page shows its outline while it loads, and the page you return to after signing in says that it is signing you in.
+- When an admin page needs a passkey, Hephaestus now opens a short confirmation page instead of your settings. It explains why, lets you add your first passkey without naming it, and takes you back to the exact page you were on once you confirm. If you close the browser prompt, you can try again from the same page, or leave with **Not now**.
+- Browser tests now use a patched server that refuses private files such as environment files and the test runner’s access token. Deployed applications were not affected.
+- Builds and contributor checks now use the patched Vite+ toolchain. Cached checks keep their existing input and environment controls.
+- On a phone, the "Has open feedback" label in a group's table wraps its progress words onto a second line instead of cutting them off.
+- A chart host whose upgrade was cut off now rolls back to the newest revision that Helm finished, not to a failed one. When Helm never finished a revision, as after a cut-off first install, the update fails and names the `helm uninstall` command that clears the release; the next update installs it again.
+- Practice-script searches return matches correctly on macOS.
+- Links between your Practice profile and Practices across the workspace now stand out. Group and practice footers have a gray band and an outline button that turns dark on hover, focus and press.
+- A practice group's description now looks like a practice's why it matters, in the same text color and column width.
+- In your Practice profile, the Practice group heading of All practice groups has an (i) that explains what a practice group is.
+- A practice's introduction now sets why it matters at the size of its caption and guide. Labels in its picture no longer grow past that text in a wide panel.
+- Every practice in a table, a list or a card's head is now a small gray pill with its group's icon before the name.
+  Where the page does not know the group, the pill holds the name alone.
+  On your Practice profile, a practice group's page is headed like the group in All practice groups, its icon and name in its color.
+  A practice's page is headed by its gray pill with the group's icon.
+- The Observations tab of a practice has a filter bar: search by words, work such as #15, or problem, and select an outcome. Open observation on a review now filters the tab to that work and opens the observation, with no second copy above the history.
+- The Practice profile loads faster when much of your work has been reviewed. Your overview, standings and the feedback on your practice pages no longer wait on a separate check for each observation.
+- Your Practice profile counts practices without a standing as one: No standing yet. Practices that did not apply and practices not yet reviewed share one fold, and Practices across the workspace names its gray part the same way. A practice's or group's own panel says No standing yet as its folded row does, with why behind the label and "Not enough to compare yet" beside it.
+- The list of reviews on your Practice profile and the feedback on your practice pages load faster.
+- A review's practices no longer read "Ready: everything it reads was captured" before anything was captured. They read Queued until capture decides whether each one is ready or withheld, and a scan's practices read Running once a worker captures their first file.
+- The practice reviews list and a work item's review trace load faster in workspaces with many reviews.
+- Each practice in a review now starts from only the sources it declares, such as the change, the description or the review discussion. It can cite only those, the code change and the repository. Practices that declare the same sources share their opening, so a model provider can reuse more of each review from its prompt cache. The pull request handoff practice now also reads the linked issues that its criteria already mention.
+- On a practice, one short line under the Feedback, Observations and Guide tabs now says what the open tab holds. The tabs no longer repeat their name as a heading, so each one starts with its content.
+- A standing and its trend now stand side by side without a "Standing:" or "Trend:" prefix, with a little more space between them. A trend's sentence first says what it compares: your latest reviewed work with the work before it, in the last 90 days.
+- Sparse issue and pull-request updates preserve stored counts and discussion locks when those inputs are omitted. Merge-request sync also preserves values that GitLab cannot return.
+- Hephaestus now considers conversation feedback independently of comments on the reviewed work.
+- The landing page, About page and introduction now describe practice feedback as it works. The examples show where work needs attention and a concrete next step. Slack channel messages are described as used only with each member's permission.
+- In Practice reviews, the queue's "See all 7" link now reads "See all": it opens reviews by status, which need not match the queue's figures. The queue's (i) no longer gives the pace or the number of workers, since no list opens them.
+- When an admin views a developer's feedback on a piece of work as that developer, the page no longer tells them to respond to the feedback. They can only read it there.
+- The shipped Prometheus alert rules now cover pull-based deployment. A new group, `hephaestus-pull-deploy`, warns when every reconcile run of a host fails for 15 minutes, for example because the release's chart refuses the host's values, when a host finishes no run for 40 minutes, when no host reports the reconciler's metrics, and when a host runs tooling that no apply recorded. Load the group only where Prometheus scrapes a host that runs the reconciler.
+- Pull-based deployment no longer fills the host's disk with old images. After each apply, the host removes the images that neither the running nor the previous release uses, so a rollback to the previous release still needs no download. Before it pulls a release, the host checks the free space for Docker's data and refuses the apply below 10 GiB, after first removing those unused images. A rollback whose images are already on the host is never refused. The new `hephaestus_deploy_free_bytes` metric lets you warn earlier. Set the optional `HEPHAESTUS_MIN_FREE_GIB` in `reconcile.env` to change the threshold.
+- The admin Problems list includes recorded Problems from accepted and ended results. Its filters no longer silently restrict the list to open Problems.
+- Deleting a recurring check now asks first and names the check, because you cannot undo it.
+- A redelivered comment edit, review dismissal, thread resolution or review comment deletion no longer adds a second entry to a developer's activity.
+- The web client and development tools use updated transitive dependencies.
+  No configuration change is required.
+- Each release now carries its signed release attestation as `release-vX.Y.Z.intoto.jsonl`, so you can check the image lock and every image digest without GitHub's attestation store. The release image lock page gives the command.
+- Practice lists now move rows to the intended position when you reorder them with the keyboard.
+- After an update, a page that was already open reloads once instead of failing to open the next page. If the reload does not help, the page shows its usual error instead of reloading again.
+- Separator dots in the status line of review details and in the Practice profile's latest review chip now sit centered next to icons and chips.
+- You can now remove your last passkey in User settings after you verify a passkey and turn off personal admin protection. Removing it also deletes your recovery codes and signs you out of your other sessions. Admin access that your instance or a workspace protects with passkeys stays locked until you add and verify a new passkey. Your last passkey stays while personal protection is on or recovery is active.
+- A webhook delivered again, or late after newer changes, no longer starts a second practice review or posts the same feedback twice. It also no longer brings back older text. This covers pull and merge requests, issues, comments, reviews, Outline documents and Slack message edits. A dismissed review stays dismissed, and a reopened issue or merge request stays open.
+- When you request a review, **View requested review** stays available after the toast closes. You can open it from your Practice profile or the admin Practice reviews page, even before results appear. The original review keeps its own status.
+- When a practice review moves to a new attempt, for example after its worker stopped, the sandbox of the old attempt is now removed within a minute. Before, it kept running until its own deadline, held sandbox capacity that a new review could not use, and its late output was discarded.
+- The research datasets page now follows the instance’s confirmation policy. It no longer asks for a passkey when additional confirmation is disabled. Loading or failed policy reads no longer imply that confirmation is required or waived. The server still checks every export, check and dataset update.
+- A research removal check that runs while an account is erased, or while removals are recorded, no longer links the erased account to its participant key again. It also no longer reopens a removal that was already recorded. The key and the owed removal stay listed until the researchers' removal is recorded or the dataset is closed. The reason and date that were recorded first stay.
+- The sentence for feedback whose clean run started over now reads "back to none of 3 clean in a row", in the words of the card's own progress line, instead of "back to 0 of 3 clean".
+- What a practice review records about your work is now called an observation instead of a result, in the web app, the Chrome extension, Hephaestus's answers and the docs. For example, practice reviews have an **Observations** tab, the extension lists **Your observations**, and an outdated one is marked **Historical observation**. What a review proposed before Hephaestus checked it is a candidate observation: a practice script's run now says **Returned a candidate observation**, and refused ones are reported as withheld candidate observations.
+- A review whose model provider rejects its credentials now fails with that provider error instead of stopping as if its attempt had ended. Only the gateway's own refusal of an attempt that no longer runs stops the review.
+- A review attempt that was cancelled or requeued can no longer record its late result over the attempt that replaced it. Its runner now stops at its next model call of the review conversation, and a worker that is offered the requeued review stops its own earlier attempt first. Hephaestus replies are no longer restarted when the clocks of the server and the worker differ, because the reply lease now uses the database clock.
+- Practice reviews no longer lose practices when several practices start at the same time. Before, some practices of such a review could end without a result, and the review showed as partial.
+- A practice review whose sandbox cannot prepare its workspace now runs again within the job's retry limit instead of failing at once, because no model call has run yet. The worker log names the failure and its exit code, and after the last attempt the job keeps the initializer's exit code and the last lines of its log, with known credential formats masked, for the operator. A review that fails before its sandbox starts now also logs the stage, the cause and the exception types, and a failed repository operation is named as such instead of as an unclassified cause.
+- Each practice review that a worker runs now holds a lease, which the worker renews with its heartbeat. When a worker stops, the server requeues its reviews once their leases expire. After the server starts, and after its checks stalled, it waits one heartbeat interval before it requeues anything, so a worker that stalled with the database keeps its reviews. The upgrade to 0.95.0 recovers a running review without a lease as a drain, without spending a retry. Follow **Workers no longer connect to the server** in [this release's migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md).
+- A review of your work no longer offers Open the original or Request review in its header. The work line at the top links to the original, a rule separates the header from the practices, and another review is requested from Reviews of your work.
+- A review of your work no longer lists the feedback it gave above its practices. Each piece of feedback stays reachable from its observation in the practice.
+- A review of your work now lists only the practices it reached. The What we noticed tab is gone, and an old link to it opens the practices. Each row's Observation column holds the Open observation link.
+- In a review of your work, Open observation looks like every row's own link: right-aligned with its arrow, lit while you point at the row, and without a visible "Observation" column heading (a screen reader still hears it).
+- Reviews of your work and a review's header now tag a scheduled or backfilled review as Scheduled or Backfilled, as they tag a requested one.
+- Practice reviews no longer receive a garbled instruction about when a practice does not apply.
+- A review whose job still waits, for capacity, for room for its sandbox, for the workspace's AI budget or for a retry, now reads Queued instead of Running everywhere: the review list and its status filter, the review's header and history, the overview counts and a developer's own reviews.
+- A practice review that is retried after a preparation or infrastructure failure now runs again. Before, the retry failed whenever the first attempt had withheld a practice before it ran, and the review ended as failed. A practice withheld before it ran keeps its reason across the retry.
+- In a review of your work, a press anywhere on a practice's row now opens its observation, as Open observation does. The link stays the way in for a keyboard.
+- A practice review sandbox uses about 50 MiB less memory while the review runs.
+- A review's place among the reviews of its work now reads "Review 2 of 3", with a stack icon, in Reviews of your work, whatever its filters keep, and in the review's header. The first review of a work reviewed more than once says "Review 1 of 2".
+- The tabs on Review settings now sit inside their track like the other tabs in the app. On a narrow screen, a tab that wraps no longer covers the section below.
+- On Kubernetes, a practice review now waits in the queue while the sandbox quota has no room for its sandbox, for example while Hephaestus's sandboxes hold it, instead of being started into a refusal that used up its retries.
+- The filters of Reviews of your work now work and look like those of the admin Reviews tab: Work and Status as chips that take several values, Sort for newest or oldest first, Reset, and a line that counts the matching reviews. The timeframe stays the segmented range. The own reviews list accepts several kinds and statuses and an order for this.
+- In Reviews of your work, each row's link now reads "See the reviewed practices", which is what the review shows.
+- While earlier reviews load, placeholder rows now continue the table under its columns.
+- Reviews of your work no longer links the feedback a review gave in each row. The feedback stays reachable from its observation.
+- In Reviews of your work, the button in each row now reads "Request another review", since the work already has one.
+- In Reviews of your work, Request another review and Track this work are icon buttons of one design and size, each named in a tooltip and explained in one line above the table. Request another review appears only on a work's latest review, also under a filter or with the oldest first.
+- In Reviews of your work, the timeframe is now a segmented control (Last 7 days, Last 30 days, Last 90 days, All time) on the right of the filter bar, beside the count of matching reviews.
+- In Reviews of your work, a work with more than one review offers Track, which narrows the list to every review of that work. A Status filter narrows the list to running, completed, partial, failed or cancelled reviews.
+- In Reviews of your work, What it saw now counts the practices a review recorded and each outcome, such as 8 practices · 5 met · 2 not met · 1 does not apply, and says nothing else.
+- A logged stack trace now starts with its root cause, so a failure wrapped many times, as at startup, still shows what started it within the trace length limit.
+- In the admin Practice reviews tables, the explanation of the row actions now shows each button's icon in front of Track, Trace and Request review, so you can see which button does what.
+- The worker metric for orphaned sandboxes now counts each removed sandbox once, with `resource="sandbox"`, instead of its containers and networks separately. A practice review whose sandbox cleanup fails now counts once, under the step `remove sandbox`, instead of once for each Docker step that failed.
+- `SANDBOX_API_PORT=0` now lets the worker bind a free port for its sandbox gateway. Review sandboxes and the Hephaestus host then dial the port that was bound. A fixed port, 8081 by default, works as before.
+- The Helm chart now ranks its Pods: the roles, PostgreSQL and NATS first, then Hephaestus's sandboxes, then review sandboxes. When a node runs short of memory, Kubernetes now stops a review, which runs again, before it touches Hephaestus or the database. The chart creates three PriorityClasses for this, so the account that installs or upgrades the chart needs permission to create PriorityClasses. On a shared cluster without that permission, set `priorityClasses.create=false` and name three existing classes.
+- The scheduled GitHub and GitLab syncs now sync at most four workspaces at the same time, so they no longer take all database connections of the server, and pages and API requests no longer wait while they run. With many workspaces, a scheduled sync takes longer to finish.
+- The server's background tasks no longer wait behind a long one. Before, a long task such as an Outline catch-up delayed the others, including the heartbeat that keeps a running sync alive.
+- User settings now ask you to verify a passkey before you add another passkey, remove one, change protection or create new recovery codes, and say why each of those waits. Adding a passkey says beforehand that it turns on personal admin protection and signs out your other sessions. When a confirmation expires during a change, the page tells you to verify again. New recovery codes can be copied in one step. You can now disconnect a Slack or Outline account even when GitHub or GitLab is your only sign-in method; that last sign-in method stays protected, and the page suggests connecting another sign-in account first. Links at the top of user settings lead to account security, passkeys, preferences, research participation and your data. Account security now comes first, with connected accounts, passkeys and active sessions together. Your AI choice, connected accounts and research participation no longer wait for, or disappear with, your other preferences.
+- Feedback and Hephaestus's replies lead with the answer, explain technical terms in plain words, and leave out Hephaestus's internal terms.
+- The server now stops within seconds during an upgrade instead of waiting 20 seconds for open live streams; browsers reconnect to the new server and catch up.
+  A stopping worker now waits for its whole drain, running conversation turns included, before it closes its database connections. Before, the drain phase ended after a fixed 6 minutes.
+  The Helm chart gives the server 45 seconds to stop instead of 35.
+- The sidebar section "Your practices" now opens and closes its pages like the admin sections. The Practice profile is the first page under it.
+- While you type in a field, Cmd+B or Ctrl+B no longer opens or closes the sidebar, so the field keeps the keys. For example, on a Mac, Ctrl+B moves the cursor back one character. To see the shortcut, point to or move focus to the sidebar button.
+- A stop reported by Slack while Hephaestus streams an answer now stops its work on that answer too. Queued follow-up questions keep their place.
+
+  Feedback from an interrupted answer keeps its recorded delivery uncertainty when Slack later finishes or rejects the reply.
+
+- Hephaestus explains when it is not set up to answer in Slack instead of leaving your message unanswered.
+- In your Slack settings, each workspace's channel-message switch now stays unavailable until its own change is saved, even when you change another workspace in the meantime. Workspaces you are not changing stay available.
+- Slack preferences now show a placeholder shaped like a workspace’s settings while they load.
+- A research opt-out that a person gave in the Slack App Home before version 0.81 applies again.
+  Since 0.81, Hephaestus read research consent only from the person's account and ignored these opt-outs.
+  The upgrade adds each one to the research decisions of the linked account. A decision that the account made later still counts.
+  Where the opt-out is now the latest decision, research stops using that person's data, and the next removal list of a released research dataset can name them.
+  If your instance runs a research program, Hephaestus asks that person the research question again.
+- In a Slack thread with Hephaestus, Slack now shows that Hephaestus works, with a **Stop** control that stops only the answer in progress. It works also before Hephaestus writes its first words, and questions that wait after it keep their place. Hephaestus stops soon after, not always at once. To show the control, apply the current Slack app manifest, which subscribes the app to `agent_session_stopped` and needs no new OAuth scope. Until then, developers stop Hephaestus in the app as before.
+- The upgrade to 0.95.0 stops every runtime role before migration. For later schema-compatible rollouts on the `small` profile, conversations keep running. The new worker starts beside the old one and opens its conversation host's command channel before the old worker drains. The old worker drains until its running reviews finish or its configured drain timeout ends. A conversation turn's sandbox now requests less CPU, so both workers fit on the profile's node during the upgrade. `small-16gib` still stops the worker first, because two workers do not fit in 16 GiB.
+
+  A question that waits in the queue for three minutes can end with a message that asks you to try again. This limit follows the question across worker restarts. A follow-up stays queued while its conversation has a running answer. An unready worker leaves questions for a ready worker, without spending an attempt.
+
+  The update gives existing queued questions a fresh wait to start.
+
+- A standing that changed now says whose standing it is.
+  The practice groups table and the weekly digest say "The group is now at Mixed feedback for you.".
+  They no longer say "The group moved to Mixed feedback.".
+  A practice's row in its group says "Your standing is now Going well after !425.".
+- A push to a pull request no longer removes it from your standing for practices that review only when the pull request opens or becomes ready. Its last review keeps counting until a newer review of the work decides the practice again.
+- In Practice reviews, "Started by" now shows a requester's face and name, as the Developer column in Results does.
+- A review that already started, such as one a worker restart put back or one whose feedback is still being written, now runs before reviews that have not started. Before, it waited behind every review queued ahead of it, and its feedback arrived late.
+- Protects local Storybook development previews from cross-origin messages and unauthorized story edits. Published static Storybooks remain available.
+- The group headings on the Activity page, such as "Review requested", now use the same weight as every other subsection heading.
+- The dialog that deletes a survey now names the survey.
+- On the day the clocks change, the integration overview shows the right next scheduled sync, also for a sync schedule that runs in the repeated hour.
+- Tracking a work in Reviews of your work keeps its name in the Tracking bar when another filter leaves none of its reviews, instead of showing a loading placeholder.
+- When you delete a workspace or erase a person's data, the text you enter to confirm may now have spaces around it, as it already could when you remove a Slack channel or turn off silent mode. All four confirmations now ask you to "Enter" the text.
+- Hephaestus no longer records an observation that rests on a source its practice does not read. For example, a practice that reads only the code change cannot cite the pull request discussion. The review shows such an observation as not recorded.
+- The agent images and the development tooling now use undici 7.30.1 and 8.12.2, which fix a denial-of-service security advisory in stream error handling.
+- When Hephaestus cannot be reached, for example while it restarts, the web app no longer treats you as signed out or as lacking access. The header says "Hephaestus is not reachable right now" and offers Try again. It also picks your session up again by itself once the server answers. Pages show their error page with Retry instead of the visitor's page or a redirect away from workspace administration. A server that does not answer within 10 seconds counts as unreachable.
+- A practice whose review settings name events or a role that its kind of work does not offer is no longer selected for reviews. Before, it was withheld on every review, so every review showed as partial. Its page in practice administration now says that Hephaestus does not run it, and asks you to change its review settings.
+- When Hephaestus refuses to migrate a database at startup, the log now says why and what to do. For example, a database from before v0.77.4 names the baseline synchronization runbook again.
+- AI usage reports now name practice reviews in the run type column. These rows were blank before. Reports for earlier months keep their existing run type names.
+- Keyboard focus is now clearly visible in light and dark mode.
+- The webhook receiver's health check no longer waits on NATS: it reads only the state of the NATS connection, so it stays fast while the broker's disk is slow. Every publish now ends before GitHub and GitLab stop waiting, and the receiver still answers `503` instead of accepting a delivery it has not stored.
+
+  Failed GitHub deliveries are now redelivered for up to 80 minutes after the first failure, with growing gaps between attempts, instead of three times in the next 30 minutes. A redelivery run sends at most 5 requests a second, stops after 5 refusals in a row or after 5 minutes, and leaves the rest for the next run, so two runs never redeliver the same events. When the receiver fails redeliveries in a row, a run only probes it with 3 redeliveries, so the other events keep their attempts until it takes deliveries again. Keep the NATS store on storage that a database or container runtime does not saturate: the broker writes every delivery to disk before it acknowledges it.
+
+- The review page now explains every reason a practice was not reviewed: evidence that could not be captured, a role that nobody or several people hold, work or a person outside your review scope, an inactive workspace, an unconfirmed record of copied data, and a candidate observation that failed a check. Before, the page showed the raw reason code.
+- On Kubernetes, the worker may now read events and the resource quota in the sandbox namespace. It needs both to tell that the sandbox quota refused a review's Pod, so that the review waits for room instead of failing.
+- On the workspace Members page, making someone an owner or lowering your own role now asks first. If you cancel, the focus goes back to that member's Role menu. Admins who are not owners no longer see the Owner role, which only an owner can give.
+- When you create a GitLab workspace, the URL slug that you enter now changes to lowercase, and spaces and underscores change to hyphens. For example, "My Team" becomes "my-team" and is no longer refused.
+- The workspace switcher no longer shows a workspace's name twice when its account login is the same. Screen readers hear the workspace once, including when the sidebar is collapsed to icons. When you have no workspace yet, the collapsed **No workspace** and **Create workspace** buttons keep their names too.
+- The web app, the browser extension, and the agent image now use Zod 4.6.6, which fixes a security advisory in how schema validation checks size limits on lists, maps, and sets.
+
 ## 0.94.7
 
 ### Patch Changes
@@ -2067,7 +2791,7 @@
   escaping the release-age floor every other Hephaestus dependency is held to. The image now applies
   that floor and verifies it while it builds.
 - The reference multi-host stack now deploys instead of stopping with `service "webhook-server"
-depends on undefined service "postgres": invalid compose project`. That deployment brings the proxy,
+  depends on undefined service "postgres": invalid compose project`. That deployment brings the proxy,
   core and app stacks up as three separate Compose projects, and the core stack had been asking Compose
   to start the webhook receiver after a database that belongs to the app stack — an order Compose
   cannot honour across projects, and one that made the core stack refuse to render at all. The receiver
@@ -2076,13 +2800,13 @@ depends on undefined service "postgres": invalid compose project`. That deployme
   after the database. Nothing to set on either — deploy or upgrade as usual.
 - A fresh self-host install now starts instead of crash-looping with
   `hephaestus.security.prior-credential-encryption-key and prior-credential-encryption-key-version must
-be configured together`. The stack passes both credential-rotation variables through empty when you
+  be configured together`. The stack passes both credential-rotation variables through empty when you
   have not set them, and Hephaestus was reading one empty value as a half-finished key rotation; an
   empty value now means what you meant by it — not configured. Finishing a rotation by clearing the
   prior key and its version works the same way. Setting only one of the two is still refused at
   startup, so a rotation cannot half-apply and leave stored credentials unreadable.
 - A fresh self-host install now starts instead of stopping with `required variable NATS_USERNAME is
-missing a value`: `setup.sh` generates the message-broker credentials alongside the database password
+  missing a value`: `setup.sh` generates the message-broker credentials alongside the database password
   and the other internal secrets. Upgrading an existing installation picks them up by rerunning
   `docker/self-host/setup.sh`, which leaves every value you already set untouched.
 - The webhook receiver in a self-host install now starts instead of crash-looping with
@@ -2852,7 +3576,7 @@ missing a value`: `setup.sh` generates the message-broker credentials alongside 
   `GET /admin/llm/usage`, `PUT /admin/workspaces/{slug}/llm/budget`, `GET /workspaces/{slug}/llm/usage`,
   `PUT /workspaces/{slug}/llm/budget`, `GET /workspaces/{slug}/llm/settings`, and the per-purpose
   bindings — `GET /workspaces/{slug}/agents` to list them, `PUT`/`DELETE
-/workspaces/{slug}/agents/{purpose}` to set or clear one.
+  /workspaces/{slug}/agents/{purpose}` to set or clear one.
 
   The workspace console's retired `/w/{slug}/admin/ai/*` browser URLs no longer redirect either; those
   pages have been at `/w/{slug}/admin/models` and `/w/{slug}/admin/practices` since the previous
