@@ -78,8 +78,7 @@ public final class PostedText {
     }
 
     /**
-     * A summary as it is posted: the bot's own header, the text made literal, then the hidden marker that finds it
-     * again.
+     * A summary before its disclosure footer: the bot's own header, literal text and its physical marker.
      */
     public static String summary(SummaryContent content) {
         String marker = content.writeMarker();

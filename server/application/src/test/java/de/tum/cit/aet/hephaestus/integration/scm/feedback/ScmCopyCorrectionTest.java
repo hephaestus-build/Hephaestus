@@ -44,6 +44,7 @@ class ScmCopyCorrectionTest extends BaseUnitTest {
                 .thenAnswer(call -> ((String) call.getArgument(0)).startsWith("query") ? read : write);
         when(read.variable(anyString(), any())).thenReturn(read);
         when(write.variable(anyString(), any())).thenReturn(write);
+        var target = ScmFeedbackFixtures.target(new IntegrationRef(kind, 1, null), "owner/repo#42", "a".repeat(40));
         String marker = "<!-- hephaestus-feedback-copy:" + UUID.randomUUID() + " -->";
         var lookedUp = mock(ClientGraphQlResponse.class);
         when(lookedUp.getErrors()).thenReturn(List.of());
@@ -56,7 +57,14 @@ class ScmCopyCorrectionTest extends BaseUnitTest {
                         "id",
                         "copy-1",
                         "body",
-                        "Original words\n" + marker,
+                        form == CopyForm.FILE_NOTE
+                                ? ScmFeedbackFixtures.formatter()
+                                        .footer(target.item())
+                                        .summary(ScmFeedbackFixtures.summary("Original words", marker))
+                                : ScmFeedbackFixtures.formatter()
+                                                .footer(target.item())
+                                                .appendLineNotePrompt("Original words")
+                                        + "\n" + marker,
                         "viewerDidAuthor",
                         true));
         when(read.execute()).thenReturn(Mono.just(lookedUp));
@@ -70,7 +78,6 @@ class ScmCopyCorrectionTest extends BaseUnitTest {
         when(write.execute()).thenReturn(Mono.just(updated));
         var receipt = new CopyReceipt(
                 UUID.randomUUID(), CopyDisposition.POSTED, "copy-1", "https://example.test/copy-1", true, form);
-        var target = ScmFeedbackFixtures.target(new IntegrationRef(kind, 1, null), "owner/repo#42", "a".repeat(40));
         assertThat(writer.retract(target, List.of(receipt))).singleElement().satisfies(update -> {
             assertThat(update.kind()).isEqualTo(CopyUpdateKind.EDITED);
             assertThat(update.externalRef()).isEqualTo(receipt.externalRef());

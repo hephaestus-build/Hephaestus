@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.feedback;
 
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
+import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
@@ -12,8 +14,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -50,6 +54,22 @@ public final class ScmFeedbackFixtures {
             }
             return Answers.RETURNS_DEFAULTS.answer(call);
         });
+    }
+
+    public static ScmFeedbackFormatter formatter() {
+        return formatter("team");
+    }
+
+    public static ScmFeedbackFormatter formatter(String slug) {
+        var workspaces = mock(WorkspaceSummaryQuery.class, call -> {
+            if (call.getMethod().getName().equals("findById"))
+                return Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(call.getArgument(0), slug, "Team"));
+            return Answers.RETURNS_DEFAULTS.answer(call);
+        });
+        return new ScmFeedbackFormatter(
+                new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
+                workspaces,
+                new WorkspaceSubdomainProperties(false, ""));
     }
 
     public static UUID copyId(String key) {

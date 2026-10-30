@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter.Footer;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.GitHubSummaryWriter.PrCoordinates;
@@ -71,18 +72,21 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     private final OutboundEgressGuard egressGuard;
     private final ScmFeedbackTargetResolver targets;
     private final GitHubSummaryWriter summaries;
+    private final ScmFeedbackFormatter formatter;
 
     public GitHubLineNoteWriter(
             GitHubGraphQlClientProvider gitHubProvider,
             GitHubPrNodeIdResolver prNodeIdResolver,
             OutboundEgressGuard egressGuard,
             ScmFeedbackTargetResolver targets,
-            GitHubSummaryWriter summaries) {
+            GitHubSummaryWriter summaries,
+            ScmFeedbackFormatter formatter) {
         this.gitHubProvider = gitHubProvider;
         this.prNodeIdResolver = prNodeIdResolver;
         this.egressGuard = egressGuard;
         this.targets = targets;
         this.summaries = summaries;
+        this.formatter = formatter;
     }
 
     @Override
@@ -95,6 +99,12 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             FeedbackTarget target, List<LineNote> feedbackItems, CopyWriteFence fence) {
         if (feedbackItems.isEmpty()) {
             return CopyWriteResult.of(List.of());
+        }
+        Footer footer;
+        try {
+            footer = formatter.footer(target.item());
+        } catch (RuntimeException unavailable) {
+            return CopyWriteResult.of(notSent(feedbackItems));
         }
         long scopeId = target.integration().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
@@ -112,7 +122,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         var lines = feedbackItems.stream()
                 .filter(note -> note.anchor().endLine() != null)
                 .toList();
-        Map<String, Copy> copies = lines.isEmpty() ? Map.of() : indexCopies(scopeId, pr, lines, commitOid);
+        Map<String, Copy> copies = lines.isEmpty() ? Map.of() : indexCopies(footer, pr, lines, commitOid);
         Map<UUID, SummaryLookup> fileCopies = new HashMap<>();
         for (LineNote note : feedbackItems)
             if (note.anchor().endLine() == null)
@@ -161,7 +171,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         }
 
         if (candidates.stream().anyMatch(note -> note.anchor().endLine() == null))
-            return postMixed(target, pr, commitOid, candidates, fence, receipts);
+            return postMixed(target, footer, pr, commitOid, candidates, fence, receipts);
         String prNodeId = prNodeIdResolver.resolve(scopeId, pr.owner(), pr.name(), pr.number());
         try {
             egressGuard.requireDeliveryAllowed("github.post-inline-feedback");
@@ -173,7 +183,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             receipts.addAll(notSent(candidates));
             return CopyWriteResult.of(receipts);
         }
-        receipts.addAll(postBatch(scopeId, prNodeId, commitOid, candidates));
+        receipts.addAll(postBatch(footer, prNodeId, commitOid, candidates));
         return CopyWriteResult.of(receipts);
     }
 
@@ -208,6 +218,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
 
     private CopyWriteResult postMixed(
             FeedbackTarget target,
+            Footer footer,
             PrCoordinates pr,
             String commit,
             List<LineNote> notes,
@@ -250,7 +261,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                             true,
                             CopyForm.FILE_NOTE);
                 } else {
-                    receipt = postBatch(workspace, Objects.requireNonNull(nodeId), commit, List.of(note))
+                    receipt = postBatch(footer, Objects.requireNonNull(nodeId), commit, List.of(note))
                             .getFirst();
                 }
             } catch (FeedbackNotSentException beforeWrite) {
@@ -279,6 +290,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             return null;
         }
         try {
+            Footer footer = formatter.footer(target.item());
             PrCoordinates pr =
                     GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITHUB));
             List<CopyReceipt> files = new ArrayList<>();
@@ -300,7 +312,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                                 null,
                                 CopyForm.FILE_NOTE));
                 }
-            Map<String, Copy> copies = lines.isEmpty() ? Map.of() : indexCopies(scopeId, pr, lines, commitOid(target));
+            Map<String, Copy> copies = lines.isEmpty() ? Map.of() : indexCopies(footer, pr, lines, commitOid(target));
             List<CopyReceipt> found = new ArrayList<>(files);
             for (LineNote item : feedbackItems) {
                 Copy copy = copies.get(item.writeKey());
@@ -316,10 +328,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
 
     // Only a returned comment id acknowledges creation; errors or missing ids can follow a provider write.
     private List<CopyReceipt> postBatch(
-            long scopeId, String prNodeId, @Nullable String commitOid, List<LineNote> candidates) {
+            Footer footer, String prNodeId, @Nullable String commitOid, List<LineNote> candidates) {
+        long scopeId = footer.workspaceId();
         List<Map<String, Object>> threads = new ArrayList<>(candidates.size());
         for (LineNote item : candidates) {
-            threads.add(buildThread(item.anchor(), postedBody(item)));
+            threads.add(buildThread(item.anchor(), postedBody(footer, item)));
         }
         try {
             ClientGraphQlResponse response = gitHubProvider
@@ -395,7 +408,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
 
     // Partial pagination cannot prove absence; retain mismatched copies as conflicts.
     private Map<String, Copy> indexCopies(
-            long scopeId, PrCoordinates pr, List<LineNote> items, @Nullable String commitOid) {
+            Footer footer, PrCoordinates pr, List<LineNote> items, @Nullable String commitOid) {
+        long scopeId = footer.workspaceId();
         Map<String, LineNote> expected = new HashMap<>();
         for (LineNote item : items) {
             expected.putIfAbsent(item.writeKey(), item);
@@ -430,7 +444,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                     throw new FeedbackDeliveryException("GitHub review-thread lookup was incomplete");
                 }
                 for (Object thread : threads) {
-                    indexThread(thread, expected, commitOid, copies);
+                    indexThread(footer, thread, expected, commitOid, copies);
                 }
                 Object hasNextPage = pageInfo.get("hasNextPage");
                 if (Boolean.FALSE.equals(hasNextPage)) {
@@ -452,7 +466,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private static void indexThread(
+    private void indexThread(
+            Footer footer,
             @Nullable Object node,
             Map<String, LineNote> expected,
             @Nullable String commitOid,
@@ -476,7 +491,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             return;
         }
         LineNote item = expected.get(key);
-        boolean verified = item != null && sameCopy(thread, firstComment, body, item, commitOid);
+        boolean verified = item != null && sameCopy(footer, thread, firstComment, body, item, commitOid);
         String url = firstComment.get("url") instanceof String commentUrl ? commentUrl : null;
         Copy previous = copies.get(key);
         if (verified && (previous == null || !previous.verified())) {
@@ -486,15 +501,20 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private static boolean sameCopy(
-            Map<?, ?> thread, Map<?, ?> comment, String body, LineNote item, @Nullable String commitOid) {
+    private boolean sameCopy(
+            Footer footer,
+            Map<?, ?> thread,
+            Map<?, ?> comment,
+            String body,
+            LineNote item,
+            @Nullable String commitOid) {
         FeedbackAnchor diff = item.anchor();
         if (diff.endLine() == null || diff.side() == null) return false;
         Integer startLine = diff.startLine();
         Integer expectedStart = startLine != null && startLine < diff.endLine() ? startLine : null;
         String expectedSide = diff.side() == CitationSide.OLD ? "LEFT" : "RIGHT";
         return Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                && body.equals(postedBody(item))
+                && body.equals(postedBody(footer, item))
                 && expectedSide.equals(thread.get("diffSide"))
                 && (expectedStart == null || expectedSide.equals(thread.get("startDiffSide")))
                 && diff.path().equals(comment.get("path"))
@@ -530,8 +550,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         return items.stream().map(LineNote::copyId).toList();
     }
 
-    private static String postedBody(LineNote item) {
-        String body = PostedText.of(item.body()) + "\n\n" + item.writeMarker();
+    private String postedBody(Footer footer, LineNote item) {
+        String body = footer.appendLineNotePrompt(PostedText.of(item.body())) + "\n" + item.writeMarker();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 
