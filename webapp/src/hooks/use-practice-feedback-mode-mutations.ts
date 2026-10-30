@@ -23,8 +23,8 @@ export interface BulkProgress {
 export function usePracticeFeedbackModeMutations(workspaceSlug: string) {
 	const queryClient = useQueryClient();
 	const [bulk, setBulk] = useState<BulkProgress | null>(null);
-	// Mutation callbacks capture render state; a ref exposes the current bulk-write state.
-	const bulkRunning = useRef(false);
+	// Mutation callbacks capture render state; a ref exposes the practices a bulk write is changing now.
+	const bulkPractices = useRef(new Set<string>());
 	const groupMutationKey = ["practice-feedback-mode", workspaceSlug, "groups"] as const;
 	const practiceMutationKey = ["practice-feedback-mode", workspaceSlug, "practices"] as const;
 
@@ -60,15 +60,15 @@ export function usePracticeFeedbackModeMutations(workspaceSlug: string) {
 	const setPracticeFeedbackMode = useMutation({
 		...filedUnder(practiceMutationKey, setPracticeFeedbackModeMutation()),
 		// A bulk write reports once, in its summary: a failure stays until it is closed, so one message per
-		// practice would leave a pile to close.
-		onError: (error) => {
-			if (!bulkRunning.current) {
+		// practice would leave a pile to close. A single change made meanwhile still reports itself.
+		onError: (error, { path }) => {
+			if (!bulkPractices.current.has(path.practiceSlug)) {
 				toast.error("We could not change the practice", { description: problemDetailOf(error) });
 			}
 		},
 		// Bulk writes share one final refetch instead of refetching after each member write.
-		onSettled: () => {
-			if (!bulkRunning.current) {
+		onSettled: (_data, _error, { path }) => {
+			if (!bulkPractices.current.has(path.practiceSlug)) {
 				invalidateResolved();
 			}
 		},
@@ -82,9 +82,9 @@ export function usePracticeFeedbackModeMutations(workspaceSlug: string) {
 			return;
 		}
 		let failed = 0;
-		bulkRunning.current = true;
 		setBulk({ done: 0, total: practiceSlugs.length });
 		for (const [index, practiceSlug] of practiceSlugs.entries()) {
+			bulkPractices.current.add(practiceSlug);
 			try {
 				await setPracticeFeedbackMode.mutateAsync({
 					path: { workspaceSlug, practiceSlug },
@@ -93,9 +93,9 @@ export function usePracticeFeedbackModeMutations(workspaceSlug: string) {
 			} catch {
 				failed += 1;
 			}
+			bulkPractices.current.delete(practiceSlug);
 			setBulk({ done: index + 1, total: practiceSlugs.length });
 		}
-		bulkRunning.current = false;
 		setBulk(null);
 		invalidateResolved();
 

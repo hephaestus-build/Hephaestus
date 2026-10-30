@@ -4,6 +4,8 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import { deferred } from "@/test/async";
+
 import { Toaster } from "@/components/ui/sonner";
 import { server } from "@/mocks/server";
 import { usePracticeFeedbackModeMutations } from "./use-practice-feedback-mode-mutations";
@@ -54,5 +56,38 @@ describe("practice feedback mode messages", () => {
 		});
 
 		await screen.findByText("We could not change the practice");
+	});
+
+	it("reports a single change that fails while a bulk change is still running", async () => {
+		// The bulk write waits for the test; the separate single write fails at once.
+		const bulkAnswer = deferred();
+		server.use(
+			http.patch("*/workspaces/acme/practices/bulk-one/feedback-mode", async () => {
+				await bulkAnswer.promise;
+				return HttpResponse.json({ status: 500, detail: "The server failed." }, { status: 500 });
+			}),
+			http.patch("*/workspaces/acme/practices/single/feedback-mode", () =>
+				HttpResponse.json({ status: 500, detail: "The server failed." }, { status: 500 }),
+			),
+		);
+		const { result } = renderMutations();
+
+		let bulk: Promise<void> | undefined;
+		act(() => {
+			bulk = result.current.setManyPracticeFeedbackModes(["bulk-one"], "OFF");
+		});
+		act(() => {
+			result.current.setPracticeFeedbackMode.mutate({
+				path: { workspaceSlug: "acme", practiceSlug: "single" },
+				body: { feedbackMode: "OFF" },
+			});
+		});
+		await screen.findByText("We could not change the practice");
+
+		bulkAnswer.resolve(undefined);
+		await act(async () => {
+			await bulk;
+		});
+		await screen.findByText("We could not change 1 practice. Try again.");
 	});
 });
