@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScanItemVersions;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
+import de.tum.cit.aet.hephaestus.practices.UncapturableReads;
 import de.tum.cit.aet.hephaestus.practices.UnofferedItemCapabilities;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
@@ -301,30 +302,22 @@ public class DefaultReviewExecutionHandler {
                 assignment.practice().practiceId(), ReviewPracticeStatus.WITHHELD, reason, mapper.valueToTree(facts));
     }
 
-    /**
-     * Returns why the current catalog cannot capture this practice's pinned reads for the item, or null when it can.
-     * An optional read counts: dropping it would review the practice with less than its pinned definition.
-     */
+    /** Returns why the current catalog cannot capture this practice's pinned reads for the item, or null when it can. */
     private @Nullable UnsupportedReads unsupportedReads(
             ReviewAssignmentSnapshot assignment, String itemKind, ReviewKind scope) {
         var definition = assignment.practice().definition();
         PracticeReads reads = scope == ReviewKind.SCAN
                 ? Objects.requireNonNull(definition.scan()).reads()
                 : definition.reads();
-        var current = sourceCatalog.current();
-        var sources = reads.sources().stream()
-                .filter(read -> current.source(read.source())
-                        .filter(contract -> contract.appliesTo(itemKind))
-                        .isEmpty())
-                .toList();
-        if (reads.contract().equals(current.version().value()) && sources.isEmpty()) return null;
+        var uncapturable = UncapturableReads.of(sourceCatalog.current(), reads, itemKind);
+        if (uncapturable == null) return null;
         return new UnsupportedReads(
                 assignment.practiceSlug(),
                 clock.instant(),
-                reads.contract(),
-                current.version().value(),
+                uncapturable.contract(),
+                uncapturable.currentContract(),
                 itemKind,
-                sources);
+                uncapturable.sources());
     }
 
     /** The recorded capture facts of a practice withheld before capture. */

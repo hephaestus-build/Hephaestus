@@ -42,6 +42,14 @@ describe("legacy withholding reasons", () => {
 			"More than one eligible person holds the role that this practice is about, and Hephaestus does not guess which one.",
 		],
 		["OUTSIDE_REVIEW_SCOPE", "This work or this person is outside the workspace’s review scope."],
+		[
+			"CHECKS_PENDING",
+			"Not reviewed yet: this practice needs the checks of this commit, and they had not finished.",
+		],
+		[
+			"NO_CHECKS_REPORTED",
+			"Not reviewed: this practice needs the checks of this commit, and none were reported.",
+		],
 		["WORKSPACE_INACTIVE", "The workspace was not active when the candidate observation arrived."],
 		[
 			"COPY_AUTHORITY_UNAVAILABLE",

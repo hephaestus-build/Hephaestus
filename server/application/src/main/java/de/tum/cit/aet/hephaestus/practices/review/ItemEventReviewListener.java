@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.api.ItemSourceObserved;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.result.ResultCurrentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
@@ -15,8 +16,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.modulith.events.ApplicationModuleListener;
@@ -32,6 +36,8 @@ public class ItemEventReviewListener {
     private final ReviewService reviews;
     private final ResultCurrentness currentness;
     private final ResultStore results;
+    private final PracticeItemOptions itemOptions;
+    private final Clock clock;
 
     @ApplicationModuleListener
     public void on(ItemEventRecorded recorded) {
@@ -52,24 +58,66 @@ public class ItemEventReviewListener {
                     event.occurredAt());
         }
         if (item.isEmpty()) {
-            decide(recorded, state, ItemEventState.WITHHELD, ReviewRequestReason.ITEM_GONE);
+            decide(
+                    recorded.workspaceId(),
+                    recorded.eventId(),
+                    state,
+                    ItemEventState.WITHHELD,
+                    ReviewRequestReason.ITEM_GONE);
             return;
         }
         // The source pins the version later and offers the occasion again; the expiry bounds the wait.
         if (event.itemVersion() == null) return;
-        var version = new ItemVersion(event.itemVersion(), null);
+        var kind = item.orElseThrow().kind();
+        var open = events.open(recorded.workspaceId(), recorded.itemId());
+        if (!itemOptions.occasion(kind, event.name()).joinsWindow()) {
+            open.stream()
+                    .filter(waiting -> waiting.id().equals(recorded.eventId()))
+                    .findFirst()
+                    .ifPresent(self -> edge(recorded.workspaceId(), recorded.itemId(), List.of(self)));
+            return;
+        }
+        var window = open.stream()
+                .filter(waiting -> itemOptions.occasion(kind, waiting.name()).joinsWindow())
+                .toList();
+        if (window.isEmpty()) return;
+        var closes = events.windowCloses(window);
+        if (closes.isAfter(clock.instant())) {
+            events.hold(recorded.workspaceId(), recorded.itemId(), window, ReviewRequestReason.QUIET_WINDOW, closes);
+            return;
+        }
+        edge(recorded.workspaceId(), recorded.itemId(), window);
+    }
+
+    /**
+     * The readiness edge of a window: one review at its newest occasion runs what every occasion of the window selects
+     * and is ready, and the older occasions are coalesced into it. A practice that an earlier review of the item still
+     * measures holds the window until that review ends.
+     */
+    private void edge(long workspaceId, long itemId, List<ItemEventService.Open> window) {
+        var newest = window.getLast();
         try {
             reviews.request(ReviewRequest.builder()
-                    .workspaceId(recorded.workspaceId())
-                    .itemId(recorded.itemId())
+                    .workspaceId(workspaceId)
+                    .itemId(itemId)
                     .kind(ReviewKind.ITEM)
-                    .version(version)
+                    .version(new ItemVersion(newest.itemVersion(), null))
                     .origin(ReviewOrigin.EVENT)
-                    .eventId(recorded.eventId())
+                    .eventId(newest.id())
                     .practiceIds(List.of())
+                    .occasions(window.stream().map(ItemEventService.Open::name).collect(Collectors.toSet()))
                     .build());
-            decide(recorded, state, ItemEventState.STARTED, null);
+            settle(workspaceId, window, ItemEventState.STARTED, null);
         } catch (ReviewRequestRejected refusal) {
+            if (refusal.eventReason() == ReviewRequestReason.REVIEW_IN_PROGRESS) {
+                events.hold(
+                        workspaceId,
+                        itemId,
+                        window,
+                        ReviewRequestReason.REVIEW_IN_PROGRESS,
+                        clock.instant().plus(events.quietWindow()));
+                return;
+            }
             ReviewRequestReason reason = switch (refusal.reason()) {
                 case WORKSPACE_INACTIVE -> ReviewRequestReason.WORKSPACE_INACTIVE;
                 case BUDGET_UNAVAILABLE -> ReviewRequestReason.BUDGET_EXHAUSTED;
@@ -82,8 +130,30 @@ public class ItemEventReviewListener {
                 case SCAN_ACTIVE, REF_UNSUPPORTED, VERSION_CHANGED ->
                     throw new IllegalStateException("An item review cannot compete with a scan", refusal);
             };
-            boolean retry = refusal.reason().transientReason();
-            decide(recorded, state, retry ? ItemEventState.WAITING : ItemEventState.WITHHELD, reason);
+            // A refusal that can pass keeps the whole window waiting, so its occasions still select when it is retried.
+            if (refusal.reason().transientReason())
+                for (var waiting : window)
+                    decide(workspaceId, waiting.id(), waiting.state(), ItemEventState.WAITING, reason);
+            else settle(workspaceId, window, ItemEventState.WITHHELD, reason);
+        }
+    }
+
+    /** Decides the window's newest occasion and coalesces every older one into it. */
+    private void settle(
+            long workspaceId,
+            List<ItemEventService.Open> window,
+            ItemEventState newest,
+            @Nullable ReviewRequestReason reason) {
+        var last = window.getLast();
+        for (var waiting : window) {
+            if (waiting.id().equals(last.id())) decide(workspaceId, waiting.id(), waiting.state(), newest, reason);
+            else
+                decide(
+                        workspaceId,
+                        waiting.id(),
+                        waiting.state(),
+                        ItemEventState.WITHHELD,
+                        ReviewRequestReason.COALESCED);
         }
     }
 
@@ -95,8 +165,12 @@ public class ItemEventReviewListener {
     }
 
     private void decide(
-            ItemEventRecorded event, ItemEventState from, ItemEventState to, @Nullable ReviewRequestReason reason) {
-        if (!events.decide(event.workspaceId(), event.eventId(), from, to, reason))
+            long workspaceId,
+            UUID eventId,
+            ItemEventState from,
+            ItemEventState to,
+            @Nullable ReviewRequestReason reason) {
+        if (!events.decide(workspaceId, eventId, from, to, reason))
             throw new IllegalStateException("The event changed while the workspace was locked");
     }
 }

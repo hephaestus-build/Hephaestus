@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,19 +75,20 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
     void storedOffModeStillAllowsAResultReview() {
         scenario.practice().setFeedbackMode(FeedbackMode.OFF);
         practices.saveAndFlush(scenario.practice());
-        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.REQUEST, null, List.of()))
+        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
     @Test
     void shouldSelectStoredPracticesBeforeRecipientSpecificModelBinding() {
-        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.REQUEST, null, List.of()))
+        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
     @Test
     void anExplicitReviewDoesNotInventAnEvent() {
-        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.BACKFILL, null, List.of()))
+        assertThat(gate.evaluate(
+                        scenario.workspace(), snapshot(), ReviewOrigin.BACKFILL, Set.of(), Set.of(), List.of()))
                 .isInstanceOfSatisfying(
                         GateDecision.Run.class, r -> assertThat(r.origin()).isEqualTo(ReviewOrigin.BACKFILL));
     }

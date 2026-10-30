@@ -92,3 +92,23 @@ in API PATCH /workspaces/{workspaceSlug}/slug api path removed without deprecati
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings api path removed without deprecation
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId} api path removed without deprecation
 in API POST /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId} api path removed without deprecation
+
+# #3468: an item event can wait in its quiet window or for an earlier review, or be withheld because its practices are current.
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace added the new `ALREADY_CURRENT` enum value to the `events/items/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace added the new `QUIET_WINDOW` enum value to the `events/items/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace added the new `REVIEW_IN_PROGRESS` enum value to the `events/items/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews added the new `ALREADY_CURRENT` enum value to the `content/items/startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews added the new `QUIET_WINDOW` enum value to the `content/items/startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews added the new `REVIEW_IN_PROGRESS` enum value to the `content/items/startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} added the new `ALREADY_CURRENT` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} added the new `QUIET_WINDOW` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} added the new `REVIEW_IN_PROGRESS` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/review-requests added the new `ALREADY_CURRENT` enum value to the `reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/review-requests added the new `QUIET_WINDOW` enum value to the `reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/review-requests added the new `REVIEW_IN_PROGRESS` enum value to the `reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `ALREADY_CURRENT` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `ALREADY_CURRENT` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `QUIET_WINDOW` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `QUIET_WINDOW` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `REVIEW_IN_PROGRESS` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `REVIEW_IN_PROGRESS` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `202`

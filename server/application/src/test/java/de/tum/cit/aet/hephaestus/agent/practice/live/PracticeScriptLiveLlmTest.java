@@ -775,7 +775,8 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 null,
                 null,
                 List.of(job.getInput().assignments().getFirst().practiceId()),
-                false));
+                false,
+                Set.of()));
         var review = reviews.find(job.getWorkspaceId(), reviewId).orElseThrow();
         UUID jobId = reviewQueue.enqueue(
                 review,

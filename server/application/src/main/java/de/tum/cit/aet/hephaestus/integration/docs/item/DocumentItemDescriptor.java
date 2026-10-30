@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventDefinition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersionScheme;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateDimension;
@@ -38,21 +39,24 @@ public class DocumentItemDescriptor implements ItemDescriptor {
                         Set.of(new EventTypeKey(IntegrationKind.OUTLINE, "document")),
                         ItemVersionScheme.CONTENT_DIGEST,
                         true,
-                        true),
+                        true,
+                        OccasionKind.MILESTONE),
                 new ItemEventDefinition(
                         DocumentEvents.UPDATED,
                         "Content changed",
                         Set.of(new EventTypeKey(IntegrationKind.OUTLINE, "document")),
                         ItemVersionScheme.CONTENT_DIGEST,
                         true,
-                        true),
+                        true,
+                        OccasionKind.CONTINUING),
                 new ItemEventDefinition(
                         DocumentEvents.ARCHIVED,
                         "Archived",
                         Set.of(new EventTypeKey(IntegrationKind.OUTLINE, "document")),
                         ItemVersionScheme.TERMINAL_STATE,
                         false,
-                        true));
+                        true,
+                        OccasionKind.IMMEDIATE));
     }
 
     @Override

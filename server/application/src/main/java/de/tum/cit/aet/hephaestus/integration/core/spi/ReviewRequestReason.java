@@ -29,5 +29,11 @@ public enum ReviewRequestReason {
     /** A released review signal keyed by the pull request head; it names no review to resume. */
     LEGACY_REVIEW_UNBOUND,
     /** The occasion kept no usable record of the work as it was; the current work is never reviewed in its place. */
-    OCCASION_EVIDENCE_UNAVAILABLE;
+    OCCASION_EVIDENCE_UNAVAILABLE,
+    /** The occasion waits in its item's quiet window, which a newer occasion of the item extends up to the cap. */
+    QUIET_WINDOW,
+    /** A practice the window selects is still measured by an earlier review of the item; the window waits for it. */
+    REVIEW_IN_PROGRESS,
+    /** Every practice the occasion selects already has a current result or is being measured. */
+    ALREADY_CURRENT;
 }

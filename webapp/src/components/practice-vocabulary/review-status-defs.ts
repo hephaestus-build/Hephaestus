@@ -185,6 +185,12 @@ const REVIEW_WITHHELD_REASON_SENTENCES: Readonly<Record<string, string>> = {
 	ROLE_AMBIGUOUS:
 		"More than one eligible person holds the role that this practice is about, and Hephaestus does not guess which one.",
 	OUTSIDE_REVIEW_SCOPE: "This work or this person is outside the workspace’s review scope.",
+	CHECKS_PENDING:
+		"Not reviewed yet: this practice needs the checks of this commit, and they had not finished.",
+	CHECKS_AWAITING_APPROVAL:
+		"Not reviewed yet: the checks of this commit wait for a maintainer to approve their workflows.",
+	NO_CHECKS_REPORTED:
+		"Not reviewed: this practice needs the checks of this commit, and none were reported.",
 	WORKSPACE_INACTIVE: "The workspace was not active when the candidate observation arrived.",
 	COPY_AUTHORITY_UNAVAILABLE:
 		"Hephaestus could not confirm the record of whose data this review copied, so the candidate observation was not recorded.",
