@@ -66,7 +66,6 @@ class KubernetesExecLoggingTest {
         ListAppender<ILoggingEvent> clientEvents = attach(CATEGORY);
         ListAppender<ILoggingEvent> ownedEvents = attach(owner);
         try (var sandboxes = new KubernetesExecSandboxes(
-                api,
                 pods,
                 worker,
                 "agent",

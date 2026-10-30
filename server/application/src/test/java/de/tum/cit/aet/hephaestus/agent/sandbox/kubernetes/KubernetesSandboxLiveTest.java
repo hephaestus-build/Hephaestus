@@ -321,7 +321,7 @@ class KubernetesSandboxLiveTest {
         backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
         hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
-        turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers, exits, cache);
+        turns = configuration.kubernetesExecSandboxes(pods, worker, agentImage, liveWorkers, exits, cache);
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
         KubernetesIsolationProbe probe = configuration.kubernetesIsolationProbe(
@@ -919,7 +919,6 @@ class KubernetesSandboxLiveTest {
         String uid = present(sandbox).getMetadata().getUid();
         KubernetesExecSandboxes runtime = new KubernetesSandboxConfiguration()
                 .kubernetesExecSandboxes(
-                        client,
                         pods,
                         worker,
                         agentImage,

@@ -29,6 +29,7 @@ import io.fabric8.kubernetes.api.model.VolumeMountBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
+import io.fabric8.kubernetes.client.RequestConfigBuilder;
 import java.io.IOException;
 import java.io.Reader;
 import java.time.Duration;
@@ -629,6 +630,15 @@ public class KubernetesPods {
 
     // --- API calls ---
 
+    /** A view of the shared transports with a bounded request and no retry. */
+    KubernetesClient boundedClient(int timeoutMillis) {
+        var requests = new RequestConfigBuilder(client.getConfiguration().getRequestConfig())
+                .withRequestTimeout(timeoutMillis)
+                .withRequestRetryBackoffLimit(0)
+                .build();
+        return client.newClient(requests).adapt(KubernetesClient.class);
+    }
+
     /**
      * @throws SandboxException when a Pod of the name exists: an attempt runs once
      * @throws SandboxInfrastructureException when the API refuses or fails
@@ -642,7 +652,8 @@ public class KubernetesPods {
             }
             if (e.getCode() == 403 && e.getMessage() != null && e.getMessage().contains("exceeded quota")) {
                 throw new SandboxCapacityException(
-                        "The sandbox quota has no room for another Pod", SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+                        "The sandbox quota has no room for another Pod",
+                        SandboxCapacityException.Reason.QUOTA_EXCEEDED);
             }
             throw failure("Could not create a sandbox Pod", e);
         }

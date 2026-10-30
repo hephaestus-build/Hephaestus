@@ -471,7 +471,6 @@ class KubernetesSandboxRuntimeTest {
     @Test
     void shouldStartListAndRemoveTurnSandbox() throws Exception {
         var sandboxes = new KubernetesExecSandboxes(
-                api(),
                 pods,
                 worker,
                 IMAGE,
@@ -955,7 +954,6 @@ class KubernetesSandboxRuntimeTest {
                 .isInstanceOf(SandboxInfrastructureException.class)
                 .hasMessageContaining("isolation probe");
         try (var turns = new KubernetesExecSandboxes(
-                api(),
                 unprovedPods,
                 unproved,
                 IMAGE,
@@ -1125,7 +1123,6 @@ class KubernetesSandboxRuntimeTest {
         createSandbox("turn-here", KubernetesWorker.KIND_TURN, labels -> labels);
         createSandbox("turn-of-gone-worker", KubernetesWorker.KIND_TURN, KubernetesSandboxRuntimeTest::gone);
         try (var sandboxes = new KubernetesExecSandboxes(
-                api(),
                 pods,
                 worker,
                 IMAGE,

@@ -711,7 +711,6 @@ class KubernetesExecSandboxesTest {
         worker.proved(KubernetesSandboxRuntimeTest.passed());
         var pods = new KubernetesPods(shared, worker, 10, ImagePullPolicy.IF_NOT_PRESENT);
         return new KubernetesExecSandboxes(
-                shared,
                 pods,
                 worker,
                 "agent",

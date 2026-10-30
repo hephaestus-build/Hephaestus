@@ -10,8 +10,6 @@ import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.kubernetes.client.RequestConfig;
-import io.fabric8.kubernetes.client.RequestConfigBuilder;
 import io.fabric8.kubernetes.client.dsl.ContainerResource;
 import io.fabric8.kubernetes.client.dsl.ExecWatch;
 import io.fabric8.kubernetes.client.dsl.TtyExecOutputErrorable;
@@ -101,7 +99,6 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
     private static final int CANCEL_OUTPUT_LIMIT = 1024;
     private static final int STAGING_OUTPUT_LIMIT = 4096;
 
-    private final KubernetesClient client;
     private final KubernetesPods pods;
     private final KubernetesWorker worker;
     private final String image;
@@ -115,7 +112,6 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
     private final ExecutorService calls = Executors.newVirtualThreadPerTaskExecutor();
 
     public KubernetesExecSandboxes(
-            KubernetesClient client,
             KubernetesPods pods,
             KubernetesWorker worker,
             String image,
@@ -123,7 +119,6 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
             SandboxExits exits,
             KubernetesSandboxCache cache) {
         this.liveWorkers = liveWorkers;
-        this.client = client;
         this.pods = pods;
         this.worker = worker;
         this.image = image;
@@ -412,12 +407,7 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
      * way to scope request settings. The view shares the shared client's transports.
      */
     private KubernetesClient bounded(long deadline) {
-        RequestConfig requests = new RequestConfigBuilder(
-                        client.getConfiguration().getRequestConfig())
-                .withRequestTimeout((int) Math.min(Integer.MAX_VALUE, Math.max(1, left(deadline))))
-                .withRequestRetryBackoffLimit(0)
-                .build();
-        return client.newClient(requests).adapt(KubernetesClient.class);
+        return pods.boundedClient((int) Math.min(Integer.MAX_VALUE, Math.max(1, left(deadline))));
     }
 
     /**

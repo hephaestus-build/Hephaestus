@@ -406,7 +406,9 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try {
             await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.waitingForQuota(attempt));
             dispatcher.tick();
-            assertThat(Objects.requireNonNull(row(asked).getPartial()).path("stage").asString())
+            assertThat(Objects.requireNonNull(row(asked).getPartial())
+                            .path("stage")
+                            .asString())
                     .isEqualTo("Waiting for tools…");
             JsonNode writing = mapper.readTree("""
                     {"activity":"writing","tool":null,"messages":[{"content":[{"type":"text","text":"Found it"}]}]}""");
@@ -415,7 +417,9 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
             assertThat(row(asked).getPartial()).isEqualTo(writing);
             controller.partial(asked.getId(), reading, HephTurnFixtures.authenticated(turn));
             dispatcher.tick();
-            assertThat(Objects.requireNonNull(row(asked).getPartial()).path("stage").asString())
+            assertThat(Objects.requireNonNull(row(asked).getPartial())
+                            .path("stage")
+                            .asString())
                     .isEqualTo("Waiting for tools…");
             runtime.quotaFull = false;
             waiting.get(5, TimeUnit.SECONDS);

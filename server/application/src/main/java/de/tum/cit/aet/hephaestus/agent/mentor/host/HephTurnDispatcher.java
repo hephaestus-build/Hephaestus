@@ -155,6 +155,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile @Nullable JsonNode partial;
         /** The latest host snapshot before a local tools-wait stage is applied. */
         volatile @Nullable JsonNode hostPartial;
+
         final ReentrantLock progress = new ReentrantLock();
 
         volatile boolean started;
