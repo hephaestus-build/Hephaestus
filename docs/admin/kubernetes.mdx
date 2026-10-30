@@ -450,10 +450,10 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
-| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 7.9 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new worker, webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.1 GiB | 1.00 | The new Pods' caches |
+| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.8 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
+| An upgrade: the new worker, webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.8 GiB | 1.00 | The new Pods' caches |
 | The sandbox quotas during the upgrade: in the reviews tier one review and the isolation probes of both workers, in the conversations tier the conversation host, its two pooled turn sandboxes and 8 running turns of each worker | 5.8 GiB | 1.00 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less what k3s requests | 18.8 GiB of 31 GiB | 3.25 of 3.75 | 80 GiB of the 110 GiB left beside images and review workspaces |
+| Total, against the node less platform reservations and the hard eviction floor | 21.4 GiB of 30.25 GiB | 3.25 of 3.5 | 80 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker upgrades by a rolling update with a surge of one.
 The new worker passes its isolation probe and opens its conversation host's command channel before the old worker drains.
@@ -463,6 +463,8 @@ A turn sandbox requests 25m of CPU, so a second conversation host and turn pool 
 
 The table gives the measured resident memory of each role and the chart's sizes.
 Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
+PostgreSQL and its backup containers also request their full memory limits.
+CPU remains burstable, so these Pods keep the Burstable quality-of-service class.
 NATS requests less than its limit, because JetStream's caches grow above the request.
 
 | Role | Measured | Request | Limit |
@@ -470,6 +472,8 @@ NATS requests less than its limit, because JetStream's caches grow above the req
 | Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
 | Worker | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
 | Webhook role | 1.0 GiB | 1.25 GiB | 1.25 GiB |
+| PostgreSQL, at rest in the earlier staging capture | 0.7 GiB | 2 GiB | 2 GiB |
+| pgBackRest | Not measured | 512 MiB | 512 MiB |
 | NATS, with JetStream's memory and file caches | 1.3 to 2.7 GiB | 1.5 GiB | 3 GiB |
 
 The server's and the worker's caches have a bound of 10 GiB each, so that the node does not run out of disk and evict a draining worker.
@@ -492,17 +496,20 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 9.5 GiB of 15.4 GiB | 2.75 of 3.75 |
-| The same, with the isolation probe | 10.3 GiB | — |
-| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 10.9 GiB of 15.4 GiB | 2.40 of 3.75 |
+| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.8 GiB of 13.9 GiB | 1.75 of 3.5 |
+| The same, with the isolation probe | 12.5 GiB | — |
+| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.2 GiB of 13.9 GiB | 2.40 of 3.5 |
 
 The table counts requests.
+Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
+It does not qualify the peak memory of running work.
 Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
 A chart test derives the conversation turns of both single-node profiles: 8, the worker's automatic number, as long as one more turn sandbox would still fit.
 
-Staging measured these values on one node of 16 GiB with k3s 1.37:
+An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
+Its request figures precede the PostgreSQL memory-request change:
 
 - At rest, the release requests 10.3 GiB of 15.6 GiB and uses about 5.9 GiB on the host: the server 2.0 GiB, the worker 1.3 GiB, the webhook role 0.8 GiB, PostgreSQL 0.7 GiB and NATS 60 MiB.
 - An upgrade that recreated the worker and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
@@ -595,7 +602,10 @@ Pods cannot request all of the host's memory.
 `k3s-kubelet.yaml` reserves 1 GiB and 250m CPU for k3s, which runs the API server, the kubelet and containerd in one process of about 1 GB.
 It reserves 512 MiB and 250m CPU for the host's own services.
 The kubelet evicts Pods when less than 256 MiB of memory is available, before the kernel's out-of-memory killer stops a process on the host.
-For a measured Node capacity of 16 GiB and 4 vCPU, this leaves 14 592 MiB (14.25 GiB) and 3.5 CPUs for Pods.
+
+For a Node API capacity of exactly 16 GiB and 4 vCPU, this leaves 14 592 MiB (14.25 GiB) and 3.5 CPUs for Pods.
+At the recorded capacity of 16 372 036 KiB used in the profile table, Pods get about 13.9 GiB.
+
 The installer restarts k3s when this file changes.
 After the node becomes ready, it reads the kubelet configuration endpoint and Node allocatable.
 It stops before the application upgrade if the configured policy is absent or overridden.
