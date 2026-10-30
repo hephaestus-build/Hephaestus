@@ -1,6 +1,6 @@
 import { hashKey, useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { adminListAuthEventsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { adminExportAuthEvents } from "@/api/sdk.gen";

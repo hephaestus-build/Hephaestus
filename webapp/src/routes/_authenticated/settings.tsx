@@ -12,8 +12,8 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { toast } from "sonner";
 import { usePasskeySettings } from "@/hooks/use-passkey-settings";
+import { toast } from "@/lib/toast";
 import type { Route as RootRoute } from "@/routes/__root";
 
 import {

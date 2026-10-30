@@ -1,6 +1,6 @@
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { resolveReviewContextOptions } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceMembership } from "@/api/types.gen";

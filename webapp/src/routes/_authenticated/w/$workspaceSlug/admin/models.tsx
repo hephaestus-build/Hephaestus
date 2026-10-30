@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { isPracticeScriptApi } from "@/lib/llm-api-protocol-labels";
 import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
+import { toast } from "@/lib/toast";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 

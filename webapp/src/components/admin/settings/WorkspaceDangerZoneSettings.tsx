@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { listWorkspacesQueryKey, purgeWorkspaceMutation } from "@/api/@tanstack/react-query.gen";
 import type { ListWorkspacesResponse } from "@/api/types.gen";

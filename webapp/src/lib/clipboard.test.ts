@@ -1,5 +1,5 @@
-import { toast } from "sonner";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "@/lib/toast";
 
 import { deferred } from "@/test/async";
 

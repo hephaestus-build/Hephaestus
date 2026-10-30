@@ -8,8 +8,8 @@ import {
 import { createFileRoute, Link, retainSearchParams } from "@tanstack/react-router";
 import { Inbox, ListChecks } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { toast } from "sonner";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
+import { toast } from "@/lib/toast";
 
 import {
 	adoptGroupMutation,

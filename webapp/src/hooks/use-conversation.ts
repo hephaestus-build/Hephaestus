@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 	type UseInfiniteQueryResult,
 } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { useEffect } from "react";
 import {

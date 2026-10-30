@@ -11,7 +11,7 @@ import {
 	useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import {
 	createWorkspaceMutation,

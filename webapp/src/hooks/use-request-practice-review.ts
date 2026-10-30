@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { requestReviewMutation } from "@/api/@tanstack/react-query.gen";
 import type { CreateReviewRequest, RequestReviewData, ReviewRequestOutcome } from "@/api/types.gen";

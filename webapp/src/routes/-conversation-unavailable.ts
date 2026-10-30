@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 /**
  * Each failure gets its own toast id. Sonner removes a dismissed or clicked toast a few frames later
@@ -31,8 +31,9 @@ export function showConversationUnavailable({
 		again ? "Ask Hephaestus still could not open." : "We could not open Ask Hephaestus.",
 		{
 			id: idOf(failures),
-			duration: Number.POSITIVE_INFINITY,
 			dismissible: false,
+			// Sonner draws the close button on a toast that cannot be dismissed, as a button that does nothing.
+			closeButton: false,
 			action:
 				retry === undefined
 					? { label: "Reload page", onClick: reloadPage }
