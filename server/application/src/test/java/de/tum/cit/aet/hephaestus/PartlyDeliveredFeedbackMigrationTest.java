@@ -132,20 +132,20 @@ class PartlyDeliveredFeedbackMigrationTest {
         var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         jdbc.execute("SET session_replication_role = 'replica'");
         var rows = new SchemaRowSeeder(jdbc);
-        piece(rows, FAILED_NOTE, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "DONE");
-        piece(rows, PLANNED_NOTE, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
-        piece(rows, ALL_POSTED, "ON_WORK", "DELIVERED", "POSTED", "POSTED", "DONE");
-        piece(rows, NEVER_POSTED, "ON_WORK", "FAILED", "FAILED", "FAILED", "DONE");
-        piece(rows, WRITE_STARTED, "ON_WORK", "DELIVERED", "POSTED", "WRITE_STARTED", "DONE");
-        piece(rows, PENDING, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "PENDING");
-        piece(rows, SENDING, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "SENDING");
-        piece(rows, UNCERTAIN, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "UNCERTAIN");
-        piece(rows, WITHDRAWN, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
+        piece(rows, FAILED_NOTE, "DELIVERED", "POSTED", "FAILED", "DONE");
+        piece(rows, PLANNED_NOTE, "DELIVERED", "POSTED", "PLANNED", "DONE");
+        piece(rows, ALL_POSTED, "DELIVERED", "POSTED", "POSTED", "DONE");
+        piece(rows, NEVER_POSTED, "FAILED", "FAILED", "FAILED", "DONE");
+        piece(rows, WRITE_STARTED, "DELIVERED", "POSTED", "WRITE_STARTED", "DONE");
+        piece(rows, PENDING, "DELIVERED", "POSTED", "FAILED", "PENDING");
+        piece(rows, SENDING, "DELIVERED", "POSTED", "FAILED", "SENDING");
+        piece(rows, UNCERTAIN, "DELIVERED", "POSTED", "FAILED", "UNCERTAIN");
+        piece(rows, WITHDRAWN, "DELIVERED", "POSTED", "PLANNED", "DONE");
         rows.insert(
                 "feedback_decision",
                 Map.of("id", UUID.randomUUID(), "workspace_id", 993L, "feedback_id", WITHDRAWN, "action", "WITHDRAW"));
-        piece(rows, RESTORED, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
-        piece(rows, TIED_RESTORE, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
+        piece(rows, RESTORED, "DELIVERED", "POSTED", "PLANNED", "DONE");
+        piece(rows, TIED_RESTORE, "DELIVERED", "POSTED", "PLANNED", "DONE");
         for (var id : List.of(RESTORED, TIED_RESTORE)) {
             rows.insert(
                     "feedback_decision",
@@ -182,8 +182,8 @@ class PartlyDeliveredFeedbackMigrationTest {
                                     ? Timestamp.from(POSTED.toInstant().plusSeconds(1))
                                     : POSTED));
         }
-        piece(rows, STARTED_AND_FAILED, "ON_WORK", "DELIVERED", "WRITE_STARTED", "FAILED", "DONE");
-        piece(rows, OTHER_WORKSPACE_COPY, "ON_WORK", "DELIVERED", "POSTED", "POSTED", "DONE");
+        piece(rows, STARTED_AND_FAILED, "DELIVERED", "WRITE_STARTED", "FAILED", "DONE");
+        piece(rows, OTHER_WORKSPACE_COPY, "DELIVERED", "POSTED", "POSTED", "DONE");
         var foreign = copy(OTHER_WORKSPACE_COPY, "SUMMARY", 5, "FAILED");
         foreign.put("workspace_id", 994L);
         rows.insert("feedback_copy", foreign);
@@ -192,23 +192,20 @@ class PartlyDeliveredFeedbackMigrationTest {
     }
 
     private static void piece(
-            SchemaRowSeeder rows, UUID id, String destination, String state, String first, String second, String send) {
+            SchemaRowSeeder rows, UUID id, String state, String first, String second, String send) {
         var feedback = new LinkedHashMap<String, Object>();
         feedback.put("id", id);
         feedback.put("workspace_id", 993L);
-        feedback.put("destination", destination);
-        if (destination.equals("ON_WORK")) feedback.put("item_id", 993L);
+        feedback.put("destination", "ON_WORK");
+        feedback.put("item_id", 993L);
         feedback.put("state", state);
         if (state.equals("DELIVERED")) feedback.put("delivered_at", POSTED);
         rows.insert("feedback", feedback);
-        boolean onWork = destination.equals("ON_WORK");
-        rows.insert("feedback_copy", copy(id, onWork ? "SUMMARY" : "CHAT_TURN", 0, first));
-        var other = copy(id, onWork ? "LINE_NOTE" : "CHAT_TURN", 1, second);
-        if (onWork) {
-            other.put("path", "src/Main.java");
-            other.put("start_line", 3);
-            other.put("end_line", 3);
-        }
+        rows.insert("feedback_copy", copy(id, "SUMMARY", 0, first));
+        var other = copy(id, "LINE_NOTE", 1, second);
+        other.put("path", "src/Main.java");
+        other.put("start_line", 3);
+        other.put("end_line", 3);
         rows.insert("feedback_copy", other);
         var sending = new LinkedHashMap<String, Object>();
         sending.put("feedback_id", id);
