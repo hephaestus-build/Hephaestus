@@ -3,6 +3,7 @@ import { toast } from "@/lib/toast";
 
 import {
 	getIntegrationCatalogOptions,
+	getSlackScopesOptions,
 	getWorkspaceOptions,
 	initiateMutation,
 	listSlackChannelCandidatesOptions,
@@ -74,6 +75,12 @@ export function useSlackIntegration(workspaceSlug: string) {
 		resourceNoun: "channel",
 		resourceNounPlural: "channels",
 		expectedClassKeys: ["messages"],
+	});
+
+	// Slack answers this from the token itself, so a failed read names no scope rather than a guess.
+	const slackScopesQuery = useQuery({
+		...getSlackScopesOptions({ path: { workspaceSlug } }),
+		enabled: isConnectionActive,
 	});
 
 	const slackChannelsQueryOptions = listSlackChannelsOptions({ path: { workspaceSlug } });
@@ -245,6 +252,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 			? {
 					state: "connected",
 					credentialsUnreadableSince: entry.credentialsUnreadableSince,
+					missingScopes: slackScopesQuery.data?.missingScopes,
 					onReconnect: startSlackOAuth,
 					isReconnecting: connect.isPending,
 					onDisconnect:

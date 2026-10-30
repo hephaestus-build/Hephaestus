@@ -97,6 +97,16 @@ The workspace connection does not override a member's AI choice.
 Use **Reconnect Slack** with the same Slack workspace to replace a bot token without removing
 channels, their consent, mirrored messages, or retention settings. Do not use **Disconnect Slack** for this.
 
+The Slack page asks Slack which scopes the bot token holds.
+If the token lacks a scope that Hephaestus requests, the page shows **Permissions missing** and names each scope.
+A token keeps the scopes of the authorization that created it.
+Thus, a Slack app installed before Hephaestus requested a scope lacks it until you reconnect.
+Without `reactions:write`, a developer who asks Hephaestus in a DM sees no sign that it works until the answer arrives.
+
+1. Apply the current Slack app manifest, as [Update an existing Slack app](./production-setup.mdx#update-an-existing-slack-app) tells.
+2. Use **Reconnect Slack** with the same Slack workspace.
+3. Open the Slack page again. It shows **Connected** when the token holds every scope.
+
 ## Outline
 
 Hephaestus reads the selected collections.

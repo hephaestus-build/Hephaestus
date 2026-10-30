@@ -38,6 +38,11 @@ export type WorkspaceSlackConnectionSettingsProps =
 			state: "connected";
 			credentialsUnreadableSince?: Date;
 			/**
+			 * The scopes that Hephaestus requests and the Slack token lacks. A token keeps the scopes of its
+			 * own authorization, so only a reconnect grants a scope added later. Absent while unknown.
+			 */
+			missingScopes?: string[];
+			/**
 			 * Starts Slack's OAuth again for the same Slack workspace, which replaces the stored token and
 			 * keeps the connection, its channels and their data; the page leaves for Slack when it succeeds.
 			 */
@@ -89,14 +94,63 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 	);
 }
 
+/** What the connected card says about the token, most urgent first: each needs a reconnect but the last. */
+type TokenStatus = "unreadable" | "scopes-missing" | "connected";
+
+function tokenStatusOf(credentialsUnreadableSince?: Date, missingScopes?: string[]): TokenStatus {
+	if (credentialsUnreadableSince != null) {
+		return "unreadable";
+	}
+	if (missingScopes != null && missingScopes.length > 0) {
+		return "scopes-missing";
+	}
+	return "connected";
+}
+
+const TOKEN_BADGE = {
+	unreadable: { label: "Token unreadable", variant: "warning" },
+	"scopes-missing": { label: "Permissions missing", variant: "warning" },
+	connected: { label: "Connected", variant: "success" },
+} as const satisfies Record<TokenStatus, { label: string; variant: "warning" | "success" }>;
+
+function TokenDescription({
+	status,
+	missingScopes,
+}: {
+	status: TokenStatus;
+	missingScopes?: string[];
+}) {
+	if (status === "unreadable") {
+		return "Hephaestus cannot post with this token. Reconnect Slack to replace it, or restore the original server key.";
+	}
+	if (status === "connected") {
+		return "Hephaestus is installed and can post in Slack.";
+	}
+	return (
+		<>
+			Slack has not granted Hephaestus every permission it needs, so some of its work in Slack
+			fails. Reconnect Slack to grant{" "}
+			{missingScopes?.map((scope, index) => (
+				<span key={scope}>
+					{index > 0 && ", "}
+					<code>{scope}</code>
+				</span>
+			))}
+			.
+		</>
+	);
+}
+
 function SlackConnected({
 	credentialsUnreadableSince,
+	missingScopes,
 	onReconnect,
 	isReconnecting,
 	onDisconnect,
 	isDisconnecting,
 }: Extract<WorkspaceSlackConnectionSettingsProps, { state: "connected" }>) {
-	const credentialUnreadable = credentialsUnreadableSince != null;
+	const status = tokenStatusOf(credentialsUnreadableSince, missingScopes);
+	const needsReconnect = status !== "connected";
 	const [disconnectOpen, setDisconnectOpen] = useState(false);
 
 	const confirmDisconnect = async () => {
@@ -120,25 +174,19 @@ function SlackConnected({
 					</ItemMedia>
 					<ItemContent>
 						<ItemTitle>Slack workspace</ItemTitle>
-						<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
-							{credentialUnreadable
-								? "Hephaestus cannot post with this token. Reconnect Slack to replace it, or restore the original server key."
-								: "Hephaestus is installed and can post in Slack."}
+						<ItemDescription className={needsReconnect ? "line-clamp-none" : undefined}>
+							<TokenDescription status={status} missingScopes={missingScopes} />
 						</ItemDescription>
 					</ItemContent>
 					<ItemActions>
-						{credentialUnreadable ? (
-							<Badge variant="warning">Token unreadable</Badge>
-						) : (
-							<Badge variant="success">Connected</Badge>
-						)}
+						<Badge variant={TOKEN_BADGE[status].variant}>{TOKEN_BADGE[status].label}</Badge>
 					</ItemActions>
 				</Item>
 			</CardContent>
 
 			<CardFooter className="justify-end gap-2">
 				<Button
-					variant={credentialUnreadable ? "default" : "outline"}
+					variant={needsReconnect ? "default" : "outline"}
 					onClick={onReconnect}
 					disabled={isReconnecting || isDisconnecting}
 				>

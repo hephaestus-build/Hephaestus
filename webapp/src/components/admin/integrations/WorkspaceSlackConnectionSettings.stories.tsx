@@ -89,6 +89,21 @@ export const CredentialUnreadable: Story = {
 	},
 };
 
+/**
+ * A token from an authorization before Hephaestus asked for a scope lacks it until an admin reconnects,
+ * so the card names the scope and makes Reconnect the main action.
+ */
+export const MissingScopes: Story = {
+	args: { ...connected, missingScopes: ["reactions:write"] },
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByText("Permissions missing")).toBeVisible();
+		await expect(canvas.getByText("reactions:write")).toBeVisible();
+		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
+		await userEvent.click(canvas.getByRole("button", { name: "Reconnect Slack" }));
+		await expect(onReconnect).toHaveBeenCalled();
+	},
+};
+
 /** While the page leaves for Slack, neither action can start a second request. */
 export const Reconnecting: Story = {
 	args: {
