@@ -15,7 +15,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1871,6 +1871,24 @@ const surge = (deployment: Resource) => {
 
 const gib = (bytes: number) => (bytes / 2 ** 30).toFixed(1);
 
+/** The chart's single-node budgets use the platform's configured reservation policy. */
+const nodeRoom = (memory: number) => {
+	const policy = asRecord(
+		parseAllDocuments(
+			readFileSync(new URL("../deploy/platform/k3s-kubelet.yaml", import.meta.url), "utf8"),
+		)[0]?.toJS(),
+		"kubelet policy",
+	);
+	const reservations = [get(policy, "kubeReserved"), get(policy, "systemReserved")];
+	return {
+		cpu: 4 - reservations.reduce<number>((sum, value) => sum + amount(get(value, "cpu")), 0),
+		memory:
+			memory -
+			reservations.reduce<number>((sum, value) => sum + amount(get(value, "memory")), 0) -
+			amount(get(policy, "evictionHard", "memory.available")),
+	};
+};
+
 /** What each sandbox Pod requests: the chart's table, which SandboxPodRequestsTableTest pins to the worker. */
 const sandboxPods = (() => {
 	const table = asRecord(
@@ -1931,9 +1949,9 @@ const assertTurnsFill = (turns: number, used: Budget, node: Budget) => {
 };
 
 await test("the single-node profile's requests, one upgrade beside them and its sandbox quota fit the node it states", () => {
-	// The node of profiles/small.yaml and docs/admin/kubernetes.mdx § Profiles, less what k3s requests
-	// itself, and less the disk that images use. The sandbox quotas count the sandboxes' disk requests.
-	const node = { cpu: 4 - 0.25, memory: 31 * 2 ** 30, disk: (150 - 40) * 2 ** 30 };
+	// The node in profiles/small.yaml, less the platform reservations and hard eviction floor.
+	// Images take node disk; the sandbox quotas count the sandboxes' disk requests.
+	const node = { ...nodeRoom(32 * 2 ** 30), disk: (150 - 40) * 2 ** 30 };
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
 		...layersFor("small"),
@@ -1972,6 +1990,14 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	}
 	const backup = resources.find((resource) => kindOf(resource) === "CronJob");
 	add(get(backup, "spec", "jobTemplate", "spec", "template", "spec"), 1);
+	const residents = workloads(resources).reduce(
+		(sum, resource) =>
+			sum + podRequests(podSpec(resource)).memory * Number(get(resource, "spec", "replicas") ?? 1),
+		0,
+	);
+	process.stdout.write(
+		`single-node role requests: ${gib(residents)} GiB; upgrade additions: ${gib(memory - residents)} GiB\n`,
+	);
 	// Every sandbox Pod is inside a tier quota, which counts its requests: reviews, Heph hosts, turn
 	// sandboxes and probe Pods. The namespace's unscoped quota counts the disk of both tiers.
 	for (const tier of ["reviews", "conversations"] as const) {
@@ -2117,8 +2143,8 @@ const sum = (...parts: Budget[]): Budget => {
 };
 
 await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, within one node of 16 GiB", () => {
-	// MemTotal of the qualified node, less what k3s requests itself.
-	const node = { cpu: 4 - 0.25, memory: 16_372_036 * 1024 - 0.25 * 2 ** 30 };
+	// The recorded Node capacity, less the current kubelet reservations and hard eviction floor.
+	const node = nodeRoom(16_372_036 * 1024);
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
 		...layersFor("small-16gib"),
@@ -2393,6 +2419,72 @@ await test("the JVM roles request the memory that they may use", () => {
 			get(resourcesOf, "limits", "memory"),
 			component,
 		);
+	}
+});
+
+await test("PostgreSQL containers reserve their full memory limits in bundled profiles", () => {
+	for (const name of ["small", "small-16gib", "preview", "dev"] as const) {
+		const backup = {
+			enabled: true,
+			clientTlsSecret: "backup-tls",
+			s3: { bucket: "test-backups", endpoint: "s3.example.com", region: "eu-central-1" },
+		};
+		const resources = rendered([...layersFor(name), { postgresql: { backup } }]);
+		const restoring = rendered([
+			...layersFor(name),
+			{ postgresql: { backup: { ...backup, restore: { enabled: true } } } },
+		]);
+		const stanza = resources.find(
+			(resource) => kindOf(resource) === "Job" && nameOf(resource).includes("-stanza-"),
+		);
+		const scheduled = resources.find(
+			(resource) => kindOf(resource) === "CronJob" && componentOf(resource) === "postgresql-backup",
+		);
+		const restore = restoring.find(
+			(resource) => kindOf(resource) === "Job" && nameOf(resource).includes("-restore-"),
+		);
+		assert.ok(stanza && scheduled && restore, name);
+		const specs = [
+			podSpec(workload(resources, "postgresql")),
+			podSpec(stanza),
+			get(scheduled, "spec", "jobTemplate", "spec", "template", "spec"),
+			podSpec(restore),
+		];
+		for (const spec of specs) {
+			const entries = list(get(spec, "containers"));
+			assert.ok(entries.length > 0);
+			for (const entry of entries) {
+				const limit = amount(get(entry, "resources", "limits", "memory"));
+				assert.ok(limit > 0);
+				assert.equal(
+					amount(get(entry, "resources", "requests", "memory")),
+					limit,
+					`${name}: ${String(get(entry, "name"))}`,
+				);
+			}
+		}
+	}
+});
+
+await test("PostgreSQL has a lower kubelet OOM adjustment than review and conversation sandboxes", () => {
+	// Kubelet's Burstable formula: kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/.
+	// Sandbox Pod totals bound each container request. Actual OOM scores also depend on process memory use.
+	const nodeBytes = 16 * 2 ** 30;
+	const adjustment = (requestBytes: number) =>
+		Math.min(999, Math.max(2, 1000 - Math.floor((1000 * requestBytes) / nodeBytes)));
+	for (const name of ["small", "small-16gib"] as const) {
+		const resources = rendered(layersFor(name));
+		const postgres = workload(resources, "postgresql");
+		const limits = get(container(postgres), "resources", "limits");
+		const requests = get(container(postgres), "resources", "requests");
+		assert.ok(amount(get(requests, "cpu")) < amount(get(limits, "cpu")), "CPU remains burstable");
+		const score = adjustment(amount(get(requests, "memory")));
+		for (const sandbox of [sandboxPods.review, sandboxPods.hephHost, sandboxPods.turn]) {
+			assert.ok(
+				score < adjustment(sandbox.gib * 2 ** 30),
+				`${name}: database precedes sandbox in OOM protection`,
+			);
+		}
 	}
 });
 
