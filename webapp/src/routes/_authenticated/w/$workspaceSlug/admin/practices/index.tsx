@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, retainSearchParams } from "@tanstack/react-router";
-import { Inbox, ListChecks } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 import { toast } from "@/lib/toast";
@@ -44,6 +44,7 @@ import {
 	parsePracticeAdoptionPreview,
 	type PracticeAdoptionPreview,
 } from "@/components/admin/practices/catalog-adoption";
+import { CatalogUpdatesLink } from "@/components/admin/practices/CatalogUpdatesLink";
 import {
 	GroupAdoptionPanel,
 	type GroupAdoptionState,
@@ -798,15 +799,7 @@ function PracticeCatalogRoute() {
 				icon={<ListChecks />}
 				title="Practice setup"
 				actions={
-					<Button
-						variant="outline"
-						nativeButton={false}
-						render={
-							<Link to="/w/$workspaceSlug/admin/practices/releases" params={{ workspaceSlug }} />
-						}
-					>
-						<Inbox /> Catalog updates{releasesQuery.data ? ` (${releasesQuery.data.length})` : ""}
-					</Button>
+					<CatalogUpdatesLink workspaceSlug={workspaceSlug} count={releasesQuery.data?.length} />
 				}
 				description={
 					<>

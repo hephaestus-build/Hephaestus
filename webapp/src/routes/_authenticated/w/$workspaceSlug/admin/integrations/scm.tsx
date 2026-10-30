@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLinkIcon, WebhookIcon } from "lucide-react";
 
+import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
+
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
 import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
@@ -15,23 +17,25 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useScmIntegration } from "@/hooks/use-scm-integration";
+import { scmProviderOf, useScmIntegration } from "@/hooks/use-scm-integration";
 import { workspaceAdminHead } from "@/lib/page-title";
-import { getProviderTerms, toScmProviderType } from "@/lib/provider/provider-terms";
 
 const SCM_ICONS = { GITHUB: GitHubIcon, GITLAB: GitLabIcon };
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/scm")({
-	// The tab carries the provider's name, as the sidebar link and the page heading do.
-	head: ({ match }) => {
-		const provider =
-			match.context.workspace?.providerType ?? match.context.administrationWorkspace?.kind;
-		return workspaceAdminHead(
-			provider === undefined
-				? "Source control"
-				: getProviderTerms(toScmProviderType(provider)).displayName,
-		)();
+	// The tab names the provider, as the sidebar link and the heading do. The workspace gate usually
+	// knows it; when its list read failed, the scoped details the page reads anyway supply it.
+	loader: async ({ context, params }) => {
+		const known = context.workspace?.providerType ?? context.administrationWorkspace?.kind;
+		if (known !== undefined) {
+			return { workspaceKind: known };
+		}
+		const details = await context.queryClient
+			.query({ ...getWorkspaceOptions({ path: params }), staleTime: "static", retry: false })
+			.catch(() => undefined);
+		return { workspaceKind: details?.kind };
 	},
+	head: ({ loaderData }) => workspaceAdminHead(scmProviderOf(loaderData?.workspaceKind).label)(),
 	remountDeps: ({ params }) => params.workspaceSlug,
 	component: ScmIntegrationPage,
 });
