@@ -95,7 +95,11 @@ async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string):
 			return;
 		}
 		if (result === "expired") {
-			if (await sessionRefused(queryClient)) {
+			const confirmed = await readSession(queryClient);
+			if (confirmed === "unavailable") {
+				return;
+			}
+			if (confirmed === "refused") {
 				redirectToLogin(currentPath);
 				return;
 			}

@@ -206,11 +206,17 @@ describe("handlePossibleSessionExpiry", () => {
 		// The second identity read sees the successor cookie that another tab or workspace address set.
 		let userCalls = 0;
 		server.use(
+			http.get(
+				"*/user",
+				() => {
+					userCalls += 1;
+					return new HttpResponse(null, { status: 401 });
+				},
+				{ once: true },
+			),
 			http.get("*/user", () => {
 				userCalls += 1;
-				return userCalls === 1
-					? new HttpResponse(null, { status: 401 })
-					: HttpResponse.json(currentUser);
+				return HttpResponse.json(currentUser);
 			}),
 			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 401 })),
 		);

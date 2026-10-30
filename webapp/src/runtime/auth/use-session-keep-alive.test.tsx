@@ -191,8 +191,16 @@ describe("useSessionKeepAlive", () => {
 	});
 
 	it.each([
-		["stays signed in when another address already renewed the cookie", 200, 0],
-		["signs out when the identity is refused as well", 401, 1],
+		[
+			"stays signed in when another address already renewed the cookie",
+			() => HttpResponse.json(userPayload(3600)),
+			0,
+		],
+		[
+			"signs out when the identity is refused as well",
+			() => new HttpResponse(null, { status: 401 }),
+			1,
+		],
 	])("after a refused renewal, %s", async (_name, identity, signOuts) => {
 		const assign = vi.fn();
 		const realLocation = window.location;
@@ -208,11 +216,7 @@ describe("useSessionKeepAlive", () => {
 					refused += 1;
 					return new HttpResponse(null, { status: 401 });
 				}),
-				http.get("*/user", () =>
-					identity === 200
-						? HttpResponse.json(userPayload(3600))
-						: new HttpResponse(null, { status: 401 }),
-				),
+				http.get("*/user", identity),
 			);
 			await advance(1000);
 			await act(async () => vi.waitFor(() => expect(refused).toBe(1)));

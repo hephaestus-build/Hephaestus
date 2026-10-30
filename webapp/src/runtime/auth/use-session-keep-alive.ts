@@ -54,7 +54,9 @@ export function useSessionKeepAlive() {
 				return;
 			}
 			if (result === "expired") {
-				if (await sessionRefused(queryClient)) {
+				const refused = await sessionRefused(queryClient);
+				// oxlint-disable-next-line typescript/no-unnecessary-condition -- TypeScript keeps `disposed` narrowed across the `await` (microsoft/TypeScript#9998); cleanup can set it during the identity read.
+				if (refused && !disposed) {
 					redirectToLogin();
 				}
 				return;
