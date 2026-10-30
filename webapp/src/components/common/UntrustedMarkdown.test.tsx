@@ -16,6 +16,11 @@ function linkReferences(value: string) {
 	);
 }
 
+/** The elements directly under Streamdown's root: each one fades in when it is inserted. */
+function fading(container: HTMLElement): Element[] {
+	return [...container.querySelectorAll(":scope > div > *")];
+}
+
 describe("UntrustedMarkdown", () => {
 	it("leaves the words of a link the model wrote alone, so no link lands inside another", () => {
 		render(
@@ -40,5 +45,30 @@ describe("UntrustedMarkdown", () => {
 		);
 
 		expect(container.querySelector("img")).toBeNull();
+	});
+
+	it("fades text in only when it is new, while the answer grows or is read again", () => {
+		const shown = "First.\n\nSecond.\n\nThird";
+		const { container, rerender } = render(
+			<UntrustedMarkdown streaming>{shown}</UntrustedMarkdown>,
+		);
+		const before = fading(container);
+
+		rerender(<UntrustedMarkdown streaming>{`${shown} grows`}</UntrustedMarkdown>);
+		expect(fading(container)).toStrictEqual(before);
+
+		// A footnote makes Streamdown read the whole answer as one block: nothing already shown fades again.
+		rerender(<UntrustedMarkdown streaming>{`${shown} grows[^1]`}</UntrustedMarkdown>);
+		for (const element of fading(container)) {
+			expect(before).toContain(element);
+		}
+
+		rerender(
+			<UntrustedMarkdown streaming>{`${shown} grows.\n\n- A list appended`}</UntrustedMarkdown>,
+		);
+		const appended = fading(container).at(-1);
+		expect(appended?.textContent.trim()).toBe("A list appended");
+		expect(before).not.toContain(appended);
+		expect(container.querySelector("[data-sd-animate]")).toBeNull();
 	});
 });

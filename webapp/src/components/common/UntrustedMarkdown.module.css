@@ -1,0 +1,31 @@
+/*
+ * A streaming answer fades in each block (a paragraph, a list, a code block) once, when it is
+ * appended. The wrapper keeps its element while its block grows or Streamdown re-reads the
+ * Markdown inside it, so an animation that runs on insertion runs once per block. Opacity only:
+ * no layout, transform or filter work per frame. Enter timing and curve: webapp/DESIGN.md § Motion.
+ */
+.newBlock {
+	animation: appear 280ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+
+/* Streamdown zeroes the outer margins of its first and last child, which is now this wrapper. */
+.newBlock:first-child > :first-child {
+	margin-top: 0;
+}
+
+.newBlock:last-child > :last-child {
+	margin-bottom: 0;
+}
+
+/* Unlike one arrival, a stream repeats the fade for every block, so reduced motion drops it. */
+@media (prefers-reduced-motion: reduce) {
+	.newBlock {
+		animation: none;
+	}
+}
+
+@keyframes appear {
+	from {
+		opacity: 0;
+	}
+}

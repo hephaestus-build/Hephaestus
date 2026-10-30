@@ -55,7 +55,7 @@ Thus, they add no specificity.
 `dark:data-checked:bg-primary`, `hover:not-data-checked:bg-muted/50`.
 
 **A `*.module.css` is only for what a utility cannot express.**
-The tree has two: `HephaestusMark` and the landing scene.
+The tree has three: `HephaestusMark`, the landing scene and the fade of a streaming answer.
 Each holds one or more of these:
 
 - `@keyframes`.

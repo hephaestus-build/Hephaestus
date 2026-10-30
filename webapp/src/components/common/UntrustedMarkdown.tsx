@@ -9,7 +9,9 @@ import {
 	type ReactNode,
 	useContext,
 } from "react";
-import { Streamdown } from "streamdown";
+import { Block, type BlockProps, Streamdown } from "streamdown";
+
+import styles from "./UntrustedMarkdown.module.css";
 
 import { InlineLink } from "@/components/common/InlineLink";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
@@ -160,9 +162,6 @@ const RENDERED_TEXT_COMPONENTS = {
  * `scrollable-region-focusable`, and a real problem on a phone, where the end of the line needs a
  * horizontal drag inside a vertically scrolling page.
  */
-/** Each word that arrives gets `data-sd-animate` and a `--sd-delay` that staggers it after the last. */
-const NEW_WORDS = { animation: "fadeIn", sep: "word" } as const;
-
 export const UNTRUSTED_MARKDOWN_PROSE =
 	"prose prose-sm dark:prose-invert max-w-none break-words prose-headings:mt-4 prose-headings:mb-1.5 prose-headings:text-sm prose-headings:font-semibold prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-pre:overflow-x-visible prose-pre:whitespace-pre-wrap prose-pre:break-words prose-code:before:content-none prose-code:after:content-none first:prose-headings:mt-0";
 
@@ -180,8 +179,8 @@ export interface UntrustedMarkdownProps {
 	renderImage?: (image: UntrustedMarkdownImage) => ReactNode;
 	/**
 	 * The words are still arriving, each version longer than the last. An unfinished construct, such
-	 * as an open `**`, renders as if it were closed, and each new word carries `data-sd-animate` for
-	 * the caller to fade in.
+	 * as an open `**`, renders as if it were closed, and each block (a paragraph, a list, a code
+	 * block) fades in once, when it is appended.
 	 */
 	streaming?: boolean;
 	/** The level of every heading in the body: one below the heading of the section it sits under. */
@@ -197,6 +196,15 @@ export interface UntrustedMarkdownProps {
  * <p>Brings no wrapper of its own. Callers put {@link UNTRUSTED_MARKDOWN_PROSE} on whichever element
  * they already have, so the prose scope cannot end up nested inside itself.
  */
+/** One block of a streaming answer, in a wrapper that keeps its element while the block changes. */
+function FadingBlock(props: BlockProps) {
+	return (
+		<div className={styles.newBlock}>
+			<Block {...props} />
+		</div>
+	);
+}
+
 export function UntrustedMarkdown({
 	children,
 	renderText,
@@ -211,8 +219,9 @@ export function UntrustedMarkdown({
 					<Streamdown
 						mode={streaming ? "streaming" : "static"}
 						isAnimating={streaming}
-						// Marks each new word while the text streams; the caller decides whether and how it fades.
-						animated={streaming ? NEW_WORDS : false}
+						// No span per word: styling each one costs a frame per chunk on a long answer.
+						animated={false}
+						BlockComponent={streaming ? FadingBlock : Block}
 						rehypePlugins={[]}
 						remarkRehypeOptions={{ allowDangerousHtml: false }}
 						components={renderText ? RENDERED_TEXT_COMPONENTS : UNTRUSTED_MARKDOWN_COMPONENTS}
