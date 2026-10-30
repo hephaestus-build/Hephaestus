@@ -442,7 +442,7 @@ If a stopped cutover fails or remains pending:
 
 A signed rollback request does not permit an automatic major release downgrade.
 A commit channel must descend from the recorded release source.
-While the applied record is a release tag, a signed request can permit an older commit only before 1.0.
+For a recorded pre-1.0 release tag, a signed request can permit an older commit.
 For a recorded 1.0 or later release tag, use the manual recovery steps above first.
 An applied commit record has no version.
 This version boundary does not apply to it.
