@@ -85,7 +85,9 @@ class PartlyDeliveredFeedbackMigrationTest {
                                     + " WHERE id::text LIKE '00000000-0000-0000-0000-000000993%'"
                                     + " AND id<>'" + NEVER_POSTED + "'"))
                     .hasSize(12)
-                    .allSatisfy((id, unchanged) -> assertThat(unchanged).as("first appearance of %s", id).isEqualTo("true"));
+                    .allSatisfy((id, unchanged) -> assertThat(unchanged)
+                            .as("first appearance of %s", id)
+                            .isEqualTo("true"));
             // A copy nothing would send fails as absent, so a retry reaches it; a withdrawn piece keeps its own.
             assertThat(columns(
                             connection,
@@ -145,17 +147,40 @@ class PartlyDeliveredFeedbackMigrationTest {
         piece(rows, RESTORED, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
         piece(rows, TIED_RESTORE, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
         for (var id : List.of(RESTORED, TIED_RESTORE)) {
-            rows.insert("feedback_decision", Map.of(
-                    "id", UUID.fromString(id.equals(RESTORED)
-                            ? "00000000-0000-0000-0000-000000000001"
-                            : "00000000-0000-0000-0000-000000000003"),
-                    "workspace_id", 993L, "feedback_id", id, "action", "WITHDRAW", "decided_at", POSTED));
-            rows.insert("feedback_decision", Map.of(
-                    "id", UUID.fromString(id.equals(RESTORED)
-                            ? "00000000-0000-0000-0000-000000000002"
-                            : "00000000-0000-0000-0000-000000000004"),
-                    "workspace_id", 993L, "feedback_id", id, "action", "RESTORE", "decided_at",
-                    id.equals(RESTORED) ? Timestamp.from(POSTED.toInstant().plusSeconds(1)) : POSTED));
+            rows.insert(
+                    "feedback_decision",
+                    Map.of(
+                            "id",
+                            UUID.fromString(
+                                    id.equals(RESTORED)
+                                            ? "00000000-0000-0000-0000-000000000001"
+                                            : "00000000-0000-0000-0000-000000000003"),
+                            "workspace_id",
+                            993L,
+                            "feedback_id",
+                            id,
+                            "action",
+                            "WITHDRAW",
+                            "decided_at",
+                            POSTED));
+            rows.insert(
+                    "feedback_decision",
+                    Map.of(
+                            "id",
+                            UUID.fromString(
+                                    id.equals(RESTORED)
+                                            ? "00000000-0000-0000-0000-000000000002"
+                                            : "00000000-0000-0000-0000-000000000004"),
+                            "workspace_id",
+                            993L,
+                            "feedback_id",
+                            id,
+                            "action",
+                            "RESTORE",
+                            "decided_at",
+                            id.equals(RESTORED)
+                                    ? Timestamp.from(POSTED.toInstant().plusSeconds(1))
+                                    : POSTED));
         }
         piece(rows, STARTED_AND_FAILED, "ON_WORK", "DELIVERED", "WRITE_STARTED", "FAILED", "DONE");
         piece(rows, OTHER_WORKSPACE_COPY, "ON_WORK", "DELIVERED", "POSTED", "POSTED", "DONE");
