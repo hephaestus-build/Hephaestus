@@ -88,7 +88,7 @@ jobs:
           cd "$RUNNER_TEMP"
           mkdir k3s-assets
           gh release download "$TAG" --repo "$REPOSITORY" --dir k3s-assets --pattern 'k3s-*'
-          gh release download "$TAG" --repo "$REPOSITORY" --pattern "release-$TAG.chart.json"
+          gh release download "$TAG" --repo "$REPOSITORY" --pattern "release-$TAG.chart.json" --pattern "release-$TAG.chart.json.sigstore.json"
           [ -f k3s-assets/k3s-install.sh ] || { echo "::error::$TAG has no k3s-install.sh"; exit 1; }
           for file in $(find k3s-assets -type f ! -name '*.sigstore.json' | sort); do
             cosign verify-blob --bundle "$file.sigstore.json" --certificate-identity "$IDENTITY" \

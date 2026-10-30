@@ -3,6 +3,12 @@ name: Release / Publish
 # Versioning contract: docs/admin/compatibility-policy.mdx
 
 on:
+  workflow_dispatch:
+    inputs:
+      promote-candidate:
+        description: Promote the latest immutable vX.Y.Z-rc.N on the exact main commit, without rebuilding artifacts
+        required: true
+        type: string
   workflow_run: # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
     workflows: ["CI/CD"]
     types: [completed]
@@ -20,9 +26,11 @@ jobs:
     # head_branch of the fork; without these guards a fork branch named "main"
     # could drive the privileged release job.
     if: >-
-      ${{ github.event.workflow_run.conclusion == 'success'
+      ${{ (github.event.workflow_run.conclusion == 'success'
         && github.event.workflow_run.event == 'push'
-        && github.event.workflow_run.head_repository.full_name == github.repository }}
+        && github.event.workflow_run.head_repository.full_name == github.repository)
+        || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        && inputs.promote-candidate != '') }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
@@ -39,6 +47,9 @@ jobs:
       previous_version: ${{ steps.cut.outputs.previous_version }}
       sha: ${{ steps.cut.outputs.sha }}
       migrations: ${{ steps.cut.outputs.migrations }}
+      candidate: ${{ steps.cut.outputs.candidate }}
+      prerelease: ${{ steps.cut.outputs.prerelease }}
+      notes_version: ${{ steps.cut.outputs.notes_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,7 +67,9 @@ jobs:
         id: cut
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          CANDIDATE: ${{ inputs.promote-candidate }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
@@ -64,7 +77,14 @@ jobs:
           git merge-base --is-ancestor "$SHA" origin/main || {
             echo "::error::Commit $SHA is not on main"; exit 1; }
 
-          node scripts/plan-release.ts "$SHA"
+          if [ "$EVENT" = workflow_dispatch ] && [ -z "$CANDIDATE" ]; then
+            echo "::error::A manual release must select a qualified candidate"; exit 1
+          fi
+          if [ -n "$CANDIDATE" ]; then
+            node scripts/plan-release.ts --candidate "$CANDIDATE" "$SHA"
+          else
+            node scripts/plan-release.ts "$SHA"
+          fi
 
       - name: Summary
         if: steps.cut.outputs.released == 'true'
@@ -99,13 +119,14 @@ jobs:
         id: render
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          NOTES_VERSION: ${{ needs.release.outputs.notes_version }}
           PREVIOUS_VERSION: ${{ needs.release.outputs.previous_version }}
           RELEASE: ${{ needs.release.outputs.tag_name }}
           COMMIT: ${{ needs.release.outputs.sha }}
           MIGRATIONS: ${{ needs.release.outputs.migrations }}
         run: |
           set -euo pipefail
-          node scripts/plan-release.ts --notes "$PREVIOUS_VERSION" "$VERSION" CHANGELOG.md notes.md
+          node scripts/plan-release.ts --notes "$PREVIOUS_VERSION" "$NOTES_VERSION" CHANGELOG.md notes.md
           node scripts/github-release-notes.ts notes.md release-body.md
 
       - name: Keep the complete notes and bounded description
@@ -160,13 +181,27 @@ jobs:
         with:
           install: "none"
 
+      - name: Verify candidate signatures before selecting artifacts
+        if: needs.release.outputs.candidate != ''
+        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        with:
+          cosign-release: v3.1.4
+
       # The images this release promotes, resolved through the same script the pre-merge evidence
       # preflight resolves them with, so the two can never disagree about which artefact is subject.
       - name: Capture release image digests
         id: retag
         env:
-          SOURCE_TAG: ${{ github.event.workflow_run.head_sha }}
-        run: node scripts/resolve-release-images.ts "$SOURCE_TAG" release-images.tsv
+          SOURCE_TAG: ${{ needs.release.outputs.sha }}
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "$CANDIDATE" ]; then
+            node scripts/promote-release-candidate.ts capture "$CANDIDATE" "$SOURCE_TAG" "$RUNNER_TEMP/candidate" release-images.tsv
+          else
+            node scripts/resolve-release-images.ts "$SOURCE_TAG" release-images.tsv
+          fi
 
       - name: Verify Node-only agent-pi sandbox
         id: sandbox-contract
@@ -242,6 +277,7 @@ jobs:
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
           SHA: ${{ needs.release.outputs.sha }}
           VERSION: ${{ needs.release.outputs.version }}
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
         run: |
           set -euo pipefail
           # The push writes the chart's version tag. Only an absent release or this commit's own
@@ -250,9 +286,17 @@ jobs:
             echo "$state"; exit 1; }
           printf '%s' "$REGISTRY_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
           mkdir "$RUNNER_TEMP/chart"
-          node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \
-            security/release-images.json "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
-          echo "package=$RUNNER_TEMP/chart/hephaestus-${VERSION}.tgz" >> "$GITHUB_OUTPUT"
+          if [ -n "$CANDIDATE" ]; then
+            node scripts/plan-release.ts --candidate-source "$CANDIDATE" "$SHA"
+            source="$RUNNER_TEMP/candidate/release-${CANDIDATE}.chart.json"
+            package=$(node scripts/release-chart.ts verify "$source" "$CANDIDATE" security/release-images.json "$RUNNER_TEMP/chart")
+            jq '.chart' "$source" > "$RUNNER_TEMP/chart.json"
+          else
+            node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \
+              security/release-images.json "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
+            package="$RUNNER_TEMP/chart/hephaestus-${VERSION}.tgz"
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
           jq . "$RUNNER_TEMP/chart.json"
 
       # One typed joint lock from the verified evidence and the pushed chart. The schema 1 lock that
@@ -261,6 +305,7 @@ jobs:
         id: pin
         env:
           VERSION: ${{ needs.release.outputs.version }}
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
         run: |
           set -euo pipefail
           ASSET="release-v${VERSION}.json"
@@ -270,6 +315,9 @@ jobs:
           node scripts/release-image-lock.ts "$ASSET" evidence/manifest.json \
             "v${VERSION}" "$RUNNER_TEMP/release-lock.env"
           node scripts/release-image-lock.ts projection "$JOINT" "$ASSET" "v${VERSION}"
+          if [ -n "$CANDIDATE" ]; then
+            node scripts/promote-release-candidate.ts verify "$RUNNER_TEMP/candidate/release-${CANDIDATE}.chart.json" "$JOINT"
+          fi
           echo "asset-path=$ASSET" >> "$GITHUB_OUTPUT"
           echo "joint-path=$JOINT" >> "$GITHUB_OUTPUT"
           jq . "$ASSET" "$JOINT"
@@ -357,6 +405,8 @@ jobs:
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
           VERSION: ${{ needs.release.outputs.version }}
           SHA: ${{ needs.release.outputs.sha }}
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
+          PRERELEASE: ${{ needs.release.outputs.prerelease }}
         run: |
           set -euo pipefail
           # The release job planned outside the promotion lock, so another run may have written this
@@ -369,8 +419,11 @@ jobs:
           fi
 
           [ -s release-notes/release-body.md ] || { echo "::error::No release description for $TAG_NAME"; exit 1; }
-
+          if [ -n "$CANDIDATE" ]; then node scripts/plan-release.ts --candidate-source "$CANDIDATE" "$SHA"; fi
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); fi
           gh release create "$TAG_NAME" --draft \
+            "${flags[@]}" \
             --title "$TAG_NAME" \
             --notes-file release-notes/release-body.md \
             --target "$SHA" \
@@ -661,6 +714,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
           RELEASE_SHA: ${{ needs.release.outputs.sha }}
+          CANDIDATE: ${{ needs.release.outputs.candidate }}
+          PRERELEASE: ${{ needs.release.outputs.prerelease }}
         run: |
           set -euo pipefail
           # The draft, or the published release and its tag, must belong to the qualified commit
@@ -668,8 +723,11 @@ jobs:
           state=$(node scripts/plan-release.ts --source "$TAG_NAME" "$RELEASE_SHA" draft published) || {
             echo "$state"; exit 1; }
           if [ "$state" = draft ]; then
+            if [ -n "$CANDIDATE" ]; then node scripts/plan-release.ts --candidate-source "$CANDIDATE" "$RELEASE_SHA"; fi
             gh release upload "$TAG_NAME" host-smoke/*.json --clobber --repo "${{ github.repository }}"
-            gh release edit "$TAG_NAME" --repo "${{ github.repository }}" --draft=false
+            flags=(--draft=false "--prerelease=$PRERELEASE")
+            if [ "$PRERELEASE" = true ]; then flags+=(--latest=false); fi
+            gh release edit "$TAG_NAME" --repo "${{ github.repository }}" "${flags[@]}"
           else
             # A failed alias promotion leaves an immutable release. Its assets must match the
             # qualified artifacts from this run; retrying must never replace published evidence.
@@ -680,6 +738,8 @@ jobs:
           fi
           [ "$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isImmutable --jq .isImmutable)" = true ] || {
             echo "::error::The published release is not immutable; refusing to promote image aliases"; exit 1; }
+          [ "$(gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json isPrerelease --jq .isPrerelease)" = "$PRERELEASE" ] || {
+            echo "::error::The published release has the wrong prerelease flag"; exit 1; }
           # Publication creates the tag at the draft's target. Aliases move only if it names this commit.
           node scripts/plan-release.ts --source "$TAG_NAME" "$RELEASE_SHA" published
 
@@ -704,12 +764,16 @@ jobs:
           jq -e --arg tag "v$VERSION" '.release == $tag' evidence/manifest.json >/dev/null || {
             echo "::error::Release version does not match verified evidence; refusing image aliases"; exit 1; }
           node scripts/plan-release.ts --promote "$VERSION"
+          aliases=$(node scripts/plan-release.ts --aliases "$VERSION")
+          [ -n "$aliases" ] || { echo "::error::No image aliases selected"; exit 1; }
+          mapfile -t tags <<< "$aliases"
           while IFS=$'\t' read -r ref digest; do
-            docker buildx imagetools create \
-              -t "$ref:$VERSION" -t "$ref:$SERIES" -t "$ref:latest" "$ref@$digest"
+            flags=()
+            for tag in "${tags[@]}"; do flags+=(-t "$ref:$tag"); done
+            docker buildx imagetools create "${flags[@]}" "$ref@$digest"
           done < "$RUNNER_TEMP/promotions.tsv"
           while IFS=$'\t' read -r ref digest; do
-            for tag in "$VERSION" "$SERIES" latest; do
+            for tag in "${tags[@]}"; do
               promoted=$(docker buildx imagetools inspect "$ref:$tag" --format '{{json .Manifest}}' | jq -r .digest)
               [ "$promoted" = "$digest" ] || { echo "::error::Promotion changed $ref:$tag digest"; exit 1; }
             done

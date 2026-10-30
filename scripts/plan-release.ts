@@ -19,15 +19,23 @@ import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
+import {
+	compareVersions,
+	formatVersion,
+	imageAliases,
+	parseVersion,
+	stableVersion,
+	type Version,
+} from "./lib/release-version.ts";
 
-/** Only a stable version counts; `0.9.0-rc.4` and friends are not part of the released line. */
-const RELEASE_VERSION = /^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/u;
+export { compareVersions, parseVersion } from "./lib/release-version.ts";
 
 const MIGRATION_PATH = "server/application/src/main/resources/db/changelog/";
 
 export interface ReleaseRef {
 	readonly isDraft: boolean;
 	readonly isPrerelease: boolean;
+	readonly isImmutable?: boolean;
 	readonly tag: string;
 	/** The commit a draft was targeted at; a branch name for a release published from one. */
 	readonly targetCommitish: string;
@@ -44,32 +52,14 @@ export interface ReleaseCut {
 	readonly sha: string;
 	readonly tag: string;
 	readonly version: string;
+	/** An immutable RC whose exact image and chart digests this stable release promotes. */
+	readonly candidate?: string;
 }
 
 export type ReleasePlan =
 	| ReleaseCut
 	| { readonly kind: "refuse"; readonly reason: string }
 	| { readonly kind: "skip"; readonly reason: string };
-
-interface Version {
-	readonly major: number;
-	readonly minor: number;
-	readonly patch: number;
-}
-
-export const parseVersion = (value: string): Version | undefined => {
-	const groups = RELEASE_VERSION.exec(value)?.groups;
-	if (groups === undefined) {
-		return undefined;
-	}
-	return { major: Number(groups.major), minor: Number(groups.minor), patch: Number(groups.patch) };
-};
-
-export const compareVersions = (left: Version, right: Version): number =>
-	left.major - right.major || left.minor - right.minor || left.patch - right.patch;
-
-const formatVersion = (version: Version): string =>
-	`${version.major}.${version.minor}.${version.patch}`;
 
 /** The highest published stable release: the one a new release follows and upgrades from. */
 const latestPublished = (releases: readonly ReleaseRef[]): Version | undefined => {
@@ -79,7 +69,7 @@ const latestPublished = (releases: readonly ReleaseRef[]): Version | undefined =
 			continue;
 		}
 		const version = parseVersion(release.tag.slice(1));
-		if (version && (!latest || compareVersions(version, latest) > 0)) {
+		if (version && version.rc === undefined && (!latest || compareVersions(version, latest) > 0)) {
 			latest = version;
 		}
 	}
@@ -88,6 +78,21 @@ const latestPublished = (releases: readonly ReleaseRef[]): Version | undefined =
 
 /** Alias writes must not let a retry of an older release undo a newer publication. */
 export function assertCurrentStableRelease(version: string, releases: readonly ReleaseRef[]): void {
+	const parsed = parseVersion(version);
+	if (parsed?.rc !== undefined) {
+		if (
+			!releases.some(
+				(release) =>
+					release.tag === `v${version}` &&
+					!release.isDraft &&
+					release.isPrerelease &&
+					release.isImmutable === true,
+			)
+		) {
+			throw new Error("Only a published immutable candidate may promote its version alias");
+		}
+		return;
+	}
 	const latest = latestPublished(releases);
 	if (latest === undefined || version !== formatVersion(latest)) {
 		throw new Error("Only the current stable release may promote image aliases");
@@ -167,6 +172,23 @@ export function planRelease(
 			reason: `pending changesets remain at ${sha}; the Version PR must consume them before releasing ${tag}`,
 		};
 	}
+	if (
+		parsed.rc === undefined &&
+		releases.some((release) => {
+			const candidate = parseVersion(release.tag.replace(/^v/u, ""));
+			return (
+				!release.isDraft &&
+				release.isPrerelease &&
+				candidate?.rc !== undefined &&
+				stableVersion(candidate) === version
+			);
+		})
+	) {
+		return {
+			kind: "refuse",
+			reason: `${tag} must promote its qualified candidate; a stable Version PR must not rebuild it`,
+		};
+	}
 
 	const previous = latestPublished(releases);
 	if (!previous) {
@@ -191,6 +213,67 @@ export function planRelease(
 	};
 }
 
+/** Rechecked under each publication lock so a newer RC cannot be overtaken by promotion. */
+export function assertPromotionCandidate(
+	sha: string,
+	candidate: string,
+	releases: readonly ReleaseRef[],
+): Version {
+	if (!/^[a-f0-9]{40}$/u.test(sha)) {
+		throw new Error("Promotion needs the full main commit SHA");
+	}
+	const version = candidate.startsWith("v") ? parseVersion(candidate.slice(1)) : undefined;
+	if (version?.rc === undefined) {
+		throw new Error("Promotion needs a vX.Y.Z-rc.N candidate");
+	}
+	const source = releases.find((release) => release.tag === candidate);
+	if (
+		!source ||
+		source.isDraft ||
+		!source.isPrerelease ||
+		source.isImmutable !== true ||
+		source.targetCommitish !== sha
+	) {
+		throw new Error("Promotion needs the immutable published candidate of this exact main commit");
+	}
+	for (const release of releases) {
+		const other = release.tag.startsWith("v") ? parseVersion(release.tag.slice(1)) : undefined;
+		if (
+			other?.rc !== undefined &&
+			stableVersion(other) === stableVersion(version) &&
+			compareVersions(other, version) > 0
+		) {
+			throw new Error(`A newer candidate exists: ${release.tag}`);
+		}
+	}
+	return version;
+}
+
+export function planCandidatePromotion(
+	sha: string,
+	candidate: string,
+	releases: readonly ReleaseRef[],
+	pendingChangesets: boolean,
+): ReleasePlan {
+	let version: Version;
+	try {
+		version = assertPromotionCandidate(sha, candidate, releases);
+	} catch (error) {
+		return { kind: "refuse", reason: error instanceof Error ? error.message : String(error) };
+	}
+	if (pendingChangesets) {
+		return { kind: "refuse", reason: "A candidate with pending changesets cannot be promoted" };
+	}
+	// Candidate identity is checked above. Ordinary stable planning deliberately refuses this path.
+	const plan = planRelease(
+		sha,
+		stableVersion(version),
+		releases.filter((release) => !release.isPrerelease),
+		false,
+	);
+	return plan.kind === "cut" ? { ...plan, candidate } : plan;
+}
+
 /**
  * The step outputs the rest of `release.yml` reads. A plan that cuts nothing writes only `released`,
  * which is what every downstream job is gated on.
@@ -200,10 +283,13 @@ export function releaseOutputs(plan: ReleasePlan, migrations = false): Record<st
 		return { released: "false" };
 	}
 	return {
+		candidate: plan.candidate ?? "",
 		major: String(plan.major),
 		migrations: String(migrations),
 		minor: String(plan.minor),
 		previous_version: plan.previousVersion,
+		prerelease: String(parseVersion(plan.version)?.rc !== undefined),
+		notes_version: plan.candidate?.slice(1) ?? plan.version,
 		released: "true",
 		sha: plan.sha,
 		tag_name: plan.tag,
@@ -216,7 +302,7 @@ export function releaseOutputs(plan: ReleasePlan, migrations = false): Record<st
  * `previousVersion`, newest first, as the source has them. A version that never published reaches
  * operators through the next one that does. Only top-level `##` headings bound a section, so a
  * heading inside a fenced example is text. Throws, before any release exists, where the sections
- * from `version` down to `previousVersion` are missing, repeated, out of order or not stable.
+ * from `version` down to `previousVersion` are missing, repeated, out of order or not release versions.
  */
 export async function renderReleaseNotes(
 	changelog: string,
@@ -264,7 +350,7 @@ export async function renderReleaseNotes(
 	for (const section of older) {
 		if (!section.version || compareVersions(section.version, newer) >= 0) {
 			throw new Error(
-				`release notes: "${section.heading}" is not a stable release older than ${formatVersion(newer)}`,
+				`release notes: "${section.heading}" is not a release older than ${formatVersion(newer)}`,
 			);
 		}
 		if (compareVersions(section.version, previous) === 0) {
@@ -285,7 +371,7 @@ async function listReleases(repository: string): Promise<ReleaseRef[]> {
 		// Projected rather than slurped whole: the release bodies are the changelog, and the full
 		// listing already outgrows the default subprocess buffer.
 		"--jq",
-		".[] | {tag: .tag_name, draft: .draft, prerelease: .prerelease, commitish: .target_commitish}",
+		".[] | {tag: .tag_name, draft: .draft, prerelease: .prerelease, immutable: .immutable, commitish: .target_commitish}",
 	]);
 	return listed
 		.split("\n")
@@ -298,6 +384,7 @@ async function listReleases(repository: string): Promise<ReleaseRef[]> {
 			return {
 				isDraft: release.draft,
 				isPrerelease: release.prerelease,
+				...(typeof release.immutable === "boolean" ? { isImmutable: release.immutable } : {}),
 				tag: asString(release.tag, `gh api releases[${index}].tag_name`),
 				targetCommitish: asString(release.commitish, `gh api releases[${index}].target_commitish`),
 			};
@@ -408,7 +495,41 @@ async function readTagCommit(repository: string, tag: string): Promise<string | 
 	return sha;
 }
 
-if (import.meta.main && process.argv[2] === "--promote") {
+export async function verifyCandidateSource(
+	repository: string,
+	candidate: string,
+	sha: string,
+): Promise<ReleaseRef[]> {
+	const releases = await listReleases(repository);
+	assertPromotionCandidate(sha, candidate, releases);
+	if ((await readTagCommit(repository, candidate)) !== sha) {
+		throw new Error("The candidate tag does not name this source commit");
+	}
+	const mainOutput = await output("gh", [
+		"api",
+		`repos/${repository}/commits/main`,
+		"--jq",
+		".sha",
+	]);
+	const main = mainOutput.trim();
+	if (main !== sha) {
+		throw new Error("Main advanced after the candidate; qualify another RC before promotion");
+	}
+	return releases;
+}
+
+if (import.meta.main && process.argv[2] === "--aliases") {
+	for (const alias of imageAliases(process.argv[3] ?? "")) {
+		console.log(alias);
+	}
+} else if (import.meta.main && process.argv[2] === "--candidate-source") {
+	const [, candidate, sha] = process.argv.slice(2);
+	const repository = process.env.GITHUB_REPOSITORY;
+	if (!isSet(candidate) || !isSet(sha) || !isSet(repository)) {
+		throw new Error("usage: plan-release --candidate-source <candidate-tag> <sha>");
+	}
+	await verifyCandidateSource(repository, candidate, sha);
+} else if (import.meta.main && process.argv[2] === "--promote") {
 	const [, version] = process.argv.slice(2);
 	const repository = process.env.GITHUB_REPOSITORY;
 	if (!isSet(version) || !isSet(repository)) {
@@ -474,7 +595,9 @@ if (import.meta.main && process.argv[2] === "--promote") {
 		}
 	}
 } else if (import.meta.main) {
-	const [sha] = process.argv.slice(2);
+	const promotion = process.argv[2] === "--candidate";
+	const candidate = promotion ? process.argv[3] : undefined;
+	const sha = process.argv[promotion ? 4 : 2];
 	const repository = process.env.GITHUB_REPOSITORY;
 	if (!isSet(sha) || !isSet(repository)) {
 		console.log("::error::usage: GITHUB_REPOSITORY=<owner/repo> plan-release.ts <sha>");
@@ -489,12 +612,22 @@ if (import.meta.main && process.argv[2] === "--promote") {
 			),
 			`${sha}:package.json`,
 		);
-		const plan = planRelease(
-			sha,
-			asString(manifest.version, `${sha}:package.json version`),
-			await listReleases(repository),
-			await hasPendingChangesets(sha),
-		);
+		const version = asString(manifest.version, `${sha}:package.json version`);
+		const pending = await hasPendingChangesets(sha);
+		let plan: ReleasePlan;
+		if (promotion) {
+			if (!isSet(candidate) || candidate !== `v${version}`) {
+				throw new Error("Promotion must select the exact candidate version on main");
+			}
+			plan = planCandidatePromotion(
+				sha,
+				candidate,
+				await verifyCandidateSource(repository, candidate, sha),
+				pending,
+			);
+		} else {
+			plan = planRelease(sha, version, await listReleases(repository), pending);
+		}
 		if (plan.kind === "refuse") {
 			console.log(`::error::${plan.reason}`);
 			process.exitCode = 1;

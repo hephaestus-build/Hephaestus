@@ -2737,7 +2737,7 @@ void describe("CI contract", () => {
 		const release = await readFile(".github/workflows/release.yml", "utf8");
 		assert.match(
 			job(release, "tag-images"),
-			/SOURCE_TAG: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u,
+			/SOURCE_TAG: \$\{\{ needs\.release\.outputs\.sha \}\}/u,
 		);
 
 		for (const [file, workflow] of await workflowSources()) {
@@ -4127,7 +4127,7 @@ void describe("CI contract", () => {
 	void test("runs release evidence verification through tested TypeScript", async () => {
 		const release = await readFile(".github/workflows/release.yml", "utf8");
 		const rescan = job(await readFile(".github/workflows/rescan-images.yml", "utf8"), "release");
-		assert.match(release, /SOURCE_TAG: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u);
+		assert.match(release, /SOURCE_TAG: \$\{\{ needs\.release\.outputs\.sha \}\}/u);
 		assert.match(release, /node scripts\/resolve-release-images\.ts "\$SOURCE_TAG"/u);
 		assert.doesNotMatch(job(release, "tag-images"), /imagetools/u);
 		assert.match(rescan, /node scripts\/rescan-release-images\.ts release-evidence reports/u);
@@ -4155,7 +4155,7 @@ void describe("CI contract", () => {
 		const notes = job(source, "release-notes");
 		assert.match(notes, /ref: \$\{\{ needs\.release\.outputs\.sha \}\}/u);
 		assert.match(notes, /PREVIOUS_VERSION: \$\{\{ needs\.release\.outputs\.previous_version \}\}/u);
-		assert.match(notes, /--notes "\$PREVIOUS_VERSION" "\$VERSION" CHANGELOG\.md/u);
+		assert.match(notes, /--notes "\$PREVIOUS_VERSION" "\$NOTES_VERSION" CHANGELOG\.md/u);
 		assert.doesNotMatch(notes, /contents: write|id-token|packages: write/u);
 		assert.doesNotMatch(gate, /RELEASE_NOTES:/u);
 		assert.match(notes, /node scripts\/github-release-notes\.ts notes\.md release-body\.md/u);
@@ -5347,8 +5347,10 @@ void test("the chart signing rehearsal runs steps 2 to 4 of Verify the release c
 	)?.groups?.block;
 	assert.ok(documented !== undefined);
 	const commands = documented
+		.slice(documented.indexOf("# 2."), documented.indexOf("# 5."))
 		.split("\n")
-		.map((line) => line.trim())
+		// A rehearsal has no promoted release; its artifact version is always its own version.
+		.map((line) => line.trim().replaceAll("$CHART_VERSION", "$VERSION"))
 		.filter((line) =>
 			/^(?:cosign verify|helm pull|helm show chart|--certificate-oidc-issuer)/u.test(line),
 		);
@@ -6002,4 +6004,57 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 			...Object.keys(ACTIONS_WRITE_GRANTS),
 		].toSorted(),
 	);
+});
+
+void test("manual publication requires a nonempty candidate on main and cannot bypass successful trusted CI", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+	const condition = workflow.getIn(["jobs", "release", "if"]);
+	const base = {
+		repository: "owner/repo",
+		ref: "refs/heads/main",
+		event_name: "workflow_dispatch",
+		event: {
+			workflow_run: {
+				conclusion: "success",
+				event: "push",
+				head_repository: { full_name: "owner/repo" },
+			},
+		},
+	};
+	const manual = { ...base, event: {} };
+	assert.equal(
+		expandExpressions(condition, {
+			github: manual,
+			inputs: { "promote-candidate": "v1.0.0-rc.2" },
+		}),
+		"true",
+	);
+	assert.equal(
+		expandExpressions(condition, { github: manual, inputs: { "promote-candidate": "" } }),
+		"false",
+	);
+	assert.equal(
+		expandExpressions(condition, {
+			github: { ...manual, ref: "refs/heads/topic" },
+			inputs: { "promote-candidate": "v1.0.0-rc.2" },
+		}),
+		"false",
+	);
+	assert.equal(
+		expandExpressions(condition, { github: { ...base, event_name: "workflow_run" }, inputs: {} }),
+		"true",
+	);
+	for (const run of [
+		{ conclusion: "failure", event: "push", head_repository: { full_name: "owner/repo" } },
+		{ conclusion: "success", event: "pull_request", head_repository: { full_name: "owner/repo" } },
+		{ conclusion: "success", event: "push", head_repository: { full_name: "fork/repo" } },
+	]) {
+		assert.equal(
+			expandExpressions(condition, {
+				github: { ...base, event_name: "workflow_run", event: { workflow_run: run } },
+				inputs: {},
+			}),
+			"false",
+		);
+	}
 });

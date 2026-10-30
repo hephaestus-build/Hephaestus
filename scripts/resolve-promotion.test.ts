@@ -45,7 +45,7 @@ await test("a draft or a mutable reference is never promoted", async () => {
 		resolvePromotion({ ...request, release: "v1.2.3" }, { ...sources, isDraft: async () => true }),
 		/still a draft/u,
 	);
-	for (const release of ["main", "v1.2", "v01.2.3", "v1.2.3-rc.1"]) {
+	for (const release of ["main", "v1.2", "v01.2.3", "v1.2.3-beta.1"]) {
 		await assert.rejects(resolvePromotion({ ...request, release }, sources), /immutable vX\.Y\.Z/u);
 	}
 });

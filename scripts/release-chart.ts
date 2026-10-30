@@ -138,7 +138,9 @@ export async function verifyReleaseChart(
 ): Promise<string> {
 	const scratch = await mkdtemp(path.join(destination, ".chart-"));
 	try {
-		const pulled = await pullChart(lock.chart, lock.release, scratch, run);
+		// Promotion keeps the qualified chart's RC metadata and package bytes.
+		const artifactRelease = `v${lock.chart.version}`;
+		const pulled = await pullChart(lock.chart, artifactRelease, scratch, run);
 		await run("cosign", [
 			"verify",
 			`${lock.chart.repository}@${lock.chart.digest}`,
@@ -147,9 +149,9 @@ export async function verifyReleaseChart(
 			"--certificate-oidc-issuer",
 			"https://token.actions.githubusercontent.com",
 		]);
-		await inspectChart(pulled, lock.release, run);
-		await inspectValues(pulled, chartValues(lock, inventory), run);
-		const verified = path.join(destination, chartPackageName(lock.release));
+		await inspectChart(pulled, artifactRelease, run);
+		await inspectValues(pulled, chartValues({ ...lock, release: artifactRelease }, inventory), run);
+		const verified = path.join(destination, chartPackageName(artifactRelease));
 		await rename(pulled, verified);
 		return verified;
 	} finally {

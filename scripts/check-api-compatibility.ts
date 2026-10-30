@@ -106,6 +106,7 @@ export function latestStableTag(listing: string): string {
 		if (
 			tag !== undefined &&
 			version !== undefined &&
+			version.rc === undefined &&
 			(latest === undefined || compareVersions(version, latest.version) > 0)
 		) {
 			latest = { tag, version };

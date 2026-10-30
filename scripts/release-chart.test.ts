@@ -348,6 +348,35 @@ const otherImages: ChartValues = {
 	images: { ...values.images, webapp: image("webapp", "9") },
 };
 
+await test("a stable promotion verifies the same candidate chart bytes and keeps the artifact filename", async (t) => {
+	const artifact = `${version}-rc.2`;
+	const candidateValues = { ...values, release: { ...values.release, version: `v${artifact}` } };
+	const bytes = chartBytes(candidateValues);
+	const registry = lockedRegistry(bytes);
+	const tool = tools({ registry, chartYaml: metadata(artifact) });
+	const directory = await scratch(t);
+	const verified = await verifyReleaseChart(
+		lockFor({ repository, version: artifact, digest: digest("b") }),
+		inventory,
+		directory,
+		{},
+		tool.execute,
+	);
+	assert.equal(path.basename(verified), `hephaestus-${artifact}.tgz`);
+	assert.equal(await readFile(verified, "utf8"), bytes);
+	assert.ok(tool.calls.every((call) => call[1] !== "package" && call[1] !== "push"));
+	await assert.rejects(
+		verifyReleaseChart(
+			lockFor({ repository, version: artifact, digest: digest("b") }),
+			inventory,
+			await scratch(t),
+			{},
+			tools({ registry, chartYaml: metadata() }).execute,
+		),
+		/is not the hephaestus chart/u,
+	);
+});
+
 await test("verification leaves nothing behind for a foreign, unlocked, unsigned, renamed or unpinned chart", async (t) => {
 	for (const [label, chart, options, message] of [
 		[

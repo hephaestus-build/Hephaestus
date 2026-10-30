@@ -72,7 +72,7 @@ await test("a channel names an immutable release", () => {
 	});
 	assert.throws(() => parseChannel({ release: "main" }), /immutable vX\.Y\.Z tag/u);
 	assert.throws(() => parseChannel({ release: "v01.2.3" }), /immutable vX\.Y\.Z tag/u);
-	assert.throws(() => parseChannel({ release: "v1.2.3-rc.1" }), /immutable vX\.Y\.Z tag/u);
+	assert.throws(() => parseChannel({ release: "v1.2.3-rc.01" }), /immutable vX\.Y\.Z tag/u);
 	assert.throws(() => parseChannel({}), /channel\.release/u);
 	assert.throws(() => parseChannel({ release: "v1.2.3", freeze: "yes" }), /must be a boolean/u);
 });
@@ -893,6 +893,7 @@ async function reconcilerFixture(directory: string) {
 			"lib/env.ts",
 			"lib/json.ts",
 			"lib/process.ts",
+			"lib/release-version.ts",
 		]) {
 			await copyFile(path.join(import.meta.dirname, file), path.join(tree, "scripts", file));
 		}

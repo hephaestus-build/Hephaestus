@@ -12,7 +12,7 @@ on:
         options: [Staging, Production]
         required: true
       release:
-        description: Release to run, as vX.Y.Z. Leave empty to follow a commit instead.
+        description: Stable or candidate release tag to run. Leave empty to follow a commit instead.
         type: string
         required: false
       commit:

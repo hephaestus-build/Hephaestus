@@ -52,6 +52,9 @@ void test("cuts the version the Version PR merge introduced", () => {
 	assert.equal(plan.previousVersion, "0.74.0");
 	assert.equal(plan.resumesDraft, false);
 	assert.deepEqual(releaseOutputs(plan, true), {
+		candidate: "",
+		prerelease: "false",
+		notes_version: "0.75.0",
 		major: "0",
 		migrations: "true",
 		minor: "75",
@@ -121,7 +124,7 @@ void test("refuses when nothing published exists to follow", () => {
 });
 
 void test("refuses a version that is not a released version shape", () => {
-	const plan = planRelease(SHA, "0.75.0-rc.1", RELEASED, false);
+	const plan = planRelease(SHA, "0.75.0-beta.1", RELEASED, false);
 	assert.equal(plan.kind, "refuse");
 	assert.match(plan.reason, /is not major\.minor\.patch/u);
 });
@@ -168,7 +171,7 @@ void test("promotion accepts the same stable version that seeds the next release
 	for (const version of ["0.93.0", "0.93.1", "0.101.0", "99.0.0", "0.100.0-rc.1"]) {
 		assert.throws(
 			() => assertCurrentStableRelease(version, releases),
-			/Only the current stable release/u,
+			/Only (?:the current stable release|a published immutable candidate)/u,
 		);
 	}
 });
@@ -289,15 +292,15 @@ void test("release notes refuse boundaries they cannot place exactly", async () 
 		CHANGELOG.replace("## 0.89.0", "## 0.89.5"),
 		"0.88.0",
 		"0.89.1",
-		/"## 0\.89\.5" is not a stable release older than 0\.89\.1/u,
+		/"## 0\.89\.5" is not a release older than 0\.89\.1/u,
 	);
 	await refused(
-		CHANGELOG.replace("## 0.89.0", "## 0.89.1-rc.1"),
+		CHANGELOG.replace("## 0.89.0", "## 0.89.1-beta.1"),
 		"0.88.0",
 		"0.89.1",
-		/"## 0\.89\.1-rc\.1" is not a stable release/u,
+		/"## 0\.89\.1-beta\.1" is not a release/u,
 	);
-	await refused(CHANGELOG, "0.88.0", "0.89.1-rc.1", /must both be major\.minor\.patch/u);
+	await refused(CHANGELOG, "0.88.0", "0.89.1-beta.1", /must both be major\.minor\.patch/u);
 	await refused(CHANGELOG, "0.89.1", "0.89.1", /not newer than 0\.89\.1/u);
 });
 

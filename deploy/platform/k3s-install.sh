@@ -133,7 +133,7 @@ skipped() { case " $SKIPPED " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
 
 if [ "$VERIFY" = false ]; then
 	LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
-	matches "$VERSION" '[0-9]+\.[0-9]+\.[0-9]+' || die "--version takes a release such as 0.95.0"
+	matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?' || die "--version takes a release such as 0.95.0 or 1.0.0-rc.1"
 	matches "$HOST" "($LABEL\\.)+[a-z]$LABEL" || die "--host takes a lowercase DNS name, such as hephaestus.example.com"
 	if [ -z "$CERTIFICATES" ]; then
 		matches "$EMAIL" "[A-Za-z0-9._%+-]+@($LABEL\\.)+[a-z]$LABEL" || die "--email takes an address, such as ops@example.com"
@@ -536,11 +536,28 @@ if [ -z "$LOCK" ]; then
 	curl -fsSL --proto '=https' --retry 5 -o "$LOCK" \
 		"https://github.com/$RELEASE_REPOSITORY/releases/download/v$VERSION/release-v$VERSION.chart.json"
 fi
+bundle="$LOCK.sigstore.json"
+if [ ! -f "$bundle" ]; then
+	bundle="$TEMP/release-lock.sigstore.json"
+	curl -fsSL --proto '=https' --retry 5 -o "$bundle" \
+		"https://github.com/$RELEASE_REPOSITORY/releases/download/v$VERSION/release-v$VERSION.chart.json.sigstore.json"
+fi
+cosign verify-blob --bundle "$bundle" --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" "$LOCK" >/dev/null
+jq -e --arg release "v$VERSION" '.schemaVersion == 2 and .release == $release' "$LOCK" >/dev/null || die "the signed joint lock is not for this release"
 digest=$(jq -er .chart.digest "$LOCK")
 matches "$digest" 'sha256:[a-f0-9]{64}' || die "the joint lock names no chart digest"
+artifact_version=$(jq -er .chart.version "$LOCK")
+if [ "$artifact_version" != "$VERSION" ]; then
+	# A stable promotion retains its candidate's exact chart bytes and metadata.
+	matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)' &&
+		matches "$artifact_version" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.(0|[1-9][0-9]*)' &&
+		[ "${artifact_version%-rc.*}" = "$VERSION" ] || die "the signed chart is not this release or its same-version candidate"
+fi
+commit=$(jq -er .commit "$LOCK")
+matches "$commit" '[a-f0-9]{40}' || die "the joint lock names no source commit"
 cosign verify "$CHART_REPOSITORY@$digest" --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null
 helm pull "oci://$CHART_REPOSITORY@$digest" --untar --untardir "$TEMP/chart"
-helm show chart "$TEMP/chart/hephaestus" | grep -qx "version: $VERSION" || die "the signed chart is not the chart of $VERSION"
+helm show chart "$TEMP/chart/hephaestus" | grep -qx "version: $artifact_version" || die "the signed chart is not the chart of $artifact_version"
 rm -rf "$HERE/chart-$VERSION"
 mkdir "$HERE/chart-$VERSION"
 mv "$TEMP/chart/hephaestus" "$HERE/chart-$VERSION/hephaestus"
@@ -551,6 +568,7 @@ set -- -f "$profiles/small.yaml"
 if [ "$PROFILE_16GIB" = true ]; then set -- "$@" -f "$profiles/small-16gib.yaml"; fi
 helm upgrade --install hephaestus "$HERE/chart-$VERSION/hephaestus" -n "$NAMESPACE" \
 	"$@" -f "$HERE/k3s-values.yaml" -f "$HERE/site.yaml" \
+	--set-string "release.version=v$VERSION" --set-string "release.commit=$commit" \
 	--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
 if [ "$oauth_changed" = true ]; then
 	# A changed client secret reaches the server only at its start.

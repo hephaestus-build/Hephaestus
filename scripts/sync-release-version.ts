@@ -3,11 +3,29 @@ import path from "node:path";
 
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { migrationGuideSections, renderMigrationGuide } from "./lib/migration-guide.ts";
+import { compareVersions, parseVersion } from "./lib/release-version.ts";
 
-const version = asString(
-	asRecord(parseJson(readFileSync("package.json", "utf8")), "package.json").version,
-	"package.json version",
-);
+const manifest = asRecord(parseJson(readFileSync("package.json", "utf8")), "package.json");
+let version = asString(manifest.version, "package.json version");
+
+// Changesets starts at rc.0; the public release train numbers its first candidate rc.1.
+if (version.endsWith("-rc.0")) {
+	const original = version;
+	version = `${version.slice(0, -1)}1`;
+	const changelog = readFileSync("CHANGELOG.md", "utf8");
+	const heading = `## ${original}`;
+	const first = migrationGuideSections(changelog).find((section) =>
+		section.heading.startsWith("## "),
+	);
+	if (first?.heading !== heading) {
+		throw new Error("sync-release-version: first candidate needs its generated changelog heading");
+	}
+	writeFileSync("package.json", `${JSON.stringify({ ...manifest, version }, null, "\t")}\n`);
+	writeFileSync(
+		"CHANGELOG.md",
+		`${changelog.slice(0, first.start)}## ${version}${changelog.slice(first.start + heading.length)}`,
+	);
+}
 
 const edits = [
 	{
@@ -41,22 +59,17 @@ const fragmentFiles = existsSync(fragmentDirectory)
 	: [];
 
 const semverAtLeast = (candidate: string, reference: string): boolean => {
-	const left = candidate.split(".").map(Number);
-	const right = reference.split(".").map(Number);
-	for (let index = 0; index < 3; index += 1) {
-		if ((left[index] ?? 0) !== (right[index] ?? 0)) {
-			return (left[index] ?? 0) > (right[index] ?? 0);
-		}
-	}
-	return true;
+	const left = parseVersion(candidate);
+	const right = parseVersion(reference);
+	return left !== undefined && right !== undefined && compareVersions(left, right) >= 0;
 };
 const regionStart = pendingSection.start;
 let regionEnd = pendingSection.end;
 const unreleased: string[] = [];
 // Changesets selects the next release version; sections at or above it have not shipped.
 for (const section of sections.slice(sections.indexOf(pendingSection) + 1)) {
-	const next = /^### v(?<version>\d+\.\d+\.\d+)$/u.exec(section.heading);
-	if (!next || !semverAtLeast(next.groups?.version ?? "", version)) {
+	const next = section.heading.startsWith("### v") ? section.heading.slice(5) : "";
+	if (!semverAtLeast(next, version)) {
 		break;
 	}
 	unreleased.push(section.content);

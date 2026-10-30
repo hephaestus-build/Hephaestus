@@ -20,6 +20,7 @@ import { commitChartValues, renderChartValues } from "./kubernetes-chart.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
+import { compareVersions, parseVersion } from "./lib/release-version.ts";
 import { chartPackageName } from "./release-chart.ts";
 
 export type Stack = "proxy" | "core" | "app" | "chart";
@@ -100,7 +101,8 @@ export type Decision =
 	| { action: "noop"; reason: string }
 	| { action: "refuse"; reason: string };
 
-export const RELEASE_TAG = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
+export const RELEASE_TAG =
+	/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-rc\.(?:0|[1-9]\d*))?$/u;
 const CHANNEL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const IMAGE_KEY = /^HEPHAESTUS_IMAGE_[A-Z0-9_]+$/u;
@@ -209,21 +211,12 @@ const releaseParts = (release: string): string[] => release.slice(1).split(".");
 const releaseMajor = (release: string) => BigInt(releaseParts(release)[0] ?? "0");
 
 function compareReleases(left: string, right: string): number {
-	const leftParts = releaseParts(left);
-	const rightParts = releaseParts(right);
-	for (const [index, leftPart] of leftParts.entries()) {
-		const rightPart = rightParts[index];
-		if (rightPart === undefined) {
-			throw new Error(`invalid release ${right}`);
-		}
-		if (leftPart.length !== rightPart.length) {
-			return leftPart.length - rightPart.length;
-		}
-		if (leftPart !== rightPart) {
-			return leftPart < rightPart ? -1 : 1;
-		}
+	const from = parseVersion(left.slice(1));
+	const to = parseVersion(right.slice(1));
+	if (!from || !to) {
+		throw new Error("invalid release version");
 	}
-	return 0;
+	return compareVersions(from, to);
 }
 
 /**
