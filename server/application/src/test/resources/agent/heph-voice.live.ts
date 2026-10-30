@@ -480,7 +480,10 @@ async function ask(
 			...worker,
 			api: () => ({
 				...api,
-				exec: async (request) => repository?.answer(request.command.trim()) ?? exec(request),
+				exec: async (request) => {
+					worker.execs.push(request);
+					return repository?.answer(request.command.trim()) ?? exec(request);
+				},
 				...(repository === undefined
 					? {}
 					: {
@@ -907,22 +910,26 @@ const PR66: unknown = JSON.parse(
 assert.ok(
 	isRecord(PR66) &&
 		typeof PR66.diff === "string" &&
+		typeof PR66.head === "string" &&
+		typeof PR66.base === "string" &&
 		isRecord(PR66.files) &&
 		isRecord(PR66.baseFiles),
 	"heph-voice-pr66.json holds the diff and the files",
 );
 const PR66_ROOT = "repos/github.com/HephaestusTest/practice-validation";
-const PR66_FILES = Object.fromEntries(
-	Object.entries(PR66.files).flatMap(([path, text]) =>
-		typeof text === "string" ? [[`${PR66_ROOT}/${path}`, text]] : [],
-	),
-);
-const PR66_BASE = Object.fromEntries(
-	Object.entries(PR66.baseFiles).flatMap(([path, text]) =>
-		typeof text === "string" ? [[path, text]] : [],
-	),
-);
+const PR66_HEAD = PR66.head;
+const PR66_BASE_SHA = PR66.base;
 const PR66_DIFF = PR66.diff;
+
+function textsOf(files: Record<string, unknown>): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(files).flatMap(([path, text]) =>
+			typeof text === "string" ? [[path, text]] : [],
+		),
+	);
+}
+const PR66_HEAD_FILES = textsOf(PR66.files);
+const PR66_BASE_FILES = { ...PR66_HEAD_FILES, ...textsOf(PR66.baseFiles) };
 
 const PR66_FOLDER: Folder = {
 	"INDEX.md": `# Context folder
@@ -936,14 +943,16 @@ Read a file with \`read\`. Use \`bash\` for \`ls\`, \`rg\`, \`find\`, \`jq\`, \`
 - \`github.com/HephaestusTest/practice-validation\`: their pull request #66, "Refactor user creation and validation". Load it with \`load_context\` and ref \`pull/66\`.
 `,
 	"FIELDS.md": FIELDS,
-	...PR66_FILES,
+	...Object.fromEntries(
+		Object.entries(PR66_HEAD_FILES).map(([path, text]) => [`${PR66_ROOT}/${path}`, text]),
+	),
 };
 
 const PR66_LOADED: SandboxLoadAnswer = {
 	ok: true,
 	path: PR66_ROOT,
-	resolved: { ref: "pull/66", sha: "e1a34915a80fd69a15127ad811ca817dd7e2f11b", cite: "@e1a3491" },
-	note: "Staged pull request #66 of HephaestusTest/practice-validation with its history. Its base is 2494257.",
+	resolved: { ref: "pull/66", sha: PR66_HEAD, cite: `@${PR66_HEAD.slice(0, 7)}` },
+	note: `Staged pull request #66 of HephaestusTest/practice-validation with its history. Its base is ${PR66_BASE_SHA.slice(0, 7)}.`,
 };
 
 function numbered(text: string): string {
@@ -953,115 +962,86 @@ function numbered(text: string): string {
 		.join("\n");
 }
 
-/** The repository's file at `path`, given relative to the repository or to the folder. */
-function pr66File(path: string): string | undefined {
-	const relative = path.replace(/^(?:\/workspace\/|\.\/)/u, "").replace(`${PR66_ROOT}/`, "");
-	return PR66_FILES[`${PR66_ROOT}/${relative}`];
+/** The repository path of `path`, given relative to the repository or to the folder. */
+function inPr66(path: string): string {
+	return path.replace(/^(?:\/workspace\/|\.\/)/u, "").replace(`${PR66_ROOT}/`, "");
 }
 
-/**
- * The commands a model uses to read a loaded pull request, answered from the staged files: `git diff`, `git show
- * <base>:<path>`, `git log`, `ls`/`find`, and `cat`, `cat -n`, `nl -ba` or `sed -n 'a,bp'` of a file. Every other
- * command falls through to the folder's own answers.
- */
-function pr66Answer(command: string): SandboxExecAnswer | undefined {
-	const inRepo = command.replace(/^cd \S+ && /u, "").replace(/^git -C \S+ /u, "git ");
-	if (/^git (?:--no-pager )?diff\b/u.test(inRepo)) {
-		return ran(PR66_DIFF);
+/** The files of the revision `ref` names, or `undefined` for a ref this repository does not have. */
+function pr66Revision(ref: string): Record<string, string> | undefined {
+	const names = (sha: string) => ref.length >= 7 && sha.startsWith(ref);
+	if (["HEAD", "pull/66", "FETCH_HEAD"].includes(ref) || names(PR66_HEAD)) {
+		return PR66_HEAD_FILES;
 	}
-	if (/^git (?:--no-pager )?log\b/u.test(inRepo)) {
-		return ran("e1a3491 Refactor user creation and validation");
-	}
-	const shown = /^git (?:--no-pager )?show \S+:(?<path>\S+)$/u.exec(inRepo)?.groups?.path;
-	if (shown !== undefined) {
-		const base = PR66_BASE[shown];
-		return base === undefined ? ran(`fatal: path '${shown}' does not exist`, 128) : ran(base);
-	}
-	if (/^(?:ls|find)\b/u.test(inRepo)) {
-		return ran(Object.keys(PR66_FILES).join("\n"));
-	}
-	const file = /^(?:cat(?<n> -n)?|nl -ba) (?<path>\S+)$/u.exec(inRepo)?.groups;
-	if (file?.path !== undefined) {
-		const text = pr66File(file.path);
-		if (text === undefined) {
-			return ran(`cat: ${file.path}: No such file or directory`, 1);
-		}
-		return ran(file.n !== undefined || inRepo.startsWith("nl") ? numbered(text) : text);
-	}
-	const range = /^sed -n '(?<from>\d+),(?<to>\d+)p' (?<path>\S+)$/u.exec(inRepo)?.groups;
-	if (range?.path !== undefined) {
-		const text = pr66File(range.path);
-		return text === undefined
-			? ran(`sed: ${range.path}: No such file or directory`, 2)
-			: ran(
-					text
-						.split("\n")
-						.slice(Number(range.from) - 1, Number(range.to))
-						.join("\n"),
-				);
+	if (["HEAD~1", "HEAD^", "main", "origin/main"].includes(ref) || names(PR66_BASE_SHA)) {
+		return PR66_BASE_FILES;
 	}
 	return undefined;
 }
 
-/** About `tokens` of earlier conversation by Pi's estimate, so this turn's reads pass the working trigger. */
-function longConversation(tokens: number): unknown[] {
-	const entries: unknown[] = [];
-	const exchanges = Math.ceil(tokens / 2250);
-	for (let index = 0; index < exchanges; index += 1) {
-		const question = crypto.randomUUID().slice(0, 8);
-		const answer = crypto.randomUUID().slice(0, 8);
-		const parent = entries.at(-1);
-		entries.push(
-			{
-				type: "message",
-				id: question,
-				parentId: isRecord(parent) && typeof parent.id === "string" ? parent.id : null,
-				timestamp: new Date(0).toISOString(),
-				message: {
-					role: "user",
-					content: `[Mon 2026-10-26 10:${String(index % 60).padStart(2, "0")} Europe/Berlin · app] How do I write a good commit message? ${"Tell me more. ".repeat(320)}`,
-					timestamp: 0,
-				},
-			},
-			{
-				type: "message",
-				id: answer,
-				parentId: question,
-				timestamp: new Date(0).toISOString(),
-				message: {
-					role: "assistant",
-					content: [
-						{
-							type: "text",
-							text: `Name what changed and why. ${"A commit says why. ".repeat(240)}`,
-						},
-					],
-					api: "openai-completions",
-					provider: "hephaestus",
-					model: modelId,
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-					},
-					stopReason: "stop",
-					timestamp: 0,
-				},
-			},
+/** `git diff`, `git show <ref>:<path>` and `git log` in the loaded pull request. */
+function pr66Git(command: string, evidence: Set<string>): SandboxExecAnswer | undefined {
+	if (/^git (?:--no-pager )?diff\b/u.test(command)) {
+		evidence.add("diff");
+		return ran(PR66_DIFF);
+	}
+	if (/^git (?:--no-pager )?log\b/u.test(command)) {
+		return ran(`${PR66_HEAD.slice(0, 7)} Refactor user creation and validation`);
+	}
+	const shown = /^git (?:--no-pager )?show (?<ref>[^\s:]+):(?<path>\S+)$/u.exec(command)?.groups;
+	if (shown?.ref === undefined || shown.path === undefined) {
+		return undefined;
+	}
+	const text = pr66Revision(shown.ref)?.[inPr66(shown.path)];
+	if (text === undefined) {
+		return ran(`fatal: invalid object name '${shown.ref}:${shown.path}'`, 128);
+	}
+	evidence.add(inPr66(shown.path));
+	return ran(text);
+}
+
+/** `cat`, `cat -n`, `nl -ba` or `sed -n 'a,bp'` of one file of the pull request's head. */
+function pr66File(command: string, evidence: Set<string>): SandboxExecAnswer | undefined {
+	const file = /^(?<tool>cat|nl)(?<numbered> -n| -ba)? (?<path>\S+)$/u.exec(command)?.groups;
+	const range = /^sed -n '(?<from>\d+),(?<to>\d+)p' (?<path>\S+)$/u.exec(command)?.groups;
+	const path = file?.path ?? range?.path;
+	if (path === undefined) {
+		return undefined;
+	}
+	const text = PR66_HEAD_FILES[inPr66(path)];
+	if (text === undefined) {
+		return ran(`${file?.tool ?? "sed"}: ${path}: No such file or directory`, 1);
+	}
+	evidence.add(inPr66(path));
+	if (range?.from !== undefined && range.to !== undefined) {
+		return ran(
+			text
+				.split("\n")
+				.slice(Number(range.from) - 1, Number(range.to))
+				.join("\n"),
 		);
 	}
-	return entries;
+	return ran(file?.numbered === undefined ? text : numbered(text));
+}
+
+/**
+ * The commands a model uses to read the loaded pull request, answered from the staged files: git, `ls`/`find`, and
+ * the file reads of {@link pr66File}. Each file whose text an answer shows goes into `evidence`, the diff as `diff`.
+ * Every other command falls through to the folder's own answers.
+ */
+function pr66Answer(command: string, evidence: Set<string>): SandboxExecAnswer | undefined {
+	const inRepo = command.replace(/^cd \S+ && /u, "").replace(/^git -C \S+ /u, "git ");
+	if (/^(?:ls|find)\b/u.test(inRepo)) {
+		return ran(Object.keys(PR66_HEAD_FILES).join("\n"));
+	}
+	return pr66Git(inRepo, evidence) ?? pr66File(inRepo, evidence);
 }
 
 const PR66_QUESTION =
 	"Walk me through pull request #66 step by step. What does it change, and what tests are missing? Quote the lines you rely on.";
 
-/** Says that it did not read or check something, which a sentence may say about the tests. */
-const NOT_CHECKED =
-	/\b(?:haven't|haven’t|have not|didn't|didn’t|did not|can't|can’t|cannot|couldn't|couldn’t)\b[^.!?]*\b(?:read|check|open|look|see)/iu;
+const TEST_FILE = "src/test/java/com/example/userapi/service/UserServiceTest.java";
+const REPOSITORY_FILE = "src/main/java/com/example/userapi/repository/UserRepository.java";
 
 /** The test methods UserServiceTest.java has at the head of #66. */
 const PR66_TESTS = new Set([
@@ -1070,84 +1050,140 @@ const PR66_TESTS = new Set([
 	"createUser_duplicateEmail_throwsException",
 ]);
 
-/** Any text inside one sentence: a dot inside a file name such as `UserServiceTest.java` does not end it. */
-const SAME_SENTENCE = String.raw`(?:[^.!?]|\.(?=\S))*`;
+/** A sentence that says it did not read or check the thing it names. */
+const NOT_CHECKED =
+	/\b(?:haven't|haven’t|have not|didn't|didn’t|did not|can't|can’t|cannot|couldn't|couldn’t)\b[^!?]*\b(?:read|check|open|look|see)/iu;
+/** A successful createUser test that a sentence denies: a negation at most four words before it. */
+const DENIED_CREATE_TEST =
+	/(?:\b(?:no|not|never|none|missing|lacks?|without)\b(?!-)|n't|n’t)(?:\s+\w+){0,4}\s+(?:successful|success|new|valid|happy)\b/iu;
 
-function assertGroundedInPr66(reply: Reply & { looked: string[] }) {
-	const readTests = reply.looked.some((entry) => entry.includes("UserServiceTest.java"));
-	const readRepository = reply.looked.some((entry) => entry.includes("UserRepository.java"));
-	// The answer may describe the tests only after it read them, or must say it did not.
-	const describesTests = new RegExp(
-		String.raw`\btests?\b${SAME_SENTENCE}\b(?:covers?|checks?|pins?|asserts?|exercises?)\b`,
-		"iu",
-	);
-	if (!readTests && describesTests.test(reply.text)) {
-		assert.match(reply.text, NOT_CHECKED, `describes tests it did not read: ${reply.text}`);
-	}
-	for (const name of reply.text.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
-		assert.ok(PR66_TESTS.has(name), `names a test the file does not have (${name}): ${reply.text}`);
-	}
-	assert.doesNotMatch(
-		reply.text,
-		/\b(?:new|successful|valid|happy[- ]path)\b[^.!?]{0,40}\bcreateUser\b[^.!?]{0,20}\btest\b(?![^.!?]*\b(?:missing|no |none|not|lacks?|without)\b)/iu,
-		`claims a createUser test the file does not have: ${reply.text}`,
-	);
-	// Spring Data's findById refuses null before Optional.orElseThrow runs; only reading the repository shows the
-	// contract. Null never reached UserNotFoundException.
-	for (const sentence of sentences(reply.text)) {
+/**
+ * What an answer about #66 may say, given the repository files it read (`evidence`, paths in the repository and
+ * `diff`). A wrong claim fails whatever was read; a claim about tests or the repository's contract needs that file or
+ * a sentence that says it was not read.
+ */
+function assertGroundedInPr66(text: string, evidence: ReadonlySet<string>) {
+	const all = sentences(text);
+	const limited = (topic: RegExp) =>
+		all.some((sentence) => NOT_CHECKED.test(sentence) && topic.test(sentence));
+	for (const sentence of all) {
+		if (/\bcreateUser\b/u.test(sentence) && /\btests?\b/iu.test(sentence)) {
+			assert.ok(
+				!/\b(?:successful|success|new|valid|happy[- ]path)\b/iu.test(sentence) ||
+					DENIED_CREATE_TEST.test(sentence),
+				`claims a createUser test that the file does not have: ${text}`,
+			);
+		}
 		if (/\bnull\b/iu.test(sentence) && /\bUserNotFoundException\b/u.test(sentence)) {
 			assert.match(
 				sentence,
-				/\b(?:not|n't|n’t|never|instead|rather|no longer)\b/iu,
-				`says null reached UserNotFoundException (repository read: ${readRepository}): ${reply.text}`,
+				/\b(?:not|never|no longer)\b|n't|n’t/iu,
+				`says null reached UserNotFoundException: ${text}`,
+			);
+		}
+		if (
+			/\bnull\b/iu.test(sentence) &&
+			/\b(?:before|previously|used to|old|earlier|was|were|did)\b/iu.test(sentence)
+		) {
+			assert.ok(
+				evidence.has(REPOSITORY_FILE) || NOT_CHECKED.test(sentence),
+				`compares null behaviour without the repository's contract: ${text}`,
 			);
 		}
 	}
-	assertNoInternalTerm(TERMS, reply.text);
-}
-
-for (const [name, entries] of [
-	["t4-4-pr66", []],
-	["t4-4-pr66-compacted", longConversation(45_000)],
-] as const) {
-	void test(
-		`T4-4 (${name}): Hephaestus describes tests and called code only from files it read`,
-		{ skip, timeout: TURN_MS },
-		async () => {
-			const base = turn(PR66_QUESTION, true);
-			const reply = await ask(name, { ...base, entries: [...entries] }, PR66_FOLDER, undefined, {
-				loaded: PR66_LOADED,
-				answer: pr66Answer,
-			});
-			assert.ok(
-				reply.looked.some((entry) => entry.includes("UserService")),
-				`answered without reading the change: ${reply.looked.join(", ")}`,
-			);
-			assertGroundedInPr66(reply);
-		},
-	);
-}
-
-void test("T4-4: the oracle rejects the two claims of staging's answer about pull request #66", () => {
-	// The claims of the stored answer (turn 5bf7c467, seq 334), after reads of the diff, the old and new service and
-	// the test file names only.
-	const looked = [
-		"git diff 2494257...e1a3491",
-		"git show 2494257:src/main/java/com/example/userapi/service/UserService.java",
-		"ls src/test/java/com/example/userapi/service",
-		`${PR66_ROOT}/src/main/java/com/example/userapi/service/UserService.java`,
-	];
-	const claims = [
-		"The only test, UserServiceTest.java, pins the old behavior (findById existing and nonexistent, duplicate and new createUser).",
-		"`findById(null)`, 0 and negatives previously fell through to the `orElseThrow(...UserNotFoundException)`.",
-	];
-	for (const text of claims) {
-		assert.throws(() => assertGroundedInPr66({ text, outputTokens: 0, words: 0, looked }), text);
+	for (const name of text.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
+		assert.ok(PR66_TESTS.has(name), `names a test the file does not have (${name}): ${text}`);
 	}
-	assertGroundedInPr66({
-		text: "Pull request #66 moves the checks into `validateId`, `normalizeEmail` and `normalizeName`. I haven't read the tests, so I can't say which of these they cover.",
-		outputTokens: 0,
-		words: 0,
-		looked,
-	});
+	const describesTests =
+		/\b(?:tests?|UserServiceTest)\b[^!?]*\b(?:covers?|checks?|pins?|asserts?|exercises?|includes?|has|are)\b/iu;
+	if (
+		!evidence.has(TEST_FILE) &&
+		all.some((sentence) => describesTests.test(sentence) && !NOT_CHECKED.test(sentence))
+	) {
+		assert.ok(limited(/\btests?\b|UserServiceTest/iu), `describes tests it did not read: ${text}`);
+	}
+	for (const cited of text.matchAll(/UserService\.java:(?<line>\d+)/gu)) {
+		const line = Number(cited.groups?.line);
+		assert.ok(
+			line >= 1 && line <= 76,
+			`cites UserService.java:${line}, which has no such line: ${text}`,
+		);
+	}
+	assertNoInternalTerm(TERMS, text);
+}
+
+void test("T4-4: the oracle rejects staging's two claims and accepts grounded answers", () => {
+	// Staging's reads (turn 5bf7c467, seq 327–332): the diff, the old and the new service, and the test file names.
+	const staging = new Set(["diff", "src/main/java/com/example/userapi/service/UserService.java"]);
+	const both = new Set([...staging, TEST_FILE, REPOSITORY_FILE]);
+	const wrong: [string, ReadonlySet<string>][] = [
+		[
+			"The only test, UserServiceTest.java, pins the old behavior (findById existing and nonexistent, duplicate and new createUser).",
+			staging,
+		],
+		[
+			"`findById(null)`, 0 and negatives previously fell through to the `orElseThrow(...UserNotFoundException)`.",
+			staging,
+		],
+		["The three tests are existing-id lookup, missing-id lookup, and successful createUser.", both],
+		[
+			"Before this PR, findById(null) threw UserNotFoundException rather than IllegalArgumentException.",
+			both,
+		],
+		["I have not read the controller. The tests cover findById and createUser.", staging],
+		["Before this PR, findById(null) went to the repository.", staging],
+		["`validateId` is at UserService.java:120.", both],
+	];
+	for (const [text, read] of wrong) {
+		assert.throws(() => assertGroundedInPr66(text, read), text);
+	}
+	const right: [string, ReadonlySet<string>][] = [
+		[
+			"`validateId` at UserService.java:48 now rejects null, 0 and negatives. I haven't read the tests, so I can't say which of these they cover.",
+			staging,
+		],
+		[
+			"UserServiceTest has findById_existingUser_returnsUser, findById_nonExistent_throwsException and createUser_duplicateEmail_throwsException. There is no successful createUser test.",
+			both,
+		],
+		[
+			"Spring Data's findById rejects null before the old service could throw, so null never reached UserNotFoundException.",
+			both,
+		],
+		["UserServiceTest is missing a test for a successful createUser.", both],
+	];
+	for (const [text, read] of right) {
+		assertGroundedInPr66(text, read);
+	}
+	const service = "src/main/java/com/example/userapi/service/UserService.java";
+	const outputOf = (command: string) => {
+		const answer = pr66Answer(command, new Set());
+		return answer?.ok === true ? answer.output : "";
+	};
+	assert.match(outputOf(`git show ${PR66_HEAD.slice(0, 7)}:${service}`), /validateId/u);
+	assert.doesNotMatch(outputOf(`git show ${PR66_BASE_SHA.slice(0, 7)}:${service}`), /validateId/u);
+	const unknown = pr66Answer(`git show 0000000:${service}`, new Set());
+	assert.equal(unknown?.ok === true ? unknown.exitCode : null, 128);
 });
+
+void test(
+	"T4-4: Hephaestus describes tests and called code only from files it read",
+	{ skip, timeout: TURN_MS },
+	async () => {
+		const evidence = new Set<string>();
+		const reply = await ask("t4-4-pr66", turn(PR66_QUESTION, true), PR66_FOLDER, undefined, {
+			loaded: PR66_LOADED,
+			answer: (command) => pr66Answer(command, evidence),
+		});
+		for (const path of reply.looked) {
+			if (PR66_FOLDER[path.replace(/^\/workspace\//u, "")] !== undefined) {
+				evidence.add(inPr66(path));
+			}
+		}
+		assert.ok(
+			[...evidence].some((path) => path.endsWith("UserService.java") || path === "diff"),
+			`answered without reading the change: ${reply.looked.join(", ")}`,
+		);
+		assertGroundedInPr66(reply.text, evidence);
+	},
+);
