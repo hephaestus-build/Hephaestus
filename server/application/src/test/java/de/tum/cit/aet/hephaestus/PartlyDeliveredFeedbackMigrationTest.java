@@ -193,8 +193,7 @@ class PartlyDeliveredFeedbackMigrationTest {
         connection.commit();
     }
 
-    private static void piece(
-            SchemaRowSeeder rows, UUID id, String state, String first, String second, String send) {
+    private static void piece(SchemaRowSeeder rows, UUID id, String state, String first, String second, String send) {
         var feedback = new LinkedHashMap<String, Object>();
         feedback.put("id", id);
         feedback.put("workspace_id", 993L);
