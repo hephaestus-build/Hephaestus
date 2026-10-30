@@ -3,6 +3,7 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import type { WorkspaceListItem } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { hasText } from "@/lib/text";
@@ -70,10 +71,12 @@ describe("instance-admin route gate", () => {
 	});
 });
 
-async function titleOf(url: string) {
+async function titleOf(url: string, providerType: WorkspaceListItem["providerType"] = "GITHUB") {
 	mockAppRole("APP_ADMIN");
 	server.use(
-		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("hephaestus")])),
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("hephaestus", { providerType })]),
+		),
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
 		),
@@ -94,5 +97,24 @@ describe("admin tab titles", () => {
 		["/w/hephaestus/admin/usage", "AI usage · Admin · Hephaestus"],
 	])("distinguishes %s in the tab title", async (url, title) => {
 		await expect(titleOf(url)).resolves.toBe(title);
+	});
+});
+
+/** A tab title repeats the name of the link that opened the page (WCAG 2.2 SC 2.4.2). */
+describe("tab titles name the page the link opened", () => {
+	it.each([
+		["/admin", "Instance overview · Instance administration · Hephaestus"],
+		["/w/hephaestus/admin/practices", "Practice setup · Admin · Hephaestus"],
+		["/w/hephaestus/admin/practices/releases", "Catalog updates · Admin · Hephaestus"],
+		["/w/hephaestus/admin/integrations/scm", "GitHub · Admin · Hephaestus"],
+		["/w/hephaestus/onboarding", "Your AI choice · Hephaestus"],
+	])("titles %s", async (url, title) => {
+		await expect(titleOf(url)).resolves.toBe(title);
+	});
+
+	it("names GitLab on a GitLab workspace's source-control page", async () => {
+		await expect(titleOf("/w/hephaestus/admin/integrations/scm", "GITLAB")).resolves.toBe(
+			"GitLab · Admin · Hephaestus",
+		);
 	});
 });

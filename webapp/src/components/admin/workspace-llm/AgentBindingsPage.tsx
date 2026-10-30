@@ -494,7 +494,7 @@ function PurposeGroups({
 			search={{ section: "automated-review" }}
 			className="underline underline-offset-4"
 		>
-			Open Review: Automated review
+			Open Review settings
 		</Link>
 	);
 	const off = !props.practicesEnabled;

@@ -236,7 +236,7 @@ function PracticeSetupLevel({ queryKey, query, children }: PracticeSetupLevelPro
 }
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/")({
-	head: workspaceAdminHead("Practices"),
+	head: workspaceAdminHead("Practice setup"),
 	validateSearch: practiceSetupSearchSchema,
 	search: { middlewares: [retainSearchParams(PRACTICE_SEARCH_PARAMS)] },
 	component: PracticeCatalogRoute,
@@ -805,7 +805,7 @@ function PracticeCatalogRoute() {
 							<Link to="/w/$workspaceSlug/admin/practices/releases" params={{ workspaceSlug }} />
 						}
 					>
-						<Inbox /> Review updates{releasesQuery.data ? ` (${releasesQuery.data.length})` : ""}
+						<Inbox /> Catalog updates{releasesQuery.data ? ` (${releasesQuery.data.length})` : ""}
 					</Button>
 				}
 				description={

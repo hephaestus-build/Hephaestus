@@ -17,11 +17,21 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useScmIntegration } from "@/hooks/use-scm-integration";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { getProviderTerms, toScmProviderType } from "@/lib/provider/provider-terms";
 
 const SCM_ICONS = { GITHUB: GitHubIcon, GITLAB: GitLabIcon };
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/scm")({
-	head: workspaceAdminHead("Source control"),
+	// The tab carries the provider's name, as the sidebar link and the page heading do.
+	head: ({ match }) => {
+		const provider =
+			match.context.workspace?.providerType ?? match.context.administrationWorkspace?.kind;
+		return workspaceAdminHead(
+			provider === undefined
+				? "Source control"
+				: getProviderTerms(toScmProviderType(provider)).displayName,
+		)();
+	},
 	remountDeps: ({ params }) => params.workspaceSlug,
 	component: ScmIntegrationPage,
 });
