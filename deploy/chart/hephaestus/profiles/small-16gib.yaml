@@ -1,21 +1,13 @@
 # One node of 16 GiB, on top of small.yaml: --values profiles/small.yaml --values profiles/small-16gib.yaml.
-# Sandboxes keep their full size. The worker stops before its replacement starts, so each upgrade is a
-# planned outage of reviews and Heph. docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart
-# test checks that the steady state and an upgrade fit the node.
+# docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart test checks that the steady state and an
+# upgrade fit the node.
+worker:
+  # The worker stops before its replacement starts, so each upgrade is a planned outage of reviews and conversations.
+  # 16 GiB cannot hold a second worker beside its conversation host and turn pool.
+  rolloutStrategy: Recreate
+  # An upgrade waits for the drain, so the outage stays short.
+  drainTimeoutSeconds: 600
 nats:
   # JetStream's caches grow above the request, up to the limit of small.yaml.
   resources:
     requests: { memory: 512Mi }
-worker:
-  rolloutStrategy: Recreate
-  # An upgrade waits for the drain, so the outage stays short.
-  drainTimeoutSeconds: 600
-  hephTurns: 1
-  sandbox:
-    # One worker's sandboxes, by memory limit: one review (1280 MiB), the Heph host (1 GiB), the turn
-    # sandboxes of the pool and of the running turn (3 x 544 MiB), and the isolation probe (768 MiB).
-    quota:
-      enabled: true
-      pods: 10
-      cpu: "8"
-      memory: 9728Mi

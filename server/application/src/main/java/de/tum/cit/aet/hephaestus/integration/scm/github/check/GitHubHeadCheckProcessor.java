@@ -43,7 +43,8 @@ public class GitHubHeadCheckProcessor {
 
     /**
      * A completed suite's conclusion, or its status while it runs, as one {@link CheckState}. A
-     * suite that ended {@code neutral}, {@code skipped} or {@code stale} said nothing about the head.
+     * suite that ended {@code neutral}, {@code skipped} or {@code stale} said nothing about the head. A suite that ended
+     * {@code action_required} waits for a maintainer to approve its workflows, so its checks have not run yet.
      */
     public static @Nullable CheckState fromCheckSuite(@Nullable String status, @Nullable String conclusion) {
         if (conclusion == null || conclusion.isBlank()) {
@@ -51,7 +52,8 @@ public class GitHubHeadCheckProcessor {
         }
         return switch (conclusion.toLowerCase(Locale.ROOT)) {
             case "success" -> CheckState.SUCCESS;
-            case "failure", "timed_out", "action_required", "startup_failure" -> CheckState.FAILURE;
+            case "failure", "timed_out", "startup_failure" -> CheckState.FAILURE;
+            case "action_required" -> CheckState.PENDING;
             case "cancelled" -> CheckState.CANCELLED;
             default -> null;
         };

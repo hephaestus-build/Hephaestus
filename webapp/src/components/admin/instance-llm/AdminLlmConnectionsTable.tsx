@@ -250,8 +250,8 @@ export function AdminLlmConnectionsTable({
 					<>
 						This immediately stops requests through{" "}
 						{modelsOn(connection) === 1 ? "the model" : `all ${modelsOn(connection)} models`} on
-						this connection. Practice reviews and Heph cannot run on them until you turn the
-						connection back on, or until each workspace picks another model.
+						this connection. Practice reviews and conversations cannot run on them until you turn
+						the connection back on, or until each workspace picks another model.
 					</>
 				)}
 				confirmLabel="Turn off connection"

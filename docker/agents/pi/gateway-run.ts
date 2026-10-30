@@ -169,7 +169,7 @@ export interface SessionSummary {
 }
 
 /**
- * The patched OpenAI chat-completions and Responses adapters' failure and call diagnostics
+ * The patched chat adapters' failure and call diagnostics
  * (patches/@earendil-works__pi-ai@1.0.0.patch). The runner reads the same contract in its own tree
  * (server/application/src/main/resources/agent/pi-model-failure.ts): this image and that staged runner are delivered
  * separately, so neither can import the other.
@@ -195,8 +195,16 @@ const MODEL_FAILURE_KINDS = new Set([
 	"ABORTED",
 	"UNKNOWN",
 ]);
-const FAILURE_DIAGNOSTICS = ["openai_completions_failure", "openai_responses_failure"];
-const CALL_DIAGNOSTICS = ["openai_completions_call", "openai_responses_call"];
+const FAILURE_DIAGNOSTICS = [
+	"openai_completions_failure",
+	"openai_responses_failure",
+	"anthropic_messages_failure",
+];
+const CALL_DIAGNOSTICS = [
+	"openai_completions_call",
+	"openai_responses_call",
+	"anthropic_messages_call",
+];
 const MAX_EPOCH_MS = 8_640_000_000_000_000;
 
 /** A failed message's own diagnostic as closed values; anything malformed is UNKNOWN and claims nothing more. */

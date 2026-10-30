@@ -31,7 +31,7 @@ public class SlackHephaestusUiLinks {
         if (webappUrl.isBlank()) {
             return "";
         }
-        return subdomains.address(workspaceSlug, webappUrl) + "/mentor?entry=" + entryId;
+        return subdomains.address(workspaceSlug, webappUrl) + "/conversation?entry=" + entryId;
     }
 
     private static String normalize(String url) {

@@ -385,7 +385,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                     ? Set.of(core, IssueContentSource.COMMENTS)
                     : Set.of(core);
             var captured = sources.capture(
-                    snapshot, new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, selected, "2.0.0", 3));
+                    snapshot, new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, selected, "3.0.0", 3));
             if (snapshot.item().kind().equals(ScmItemEvents.ISSUE)) {
                 var discussion = new JsonMapper().readTree(captured.files().get("context/comments.json"));
                 assertThat(discussion).hasSize(2);
@@ -413,7 +413,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         var linked = sources.capture(
                 pullSnapshot,
                 new CaptureRequest(
-                        UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(LinkedWorkItemContentSource.KIND), "2.0.0", 3));
+                        UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(LinkedWorkItemContentSource.KIND), "3.0.0", 3));
         var linkedWords = Objects.requireNonNull(linked.files().get("context/linked_work_items/7.md"));
         assertThat(new String(linkedWords, StandardCharsets.UTF_8)).contains("An issue", "Issue body");
         assertThat(linked.citableTexts())
@@ -528,7 +528,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                                     UUID.randomUUID(),
                                     1,
                                     Set.of(RepositoryTreeContentSource.KIND),
-                                    "2.0.0",
+                                    "3.0.0",
                                     3)))
                     .isInstanceOfSatisfying(
                             ItemCaptureException.class,
@@ -804,7 +804,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> sources.capture(
                         originalSnapshot,
                         new CaptureRequest(
-                                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(IssueContentSource.CORE), "2.0.0", 3)))
+                                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(IssueContentSource.CORE), "3.0.0", 3)))
                 .isInstanceOfSatisfying(
                         ItemCaptureException.class,
                         refusal -> assertThat(refusal.code()).isEqualTo(ItemCaptureCode.VERSION_UNAVAILABLE));
@@ -930,7 +930,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         var captured = sources.capture(
                 snapshot,
                 new CaptureRequest(
-                        UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(IssueContentSource.CORE), "2.0.0", 3));
+                        UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(IssueContentSource.CORE), "3.0.0", 3));
         var metadata = new JsonMapper().readTree(captured.files().get("context/metadata.json"));
         assertThat(metadata.get("sub_issues_source").asString()).isEqualTo("children");
         assertThat(metadata.get("sub_issues_total").asLong()).isEqualTo(1);
@@ -1475,7 +1475,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
                 new ItemRegistration(holder.workspaceId(), ScmItemEvents.PULL_REQUEST, pullId, holder.itemId(), null));
         var pinned = sources.pin(item, null);
         var request = new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(PullRequestContentSource.CORE), "2.0.0", 3);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(PullRequestContentSource.CORE), "3.0.0", 3);
 
         var before = Instant.now();
         var captured = sources.capture(pinned, request);

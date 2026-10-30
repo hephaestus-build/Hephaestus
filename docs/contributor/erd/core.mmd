@@ -233,12 +233,6 @@ erDiagram
         VARCHAR(128) version "NOT NULL"
     }
 
-    WorkerTokenDenylist {
-        VARCHAR(64) jti PK
-        TIMESTAMPTZ revoked_at "NOT NULL"
-        TIMESTAMPTZ expires_at "NOT NULL"
-    }
-
     IdentityProvider["IdentityProvider · Integration"]
     User["User · Integration"]
     Workspace["Workspace · Workspace (Tenancy)"]

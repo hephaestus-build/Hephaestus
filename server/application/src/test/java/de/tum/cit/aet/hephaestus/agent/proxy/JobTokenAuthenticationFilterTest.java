@@ -8,14 +8,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -40,7 +39,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
-    private final WorkerJwtVerifier verifier = mock(WorkerJwtVerifier.class);
+    private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final JobTokenAuthenticationFilter filter =
             new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier, "worker-1");
 
@@ -77,7 +76,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
         var turn = leased(jwt);
-        when(turns.findByIdAndWorkspaceId(jwt.turnId(), jwt.workspaceId())).thenReturn(Optional.of(turn));
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(turn));
         var principal = new AtomicReference<Authentication>();
         var response = new MockHttpServletResponse();
         filter.doFilter(
@@ -88,22 +87,21 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         assertThat(response.getStatus()).isEqualTo(200);
         var authenticated = (JobTokenAuthentication) principal.get();
         assertThat(authenticated.getPrincipal().turn()).isEqualTo(jwt);
-        assertThat(authenticated.getPrincipal().description()).isEqualTo("mentor-turn:" + jwt.turnId());
+        assertThat(authenticated.getPrincipal().description()).isEqualTo("mentor-turn:" + jwt.id());
         assertThat(authenticated.getDetails()).isEqualTo(jwt);
         verifyNoInteractions(jobs);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"attempt", "worker", "conversation", "released"})
+    @ValueSource(strings = {"attempt", "worker", "released"})
     void turnModelCallOfAnAttemptThatLostItsLeaseGetsConflict(String mismatch) throws Exception {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
         var turn = leased(jwt);
         if (mismatch.equals("attempt")) when(turn.getAttempt()).thenReturn(jwt.attempt() + 1);
         if (mismatch.equals("worker")) when(turn.getWorkerId()).thenReturn("other-worker");
-        if (mismatch.equals("conversation")) when(turn.getConversationId()).thenReturn(UUID.randomUUID());
         if (mismatch.equals("released")) when(turn.isLeased()).thenReturn(false);
-        when(turns.findByIdAndWorkspaceId(jwt.turnId(), jwt.workspaceId())).thenReturn(Optional.of(turn));
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(turn));
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Lost attempt served");
@@ -112,10 +110,38 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @Test
+    void reviewTokenNamingATurnIsUnauthorized() throws Exception {
+        // One token type for both kinds: the kind decides which rows the id may name.
+        var jwt = jwt(UUID.randomUUID(), 7L, 2);
+        when(verifier.verify("valid-token")).thenReturn(jwt);
+        when(jobs.findById(jwt.id())).thenReturn(Optional.empty());
+        var response = new MockHttpServletResponse();
+        filter.doFilter(request("/internal/llm/responses", "Bearer valid-token"), response, (incoming, outgoing) -> {
+            throw new AssertionError("A review token served as a turn");
+        });
+        assertThat(response.getStatus()).isEqualTo(401);
+        verifyNoInteractions(turns);
+    }
+
+    @Test
+    void turnTokenNamingAReviewJobIsUnauthorized() throws Exception {
+        var job = running();
+        var jwt = turnJwt(job.getId(), job.getWorkspaceId());
+        when(verifier.verify("turn-token")).thenReturn(jwt);
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.empty());
+        var response = new MockHttpServletResponse();
+        filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, (incoming, outgoing) -> {
+            throw new AssertionError("A turn token served as a review");
+        });
+        assertThat(response.getStatus()).isEqualTo(401);
+        verifyNoInteractions(jobs);
+    }
+
+    @Test
     void turnModelCallOfAnUnknownTurnIsUnauthorized() throws Exception {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
-        when(turns.findByIdAndWorkspaceId(jwt.turnId(), jwt.workspaceId())).thenReturn(Optional.empty());
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.empty());
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Unknown turn served");
@@ -130,7 +156,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var served = new AtomicBoolean();
         var response = new MockHttpServletResponse();
         filter.doFilter(
-                request("/internal/llm/turn/" + jwt.turnId() + "/end", "Bearer turn-token"),
+                request("/internal/llm/turn/" + jwt.id() + "/end", "Bearer turn-token"),
                 response,
                 (incoming, outgoing) -> served.set(true));
         assertThat(response.getStatus()).isEqualTo(200);
@@ -145,8 +171,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         when(verifier.verify("turn-token")).thenReturn(jwt);
         var path = switch (target) {
             case "other-turn" -> "/internal/llm/turn/" + UUID.randomUUID() + "/end";
-            case "runtime" -> "/internal/llm/runtime/" + jwt.turnId();
-            default -> "/internal/llm/runtime/" + jwt.turnId() + "/commands";
+            case "runtime" -> "/internal/llm/runtime/" + jwt.id();
+            default -> "/internal/llm/runtime/" + jwt.id() + "/commands";
         };
         var response = new MockHttpServletResponse();
         filter.doFilter(request(path, "Bearer turn-token"), response, (incoming, outgoing) -> {
@@ -176,7 +202,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @Test
     void hostSessionTokenReachesOnlyItsOwnRuntimeReadsAndCommandChannel() throws Exception {
         UUID host = UUID.randomUUID();
-        when(verifier.verify("session-token")).thenThrow(new WorkerJwtInvalidException("not signed", "malformed"));
+        when(verifier.verify("session-token")).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
         when(sessions.unsignedSessionFor("session-token"))
                 .thenReturn(Optional.of(
                         new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));
@@ -223,28 +249,23 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         }
     }
 
-    private static TurnJwt turnJwt() {
+    private static AttemptJwt turnJwt() {
+        return turnJwt(UUID.randomUUID(), 7L);
+    }
+
+    private static AttemptJwt turnJwt(UUID id, long workspace) {
         var now = Instant.now();
-        return new TurnJwt(
-                UUID.randomUUID(),
-                7L,
-                11L,
-                UUID.randomUUID(),
-                2,
-                Set.of("llm_proxy"),
-                UUID.randomUUID().toString(),
-                now,
-                now.plusSeconds(60));
+        return new AttemptJwt(
+                AttemptJwt.Kind.TURN, id, workspace, 2, Set.of("llm_proxy"), "jti", now, now.plusSeconds(60), null);
     }
 
     /** The turn row as this worker's attempt holds it. */
-    private static MentorTurn leased(TurnJwt jwt) {
+    private static MentorTurn leased(AttemptJwt jwt) {
         var turn = mock(MentorTurn.class);
         // The check stops at the first mismatch, so a case reads only some of these.
         lenient().when(turn.isLeased()).thenReturn(true);
         lenient().when(turn.getAttempt()).thenReturn(jwt.attempt());
         lenient().when(turn.getWorkerId()).thenReturn("worker-1");
-        lenient().when(turn.getConversationId()).thenReturn(jwt.conversationId());
         return turn;
     }
 
@@ -352,9 +373,10 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         return job;
     }
 
-    private static JobJwt jwt(UUID id, long workspace, int attempt) {
+    private static AttemptJwt jwt(UUID id, long workspace, int attempt) {
         var now = Instant.now();
-        return new JobJwt(
+        return new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
                 id,
                 workspace,
                 attempt,

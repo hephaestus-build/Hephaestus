@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Persistence for the self-reported worker liveness registry: written by {@link WorkerLivenessReporter},
- * read by the orphan-recovery sweep to find jobs whose owning worker has gone stale.
+ * read for the count of live workers and by the cleanup of a stopped worker's Heph sandboxes.
  */
 @Repository
 @WorkspaceAgnostic("Fleet-wide worker coordination; not workspace-scoped.")
@@ -32,7 +32,7 @@ public interface WorkerRegistryRepository extends JpaRepository<WorkerRegistry, 
 
     /**
      * Delete registrations whose heartbeat is older than {@code ttlSeconds} on the DB clock. The caller
-     * must pass a TTL well above the orphan lease, so any job the worker owned is already requeued.
+     * must pass a TTL well above the heartbeat interval, so that no live worker loses its row.
      *
      * @return number of rows deleted
      */

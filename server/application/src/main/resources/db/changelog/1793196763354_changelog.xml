@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793196763354-1" author="hephaestus">
+        <comment>Move current practice definitions and catalog comparison bases to the one source contract accepted by the runtime. Preserve historical versions and custom criteria and scripts.</comment>
+        <sqlFile path="source-contract-3.sql" relativeToChangelogFile="true" splitStatements="false"/>
+        <rollback><stop>Restore the verified pre-upgrade backup and matching release to reverse the source contract cutover.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

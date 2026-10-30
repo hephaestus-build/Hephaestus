@@ -182,7 +182,7 @@ public abstract class AbstractFeedbackIntegrationTest extends AbstractWorkspaceI
                     """
                     {"name":"Regression tests","criteria":"Cover failures.","about":"AUTHOR",
                      "reviewOn":{"events":["scm.pull_request.updated"],"state":{}},"appliesWhen":null,
-                     "reads":{"contract":"2.0.0","sources":[{"source":"scm.pull-request.core","need":"COMPLETE"}]},
+                     "reads":{"contract":"3.0.0","sources":[{"source":"scm.pull-request.core","need":"COMPLETE"}]},
                      "reviewedBy":{"by":"HEPHAESTUS","humanReason":null,"limits":[]},
                      "script":null,"scan":null,"lineNotes":false,
                      "guidance":{"whyItMatters":null,"whatGoodLooksLike":null,"goingWell":null,"visual":null,"guide":null}}

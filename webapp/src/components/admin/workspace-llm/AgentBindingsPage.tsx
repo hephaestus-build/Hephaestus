@@ -81,7 +81,7 @@ interface PurposeGroup {
 }
 
 const REVIEWS_GROUP: PurposeGroup = {
-	title: "Reviews and Heph",
+	title: "Reviews and conversations",
 	rule: "A member who chooses Cloud gets the Cloud assignment when it is ready, and the In-house one when it is not. A member who chooses In-house gets only the In-house assignment.",
 	purposes: AGENT_PURPOSES.filter((purpose) => !isPracticeScriptPurpose(purpose)),
 };
@@ -198,7 +198,7 @@ export function AgentBindingsPage({
 			<PageHeader
 				icon={<BrainCircuit />}
 				title="AI models"
-				description="Choose the models that run practice reviews and Heph."
+				description="Choose the models that run practice reviews and conversations."
 			/>
 
 			<div className="space-y-8">

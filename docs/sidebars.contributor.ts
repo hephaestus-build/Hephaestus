@@ -21,6 +21,7 @@ const sidebars: SidebarsConfig = {
 					items: [
 						"e2e-testing",
 						"security-mutation-testing",
+						"sandbox-footprint",
 						{
 							type: "category",
 							label: "Accessibility audit",

@@ -57,7 +57,7 @@ it("opens the viewed member's conversation read-only, without a live stream", as
 	});
 	server.use(...conversation.handlers());
 
-	renderRouteAt(`/w/engineering/mentor?thread=${question.id}`, queryClient);
+	renderRouteAt(`/w/engineering/conversation?thread=${question.id}`, queryClient);
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
 	await screen.findByText("Which pull request?");
 	const viewedUsers = requests
@@ -68,16 +68,19 @@ it("opens the viewed member's conversation read-only, without a live stream", as
 	expect(screen.getAllByRole("button", { name: /^Copy message \(/u }).length).toBeGreaterThan(0);
 	expect(screen.queryByRole("button", { name: /^Helpful/u })).toBeNull();
 	expect(screen.queryByRole("button", { name: /^Delete message/u })).toBeNull();
-	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
+	expect(screen.queryByRole("heading", { name: "Ask Hephaestus is off for you" })).toBeNull();
 	expect(FakeEventSource.instances).toHaveLength(0);
 });
 
 it("says that a viewed member with no conversation has no messages, and whose they would be", async () => {
 	server.use(...new MentorFake("engineering").handlers());
 
-	renderRouteAt("/w/engineering/mentor", queryClient);
+	renderRouteAt("/w/engineering/conversation", queryClient);
 	await screen.findByText("No messages yet", {}, ROUTE_RENDER_WAIT);
-	screen.getByText("Questions Alex asks Heph, here or in Slack, show up with Heph’s answers.");
+	expect(screen.queryByRole("heading", { name: "Conversation", level: 1 })).not.toBeNull();
+	screen.getByText(
+		"Questions Alex asks Hephaestus, here or in Slack, show up with Hephaestus’s answers.",
+	);
 	// The greeting invites the reader to ask, which a view cannot.
 	expect(screen.queryByRole("textbox")).toBeNull();
 });
@@ -88,7 +91,7 @@ const stepUpRequired = () =>
 it("asks for a recent sign-in when a viewed read is refused for it", async () => {
 	server.use(http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired));
 
-	renderRouteAt("/w/engineering/mentor", queryClient);
+	renderRouteAt("/w/engineering/conversation", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
 });
 
@@ -97,7 +100,7 @@ it("asks again when a later read is refused after the first prompt was dismissed
 		http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired),
 		http.get("*/workspaces/:workspaceSlug/mentor/entries", stepUpRequired),
 	);
-	renderRouteAt("/w/engineering/mentor", queryClient);
+	renderRouteAt("/w/engineering/conversation", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
 	await userEvent.keyboard("{Escape}");
 	await waitFor(() => expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull());

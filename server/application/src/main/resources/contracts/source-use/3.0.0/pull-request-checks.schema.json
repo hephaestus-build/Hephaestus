@@ -1,0 +1,99 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://hephaestus.aet.cit.tum.de/contracts/item-source/3.0.0/pull-request-checks.schema.json",
+	"title": "Pull request checks record",
+	"description": "CI evidence for one reviewed head, independently selectable from the work record.",
+	"type": "object",
+	"properties": {
+		"basis": {
+			"type": "object",
+			"properties": {
+				"admission_fields": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"admitted_at": {
+					"type": "string"
+				},
+				"other_fields": {
+					"type": "string"
+				},
+				"captured_at": {
+					"type": "string"
+				},
+				"observed_at": {
+					"type": "string"
+				},
+				"mirror_synced_at": {
+					"type": "string"
+				}
+			},
+			"required": ["other_fields"],
+			"description": "The time each observation describes."
+		},
+		"commit_sha": {
+			"type": "string",
+			"pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+			"description": "The reviewed head commit."
+		},
+		"head_checks": {
+			"enum": ["SUCCESS", "FAILURE", "PENDING", "CANCELLED", "NONE", "NO_PIPELINE", "SKIPPED"],
+			"description": "The provider check state for this head, when observed."
+		},
+		"head_check_runs": {
+			"type": "object",
+			"required": ["complete", "observed_at", "runs"],
+			"properties": {
+				"complete": {
+					"type": "boolean"
+				},
+				"limitation": {
+					"type": "string",
+					"enum": ["AWAITING_APPROVAL"]
+				},
+				"observed_at": {
+					"type": "string"
+				},
+				"runs": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["name", "state", "finished"],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"group": {
+								"type": "string"
+							},
+							"state": {
+								"type": "string"
+							},
+							"finished": {
+								"type": "boolean"
+							},
+							"url": {
+								"type": "string"
+							},
+							"started_at": {
+								"type": "string"
+							},
+							"finished_at": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			},
+			"description": "The observed runs of this head. Missing means not observed. Unfinished runs establish no result."
+		},
+		"merge_state_status": {
+			"type": "string",
+			"description": "The provider merge state for this head, when observed."
+		}
+	},
+	"required": ["basis", "commit_sha"],
+	"additionalProperties": false
+}

@@ -67,6 +67,14 @@ export function tcpPort(value: string): string {
 	return value;
 }
 
+/** The management listener binds to the Compose network, never an automatically joined sandbox network. */
+export function managementNetwork(networks: readonly string[]): string {
+	if (!networks.includes("shared-network")) {
+		throw new Error("application-worker is not on the shared-network management network");
+	}
+	return "shared-network";
+}
+
 const composeArguments = process.argv.slice(2);
 
 function container(service: string): string {
@@ -161,16 +169,16 @@ if (import.meta.main) {
 	const worker = container("application-worker");
 	const gatewayPort = workerGatewayPort(worker);
 	const image = docker("inspect", "--format", "{{.Config.Image}}", container("volume-init"));
-	const stackNetwork = docker(
-		"inspect",
-		"--format",
-		"{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}",
-		worker,
-	)
-		.split(/\s+/u)
-		.find(Boolean);
-	const [workerAddress] = stackNetwork === undefined ? [] : addresses(worker, stackNetwork);
-	if (stackNetwork === undefined || workerAddress === undefined) {
+	const stackNetwork = managementNetwork(
+		docker(
+			"inspect",
+			"--format",
+			"{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}",
+			worker,
+		).split(/\s+/u),
+	);
+	const [workerAddress] = addresses(worker, stackNetwork);
+	if (workerAddress === undefined) {
 		throw new Error("application-worker is on no network");
 	}
 	await waitForVerifiedAgentImage(stackNetwork, workerAddress, image);

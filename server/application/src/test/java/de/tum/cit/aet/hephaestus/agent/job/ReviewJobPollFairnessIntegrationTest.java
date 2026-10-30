@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -9,6 +12,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -19,7 +24,9 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -72,6 +80,76 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
                 LlmCatalogTestFixtures.model(connection, "poll-fairness-model", "gpt-poll-fairness"));
     }
 
+    @Autowired
+    private ApplicationContext context;
+
+    @Test
+    void shouldPollAnotherEndpointWhenTheCurrentPollExcludesAnUnavailablePool() {
+        var blockedWorkspace = activeWorkspace("endpoint-blocked");
+        var openWorkspace = activeWorkspace("endpoint-open");
+        binding(blockedWorkspace, 10);
+        binding(openWorkspace, 10);
+        var pools = context.getBean(LlmCallPoolRepository.class);
+        var blocked = new LlmCallPool();
+        blocked.setSlug("blocked-" + UUID.randomUUID());
+        blocked.setDisplayName("Unavailable endpoint");
+        blocked.setMaxConcurrentCalls(2);
+        blocked.setNoCallBefore(Instant.now().plusSeconds(60));
+        blocked = pools.saveAndFlush(blocked);
+        instanceModel.setCallPoolId(blocked.getId());
+        llmModelRepository.saveAndFlush(instanceModel);
+        Instant old = Instant.now().minusSeconds(3600);
+        UUID first = null;
+        for (int i = 0; i < 5; i++) {
+            UUID id = queuedJob(blockedWorkspace, old.plusSeconds(i));
+            if (first == null) first = id;
+            var snapshot = objectMapper.createObjectNode();
+            snapshot.putObject("model")
+                    .put("connectionScope", "INSTANCE")
+                    .put("modelId", instanceModel.getId())
+                    .put("connectionId", instanceModel.getConnection().getId());
+            jdbc.update("UPDATE review_job SET config_snapshot=CAST(? AS jsonb) WHERE id=?", snapshot.toString(), id);
+        }
+        var openPool = new LlmCallPool();
+        openPool.setSlug("open-" + UUID.randomUUID());
+        openPool.setDisplayName("Available endpoint");
+        openPool.setMaxConcurrentCalls(2);
+        openPool = pools.saveAndFlush(openPool);
+        var openConnection = llmConnectionRepository.saveAndFlush(LlmCatalogTestFixtures.connection("open-endpoint"));
+        var openModel = LlmCatalogTestFixtures.model(openConnection, "open-model", "open-upstream");
+        openModel.setCallPoolId(openPool.getId());
+        openModel = llmModelRepository.saveAndFlush(openModel);
+        var openBinding = bindingRepository
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        openWorkspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
+                .orElseThrow();
+        openBinding.setInstanceModel(openModel);
+        bindingRepository.saveAndFlush(openBinding);
+        UUID runnable = queuedJob(openWorkspace, old.plusSeconds(100));
+        var openSnapshot = objectMapper.createObjectNode();
+        openSnapshot
+                .putObject("model")
+                .put("connectionScope", "INSTANCE")
+                .put("modelId", openModel.getId())
+                .put("connectionId", openConnection.getId());
+        jdbc.update(
+                "UPDATE review_job SET config_snapshot=CAST(? AS jsonb) WHERE id=?", openSnapshot.toString(), runnable);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "new-worker");
+        long blockedId = blocked.getId();
+        UUID oldest = Objects.requireNonNull(first);
+        var candidates = transactionTemplate.execute(status -> {
+            assertThat(capacity.reserve(
+                                    blockedId,
+                                    LlmCallClass.REQUEST,
+                                    new LlmCallPermits.Caller(blockedWorkspace.getId(), oldest, 0, null))
+                            .granted())
+                    .isFalse();
+            return jobRepository.findQueuedIdsStartedFirst(1, Set.of(blockedId), Set.of());
+        });
+        assertThat(candidates).containsExactly(runnable);
+        assertThat(jobRepository.findById(oldest).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+    }
+
     @Test
     @DisplayName("a saturated (workspace, purpose)'s older QUEUED backlog does not starve a younger, runnable job from"
             + " another workspace")
@@ -92,7 +170,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         // oldest-first LIMIT 5 query would never even fetch it.
         UUID youngerRunnableJobId = queuedJob(openWs, base.plusSeconds(100));
 
-        List<UUID> candidates = jobRepository.findQueuedIdsOldestFirst(5);
+        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(5);
 
         assertThat(candidates)
                 .as("the open workspace's runnable job must be a poll candidate even though 5 older, unclaimable "
@@ -108,7 +186,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         runningJob(cappedWs);
         UUID queuedOnCapped = queuedJob(cappedWs, Instant.now());
 
-        List<UUID> candidates = jobRepository.findQueuedIdsOldestFirst(10);
+        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(10);
 
         assertThat(candidates).doesNotContain(queuedOnCapped);
     }
@@ -122,7 +200,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         // authoritative gate that will reject an unbound job — it must not silently starve siblings here).
         UUID jobId = queuedJob(ws, Instant.now());
 
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10)).contains(jobId);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).contains(jobId);
     }
 
     @ParameterizedTest
@@ -133,7 +211,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         binding(ws, DataHandlingTier.UNDECLARED, 1, otherSlotEnabled);
         UUID jobId = queuedJob(ws, Instant.now(), DataHandlingTier.IN_HOUSE);
 
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10)).contains(jobId);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).contains(jobId);
     }
 
     @Test
@@ -153,7 +231,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         UUID otherTier = queuedJob(tiered, base.plusSeconds(10), DataHandlingTier.UNDECLARED);
         UUID otherWorkspace = queuedJob(other, base.plusSeconds(20));
 
-        List<UUID> candidates = jobRepository.findQueuedIdsOldestFirst(2);
+        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(2);
 
         assertThat(candidates).contains(otherTier, otherWorkspace).doesNotContainAnyElementsOf(saturated);
     }
@@ -167,7 +245,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         UUID undeclared = queuedJob(ws, Instant.now(), null);
         UUID inHouse = queuedJob(ws, Instant.now(), DataHandlingTier.IN_HOUSE);
 
-        List<UUID> candidates = jobRepository.findQueuedIdsOldestFirst(10);
+        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(10);
 
         assertThat(candidates).contains(inHouse).doesNotContain(undeclared);
     }
@@ -179,7 +257,28 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         runningJob(ws);
         UUID unbound = queuedJob(ws, Instant.now(), DataHandlingTier.IN_HOUSE);
 
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10)).contains(unbound);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).contains(unbound);
+    }
+
+    @Test
+    void shouldOfferStartedWorkBeforeFreshReviewsQueuedEarlier() {
+        Workspace ws = activeWorkspace("started-first-ws");
+        Instant base = Instant.now().minus(1, ChronoUnit.HOURS);
+        UUID fresh = queuedJob(ws, base);
+        UUID alsoFresh = queuedJob(ws, base.plusSeconds(1));
+        // A drained attempt and an admitted review whose composition was handed on, both requeued later.
+        UUID retried = queuedJob(ws, base.plusSeconds(10));
+        jdbc.update("UPDATE review_job SET attempt = 1 WHERE id = ?", retried);
+        UUID admitted = queuedJob(ws, base.plusSeconds(20));
+        jdbc.update(
+                "UPDATE review_job SET capture = jsonb_build_object('admission', jsonb_build_object()) WHERE id = ?",
+                admitted);
+
+        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(10).stream()
+                .filter(List.of(fresh, alsoFresh, retried, admitted)::contains)
+                .toList();
+
+        assertThat(candidates).containsExactly(retried, admitted, fresh, alsoFresh);
     }
 
     @Test
@@ -189,7 +288,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
         workspaceRepository.saveAndFlush(workspace);
 
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10)).doesNotContain(jobId);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).doesNotContain(jobId);
         Optional<ReviewJob> claimed = transactionTemplate.execute(
                 status -> jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now()));
         assertThat(claimed).isEmpty();

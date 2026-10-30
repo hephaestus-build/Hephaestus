@@ -1,6 +1,6 @@
 {
 	"name": "hephaestus",
-	"version": "0.94.7",
+	"version": "0.95.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -10,6 +10,7 @@
 		"@actions/expressions": "0.3.61",
 		"@actions/languageservice": "0.3.61",
 		"@actions/workflow-parser": "0.3.61",
+		"@ai-sdk/anthropic": "4.0.85",
 		"@ai-sdk/openai": "4.0.85",
 		"@ai-sdk/openai-compatible": "3.0.63",
 		"@ai-sdk/provider": "4.0.22",

@@ -88,6 +88,11 @@ public class WorkspaceLlmModel {
     @Column(name = "max_output_tokens")
     private Integer maxOutputTokens;
 
+    /** Null until a probe establishes the model's forced tool-choice support. */
+    @Nullable
+    @Column(name = "forced_tool_choice")
+    private Boolean forcedToolChoice;
+
     /** The reasoning effort requested of the model; null sends none, and the provider's default applies. */
     @Nullable
     @Enumerated(EnumType.STRING)
@@ -130,6 +135,14 @@ public class WorkspaceLlmModel {
     @Nullable
     @Column(name = "price_note", length = 500)
     private String priceNote;
+
+    /**
+     * The {@link LlmCallPool} whose capacity the model's calls share; {@code null} for none, which does not limit them.
+     * Only the instance admin sets it. Backed by {@code sfk_ws_llm_model_call_pool}.
+     */
+    @Nullable
+    @Column(name = "call_pool_id")
+    private Long callPoolId;
 
     @ColumnDefault("false")
     @Column(name = "enabled", nullable = false)

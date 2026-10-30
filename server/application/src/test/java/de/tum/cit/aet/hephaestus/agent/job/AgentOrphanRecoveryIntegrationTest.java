@@ -2,11 +2,13 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
@@ -43,7 +45,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -108,7 +109,7 @@ import io.micrometer.tracing.Tracer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -122,6 +123,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
@@ -131,7 +134,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -144,6 +149,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private PracticeVersionService runtimePracticeVersions;
 
     private ReviewJobZombieSweeper sweeper;
+
+    @Autowired
+    private ObjectProvider<ReviewJobCompletionService> completion;
+
+    @Autowired
+    private Environment environment;
 
     @Autowired
     private ReviewAttemptUsageService attemptUsage;
@@ -272,11 +283,135 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private Practice practice;
     private User developer;
 
+    @Test
+    void shouldRecoverOldCutoverClaimsBeforeTheStartupTimeoutSweepCanEndThem() {
+        UUID unadmitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        UUID admitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        Result observed = admitWithResult(admitted);
+        // The cutover's drain increment, scoped to this test's old claims.
+        jdbc.update(
+                "UPDATE review_job SET drain_count = drain_count + 1, leased_until = NULL WHERE id = ? OR id = ?",
+                unadmitted,
+                admitted);
+        when(properties.heartbeatInterval()).thenReturn(Duration.ofSeconds(25));
+        Instant start = jobRepository.databaseNow();
+        var clock = new AtomicReference<>(start.plusSeconds(30));
+        var monotonic = new AtomicLong(Duration.ofSeconds(30).toNanos());
+        ReviewJobRepository clocked = mock(ReviewJobRepository.class, delegatesTo(jobRepository));
+        doAnswer(invocation -> clock.get()).when(clocked).databaseNow();
+        var startup = new ReviewJobZombieSweeper(
+                clocked,
+                workerRegistryRepository,
+                objectMapper,
+                transactionTemplate,
+                attemptUsage,
+                meterRegistry,
+                new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
+                recovery,
+                properties);
+        startup.ticker = monotonic::get;
+
+        startup.recoverOrphanedJobs();
+        clock.set(start.plusSeconds(50));
+        monotonic.set(Duration.ofSeconds(50).toNanos());
+        startup.recoverOrphanedJobs();
+        clock.set(start.plusSeconds(60));
+        monotonic.set(Duration.ofSeconds(60).toNanos());
+        startup.reapStaleRunningJobs();
+        assertThat(jobRepository.findById(unadmitted).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(jobRepository.findById(admitted).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+
+        clock.set(start.plusSeconds(70));
+        monotonic.set(Duration.ofSeconds(70).toNanos());
+        startup.recoverOrphanedJobs();
+
+        for (UUID id : List.of(unadmitted, admitted)) {
+            ReviewJob continued = jobRepository.findById(id).orElseThrow();
+            assertThat(continued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(continued.getAttempt()).isEqualTo(2);
+            assertThat(continued.spentAttempts()).isEqualTo(1);
+        }
+        assertThat(ResultAdmissionService.isContinuation(
+                        jobRepository.findById(admitted).orElseThrow()))
+                .isTrue();
+        assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
+    }
+
+    @Test
+    void shouldEndCutoverClaimsAndReviewsWhenExecutionIsDisabledAndLeaseRecoveryNeverRuns() {
+        assertThat(environment.getProperty("hephaestus.agent.enabled", Boolean.class))
+                .isFalse();
+        UUID unadmitted =
+                runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1, privateRecoveryWork());
+        pinScriptAssignments(unadmitted);
+        ReviewJob unadmittedJob = jobRepository.findById(unadmitted).orElseThrow();
+        members.bind(
+                workspace.getId(),
+                unadmittedJob.getReviewId(),
+                unadmitted,
+                unadmittedJob.getInput().assignments());
+        UUID admitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        Result observed = admitWithResult(admitted);
+        for (UUID id : List.of(unadmitted, admitted)) {
+            assertThat(reviews.start(
+                            workspace.getId(),
+                            jobRepository.findById(id).orElseThrow().getReviewId()))
+                    .isTrue();
+        }
+        jdbc.update("UPDATE review_job SET execution_started_at = started_at WHERE id = ?", admitted);
+        jdbc.update(
+                "UPDATE review_job SET drain_count = drain_count + 1, leased_until = NULL WHERE id = ? OR id = ?",
+                unadmitted,
+                admitted);
+        var backstop = new ReviewJobZombieSweeper(
+                jobRepository,
+                workerRegistryRepository,
+                objectMapper,
+                transactionTemplate,
+                attemptUsage,
+                meterRegistry,
+                new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
+                recovery,
+                properties);
+        Instant start = Instant.now();
+        backstop.clock = Clock.fixed(start.plusSeconds(60), ZoneOffset.UTC);
+        backstop.reapStaleRunningJobs();
+        for (UUID id : List.of(unadmitted, admitted)) {
+            assertThat(jobRepository.findById(id).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        }
+
+        backstop.clock = Clock.fixed(start.plus(Duration.ofDays(1)), ZoneOffset.UTC);
+        backstop.reapStaleRunningJobs();
+
+        for (UUID id : List.of(unadmitted, admitted)) {
+            ReviewJob ended = jobRepository.findById(id).orElseThrow();
+            assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+            assertThat(ended.getErrorMessage()).isEqualTo("The server could not resume this review after the upgrade.");
+            assertThat(ended.getAttempt()).isEqualTo(1);
+            assertThat(ended.spentAttempts()).isZero();
+        }
+        completion.ifAvailable(ReviewJobCompletionService::tick);
+        for (UUID id : List.of(unadmitted, admitted)) {
+            ReviewJob ended = jobRepository.findById(id).orElseThrow();
+            assertThat(jdbc.queryForMap(
+                            "SELECT status, stop_reason, completed_at FROM review WHERE id = ?", ended.getReviewId()))
+                    .containsEntry("status", id.equals(admitted) ? "PARTIAL" : "FAILED")
+                    .containsEntry("stop_reason", id.equals(admitted) ? "EXECUTION_FAILED" : "PREPARATION_FAILED")
+                    .hasEntrySatisfying(
+                            "completed_at", value -> assertThat(value).isNotNull());
+        }
+        ReviewJob retained = jobRepository.findById(admitted).orElseThrow();
+        assertThat(retained.getAdmissionDigest()).isNotNull();
+        assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
+    }
+
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
         properties = mock(AgentProperties.class);
         when(properties.maxRetries()).thenReturn(5);
+        // A tiny renewal interval: the quiet time after the priming check ends at once, and the cutoff is now.
+        when(properties.heartbeatInterval()).thenReturn(Duration.ofMillis(1));
         recovery =
                 new ReviewJobRecovery(jobRepository, properties, objectMapper, attemptUsage, Optional.of(continuation));
         sweeper = new ReviewJobZombieSweeper(
@@ -287,7 +422,10 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 attemptUsage,
                 meterRegistry,
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                recovery);
+                recovery,
+                properties);
+        // The first lease check after a start reaps nothing: each test's check then follows a previous one.
+        sweeper.recoverOrphanedJobs();
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("orphan-recovery-ws"));
 
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("orphan-recovery"));
@@ -329,7 +467,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("a dead worker's RUNNING job is requeued (attempt++) and becomes claimable again")
     void orphanRecoveryRequeuesAndBecomesClaimable() {
         UUID jobId = runningJobOwnedBy("dead-replica", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica");
+        expireLeasesOf("dead-replica");
 
         sweeper.recoverOrphanedJobs();
 
@@ -346,7 +484,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRemoveTheLostAttemptsSandboxOnceTheJobIsRequeuedAndKeepTheNewAttempts() {
         UUID jobId = runningJobOwnedBy("dead-replica", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica");
+        expireLeasesOf("dead-replica");
         List<SandboxBackend.Listed> sandboxes = new ArrayList<>();
         sandboxes.add(reviewSandbox("attempt-0", jobId, 0));
         SandboxBackend backend = mock(SandboxBackend.class);
@@ -373,7 +511,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("a direct claim attempt made WHILE still backed off does not succeed")
     void claimAttemptWhileStillBackedOffDoesNotSucceed() {
         UUID jobId = runningJobOwnedBy("dead-replica-5", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica-5");
+        expireLeasesOf("dead-replica-5");
 
         sweeper.recoverOrphanedJobs();
 
@@ -392,7 +530,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("a job whose available_at is in the future is not offered as a poll candidate")
     void jobWithFutureAvailableAtIsNotClaimed() {
         UUID jobId = runningJobOwnedBy("dead-replica-4", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica-4");
+        expireLeasesOf("dead-replica-4");
 
         sweeper.recoverOrphanedJobs();
 
@@ -401,7 +539,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(requeued.getAvailableAt()).isAfter(Instant.now());
 
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10))
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10))
                 .as("a not-yet-eligible QUEUED job must not be offered as a poll candidate")
                 .doesNotContain(jobId);
     }
@@ -410,14 +548,14 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("an orphan already at the retry cap is failed, not requeued again")
     void orphanPastRetryCapIsFailedNotRequeued() {
         UUID jobId = runningJobOwnedBy("dead-replica-2", Instant.now().minus(Duration.ofMinutes(5)), 5);
-        registerStaleWorker("dead-replica-2");
+        expireLeasesOf("dead-replica-2");
 
         sweeper.recoverOrphanedJobs();
 
         ReviewJob failed = jobRepository.findById(jobId).orElseThrow();
         assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
         assertThat(failed.getErrorMessage()).contains("retry limit is reached");
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10)).doesNotContain(jobId);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).doesNotContain(jobId);
     }
 
     @Test
@@ -462,7 +600,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         UUID jobId = runningJobOwnedBy("dead-replica-6", Instant.now().minus(Duration.ofMinutes(5)), 0);
         Result observed = admitWithResult(jobId);
         changePracticeDefinition();
-        registerStaleWorker("dead-replica-6");
+        expireLeasesOf("dead-replica-6");
         ReviewJob before = jobRepository.findById(jobId).orElseThrow();
 
         sweeper.recoverOrphanedJobs();
@@ -530,7 +668,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         Result observed = admitWithResult(jobId);
         keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
         spentBeforeItWasLost(jobId, 3);
-        registerStaleWorker("dead-replica-9");
+        expireLeasesOf("dead-replica-9");
         ReviewJob before = jobRepository.findById(jobId).orElseThrow();
 
         sweeper.recoverOrphanedJobs();
@@ -605,7 +743,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             default -> throw new IllegalArgumentException("Unknown recovery case: " + why);
         }
         spentBeforeItWasLost(jobId, 2);
-        registerStaleWorker("dead-replica-10");
+        expireLeasesOf("dead-replica-10");
 
         sweeper.recoverOrphanedJobs();
 
@@ -625,7 +763,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     void shouldHandOnceMoreAnAdmittedReviewLostAtTheRetryLimit() {
         UUID jobId = runningJobOwnedBy("dead-replica-11", Instant.now().minus(Duration.ofMinutes(5)), 5);
         admitWithResult(jobId);
-        registerStaleWorker("dead-replica-11");
+        expireLeasesOf("dead-replica-11");
 
         sweeper.recoverOrphanedJobs();
 
@@ -640,7 +778,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     void shouldCompleteAnAdmittedReviewWhoseAttemptAfterTheRetryLimitIsLost() {
         UUID jobId = runningJobOwnedBy("dead-replica-12", Instant.now().minus(Duration.ofMinutes(5)), 6);
         Result observed = admitWithResult(jobId);
-        registerStaleWorker("dead-replica-12");
+        expireLeasesOf("dead-replica-12");
         var unrecorded = meterRegistry.counter(
                 AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED, "cause", "retries_exhausted", "outcome", "unrecorded");
         double unrecordedBefore = unrecorded.count();
@@ -936,7 +1074,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             job.setAdmissionAttempt(0);
             job.setCapture(objectMapper
                     .createObjectNode()
-                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "2.0.0")));
+                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "3.0.0")));
             jobRepository.saveAndFlush(job);
             return row;
         }));
@@ -951,7 +1089,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         acceptPublicReview(jobId);
         if (privatePiece) jdbc.update("UPDATE review_job SET practice_page_prepared_at = now() WHERE id = ?", jobId);
         keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
-        registerStaleWorker("dead-replica-11");
+        expireLeasesOf("dead-replica-11");
 
         sweeper.recoverOrphanedJobs();
 
@@ -1381,7 +1519,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 jobRepository,
                 mock(DefaultReviewExecutionHandler.class),
                 agent,
-                mock(WorkerJwtIssuer.class),
+                mock(AttemptTokenIssuer.class),
                 sandbox,
                 SandboxTestLimits.PROPERTIES,
                 mock(AsyncTaskExecutor.class),
@@ -1405,7 +1543,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("recovery waiting on the admission's row lock decides on what the admission left behind")
     void shouldDecideOnTheCommittedAdmissionWhenRecoveryWaitsForItsRowLock(boolean committed) throws Exception {
         UUID jobId = runningJobOwnedBy("dead-replica-7", Instant.now().minus(Duration.ofMinutes(5)), 0);
-        registerStaleWorker("dead-replica-7");
+        expireLeasesOf("dead-replica-7");
 
         whileRecoveryWaits(jobId, committed, job -> {
             job.setAdmissionDigest("admitted-digest");
@@ -1429,7 +1567,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @DisplayName("recovery leaves alone an attempt a new claim took while it waited for the row lock")
     void shouldLeaveTheNewClaimAloneWhenTheOrphanWasReclaimedWhileRecoveryWaited() throws Exception {
         UUID jobId = runningJobOwnedBy("dead-replica-8", Instant.now().minus(Duration.ofMinutes(5)), 5);
-        registerStaleWorker("dead-replica-8");
+        expireLeasesOf("dead-replica-8");
 
         whileRecoveryWaits(jobId, true, job -> {
             job.setWorkerId("live-sibling");
@@ -1563,7 +1701,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             job.setAdmissionAttempt(job.getAttempt());
             job.setCapture(objectMapper
                     .createObjectNode()
-                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "2.0.0")));
+                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "3.0.0")));
             jobRepository.saveAndFlush(job);
             return row;
         }));
@@ -1647,7 +1785,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                                 workspace.getId(),
                                 null,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,
@@ -1702,18 +1841,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         return jobRepository.saveAndFlush(job).getId();
     }
 
-    private void registerStaleWorker(String workerId) {
-        // The orphan query judges the lease on the database clock.
-        Instant lastHeartbeat = requireNonNull(jdbc.queryForObject(
-                        "SELECT now() - make_interval(secs => ?)",
-                        OffsetDateTime.class,
-                        AgentProperties.WORKER_LEASE_TTL.plusMinutes(1).toSeconds()))
-                .toInstant();
-        WorkerRegistry w = new WorkerRegistry();
-        w.setWorkerId(workerId);
-        w.setLastHeartbeat(lastHeartbeat);
-        w.setRegisteredAt(lastHeartbeat);
-        workerRegistryRepository.saveAndFlush(w);
+    private void expireLeasesOf(String workerId) {
+        // The lease check judges each lease on the database clock.
+        jdbc.update(
+                "UPDATE review_job SET leased_until = now() - make_interval(secs => ?) WHERE worker_id = ?",
+                AgentProperties.WORKER_LEASE_TTL.plusMinutes(1).toSeconds(),
+                workerId);
     }
 
     private boolean eligibleForClaim(UUID jobId) {

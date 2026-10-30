@@ -40,9 +40,9 @@ const shots: Shot[] = [
 			page.getByRole("heading", { name: "Reviewers cannot see how to check your change" }),
 	},
 	{
-		page: "ai-mentor",
+		page: "ask-hephaestus",
 		name: "conversation",
-		route: `/w/${WORKSPACE}/mentor`,
+		route: `/w/${WORKSPACE}/conversation`,
 		role: "MEMBER",
 		ready: (page) => page.getByText("Why did I get feedback about how to verify #223?"),
 	},
@@ -111,10 +111,10 @@ async function open(
 /** Playwright writes PNG or JPEG only; Chromium's own capture encodes WebP. */
 async function captureWebp(page: Page): Promise<Buffer> {
 	// A focused field blinks its caret, so two captures of the same screen would differ.
-	// The floating Heph button sits over the content that the image is about.
+	// The floating Hephaestus button sits over the content that the image is about.
 	await page.addStyleTag({
 		content: `* { caret-color: transparent !important; }
-			div:has(> button[aria-label^="Open Heph"]) { display: none !important; }`,
+			div:has(> button[aria-label^="Ask Hephaestus"]) { display: none !important; }`,
 	});
 	const session = await page.context().newCDPSession(page);
 	const { data } = await session.send("Page.captureScreenshot", {

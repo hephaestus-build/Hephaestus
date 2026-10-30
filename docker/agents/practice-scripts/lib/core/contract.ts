@@ -137,6 +137,7 @@ export const factsSchema = z
 export type Facts = z.infer<typeof factsSchema>;
 
 const PROTOCOLS = [
+	"anthropic-messages",
 	"openai-completions",
 	"openai-responses",
 	"openai-decisions",
@@ -147,6 +148,7 @@ const boundModelSchema = z.strictObject({
 	protocol: z.enum(PROTOCOLS),
 	modelId: z.string().min(1),
 	reasoningEffort: z.string().optional(),
+	forcedToolChoice: z.boolean().optional(),
 });
 export const boundModelsSchema = z.partialRecord(modelSlotSchema, boundModelSchema);
 export type BoundModels = z.infer<typeof boundModelsSchema>;

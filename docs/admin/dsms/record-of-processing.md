@@ -16,7 +16,7 @@ An admin role alone does not establish Art. 26 status.
 ## Purpose and description (Art. 30(1)(b))
 
 `[each purpose, for each group of data subjects]`.
-Describe the enabled features: practice review of connected repositories, Heph conversations, the weekly digest, Activity, public activity pages, and research use, where you enable them.
+Describe the enabled features: practice review of connected repositories, conversations, the weekly digest, Activity, public activity pages, and research use, where you enable them.
 [Practice review](../practice-review.mdx), [Public activity pages](../public-activity.mdx) and [Legal pages](../legal-pages.mdx#the-optional-research-question) describe what each feature processes.
 
 ## Data subjects (Art. 30(1)(c))

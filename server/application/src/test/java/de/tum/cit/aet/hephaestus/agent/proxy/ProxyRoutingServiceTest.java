@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -24,13 +25,12 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
@@ -53,7 +53,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final ReviewAttemptUsageService attemptUsage = mock(ReviewAttemptUsageService.class);
-    private final ProxyRoutingService routing = new ProxyRoutingService(jobs, turns, mapper, attemptUsage);
+    private final ProxyRoutingService routing =
+            new ProxyRoutingService(jobs, turns, mapper, attemptUsage, mock(ReviewSnapshotQuery.class));
     private final ReviewJob job = new ReviewJob();
     private final Instant workDeadline = Instant.now().plusSeconds(30);
     private ProxyIdentity identity;
@@ -80,7 +81,16 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         job.setConfigSnapshot(snapshot.toJson(mapper));
         var now = Instant.now();
         identity = ProxyIdentity.of(
-                new JobJwt(job.getId(), 7L, 2, Set.of("llm_proxy"), "id", now, now.plusSeconds(60), workDeadline),
+                new AttemptJwt(
+                        AttemptJwt.Kind.REVIEW,
+                        job.getId(),
+                        7L,
+                        2,
+                        Set.of("llm_proxy"),
+                        "id",
+                        now,
+                        now.plusSeconds(60),
+                        workDeadline),
                 "worker");
         lenient().when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
     }
@@ -170,11 +180,11 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
 
         var route = routing.resolve(ProxyIdentity.of(jwt, "worker"), request("/internal/llm/responses"));
 
-        assertThat(route.principalDescription()).isEqualTo("mentor-turn:" + jwt.turnId());
+        assertThat(route.principalDescription()).isEqualTo("mentor-turn:" + jwt.id());
         assertThat(route.baseUrl()).isEqualTo("https://models.example/v1");
         assertThat(route.workspaceId()).isEqualTo(7L);
         assertThat(route.attempt().sourceType()).isEqualTo(UsageSourceType.MENTOR_TURN);
-        assertThat(route.attempt().sourceId()).isEqualTo(jwt.turnId());
+        assertThat(route.attempt().sourceId()).isEqualTo(jwt.id());
         assertThat(route.attempt().number()).isEqualTo(3);
         assertThat(route.attempt().workerId()).isEqualTo("worker");
         assertThat(route.attempt().spentUsd()).isEqualByComparingTo("2");
@@ -191,29 +201,28 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
     }
 
-    private static TurnJwt turnJwt(int attempt) {
+    private static AttemptJwt turnJwt(int attempt) {
         var now = Instant.now();
-        return new TurnJwt(
+        return new AttemptJwt(
+                AttemptJwt.Kind.TURN,
                 UUID.randomUUID(),
                 7L,
-                11L,
-                UUID.randomUUID(),
                 attempt,
                 Set.of("llm_proxy"),
                 "id",
                 now,
-                now.plusSeconds(60));
+                now.plusSeconds(60),
+                null);
     }
 
-    private MentorTurn leasedTurn(TurnJwt jwt, int attempt, String worker) {
+    private MentorTurn leasedTurn(AttemptJwt jwt, int attempt, String worker) {
         var row = mock(MentorTurn.class);
         // A turn that lost its lease is refused before its rates are read.
-        lenient().when(row.getId()).thenReturn(jwt.turnId());
+        lenient().when(row.getId()).thenReturn(jwt.id());
         lenient().when(row.getWorkspaceId()).thenReturn(jwt.workspaceId());
         lenient().when(row.isLeased()).thenReturn(true);
         lenient().when(row.getAttempt()).thenReturn(attempt);
         lenient().when(row.getWorkerId()).thenReturn(worker);
-        lenient().when(row.getConversationId()).thenReturn(jwt.conversationId());
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.WORKSPACE,
                 UsagePricingState.PRICED,
@@ -238,7 +247,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                                 null,
                                 null)
                         .toJson());
-        when(turns.findByIdAndWorkspaceId(jwt.turnId(), jwt.workspaceId())).thenReturn(Optional.of(row));
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(row));
         return row;
     }
 
@@ -255,7 +264,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 7L,
                 DataHandlingTier.IN_HOUSE,
                 null,
-                price);
+                price,
+                false);
     }
 
     private static MockHttpServletRequest request(String path) {

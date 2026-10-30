@@ -8,7 +8,7 @@ const meta = {
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
 	args: {
-		subject: "Heph, 10:42",
+		subject: "Hephaestus, 10:42",
 		text: "Your team asks for pull request descriptions that explain significant decisions.",
 		onCopy: fn(),
 		vote: { value: undefined, onChange: fn() },
@@ -27,10 +27,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Under Heph's message: copy, the two votes and a reply in thread, reachable from the keyboard though hidden at rest. */
+/** Under Hephaestus's message: copy, the two votes and a reply in thread, reachable from the keyboard though hidden at rest. */
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const copy = canvas.getByRole("button", { name: "Copy message (Heph, 10:42)" });
+		const copy = canvas.getByRole("button", { name: "Copy message (Hephaestus, 10:42)" });
 		await userEvent.tab();
 		await expect(copy).toHaveFocus();
 		await waitFor(async () => expect(copy).toBeVisible());
@@ -38,9 +38,11 @@ export const Default: Story = {
 		await expect(args.onCopy).toHaveBeenCalledWith(
 			"Your team asks for pull request descriptions that explain significant decisions.",
 		);
-		await userEvent.click(canvas.getByRole("button", { name: "Not helpful (Heph, 10:42)" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Not helpful (Hephaestus, 10:42)" }));
 		await expect(args.vote?.onChange).toHaveBeenCalledWith("NOT_HELPFUL");
-		await userEvent.click(canvas.getByRole("button", { name: "Reply in thread (Heph, 10:42)" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Reply in thread (Hephaestus, 10:42)" }),
+		);
 		await expect(args.onReply).toHaveBeenCalledOnce();
 	},
 };
@@ -48,12 +50,11 @@ export const Default: Story = {
 export const Voted: Story = {
 	args: { vote: { value: "HELPFUL", onChange: fn() } },
 	play: async ({ args, canvas, userEvent }) => {
-		const helpful = canvas.getByRole("button", { name: "Helpful (Heph, 10:42)" });
+		const helpful = canvas.getByRole("button", { name: "Helpful (Hephaestus, 10:42)" });
 		await expect(helpful).toHaveAttribute("aria-pressed", "true");
-		await expect(canvas.getByRole("button", { name: "Not helpful (Heph, 10:42)" })).toHaveAttribute(
-			"aria-pressed",
-			"false",
-		);
+		await expect(
+			canvas.getByRole("button", { name: "Not helpful (Hephaestus, 10:42)" }),
+		).toHaveAttribute("aria-pressed", "false");
 		await userEvent.click(helpful);
 		await expect(args.vote?.onChange).toHaveBeenCalledWith(null);
 	},

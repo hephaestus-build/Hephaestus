@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepositoryOwner;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRequestedReviewer;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusCheckRollupContext;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubActorMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubIssueMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubProjectV2FieldConfigurationMixin;
@@ -25,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubProjectV2O
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubPullRequestMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubRepositoryOwnerMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubRequestedReviewerMixin;
+import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubStatusCheckRollupContextMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GitHubMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -127,6 +129,7 @@ public class GitHubGraphQlConfig {
                 .addMixIn(GHProjectV2ItemFieldValue.class, GitHubProjectV2ItemFieldValueMixin.class)
                 .addMixIn(GHIssue.class, GitHubIssueMixin.class)
                 .addMixIn(GHPullRequest.class, GitHubPullRequestMixin.class)
+                .addMixIn(GHStatusCheckRollupContext.class, GitHubStatusCheckRollupContextMixin.class)
                 .build();
     }
 

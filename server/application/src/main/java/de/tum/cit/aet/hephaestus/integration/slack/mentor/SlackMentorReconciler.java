@@ -93,7 +93,7 @@ public class SlackMentorReconciler {
                 }
             } catch (RuntimeException e) {
                 // Never rethrown: one post that cannot be settled must not hold up the others.
-                log.warn("Slack post of Heph entry {} stays uncertain", unsettled.entryId(), e);
+                log.warn("Slack post of Hephaestus entry {} stays uncertain", unsettled.entryId(), e);
             }
         }
     }

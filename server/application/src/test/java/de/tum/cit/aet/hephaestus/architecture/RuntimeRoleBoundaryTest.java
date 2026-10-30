@@ -74,7 +74,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController", RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.core.runtime.hub.HubConfiguration", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration", RuntimeRole.WORKER_PROPERTY),
             // Admin surfaces and the services behind them are server-only: the worker and webhook pods do
             // not load core.auth, so an admin controller mapped there is a route with no authentication
             // layer under it.
@@ -211,9 +211,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.slack.sync.status.SlackIntegrationSyncRunner",
                     RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerTokenExchangeController",
-                    RuntimeRole.SERVER_PROPERTY),
             // WorkspaceContextFilter lives outside core.auth, so allAuthStereotypeBeansAreServerGated()
             // doesn't cover it — pin it here. (The core.auth beans are covered by that structural test.)
             Map.entry(
@@ -299,9 +296,8 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
      * {@code matchIfMissing} default cannot be dropped on one bean. A further condition sits beside the
      * composed annotation, since Boot requires every property condition on an element to match. The
      * exceptions are the composed annotations themselves and the gates no composed annotation expresses:
-     * the sandbox gateway's rate-limit buckets exist only where the server role is off, and worker tokens
-     * wherever the server or the worker role is on. Each exception must still carry an inline gate, so
-     * one that no longer needs exempting fails here.
+     * the sandbox gateway's rate-limit buckets exist only where the server role is off. Each exception must
+     * still carry an inline gate, so one that no longer needs exempting fails here.
      */
     @Test
     void runtimeRoleGatesUseTheComposedAnnotations() {
@@ -310,8 +306,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                 ConditionalOnWorkerRole.class.getName(),
                 ConditionalOnWebhookRole.class.getName(),
                 ConditionalOnCaptureRole.class.getName(),
-                "de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration.sandboxGatewayBucketResolver()",
-                "de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtConfiguration");
+                "de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration.sandboxGatewayBucketResolver()");
         List<String> gated = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
                 .flatMap(c -> Stream.concat(

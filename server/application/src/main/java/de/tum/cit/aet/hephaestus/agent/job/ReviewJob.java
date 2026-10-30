@@ -100,9 +100,6 @@ public class ReviewJob {
     @Column(name = "worker_id", length = 255)
     private @Nullable String workerId;
 
-    @Column(name = "idempotency_key", length = 255)
-    private @Nullable String idempotencyKey;
-
     @Column(name = "trace_id", nullable = false, length = 32)
     private String traceId;
 
@@ -177,6 +174,13 @@ public class ReviewJob {
 
     @Column(name = "started_at")
     private @Nullable Instant startedAt;
+
+    /**
+     * Until when the worker that runs this attempt holds it, on the database clock. The worker sets it at the claim and
+     * renews it with its heartbeat. An attempt whose lease expired lost its worker, and the server recovers it.
+     */
+    @Column(name = "leased_until")
+    private @Nullable Instant leasedUntil;
 
     @Column(name = "execution_started_at")
     private @Nullable Instant executionStartedAt;

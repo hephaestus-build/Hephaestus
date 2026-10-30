@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 
@@ -53,7 +53,17 @@ export const RegularUser: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Administration")).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: /AI assistant/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /Ask Hephaestus/u })).toBeVisible();
+		await expect(
+			within(canvas.getByRole("list", { name: "You" }))
+				.getAllByRole("link")
+				.map((link) => link.textContent),
+		).toEqual(["Practice profile", "Activity", "Ask Hephaestus"]);
+		await expect(
+			within(canvas.getByRole("list", { name: "Workspace" }))
+				.getAllByRole("link")
+				.map((link) => link.textContent),
+		).toEqual(["Practices across the workspace", "Workspace activity", "Teams"]);
 		// The only landmark a screen reader can jump to for the app's navigation.
 		const navigation = canvas.getByRole("navigation", { name: "Primary" });
 		await expect(within(navigation).getByRole("link", { name: "Activity" })).toBeVisible();
@@ -72,10 +82,22 @@ export const Collapsed: Story = {
 			</SidebarProvider>
 		),
 	],
-	play: async ({ canvas }) => {
+	play: async ({ canvas, canvasElement }) => {
 		const workspace = canvas.getByRole("button", { name: "AET aet-org" });
 		// Icon width proves the real sidebar collapsed, not a story that only names it so.
 		await expect(workspace.getBoundingClientRect().width).toBeLessThanOrEqual(48);
+		canvas.getByRole("list", { name: "You" });
+		canvas.getByRole("list", { name: "Workspace" });
+		await expect(canvas.getByRole("separator")).toBeVisible();
+		canvas.getByRole("link", { name: "Activity" }).focus();
+		await userEvent.tab();
+		await waitFor(async () =>
+			expect(
+				within(canvasElement.ownerDocument.body).getByText("Ask Hephaestus", {
+					selector: '[data-slot="tooltip-content"]',
+				}),
+			).toBeVisible(),
+		);
 	},
 };
 
@@ -117,7 +139,15 @@ export const WorkspaceAdminUser: Story = {
 		activeWorkspace: mockWorkspace,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("Administration");
+		canvas.getByRole("list", { name: "Administration" });
+		await expect(canvas.getByRole("link", { name: "Teams" })).toHaveAttribute(
+			"href",
+			"/w/aet/teams",
+		);
+		await expect(canvas.getByRole("link", { name: "Team setup" })).toHaveAttribute(
+			"href",
+			"/w/aet/admin/teams",
+		);
 		await expect(canvas.queryByText("Instance admin")).not.toBeInTheDocument();
 	},
 };
@@ -142,7 +172,7 @@ export const ReadOnlyUserView: Story = {
 		context: "main",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /AI assistant/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /^Conversation$/u })).toBeVisible();
 		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
 	},
 };
@@ -209,7 +239,7 @@ export const HephHidden: Story = {
 		showMentor: false,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("link", { name: /AI assistant/u })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("link", { name: /Ask Hephaestus/u })).not.toBeInTheDocument();
 		await expect(canvas.getByRole("link", { name: "Activity" })).toBeVisible();
 	},
 };
@@ -233,6 +263,12 @@ export const InstanceWorkspaceAdministration: Story = {
 			"/w/tutors/admin/settings",
 		);
 		await expect(canvas.queryByRole("link", { name: "Activity" })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("list", { name: "You" })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("list", { name: "Workspace" })).not.toBeInTheDocument();
+		await expect(canvas.getByRole("link", { name: "Team setup" })).toHaveAttribute(
+			"href",
+			"/w/tutors/admin/teams",
+		);
 		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
 	},
 };
@@ -282,5 +318,32 @@ export const InstanceAdministrationRefused: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("You do not have access to the workspace details")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+	},
+};
+
+/** Shared pages stay available when the workspace does not run practice reviews. */
+export const PracticesOff: Story = {
+	args: { activeWorkspace: { ...mockWorkspace, practicesEnabled: false } },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("link", { name: "Practice profile" })).not.toBeInTheDocument();
+		await expect(
+			canvas.queryByRole("link", { name: "Practices across the workspace" }),
+		).not.toBeInTheDocument();
+		await expect(canvas.getByRole("link", { name: "Workspace activity" })).toBeVisible();
+	},
+};
+
+export const CollapsedWorkspaceAdmin: Story = {
+	args: WorkspaceAdminUser.args,
+	decorators: Collapsed.decorators,
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByRole("separator")).toHaveLength(2);
+		for (const separator of canvas.getAllByRole("separator")) {
+			await expect(separator).toBeVisible();
+		}
+		await expect(canvas.getByRole("link", { name: "Team setup" })).toHaveAttribute(
+			"href",
+			"/w/aet/admin/teams",
+		);
 	},
 };

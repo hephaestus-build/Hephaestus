@@ -78,7 +78,7 @@ public final class ScmReviewFixtures {
             definition.putNull("appliesWhen");
             definition.put("about", "AUTHOR");
             var reads = definition.putObject("reads");
-            reads.put("contract", "2.0.0");
+            reads.put("contract", "3.0.0");
             reads.putArray("sources")
                     .addObject()
                     .put("source", "scm.issue.core")

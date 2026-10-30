@@ -33,7 +33,7 @@ const FeatureList: FeatureItem[] = [
 		title: "Conversations",
 		description:
 			"A weekly digest you can turn on arrives in the conversation. Developers ask why, ask for an example, or disagree.",
-		cta: { label: "Talk with Heph", to: "/user/ai-mentor" },
+		cta: { label: "Ask Hephaestus", to: "/user/ask-hephaestus" },
 	},
 	{
 		title: "Feedback Mode",

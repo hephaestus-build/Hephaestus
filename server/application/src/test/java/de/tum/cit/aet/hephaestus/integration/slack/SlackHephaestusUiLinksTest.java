@@ -26,8 +26,9 @@ class SlackHephaestusUiLinksTest extends BaseUnitTest {
         SlackHephaestusUiLinks subdomain = new SlackHephaestusUiLinks(
                 "https://heph.example/", new WorkspaceSubdomainProperties(true, "heph.example"));
 
-        assertThat(apex.mentorEntryUrl("acme", ENTRY)).isEqualTo("https://heph.example/w/acme/mentor?entry=" + ENTRY);
+        assertThat(apex.mentorEntryUrl("acme", ENTRY))
+                .isEqualTo("https://heph.example/w/acme/conversation?entry=" + ENTRY);
         assertThat(subdomain.mentorEntryUrl("acme", ENTRY))
-                .isEqualTo("https://acme.heph.example/mentor?entry=" + ENTRY);
+                .isEqualTo("https://acme.heph.example/conversation?entry=" + ENTRY);
     }
 }

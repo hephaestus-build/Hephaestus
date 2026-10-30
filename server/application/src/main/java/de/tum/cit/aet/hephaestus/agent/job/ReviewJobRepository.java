@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
@@ -388,37 +389,97 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * window with jobs nobody can claim, and a younger runnable job elsewhere never reaches the batch. A
      * candidate whose slot has no binding row is still fetched — the claim's admission re-check is the
      * authoritative gate.
+     *
+     * <p>Work already started comes first: a job on a later attempt, such as one a drain or a handed-on composition
+     * put back, and a job whose results were admitted. A requeue sets a fresh {@code available_at}, so oldest-first
+     * alone left an admitted review's composition behind every fresh review queued before it. Within each group the
+     * oldest available job comes first.
      */
-    @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the @WorkspaceAgnostic job poller")
-    @Query(
-            value = "SELECT j.id FROM review_job j JOIN workspace w ON w.id = j.workspace_id WHERE j.status = 'QUEUED'"
-                    + " AND w.status = 'ACTIVE' AND j.available_at <= now() AND (  (SELECT count(*) FROM review_job r     "
-                    + " WHERE r.workspace_id = j.workspace_id AND r.status = 'RUNNING'        AND"
-                    + " COALESCE(r.config_snapshot -> 'model' ->> 'dataHandlingTier', 'UNDECLARED')          ="
-                    + " COALESCE(j.config_snapshot -> 'model' ->> 'dataHandlingTier', 'UNDECLARED'))   < COALESCE((SELECT"
-                    + " b.max_concurrent_jobs FROM workspace_agent_binding b      WHERE b.workspace_id = j.workspace_id"
-                    + " AND b.purpose = 'PRACTICE_REVIEW'        AND b.data_handling_tier = COALESCE(j.config_snapshot ->"
-                    + " 'model' ->> 'dataHandlingTier', 'UNDECLARED')),      2147483647)) ORDER BY j.available_at ASC,"
-                    + " j.id ASC LIMIT :limit",
-            nativeQuery = true)
-    List<UUID> findQueuedIdsOldestFirst(@Param("limit") int limit);
+    @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the workspace-agnostic job poller")
+    default List<UUID> findQueuedIdsStartedFirst(int limit) {
+        return findQueuedIdsStartedFirst(limit, Set.of(), Set.of());
+    }
+
+    /**
+     * Offer fresh demand to fairness first. The poller then dispatches the fair winner; only an unavailable
+     * endpoint is skipped for the rest of this poll.
+     */
+    @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and per-poll endpoint exclusions")
+    @Query(value = """
+            SELECT j.id FROM review_job j JOIN workspace w ON w.id=j.workspace_id
+            LEFT JOIN llm_model im ON j.config_snapshot->'model'->>'connectionScope'='INSTANCE'
+              AND im.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
+              AND im.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
+            LEFT JOIN workspace_llm_model wm ON j.config_snapshot->'model'->>'connectionScope'='WORKSPACE'
+              AND wm.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
+              AND wm.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
+              AND wm.workspace_id=j.workspace_id
+            WHERE j.status='QUEUED' AND w.status='ACTIVE' AND j.available_at<=now()
+              AND (SELECT count(*) FROM review_job r WHERE r.workspace_id=j.workspace_id AND r.status='RUNNING'
+                AND COALESCE(r.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')=
+                    COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED'))
+                < COALESCE((SELECT b.max_concurrent_jobs FROM workspace_agent_binding b
+                    WHERE b.workspace_id=j.workspace_id AND b.purpose='PRACTICE_REVIEW'
+                      AND b.data_handling_tier=COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')),2147483647)
+              AND (:#{#excludedJobs.isEmpty()} OR j.id NOT IN (:excludedJobs))
+              AND (j.capture->'admission' IS NOT NULL OR :#{#excludedPools.isEmpty()}
+                OR COALESCE(im.call_pool_id,wm.call_pool_id,0) NOT IN (:excludedPools))
+            ORDER BY (j.attempt>0 OR j.capture->'admission' IS NOT NULL) DESC,
+              (SELECT max(pending.renewed_at) FROM llm_call_permit pending WHERE pending.source_id=j.id
+                 AND pending.workspace_id=j.workspace_id AND pending.attempt=j.attempt AND pending.state='CLAIM_WAITING') ASC NULLS FIRST,
+              j.available_at ASC,j.id ASC LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> findQueuedIdsStartedFirst(
+            @Param("limit") int limit,
+            @Param("excludedPools") Set<Long> excludedPools,
+            @Param("excludedJobs") Set<UUID> excludedJobs);
 
     @WorkspaceAgnostic("Cross-workspace stale job reaper; caller is @WorkspaceAgnostic sweeper")
     @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")
     List<ReviewJob> findStaleRunningJobs(@Param("cutoff") Instant cutoff);
 
-    /** Compare heartbeat times on the database clock so application clock skew cannot create false orphans. */
-    @WorkspaceAgnostic("Cross-workspace orphan recovery; caller is @WorkspaceAgnostic sweeper")
+    /**
+     * Running attempts whose lease expired before {@code cutoff}, a time on the database clock. An attempt with no lease
+     * was claimed by a version before leases, which no longer runs.
+     */
+    @WorkspaceAgnostic("Cross-workspace lease recovery; caller is @WorkspaceAgnostic sweeper")
     @Query(
             value = "SELECT j.id AS jobId, j.workspace_id AS workspaceId, j.attempt AS attempt, "
                     + "j.worker_id AS workerId "
                     + "FROM review_job j WHERE j.status = 'RUNNING' AND j.worker_id IS NOT NULL "
-                    + "AND j.started_at < :graceCutoff "
-                    + "AND NOT EXISTS (SELECT 1 FROM worker_registry w WHERE w.worker_id = j.worker_id "
-                    + "AND w.last_heartbeat >= now() - make_interval(secs => :leaseTtlSeconds))",
+                    + "AND (j.leased_until IS NULL OR j.leased_until < :cutoff)",
             nativeQuery = true)
-    List<OrphanedJobRef> findOrphanedRunningJobs(
-            @Param("graceCutoff") Instant graceCutoff, @Param("leaseTtlSeconds") long leaseTtlSeconds);
+    List<OrphanedJobRef> findExpiredLeases(@Param("cutoff") Instant cutoff);
+
+    /** Leases the claimed attempt for {@code ttlSeconds} from now, on the database clock. */
+    @WorkspaceAgnostic("ID-based lease of an attempt that this worker claimed")
+    @Modifying(flushAutomatically = true)
+    @Query(
+            value = "UPDATE review_job SET leased_until = now() + make_interval(secs => :ttlSeconds) "
+                    + "WHERE id = :id AND status = 'RUNNING'",
+            nativeQuery = true)
+    int lease(@Param("id") UUID id, @Param("ttlSeconds") long ttlSeconds);
+
+    /** The jobs among {@code ids} that this worker still runs. */
+    @WorkspaceAgnostic("Reads one worker's own attempts across workspaces")
+    @Query(
+            value = "SELECT id FROM review_job WHERE worker_id = :workerId AND status = 'RUNNING' AND id IN (:ids)",
+            nativeQuery = true)
+    List<UUID> findRunningIdsOwnedBy(@Param("workerId") String workerId, @Param("ids") Collection<UUID> ids);
+
+    /** Renews the leases of every attempt that this worker runs, on the database clock. */
+    @WorkspaceAgnostic("Renews the leases of one worker's attempts across workspaces")
+    @Modifying
+    @Query(
+            value = "UPDATE review_job SET leased_until = now() + make_interval(secs => :ttlSeconds) "
+                    + "WHERE worker_id = :workerId AND status = 'RUNNING'",
+            nativeQuery = true)
+    int renewLeases(@Param("workerId") String workerId, @Param("ttlSeconds") long ttlSeconds);
+
+    /** The database clock, which every lease compares with: the transaction's start, or this statement's without one. */
+    @WorkspaceAgnostic("Reads the database clock")
+    @Query(value = "SELECT now()", nativeQuery = true)
+    Instant databaseNow();
 
     /**
      * Hands an owned admitted attempt on to a new attempt that measures nothing and composes what is still open, from

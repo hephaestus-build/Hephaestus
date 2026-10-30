@@ -84,6 +84,35 @@ class LlmModelServiceTest extends BaseUnitTest {
         lenient().when(modelRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(model));
     }
 
+    @Test
+    void shouldKeepThePreviousCapabilityWhenTheConnectionChangesDuringAProbe() {
+        var connection = model.getConnection();
+        connection.setBaseUrl("https://model.example");
+        connection.setApiProtocol(LlmApiProtocol.ANTHROPIC_MESSAGES);
+        connection.setApiKey("new-key");
+        model.setForcedToolChoice(true);
+        var oldTarget = new LlmProbeTarget(
+                "https://model.example", LlmAuthMode.BEARER, "old-key", LlmApiProtocol.ANTHROPIC_MESSAGES);
+        assertThatThrownBy(
+                        () -> modelService.recordCapability(7L, "gpt-5", oldTarget, new LlmModelCapabilitiesDTO(false)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(model.getForcedToolChoice()).isTrue();
+        verifyNoInteractions(llmModelAudit);
+    }
+
+    @Test
+    void shouldKeepAPreviousCapabilityWhenItsNewProbeIsInconclusive() {
+        var connection = model.getConnection();
+        connection.setBaseUrl("https://model.example");
+        connection.setApiProtocol(LlmApiProtocol.ANTHROPIC_MESSAGES);
+        model.setForcedToolChoice(true);
+        var target = new LlmProbeTarget(
+                connection.getBaseUrl(), connection.getAuthMode(), null, connection.getApiProtocol());
+        modelService.recordCapability(7L, "gpt-5", target, new LlmModelCapabilitiesDTO(null));
+        assertThat(model.getForcedToolChoice()).isTrue();
+        verifyNoInteractions(llmModelAudit);
+    }
+
     private void stubModelSavePassthrough() {
         // create()/update() flush synchronously; updateSharing() never touches upstream_model_id and
         // still calls plain save().

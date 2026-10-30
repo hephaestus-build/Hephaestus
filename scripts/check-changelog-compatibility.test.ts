@@ -220,21 +220,36 @@ void test("permits dropping an object in the pending contractions of the latest 
 	]);
 });
 
-void test("reads the pending contractions from the migration workflow page", () => {
+void test("reads the pending contractions from the first table after their heading", () => {
 	const objects = pendingContractions(
-		readFileSync(new URL("../docs/contributor/database-migration.mdx", import.meta.url), "utf8"),
+		[
+			"### Pending contractions",
+			"",
+			"| Object | Changelog that stopped writing it | Exclusion to remove |",
+			"| --- | --- | --- |",
+			"| `consent_notice` table | `1789067582535_changelog.xml` | `table:consent_notice` |",
+			"| `llm_model.supports_reasoning`, `workspace_llm_model.supports_reasoning` columns | `1789135709162_changelog.xml` | `column:supports_reasoning` |",
+			"",
+			"## CI validation",
+		].join("\n"),
 	);
-	for (const object of [
-		"consent_notice",
-		"product_survey_submission",
-		"llm_model.supports_reasoning",
-		"workspace_llm_model.supports_reasoning",
-	]) {
-		assert.ok(objects.has(object), object);
-	}
-	// Changelog names and exclusions in the other columns are not objects.
-	assert.ok(![...objects].some((object) => object.endsWith(".xml") || object.includes(":")));
+	assert.deepEqual(
+		objects,
+		new Set([
+			"consent_notice",
+			"llm_model.supports_reasoning",
+			"workspace_llm_model.supports_reasoning",
+		]),
+	);
 	assert.deepEqual(pendingContractions("## Other\n\n| `table` | x |"), new Set());
+});
+
+void test("the migration workflow page lists no pending contraction for 1.0", () => {
+	const page = readFileSync(
+		new URL("../docs/contributor/database-migration.mdx", import.meta.url),
+		"utf8",
+	);
+	assert.deepEqual(pendingContractions(page), new Set());
 });
 
 void test("finds the stop-every-role entries of the upgrade from a previous version", () => {

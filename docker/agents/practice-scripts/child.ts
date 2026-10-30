@@ -98,33 +98,37 @@ async function runDefinition(
 		stopped.signal,
 		AbortSignal.timeout(Math.max(0, job.deadline - Date.now())),
 	]);
-	const models = ipcModels(accepted.models, async (slot, options, signal) => {
-		signal?.throwIfAborted();
-		const answered = new AbortController();
-		const reply = await request((id) => {
-			signal?.addEventListener(
-				"abort",
-				() => {
-					post({ kind: "cancel", id });
-				},
-				{ once: true, signal: answered.signal },
-			);
-			const label = (callLabel.getStore() ?? "").slice(0, MAX_LABEL_CHARS);
-			return { kind: "model", id, slot, label, options };
-		}).finally(() => {
-			answered.abort();
-		});
-		if (reply.kind === "model") {
-			tokensLeft = reply.tokensLeft;
-			return reply.answer;
-		}
-		if (reply.kind === "model-failed") {
-			tokensLeft = reply.tokensLeft;
-			// The AI SDK's `maxRetries` retries only an `APICallError`, so each direct model call runs once.
-			throw new UnratedError(reply.reason, reply.message);
-		}
-		throw new Error("unexpected reply to a model call");
-	});
+	const models = ipcModels(
+		accepted.models,
+		async (slot, options, signal) => {
+			signal?.throwIfAborted();
+			const answered = new AbortController();
+			const reply = await request((id) => {
+				signal?.addEventListener(
+					"abort",
+					() => {
+						post({ kind: "cancel", id });
+					},
+					{ once: true, signal: answered.signal },
+				);
+				const label = (callLabel.getStore() ?? "").slice(0, MAX_LABEL_CHARS);
+				return { kind: "model", id, slot, label, options };
+			}).finally(() => {
+				answered.abort();
+			});
+			if (reply.kind === "model") {
+				tokensLeft = reply.tokensLeft;
+				return reply.answer;
+			}
+			if (reply.kind === "model-failed") {
+				tokensLeft = reply.tokensLeft;
+				// The AI SDK's `maxRetries` retries only an `APICallError`, so each direct model call runs once.
+				throw new UnratedError(reply.reason, reply.message);
+			}
+			throw new Error("unexpected reply to a model call");
+		},
+		accepted.forcedToolChoice,
+	);
 	const ctx = programContext(job, {
 		read,
 		review: async (options) => {

@@ -8,7 +8,7 @@ description: Versioned evidence sources, capture states and practice readiness r
 # Source contract
 
 Hephaestus may review work against a practice only from evidence with explicit semantics.
-Contract `2.0.0` defines the logical source catalog, its capture states, and how well each source must be captured.
+Contract `3.0.0` defines the logical source catalog, its capture states, and how well each source must be captured.
 A folder index records what was supplied to one run.
 It does not prove that a practice is empirically observable.
 
@@ -111,7 +111,7 @@ A source allowed in an internal mirror is not thereby allowed in an external mod
 
 ## Source catalog
 
-The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/2.0.0/catalog.json), its adjacent JSON Schemas, and the checks in [`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-source-use-contracts.ts) jointly define conformance.
+The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/3.0.0/catalog.json), its adjacent JSON Schemas, and the checks in [`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-source-use-contracts.ts) jointly define conformance.
 Schema validation alone is insufficient.
 Standard JSON Schema `uniqueItems` compares whole values, not a selected identity property.
 The [validation checks](#validation) separate resource validation and digest checks from the server's catalog and governance checks.
@@ -133,6 +133,24 @@ The constraints with direct authoring consequences are:
   permitted mirrored document and can report `COMPLETE` for that mirror scope, not upstream currentness.
 - Three sources cannot be logically empty — the pull-request, issue, and document core records.
   Every other source may be validly empty.
+- The checks source (`scm.pull-request.checks`) carries `head_checks`, `head_check_runs`, and `merge_state_status` in `checks.json`.
+  The core record carries none of these fields.
+  It carries `head_check_runs` only when a read listed them for that head.
+  An absent field means that the runs are unknown, not that the head has no runs.
+  A practice that needs the runs and cannot read them returns Could not determine, never Not met.
+  A run with `finished: false` has no result.
+  A claim that depends on its outcome is Could not determine, and admission refuses a citation of it (`unfinished_run_cited`).
+  A run list never proves that a run is absent, because a provider can add runs after the read.
+  `complete: true` says only that the read listed every run the provider knew at `observed_at`.
+  `limitation: AWAITING_APPROVAL` says that the CI waits for a maintainer to approve it, so it has not run.
+  Then `head_checks` is `PENDING`, whatever the provider's rollup says.
+  A result can cite only the listed runs, with the state that they show at `observed_at`.
+  GitHub supplies check runs and commit statuses.
+  GitLab supplies none yet, because its pipeline hooks cannot show which runs finished.
+  Slack threads and Outline documents have no check runs.
+  The [sync lifecycle](./sync-lifecycle.md#check-runs-of-the-head) owns how the runs are read.
+- The review discussion source (`scm.review-threads`) carries `review_decision` in `review_threads.json`.
+  The core record carries no aggregate review decision.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
   also pinned. Its `requiredQuality` is `COMPLETE`: a verified empty range is available evidence.
   Each practice still needs its own review selection and supported result. Capture readiness assigns neither
@@ -297,7 +315,8 @@ Historical records keep their original contract and practice version.
 Currentness is derived:
 
 - source resources are immutable within a published contract version. Any semantic change creates a new
-  version.
+  version. The item record schemas under `contracts/items/` are not source resources.
+  An optional field added to a record keeps the contract version.
 - an [explicit practice upgrade](#cut-a-contract-version) controls when a practice moves to another source-contract version.
 - changing a practice's review configuration or automated-review policy stales that practice's claims.
 - adding a source cannot silently alter existing requirements because each practice names its sources explicitly.
@@ -407,7 +426,11 @@ Run commands from the repository root.
 
 A practice definition pins its source contract in `reads.contract`.
 A version cut does not change existing practice versions.
-An explicit definition update creates a practice version with a new review digest.
+A definition update creates a practice version with a new review digest.
+
+The stopped 1.0 upgrade creates current versions for practices that pin 2.0.0, including custom practices.
+It also updates their catalog comparison bases.
+Historical versions stay unchanged.
 The [currentness rules](#change-and-staleness) apply after the update.
 The [catalog update path](./practice-catalog.md#workspace-adoption-lifecycle) owns workspace proposal and acceptance behavior.
 

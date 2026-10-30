@@ -69,13 +69,13 @@ public class LlmConnectionProbeService {
                 .findProbeTargetById(connectionId)
                 .orElseThrow(() -> new EntityNotFoundException("LlmConnection", connectionId));
         boolean privateTarget = egressPolicy.validate(target.baseUrl());
-        return probe(target.baseUrl(), target.authMode(), target.apiKey(), privateTarget);
+        return probe(target.baseUrl(), target.authMode(), target.apiKey(), privateTarget, target.apiProtocol());
     }
 
     public LlmProbeResultDTO probeDraft(ProbeLlmConnectionRequestDTO request) {
         boolean privateTarget = egressPolicy.validate(request.baseUrl());
         LlmAuthMode authMode = request.authMode() != null ? request.authMode() : LlmAuthMode.BEARER;
-        return probe(request.baseUrl(), authMode, request.apiKey(), privateTarget);
+        return probe(request.baseUrl(), authMode, request.apiKey(), privateTarget, request.apiProtocol());
     }
 
     /**
@@ -83,21 +83,33 @@ public class LlmConnectionProbeService {
      * {@link EgressPolicy#validate} returned.
      */
     public LlmProbeResultDTO probeCredential(
-            String baseUrl, LlmAuthMode authMode, @Nullable String apiKey, boolean privateTarget) {
-        return probe(baseUrl, authMode, apiKey, privateTarget);
+            String baseUrl,
+            LlmAuthMode authMode,
+            @Nullable String apiKey,
+            boolean privateTarget,
+            LlmApiProtocol protocol) {
+        return probe(baseUrl, authMode, apiKey, privateTarget, protocol);
     }
 
     private LlmProbeResultDTO probe(
-            String baseUrl, LlmAuthMode authMode, @Nullable String apiKey, boolean privateTarget) {
-        String url = stripTrailingSlash(baseUrl) + "/models";
+            String baseUrl,
+            LlmAuthMode authMode,
+            @Nullable String apiKey,
+            boolean privateTarget,
+            LlmApiProtocol protocol) {
+        String url = stripTrailingSlash(baseUrl)
+                + (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES ? "/v1/models" : "/models");
         try {
             return restClient
                     .get()
                     .uri(url)
                     .headers(headers -> {
                         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+                        if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES)
+                            headers.set("anthropic-version", "2023-06-01");
                         if (StringUtils.hasText(apiKey)) {
-                            if (authMode == LlmAuthMode.API_KEY) {
+                            if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) headers.set("x-api-key", apiKey);
+                            else if (authMode == LlmAuthMode.API_KEY) {
                                 headers.set("api-key", apiKey);
                             } else {
                                 headers.setBearerAuth(apiKey);

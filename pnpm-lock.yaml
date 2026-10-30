@@ -148,7 +148,7 @@ overrides:
 packageExtensionsChecksum: sha256-GChmywMC9g5Yc9vtzjyZduZjO11V8kq+EdLHL0WucYw=
 
 patchedDependencies:
-  '@earendil-works/pi-ai@1.0.0': 7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872
+  '@earendil-works/pi-ai@1.0.0': e2769ddd24ee6f7866e116c30eb20cb0a2a6d026697cf17cd525240c19d67b71
   wxt@0.21.4: d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f
 
 importers:
@@ -164,6 +164,9 @@ importers:
       '@actions/workflow-parser':
         specifier: 0.3.61
         version: 0.3.61
+      '@ai-sdk/anthropic':
+        specifier: 4.0.85
+        version: 4.0.85(zod@4.6.6)
       '@ai-sdk/openai':
         specifier: 4.0.85
         version: 4.0.85(zod@4.6.6)
@@ -768,6 +771,12 @@ packages:
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
 
+  '@ai-sdk/anthropic@4.0.85':
+    resolution: {integrity: sha512-nfv/vtR4HuNUZyCzdK37d2CaW1mzeZJlzSmC+4Jn8Dn8ces8R9HOAgF9d+8iwx+SedmzurKQQmNvJ7xYGBcPMQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/gateway@4.0.104':
     resolution: {integrity: sha512-4lTyt8a4BMfVz4QGo+VO5odakmYMX5kq+xiRgdQGGY7o/jP2WSasp6LvIvYvt/lHzz1MfE+xKTOJhz7mMwjynA==}
     engines: {node: '>=22'}
@@ -798,12 +807,22 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.65':
+    resolution: {integrity: sha512-LCugcsP8oWmdeI3BASf4Fuo1wiC6Qx0YrefFssl7n12s+LV4DNi5RdwWQrtrB4oek3GGNQRN/h/NSwVZM2eHKw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.22':
     resolution: {integrity: sha512-1Jtmn36VNMOBo9CMUQrPqsR744qtqRloEiXpWCYS8ffPlhS2CrSNmoho5lPjp3R7EnkzBsGI6p51TA7fQJQZdA==}
     engines: {node: '>=22'}
 
   '@ai-sdk/provider@4.0.23':
     resolution: {integrity: sha512-TdEzgE1ndBGhDDwZcg/WZG3IeUj8Yz7/DkUG4ctMyK5HdNXTEKpjkCdwX8ayvkgluTv7yjnqCdOkB8/q1nfaNQ==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.31':
+    resolution: {integrity: sha512-3wJnwVTFg8SwOyoZCv+ov7Re2GB+7IQnU5a5MYJACrtiWDDUHgqTBeeesq2MB2ddgojzL8hgWleltwpAgtUqfg==}
     engines: {node: '>=22'}
 
   '@aklinker1/rollup-plugin-visualizer@5.12.0':
@@ -11094,9 +11113,9 @@ packages:
     peerDependencies:
       seroval: ^1.0
 
-  seroval@1.6.4:
-    resolution: {integrity: sha512-LErWMNS2RRFdu2RMA5u/PA59/IWs0XsikyEXGQ2/36iEWFrdG0ABmg17E17cikrv76891kOAMq3TkTFXpwAHXw==}
-    engines: {node: '>=10'}
+  seroval@1.7.2:
+    resolution: {integrity: sha512-NPOYrDVbvtuTo5m9InqKE7O6wBASON46OabjyqLUGPvoXNDYp0pReuFYkqOQwGsoj1OpZVj6mIdnRRgt5O1/gQ==}
+    engines: {node: '>=20'}
 
   serve-handler@6.1.7:
     resolution: {integrity: sha512-CinAq1xWb0vR3twAv9evEU8cNWkXCb9kd5ePAHUKJBkOsUpR1wt/CvGdeca7vqumL1U5cSaeVQ6zZMxiJ3yWsg==}
@@ -11489,8 +11508,8 @@ packages:
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
-  systeminformation@5.33.14:
-    resolution: {integrity: sha512-9liS0hutibZOitbibm90AK3WZe/1rGhNGZSw+/4TbY5moax6KkWwv1TKJmk9uSOD4bvPPg57VAuuNN+4edIpBg==}
+  systeminformation@5.33.16:
+    resolution: {integrity: sha512-R+Lh69IJXfJj6bfyH1In5cIR9FTr4hBS39YvlZHZjsK1p9cuELPq7hplZZIb56ZESMMb+DzdKqqE6Iomi01Mvg==}
     engines: {node: '>=10.0.0'}
     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
@@ -12427,6 +12446,12 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
+  '@ai-sdk/anthropic@4.0.85(zod@4.6.6)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.6)
+      zod: 4.6.6
+
   '@ai-sdk/gateway@4.0.104(zod@4.6.6)':
     dependencies:
       '@ai-sdk/provider': 4.0.22
@@ -12464,11 +12489,24 @@ snapshots:
       undici: 7.30.1
       zod: 4.6.6
 
+  '@ai-sdk/provider-utils@5.0.65(zod@4.6.6)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.31
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.30.1
+      zod: 4.6.6
+
   '@ai-sdk/provider@4.0.22':
     dependencies:
       json-schema: 0.4.0
 
   '@ai-sdk/provider@4.0.23':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.31':
     dependencies:
       json-schema: 0.4.0
 
@@ -15299,7 +15337,7 @@ snapshots:
       object-treeify: 1.1.33
       open: 8.4.2
       picomatch: 4.0.7
-      systeminformation: 5.33.14
+      systeminformation: 5.33.16
       undici: 7.30.1
       which: 4.0.0
       yocto-spinner: 1.2.2
@@ -15312,7 +15350,7 @@ snapshots:
 
   '@earendil-works/pi-agent-core@1.0.0(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)':
     dependencies:
-      '@earendil-works/pi-ai': 1.0.0(patch_hash=7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)
+      '@earendil-works/pi-ai': 1.0.0(patch_hash=e2769ddd24ee6f7866e116c30eb20cb0a2a6d026697cf17cd525240c19d67b71)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)
       typebox: 1.3.27
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -15327,7 +15365,7 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@1.0.0(patch_hash=7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)':
+  '@earendil-works/pi-ai@1.0.0(patch_hash=e2769ddd24ee6f7866e116c30eb20cb0a2a6d026697cf17cd525240c19d67b71)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)':
     dependencies:
       '@anthropic-ai/sdk': 0.124.0(zod@4.6.6)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
@@ -15360,7 +15398,7 @@ snapshots:
     dependencies:
       '@earendil-works/chord': 1.0.0
       '@earendil-works/pi-agent-core': 1.0.0(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)
-      '@earendil-works/pi-ai': 1.0.0(patch_hash=7f20240a7a66b663e86c5b87724e775856909cddc18844451d0328a15b3f8872)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)
+      '@earendil-works/pi-ai': 1.0.0(patch_hash=e2769ddd24ee6f7866e116c30eb20cb0a2a6d026697cf17cd525240c19d67b71)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.1(supports-color@8.1.1)(zod@4.6.6))(@smithy/signature-v4@5.7.3)(supports-color@8.1.1)(undici@8.12.2)(ws@8.21.3)(zod@4.6.6)
       '@earendil-works/pi-codemode': 1.0.0
       '@earendil-works/pi-mcp': 1.0.0
       '@earendil-works/pi-tui': 1.0.0
@@ -17660,8 +17698,8 @@ snapshots:
     dependencies:
       '@tanstack/history': 1.162.1
       cookie-es: 3.1.1
-      seroval: 1.6.4
-      seroval-plugins: 1.6.4(seroval@1.6.4)
+      seroval: 1.7.2
+      seroval-plugins: 1.6.4(seroval@1.7.2)
 
   '@tanstack/router-devtools-core@1.168.1(@tanstack/router-core@1.171.27)(csstype@3.2.3)':
     dependencies:
@@ -24758,11 +24796,11 @@ snapshots:
 
   serialize-javascript@7.1.2: {}
 
-  seroval-plugins@1.6.4(seroval@1.6.4):
+  seroval-plugins@1.6.4(seroval@1.7.2):
     dependencies:
-      seroval: 1.6.4
+      seroval: 1.7.2
 
-  seroval@1.6.4: {}
+  seroval@1.7.2: {}
 
   serve-handler@6.1.7:
     dependencies:
@@ -25268,7 +25306,7 @@ snapshots:
 
   symbol-tree@3.2.4: {}
 
-  systeminformation@5.33.14: {}
+  systeminformation@5.33.16: {}
 
   tagged-tag@1.0.0: {}
 

@@ -21,7 +21,7 @@ const guides = [
 			{ label: "Practice profile", to: "/user/practice-profile" },
 			{ label: "Activity", to: "/user/activity" },
 			{ label: "Practice feedback", to: "/user/ai-code-review" },
-			{ label: "Talk with Heph", to: "/user/ai-mentor" },
+			{ label: "Ask Hephaestus", to: "/user/ask-hephaestus" },
 			{ label: "Chrome extension", to: "/user/browser-extension" },
 		],
 	},

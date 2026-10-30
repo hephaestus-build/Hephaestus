@@ -39,8 +39,8 @@ export const LightAndDark: Story = {
 };
 
 export const Informative: Story = {
-	args: { label: "Heph, AI assistant" },
+	args: { label: "Ask Hephaestus" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("img", { name: "Heph, AI assistant" })).toBeVisible();
+		await expect(canvas.getByRole("img", { name: "Ask Hephaestus" })).toBeVisible();
 	},
 };

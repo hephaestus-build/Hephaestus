@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolInUseException;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionInUseException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelInUseException;
@@ -82,19 +84,29 @@ public class AgentControllerAdvice {
         return problem(HttpStatus.CONFLICT, "llm-model-slug-conflict", "LLM model slug conflict", exception);
     }
 
+    @ExceptionHandler(LlmCallPoolInUseException.class)
+    ProblemDetail handleCallPoolInUse(LlmCallPoolInUseException exception) {
+        return problem(HttpStatus.CONFLICT, "llm-call-pool-in-use", "Call pool is in use", exception);
+    }
+
+    @ExceptionHandler(LlmCallPoolSlugConflictException.class)
+    ProblemDetail handleCallPoolSlugConflict(LlmCallPoolSlugConflictException exception) {
+        return problem(HttpStatus.CONFLICT, "llm-call-pool-slug-conflict", "LLM call pool slug conflict", exception);
+    }
+
     @ExceptionHandler(LlmModelUpstreamIdConflictException.class)
     ProblemDetail handleModelUpstreamIdConflict(LlmModelUpstreamIdConflictException exception) {
         return problem(
                 HttpStatus.CONFLICT, "llm-model-upstream-id-conflict", "LLM model upstream id conflict", exception);
     }
 
-    /** Heph declines the member; {@code reason} lets the app point at the setting that changes it. */
+    /** Hephaestus declines the member; {@code reason} lets the app point at the setting that changes it. */
     @ExceptionHandler(MentorRefusedException.class)
     ProblemDetail handleMentorRefused(MentorRefusedException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, exception.reason().userMessage());
         problem.setType(URI.create("/problems/mentor-refused"));
-        problem.setTitle("Heph cannot reply");
+        problem.setTitle("Hephaestus cannot reply");
         problem.setProperty("reason", exception.reason().name());
         return problem;
     }
@@ -105,12 +117,12 @@ public class AgentControllerAdvice {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, exception.reason().userMessage());
         problem.setType(URI.create("/problems/mentor-rejected"));
-        problem.setTitle("Heph conversation conflict");
+        problem.setTitle("Conversation conflict");
         problem.setProperty("reason", exception.reason().name());
         return problem;
     }
 
-    /** A Heph host wrote for a turn attempt that lost its lease. */
+    /** A Hephaestus host wrote for a turn attempt that lost its lease. */
     @ExceptionHandler(MentorLeaseLostException.class)
     ProblemDetail handleMentorLeaseLost(MentorLeaseLostException exception) {
         return problem(HttpStatus.CONFLICT, "mentor-lease-lost", "Turn lease lost", exception);

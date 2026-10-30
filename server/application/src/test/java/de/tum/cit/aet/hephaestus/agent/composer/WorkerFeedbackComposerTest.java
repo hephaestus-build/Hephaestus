@@ -128,7 +128,8 @@ class WorkerFeedbackComposerTest {
                                 null,
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         200_000,
                         4_000,
                         600,
@@ -163,6 +164,10 @@ class WorkerFeedbackComposerTest {
     }
 
     private WorkerFeedbackComposer composer() {
+        return composer(new CompositionCapacity(4));
+    }
+
+    private WorkerFeedbackComposer composer(CompositionCapacity capacity) {
         return new WorkerFeedbackComposer(
                 admission,
                 evidence,
@@ -182,7 +187,8 @@ class WorkerFeedbackComposerTest {
                         16),
                 meters,
                 mapper,
-                Duration.ZERO);
+                Duration.ZERO,
+                capacity);
     }
 
     @Test
@@ -382,17 +388,46 @@ class WorkerFeedbackComposerTest {
     }
 
     @Test
-    void shouldWithholdWithoutCallingTheModelAfterTheDeadline() {
+    void shouldHandTheAttemptOnWithoutCallingTheModelAfterTheDeadline() {
+        assertThatThrownBy(() -> composer().composeAfterMeasurement(job, "worker-1", Instant.now()))
+                .isInstanceOfSatisfying(
+                        CompositionHandedOnException.class,
+                        handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.DEADLINE));
+
+        // A later attempt composes what is still open in a fresh window; nothing is withheld now.
+        verify(gateway, never()).call(any(), any());
+        assertThat(prepared).isEmpty();
+        assertThat(stops("deadline", "handed_on")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldWithholdWhatTheDeadlineLeftOpenOnTheAttemptAtTheRetryLimit() {
+        job.setAttempt(MAX_RETRIES);
+
         composer().composeAfterMeasurement(job, "worker-1", Instant.now());
 
         verify(gateway, never()).call(any(), any());
         assertThat(prepared)
                 .extracting(request -> request.composition().getFirst().withheldReason())
-                .containsOnly(FeedbackStopReason.NOT_COMPOSED);
+                .containsOnly(FeedbackStopReason.NOT_COMPOSED)
+                .hasSize(4);
+        assertThat(stops("deadline", "withheld")).isEqualTo(4);
+    }
+
+    @Test
+    void shouldHandTheAttemptOnWhenTheProxyRefusesACallPastTheWorkDeadline() {
+        answerEveryCall(new ReviewModelGateway.Answer(403, new byte[0], true, ReviewModelGateway.Refusal.WORK_TIME));
+
+        assertThatThrownBy(() -> composer()
+                        .composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1))))
+                .isInstanceOfSatisfying(
+                        CompositionHandedOnException.class,
+                        handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.DEADLINE));
+        assertThat(prepared).isEmpty();
     }
 
     @ParameterizedTest
-    @CsvSource({"AI_CHOICE, NO_AI, no_ai", "BUDGET, NOT_COMPOSED, budget", "WORK_TIME, NOT_COMPOSED, deadline"})
+    @CsvSource({"AI_CHOICE, NO_AI, no_ai", "BUDGET, NOT_COMPOSED, budget"})
     void shouldWithholdAtOnceWithTheMostSpecificReasonWhenTheProxyRefuses(
             ReviewModelGateway.Refusal refusal, FeedbackStopReason reason, String cause) {
         answerEveryCall(new ReviewModelGateway.Answer(403, new byte[0], true, refusal));
@@ -406,6 +441,26 @@ class WorkerFeedbackComposerTest {
                 .containsOnly(reason)
                 .hasSize(4);
         assertThat(stops(cause, "withheld")).isEqualTo(4);
+    }
+
+    @Test
+    void shouldWithholdNativeRefusalsWithoutRepairingEitherCompositionSession() {
+        var config = (ObjectNode) job.getConfigSnapshot().deepCopy();
+        ((ObjectNode) config.path("model")).put("apiProtocol", "anthropic-messages");
+        job.setConfigSnapshot(config);
+        answerEveryCall(new ReviewModelGateway.Answer(200, """
+                {"stop_reason":"refusal","content":[{"type":"text","text":"I cannot compose this feedback."},
+                  {"type":"tool_use","id":"refused","name":"report_review","input":{}}]}
+                """.getBytes(StandardCharsets.UTF_8), true, null));
+
+        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+
+        assertThat(requests).hasSize(2);
+        assertThat(prepared)
+                .extracting(request -> request.composition().getFirst().withheldReason())
+                .containsOnly(FeedbackStopReason.NOT_COMPOSED)
+                .hasSize(4);
+        assertThat(stops("model_refused", "withheld")).isEqualTo(4);
     }
 
     @Test
@@ -491,6 +546,26 @@ class WorkerFeedbackComposerTest {
                 .extracting(request -> request.composition().getFirst().withheldReason())
                 .containsOnly(FeedbackStopReason.NO_AI)
                 .hasSize(4);
+    }
+
+    @Test
+    void shouldWithholdExhaustedRetriesWhenAllCompositionSlotsAreOccupied() {
+        job.setAttempt(MAX_RETRIES + 1);
+        when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
+        var capacity = new CompositionCapacity(1);
+        var occupied = capacity.acquire(Instant.now().plusSeconds(5));
+        try {
+            composer(capacity).composeResumed(job, "worker-1", Instant.now());
+        } finally {
+            occupied.close();
+        }
+        assertThat(prepared)
+                .extracting(request -> request.composition().getFirst().withheldReason())
+                .containsOnly(FeedbackStopReason.NOT_COMPOSED)
+                .hasSize(4);
+        assertThat(stops("retries_exhausted", "withheld")).isEqualTo(4);
+        verify(continuation, never()).restore(any());
+        verify(gateway, never()).call(any(), any());
     }
 
     @Test

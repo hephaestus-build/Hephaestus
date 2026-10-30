@@ -120,11 +120,13 @@ A practice that pins another source contract, or reads a source that the catalog
 That practice is withheld, and its sources are not captured.
 The other practices are captured and run.
 
-An item review first compares each practice's pinned review events and About role with the reviewed item kind's descriptor.
+Selection compares each practice's review events and About role with the item kind's descriptor, for events and for requests.
 Authoring checks the same descriptor facts, but a stored version can predate them.
-A practice that declares an event or an About role that the item kind does not offer records `item_capability_unsupported`.
-It is withheld in the same way.
-The check does not require a declared event to have occurred, so a requested review still bypasses event selection.
+A practice that declares an event or an About role that the item kind does not offer is not selected.
+Its page in practice administration says that Hephaestus does not run it.
+
+Capture checks the pinned version again, for a version pinned before the check.
+Such a practice records `item_capability_unsupported` and is withheld in the same way.
 Scans review files and repositories, not the practice's item kind, so this check does not apply to them.
 
 `source_contract_unsupported` and `item_capability_unsupported` mean that the stored practice does not fit the work.
@@ -232,6 +234,53 @@ The brief shows them in one order: the change, the core text, linked work, then 
 It ends with the practice's own index of those sources.
 Practices that declare the same sources get the same opening, so a prompt cache can share it.
 
+The server orders item-review practices without a current result first, then by the oldest last verdict.
+The runner preserves that order among practices ready to start.
+Each declared-source set starts one leader at once.
+Its followers wait for the leader's first streamed response, at most 20 seconds or until the leader ends.
+A different set can start while those followers wait.
+The review deadline still bounds the wait and the work.
+
+OpenAI Responses uses explicit cache boundaries at the system prompt and the ends of the change and core layers where the model supports them.
+The provider's implicit session cache keeps its own slot.
+OpenAI keeps its provider-default retention.
+The API does not accept a five-minute TTL.
+Anthropic's native Messages layout uses five minutes in L5 of [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#update--2026-10-28).
+Completions protocols receive no explicit cache markers.
+
+Live cache gain remains unverified until staging measurement after L3 merges.
+
+The native Anthropic Messages protocol serves reviews, script chat calls, composition, and conversations through the gateway.
+Its upstream path is `/v1/messages` relative to the connection's root URL.
+The gateway uses the live connection's key and a fixed API version.
+It permits custom client tools and refuses provider-hosted tools.
+
+The native SDK keeps hosted tool discovery and system updates inside the conversation disabled.
+The gateway serves custom client tools and a top-level system prompt with one fixed API version.
+Known model metadata still supplies its supported thinking mode.
+
+It combines cumulative stream usage without subtracting cache buckets from uncached input.
+
+The catalog stores the nullable `forced_tool_choice` capability from a synthetic probe.
+An unknown capability uses automatic tool choice.
+The frozen review configuration carries the capability to Pi and the script host.
+The script host passes it to custom programs through IPC.
+No model-name pattern determines it.
+
+Anthropic sessions use automatic tool choice throughout, so repair turns keep the same cache prefix.
+
+The [admin guide](/admin/ai-providers#test-model-tool-choice) describes the test.
+The system, change and core layers have explicit cache breakpoints with a five-minute TTL.
+The SDK's last-tool breakpoint is removed. Its moving session breakpoint uses the fourth slot.
+A repair keeps the stable layers and the same tool choice.
+Without the original opening after compaction, system and session caching continue.
+
+Native feedback composition uses the provider's defaults for thinking and sampling.
+It does not apply the review runner's effort or temperature overrides.
+This supports opaque model aliases without a second model-capability catalog.
+Pi uses its provider metadata for native model IDs that it recognizes.
+An unknown native alias keeps provider defaults for those options.
+
 The session's read, grep and find tools refuse a captured file that the practice does not declare. A listing still shows its name.
 A result may cite only its declared sources, the change and the checkout. The runner refuses other citations, and the session gets a repair turn.
 Every session can also read the change and the checkout through Git.
@@ -254,6 +303,12 @@ Candidate omissions and failure counts describe only gaps in the sources needed 
 In an item review that reads a checkout, a result that says the repository lacks something needs a search of the whole checkout.
 Otherwise admission withholds it as `consulted_source_unread`.
 [Workspace ABI § Claims that the repository lacks something](./agent/workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.
+
+A result may cite, or name as consulted, only the sources that its practice declares, and the change and the checkout.
+Every session reads the change and the checkout through Git.
+Otherwise admission withholds the result as `undeclared_source_cited`.
+The runner refuses such a result first and gives the session a repair turn, so this reason guards against a runner defect.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides it.
 
 The server verifies shape, outcome requirements, quotations, source permission and claim basis.
 One invalid problem, example or citation withholds the complete candidate.
@@ -505,10 +560,10 @@ An unknown outcome keeps the proposal awaiting approval.
 An admin can recheck a write with unknown visibility.
 The recheck only reads the copy back and never creates a copy.
 
-A conversation copy settles after its Heph turn ends.
+A conversation copy settles after its conversation turn ends.
 It is delivered only when the completed answer shows its words through `show_feedback`.
 The weekly digest creates no copy and changes no delivery.
-The [Heph runtime](./unified-pi-runtime.mdx#delivery-of-shown-feedback) owns the claim and the receipt.
+The [Conversation runtime](./unified-pi-runtime.mdx#delivery-of-shown-feedback) owns the claim and the receipt.
 
 The [feedback model](./practice-feedback-schema.md#feedback-and-delivery) owns durable receipts.
 The [operator guide](/admin/practice-review) owns approval, retry and diagnosis procedures.

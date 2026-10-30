@@ -1,6 +1,6 @@
 # ADR 0057: One Heph conversation per developer, on a stateless shared Heph host
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-10-28 — Heph's host and turn sandbox superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 **Date:** 2026-10-09
 **Authors:** Felix T.J. Dietrich
 
@@ -219,7 +219,7 @@ The server role never talks to the host.
 
 The worker pings the WebSocket.
 A host that stops answering the pings is gone, and the worker replaces it.
-[Heph runtime](../contributor/unified-pi-runtime.mdx#the-heph-host) gives the lifecycle of the host.
+[Heph runtime](../contributor/unified-pi-runtime.mdx#the-conversation-host) gives the lifecycle of the host.
 
 Nothing about a conversation outlives a turn in the host.
 Any host can run the next turn, because the turn rebuilds its session from rows.
@@ -543,3 +543,11 @@ The binding is now as follows:
 - OpenAI: [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching), [Session memory](https://developers.openai.com/cookbook/examples/agents_sdk/session_memory).
 - Context limits: [Chroma, context rot](https://www.trychroma.com/research/context-rot), [How contexts fail](https://www.dbreunig.com/2025/06/22/how-contexts-fail-and-how-to-fix-them.html), [Manus, context engineering](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus).
 - Slack: [Agents and AI apps](https://docs.slack.dev/ai/), [Streaming messages](https://docs.slack.dev/reference/methods/chat.startStream/), [message events](https://docs.slack.dev/reference/events/message/).
+
+## Update — 2026-10-28: where Heph's loop and tools run ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+
+ADR 0068 supersedes § The Heph host and § Context folder and turn sandbox.
+Heph's loop runs as one Deployment, and each turn attempt's tools run in a tools Pod that holds no token and has no network egress.
+The Heph host, its WebSocket channel, its gateway session token, the turn sandbox and its stager go.
+Each turn attempt carries an attempt token that names only the turn, its workspace and the attempt.
+The ledger, the conversation model, the context model and delivery of this decision stay.

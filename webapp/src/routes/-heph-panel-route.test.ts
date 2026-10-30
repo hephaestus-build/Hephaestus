@@ -8,8 +8,8 @@ describe("isHephPanelExcludedRoute", () => {
 		"/admin/users",
 		"/w/acme/admin",
 		"/w/acme/admin/practices/reviews",
-		"/mentor",
-		"/w/acme/mentor",
+		"/conversation",
+		"/w/acme/conversation",
 		"/settings",
 		"/privacy",
 	])("excludes %s", (pathname) => {

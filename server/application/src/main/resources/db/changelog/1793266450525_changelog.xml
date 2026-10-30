@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793266450525-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="workspace" columnName="slug"/>
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_proc WHERE oid = to_regprocedure('workspace_slug_assignable(text)')</sqlCheck>
+        </preConditions>
+        <comment>Reserve the conversation route in the database slug policy. Existing workspaces must use another slug before upgrade.</comment>
+        <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout = '1s';
+LOCK TABLE workspace IN SHARE ROW EXCLUSIVE MODE;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM workspace WHERE slug = 'conversation') THEN
+        RAISE EXCEPTION 'Rename the workspace with slug conversation before upgrading' USING ERRCODE = '23514';
+    END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION workspace_slug_assignable(label text) RETURNS boolean
+LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT length(label) BETWEEN 3 AND 51
+        AND label COLLATE "C" ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        AND position('--' IN label) = 0
+        AND label !~ '^pr[0-9]+$'
+        AND label NOT IN (
+            'www', 'api', 'docs', 'admin', 'auth', 'login', 'mail', 'status',
+            'staging', 'preview', 'info', 'marketing', 'sales', 'support', 'abuse', 'noc',
+            'security', 'postmaster', 'hostmaster', 'usenet', 'news', 'webmaster', 'uucp', 'ftp',
+            'w', 'settings', 'integrations', 'consent', 'legal', 'privacy', 'terms', 'unsubscribe',
+            'landing', 'oauth', 'oauth2', 'webhooks', 'actuator', 'livez', 'readyz', 'error',
+            'swagger-ui', 'v3', 'identity-providers', 'workspaces', 'workers', 'mentor', 'conversation', 'feedback', 'practices',
+            'activity', 'about', 'imprint', 'audit', 'catalog', 'login-providers', 'models', 'person-data',
+            'surveys', 'usage', 'users', 'onboarding', 'practice-profile', 'practices-across-the-workspace', 'workspace-activity', 'new',
+            'github', 'gitlab', 'members', 'teams', 'outline', 'scm', 'slack', 'releases',
+            'review', 'reviews', 'user', 'observations', 'runs', 'work', 'practice-groups', 'assets',
+            'static', 'cdn', 'traefik', 'grafana', 'prometheus', 'nats', 'postgres', 'registry',
+            'agents', 'config-audit', 'connections', 'contributors', 'internal', 'llm', 'practice-catalog', 'product-feedback',
+            'sync', 'team', 'user-view', 'notifications', 'providers'
+        );
+$$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout = '1s';
+LOCK TABLE workspace IN SHARE ROW EXCLUSIVE MODE;
+
+CREATE OR REPLACE FUNCTION workspace_slug_assignable(label text) RETURNS boolean
+LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT length(label) BETWEEN 3 AND 51
+        AND label COLLATE "C" ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        AND position('--' IN label) = 0
+        AND label !~ '^pr[0-9]+$'
+        AND label NOT IN (
+            'www', 'api', 'docs', 'admin', 'auth', 'login', 'mail', 'status',
+            'staging', 'preview', 'info', 'marketing', 'sales', 'support', 'abuse', 'noc',
+            'security', 'postmaster', 'hostmaster', 'usenet', 'news', 'webmaster', 'uucp', 'ftp',
+            'w', 'settings', 'integrations', 'consent', 'legal', 'privacy', 'terms', 'unsubscribe',
+            'landing', 'oauth', 'oauth2', 'webhooks', 'actuator', 'livez', 'readyz', 'error',
+            'swagger-ui', 'v3', 'identity-providers', 'workspaces', 'workers', 'mentor', 'feedback', 'practices',
+            'activity', 'about', 'imprint', 'audit', 'catalog', 'login-providers', 'models', 'person-data',
+            'surveys', 'usage', 'users', 'onboarding', 'practice-profile', 'practices-across-the-workspace', 'workspace-activity', 'new',
+            'github', 'gitlab', 'members', 'teams', 'outline', 'scm', 'slack', 'releases',
+            'review', 'reviews', 'user', 'observations', 'runs', 'work', 'practice-groups', 'assets',
+            'static', 'cdn', 'traefik', 'grafana', 'prometheus', 'nats', 'postgres', 'registry',
+            'agents', 'config-audit', 'connections', 'contributors', 'internal', 'llm', 'practice-catalog', 'product-feedback',
+            'sync', 'team', 'user-view', 'notifications', 'providers'
+        );
+$$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

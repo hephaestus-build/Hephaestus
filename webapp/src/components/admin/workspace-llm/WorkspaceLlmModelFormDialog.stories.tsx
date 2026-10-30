@@ -213,3 +213,7 @@ export const Dark: Story = {
 		await expectSettledVisible(within(dialog).getByText("In-house"));
 	},
 };
+
+export const ToolChoiceTest: Story = {
+	args: { editing: mockModel, capabilities: { test: { status: "idle" }, onProbe: fn() } },
+};

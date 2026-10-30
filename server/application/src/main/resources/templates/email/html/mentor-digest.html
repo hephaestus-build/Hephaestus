@@ -11,8 +11,8 @@
                     <td style="padding: 24px; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 24px; color: #111827;">
                         <h1 style="margin: 0 0 16px 0; font-size: 20px; line-height: 28px;" th:text="#{email.mentor-digest.subject}">Your weekly digest is ready</h1>
                         <p style="margin: 0 0 16px 0;">Your weekly digest for <span th:text="${weekDays}">5–11 October</span> in <span th:text="${workspaceName}">workspace</span> is ready in Hephaestus.</p>
-                        <p style="margin: 0 0 16px 0;"><a th:href="${workspaceAddress + '/mentor?entry=' + entryId}" style="color: #2563eb;">Open in Hephaestus</a></p>
-                        <p style="margin: 0;">Open it to go through it with Heph. Replies to this email are not read.</p>
+                        <p style="margin: 0 0 16px 0;"><a th:href="${workspaceAddress + '/conversation?entry=' + entryId}" style="color: #2563eb;">Open in Hephaestus</a></p>
+                        <p style="margin: 0;">Open it to go through it in Hephaestus. Replies to this email are not read.</p>
                     </td>
                 </tr>
                 <tr><td th:replace="~{email/html/layout :: footer}"></td></tr>

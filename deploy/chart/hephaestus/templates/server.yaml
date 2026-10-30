@@ -29,8 +29,7 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
 spec:
-  # One replica. The worker-token signing key ring has no flat environment form, and without it each
-  # replica signs with its own ephemeral key (docs/admin/runtime-roles.mdx § Worker pod env vars).
+  # One replica: servers do not yet process provider events in order across replicas.
   # Recreate: two server versions would consume the same provider event streams out of order. The
   # migration Job owns the schema; the server waits for it. 0 stops it for database maintenance.
   replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.server.replicas) }}
@@ -58,6 +57,10 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
           imagePullPolicy: IfNotPresent
           env:
+            - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED
+              value: {{ .Values.workspaceSubdomains.enabled | quote }}
+            - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN
+              value: {{ .Values.host | quote }}
             {{- include "hephaestus.env.pod" . | nindent 12 }}
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}
@@ -83,9 +86,9 @@ spec:
             # The server submits practice review jobs only when a worker can run them.
             - name: AGENT_ENABLED
               value: {{ .Values.worker.enabled | quote }}
-            {{- $hephSlots := mul (int .Values.worker.replicas) (int (include "hephaestus.hephTurns" .)) }}
+            {{- $hephSlots := mul (int .Values.worker.replicas) (int (include "hephaestus.conversationTurns" .)) }}
             {{- if and .Values.worker.enabled (gt $hephSlots 0) }}
-            # Every worker's Heph turns. A question says that Heph answers other questions only while all of them run.
+            # Every worker's conversation turns. A question says that Hephaestus answers other questions only while all of them run.
             - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
               value: {{ $hephSlots | quote }}
             {{- end }}
@@ -181,7 +184,6 @@ spec:
               value: {{ $config.llmUsageRetention | quote }}
             - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
               value: {{ $config.releaseCheckEnabled | quote }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN" "key" "HEPHAESTUS_WORKER_REGISTRATION_TOKEN" "optional" (not .Values.worker.enabled)) | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080

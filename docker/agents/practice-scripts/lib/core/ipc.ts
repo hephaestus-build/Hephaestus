@@ -56,7 +56,12 @@ export type AbortReason = "deadline" | "budget" | "cancelled";
 
 export type HostMessage =
 	| { kind: "job"; job: ChildJob }
-	| { kind: "meta-accepted"; models: Partial<Record<ModelSlot, string>>; tokens: number }
+	| {
+			kind: "meta-accepted";
+			models: Partial<Record<ModelSlot, string>>;
+			forcedToolChoice: boolean;
+			tokens: number;
+	  }
 	| { kind: "model"; id: number; answer: SlotAnswer; tokensLeft: number }
 	| { kind: "model-failed"; id: number; reason: UnratedReason; message: string; tokensLeft: number }
 	| { kind: "read-result"; id: number; value: ReadValue }

@@ -7,7 +7,7 @@ import { statusValues } from "@/components/common/status-def";
 
 export type AgentPurpose = AgentBinding["purpose"];
 
-/** A kind's glyph. `size` in pixels, because Heph's mark sizes itself from it, not from a class. */
+/** A kind's glyph. `size` in pixels, because Hephaestus's mark sizes itself from it, not from a class. */
 type ModelKindIcon = ComponentType<{ size: number; className?: string }>;
 
 function HephKindIcon({ size, className }: { size: number; className?: string }) {
@@ -22,7 +22,7 @@ interface AgentPurposeDef {
 	withArticle: string;
 	description: string;
 	/**
-	 * Whether only practice scripts call it. False for review and Heph: a script can call the review
+	 * Whether only practice scripts call it. False for review and Hephaestus: a script can call the review
 	 * model too, but that model is not a model for practice scripts. Which APIs serve a purpose is the server's
 	 * fact, sent as each model's `purposes`; a connection's API names them in `LLM_API_PROTOCOL_LABELS`.
 	 */
@@ -31,7 +31,7 @@ interface AgentPurposeDef {
 	/**
 	 * The glyph's colour, as complete class strings. A hue tells the three model kinds for practice scripts apart;
 	 * each stays at least 30° (OKLCH) from success, warning, destructive and mentor, so a kind never
-	 * reads as a status or the accent. Review and Heph stay neutral.
+	 * reads as a status or the accent. Review and Hephaestus stay neutral.
 	 */
 	tone: string;
 }
@@ -49,12 +49,12 @@ export const AGENT_PURPOSE_DEFS = {
 		tone: "text-foreground",
 	},
 	MENTOR: {
-		title: "Heph",
-		short: "Heph",
-		noun: "Heph model",
-		withArticle: "the Heph model",
+		title: "Conversations",
+		short: "Conversation",
+		noun: "conversation model",
+		withArticle: "the conversation model",
 		description:
-			"Powers conversations with Heph. Every member is offered Heph once an assignment here is ready.",
+			"Answers members in their conversations. Every member can ask once a conversation model is ready.",
 		practiceScript: false,
 		icon: HephKindIcon,
 		tone: "text-foreground",

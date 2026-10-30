@@ -247,7 +247,12 @@ class PracticeCriteriaCaseStagingIntegrationTest {
         assertThat(index.get(0).path("exhaustiveSources")).isEmpty();
         assertThat(index.get(0).path("readsSources"))
                 .extracting(JsonNode::asString)
-                .containsExactly("scm.pull-request.core", "scm.pull-request.diff", "scm.repository.tree");
+                .containsExactly(
+                        "scm.pull-request.checks",
+                        "scm.pull-request.core",
+                        "scm.pull-request.diff",
+                        "scm.repository.tree",
+                        "scm.review-threads");
         assertThat(Files.readString(workspace.resolve(SandboxLayout.PRACTICES_PREFIX + "index.json")))
                 .doesNotContain("UNDETERMINED");
     }

@@ -12,6 +12,10 @@ const CITATION_BY_KIND: Record<string, { path: string; quote: string }> = {
 		path: "Pull request description",
 		quote: "Adds the admin read surface for review output. Follow-up to #1402.",
 	},
+	"scm.pull-request.checks": {
+		path: "Checks for the reviewed commit",
+		quote: '"name": "build", "state": "success", "finished": true',
+	},
 	"scm.pull-request.diff": {
 		path: "webapp/src/components/admin/practice-reviews/ReviewRow.tsx",
 		quote:
@@ -139,6 +143,7 @@ export const EverySource: Story = {
 		).toEqual(
 			[
 				"The reviewed work itself",
+				"CI checks and merge status",
 				"The code changes",
 				"Comments on the reviewed work",
 				"Files and history in the repository",

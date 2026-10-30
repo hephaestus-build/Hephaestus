@@ -115,7 +115,7 @@ In the production compose stack, that base is `https://<host>/api`.
 
 Slack opens Home when someone selects the app.
 Hephaestus uses Home for account linking and privacy controls.
-Heph uses the Messages tab, which is the DM with the app.
+Hephaestus uses the Messages tab, which is the DM with the app.
 
 Events and interactivity go to different roles.
 Events are published to the event stream, and the webhook role receives them.
@@ -148,14 +148,14 @@ The bot token scope set stays minimal — every scope maps to a feature the code
 
 | Scope                                 | Feature                                                                                      |
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `chat:write`                          | Heph replies in DMs, weekly digest notes, and monitored-channel announcements                |
-| `assistant:write`                     | Heph's streamed answers in DM threads                                                        |
-| `im:history`                          | DM `message` events with their edits and deletions, and DM history reads that look for an unsettled Heph reply or weekly digest note |
-| `reactions:write`                     | The 👀 reaction on a DM question while Heph works on it                                      |
+| `chat:write`                          | Hephaestus replies in DMs, weekly digest notes, and monitored-channel announcements                |
+| `assistant:write`                     | Hephaestus's streamed answers in DM threads                                                        |
+| `im:history`                          | DM `message` events with their edits and deletions, and DM history reads that look for an unsettled Hephaestus reply or weekly digest note |
+| `reactions:write`                     | The 👀 reaction on a DM question while Hephaestus works on it                                      |
 | `channels:history` / `groups:history` | Reading messages in workspace-admin-consented monitored channels (public / private)          |
 | `channels:read` / `groups:read`       | Channel directory listing for the admin channel picker and periodic channel-metadata refresh |
 | `channels:join`                       | Letting an admin add a public channel to monitoring directly from the picker                 |
-| `users:read`                          | Resolving a Slack user to a workspace member for Heph                                        |
+| `users:read`                          | Resolving a Slack user to a workspace member for Hephaestus                                        |
 
 The user token scope set is only for Sign in with Slack account linking:
 
@@ -166,7 +166,7 @@ email
 ```
 
 Workspace app installation gives Hephaestus a bot token.
-Heph in DMs also requires the member's Slack account connected to their Hephaestus account.
+Hephaestus in DMs also requires the member's Slack account connected to their Hephaestus account.
 
 1. Create an enabled Hephaestus login provider with registration id `slack` and type `SLACK`.
 2. Set its base URL to `https://slack.com`.
@@ -179,11 +179,11 @@ Use [`slack-app-manifest-template.yml`](./slack-app-manifest-template.yml) as th
 It owns scopes, event subscriptions, and request URLs.
 Its `settings.event_subscriptions` covers these event groups:
 
-- DM and channel `message` events for Heph turns and channel ingestion.
+- DM and channel `message` events for conversation turns and channel ingestion.
   DM edits and deletions arrive as `message` events too.
 - Channel-lifecycle events that update the monitored-channel allow-list.
 - App-lifecycle events, and `app_home_opened` for the Home tab.
-- `agent_session_stopped`, which Slack sends when a developer selects **Stop** while Heph works in a Slack thread.
+- `agent_session_stopped`, which Slack sends when a developer selects **Stop** while Hephaestus works in a Slack thread.
   It needs no OAuth scope beyond `chat:write`, which also sets that Stop's status.
 
 Hephaestus does not read Slack reactions.
@@ -198,7 +198,7 @@ It needs no additional scopes.
 #### Update an existing Slack app
 
 A Slack app that you created from an older manifest does not have `reactions:write`.
-Without it, Heph cannot show its working reaction on a DM.
+Without it, Hephaestus cannot show its working reaction on a DM.
 
 1. Apply the current [`slack-app-manifest-template.yml`](./slack-app-manifest-template.yml) to the Slack app.
 2. Reinstall the app in the Slack dashboard when Slack asks for it.
@@ -208,7 +208,7 @@ Only a new authorization gives the stored bot token the new scope.
 [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) gives the full upgrade procedure.
 
 A Slack app from an older manifest also does not subscribe to `agent_session_stopped`.
-Without it, Slack shows no Stop while Heph works in a Slack thread, and developers stop Heph in the app.
+Without it, Slack shows no Stop while Hephaestus works in a Slack thread, and developers stop Hephaestus in the app.
 Apply the current manifest to add the subscription.
 It adds no OAuth scope, so a Slack app that already has `reactions:write` keeps its bot token.
 
@@ -245,7 +245,7 @@ The compose files pass the same value to each:
 - **application-server:** connect/admin API, collection registration, reconcile scheduler, and webhook-subscription registrar.
 - **application-worker:** assembles agent context.
   The Outline content source has no runtime-role gate.
-  Without the flag, reviews that require wiki evidence decline, and Heph turns omit wiki context.
+  Without the flag, reviews that require wiki evidence decline, and conversation turns omit wiki context.
 - **webhook-server:** without the flag, no Outline delivery endpoint registers.
   Every delivery to `POST /webhooks/outline/…` returns `404`.
   Outline counts these as failures and **auto-disables the subscription after 25 failures**.
@@ -361,6 +361,7 @@ For a workspace connected before pipeline events had a consumer:
    Hephaestus then registers it again on the next sync.
 
 Until then, only scheduled sync supplies the head pipeline's state.
+Hephaestus then has no pipeline jobs as evidence, and no review starts when a pipeline finishes.
 Before GitLab 18.6, merge request events omit each reviewer's review state.
 On those versions, only scheduled sync (`MONITORING_SYNC_CRON`) supplies approvals, change requests, or renewed review requests.
 
@@ -405,23 +406,23 @@ Slack revocation alerts and Outline expiry information stay unchanged.
 
 Two deployment-topology facts belong here.
 The **worker runtime role** (`hephaestus.runtime.worker.enabled`), not `AGENT_ENABLED`, activates the Docker sandbox.
-Only `application-worker` runs sandboxes and holds the Docker socket, for both queued reviews and the Heph host.
+Only `application-worker` runs sandboxes and holds the Docker socket, for both queued reviews and the conversation host.
 `application-server` disables its worker role and uses connected workers.
 
 `NATS_ENABLED` controls webhook-driven sync consumption.
 It is not part of the practice-review bundle.
 Production startup refuses a server or webhook role without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
 
-Each worker runs one Heph host for all Heph turns that it claims.
+Each worker runs one conversation host for all conversation turns that it claims.
 The host starts with the first turn on that worker.
-[Runtime Roles](./runtime-roles.mdx#the-heph-host) gives its fixed limits.
+[Runtime Roles](./runtime-roles.mdx#the-conversation-host) gives its fixed limits.
 Size each worker for this host in addition to its review sandboxes.
-The application server needs no memory for Heph runtimes.
-[Runtime Roles](./runtime-roles.mdx#heph-turns) explains dispatch, capacity, and the host lifecycle.
+The application server needs no memory for Conversation runtimes.
+[Runtime Roles](./runtime-roles.mdx#conversation-turns) explains dispatch, capacity, and the host lifecycle.
 
 ### Instance-wide LLM settings
 
-Every sandbox uses the LLM proxy on its worker, whether for Heph or queued practice reviews.
+Every sandbox uses the LLM proxy on its worker, whether for Hephaestus or queued practice reviews.
 That proxy is its only path to a provider key.
 Keys are never injected directly.
 There is no separate intelligence service to configure.
@@ -441,20 +442,20 @@ Each defaults to off or its standard value:
 | `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP` | `false` | Permits `http://` base URLs for the hosts in `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS`. Every other host still needs HTTPS. |
 | `HEPHAESTUS_LLM_FX_DAILY_URL`          | ECB daily reference feed | Override only on an air-gapped instance with an internal mirror of the ECB file.                                                                                                                                                                                              |
 
-Heph turns run in the Heph host of a worker, for both the webapp and Slack DMs.
+Conversation turns run in the conversation host of a worker, for both the webapp and Slack DMs.
 The application server keeps the conversation store and makes a first admission check when a question arrives.
 The worker admits the turn again, with the budget check, and builds the turn's context.
 With its worker role disabled, it creates no Docker client.
 A turn waits in the queue until a worker has free capacity.
 
-[Runtime roles](./runtime-roles.mdx#heph-turns) owns dispatch, leases, drain, and the Heph host.
+[Runtime roles](./runtime-roles.mdx#conversation-turns) owns dispatch, leases, drain, and the conversation host.
 The proxy resolves each model's upstream base URL, auth header, and key from its bound connection.
 No process-level configuration needs to fix those values.
 In split-pod deployments, worker and app pods use the same provider catalog.
 No LLM credentials pass between pods.
 
-Each Heph turn reads the model and route of the workspace's Heph binding when it starts.
-A change to the binding applies to the next turn without a restart of the Heph host.
+Each conversation turn reads the model and route of the workspace's Hephaestus binding when it starts.
+A change to the binding applies to the next turn without a restart of the conversation host.
 
 #### Workspace budgets and alerting
 
@@ -481,15 +482,15 @@ To stop *all* AI work, change the workspace status or feature switches, not its 
 Once confirmed monthly spend reaches the cap, that purse's verdict becomes **EXHAUSTED**.
 New funded agent jobs are refused at submission.
 Queued jobs have another check immediately before claim.
-Heph turns are refused when a worker claims them, before the Heph host runs them.
+Conversation turns are refused when a worker claims them, before the conversation host runs them.
 Work resumes automatically next UTC calendar month, or about a minute after a cap increase or removal.
 The pause appears on both workspace **AI usage** and **AI models** pages.
 
-**Practice reviews and Heph fail differently.**
+**Practice reviews and conversations fail differently.**
 A queued practice review is refused before execution and posts nothing.
 The end user sees no error.
-**Heph does not go silent**.
-A Heph turn that uses an exhausted purse gets a reply that states the monthly cap and who can increase it.
+**Hephaestus does not go silent**.
+A conversation turn that uses an exhausted purse gets a reply that states the monthly cap and who can increase it.
 The workspace admin controls the own-provider cap, and the instance admin controls the shared budget.
 
 A silently lost turn would appear broken.

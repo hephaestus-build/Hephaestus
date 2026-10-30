@@ -601,7 +601,7 @@ export const WithdrawalInProgress: Story = {
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
-		panel.getByText(/Heph is still removing the copies it posted on the work\./u);
+		panel.getByText(/Hephaestus is still removing the copies it posted on the work\./u);
 		history(panelElement).getByText("Not confirmed");
 		// A removal keeps its own words: it is not a readback.
 		history(panelElement).getByText("Retract the posted copies · 3 attempts");
@@ -625,7 +625,7 @@ export const WithdrawnPartlyRetractedUnknownWrite: Story = {
 		panel.getByText(
 			"It is withdrawn, but 2 copies may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The observations behind it are unchanged.",
 		);
-		await expect(panel.queryByText(/Heph cannot remove/u)).toBeNull();
+		await expect(panel.queryByText(/Hephaestus cannot remove/u)).toBeNull();
 		const events = history(panelElement);
 		events.getByText("Summary posted");
 		await expect(events.getAllByText("Line note writing")).toHaveLength(2);
@@ -692,7 +692,7 @@ export const WithdrawnPartlyRetractedRemovalInProgress: Story = {
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
-		panel.getByText(/Heph is still removing the copies it posted on the work\./u);
+		panel.getByText(/Hephaestus is still removing the copies it posted on the work\./u);
 		const events = history(panelElement);
 		events.getByText("Not confirmed");
 		events.getByText("Retract the posted copies · 3 attempts");
@@ -741,7 +741,7 @@ export const WithdrawalNeedsAttention: Story = {
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
-		panel.getByText(/2 copies may still be on the work, and Heph cannot remove them\./u);
+		panel.getByText(/2 copies may still be on the work, and Hephaestus cannot remove them\./u);
 		const events = history(panelElement);
 		events.getByText("Retraction incomplete");
 		await expect(events.getAllByText("This provider cannot correct the posted copy.")).toHaveLength(
@@ -781,7 +781,7 @@ export const WithdrawFeedback: Story = {
 };
 
 const UNKNOWN_WRITE_WITHDRAWAL =
-	"An unconfirmed comment may still be on the work. Heph can retract that comment only if a check finds it. Receipts and observations are kept.";
+	"An unconfirmed comment may still be on the work. Hephaestus can retract that comment only if a check finds it. Receipts and observations are kept.";
 
 /** Withdrawing a comment whose write is unknown promises no removal it cannot make yet. */
 export const WithdrawUnconfirmedComment: Story = {
@@ -907,7 +907,7 @@ export const DeliveryCheckInProgress: Story = {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
 		panel.getByText(
-			"Heph is confirming whether a comment it began writing appeared on the work. Until the provider confirms it, it does not count as delivered.",
+			"Hephaestus is confirming whether a comment it began writing appeared on the work. Until the provider confirms it, it does not count as delivered.",
 		);
 		await expect(panel.queryByText(UNKNOWN_ON_WORK_NOW)).toBeNull();
 		// The queued post only reads the work back; it is not a send waiting to post.
@@ -961,7 +961,7 @@ export const WithdrawnUnknownWrite: Story = {
 		panel.getByText(
 			"It is withdrawn, but one copy may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The observations behind it are unchanged.",
 		);
-		await expect(panel.queryByText(/Heph cannot remove/u)).toBeNull();
+		await expect(panel.queryByText(/Hephaestus cannot remove/u)).toBeNull();
 		await expect(panel.getByRole("button", { name: "Check delivery" })).toBeEnabled();
 		await expect(panel.queryByRole("button", { name: "Retry withdrawal" })).toBeNull();
 		await expect(panel.getByRole("button", { name: "Restore feedback" })).toBeEnabled();
@@ -975,7 +975,7 @@ export const WithdrawnDeliveryCheckInProgress: Story = {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
 		panel.getByText(
-			"It is withdrawn. Heph is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The observations behind it are unchanged.",
+			"It is withdrawn. Hephaestus is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The observations behind it are unchanged.",
 		);
 		await expect(panel.queryByText(/still removing/u)).toBeNull();
 		// Being sent, it may be the first write or a readback; the record does not say which.
@@ -992,13 +992,13 @@ export const ReadyForConversation: Story = {
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		await expectHeaderChip(panelElement, "Ready for conversation");
-		within(panelElement).getByText("For a conversation with Heph");
+		within(panelElement).getByText("For a conversation");
 		within(panelElement).getByText(/which is what delivers it/u);
 	},
 };
 
 /**
- * Withdrawn while it waited for a conversation: the stored state stays ready, but Heph does not
+ * Withdrawn while it waited for a conversation: the stored state stays ready, but Hephaestus does not
  * raise it, so the sheet does not promise the next conversation and names the withdrawal once.
  */
 export const WithdrawnBeforeConversation: Story = {
@@ -1020,7 +1020,7 @@ export const WithdrawnBeforeConversation: Story = {
 			/Withdrawn|Ready for conversation/u,
 		);
 		panel.getByText(
-			"It is withdrawn, so Heph does not raise it in a conversation. The observations behind it are unchanged.",
+			"It is withdrawn, so Hephaestus does not raise it in a conversation. The observations behind it are unchanged.",
 		);
 		await expect(panel.queryByText(/which is what delivers it/u)).toBeNull();
 		await expect(panel.getByRole("button", { name: "Restore feedback" })).toBeEnabled();

@@ -13,6 +13,10 @@ images: {}
 host: ""
 # Lowercase letters, digits, ".", "_" or "-". The server refuses to start with another value.
 deploymentEnvironment: local
+
+# Workspace hosts use the public host as their base domain. Prepare wildcard DNS and TLS first.
+workspaceSubdomains:
+  enabled: false
 # Tomcat internal-proxies regular expression (not a CIDR) that matches only the addresses of the
 # Gateway data plane. The server refuses to start in production when it is blank.
 trustedProxies: ""
@@ -86,11 +90,13 @@ postgresql:
     limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 1Gi }
   # Optional: pgBackRest for the bundled server. PostgreSQL archives its WAL to one S3-compatible
   # bucket, and CronJobs take a full backup each week and a differential backup on the other days.
-  # Needs, in `secret.name`: BACKUP_S3_KEY, BACKUP_S3_KEY_SECRET and BACKUP_CIPHER_PASS; and in
-  # postgresql.tls.existingSecret: backup.crt and backup.key, a client certificate for the CN
-  # hephaestus-backup that its ca.crt signed. docs/admin/kubernetes.mdx § Backup and restore.
+  # Needs BACKUP_S3_KEY, BACKUP_S3_KEY_SECRET and BACKUP_CIPHER_PASS in secret.name.
+  # clientTlsSecret holds ca.crt, tls.crt and tls.key for CN hephaestus-backup, signed by the
+  # same CA as PostgreSQL. docs/admin/kubernetes.mdx § Backup and restore.
   backup:
     enabled: false
+    # A cert-manager TLS Secret for CN hephaestus-backup, signed by the PostgreSQL CA.
+    clientTlsSecret: ""
     s3:
       bucket: ""
       # A host name, without https://.
@@ -168,6 +174,8 @@ server:
 # The release's migration Job: the server image in its migrate run mode, once per revision. Its
 # context holds the data source and Liquibase only.
 migration:
+  # Disable while a restore clone receives its pre-boot lockdown.
+  enabled: true
   resources:
     requests: { cpu: 250m, memory: 1536Mi, ephemeral-storage: 64Mi }
     limits: { cpu: "2", memory: 1536Mi, ephemeral-storage: 256Mi }
@@ -179,6 +187,8 @@ webhook:
     # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
     # times the daily GitHub volume below half of maxBytesGithub (webhook ingestion operations).
     maxAge: 7d
+    # Empty keeps application defaults, including the shorter Slack and Outline retention.
+    maxAgeByStream: {}
     maxBytes: 1GB
     maxBytesGithub: 10GB
     # Set true for one release to apply a limit that deletes stored messages, such as a shorter
@@ -203,7 +213,7 @@ webapp:
     requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }
     limits: { cpu: 500m, memory: 256Mi, ephemeral-storage: 256Mi }
 
-# The worker role runs practice reviews and Heph turns in sandboxes. worker.enabled=true needs
+# The worker role runs practice reviews and conversation turns in sandboxes. worker.enabled=true needs
 # worker.sandbox.namespace and networkPolicy.kubernetesApi. At its start, and then every
 # runtime.probeInterval, each worker proves that the cluster enforces the sandbox boundary; it stops
 # at its start, and runs no new sandbox later, if it does not.
@@ -224,27 +234,32 @@ worker:
   # drains. 0 stops every worker and keeps its objects.
   replicas: 2
   # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
-  # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes), so the sandbox quota must hold every
-  # worker's reviews.
+  # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes). The reviews tier's quota follows it.
   reviews: 5
-  # The Heph turns that one worker runs at once: auto, or a number. Each running turn holds a turn
-  # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones, so the sandbox quota must
-  # hold them. The server gets replicas times this as its Heph capacity: while every worker runs as
-  # many turns, a question that could start next says that Heph answers other questions.
-  # docs/admin/runtime-roles.mdx § Heph capacity.
-  hephTurns: auto
+  # The conversation turns that one worker runs at once: auto, or a number. Each running turn holds a turn
+  # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones. The conversations tier's quota
+  # follows it. The server gets replicas times this as the conversation capacity. While every worker runs
+  # that many turns, a question that could start next says that Hephaestus answers other questions.
+  # docs/admin/runtime-roles.mdx § Conversation turn capacity.
+  conversationTurns: auto
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
   # that is still running stops: it is tried again on another worker and spends one of its attempts.
   drainTimeoutSeconds: 3600
   # RollingUpdate starts the new workers before the old ones drain. Recreate stops the old workers
-  # first, for a node that cannot hold both: each upgrade is then a planned outage of reviews and Heph.
+  # first, for a node that cannot hold both: each upgrade is then a planned outage of reviews and conversations.
   rolloutStrategy: RollingUpdate
   # The sandbox nodes. The chart passes each value to the worker as it is.
   runtime:
     # Optional. The RuntimeClass of every sandbox pod, for example gVisor's. Empty uses the
     # cluster's default runtime.
     runtimeClassName: ""
+    # The RuntimeClass's overhead.podFixed, which the quotas count with each sandbox Pod's requests.
+    # Set it for a class with an overhead, such as gVisor or Kata on some clusters.
+    # Only the chart reads it: the worker reads the overhead from its Pods.
+    podOverhead:
+      cpuMillis: 0
+      memoryMi: 0
     # Optional. The shipped seccomp profile as a Localhost profile, relative to the kubelet's
     # seccomp directory. Empty uses RuntimeDefault.
     seccompProfile: ""
@@ -262,12 +277,10 @@ worker:
     # Required. The namespace that the operator created for this release's sandboxes alone, with the
     # Restricted Pod Security level. Not the release namespace, and no other release's.
     namespace: ""
-    # Bounds every sandbox of the namespace: review sandboxes, Heph hosts and turn sandboxes.
+    # One quota for each tier of sandboxes, reviews and conversations, derived from the workers' replicas,
+    # reviews and conversationTurns and from sandbox-pod-requests.json. Conversation sandboxes can never take a review's room.
     quota:
       enabled: true
-      pods: 20
-      cpu: "28"
-      memory: 46Gi
 
 # Application settings. Each key maps to one setting of docs/admin/production-setup.mdx.
 config:

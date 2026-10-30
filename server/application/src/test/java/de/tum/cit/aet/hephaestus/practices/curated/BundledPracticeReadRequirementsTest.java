@@ -88,7 +88,7 @@ class BundledPracticeReadRequirementsTest extends BaseUnitTest {
                 .map(Objects::requireNonNull)
                 .toList();
         assertThat(scans).hasSize(13).allSatisfy(scan -> {
-            assertThat(scan.reads().contract()).isEqualTo("2.0.0");
+            assertThat(scan.reads().contract()).isEqualTo("3.0.0");
             assertThat(scan.reads().sources())
                     .extracting(source -> source.source().value())
                     .containsExactly("scm.repository.tree");

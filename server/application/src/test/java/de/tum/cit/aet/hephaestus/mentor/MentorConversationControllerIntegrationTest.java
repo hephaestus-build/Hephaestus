@@ -32,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
-/** The app's Heph routes, through the real filter chain, as the developer the token signs in. */
+/** The app's Hephaestus routes, through the real filter chain, as the developer the token signs in. */
 class MentorConversationControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** Signs in as the user with login {@code mentor}. */
@@ -83,7 +83,8 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     @BeforeEach
     void setUpWorkspace() {
         developer = persistUser("mentor");
-        workspace = createWorkspace("heph-api", "Heph API", "heph-api", AccountType.ORG, persistUser("heph-owner"));
+        workspace =
+                createWorkspace("heph-api", "Hephaestus API", "heph-api", AccountType.ORG, persistUser("heph-owner"));
         ensureMembership(workspace, developer, WorkspaceRole.MEMBER);
         var connection = connections.save(LlmCatalogTestFixtures.connection("heph-api"));
         var model = models.save(LlmCatalogTestFixtures.model(connection, "heph-api", "heph-model"));
@@ -281,7 +282,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
 
     @Test
     void shouldSayInEveryReadOfATurnWhetherItWaitsForAFreeHeph() {
-        // The suite's deployment has one Heph slot (application-test.yml), and the started turn takes it.
+        // The suite's deployment has one Hephaestus slot (application-test.yml), and the started turn takes it.
         MentorTurnService.Submission first = submit(main(), "What did the review say?");
         assertThat(turns.claimNext(WORKER, Duration.ofMinutes(5))).isPresent();
         UUID parent = first.question().getId();
@@ -533,7 +534,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 WORKER,
                 MentorTurn.Status.FAILED,
                 List.of(),
-                "Heph could not finish this reply. Try again.");
+                "Hephaestus could not finish this reply. Try again.");
 
         get("/entries")
                 .jsonPath("$.entries[0].id")
@@ -541,7 +542,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .jsonPath("$.entries[0].turnStatus")
                 .isEqualTo("FAILED")
                 .jsonPath("$.entries[0].turnError")
-                .isEqualTo("Heph could not finish this reply. Try again.");
+                .isEqualTo("Hephaestus could not finish this reply. Try again.");
     }
 
     @Test

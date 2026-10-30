@@ -476,7 +476,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepConversationOpenWhenTheResultWasAlreadyConfirmedOnTheWork() {
-        var privateWords = "Words Heph said in an earlier conversation.";
+        var privateWords = "Words Hephaestus said in an earlier conversation.";
         var privateWitness =
                 historical(scenario, FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, privateWords, "701");
         try (var captured = admittedResult(scenario, Instant.now(), "999")) {
@@ -622,7 +622,7 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow();
     }
 
-    /** A completed Heph answer that showed {@code words} through {@code show_feedback}, and its posted copy. */
+    /** A completed Hephaestus answer that showed {@code words} through {@code show_feedback}, and its posted copy. */
     private void postedConversation(Feedback feedback, String words) {
         var conversation = UUID.randomUUID();
         var turn = UUID.randomUUID();

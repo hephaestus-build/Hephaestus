@@ -8,7 +8,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "A question to Heph from the app")
+@Schema(description = "A question to Hephaestus from the app")
 public record MentorTurnRequestDTO(
         @NotNull
         @Schema(

@@ -87,8 +87,8 @@ function AiChoiceForm({
 			<QuestionnaireItem name="ai-choice" required>
 				<QuestionnaireTitle>Which AI may handle your work?</QuestionnaireTitle>
 				<QuestionnaireDescription>
-					Choose which AI may review your work and answer you in Heph. Cloud also allows in-house
-					models. Each workspace shows the models it runs for your answer.
+					Choose which AI may review your work and answer you in Hephaestus. Cloud also allows
+					in-house models. Each workspace shows the models it runs for your answer.
 				</QuestionnaireDescription>
 				{isLoading ? (
 					<div className="grid gap-3 md:grid-cols-3" aria-busy="true">

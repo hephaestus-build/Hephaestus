@@ -26,10 +26,16 @@
     },
     {
       "name": "hephaestus.agent.image",
-      "description": "Shared image reference for the Pi practice and Heph agent runtime"
+      "description": "Shared image reference for the Pi practice and Hephaestus agent runtime"
     }
   ],
   "properties": [
+    {
+      "name": "hephaestus.agent.max-active-compositions",
+      "type": "java.lang.Integer",
+      "description": "Most compositions whose inputs one worker loads at once. Additional attempts wait without loading composition inputs. This does not reduce review sandbox capacity.",
+      "defaultValue": 4
+    },
     {
       "name": "hephaestus.integration.github.sync.graphql-timeout",
       "type": "java.time.Duration",
@@ -108,7 +114,7 @@
     {
       "name": "hephaestus.agent.image.reference",
       "type": "java.lang.String",
-      "description": "Image reference used by Pi practice sandboxes and the Heph container. Production must be digest-pinned (registry/path@sha256:<64 lowercase hex>)."
+      "description": "Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:<64 lowercase hex>)."
     },
     {
       "name": "hephaestus.agent.image.pull-policy",
@@ -129,7 +135,7 @@
     {
       "name": "hephaestus.runtime.worker.enabled",
       "type": "java.lang.Boolean",
-      "description": "Runs the worker role, which runs sandboxed practice reviews and Heph turns. Only a container with this role may mount the Docker socket.",
+      "description": "Runs the worker role, which runs sandboxed practice reviews and conversation turns. Only a container with this role may mount the Docker socket.",
       "sourceType": "de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole"
     },
     {
@@ -352,7 +358,7 @@
     {
       "name": "hephaestus.mentor.turn.capacity",
       "type": "java.lang.Integer",
-      "description": "The Heph turns that all workers together run at once: the number of workers times the Heph turns of each. While every one of them runs a turn, a question that could start next says that Heph is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set."
+      "description": "The conversation turns that all workers together run at once: the number of workers times the conversation turns of each. While every one of them runs a turn, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set."
     }
   ],
   "hints": [

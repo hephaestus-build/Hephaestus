@@ -170,8 +170,8 @@ The tables explain each grant.
 | Members (`members`)                | Organization | Read         | Organization membership, teams, and member events                                                       |
 | Projects (`organization_projects`) | Organization | Read         | Projects v2 sync and project event access, not classic repository projects.                             |
 | Issue types (`issue_types`)        | Organization | Read         | Native issue-type sync, and the issue-type change that opens a practice review                          |
-| Checks (`checks`)                  | Repository   | Read         | Check state of a pull request's head. Read with the pull request. `check_suite` events keep it current. |
-| Commit statuses (`statuses`)       | Repository   | Read         | The same state from commit statuses, including non-Actions CI. `status` events keep it current.         |
+| Checks (`checks`)                  | Repository   | Read         | Check state and check runs of a pull request's head. Read with the pull request and when a suite completes. |
+| Commit statuses (`statuses`)       | Repository   | Read         | The same state and runs from commit statuses, including non-Actions CI. `status` events keep them current.  |
 
 #### Provisioned — read access ahead of features
 
@@ -227,8 +227,8 @@ Add the subscription in the release with the feature that reads it.
 | `pull_request_review`         | Synchronize submitted and updated reviews.                  |
 | `pull_request_review_comment` | Synchronize inline review comments.                         |
 | `pull_request_review_thread`  | Track review-thread resolution, and when it happened.       |
-| `check_suite`                 | Keep the head's check state current between syncs.          |
-| `status`                      | Keep the head's check state current from commit statuses.   |
+| `check_suite`                 | Keep the head's check state and runs current. Start reviews when checks finish. |
+| `status`                      | The same for commit statuses.                                                   |
 | `issues`                      | Synchronize issue lifecycle and content.                    |
 | `issue_comment`               | Synchronize issue and PR conversation comments.             |
 | `label`                       | Keep label metadata current.                                |

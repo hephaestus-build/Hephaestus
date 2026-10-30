@@ -8,7 +8,7 @@ description: Reserved paths, task envelope, and exit codes for the Pi sandbox wo
 # Agent workspace ABI
 
 This ABI covers the one-shot practice runner's container workspace at `/workspace/`.
-The Heph host uses its own layout. See [Heph runtime](../unified-pi-runtime.mdx).
+The conversation host uses its own layout. See [Conversation runtime](../unified-pi-runtime.mdx).
 
 The worker renders one disposable folder for an owned execution attempt.
 The runtime contract is version 8. Practice inputs and candidates use script contract version 3.
@@ -36,13 +36,13 @@ The runtime contract is version 8. Practice inputs and candidates use script con
 └── task.json                        # Owned runtime envelope.
 ```
 
-The worker stages the Heph host's scripts, its system prompt, and a `package.json` from its own JAR. Nothing else is staged.
+The worker stages the conversation host's scripts, its system prompt, and a `package.json` from its own JAR. Nothing else is staged.
 It also reads the practice-script library at `/opt/practice-scripts`, through the same workspace link that the practice runner uses.
 It reads the stored path and the situation of a turn from the worker (`GET context`).
 
-The Heph host reads context documents and repositories from a [context folder](../practice-review-glossary.mdx#runtime-terms) in a turn sandbox, through the worker ([Heph runtime](../unified-pi-runtime.mdx#context-folder)).
+The conversation host reads context documents and repositories from a [context folder](../practice-review-glossary.mdx#runtime-terms) in a turn sandbox, through the worker ([Conversation runtime](../unified-pi-runtime.mdx#context-folder)).
 That folder uses a layout similar to the job folder: documents under `inputs/context/` and repositories under `repos/`.
-The practice runner and the Heph host execute on Node.
+The practice runner and the conversation host execute on Node.
 See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
 
 Source identity and capture facts are frozen before evaluation.
@@ -121,8 +121,9 @@ A review session's unchanged result keeps the searches of that session.
 A result that code decided keeps the searches of the script's reader.
 
 The orchestrator prompt tells the model to grep the checkout and name the tree for such a claim.
-The runner returns a submission without the receipt to the model before it submits.
-It returns a match of a marker once per practice.
+Before the runner submits a result without the receipt, it returns it to the model once for each practice.
+The runner submits the next result of that practice as it is.
+Thus, a session that cannot repair the claim does not use up the refusals of the practice.
 When the capture does not hold the whole checkout, the runner asks the model to remove the claim.
 
 Then admission withholds a result without the receipt.

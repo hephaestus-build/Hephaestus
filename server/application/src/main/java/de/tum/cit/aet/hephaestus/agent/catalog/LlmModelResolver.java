@@ -39,7 +39,8 @@ public class LlmModelResolver {
                     instance.getUpstreamModelId(),
                     instance.getContextWindow(),
                     instance.getMaxOutputTokens(),
-                    instance.getReasoningEffort());
+                    instance.getReasoningEffort(),
+                    Boolean.TRUE.equals(instance.getForcedToolChoice()));
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         if (byo != null) {
@@ -53,7 +54,8 @@ public class LlmModelResolver {
                     byo.getUpstreamModelId(),
                     byo.getContextWindow(),
                     byo.getMaxOutputTokens(),
-                    byo.getReasoningEffort());
+                    byo.getReasoningEffort(),
+                    Boolean.TRUE.equals(byo.getForcedToolChoice()));
         }
         throw new IllegalStateException("The binding does not reference a model");
     }
@@ -141,13 +143,27 @@ public class LlmModelResolver {
      *
      * @param apiKey {@code null} for a deliberately keyless connection (self-hosted vLLM/Ollama
      *     gateway) — the caller forwards without an auth header rather than refusing
+     * @param callPoolId the model's {@link LlmCallPool}, read live so a changed pool applies to the next call;
+     *     {@code null} for none
      */
     public record ProxyCredential(
             String baseUrl,
             String apiProtocol,
             LlmAuthMode authMode,
             String upstreamModelId,
-            @Nullable String apiKey) {}
+            @Nullable String apiKey,
+            @Nullable Long callPoolId) {
+
+        /** A credential of a model in no pool. */
+        public ProxyCredential(
+                String baseUrl,
+                String apiProtocol,
+                LlmAuthMode authMode,
+                String upstreamModelId,
+                @Nullable String apiKey) {
+            this(baseUrl, apiProtocol, authMode, upstreamModelId, apiKey, null);
+        }
+    }
 
     @Transactional(readOnly = true)
     public ConnectionRef connectionRef(ModelBindingSource config) {
@@ -168,6 +184,22 @@ public class LlmModelResolver {
                     config.getWorkspace().getId());
         }
         return ConnectionRef.NONE;
+    }
+
+    /** Pool-lock rechecks must read the database even when the claim already loaded the model entity. */
+    @Transactional(readOnly = true)
+    public @Nullable Long resolveCallPool(ConnectionRef ref) {
+        Long modelId = ref.modelId();
+        Long connectionId = ref.connectionId();
+        if (modelId == null || connectionId == null) return null;
+        if (ref.scope() == UsageFundingSource.INSTANCE)
+            return llmModelRepository.findCallPoolId(modelId, connectionId).orElse(null);
+        Long workspaceId = ref.workspaceId();
+        if (ref.scope() == UsageFundingSource.WORKSPACE && workspaceId != null)
+            return workspaceLlmModelRepository
+                    .findCallPoolId(modelId, connectionId, workspaceId)
+                    .orElse(null);
+        return null;
     }
 
     /**
@@ -193,7 +225,8 @@ public class LlmModelResolver {
                             c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
-                            blankToNull(c.getApiKey())))
+                            blankToNull(c.getApiKey()),
+                            model.getCallPoolId()))
                     .orElse(null);
         }
         if (ref.scope() == UsageFundingSource.WORKSPACE && ref.connectionId() != null) {
@@ -215,7 +248,8 @@ public class LlmModelResolver {
                             c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
-                            blankToNull(c.getApiKey())))
+                            blankToNull(c.getApiKey()),
+                            model.getCallPoolId()))
                     .orElse(null);
         }
         return null;

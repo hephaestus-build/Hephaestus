@@ -173,7 +173,7 @@ const gitlabItem = reviewFeedback.find((item) => item.location === "GITLAB")?.it
 
 /**
  * One row per location. Each names where its feedback went in words and with the provider's mark: a
- * comment on the GitHub pull request or GitLab merge request, a conversation with Heph in the app or
+ * comment on the GitHub pull request or GitLab merge request, a conversation with Hephaestus in the app or
  * in Slack, the next conversation, or a card on the developer's practice pages.
  */
 export const EveryLocation: Story = {
@@ -238,8 +238,8 @@ export const EveryLocation: Story = {
 		await expect(canvas.getByText("On GitHub")).toBeVisible();
 		await expect(canvas.getByText("On GitLab")).toBeVisible();
 		canvas.getByText("On the work");
-		canvas.getByText("With Heph in the app");
-		canvas.getByText("With Heph in Slack");
+		canvas.getByText("In conversation in the app");
+		canvas.getByText("In conversation in Slack");
 		canvas.getByText("In conversation");
 		canvas.getByText("On the practice page");
 		await expectNoPageOverflow();

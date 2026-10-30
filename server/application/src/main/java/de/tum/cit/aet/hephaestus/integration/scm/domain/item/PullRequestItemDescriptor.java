@@ -47,6 +47,12 @@ public class PullRequestItemDescriptor implements ItemDescriptor {
                         true,
                         true),
                 ScmEventSources.declare(
+                        ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED,
+                        "Checks finished",
+                        Set.of(ScmEventSources.GITHUB_CHECK_SUITE, ScmEventSources.GITHUB_STATUS),
+                        false,
+                        true),
+                ScmEventSources.declare(
                         ScmItemEvents.PULL_REQUEST_EDITED,
                         "Title or description edited",
                         Set.of(ScmEventSources.GITHUB_PULL_REQUEST, ScmEventSources.GITLAB_MERGE_REQUEST),

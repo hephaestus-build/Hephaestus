@@ -487,7 +487,7 @@ function waitBottleneck(
 			kind: "waiting",
 			stage: "feedback",
 			title: "Waiting for a conversation",
-			text: "It reaches the developer only when they next talk with Heph.",
+			text: "It reaches the developer only when they next talk with Hephaestus.",
 			tone: "secondary",
 			icon: HourglassIcon,
 		};

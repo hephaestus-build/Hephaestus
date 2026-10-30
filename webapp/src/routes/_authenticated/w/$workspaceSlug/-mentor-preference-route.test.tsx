@@ -27,11 +27,11 @@ it("keeps an existing conversation readable under No AI and restores its compose
 		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(preference)),
 		...conversation.handlers(),
 	);
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
-	await screen.findByRole("heading", { name: "Heph is off for you" });
+	await screen.findByRole("heading", { name: "Ask Hephaestus is off for you" });
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
-		"/w/acme/onboarding?returnTo=/w/acme/mentor",
+		"/w/acme/onboarding?returnTo=/w/acme/conversation",
 	);
 	expect(screen.queryByRole("textbox")).toBeNull();
 
@@ -49,11 +49,11 @@ it("keeps an existing conversation readable under No AI and restores its compose
 			preference,
 		);
 	});
-	await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
-	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
+	await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT);
+	expect(screen.queryByRole("heading", { name: "Ask Hephaestus is off for you" })).toBeNull();
 });
 
-it("names the saved choice when no Heph model is set up for it", async () => {
+it("names the saved choice when no conversation model is set up for it", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -71,24 +71,24 @@ it("names the saved choice when no Heph model is set up for it", async () => {
 		),
 		...new MentorFake().handlers(),
 	);
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByRole(
 		"heading",
-		{ name: "Heph is not set up for your AI choice yet" },
+		{ name: "Ask Hephaestus is not set up for your AI choice yet" },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(screen.getByText("Cloud", { selector: "em" }).parentElement?.textContent).toBe(
-		"No Heph model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
+		"No conversation model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 	);
 	expect(screen.getByRole("link", { name: "Change your AI choice" }).getAttribute("href")).toBe(
-		"/w/acme/onboarding?returnTo=/w/acme/mentor",
+		"/w/acme/onboarding?returnTo=/w/acme/conversation",
 	);
 	// The empty conversation under the notice adds no second empty state: the notice says it all.
 	await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 	expect(screen.queryByText("No messages yet")).toBeNull();
 });
 
-it("says Heph is not set up, and offers no choice to change, to a member without a choice whom no model serves", async () => {
+it("says Hephaestus is not set up, and offers no choice to change, to a member without a choice whom no model serves", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -105,20 +105,20 @@ it("says Heph is not set up, and offers no choice to change, to a member without
 		),
 		...new MentorFake().handlers(),
 	);
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByRole(
 		"heading",
-		{ name: "Heph is not set up in this workspace yet" },
+		{ name: "Ask Hephaestus is not set up in this workspace yet" },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(screen.queryByRole("link", { name: /^(?:Change|Make) your AI choice$/u })).toBeNull();
 	expect(screen.queryByRole("textbox")).toBeNull();
 });
 
-it("opens Heph for a member whose account carries no feature flags", async () => {
+it("opens Hephaestus for a member whose account carries no feature flags", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		// Heph follows the workspace and the member's AI choice, not an account flag.
+		// Hephaestus follows the workspace and the member's AI choice, not an account flag.
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () =>
@@ -132,12 +132,12 @@ it("opens Heph for a member whose account carries no feature flags", async () =>
 		),
 		...new MentorFake().handlers(),
 	);
-	const { router } = renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
-	expect(router.state.location.pathname).toBe("/w/acme/mentor");
+	const { router } = renderRouteAtWithRouter("/w/acme/conversation");
+	await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT);
+	expect(router.state.location.pathname).toBe("/w/acme/conversation");
 });
 
-it("offers Heph to a member who has not chosen, whom the workspace's undeclared model serves", async () => {
+it("offers Hephaestus to a member who has not chosen, whom the workspace's undeclared model serves", async () => {
 	// The server answers such a member from the undeclared slot, which `aiOptions` does not list, and
 	// sends no refusal; the page follows the refusal, not the declared options.
 	server.use(
@@ -155,12 +155,12 @@ it("offers Heph to a member who has not chosen, whom the workspace's undeclared 
 		),
 		...new MentorFake().handlers(),
 	);
-	renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
-	expect(screen.queryByText("Heph is not set up in this workspace yet")).toBeNull();
+	renderRouteAtWithRouter("/w/acme/conversation");
+	await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT);
+	expect(screen.queryByText("Ask Hephaestus is not set up in this workspace yet")).toBeNull();
 });
 
-it("lists Heph in the navigation for a member who has not chosen", async () => {
+it("lists Hephaestus in the navigation for a member who has not chosen", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -168,10 +168,10 @@ it("lists Heph in the navigation for a member who has not chosen", async () => {
 		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(workspaceOnboarding())),
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("link", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT);
 });
 
-it("keeps Heph out of the navigation for a reader who is not a member", async () => {
+it("keeps Hephaestus out of the navigation for a reader who is not a member", async () => {
 	let membershipAnswered = false;
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
@@ -188,10 +188,10 @@ it("keeps Heph out of the navigation for a reader who is not a member", async ()
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
 	await waitFor(() => expect(membershipAnswered).toBe(true), ROUTE_RENDER_WAIT);
-	expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull();
+	expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull();
 });
 
-it("offers Heph in the navigation where a Heph model is ready, whatever the member chose", async () => {
+it("offers Hephaestus in the navigation where a conversation model is ready, whatever the member chose", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -208,10 +208,10 @@ it("offers Heph in the navigation where a Heph model is ready, whatever the memb
 		),
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("link", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT);
 });
 
-it("keeps Heph out of the navigation of a workspace where only practice reviews have a model", async () => {
+it("keeps Hephaestus out of the navigation of a workspace where only practice reviews have a model", async () => {
 	const ready: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
 		aiChoice: "CLOUD",
@@ -237,7 +237,7 @@ it("keeps Heph out of the navigation of a workspace where only practice reviews 
 		),
 	);
 	const { router, queryClient } = renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("link", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT);
 
 	await act(async () => {
 		await router.navigate({ to: "/w/$workspaceSlug/teams", params: { workspaceSlug: "other" } });
@@ -250,5 +250,5 @@ it("keeps Heph out of the navigation of a workspace where only practice reviews 
 			).toBe("success"),
 		ROUTE_RENDER_WAIT,
 	);
-	expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull();
+	expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull();
 });

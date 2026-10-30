@@ -211,8 +211,8 @@ function SettingsForm({ workspaceSlug, settings, links, submission, onSave }: Se
 						<InfoIcon aria-hidden="true" />
 						<AlertTitle>Members still have to choose</AlertTitle>
 						<AlertDescription>
-							Members who have not chosen get no practice reviews and no Heph. Turn the setup page
-							on so they can choose.
+							Members who have not chosen get no practice reviews and no conversation answers. Turn
+							the setup page on so they can choose.
 						</AlertDescription>
 					</Alert>
 				)}

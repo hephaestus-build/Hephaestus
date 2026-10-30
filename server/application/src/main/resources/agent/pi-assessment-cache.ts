@@ -12,6 +12,8 @@ export function assessmentCacheExtension(
 	prefix: string,
 	workspaceId: unknown,
 	jobId: unknown,
+	/** Character offsets from the brief builder, before the practice-specific suffix. */
+	boundaries: readonly number[],
 ): ExtensionFactory {
 	const known = runtime.getModel("openai", config.modelId ?? "");
 	const compat = known?.compat;
@@ -32,6 +34,20 @@ export function assessmentCacheExtension(
 				.update(JSON.stringify([workspaceId, jobId]))
 				.digest("hex")
 		: null;
+	if (config.apiProtocol === "anthropic-messages") {
+		return (pi) => {
+			pi.on("before_provider_request", ({ payload }) => {
+				if (
+					!isRecord(payload) ||
+					payload.model !== config.modelId ||
+					!Array.isArray(payload.messages)
+				) {
+					return;
+				}
+				return anthropicCache(payload, prefix, boundaries);
+			});
+		};
+	}
 	return (pi) => {
 		if (!supported || key === null || prefix.length === 0) {
 			return;
@@ -63,18 +79,117 @@ export function assessmentCacheExtension(
 			) {
 				return;
 			}
-			// Split the constructed user text after shared work, preserving its role and exact text.
-			const content = [
-				{ ...block, text: prefix, prompt_cache_breakpoint: { mode: "explicit" } },
-				{ ...block, text: block.text.slice(prefix.length) },
-			];
+			// System, change and core leave the fourth write slot for the implicit session cache.
+			const layers = [...new Set(boundaries)]
+				.filter((end) => Number.isSafeInteger(end) && end > 0 && end <= prefix.length)
+				.toSorted((a, b) => a - b)
+				.slice(0, 2);
+			const ends = layers.length === 0 ? [prefix.length] : layers;
+			let start = 0;
+			const content = ends.map((end) => {
+				const part = {
+					...block,
+					text: prefix.slice(start, end),
+					prompt_cache_breakpoint: { mode: "explicit" },
+				};
+				start = end;
+				return part;
+			});
+			const suffix = block.text.slice(start);
 			return {
 				...payload,
 				prompt_cache_key: key,
-				input: payload.input.map((item: unknown, at: number) =>
-					at === index ? { ...message, content } : item,
-				),
+				input: payload.input.map((item: unknown, at: number) => {
+					if (at === index) {
+						return { ...message, content: [...content, { ...block, text: suffix }] };
+					}
+					if (
+						at === 0 &&
+						isRecord(item) &&
+						(item.role === "developer" || item.role === "system") &&
+						typeof item.content === "string"
+					) {
+						return {
+							...item,
+							content: [
+								{
+									type: "input_text",
+									text: item.content,
+									prompt_cache_breakpoint: { mode: "explicit" },
+								},
+							],
+						};
+					}
+					return item;
+				}),
 			};
 		});
 	};
+}
+
+/** The system covers tools, leaving two stable work boundaries and the SDK's moving session slot. */
+function anthropicCache(
+	payload: Record<string, unknown>,
+	prefix: string,
+	boundaries: readonly number[],
+) {
+	const cache = { type: "ephemeral", ttl: "5m" };
+	const tools = Array.isArray(payload.tools) ? payload.tools.map(withoutCache) : payload.tools;
+	const systemBlocks = payload.system;
+	const system = Array.isArray(systemBlocks)
+		? systemBlocks.map((block: unknown, at: number) => {
+				const clean = withoutCache(block);
+				return isRecord(clean) && at === systemBlocks.length - 1
+					? { ...clean, cache_control: cache }
+					: clean;
+			})
+		: payload.system;
+	const messages = Array.isArray(payload.messages)
+		? payload.messages.map((message: unknown) => {
+				if (!isRecord(message) || !Array.isArray(message.content)) {
+					return message;
+				}
+				const content = message.content.map((block: unknown) =>
+					isRecord(block) && "cache_control" in block ? { ...block, cache_control: cache } : block,
+				);
+				const block: unknown = content[0];
+				if (
+					message.role !== "user" ||
+					content.length !== 1 ||
+					!isRecord(block) ||
+					block.type !== "text" ||
+					typeof block.text !== "string" ||
+					prefix.length === 0 ||
+					!block.text.startsWith(prefix) ||
+					block.text.length <= prefix.length
+				) {
+					return { ...message, content };
+				}
+				const ends = [...new Set(boundaries)]
+					.filter((end) => Number.isSafeInteger(end) && end > 0 && end <= prefix.length)
+					.toSorted((a, b) => a - b)
+					.slice(0, 2);
+				if (ends.length === 0) {
+					ends.push(prefix.length);
+				}
+				let start = 0;
+				const { text } = block;
+				const layers = ends.map((end) => {
+					const part = { type: "text", text: text.slice(start, end), cache_control: cache };
+					start = end;
+					return part;
+				});
+				return { ...message, content: [...layers, { ...block, text: block.text.slice(start) }] };
+			})
+		: payload.messages;
+	return { ...payload, tools, system, messages };
+}
+
+function withoutCache(value: unknown) {
+	if (!isRecord(value)) {
+		return value;
+	}
+	const copy = { ...value };
+	delete copy.cache_control;
+	return copy;
 }

@@ -143,6 +143,15 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             """, nativeQuery = true)
     Optional<MentorTurn> lockClaimable();
 
+    /** Queued questions past their start budget; held conversations stay with their running turn. */
+    @WorkspaceAgnostic("Server maintenance ends overdue queued questions across tenants")
+    @Query(value = "SELECT t.id " + CLAIMABLE + """
+            AND t.queued_at <= :cutoff
+            ORDER BY t.queued_at, t.id
+            LIMIT 100
+            """, nativeQuery = true)
+    List<UUID> findOverdueQueued(@Param("cutoff") Instant cutoff);
+
     /** Of {@code ids}, the turns of the workspace that a worker may start now ({@link #CLAIMABLE}). Locks nothing. */
     @Query(
             value = "SELECT t.id " + CLAIMABLE + " AND t.workspace_id = :workspaceId AND t.id IN (:ids)",
@@ -150,10 +159,10 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<UUID> findClaimableIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
     /**
-     * The turns that hold a Heph slot now: those that run, and stopped ones whose host still commits their answer.
-     * Every workspace counts, because every workspace shares the workers' Heph slots.
+     * The turns that hold a Hephaestus slot now: those that run, and stopped ones whose host still commits their answer.
+     * Every workspace counts, because every workspace shares the workers' Hephaestus slots.
      */
-    @WorkspaceAgnostic("Every workspace shares the workers' Heph slots")
+    @WorkspaceAgnostic("Every workspace shares the workers' Hephaestus slots")
     @Query("""
             SELECT COUNT(t) FROM MentorTurn t
             WHERE t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
@@ -179,7 +188,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
      * and loads no entity.
      */
     @WorkspaceAgnostic(
-            "Every workspace shares the workers' Heph slots, so a change of them changes every workspace's waits")
+            "Every workspace shares the workers' Hephaestus slots, so a change of them changes every workspace's waits")
     @Query(value = """
             SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.id AS id,
                    t.surface AS surface, t.attempt AS attempt

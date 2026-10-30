@@ -50,7 +50,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-scan", "Scan", "wire-scan-org", AccountType.ORG, owner);
         var reads = new PracticeReads(
-                "2.0.0", List.of(new PracticeReadSource(new SourceKind("scm.repository.tree"), ReadNeed.COMPLETE)));
+                "3.0.0", List.of(new PracticeReadSource(new SourceKind("scm.repository.tree"), ReadNeed.COMPLETE)));
         var definition = new PracticeDefinition(
                 "Keep repository code clear",
                 new ReviewOn(List.of(), Map.of()),
@@ -96,7 +96,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .jsonPath("$.currentVersion.definition.scan.itemKind")
                 .isEqualTo("scm.file")
                 .jsonPath("$.currentVersion.definition.scan.reads.contract")
-                .isEqualTo("2.0.0")
+                .isEqualTo("3.0.0")
                 .jsonPath("$.currentVersion.definition.scan.reads.sources[0].source")
                 .isEqualTo("scm.repository.tree")
                 .jsonPath("$.currentVersion.definition.scan.context[0]")
@@ -113,7 +113,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 new ReviewOn(List.of(), Map.of()),
                 null,
                 null,
-                new PracticeReads("2.0.0", List.of()),
+                new PracticeReads("3.0.0", List.of()),
                 new ReviewedBy(ReviewedByKind.NOBODY, null, List.of()),
                 "Discuss the decisions that affect the team.",
                 null,

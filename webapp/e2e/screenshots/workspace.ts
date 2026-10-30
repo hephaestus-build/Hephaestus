@@ -363,7 +363,7 @@ const entries: MentorEntryPage = {
 			turnStatus: "DONE",
 			text: [
 				"The description of #223 says what the new queue-depth metric is, but not how to see it.",
-				"Your earlier pull request #219 had the same gap, so I raised it as a pattern.",
+				"Your earlier pull request #219 had the same gap, so the review raised it as a pattern.",
 				"",
 				"Next time, add a short **How to verify** section, for example:",
 				"",

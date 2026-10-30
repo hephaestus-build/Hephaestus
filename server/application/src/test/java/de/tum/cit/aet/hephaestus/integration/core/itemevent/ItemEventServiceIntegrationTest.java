@@ -259,6 +259,68 @@ class ItemEventServiceIntegrationTest extends BaseIntegrationTest {
         });
     }
 
+    @Test
+    void shouldKeepOneEventOfANamePerVersionWhenTwoDeliveriesCarryOtherSourceKeys() {
+        var base = pullRequest();
+        UUID first = writer.record(keyed(base, "scm.pull_request.edited", "edit-1"));
+
+        assertThat(writer.record(keyed(base, "scm.pull_request.edited", "edit-2")))
+                .isEqualTo(first);
+        assertThat(rows(base, "scm.pull_request.edited")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRecordOneChecksEventForEachSettledRunSetAtOneVersion() {
+        var base = pullRequest();
+        UUID first = writer.record(keyed(base, "scm.pull_request.checks_completed", "checks-a"));
+        UUID second = writer.record(keyed(base, "scm.pull_request.checks_completed", "checks-b"));
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(writer.record(keyed(base, "scm.pull_request.checks_completed", "checks-a")))
+                .isEqualTo(first);
+        assertThat(rows(base, "scm.pull_request.checks_completed")).isEqualTo(2);
+    }
+
+    /** A pull request item at one version, as the base of the keyed deliveries below. */
+    private ItemEventInput pullRequest() {
+        long workspace = workspaces
+                .save(WorkspaceTestFixtures.activeWorkspace("event-" + UUID.randomUUID()))
+                .getId();
+        var item = writer.upsert(new ItemRegistration(workspace, new ItemKind("scm.pull_request"), 1L, null, null));
+        return new ItemEventInput(
+                workspace,
+                item.itemId(),
+                new ItemEventName("scm.pull_request.edited"),
+                "test-version",
+                Instant.parse("2026-10-14T10:00:00Z"),
+                FoundBy.WEBHOOK,
+                null,
+                null);
+    }
+
+    private static ItemEventInput keyed(ItemEventInput base, String name, String sourceKey) {
+        return new ItemEventInput(
+                base.workspaceId(),
+                base.itemId(),
+                new ItemEventName(name),
+                base.itemVersion(),
+                null,
+                base.occurredAt(),
+                FoundBy.WEBHOOK,
+                null,
+                null,
+                null,
+                sourceKey);
+    }
+
+    private long rows(ItemEventInput base, String name) {
+        return events.findAll().stream()
+                .filter(event -> event.getWorkspaceId() == base.workspaceId()
+                        && event.getItemId() == base.itemId()
+                        && name.equals(event.getName()))
+                .count();
+    }
+
     private ItemEventInput input() {
         long workspace = workspaces
                 .save(WorkspaceTestFixtures.activeWorkspace("event-" + UUID.randomUUID()))

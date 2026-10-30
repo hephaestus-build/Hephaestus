@@ -29,7 +29,7 @@ const meta = {
 			surface: "APP",
 			partial: { activity: "THINKING", stage: "Thinking…", text: "" },
 		},
-		stop: { label: "Stop Heph (Ada Lovelace, 10:42)", onStop: fn() },
+		stop: { label: "Stop answer (Ada Lovelace, 10:42)", onStop: fn() },
 	},
 	loaders: [askedSecondsAgo(0)],
 	render: (args, { loaded }) => (
@@ -53,12 +53,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Before Heph writes, one line says it is thinking; Stop ends the turn. Early on, nothing counts. */
+/** Before Hephaestus writes, one line says it is thinking; Stop ends the turn. Early on, nothing counts. */
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByText("Thinking…")).toBeVisible();
 		await expect(canvas.queryByText(/You can leave/u)).toBeNull();
-		await userEvent.click(canvas.getByRole("button", { name: "Stop Heph (Ada Lovelace, 10:42)" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Stop answer (Ada Lovelace, 10:42)" }),
+		);
 		await expect(args.stop?.onStop).toHaveBeenCalledOnce();
 	},
 };
@@ -77,7 +79,7 @@ function toolTurn(tool: string, stage: string): HephTurnStatusProps["turn"] {
 const TOOL_NAMES = /\b(?:read|bash|load_context|search_conversation)\b/u;
 
 /**
- * Heph reads a document from its context folder. The line says what it reads, as the host names
+ * Hephaestus reads a document from its context folder. The line says what it reads, as the host names
  * it, never the tool or the file's path.
  */
 export const ToolActivity: Story = {
@@ -88,7 +90,7 @@ export const ToolActivity: Story = {
 	},
 };
 
-/** Heph runs a command on a repository it loaded, such as a search or the history. No command shows. */
+/** Hephaestus runs a command on a repository it loaded, such as a search or the history. No command shows. */
 export const ReadingARepository: Story = {
 	args: { turn: toolTurn("bash", "Reading the repository…") },
 	play: async ({ canvas }) => {
@@ -97,7 +99,7 @@ export const ReadingARepository: Story = {
 	},
 };
 
-/** Heph loads a repository into its context folder. The line names no repository. */
+/** Hephaestus loads a repository into its context folder. The line names no repository. */
 export const LoadingARepository: Story = {
 	args: { turn: toolTurn("load_context", "Loading the repository…") },
 	play: async ({ canvas }) => {
@@ -146,16 +148,14 @@ export const WaitingToStart: Story = {
 	args: { turn: { createdAt: minutesBefore(1), status: "QUEUED", surface: "APP" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Thinking…")).toBeVisible();
-		await expect(
-			await canvas.findByText("Waiting for Heph to start…", {}, { timeout: 3000 }),
-		).toBeVisible();
+		await expect(await canvas.findByText("Waiting to start…", {}, { timeout: 3000 })).toBeVisible();
 	},
 };
 
 /**
- * Every Heph slot answers another question, and this one is next in its conversation. The line says
+ * Every Hephaestus slot answers another question, and this one is next in its conversation. The line says
  * so, because a wait of minutes with no reason reads as broken. It blames nobody and promises no
- * time, since nothing can estimate when Heph is free.
+ * time, since nothing can estimate when Hephaestus is free.
  */
 export const WaitingForAFreeHeph: Story = {
 	args: {
@@ -169,12 +169,12 @@ export const WaitingForAFreeHeph: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			await canvas.findByText(
-				"Heph is answering other questions. Yours starts when Heph is free.",
+				"Hephaestus is answering other questions. Yours starts when one finishes.",
 				{},
 				{ timeout: 3000 },
 			),
 		).toBeVisible();
-		await expect(canvas.queryByText("Waiting for Heph to start…")).toBeNull();
+		await expect(canvas.queryByText("Waiting to start…")).toBeNull();
 	},
 };
 

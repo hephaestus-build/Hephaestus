@@ -210,7 +210,7 @@ public class ScmPersonDataCatalog implements PersonDataCatalog {
                         "issue",
                         "issue",
                         "t.author_id = ANY(:users)",
-                        "issue_type,id,created_at,updated_at,closed_at,comments_count,html_url,is_locked,number,state,title,additions,changed_files,commits,deletions,is_draft,is_merged,merged_at,author_id,milestone_id,repository_id,merged_by_id,last_sync_at,state_reason,body,parent_issue_id,sub_issues_total,sub_issues_completed,sub_issues_percent_completed,issue_type_id,merge_state_status,mergeable,review_decision,head_ref_name,head_ref_oid,base_ref_name,base_ref_oid,native_id,provider_id,merge_commit_sha,deleted_at,head_check_sha,head_check_state,reviewers_observed_at,head_check_observed_at,discussions_observed_at,review_snapshot_id,review_snapshot_digest",
+                        "issue_type,id,created_at,updated_at,closed_at,comments_count,html_url,is_locked,number,state,title,additions,changed_files,commits,deletions,is_draft,is_merged,merged_at,author_id,milestone_id,repository_id,merged_by_id,last_sync_at,state_reason,body,parent_issue_id,sub_issues_total,sub_issues_completed,sub_issues_percent_completed,issue_type_id,merge_state_status,mergeable,review_decision,head_ref_name,head_ref_oid,base_ref_name,base_ref_oid,native_id,provider_id,merge_commit_sha,deleted_at,head_check_sha,head_check_state,reviewers_observed_at,head_check_observed_at,discussions_observed_at",
                         "id",
                         "author_id=NULL,body=NULL,title='Erased work',html_url=NULL",
                         250),

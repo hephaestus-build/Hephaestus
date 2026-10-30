@@ -6,23 +6,23 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -30,7 +30,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @ConditionalOnServerRole
 @Component
-@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Zombie sweeper operates across all workspaces")
 public class ReviewJobZombieSweeper {
 
@@ -39,10 +38,8 @@ public class ReviewJobZombieSweeper {
     /** How long past its job timeout a running attempt is left before the sweep ends it. */
     static final Duration RUNNING_BUFFER = SandboxLayout.RESULT_UPLOAD_GRACE.plusMinutes(5);
 
-    // Allow startup time for a claimed worker to publish its first heartbeat.
-    private static final Duration ORPHAN_STARTUP_GRACE = Duration.ofMinutes(2);
-
-    // Retain registry rows beyond the worker lease so orphan recovery can run before deletion.
+    // Keep registry rows for an hour after the last heartbeat: the live-worker count and the cleanup of Heph sandboxes
+    // read them.
     private static final Duration STALE_REGISTRATION_TTL = Duration.ofHours(1);
 
     private static final int FALLBACK_TIMEOUT_SECONDS = 600;
@@ -59,6 +56,30 @@ public class ReviewJobZombieSweeper {
     private final Counter compositionUnrecorded;
     private final Counter snapshotUnreadable;
     private final ReviewJobTelemetry jobTelemetry;
+    private final Duration renewEvery;
+
+    Clock clock = Clock.systemUTC();
+    private final Instant startedAt = clock.instant();
+
+    /**
+     * A gap from the end of one lease check until the next one reads the database clock longer than this means that
+     * this process or the database stalled. The checks run with a fixed delay of 20 seconds, so the recoveries of a slow
+     * check never make such a gap: only a stalled scheduler or a slow clock read does.
+     */
+    static final Duration STALL_GAP = Duration.ofSeconds(40);
+
+    /** A monotonic clock for the gaps between checks; tests replace it. */
+    LongSupplier ticker = System::nanoTime;
+
+    /** The ticker at the end of the last lease check. */
+    private long lastCheckEnded;
+
+    // Only the scheduler's fixed-delay run of recoverOrphanedJobs reads and writes these; it never overlaps itself.
+    /** The database clock at this sweeper's last lease check that ran; null before the first. */
+    private @Nullable Instant lastLeaseCheck;
+
+    /** Until when, after a start or a stall, no lease counts as expired: the workers renew within this time. */
+    private @Nullable Instant quietUntil;
 
     @Autowired
     public ReviewJobZombieSweeper(
@@ -69,7 +90,8 @@ public class ReviewJobZombieSweeper {
             ReviewAttemptUsageService attemptUsage,
             MeterRegistry meterRegistry,
             ReviewJobTelemetry jobTelemetry,
-            ReviewJobRecovery recovery) {
+            ReviewJobRecovery recovery,
+            AgentProperties agentProperties) {
         this.jobRepository = jobRepository;
         this.recovery = recovery;
         this.workerRegistryRepository = workerRegistryRepository;
@@ -77,7 +99,7 @@ public class ReviewJobZombieSweeper {
         this.transactionTemplate = transactionTemplate;
         this.attemptUsage = attemptUsage;
         this.zombieReaped = Counter.builder(AgentMetrics.AGENT_JOB_ZOMBIE_REAPED)
-                .description("Stale RUNNING jobs marked as TIMED_OUT")
+                .description("Stale RUNNING attempts ended by the timeout backstop")
                 .register(meterRegistry);
         this.orphanRequeued = Counter.builder(AgentMetrics.AGENT_JOB_ORPHAN_REQUEUED)
                 .description("RUNNING jobs whose owning worker was lost, requeued for another worker")
@@ -94,6 +116,7 @@ public class ReviewJobZombieSweeper {
                 .description("Terminal accounting events whose config snapshot could not be read; billed UNPRICED")
                 .register(meterRegistry);
         this.jobTelemetry = jobTelemetry;
+        this.renewEvery = agentProperties.heartbeatInterval();
     }
 
     /**
@@ -102,7 +125,7 @@ public class ReviewJobZombieSweeper {
      */
     @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES, initialDelay = 1)
     public void reapStaleRunningJobs() {
-        Instant conservativeCutoff = Instant.now().minus(RUNNING_BUFFER);
+        Instant conservativeCutoff = clock.instant().minus(RUNNING_BUFFER);
         List<ReviewJob> staleJobs = jobRepository.findStaleRunningJobs(conservativeCutoff);
 
         if (staleJobs.isEmpty()) {
@@ -119,7 +142,7 @@ public class ReviewJobZombieSweeper {
                     MDC.put(StructuredLogKeys.TRACE_ID, reaped.getTraceId());
                     MDC.put(StructuredLogKeys.SPAN_ID, ReviewJobExecutor.randomSpanId());
                     try {
-                        jobTelemetry.terminal(reaped, ReviewJobStatus.TIMED_OUT, ReviewJobTelemetry.age(reaped));
+                        jobTelemetry.terminal(reaped, reaped.getStatus(), ReviewJobTelemetry.age(reaped));
                     } finally {
                         MDC.remove(StructuredLogKeys.TRACE_ID);
                         MDC.remove(StructuredLogKeys.SPAN_ID);
@@ -137,24 +160,33 @@ public class ReviewJobZombieSweeper {
     private @Nullable ReviewJob reapIfStale(UUID jobId) {
         ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
         if (lockedJob == null || lockedJob.getStatus() != ReviewJobStatus.RUNNING) return null;
+        boolean cutover =
+                lockedJob.getLeasedUntil() == null && lockedJob.getWorkerId() != null && lockedJob.getDrainCount() > 0;
         int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
         Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
-        Instant deadlineAnchor = lockedJob.getExecutionStartedAt() != null
-                ? lockedJob.getExecutionStartedAt()
-                : lockedJob.getStartedAt();
-        if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(Instant.now())) {
+        // Give lease recovery a fresh timeout after this server starts, rather than the old claim's spent timeout.
+        Instant deadlineAnchor = cutover
+                ? startedAt
+                : lockedJob.getExecutionStartedAt() != null
+                        ? lockedJob.getExecutionStartedAt()
+                        : lockedJob.getStartedAt();
+        if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(clock.instant())) {
             return null;
         }
 
+        ReviewJobStatus terminalStatus = cutover ? ReviewJobStatus.FAILED : ReviewJobStatus.TIMED_OUT;
         int updated = jobRepository.transitionStatus(
                 jobId,
-                ReviewJobStatus.TIMED_OUT,
-                Instant.now(),
-                "The job exceeded its timeout. The executor may have crashed.",
+                terminalStatus,
+                clock.instant(),
+                cutover
+                        ? "The server could not resume this review after the upgrade."
+                        : "The job exceeded its timeout. The executor may have crashed.",
                 Set.of(ReviewJobStatus.RUNNING));
 
         if (updated > 0) {
             recordUnverifiableUsage(lockedJob);
+            lockedJob.setStatus(terminalStatus);
             zombieReaped.increment();
             log.warn("Reaped stale RUNNING job: jobId={}, startedAt={}", jobId, lockedJob.getStartedAt());
             return lockedJob;
@@ -163,21 +195,46 @@ public class ReviewJobZombieSweeper {
     }
 
     /**
-     * Requeue RUNNING jobs whose owning worker stopped heartbeating, so a sibling picks them up instead
-     * of waiting out the full job timeout; jobs past the retry cap are failed instead.
+     * Requeue RUNNING jobs whose lease expired, so another worker picks them up instead of waiting out the full job
+     * timeout; jobs past the retry cap are failed instead.
+     *
+     * <p>A stalled database or disk stops the renewals and this check alike. After a start, or after a gap from the end
+     * of one check to the next longer than {@link #STALL_GAP}, no lease counts as expired for one renewal interval: every
+     * live worker renews within it. After that, a lease counts as expired when it ended one renewal interval before the previous
+     * check, and the recovery checks the lease again under the row's lock.
      */
     @Scheduled(fixedDelay = 20, timeUnit = TimeUnit.SECONDS, initialDelay = 30)
     public void recoverOrphanedJobs() {
-        List<OrphanedJobRef> orphans = jobRepository.findOrphanedRunningJobs(
-                Instant.now().minus(ORPHAN_STARTUP_GRACE), AgentProperties.WORKER_LEASE_TTL.toSeconds());
+        try {
+            recoverExpiredLeases();
+        } finally {
+            lastCheckEnded = ticker.getAsLong();
+        }
+    }
+
+    private void recoverExpiredLeases() {
+        Instant now = jobRepository.databaseNow();
+        boolean stalled = ticker.getAsLong() - lastCheckEnded > STALL_GAP.toNanos();
+        Instant previous = lastLeaseCheck;
+        lastLeaseCheck = now;
+        if (previous == null || stalled) {
+            quietUntil = now.plus(renewEvery);
+        }
+        if (previous == null || (quietUntil != null && now.isBefore(quietUntil))) {
+            return;
+        }
+        Instant cutoff = previous.minus(renewEvery);
+        List<OrphanedJobRef> orphans = jobRepository.findExpiredLeases(cutoff);
         if (orphans.isEmpty()) {
             return;
         }
         log.warn("Found {} orphaned RUNNING job(s) (owning worker lost); recovering", orphans.size());
         for (OrphanedJobRef orphan : orphans) {
             try {
-                ReviewJobRecovery.Outcome outcome = transactionTemplate.execute(
-                        s -> recovery.recover(orphan.getJobId(), orphan.getWorkerId(), orphan.getAttempt(), null));
+                ReviewJobRecovery.Outcome outcome =
+                        transactionTemplate.execute(s -> stillExpired(orphan.getJobId(), cutoff)
+                                ? recovery.recover(orphan.getJobId(), orphan.getWorkerId(), orphan.getAttempt(), null)
+                                : ReviewJobRecovery.Outcome.NONE);
                 if (outcome == ReviewJobRecovery.Outcome.REQUEUED) {
                     orphanRequeued.increment();
                     log.warn("Requeued orphaned job {} (retry {})", orphan.getJobId(), orphan.getAttempt() + 1);
@@ -197,6 +254,13 @@ public class ReviewJobZombieSweeper {
                         e.getClass().getName());
             }
         }
+    }
+
+    /** Whether the lease is still expired under the row's lock: a heartbeat may have renewed it since the select. */
+    private boolean stillExpired(UUID jobId, Instant cutoff) {
+        Instant leasedUntil =
+                jobRepository.lockById(jobId).map(ReviewJob::getLeasedUntil).orElse(null);
+        return leasedUntil == null || leasedUntil.isBefore(cutoff);
     }
 
     /**

@@ -27,7 +27,7 @@ import { hasText } from "@/lib/text";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/teams")({
-	head: workspaceAdminHead("Teams"),
+	head: workspaceAdminHead("Team setup"),
 	validateSearch: z.object({
 		q: z.string().max(200).optional().catch(undefined),
 	}),

@@ -24,6 +24,37 @@ erDiagram
         BIGINT updated_by_account_id FK
     }
 
+    LlmCallPermit {
+        UUID id PK
+        TIMESTAMPTZ acquired_at "NOT NULL"
+        VARCHAR(16) call_class "NOT NULL"
+        BIGINT pool_id FK "NOT NULL"
+        TIMESTAMPTZ renewed_at "NOT NULL"
+        VARCHAR(255) worker_id "NOT NULL"
+        BIGINT workspace_id "NOT NULL"
+        UUID source_id "NOT NULL"
+        INTEGER attempt "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        TIMESTAMPTZ granted_at
+        TIMESTAMPTZ closed_at
+        INTEGER requests "NOT NULL"
+        BIGINT tokens "NOT NULL"
+    }
+
+    LlmCallPool {
+        BIGINT id PK
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(128) display_name "NOT NULL"
+        INTEGER interactive_reserve "NOT NULL"
+        INTEGER max_concurrent_calls
+        TIMESTAMPTZ no_call_before
+        VARCHAR(64) slug UK "NOT NULL"
+        TIMESTAMPTZ updated_at
+        INTEGER requests_per_minute
+        BIGINT tokens_per_minute
+        BIGINT tokens_per_call
+    }
+
     LlmConnection {
         BIGINT id PK
         VARCHAR(64) slug UK "NOT NULL"
@@ -46,7 +77,6 @@ erDiagram
         VARCHAR(256) upstream_model_id UK "NOT NULL"
         INTEGER context_window
         INTEGER max_output_tokens
-        BOOLEAN supports_reasoning "NOT NULL"
         VARCHAR(16) visibility "NOT NULL"
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
@@ -55,6 +85,8 @@ erDiagram
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
+        BIGINT call_pool_id FK
+        BOOLEAN forced_tool_choice
     }
 
     LlmModelPrice {
@@ -166,7 +198,6 @@ erDiagram
         TIMESTAMPTZ available_at "NOT NULL"
         VARCHAR(32) hold_reason
         VARCHAR(255) worker_id
-        VARCHAR(255) idempotency_key
         VARCHAR(32) trace_id "NOT NULL"
         JSONB input "NOT NULL"
         JSONB config_snapshot "NOT NULL"
@@ -191,6 +222,7 @@ erDiagram
         TIMESTAMPTZ completed_at
         INTEGER drain_count "NOT NULL"
         INTEGER room_refusals "NOT NULL"
+        TIMESTAMPTZ leased_until
     }
 
     ReviewJobAttemptCharge {
@@ -304,7 +336,6 @@ erDiagram
         VARCHAR(256) upstream_model_id UK "NOT NULL"
         INTEGER context_window
         INTEGER max_output_tokens
-        BOOLEAN supports_reasoning "NOT NULL"
         VARCHAR(16) pricing_mode "NOT NULL"
         NUMERIC(18,8) per_1m_input_usd
         NUMERIC(18,8) per_1m_output_usd
@@ -319,6 +350,8 @@ erDiagram
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
+        BIGINT call_pool_id FK
+        BOOLEAN forced_tool_choice
     }
 
     Account["Account · Core"]
@@ -334,7 +367,9 @@ erDiagram
 
     %% One-to-Many relationships
     Account ||--o{ InstanceLlmSetting : has
+    LlmCallPool ||--o{ LlmCallPermit : has
     LlmConnection ||--o{ LlmModel : has
+    LlmCallPool ||--o{ LlmModel : has
     LlmModel ||--o{ LlmModelPrice : has
     Review ||--o{ LlmUsageEvent : has
     Workspace ||--o{ LlmUsageEvent : has
@@ -359,6 +394,7 @@ erDiagram
     Workspace ||--o{ WorkspaceLlmConnection : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceLlmModel : has
+    LlmCallPool ||--o{ WorkspaceLlmModel : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
 
     %% Many-to-Many relationships

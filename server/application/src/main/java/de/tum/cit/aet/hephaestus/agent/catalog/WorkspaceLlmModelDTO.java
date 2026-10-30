@@ -34,6 +34,9 @@ public record WorkspaceLlmModelDTO(
         @NonNull @Schema(description = "Upstream provider model id")
         String upstreamModelId,
 
+        @Nullable @Schema(description = "Probed forced_tool_choice capability; null until established")
+        Boolean forcedToolChoice,
+
         @Nullable @Schema(description = "Context window in tokens")
         Integer contextWindow,
 
@@ -75,8 +78,14 @@ public record WorkspaceLlmModelDTO(
         @NonNull @Schema(description = "Creation timestamp") Instant createdAt,
 
         @Nullable @Schema(description = "Last update timestamp")
-        Instant updatedAt) {
-    public static WorkspaceLlmModelDTO from(WorkspaceLlmModel model) {
+        Instant updatedAt,
+
+        @Nullable
+        @Schema(
+                description =
+                        "The instance pool whose capacity the model's calls share; only an instance admin sets it")
+        LlmCallPoolMembershipDTO callPool) {
+    public static WorkspaceLlmModelDTO from(WorkspaceLlmModel model, @Nullable LlmCallPool callPool) {
         return new WorkspaceLlmModelDTO(
                 model.getId(),
                 model.getConnection().getId(),
@@ -85,6 +94,7 @@ public record WorkspaceLlmModelDTO(
                 model.getDisplayName(),
                 model.getBrand(),
                 model.getUpstreamModelId(),
+                model.getForcedToolChoice(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.getReasoningEffort(),
@@ -100,6 +110,7 @@ public record WorkspaceLlmModelDTO(
                 model.getCurrency(),
                 model.getPriceNote(),
                 model.getCreatedAt(),
-                model.getUpdatedAt());
+                model.getUpdatedAt(),
+                callPool == null ? null : LlmCallPoolMembershipDTO.from(callPool));
     }
 }

@@ -5,7 +5,7 @@ import {
 	createRouter,
 	RouterProvider,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -60,6 +60,18 @@ function renderMobileSidebar() {
 }
 
 describe("AppSidebar on mobile", () => {
+	it("names both groups and returns focus to the opener after Escape", async () => {
+		renderMobileSidebar();
+		const opener = await screen.findByRole("button", { name: "Open navigation" });
+		opener.focus();
+		fireEvent.click(opener);
+		const dialog = await screen.findByRole("dialog", { name: "Navigation" });
+		expect(within(dialog).getByRole("list", { name: "You" })).not.toBeNull();
+		expect(within(dialog).getByRole("list", { name: "Workspace" })).not.toBeNull();
+		fireEvent.keyDown(dialog, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(opener));
+	});
 	it("closes when the current destination is selected", async () => {
 		renderMobileSidebar();
 		fireEvent.click(await screen.findByRole("button", { name: "Open navigation" }));

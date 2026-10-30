@@ -142,11 +142,11 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     }
 
     /**
-     * A Heph turn has no {@code review_job} row: its credential prices what the turn's row recorded, so a turn is
+     * A conversation turn has no {@code review_job} row: its credential prices what the turn's row recorded, so a turn is
      * bounded by its own completed calls like a job attempt.
      */
     @Nested
-    @DisplayName("a Heph turn is bounded by its own completed calls, exactly like a job attempt")
+    @DisplayName("a conversation turn is bounded by its own completed calls, exactly like a job attempt")
     class AMentorTurn {
 
         private static final LlmPriceSnapshot TEN_DOLLARS_PER_MILLION_INPUT = new LlmPriceSnapshot(

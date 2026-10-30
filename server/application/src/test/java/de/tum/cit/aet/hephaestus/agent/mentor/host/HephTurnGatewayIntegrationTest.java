@@ -6,11 +6,16 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
@@ -19,8 +24,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -31,6 +34,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -40,6 +44,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -66,7 +71,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Every endpoint that a Heph host calls, over real HTTP through the worker's real gateway connector and its real
+ * Every endpoint that a Hephaestus host calls, over real HTTP through the worker's real gateway connector and its real
  * security chain, with a signed turn credential. A request without a body carries no {@code Content-Length}, as the
  * host's {@code fetch} sends it. The worker role is off in the test context, so the gateway runs as a small
  * application of its own, wired from the test context's beans.
@@ -94,11 +99,12 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private MeterRegistry metrics;
 
-    @Autowired
-    private WorkerJwtIssuer issuer;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtVerifier verifier;
+    private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(KEY);
+
+    private final AttemptTokenVerifier verifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
 
     private final MentorTurnRepository gatewayTurnReads = mock(MentorTurnRepository.class);
     private final HttpClient http = HttpClient.newHttpClient();
@@ -114,7 +120,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         User developerUser = persistUser("heph-gateway-" + suffix);
         workspace = createWorkspace(
-                "heph-gateway-" + suffix, "Heph Gateway", "heph-gateway-org", AccountType.ORG, developerUser);
+                "heph-gateway-" + suffix, "Hephaestus Gateway", "heph-gateway-org", AccountType.ORG, developerUser);
         developer = accountId(developerUser);
         conversation = conversations.findOrCreateMain(workspace.getId(), developer);
         turn = MentorTurnStarts.askAndStart(
@@ -140,7 +146,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             factory.registerSingleton("reviewJobRepository", jobRepository);
             // The turn endpoints read no turn row on the gateway; a model call would.
             factory.registerSingleton("mentorTurnRepository", gatewayTurnReads);
-            factory.registerSingleton("workerJwtVerifier", verifier);
+            factory.registerSingleton("attemptTokenVerifier", verifier);
             factory.registerSingleton("sandboxGatewaySessions", new SandboxGatewaySessions());
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
             factory.registerSingleton("workerProperties", WorkerPropertiesFixtures.minimal("1", "4"));
@@ -169,7 +175,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Arguments.of("GET", "context", null, 200),
                 Arguments.of("PUT", "partial", "partial.request.json", 204),
                 Arguments.of("POST", "search", "search.request.json", 200),
-                // The controller answers: the result, problem or feedback is unknown, so Heph may not show it.
+                // The controller answers: the result, problem or feedback is unknown, so Hephaestus may not show it.
                 Arguments.of("POST", "link-result", "{\"resultId\":\"" + UUID.randomUUID() + "\"}", 422),
                 Arguments.of("POST", "link-problem", "link-problem.request.json", 422),
                 Arguments.of("POST", "show-feedback", "show-feedback.request.json", 422),
@@ -241,7 +247,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** A dispatcher that runs this test's attempt, as the worker's does once it started the turn on its host. */
     private HephTurnDispatcher runningHere() {
         HephTurnDispatcher dispatcher = mock(HephTurnDispatcher.class);
-        when(dispatcher.runs(turn.getId(), turn.getAttempt())).thenReturn(true);
+        when(dispatcher.running(turn.getId(), turn.getAttempt()))
+                .thenReturn(Optional.of(new TurnAttempt(
+                        turn.getId(), workspace.getId(), developer, conversation.getId(), turn.getAttempt())));
         when(dispatcher.deadline(turn.getId(), turn.getAttempt()))
                 .thenReturn(Instant.now().plusSeconds(300));
         return dispatcher;
@@ -255,12 +263,12 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The signed credential the worker issues for this attempt of the turn. */
     private String credential() {
-        return issuer.issueForTurn(
+        return issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 turn.getId(),
                 workspace.getId(),
-                developer,
-                conversation.getId(),
                 turn.getAttempt(),
+                null,
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 

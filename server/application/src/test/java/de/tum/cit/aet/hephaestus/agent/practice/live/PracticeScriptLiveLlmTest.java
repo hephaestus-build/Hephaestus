@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.practice.live;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmConnectionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmModelRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettings;
@@ -50,7 +52,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -226,7 +227,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private LlmUsageEventRepository usageEvents;
 
     @Autowired
-    private WorkerJwtIssuer jwtIssuer;
+    private AttemptTokenIssuer jwtIssuer;
 
     @Autowired
     private WorkerProperties workerProperties;
@@ -384,8 +385,13 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         Map<ModelKind, FrozenModel> frozen = snapshot.practiceScriptModels();
         assertThat(frozen.keySet()).isEqualTo(called);
         Instant workDeadline = Instant.now().plus(Duration.ofSeconds(LiveRunnerWorkspace.TIMEOUT_SECONDS + 300L));
-        String jobToken = jwtIssuer.issueForJobUntil(
-                job.getId(), context.id(), job.getAttempt(), workDeadline, workDeadline.plus(Duration.ofMinutes(10)));
+        String jobToken = jwtIssuer.issueForAttempt(
+                AttemptJwt.Kind.REVIEW,
+                job.getId(),
+                context.id(),
+                job.getAttempt(),
+                workDeadline,
+                workDeadline.plus(Duration.ofMinutes(10)));
         PracticeSandboxSpec spec = practiceAdapter.buildSandboxSpec(new PracticeAgentRequest(
                 snapshot.model().apiProtocol().wire(),
                 snapshot.model().upstreamModelId(),
@@ -394,7 +400,8 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 snapshot.model().reasoningEffort(),
                 jobToken,
                 LiveRunnerWorkspace.TIMEOUT_SECONDS,
-                frozen));
+                frozen,
+                false));
         assertThat(spec.environment())
                 .as("one job token, no second credential")
                 .doesNotContainKey("PRACTICE_SCRIPT_PROXY_TOKEN");

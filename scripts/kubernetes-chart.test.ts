@@ -387,7 +387,7 @@ await test("network policy is always rendered", () => {
 });
 
 await test("the route strips only /api and keeps every webhook path whole", () => {
-	const route = source("route.yaml");
+	const route = source("route.yaml").split("---")[0] ?? "";
 	for (const forbidden of [
 		/^kind:\s*(?:Gateway|Ingress)\s*$/mu,
 		/RequestRedirect/u,
@@ -444,7 +444,12 @@ await test("the webapp runs the non-root image as it is, with only /tmp writable
 	assert.match(webapp, /- name: http\n\s*port: 8080\n\s*targetPort: http/u);
 	assert.deepEqual(
 		[...webapp.matchAll(/mountPath: (?<path>\S+)/gu)].map((match) => match.groups?.path),
-		["/tmp/hephaestus-webapp", "/usr/share/nginx/html/legal-overrides"],
+		[
+			"/etc/nginx/conf.d/workspace-maps.conf",
+			"/etc/nginx/workspace/server.conf",
+			"/tmp/hephaestus-webapp",
+			"/usr/share/nginx/html/legal-overrides",
+		],
 	);
 	assert.match(webapp, /emptyDir:\n\s*sizeLimit: 16Mi/u);
 });

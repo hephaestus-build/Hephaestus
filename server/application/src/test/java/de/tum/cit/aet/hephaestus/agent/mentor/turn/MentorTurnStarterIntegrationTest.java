@@ -63,7 +63,7 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @BeforeEach
     void setUpStarter() {
         User developer = persistUser("heph-starter-developer");
-        workspace = createWorkspace("heph-starter", "Heph", "heph-org", AccountType.ORG, developer);
+        workspace = createWorkspace("heph-starter", "Hephaestus", "heph-org", AccountType.ORG, developer);
         accountId = accountId(developer);
         main = conversations.findOrCreateMain(workspace.getId(), accountId);
         turns.submit(

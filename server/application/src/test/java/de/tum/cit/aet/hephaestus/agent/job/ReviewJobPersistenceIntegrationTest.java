@@ -113,7 +113,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 attemptUsage,
                 meterRegistry,
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                new ReviewJobRecovery(jobRepository, agentProperties, objectMapper, attemptUsage, Optional.empty()));
+                new ReviewJobRecovery(jobRepository, agentProperties, objectMapper, attemptUsage, Optional.empty()),
+                agentProperties);
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("stale-reap-ws"));
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("stale-reap"));
         instanceModel =
@@ -417,7 +418,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 workspace.getId(),
                 null,
                 null,
-                price);
+                price,
+                false);
     }
 
     private LlmUsageEvent onlyUsageEvent(UUID jobId) {
@@ -461,7 +463,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                                 workspace.getId(),
                                 null,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,

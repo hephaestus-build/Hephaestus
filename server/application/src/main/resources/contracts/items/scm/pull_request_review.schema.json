@@ -125,23 +125,6 @@
     },
     "milestone": {
       "type": "string"
-    },
-    "merge_state_status": {
-      "type": "string"
-    },
-    "review_decision": {
-      "type": "string"
-    },
-    "head_checks": {
-      "enum": [
-        "SUCCESS",
-        "FAILURE",
-        "PENDING",
-        "CANCELLED",
-        "NONE",
-        "NO_PIPELINE",
-        "SKIPPED"
-      ]
     }
   },
   "required": [

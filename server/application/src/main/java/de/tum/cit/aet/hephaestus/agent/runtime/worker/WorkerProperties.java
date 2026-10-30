@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 
 import java.net.InetAddress;
-import java.net.URI;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.UUID;
@@ -12,16 +11,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 /**
  * Bound to {@code hephaestus.worker.*}. {@code capacity.{review,mentor}Max} accept an integer or
  * the literal {@code "auto"}; resolution lives on {@link Capacity}. {@code capacity.mentorMax} is the
- * number of Heph turns this worker's Heph host runs at once. {@code toString()} redacts the
- * registration token.
+ * number of Heph turns this worker's Heph host runs at once.
  */
 @ConfigurationProperties(prefix = "hephaestus.worker")
 public record WorkerProperties(
         @Nullable String workerId,
         @DefaultValue Capacity capacity,
-        @DefaultValue Drain drain,
-        @DefaultValue Heartbeat heartbeat,
-        @DefaultValue Control control) {
+        @DefaultValue Drain drain) {
     public static final String AUTO = "auto";
 
     /**
@@ -54,26 +50,12 @@ public record WorkerProperties(
         return host + "-" + INSTANCE_SUFFIX;
     }
 
-    @Override
-    public String toString() {
-        return ("WorkerProperties[workerId=" + workerId
-                + ", capacity="
-                + capacity
-                + ", drain="
-                + drain
-                + ", heartbeat="
-                + heartbeat
-                + ", control="
-                + control
-                + "]");
-    }
-
     /**
      * Concurrency of this worker.
      *
      * @param reviewMax Number of practice reviews this worker runs at once. Accepts an integer or auto, which means
      *     one less than the processor count and at least 1.
-     * @param mentorMax Number of Heph turns this worker runs at once. Accepts an integer or auto, which means 8.
+     * @param mentorMax Number of conversation turns this worker runs at once. Accepts an integer or auto, which means 8.
      */
     public record Capacity(
             @DefaultValue("auto") String reviewMax,
@@ -114,49 +96,6 @@ public record WorkerProperties(
             if (timeout == null || timeout.isNegative()) {
                 throw new IllegalArgumentException("drain.timeout must be >= 0, got: " + timeout);
             }
-        }
-    }
-
-    public record Heartbeat(@DefaultValue("20s") Duration interval) {
-        public Heartbeat {
-            if (interval == null || interval.isZero() || interval.isNegative()) {
-                throw new IllegalArgumentException("heartbeat.interval must be positive, got: " + interval);
-            }
-        }
-    }
-
-    /**
-     * Control channel from this worker to the server.
-     *
-     * @param endpoint WebSocket address of the server's worker control channel, such as
-     *     ws://application-server:8080/api/workers/connect. The worker stays disconnected when it is unset.
-     * @param registrationToken Token that this worker exchanges at the server for its access token. Give it the same
-     *     value as hephaestus.worker.hub.token.registration-token on the server.
-     */
-    public record Control(
-            @Nullable URI endpoint,
-            @Nullable String registrationToken,
-            @DefaultValue("10s") Duration handshakeTimeout) {
-        public Control {
-            if (handshakeTimeout == null || handshakeTimeout.isZero() || handshakeTimeout.isNegative()) {
-                throw new IllegalArgumentException(
-                        "control.handshakeTimeout must be positive, got: " + handshakeTimeout);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return ("Control[endpoint=" + endpoint
-                    + ", registrationToken="
-                    + (registrationToken == null || registrationToken.isBlank() ? "<unset>" : "<redacted>")
-                    + ", handshakeTimeout="
-                    + handshakeTimeout
-                    + "]");
-        }
-
-        /** @return {@code true} iff the worker has enough config to attempt a WSS dial. */
-        public boolean isConfigured() {
-            return (endpoint != null && registrationToken != null && !registrationToken.isBlank());
         }
     }
 }

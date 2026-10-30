@@ -37,11 +37,19 @@ public final class AgentMetrics {
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_EVALUATED = "agent.review.practice.coverage.evaluated";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_RATIO = "agent.review.practice.coverage.ratio";
     public static final String AGENT_REVIEW_PRACTICE_SCRIPTS = "agent.review.practice_scripts";
+    public static final String ATTEMPT_TOKEN_VERIFY = "attempt.token.verify";
     public static final String FEEDBACK_LANE_SWEEP_FAILURE = "feedback.lane.sweep.failure";
     public static final String FEEDBACK_LANE_SWEEP_RECOVERED = "feedback.lane.sweep.recovered";
     public static final String LLM_BUDGET_ALERT_FAILURE = "llm.budget.alert.failure";
     public static final String LLM_BUDGET_BLOCKED = "llm.budget.blocked";
     public static final String LLM_BUDGET_EXHAUSTED = "llm.budget.exhausted";
+    public static final String LLM_POOL_COOLDOWN_ACTIVE = "llm.pool.cooldown.active";
+    public static final String LLM_POOL_LEASE_RENEWAL_FAILURES = "llm.pool.lease.renewal.failures";
+    public static final String LLM_POOL_PERMIT_ABANDONED = "llm.pool.permit.abandoned";
+    public static final String LLM_POOL_PERMIT_WAIT = "llm.pool.permit.wait";
+    public static final String LLM_POOL_PERMITS_ACTIVE = "llm.pool.permits.active";
+    public static final String LLM_POOL_SELF_FENCE_CANCELLED = "llm.pool.self_fence.cancelled";
+    public static final String LLM_POOL_UPSTREAM_THROTTLED = "llm.pool.upstream.throttled";
     public static final String LLM_PROXY_BUDGET_BLOCKED = "llm.proxy.budget.blocked";
     public static final String LLM_PROXY_DURATION = "llm.proxy.duration";
     public static final String LLM_PROXY_ERRORS = "llm.proxy.errors";
@@ -100,15 +108,8 @@ public final class AgentMetrics {
     public static final String WORKER_CAPACITY_IN_FLIGHT = "worker.capacity.in_flight";
     public static final String WORKER_CAPACITY_SPARE = "worker.capacity.spare";
     public static final String WORKER_CAPACITY_TOTAL = "worker.capacity.total";
-    public static final String WORKER_CONTROL_CHANNEL_CONNECTED = "worker.control.channel.connected";
-    public static final String WORKER_CONTROL_FRAMES_DROPPED = "worker.control.frames.dropped";
-    public static final String WORKER_CONTROL_FRAMES_RECEIVED = "worker.control.frames.received";
-    public static final String WORKER_CONTROL_FRAMES_SENT = "worker.control.frames.sent";
-    public static final String WORKER_CONTROL_RECONNECTS = "worker.control.reconnects";
     public static final String WORKER_DRAIN_ACTIVE = "worker.drain.active";
     public static final String WORKER_GIT_OPERATIONS_FAILED = "worker.git.operations.failed";
-    public static final String WORKER_HEARTBEATS_FAILED = "worker.heartbeats.failed";
-    public static final String WORKER_HEARTBEATS_SENT = "worker.heartbeats.sent";
     public static final String WORKER_LIVENESS_HEARTBEAT_FAILURES = "worker.liveness.heartbeat.failures";
 
     private AgentMetrics() {}

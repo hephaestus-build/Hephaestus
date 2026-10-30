@@ -84,7 +84,7 @@ class WeeklyDigestEmailListenerTest extends BaseUnitTest {
         assertThat(message.text())
                 .contains(
                         "Your weekly digest for 5–11 October in Delivery team is ready in Hephaestus.",
-                        "https://hephaestus.example/w/delivery-team/mentor?entry=" + ENTRY_ID,
+                        "https://hephaestus.example/w/delivery-team/conversation?entry=" + ENTRY_ID,
                         "Replies to this email are not read.")
                 .doesNotContainPattern("\\d+ pieces? of feedback");
     }

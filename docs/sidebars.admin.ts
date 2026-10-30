@@ -52,6 +52,7 @@ const sidebars: SidebarsConfig = {
 					label: "Upgrade",
 					link: { type: "doc", id: "upgrade" },
 					items: [
+						"compose-to-kubernetes",
 						"upgrade-to-1-0",
 						"liquibase-baseline-runbook",
 						"native-hibernate-json-cutover",

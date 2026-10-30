@@ -157,7 +157,7 @@ async function renderModelsRoute(bindings: () => AgentBinding[], aiChoiceRequire
 	return queryClient;
 }
 
-type PurposeTitle = "Practice reviews" | "Heph";
+type PurposeTitle = "Practice reviews" | "Conversations";
 const UNCHOSEN = "Members who have not chosen";
 
 function purposeRegion(purpose: string): HTMLElement {
@@ -192,10 +192,10 @@ const timeoutInput = (scope: HTMLElement) =>
 const pickerOf = (scope: HTMLElement) => within(scope).getByRole("combobox");
 
 describe("workspace AI models route", () => {
-	it("offers a concurrency limit only for queued practice reviews, not Heph turns", async () => {
+	it("offers a concurrency limit only for queued practice reviews, not conversation turns", async () => {
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20), binding("MENTOR", 20)]);
 		const reviews = row("Practice reviews");
-		const mentor = row("Heph");
+		const mentor = row("Conversations");
 		fireEvent.click(advancedButton(reviews));
 		fireEvent.click(advancedButton(mentor));
 		expect(
@@ -224,9 +224,9 @@ describe("workspace AI models route", () => {
 
 		fireEvent.click(saveButton("Practice reviews"));
 		await waitFor(() => expect(detectionSaves).toBe(1));
-		fireEvent.click(saveButton("Heph"));
+		fireEvent.click(saveButton("Conversations"));
 
-		await waitFor(() => expect(saveButton("Heph").disabled).toBe(false));
+		await waitFor(() => expect(saveButton("Conversations").disabled).toBe(false));
 		expect(saveButton("Practice reviews").disabled).toBe(true);
 
 		releaseSlowSave();
@@ -667,7 +667,7 @@ it.each([
 		modelName: "GPT Test",
 		inHouseReady: true,
 		cloudReady: true,
-		unavailableHeading: "Heph is not set up for your AI choice yet",
+		unavailableHeading: "Ask Hephaestus is not set up for your AI choice yet",
 	},
 	{
 		tier: "CLOUD",
@@ -677,7 +677,7 @@ it.each([
 		modelName: "GPT Other",
 		inHouseReady: false,
 		cloudReady: true,
-		unavailableHeading: "Heph is not set up for your AI choice yet",
+		unavailableHeading: "Ask Hephaestus is not set up for your AI choice yet",
 	},
 	{
 		tier: "UNDECLARED",
@@ -687,10 +687,10 @@ it.each([
 		modelName: "Undeclared test",
 		inHouseReady: false,
 		cloudReady: false,
-		unavailableHeading: "Heph is not set up in this workspace yet",
+		unavailableHeading: "Ask Hephaestus is not set up in this workspace yet",
 	},
 ] as const)(
-	"updates navigation and the conversation after adding and clearing a $tier Heph assignment in the same workspace",
+	"updates navigation and the conversation after adding and clearing a $tier Hephaestus assignment in the same workspace",
 	async ({
 		tier,
 		memberChoice,
@@ -757,20 +757,22 @@ it.each([
 			...new MentorFake().handlers(),
 		);
 		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/models");
-		await screen.findByRole("button", { name: "Heph" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: "Conversations" }, ROUTE_RENDER_WAIT);
 		await waitFor(() =>
 			expect(
 				queryClient.getQueryState(getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }))
 					?.status,
 			).toBe("success"),
 		);
-		expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull();
+		expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull();
 
-		await user.click(pickerOf(row("Heph", title)));
+		await user.click(pickerOf(row("Conversations", title)));
 		await user.click(await screen.findByRole("option", { name: new RegExp(modelName, "u") }));
-		await user.click(saveButton("Heph", title));
-		await user.click(await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT));
-		await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
+		await user.click(saveButton("Conversations", title));
+		await user.click(
+			await screen.findByRole("link", { name: /Ask Hephaestus/u }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT);
 
 		await act(async () => {
 			await router.navigate({
@@ -778,17 +780,20 @@ it.each([
 				params: { workspaceSlug: "acme" },
 			});
 		});
-		await screen.findByRole("button", { name: "Heph" }, ROUTE_RENDER_WAIT);
-		await user.click(clearButton(row("Heph", title)));
+		await screen.findByRole("button", { name: "Conversations" }, ROUTE_RENDER_WAIT);
+		await user.click(clearButton(row("Conversations", title)));
 		await waitFor(
-			() => expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull(),
+			() => expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull(),
 			ROUTE_RENDER_WAIT,
 		);
 		await act(async () => {
-			await router.navigate({ to: "/w/$workspaceSlug/mentor", params: { workspaceSlug: "acme" } });
+			await router.navigate({
+				to: "/w/$workspaceSlug/conversation",
+				params: { workspaceSlug: "acme" },
+			});
 		});
 		await screen.findByRole("heading", { name: unavailableHeading }, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
+		expect(screen.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
 	},
 );
 

@@ -1,0 +1,42 @@
+{{- if .Values.workspaceSubdomains.enabled }}
+{{- $domain := regexQuoteMeta .Values.host }}
+{{- $reserved := trim (.Files.Get "files/workspace-reserved-labels.txt") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "workspace-routing") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webapp") | nindent 4 }}
+data:
+  # nginx uses PCRE for maps. These rules require no lookup of a workspace or its membership.
+  maps.conf: |
+    map $host $workspace_tenant {
+      default 0;
+      "~^(?!(?:{{ $reserved }})[.]{{ $domain }}$)(?![a-z0-9-]*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9][.]{{ $domain }}$" 1;
+    }
+    map $host $workspace_suffix {
+      default 0;
+      "~[.]{{ $domain }}$" 1;
+    }
+    map "$workspace_suffix:$workspace_tenant" $workspace_invalid {
+      default 0;
+      "1:0" 1;
+    }
+    map "$workspace_tenant:$uri" $workspace_forbidden {
+      default 0;
+      "~^1:/(api|auth|oauth|oauth2|login|consent|webhooks|actuator)(/|$)" 1;
+    }
+    map "$host:$request_method:$request_uri" $workspace_redirect {
+      default "";
+      "~^{{ $domain }}:(?:GET|HEAD):/w/(?<workspace_slug>(?!(?:{{ $reserved }})(?:/|[?]|$))(?![a-z0-9-]*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])(?:/(?<workspace_tail>[^?]*))?(?<workspace_query>[?].*)?$" "https://$workspace_slug.{{ .Values.host }}/$workspace_tail$workspace_query";
+    }
+    map $workspace_redirect $workspace_redirect_cache {
+      default no-store;
+      "" "";
+    }
+  server.conf: |
+    if ($workspace_invalid) { return 404; }
+    if ($workspace_forbidden) { return 404; }
+    add_header Cache-Control $workspace_redirect_cache always;
+    if ($workspace_redirect != "") { return 308 $workspace_redirect; }
+{{- end }}

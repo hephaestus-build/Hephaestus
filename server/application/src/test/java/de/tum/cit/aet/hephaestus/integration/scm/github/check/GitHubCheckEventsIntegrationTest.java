@@ -1,32 +1,52 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.github.GitHubProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.dto.GitHubCheckSuiteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.dto.GitHubStatusEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
+@RecordApplicationEvents
 class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
 
     private static final String CHECKED_SHA = "67700adac0c0f02df77fdf1bf037273e7b056aa9";
@@ -55,6 +75,27 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ProcessingContextFactory contextFactory;
+
+    @Autowired
+    private GitHubHeadCheckProcessor headCheckProcessor;
+
+    @Autowired
+    private HeadCheckRunsRecorder checkRunsRecorder;
+
+    @Autowired
+    private NatsMessageDeserializer deserializer;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private ApplicationEvents events;
+
+    @Autowired
+    private GitHubProperties gitHubProperties;
 
     private IdentityProvider gitProvider;
     private Repository repository;
@@ -133,6 +174,136 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
 
         assertThat(pullRequestRepository.findById(pr.getId()).orElseThrow().getHeadCheckState())
                 .isEqualTo(CheckState.FAILURE);
+    }
+
+    @Test
+    void shouldStoreTheRunsOfTheHeadWhenACommitStatusOfItEnds() throws Exception {
+        PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
+        var run = new HeadCheckRuns.Run("ci/jenkins", null, "success", true, null, null, null);
+        var read = new HeadCheckRuns(CHECKED_SHA, List.of(run), true, Instant.now(), null);
+        GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
+        when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
+                .thenReturn(Optional.of(read));
+        var handler = new GitHubStatusMessageHandler(
+                contextFactory,
+                headCheckProcessor,
+                pullRequestRepository,
+                checkRuns,
+                checkRunsRecorder,
+                deserializer,
+                transactionTemplate);
+
+        handler.dispatchEvent(load("status", GitHubStatusEventDTO.class));
+
+        PullRequest stored = pullRequestRepository.findById(onHead.getId()).orElseThrow();
+        assertThat(stored.getHeadCheckRuns()).isNotNull().satisfies(runs -> {
+            assertThat(runs.sha()).isEqualTo(CHECKED_SHA);
+            assertThat(runs.runs()).containsExactly(run);
+        });
+    }
+
+    @Test
+    void shouldRecordThatTheChecksFinishedWhenTheLastSuiteOfTheHeadEndsSkipped() throws Exception {
+        PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
+        var build = new HeadCheckRuns.Run("build", "GitHub Actions", "success", true, null, null, null);
+        var docs = new HeadCheckRuns.Run("docs", "GitHub Actions", "skipped", true, null, null, null);
+        var read = new HeadCheckRuns(CHECKED_SHA, List.of(build, docs), true, Instant.now(), null);
+        GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
+        when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
+                .thenReturn(Optional.of(read));
+        var handler = new GitHubCheckSuiteMessageHandler(
+                contextFactory,
+                headCheckProcessor,
+                mock(GitHubPullRequestSyncService.class),
+                pullRequestRepository,
+                checkRuns,
+                checkRunsRecorder,
+                gitHubProperties,
+                deserializer,
+                transactionTemplate);
+        var skipped = (ObjectNode) objectMapper.readTree(
+                new ClassPathResource("github/check_suite.completed.json").getContentAsString(StandardCharsets.UTF_8));
+        ((ObjectNode) skipped.path("check_suite")).put("conclusion", "skipped");
+
+        handler.dispatchEvent(objectMapper.treeToValue(skipped, GitHubCheckSuiteEventDTO.class));
+
+        PullRequest stored = pullRequestRepository.findById(onHead.getId()).orElseThrow();
+        assertThat(stored.getHeadCheckRuns())
+                .isNotNull()
+                .satisfies(runs -> assertThat(runs.runs()).containsExactly(build, docs));
+        assertThat(stored.getHeadCheckState()).isNull();
+        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class))
+                .singleElement()
+                .satisfies(completed -> assertThat(completed.pullRequest().id()).isEqualTo(onHead.getId()));
+    }
+
+    @Test
+    void shouldLeaveTheHeadAsItIsWhenHephaestusOwnSuiteEnds() throws Exception {
+        PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
+        GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
+        var handler = new GitHubCheckSuiteMessageHandler(
+                contextFactory,
+                headCheckProcessor,
+                mock(GitHubPullRequestSyncService.class),
+                pullRequestRepository,
+                checkRuns,
+                checkRunsRecorder,
+                new GitHubProperties(
+                        new GitHubProperties.App(4242, null, null, null, null, null), new GitHubProperties.Meta(null)),
+                deserializer,
+                transactionTemplate);
+        var own = (ObjectNode) objectMapper.readTree(
+                new ClassPathResource("github/check_suite.completed.json").getContentAsString(StandardCharsets.UTF_8));
+        ((ObjectNode) own.path("check_suite")).putObject("app").put("id", 4242);
+
+        handler.dispatchEvent(objectMapper.treeToValue(own, GitHubCheckSuiteEventDTO.class));
+
+        PullRequest stored = pullRequestRepository.findById(onHead.getId()).orElseThrow();
+        assertThat(stored.getHeadCheckState()).isNull();
+        verifyNoInteractions(checkRuns);
+    }
+
+    @Test
+    void shouldReadTheRunsOfAnOpenHeadAgainWhenItsStoredListHasNotFinished() {
+        // A repository of the same name on GitHub Enterprise must not hide the github.com one.
+        var enterprise = gitProviderRepository.save(
+                new IdentityProvider(IdentityProviderType.GITHUB, "https://github.example.com"));
+        var sameName = new Repository();
+        sameName.setNativeId(42L);
+        sameName.setName(repository.getName());
+        sameName.setNameWithOwner(repository.getNameWithOwner());
+        sameName.setHtmlUrl("https://github.example.com/" + repository.getNameWithOwner());
+        sameName.setVisibility(Repository.Visibility.PRIVATE);
+        sameName.setDefaultBranch("main");
+        sameName.setCreatedAt(Instant.now());
+        sameName.setUpdatedAt(Instant.now());
+        sameName.setPushedAt(Instant.now());
+        sameName.setProvider(enterprise);
+        repositoryRepository.save(sameName);
+        PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
+        var running = new HeadCheckRuns.Run("build", "GitHub Actions", "in_progress", false, null, null, null);
+        onHead.observeHeadCheckRuns(new HeadCheckRuns(CHECKED_SHA, List.of(running), true, Instant.now(), null));
+        pullRequestRepository.save(onHead);
+        var passed = new HeadCheckRuns.Run("build", "GitHub Actions", "success", true, null, null, null);
+        GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
+        when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
+                .thenReturn(Optional.of(new HeadCheckRuns(CHECKED_SHA, List.of(passed), true, Instant.now(), null)));
+        var reread = new GitHubHeadCheckRunsReread(
+                gitProviderRepository,
+                repositoryRepository,
+                pullRequestRepository,
+                checkRuns,
+                checkRunsRecorder,
+                Clock.systemUTC());
+
+        reread.reread(1L, repository.getNameWithOwner());
+
+        assertThat(pullRequestRepository.findById(onHead.getId()).orElseThrow().getHeadCheckRuns())
+                .isNotNull()
+                .satisfies(runs -> assertThat(runs.finished()).isTrue());
+        assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class))
+                .singleElement()
+                .satisfies(completed -> assertThat(completed.pullRequest().id()).isEqualTo(onHead.getId()));
     }
 
     private PullRequest persistPullRequest(int number, String headSha) {

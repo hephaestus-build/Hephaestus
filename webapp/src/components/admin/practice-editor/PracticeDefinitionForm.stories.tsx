@@ -93,7 +93,7 @@ export const AboutWhoeverMergedIt: Story = {
 export const ReviewedByPeople: Story = {
 	args: editing(
 		practiceValueOf({
-			reads: { contract: "2.0.0", sources: [] },
+			reads: { contract: "3.0.0", sources: [] },
 			reviewedBy: {
 				by: "PEOPLE",
 				humanReason: {
@@ -159,7 +159,7 @@ export const ReadsCompleteVersusRequired: Story = {
 	args: editing(
 		practiceValueOf({
 			reads: {
-				contract: "2.0.0",
+				contract: "3.0.0",
 				sources: [
 					{ source: "scm.pull-request.core", need: "REQUIRED" },
 					{ source: "scm.review-threads", need: "COMPLETE" },

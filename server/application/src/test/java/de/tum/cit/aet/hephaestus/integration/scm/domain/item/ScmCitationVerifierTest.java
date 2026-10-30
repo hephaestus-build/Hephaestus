@@ -254,6 +254,82 @@ class ScmCitationVerifierTest extends BaseUnitTest {
                 .satisfies(refusal -> assertThat(refusal.reason()).isEqualTo(CandidateRefusal.BASIS_WITNESS_MISSING));
     }
 
+    @Test
+    void shouldRefuseACitationOfACheckRunThatHadNotFinishedAndKeepOneThatHad() throws Exception {
+        Files.createDirectories(root.resolve("context"));
+        Files.writeString(root.resolve("context/checks.json"), """
+                {"head_check_runs": {"complete": true, "observed_at": "2026-10-27T05:00:00Z", "runs": [
+                  {"name": "unit tests", "state": "in_progress", "finished": false},
+                  {"name": "build", "state": "failure", "finished": true}]}}
+                """);
+        var running = new CitationToCheck(
+                0,
+                "scm.pull-request.checks",
+                "context/checks.json#/head_check_runs/runs/0/state",
+                CitationSide.NEW,
+                null,
+                1,
+                1,
+                "in_progress");
+        var ended = new CitationToCheck(
+                1,
+                "scm.pull-request.checks",
+                "context/checks.json#/head_check_runs/runs/1/state",
+                CitationSide.NEW,
+                null,
+                1,
+                1,
+                "failure");
+
+        assertThat(verifier.verify(check(List.of(running, ended), List.of())))
+                .singleElement()
+                .satisfies(refusal -> {
+                    assertThat(refusal.index()).isZero();
+                    assertThat(refusal.reason()).isEqualTo(CandidateRefusal.UNFINISHED_RUN_CITED);
+                });
+    }
+
+    @Test
+    void shouldRefuseLinesOfTheWholeRecordThatShowACheckRunThatHadNotFinished() throws Exception {
+        Files.createDirectories(root.resolve("context"));
+        var mapper = new ObjectMapper();
+        var record = mapper.readTree("""
+                {"merge_state_status": "CLEAN", "head_check_runs": {"complete": false, "observed_at": "2026-10-27T05:00:00Z",
+                  "runs": [{"name": "unit tests", "state": "in_progress", "finished": false},
+                           {"name": "build", "state": "failure", "finished": true}]}}
+                """);
+        // Pretty-printed, as the capture writes the record.
+        String text = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(record);
+        Files.writeString(root.resolve("context/checks.json"), text);
+        List<String> lines = text.lines().toList();
+        int running = lineOf(lines, "\"in_progress\"");
+        int failed = lineOf(lines, "\"failure\"");
+        int statusLine = lineOf(lines, "\"CLEAN\"");
+        assertThat(List.of(running, failed, statusLine)).doesNotContain(0);
+
+        assertThat(verifier.verify(check(
+                        List.of(
+                                wholeRecord(0, running, "in_progress"),
+                                wholeRecord(1, failed, "failure"),
+                                wholeRecord(2, statusLine, "CLEAN")),
+                        List.of())))
+                .singleElement()
+                .satisfies(refusal -> {
+                    assertThat(refusal.index()).isZero();
+                    assertThat(refusal.reason()).isEqualTo(CandidateRefusal.UNFINISHED_RUN_CITED);
+                });
+    }
+
+    private static int lineOf(List<String> lines, String text) {
+        for (int index = 0; index < lines.size(); index++) if (lines.get(index).contains(text)) return index + 1;
+        return 0;
+    }
+
+    private static CitationToCheck wholeRecord(int index, int line, String quote) {
+        return new CitationToCheck(
+                index, "scm.pull-request.checks", "context/checks.json", CitationSide.NEW, null, line, line, quote);
+    }
+
     private void range(String base, String head) throws Exception {
         Files.createDirectories(root.resolve("context"));
         var mapper = new ObjectMapper();

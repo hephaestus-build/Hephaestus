@@ -27,6 +27,7 @@ public class KubernetesSandboxQuota {
     private final KubernetesSandboxCache cache;
     private final String namespace;
     private final String runtimeClassName;
+    private final String reviewPriorityClass;
     private final AtomicBoolean unreadable = new AtomicBoolean();
     private final AtomicBoolean full = new AtomicBoolean();
     private final AtomicBoolean tooSmall = new AtomicBoolean();
@@ -34,11 +35,16 @@ public class KubernetesSandboxQuota {
     /** The RuntimeClass's Pod overhead once a sandbox Pod showed it; fixed for the class. */
     private volatile @Nullable Map<String, Quantity> overhead;
 
-    /** @param runtimeClassName the RuntimeClass of the sandbox Pods; blank for the cluster's default */
-    public KubernetesSandboxQuota(KubernetesSandboxCache cache, String namespace, String runtimeClassName) {
+    /**
+     * @param runtimeClassName the RuntimeClass of the sandbox Pods; blank for the cluster's default
+     * @param reviewPriorityClass the PriorityClass of review Pods, whose tier quota counts them; blank for none
+     */
+    public KubernetesSandboxQuota(
+            KubernetesSandboxCache cache, String namespace, String runtimeClassName, String reviewPriorityClass) {
         this.cache = cache;
         this.namespace = namespace;
         this.runtimeClassName = runtimeClassName;
+        this.reviewPriorityClass = reviewPriorityClass;
     }
 
     /** @return {@link Integer#MAX_VALUE} without a quota, or when the quotas cannot be read: as before, a start decides */
@@ -56,7 +62,7 @@ public class KubernetesSandboxQuota {
             return Integer.MAX_VALUE;
         }
         unreadable.set(false);
-        int room = fits(quotas, footprint(limits, overhead()));
+        int room = fits(quotas, footprint(limits, overhead()), reviewPriorityClass);
         if (room == 0 && full.compareAndSet(false, true)) {
             log.info("Reviews wait for room in the sandbox quota: namespace={}", namespace);
         } else if (room > 0 && full.compareAndSet(true, false)) {
@@ -76,11 +82,11 @@ public class KubernetesSandboxQuota {
         } catch (RuntimeException e) {
             return false;
         }
-        boolean never = neverFits(quotas, footprint(limits, overhead()));
+        boolean never = neverFits(quotas, footprint(limits, overhead()), reviewPriorityClass);
         if (never && tooSmall.compareAndSet(false, true)) {
             log.warn(
                     "A sandbox quota is smaller than one review sandbox, so reviews are cancelled: raise"
-                            + " worker.sandbox.quota (docs/admin/kubernetes.mdx). namespace={}",
+                            + " a sandbox quota of your own (docs/admin/kubernetes.mdx). namespace={}",
                     namespace);
         } else if (!never) {
             tooSmall.set(false);
@@ -88,10 +94,11 @@ public class KubernetesSandboxQuota {
         return never;
     }
 
-    /** Whether an unscoped quota's hard bound of a resource that the footprint uses is below one footprint. */
-    static boolean neverFits(List<ResourceQuota> quotas, Map<String, Quantity> footprint) {
+    /** Whether a review quota's hard bound of a resource that the footprint uses is below one footprint. */
+    static boolean neverFits(List<ResourceQuota> quotas, Map<String, Quantity> footprint, String reviewClass) {
         for (ResourceQuota quota : quotas) {
-            if (quota.getStatus() == null || quota.getStatus().getHard() == null || scoped(quota)) continue;
+            if (quota.getStatus() == null || quota.getStatus().getHard() == null || !countsReviews(quota, reviewClass))
+                continue;
             for (var hard : quota.getStatus().getHard().entrySet()) {
                 Quantity need = footprint.get(hard.getKey());
                 if (need != null && hard.getValue().getNumericalAmount().compareTo(need.getNumericalAmount()) < 0) {
@@ -171,10 +178,11 @@ public class KubernetesSandboxQuota {
     }
 
     /** The fewest whole footprints that any quota still holds; a resource the footprint does not use never bounds it. */
-    static int fits(List<ResourceQuota> quotas, Map<String, Quantity> footprint) {
+    static int fits(List<ResourceQuota> quotas, Map<String, Quantity> footprint, String reviewClass) {
         int room = Integer.MAX_VALUE;
         for (ResourceQuota quota : quotas) {
-            if (quota.getStatus() == null || quota.getStatus().getHard() == null || scoped(quota)) continue;
+            if (quota.getStatus() == null || quota.getStatus().getHard() == null || !countsReviews(quota, reviewClass))
+                continue;
             Map<String, Quantity> used = quota.getStatus().getUsed() == null
                     ? Map.of()
                     : quota.getStatus().getUsed();
@@ -199,10 +207,24 @@ public class KubernetesSandboxQuota {
         return room;
     }
 
-    /** A scoped quota counts only some Pods; whether a review's is one, its admission decides, not this estimate. */
-    private static boolean scoped(ResourceQuota quota) {
+    /**
+     * Whether a quota counts a review's Pod: it has no scope, or it selects the reviews' PriorityClass, as the chart's
+     * reviews tier does. Any other scope counts only some Pods; whether a review's is one, its admission decides, not
+     * this estimate.
+     */
+    static boolean countsReviews(ResourceQuota quota, String reviewClass) {
         var spec = quota.getSpec();
-        return spec != null
-                && ((spec.getScopes() != null && !spec.getScopes().isEmpty()) || spec.getScopeSelector() != null);
+        if (spec == null) return true;
+        if (spec.getScopes() != null && !spec.getScopes().isEmpty()) return false;
+        var selector = spec.getScopeSelector();
+        if (selector == null
+                || selector.getMatchExpressions() == null
+                || selector.getMatchExpressions().isEmpty()) return true;
+        return !reviewClass.isEmpty()
+                && selector.getMatchExpressions().stream()
+                        .allMatch(expression -> "PriorityClass".equals(expression.getScopeName())
+                                && "In".equals(expression.getOperator())
+                                && expression.getValues() != null
+                                && expression.getValues().contains(reviewClass));
     }
 }

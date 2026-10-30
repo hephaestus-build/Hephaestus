@@ -15,8 +15,8 @@ result or problem.
 
 - `PRACTICE_PAGE` — one card on the developer's own practice pages. It names the observable concern that recurs across
   several pieces of their work, says briefly where it shows, and gives one step for their future work.
-- `CONVERSATION` — notes to Heph, which later decides in the live conversation whether and how to raise the
-  concern. The notes say what Heph needs to know, never a line for it to say.
+- `CONVERSATION` — notes for a later conversation answer. When answering, Hephaestus decides whether and how to raise the
+  concern. The notes give the context for that decision, never a line to repeat.
 
 Each destination is read on its own and must be useful on its own. A point may appear on more than one destination. This
 turn shows the review composed for the work. It is not a receipt of provider delivery or a record of earlier
@@ -39,7 +39,7 @@ can exist, so nothing in it supports `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
   on each destination open this turn for its practice. It is one bounded read: its
   `coverage` says whether older entries, or entries without copy authority, were left out. Absence from it is not
   evidence that nothing was delivered. Its `bodyRole` says what a body is: `PRACTICE_PAGE_CARD` is the card shown on
-  the practice page, `CONVERSATION_WORDS` the words Heph said in the conversation.
+  the practice page, `CONVERSATION_WORDS` the words Hephaestus said in the conversation.
   A `body` is the words that were delivered, where they may be copied. Its `recordedClaimCurrentness` says separately
   whether the claim behind them still holds: `STALE` words were still said. Use each entry's currentness as supplied.
   A delivered record establishes that feedback was said, not that its claim still holds or that a later review ran.
@@ -48,7 +48,7 @@ can exist, so nothing in it supports `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
   because its words were wrong. Do not repeat, rebut or refer to it. The results behind it may still hold.
 - Prepared feedback — conversation feedback prepared for them and **not yet delivered** that a
   new `CONVERSATION` piece may replace, with a `threadKey` and a `practiceSlug` for each. A `MENTOR_NOTES` body is the
-  notes queued for Heph.
+  notes queued for the conversation.
 - `PRACTICE_PAGE` support — for `PRACTICE_PAGE` only: per NOT_MET practice, the occurrences a new
   card may cite at this read, with the work each is about. Count a card's pieces of work from it. The broad history
   above stays context for both destinations, but it does not show which of its records a card may cite.
@@ -111,7 +111,7 @@ on its own, so write the card and name no target.
 - Keep one concern per piece. A small point needs no long explanation. Use short, direct sentences and keep the evidence and its qualifications.
 - Aim for at most 600 characters in a practice-page body and 300 in its nextStep.
   Keep title, body and nextStep separate; the UI renders their layout. Do not repeat the title or nextStep in the body.
-- Conversation notes stay structured for Heph. Aim for at most 300 characters per field, or 600 for evidenceSummary when it locates several pieces of work.
+- Conversation notes stay structured for Hephaestus. Aim for at most 300 characters per field, or 600 for evidenceSummary when it locates several pieces of work.
 - Do not write headings or internal labels into field contents: no "Situation:", "Capability:", "Evidence:" or "Next step:".
   Refer to evidence naturally, such as "the description’s closing line", rather than "description L16" or citation indices.
   Keep exact support references in basedOn and leave code coordinates in the source evidence.
@@ -122,8 +122,8 @@ on its own, so write the card and name no target.
   acceptance criterion is missing, point to the decision they must supply.
 - Never suggest rewriting published history. The one exception is committed secrets: say to purge them from
   history **and** rotate what leaked.
-- In notes to Heph, write nothing that goes stale: no "recently", no "yesterday", no claim about whether something
-  is still open. Write no opening question, and do not dictate how Heph must start.
+- In notes for the conversation, write nothing that goes stale: no "recently", no "yesterday", no claim about whether something
+  is still open. Write no opening question, and do not dictate how Hephaestus must start.
 
 ## Persisting
 
@@ -141,7 +141,7 @@ no confidence.
   - `situation` — the common observable concern and its shape across the work, in the third person. It is not a
     list of every piece of work.
   - `evidenceSummary` — the supporting occurrences and where they are, compactly. The original result evidence
-    is staged separately so Heph can verify it.
+    is staged separately so Hephaestus can verify it.
   - `capability` — the self-check or understanding the conversation should support, at the level of the behavior
     the results assessed.
   - `inConversationLearning` — an observable sign, before the turn ends, that the understanding formed. A promise to

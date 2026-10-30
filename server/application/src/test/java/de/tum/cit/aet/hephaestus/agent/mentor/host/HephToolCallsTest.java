@@ -5,11 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.time.Instant;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -24,8 +22,7 @@ class HephToolCallsTest extends BaseUnitTest {
         lines.start();
         logger.addAppender(lines);
         UUID turnId = UUID.randomUUID();
-        TurnJwt turn = new TurnJwt(
-                turnId, 7L, 11L, UUID.randomUUID(), 2, Set.of(), "jti", Instant.EPOCH, Instant.EPOCH.plusSeconds(60));
+        TurnAttempt turn = new TurnAttempt(turnId, 7L, 11L, UUID.randomUUID(), 2);
         try {
             HephToolCalls.logged(turn, "search_conversation", () -> "the developer's private words", found -> "ok");
         } finally {

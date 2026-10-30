@@ -12,7 +12,7 @@ function uniqueQuestion(label: string): string {
 }
 
 function conversation(page: Page): Locator {
-	return page.getByRole("region", { name: "Conversation with Heph" });
+	return page.getByRole("region", { name: "Your conversation" });
 }
 
 /** The timeline item that carries `text`; its actions appear on hover or focus. */
@@ -27,7 +27,7 @@ async function messageId(item: Locator): Promise<string> {
 }
 
 async function ask(page: Page, text: string): Promise<Locator> {
-	await page.getByRole("textbox", { name: "Message Heph" }).fill(text);
+	await page.getByRole("textbox", { name: "Message Hephaestus" }).fill(text);
 	await page.getByRole("button", { name: "Send message" }).click();
 	const item = message(conversation(page), text);
 	// The question shows at once under its request id, then under the id the server stored it with.
@@ -38,14 +38,14 @@ async function ask(page: Page, text: string): Promise<Locator> {
 /** Stops every question this test left waiting, so the next test starts with room in the queue. */
 async function stopWaiting(page: Page): Promise<void> {
 	const stops = conversation(page).getByRole("button", {
-		name: /^Stop (?:queued message|Heph) \(/u,
+		name: /^Stop (?:queued message|answer) \(/u,
 	});
 	for (let waiting = await stops.count(); waiting > 0; waiting -= 1) {
 		await stops.first().click();
-		// Stopping the turn Heph is on makes the next queued question the live one, so one button goes.
+		// Stopping the turn Hephaestus is on makes the next queued question the live one, so one button goes.
 		await expect(stops).toHaveCount(waiting - 1);
 	}
-	for (const name of ["Stop Heph", "Stop Heph in this thread"]) {
+	for (const name of ["Stop answer", "Stop answer in this thread"]) {
 		const composerStop = page.getByRole("button", { name, exact: true });
 		if (await composerStop.isVisible()) {
 			await composerStop.click();
@@ -65,8 +65,8 @@ async function clearVote(...buttons: Locator[]): Promise<void> {
 
 test.beforeEach(async ({ page }) => {
 	await loginAsDevAdmin(page);
-	await page.goto("/w/e2e/mentor");
-	await expect(page.getByRole("textbox", { name: "Message Heph" })).toBeVisible();
+	await page.goto("/w/e2e/conversation");
+	await expect(page.getByRole("textbox", { name: "Message Hephaestus" })).toBeVisible();
 	await stopWaiting(page);
 });
 
@@ -74,24 +74,26 @@ test.afterEach(async ({ page }) => {
 	await stopWaiting(page);
 });
 
-test("a question waits for Heph, follow-ups queue behind it, and a fourth is refused", async ({
+test("a question waits for Hephaestus, follow-ups queue behind it, and a fourth is refused", async ({
 	page,
 }) => {
 	const first = await ask(page, uniqueQuestion("First question"));
-	// No worker starts it, so after its first second it says it waits for Heph.
-	await expect(
-		page.getByRole("status").filter({ hasText: "Waiting for Heph to start…" }),
-	).toBeAttached();
+	// No worker starts it, so after its first second it says it waits for Hephaestus.
+	await expect(page.getByRole("status").filter({ hasText: "Waiting to start…" })).toBeAttached();
 
 	const second = await ask(page, uniqueQuestion("Second question"));
-	await expect(second.getByText("Queued. Heph answers this next.")).toBeVisible();
+	await expect(second.getByText("Queued. This is answered next.")).toBeVisible();
 	const third = await ask(page, uniqueQuestion("Third question"));
 	await expect(third.getByText("Queued.", { exact: true })).toBeVisible();
 
-	await page.getByRole("textbox", { name: "Message Heph" }).fill(uniqueQuestion("Fourth question"));
+	await page
+		.getByRole("textbox", { name: "Message Hephaestus" })
+		.fill(uniqueQuestion("Fourth question"));
 	await page.getByRole("button", { name: "Send message" }).click();
 	await expect(
-		page.getByText("Heph is still answering. Wait for an answer before you send more messages."),
+		page.getByText(
+			"Hephaestus is still answering. Wait for an answer before you send more messages.",
+		),
 	).toBeVisible();
 
 	await second.hover();
@@ -120,7 +122,7 @@ test("a thread opens on a question, takes a reply, and opens again from its link
 	await page.getByRole("button", { name: "Close thread" }).click();
 	await expect(panel).toBeHidden();
 
-	await page.goto(`/w/e2e/mentor?thread=${parentId}`);
+	await page.goto(`/w/e2e/conversation?thread=${parentId}`);
 	await expect(
 		message(page.getByRole("complementary", { name: "Thread" }), replyText),
 	).toBeVisible();
@@ -131,16 +133,16 @@ test("a link to one message brings it into view", async ({ page }) => {
 	const targetId = await messageId(target);
 	await stopWaiting(page);
 
-	await page.goto(`/w/e2e/mentor?entry=${targetId}`);
+	await page.goto(`/w/e2e/conversation?entry=${targetId}`);
 	await expect(conversation(page).locator(`[data-message-id="${targetId}"]`)).toBeInViewport();
 
-	await page.goto("/w/e2e/mentor?entry=00000000-0000-4000-8000-000000000000");
+	await page.goto("/w/e2e/conversation?entry=00000000-0000-4000-8000-000000000000");
 	await expect(
 		page.getByText("We could not find that message. It may have been deleted."),
 	).toBeVisible();
 });
 
-test("a developer deletes their own question and Heph never answers it", async ({ page }) => {
+test("a developer deletes their own question and Hephaestus never answers it", async ({ page }) => {
 	const text = uniqueQuestion("Question to delete");
 	const item = await ask(page, text);
 	const id = await messageId(item);
@@ -149,7 +151,7 @@ test("a developer deletes their own question and Heph never answers it", async (
 	await item.getByRole("button", { name: /^Delete message \(/u }).click();
 	const dialog = page.getByRole("alertdialog", { name: "Delete this message?" });
 	await expect(
-		dialog.getByText("Heph forgets it. If Heph has not answered it yet, Heph does not answer it."),
+		dialog.getByText("Hephaestus forgets it. If it has not answered yet, it does not answer."),
 	).toBeVisible();
 	await dialog.getByRole("button", { name: "Delete message" }).click();
 
@@ -158,9 +160,11 @@ test("a developer deletes their own question and Heph never answers it", async (
 	await expect(deleted).not.toContainText(text);
 });
 
-test("a developer rates one of Heph's answers and can take the rating back", async ({ page }) => {
+test("a developer rates one of Hephaestus's answers and can take the rating back", async ({
+	page,
+}) => {
 	const answer = conversation(page).locator(`[data-message-id="${SEEDED_ANSWER}"]`);
-	await page.goto(`/w/e2e/mentor?entry=${SEEDED_ANSWER}`);
+	await page.goto(`/w/e2e/conversation?entry=${SEEDED_ANSWER}`);
 	await expect(answer).toBeVisible();
 	await answer.hover();
 	const helpful = answer.getByRole("button", { name: /^Helpful \(/u });

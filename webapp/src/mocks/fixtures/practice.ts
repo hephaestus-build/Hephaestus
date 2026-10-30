@@ -8,7 +8,7 @@ import type {
 
 type ReviewFields = Pick<PracticeDefinition, "reviewOn" | "about" | "reads" | "appliesWhen">;
 
-const SOURCE_CONTRACT = "2.0.0";
+const SOURCE_CONTRACT = "3.0.0";
 
 export const mockPullRequestReviewedBy = {
 	by: "HEPHAESTUS",
@@ -132,6 +132,7 @@ export const mockPracticeDefinitionOptions = {
 			aboutRoles: ["AUTHOR", "ASSIGNEE", "MERGER"],
 			readSources: [
 				readSource("scm.pull-request.core", "Pull request details"),
+				readSource("scm.pull-request.checks", "CI checks and merge status"),
 				{
 					source: "scm.pull-request.diff",
 					label: "Code changes",

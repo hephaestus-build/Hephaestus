@@ -88,12 +88,9 @@
 		"sandboxQuota": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["enabled", "pods", "cpu", "memory"],
+			"required": ["enabled"],
 			"properties": {
-				"enabled": { "type": "boolean" },
-				"pods": { "type": "integer", "minimum": 1, "maximum": 256 },
-				"cpu": { "$ref": "#/definitions/quantity" },
-				"memory": { "$ref": "#/definitions/quantity" }
+				"enabled": { "type": "boolean" }
 			}
 		},
 		"cache": {
@@ -143,6 +140,12 @@
 		"host": {
 			"type": "string",
 			"pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"
+		},
+		"workspaceSubdomains": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["enabled"],
+			"properties": { "enabled": { "type": "boolean" } }
 		},
 		"deploymentEnvironment": { "type": "string", "pattern": "^[a-z0-9._-]{1,64}$" },
 		"trustedProxies": { "type": "string", "minLength": 1, "maxLength": 512 },
@@ -260,9 +263,18 @@
 				"backup": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["enabled", "s3", "restore", "retentionFull", "schedule", "resources"],
+					"required": [
+						"enabled",
+						"s3",
+						"restore",
+						"retentionFull",
+						"schedule",
+						"resources",
+						"clientTlsSecret"
+					],
 					"properties": {
 						"enabled": { "type": "boolean" },
+						"clientTlsSecret": { "$ref": "#/definitions/name" },
 						"s3": {
 							"type": "object",
 							"additionalProperties": false,
@@ -382,8 +394,9 @@
 		"migration": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["resources"],
+			"required": ["resources", "enabled"],
 			"properties": {
+				"enabled": { "type": "boolean" },
 				"resources": { "$ref": "#/definitions/resources" }
 			}
 		},
@@ -405,6 +418,11 @@
 					],
 					"properties": {
 						"maxAge": { "$ref": "#/definitions/duration" },
+						"maxAgeByStream": {
+							"type": "object",
+							"propertyNames": { "enum": ["github", "gitlab", "slack", "outline"] },
+							"additionalProperties": { "$ref": "#/definitions/duration" }
+						},
 						"maxBytes": { "$ref": "#/definitions/dataSize" },
 						"maxBytesGithub": { "$ref": "#/definitions/dataSize" },
 						"allowDestructiveLimitUpdates": { "type": "boolean" },
@@ -462,7 +480,7 @@
 				"enabled",
 				"replicas",
 				"reviews",
-				"hephTurns",
+				"conversationTurns",
 				"drainTimeoutSeconds",
 				"rolloutStrategy",
 				"runtime",
@@ -474,8 +492,8 @@
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
 				"reviews": { "type": "integer", "minimum": 1, "maximum": 32 },
-				"hephTurns": {
-					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the Heph turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this.",
+				"conversationTurns": {
+					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this.",
 					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
 				},
 				"drainTimeoutSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
@@ -486,6 +504,7 @@
 					"additionalProperties": false,
 					"required": [
 						"runtimeClassName",
+						"podOverhead",
 						"seccompProfile",
 						"nodeSelector",
 						"tolerations",
@@ -495,6 +514,15 @@
 						"runtimeClassName": {
 							"type": "string",
 							"pattern": "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"
+						},
+						"podOverhead": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["cpuMillis", "memoryMi"],
+							"properties": {
+								"cpuMillis": { "type": "integer", "minimum": 0 },
+								"memoryMi": { "type": "integer", "minimum": 0 }
+							}
 						},
 						"seccompProfile": {
 							"type": "string",

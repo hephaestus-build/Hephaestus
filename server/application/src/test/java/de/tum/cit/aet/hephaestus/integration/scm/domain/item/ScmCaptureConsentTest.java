@@ -294,14 +294,14 @@ class ScmCaptureConsentTest extends BaseUnitTest {
         var core = PullRequestContentSource.CORE;
         var diff = PullRequestContentSource.DIFF;
         var request = new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(core), "2.0.0", 3, null, Set.of(core, diff));
+                UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(core), "3.0.0", 3, null, Set.of(core, diff));
         var captured = service.capture(pinned, request);
         assertThat(captured.files())
                 .containsKey("context/metadata.json")
                 .doesNotContainKey(PullRequestContentSource.COMMITS_FILE);
         verify(preparer, never()).prepare(any());
         verifyNoInteractions(git);
-        var diffRequest = new CaptureRequest(request.reviewId(), request.jobId(), 0, Set.of(diff), "2.0.0", 3);
+        var diffRequest = new CaptureRequest(request.reviewId(), request.jobId(), 0, Set.of(diff), "3.0.0", 3);
         assertThatThrownBy(() -> service.capture(pinned, diffRequest))
                 .isInstanceOfSatisfying(
                         ItemCaptureException.class,

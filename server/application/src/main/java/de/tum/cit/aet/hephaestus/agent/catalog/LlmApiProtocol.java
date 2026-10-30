@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Protocol names identify wire shapes, not vendors; {@link #wire()} is the persisted and API form. */
 public enum LlmApiProtocol {
+    ANTHROPIC_MESSAGES("anthropic-messages", ModelKind.CHAT, "/v1/messages"),
     OPENAI_COMPLETIONS("openai-completions", ModelKind.CHAT, "/chat/completions"),
     OPENAI_RESPONSES("openai-responses", ModelKind.CHAT, "/responses"),
     OPENAI_DECISIONS("openai-decisions", ModelKind.DECISION, "/decisions"),

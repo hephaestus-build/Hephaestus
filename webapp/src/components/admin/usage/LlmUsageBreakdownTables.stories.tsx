@@ -99,7 +99,7 @@ export const ByJobType: Story = {
 				.filter((header) => header.getAttribute("colspan") === "2")
 				.map((header) => header.textContent),
 		).toStrictEqual(["Shared models", "Own provider"]);
-		const heph = table.getByRole("row", { name: /^Heph turn/u });
+		const heph = table.getByRole("row", { name: /^Conversation answer/u });
 		await expect(
 			within(heph)
 				.getAllByRole("cell")
@@ -111,7 +111,7 @@ export const ByJobType: Story = {
 	},
 };
 
-/** A month of the run types a workspace records now: practice reviews and Heph turns. */
+/** A month of the run types a workspace records now: practice reviews and conversation turns. */
 export const CurrentRunTypes: Story = {
 	args: {
 		purses: ["SHARED"],
@@ -141,7 +141,7 @@ export const CurrentRunTypes: Story = {
 	},
 	play: async ({ canvas }) => {
 		const table = within(await canvas.findByRole("table", { name: "AI spend by run type" }));
-		const runs = [/^Practice review/u, /^Heph turn/u].map((name) => {
+		const runs = [/^Practice review/u, /^Conversation answer/u].map((name) => {
 			const cells = within(table.getByRole("row", { name }))
 				.getAllByRole("cell")
 				.map((cell) => cell.textContent);
@@ -149,7 +149,7 @@ export const CurrentRunTypes: Story = {
 		});
 		await expect(runs).toStrictEqual([
 			["Practice review", "$4.60", "23", "138"],
-			["Heph turn", "$0.42", "7", "19"],
+			["Conversation answer", "$0.42", "7", "19"],
 		]);
 	},
 };

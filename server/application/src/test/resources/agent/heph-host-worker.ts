@@ -157,7 +157,7 @@ export function hostFor(
 	worker: FakeWorker,
 	models: ModelFactory,
 	partialIntervalMs = 10,
-	systemPrompt = "You are Heph.",
+	systemPrompt = "You are Hephaestus.",
 ) {
 	return createHephHost({
 		cwd: CWD,

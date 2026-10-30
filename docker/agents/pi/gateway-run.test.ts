@@ -371,6 +371,40 @@ void test("keeps only the adapter's closed failure facts, and clears the final f
 	);
 });
 
+void test("collects native HTTP status and call spans without provider text", async (context) => {
+	const { sessions, out } = await collected(context);
+	await writeFile(
+		path.join(sessions, "native.jsonl"),
+		`${failedCall("native", "error", [
+			{
+				type: "anthropic_messages_failure",
+				timestamp: 1_760_000_000_000,
+				details: { kind: "HTTP_ERROR", phase: "request", status: 529, body: CREDENTIAL },
+			},
+			{
+				type: "anthropic_messages_call",
+				timestamp: 1_760_000_000_000,
+				details: { elapsedMs: 1200 },
+			},
+		])}\n`,
+	);
+	await collectTraces(sessions, out, CREDENTIAL);
+	const text = await readFile(path.join(out, "traces", "manifest.json"), "utf8");
+	assert.ok(!text.includes(CREDENTIAL));
+	const [entry] = traceManifest(text).sessions;
+	const { summary } = omission(entry);
+	assert.ok(typeof summary === "object" && summary !== null);
+	assert.deepEqual(Reflect.get(summary, "finalModelFailure"), {
+		kind: "HTTP_ERROR",
+		source: "ADAPTER",
+		phase: "request",
+		status: 529,
+		at: 1_760_000_000_000,
+	});
+	assert.deepEqual(Reflect.get(summary, "modelFailures"), { HTTP_ERROR: 1 });
+	assert.deepEqual(Reflect.get(summary, "modelCallTiming"), timing(1, 0, 1200, 0));
+});
+
 void test("leaves an overflowing call untimed without changing prior session totals", async (context) => {
 	const { sessions, out } = await collected(context);
 	const details = { elapsedMs: Number.MAX_SAFE_INTEGER, responseMs: Number.MAX_SAFE_INTEGER };

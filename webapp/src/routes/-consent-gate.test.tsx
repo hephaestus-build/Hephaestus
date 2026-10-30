@@ -13,7 +13,7 @@ import { consentIsPending } from "@/runtime/auth/guard";
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });
 
-const DEEP_LINK = "/w/acme/mentor?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed#reply";
+const DEEP_LINK = "/w/acme/conversation?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed#reply";
 
 function newClient() {
 	return new QueryClient({ defaultOptions: { queries: { retry: false } } });

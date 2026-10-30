@@ -22,8 +22,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestChecksRecord;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
@@ -137,6 +141,38 @@ class ScmJobFolderProjectorIntegrationTest extends AbstractWorkspaceIntegrationT
         author = persistUser("label-author");
         workspace = createWorkspace("labels", "Labels", "labels-org", AccountType.ORG, author);
         connect(workspace, IntegrationKind.GITHUB, new ConnectionConfig.GitHubPatConfig("labels-org", null, Set.of()));
+    }
+
+    @Test
+    void shouldProjectChecksAndTheReviewDecisionOnlyUnderTheirPermittedSources() {
+        var repository = repository("labels-org/checks", workspace);
+        var pull = pullRequest(repository, 37);
+        String head = "a".repeat(40);
+        pull.setHeadRefOid(head);
+        pull.observeHeadChecks(head, CheckState.SUCCESS, true, DAY);
+        pull.observeHeadCheckRuns(new HeadCheckRuns(head, List.of(), false, DAY, HeadCheckRuns.AWAITING_APPROVAL));
+        pull.setReviewDecision(ReviewDecision.APPROVED);
+        pullRequestRepository.saveAndFlush(pull);
+        var core = project(workspace, repository, CORE);
+        assertThat(core).allSatisfy(record -> {
+            assertThat(record.value().has("head_check_runs")).isFalse();
+            assertThat(record.value().has("head_check_state")).isFalse();
+            assertThat(record.value().has("head_check_observed_at")).isFalse();
+            assertThat(record.value().has("review_decision")).isFalse();
+        });
+        var checks = project(workspace, repository, Set.of(PullRequestChecksRecord.KIND));
+        assertThat(checks).singleElement().satisfies(record -> {
+            assertThat(record.path()).isEqualTo("pulls/37/checks.json");
+            assertThat(record.value().path("head_checks").asString()).isEqualTo("PENDING");
+            assertThat(record.value().path("head_check_runs").path("limitation").asString())
+                    .isEqualTo(HeadCheckRuns.AWAITING_APPROVAL);
+            assertThat(record.value().has("review_decision")).isFalse();
+        });
+        assertThat(project(workspace, repository, Set.of(THREADS)))
+                .anySatisfy(record -> assertThat(
+                                record.value().path("review_decision").asString())
+                        .isEqualTo("APPROVED"));
+        assertThat(project(workspace, repository, Set.of())).isEmpty();
     }
 
     @Test

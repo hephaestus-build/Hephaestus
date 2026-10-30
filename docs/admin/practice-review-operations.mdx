@@ -34,9 +34,28 @@ Each practice gets a fresh model session.
 
 `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the maximum number of practices that an item review evaluates at once.
 The default is 3. Valid values are 1 through 32.
-The runner starts practices in catalog order and fills each free slot with the next practice.
+
+The server starts item-review practices without a current observation first, then the ones with the oldest last verdict.
+The runner fills each free slot with the next practice ready to start.
+Practices with the same declared sources share a cache warm-up: followers wait for the first response, for at most 20 seconds.
+Other source sets can start during this wait.
 Slots can span practice groups.
 Results and the admission request use practice order, independent of completion order.
+
+The review's technical details show **Input from cache** for every protocol.
+The fact shows the percentage of all input tokens read from cache and the total input count, across all attempts.
+Total input includes ordinary input, cache reads and cache writes.
+For example, **7.7% of 26,000 tokens** includes 24,000 ordinary input tokens and 2,000 cache reads.
+
+No recorded input shows **No usage recorded**.
+When both cache counts are zero, the fact shows **None reported**.
+This can mean no cache use or that the provider does not report it.
+A positive percentage below 0.1% shows **Under 0.1%**.
+The figure does not measure feedback quality.
+
+OpenAI Responses keeps provider-default cache retention and sends no five-minute override.
+Completions providers use their own cache policy.
+Use the percentage of input read from cache to compare reviews on the same provider.
 
 With concurrent evaluation, each practice reserves an equal share of its set's calls and output tokens before evaluation starts.
 The runner assigns any remainder in catalog order.
@@ -92,13 +111,15 @@ Feedback that the worker cannot write is withheld with the most specific reason:
 - **Evidence not permitted** when the captured work was erased.
 - A refusal from the server when the review on the work cannot be published.
 - **Not composed** for every other cause.
-  For example, the budget or the time ran out, or the model decided nothing.
+  For example, the budget ran out, or the model decided nothing.
 
 These causes withhold at once, because another attempt would meet them again.
 A review whose results were admitted never fails because of its feedback.
 The `agent.job.composition.stopped` metric below counts each cause.
 
-A passing cause, such as a provider outage or an unexpected failure, withholds nothing.
+A passing cause withholds nothing. Examples are a provider outage, an unexpected failure, or the composition timeout.
+Under load, the model calls wait for the shared call limit, so the time can run out on calls that never ran.
+
 A new attempt of the same job then writes only the feedback that is still open.
 It starts no sandbox and uses the job's retry limit with its usual backoff.
 The attempt at the retry limit withholds what a passing cause leaves open.
@@ -129,7 +150,7 @@ A stalled concurrent practice releases its slot after the session stops.
 A timeout below 61 seconds runs at 61 seconds.
 Each practice script runs inside the same timeout, with no time reserved before the review, as the [workspace ABI](/contributor/agent/agent-workspace-abi#practice-script-validation-and-limits) describes.
 
-`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not Heph calls.
+`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not Hephaestus calls.
 If unset, the provider default applies.
 A low temperature does not guarantee repeatable judgments.
 Do not set `0` for an open model whose vendor advises against greedy decoding.
@@ -185,6 +206,11 @@ See [Source governance](./dsms/item-source-governance.md).
 For workspace model readiness, coverage, feedback mode, spend, and review activity, see [Practice review](./practice-review.mdx).
 
 ### Queue health
+
+A worker claims work that already started before fresh reviews.
+One kind is a review on a later attempt, such as one that a drain put back.
+The other is a review whose results were admitted and whose feedback is still open.
+Within each group, the oldest job comes first.
 
 The job queue exposes its own metrics.
 Use them for alerts instead of application logs.
@@ -265,6 +291,15 @@ On the Practice profile, the line also has **Details**, which opens the review's
 A script that returned a candidate observation has not yet passed admission.
 The server can still withhold that candidate observation, as [What admission checks](./practice-scripts.mdx#return-a-result) tells.
 
+For `undeclared_source_cited`, compare the cited source with the pinned practice's Reads block.
+For a scan, use the Scan Reads block.
+Add a source to Reads only if the practice needs it. Otherwise, correct the script or citation.
+A source used only to check Applies when does not grant the review session access to it.
+
+The refused candidate records no observation and supplies no feedback about the developer's work.
+It does not establish that evidence is missing or that the work has a defect.
+The [glossary](/contributor/practice-review-glossary#admission-reasons) owns this reason.
+
 | The line starts with                          | What it means                                                                                                                                                                                                                                                                                                                               | What to do                                                                                                                                                                                                                                 |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **… returned a candidate observation**        | The script ran to its end and returned a valid candidate observation. The line can say how: from its code alone, with its models, through the review, or with its models and the review.                                                                                                                                                    | Nothing. If the line links **Check the decision model**, or the model that it names, a model caused calls that were not rated. Open its row and check it.                                                                                  |
@@ -300,15 +335,15 @@ It opens [Calls that were not rated](#calls-that-were-not-rated), which tells wh
 The section **Practice scripts** is on the review's sheet, after **Every practice** and the review's delivery checks.
 It has one row for each practice of the review:
 
-| Column            | What it shows                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Practice**      | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.                                                                                                                                                                                                                                                                      |
+| Column            | What it shows                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Practice**      | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.                                                                                                                                                                                                                                                       |
 | **Run**           | How the script ended. Examples are **Returned a candidate observation**, **Withheld**, **Failed: ran out of time**, **Not reached** and **Did not finish**. Below it is the same fix link as in the trace line. A practice that the workspace no longer has, or that runs the built-in script, shows no **Edit the script**. For a script that failed, the first line of the error comes last. |
-| **Review calls**  | The model calls of the practice's review sessions, as the review runner counted them. It is not the billed count: the proxy bills these calls for the whole review. A dash means no calls. **Not recorded** means that the review is from an earlier release, or that the runner did not report the practice.                                                                                                 |
-| **Script models** | Each decision, embedding or reranking model that the script declared or called. An icon shows the tier of the model that the review had for it. A declared model that the review did not have and that made no calls shows **No model**. The review's own chat model never shows here.                                                                                                                        |
-| **Not rated**     | The model calls that were not rated, with one line below for each reason, such as `5 too slow` and `1 wrong format`. [Calls that were not rated](#calls-that-were-not-rated) gives what to do for each reason.                                                                                                                                                                                                |
-| **Script calls**  | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash.                                                                                                                                                                                                                                                      |
-| **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                                          |
+| **Review calls**  | The model calls of the practice's review sessions, as the review runner counted them. It is not the billed count: the proxy bills these calls for the whole review. A dash means no calls. **Not recorded** means that the review is from an earlier release, or that the runner did not report the practice.                                                                                  |
+| **Script models** | Each decision, embedding or reranking model that the script declared or called. An icon shows the tier of the model that the review had for it. A declared model that the review did not have and that made no calls shows **No model**. The review's own chat model never shows here.                                                                                                         |
+| **Not rated**     | The model calls that were not rated, with one line below for each reason, such as `5 too slow` and `1 wrong format`. [Calls that were not rated](#calls-that-were-not-rated) gives what to do for each reason.                                                                                                                                                                                 |
+| **Script calls**  | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash.                                                                                                                                                                                                                                       |
+| **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                           |
 
 The section shows no cost.
 Its note says `Spend is on AI usage.`
@@ -484,9 +519,9 @@ These behaviors matter independently of configured capacity:
   It pauses after 32 pages that needed capture.
   Pages whose commits were all previously captured do not count.
   The next sync cycle resumes from captured commits.
-- **Linked Outline documents are retrieval-limited, and the Heph and review paths do not agree.**
+- **Linked Outline documents are retrieval-limited, and the Hephaestus and review paths do not agree.**
   A review first resolves documents linked from the work, then adds a small number by search.
-  Heph searches the whole corpus for the words of the question.
+  Hephaestus searches the whole corpus for the words of the question.
   It reads at most 15 documents and truncates each one to 4,000 characters.
   Neither path can report that it found everything.
   Neither substitutes for the other in diagnosis of missing context.

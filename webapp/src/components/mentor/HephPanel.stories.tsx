@@ -49,7 +49,7 @@ function threadTimeline() {
 
 const conversation = (
 	<HephTimeline
-		label="Conversation with Heph"
+		label="Your conversation"
 		workspaceSlug={WORKSPACE_SLUG}
 		state={ready({ entries: LONG_CONVERSATION })}
 		developer={DEVELOPER}
@@ -57,8 +57,8 @@ const conversation = (
 		threads={{ panelId: "heph-panel-thread", onOpen: fn() }}
 		composer={
 			<HephComposer
-				label="Message Heph"
-				placeholder="Message Heph"
+				label="Message Hephaestus"
+				placeholder="Message Hephaestus"
 				onSend={fn()}
 				context={
 					<RemovableToken
@@ -93,7 +93,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const launcher = canvas.getByRole("button", { name: "Open Heph, AI assistant" });
+		const launcher = canvas.getByRole("button", { name: "Ask Hephaestus" });
 		const mark = launcher.querySelector("svg");
 		await expect(mark).not.toBeNull();
 		await expect(mark?.getBoundingClientRect().width).toBe(56);
@@ -104,21 +104,19 @@ export const Default: Story = {
 export const Unread: Story = {
 	args: { unread: true },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("button", { name: "Open Heph, AI assistant, new answer" }),
-		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Ask Hephaestus, new answer" })).toBeVisible();
 	},
 };
 
-/** The same conversation as the Heph page; Open the Heph page takes it there. */
+/** The same conversation as the Hephaestus page; Open full page takes it there. */
 export const Open: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const launcher = canvas.getByRole("button", { name: "Open Heph, AI assistant" });
+		const launcher = canvas.getByRole("button", { name: "Ask Hephaestus" });
 		await userEvent.click(launcher);
-		const panel = await screen.findByRole("dialog", { name: /Heph/u });
+		const panel = await screen.findByRole("dialog", { name: /Hephaestus/u });
 		await expectSettledVisible(panel);
 		await expect(getComputedStyle(document.body).overflow).toBe("hidden");
-		await userEvent.click(screen.getByRole("button", { name: "Open the Heph page" }));
+		await userEvent.click(screen.getByRole("button", { name: "Open full page" }));
 		await expect(args.onOpenInMentor).toHaveBeenCalledOnce();
 		await userEvent.keyboard("{Escape}");
 		await expectDismissed();
@@ -154,7 +152,7 @@ export const ThreadOnTablet: Story = {
 	parameters: { viewport: { defaultViewport: "tablet" } },
 	render: (args) => <OpensThread {...args} />,
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI assistant" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Ask Hephaestus" }));
 		await userEvent.click(await screen.findByRole("button", { name: "1 reply" }));
 		const panel = await screen.findByRole("dialog", { name: "Thread" });
 		await expectSettledVisible(panel);
@@ -175,7 +173,7 @@ export const ThreadPushed: Story = {
 		children: threadTimeline(),
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI assistant" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Ask Hephaestus" }));
 		const panel = await screen.findByRole("dialog", { name: "Thread" });
 		await expectSettledVisible(panel);
 		await userEvent.click(screen.getByRole("button", { name: "Back to the conversation" }));
@@ -192,13 +190,13 @@ export const EscapeInThread: Story = {
 	args: { children: threadTimeline() },
 	render: (args) => <OpensThread {...args} />,
 	play: async ({ canvas, userEvent }) => {
-		const launcher = canvas.getByRole("button", { name: "Open Heph, AI assistant" });
+		const launcher = canvas.getByRole("button", { name: "Ask Hephaestus" });
 		await userEvent.click(launcher);
 		await userEvent.click(await screen.findByRole("button", { name: "1 reply" }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Thread" }));
 		await userEvent.keyboard("{Escape}");
 		await expect(await screen.findByRole("button", { name: "1 reply" })).toBeVisible();
-		await expect(screen.getByRole("dialog", { name: /^Heph/u })).toBeVisible();
+		await expect(screen.getByRole("dialog", { name: /^Ask Hephaestus/u })).toBeVisible();
 		await userEvent.keyboard("{Escape}");
 		await expectDismissed();
 		await expect(launcher).toHaveFocus();

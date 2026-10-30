@@ -49,7 +49,13 @@ class ConfigSnapshotTest extends BaseUnitTest {
         when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.IN_HOUSE);
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://models.example/v1", "openai-responses", "model-1", 16000, 1000, ReasoningEffort.HIGH));
+                        "https://models.example/v1",
+                        "openai-responses",
+                        "model-1",
+                        16000,
+                        1000,
+                        ReasoningEffort.HIGH,
+                        false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 7L, 9L, null));
         var snapshot = ConfigSnapshot.from(binding, resolver);
@@ -120,6 +126,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
                 null,
                 DataHandlingTier.IN_HOUSE,
                 ReasoningEffort.HIGH,
-                null);
+                null,
+                false);
     }
 }

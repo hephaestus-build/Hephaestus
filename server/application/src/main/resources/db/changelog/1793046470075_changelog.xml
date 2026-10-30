@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793046470075-1" author="hephaestus">
+        <addColumn tableName="issue">
+            <column name="head_check_runs" type="JSONB"/>
+        </addColumn>
+    </changeSet>
+    <!-- The checks event repeats per version, one for each settled run set; every other name keeps one event per
+         version. Created before the full key is dropped, so no write runs without the version rule. -->
+    <changeSet id="1793046470075-2" author="hephaestus">
+        <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout='30s';
+CREATE UNIQUE INDEX uk_item_event_version ON item_event (workspace_id, item_id, name, item_version)
+    WHERE name <> 'scm.pull_request.checks_completed';
+]]></sql>
+        <rollback>
+            <sql>DROP INDEX uk_item_event_version;</sql>
+        </rollback>
+    </changeSet>
+    <!-- 1.0 is a stopped upgrade (cutover ADR), so no earlier release writes beside this schema. -->
+    <changeSet id="1793046470075-3" author="hephaestus">
+        <dropUniqueConstraint tableName="item_event" constraintName="uk_item_event_key"/>
+        <!-- Holds only until an item records a second checks event at one version. -->
+        <rollback>
+            <addUniqueConstraint tableName="item_event" constraintName="uk_item_event_key"
+                columnNames="workspace_id, item_id, name, item_version"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

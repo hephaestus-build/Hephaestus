@@ -61,7 +61,7 @@ class AdmissionResponseDTOTest {
                                         "50000000-0000-4000-8000-000000000001",
                                         FeedbackDestination.CONVERSATION,
                                         FeedbackState.DELIVERED,
-                                        "Heph said the catch drops the error.",
+                                        "Hephaestus said the catch drops the error.",
                                         Instant.parse("2026-10-02T00:00:00Z"),
                                         Currentness.CURRENT,
                                         null),
@@ -77,7 +77,7 @@ class AdmissionResponseDTOTest {
                                         "50000000-0000-4000-8000-000000000003",
                                         FeedbackDestination.CONVERSATION,
                                         FeedbackState.READY,
-                                        "Notes queued for Heph about dropped errors.",
+                                        "Notes queued for Hephaestus about dropped errors.",
                                         null,
                                         Currentness.CURRENT,
                                         "handles-errors"))));

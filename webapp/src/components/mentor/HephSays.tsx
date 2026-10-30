@@ -5,7 +5,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Message, MessageContent } from "@/components/ui/message";
 
 /**
- * Heph speaking from a bubble. `intro` is fixed for the page; `narration` is the page's narration
+ * Hephaestus speaking from a bubble. `intro` is fixed for the page; `narration` is the page's narration
  * line, announced as it changes, so every other line that follows the reader's answers is plain text.
  */
 export function HephSays({ intro, narration }: { intro: ReactNode; narration: string }) {
@@ -15,7 +15,7 @@ export function HephSays({ intro, narration }: { intro: ReactNode; narration: st
 			<MessageContent>
 				<Bubble variant="outline" className="w-full max-w-full">
 					<BubbleContent className="w-full">
-						<p className="sr-only">Heph says:</p>
+						<p className="sr-only">Hephaestus says:</p>
 						<p>{intro}</p>
 						<p aria-live="polite" className="mt-2 font-medium">
 							{narration}

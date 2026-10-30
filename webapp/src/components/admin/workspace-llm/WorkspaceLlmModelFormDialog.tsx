@@ -1,4 +1,9 @@
 import { type ReactNode, useState } from "react";
+import {
+	LlmModelCapabilities,
+	type LlmModelCapabilitiesProps,
+} from "@/components/admin/instance-llm/LlmModelCapabilities";
+import { FieldSeparator } from "@/components/ui/field";
 
 import type {
 	CreateWorkspaceLlmModelRequest,
@@ -36,6 +41,7 @@ export interface WorkspaceLlmModelFormDialogProps {
 	/** Shown above the fields, such as a failed refresh of the models the form edits. */
 	notice?: ReactNode;
 	isSubmitting: boolean;
+	capabilities?: LlmModelCapabilitiesProps;
 	onCreate: (body: CreateWorkspaceLlmModelRequest) => void;
 	onUpdate: (id: number, body: UpdateWorkspaceLlmModelRequest) => void;
 }
@@ -81,6 +87,7 @@ function WorkspaceLlmModelFormDialogContent({
 	editing,
 	notice,
 	isSubmitting,
+	capabilities,
 	onCreate,
 	onUpdate,
 }: WorkspaceLlmModelFormDialogContentProps) {
@@ -154,6 +161,12 @@ function WorkspaceLlmModelFormDialogContent({
 						onChange={setFields}
 						errors={errors}
 					/>
+					{isEdit && capabilities && (
+						<>
+							<FieldSeparator />
+							<LlmModelCapabilities {...capabilities} />
+						</>
+					)}
 				</DialogBody>
 
 				<DialogFooter>

@@ -37,9 +37,9 @@ export const praise = {
 export const orphanedFeedback = {
 	id: "f1f1f1f1-0000-0000-0000-000000000003",
 	kind: "FEEDBACK",
-	message: "Can Heph answer in German?",
+	message: "Can Hephaestus answer in German?",
 	workspace: { id: 9, slug: "globex", displayName: "Globex" },
-	pagePath: "/w/globex/mentor",
+	pagePath: "/w/globex/conversation",
 	appVersion: "0.70.2",
 	createdAt: daysBefore(2),
 } satisfies FeedbackItem;

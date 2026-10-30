@@ -95,7 +95,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Heph's Slack replies: what reaches Slack, once, and what the ledger records about it and the feedback it showed. The
+ * Hephaestus's Slack replies: what reaches Slack, once, and what the ledger records about it and the feedback it showed. The
  * test hands the projector each ledger notification itself. The projector works on the test's thread, its clock is the
  * test's, and its wake-ups wait until the test runs them.
  */
@@ -174,7 +174,8 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                     wakeUps.add(call.getArgument(0));
                     return pendingWakeUp;
                 });
-        // No Heph capacity: turns of earlier tests can hold Heph slots, and no question here says that all are taken.
+        // No Hephaestus capacity: turns of earlier tests can hold Hephaestus slots, and no question here says that all
+        // are taken.
         projector = projector(new MentorTurnWaits(turnRepository, events, null));
     }
 
@@ -243,7 +244,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 now.getAttempt()));
     }
 
-    /** Heph writes more of the answer once the stream may take more text. */
+    /** Hephaestus writes more of the answer once the stream may take more text. */
     private void writes(MentorTurn turn, String text) {
         clock.advance(SlackMentorProjector.APPEND_INTERVAL);
         turns.updatePartial(turn.getId(), turn.getAttempt(), WORKER, partial(text));
@@ -268,7 +269,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     /**
-     * Heph says something, shows feedback in the same message, then writes {@code closing}. The running attempt holds
+     * Hephaestus says something, shows feedback in the same message, then writes {@code closing}. The running attempt holds
      * the claim on the feedback's conversation copy, as its {@code show_feedback} call left it.
      */
     private List<JsonNode> linkingAnswer(MentorTurn running, String closing) {
@@ -508,7 +509,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .turn();
         assertThat(turns.claimNext(WORKER, LEASE).map(MentorTurn::getId)).contains(colleaguesTurn.getId());
         MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
-        // Every Heph slot is taken: the deployment has as many as turns hold now.
+        // Every Hephaestus slot is taken: the deployment has as many as turns hold now.
         projector = projector(new MentorTurnWaits(turnRepository, events, Math.toIntExact(turnRepository.countHeld())));
 
         clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
@@ -783,7 +784,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
         turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
         changed(running);
-        // Slack ends an idle stream on its own, for example while Heph waits for a tool.
+        // Slack ends an idle stream on its own, for example while Hephaestus waits for a tool.
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "message_not_in_streaming_state"));
         stopStreamFails("message_not_in_streaming_state");
         writes(running, "Here is what");
@@ -817,7 +818,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
         turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
         changed(running);
-        // The stream got no text while Heph showed feedback, and Slack ended it meanwhile.
+        // The stream got no text while Hephaestus showed feedback, and Slack ended it meanwhile.
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "message_not_in_streaming_state"));
 
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
@@ -899,7 +900,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
-        // While Heph works, Heph refuses another message in the thread with a reply of its own.
+        // While Hephaestus works, Hephaestus refuses another message in the thread with a reply of its own.
         clock.advance(Duration.ofSeconds(30));
         historyHolds(botMessage(SlackTs.ofInstant(clock.instant()), null));
         postsAt("400.1");
@@ -1155,11 +1156,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(running);
         List<JsonNode> answer = linkingAnswer(running, "What do you make of the gap?");
         UUID unshown = ConversationFeedbackRows.claimedBy(
-                jdbc, workspace.getId(), developerAccount, running.getId(), "Feedback Heph did not show.");
+                jdbc, workspace.getId(), developerAccount, running.getId(), "Feedback Hephaestus did not show.");
         if (outcome == MentorTurn.Status.STOPPED) {
             turns.stop(workspace.getId(), running.getId());
         }
-        end(running, outcome, answer, outcome == MentorTurn.Status.FAILED ? "Heph could not finish." : "");
+        end(running, outcome, answer, outcome == MentorTurn.Status.FAILED ? "Hephaestus could not finish." : "");
         if (path.equals("DISCONNECTED")) {
             when(slack.isConnected(workspace.getId())).thenReturn(false);
             assertThat(delivery.retry(workspace.getId(), asked.question().getId()))
@@ -1345,7 +1346,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 null));
     }
 
-    /** A session call of the Heph thread on {@code 100.1} that only reports that it ran. */
+    /** A session call of the Hephaestus thread on {@code 100.1} that only reports that it ran. */
     private Optional<String> sessionCall(UUID threadId, AtomicBoolean called) {
         return delivery.callInThreadSession(workspace.getId(), threadId, CHANNEL, "100.1", session -> {
             called.set(true);
@@ -1695,7 +1696,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 running,
                 MentorTurn.Status.FAILED,
                 linkingAnswer(running, "unused"),
-                "Heph took too long to reply and stopped. Try again.");
+                "Hephaestus took too long to reply and stopped. Try again.");
         changed(running);
 
         verify(slack)
@@ -1704,7 +1705,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         eq(CHANNEL),
                         isNull(),
                         anyList(),
-                        eq("Heph took too long to reply and stopped. Try again."),
+                        eq("Hephaestus took too long to reply and stopped. Try again."),
                         eq(SlackMentorPosts.metadata(asked.question().getId())));
         assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(question(asked).getSlackTs()).isEqualTo("100.1");

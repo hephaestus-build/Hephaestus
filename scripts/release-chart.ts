@@ -110,7 +110,8 @@ export async function pullChart(
 		destination,
 	]);
 	const pulled = await readdir(destination);
-	const expected = chartPackageName(release);
+	// Helm names an OCI digest download after the reference, not the chart's version.
+	const expected = `hephaestus@${chart.digest.replace(":", "-")}.tgz`;
 	if (pulled.length !== 1 || pulled[0] !== expected) {
 		throw new Error(
 			`pulling the chart produced ${pulled.join(", ") || "nothing"}, not ${expected}`,

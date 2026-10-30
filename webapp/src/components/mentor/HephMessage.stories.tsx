@@ -42,11 +42,12 @@ export const Default: Story = {
 	},
 };
 
-/** Heph's headings stand out from its text, one level below the heading the message sits under. */
+/** Hephaestus's headings stand out from its text, one level below the heading the message sits under. */
 export const Heph: Story = {
 	args: { message: { ...ANSWER, text: SLACK_ANSWER.text } },
 	play: async ({ canvas, canvasElement }) => {
-		await expect(canvas.getByText("Heph", { exact: true })).toBeVisible();
+		await expect(canvas.getByText("Hephaestus", { exact: true })).toBeVisible();
+		await expect(canvas.getByText("AI", { exact: true })).toBeVisible();
 		// A stored answer never fades in, on its first paint or a remount.
 		await expect(canvasElement.querySelector("[data-sd-animate]")).toBeNull();
 		const heading = canvas.getByRole("heading", { level: 3, name: "Why" });
@@ -71,8 +72,8 @@ export const Edited: Story = {
 };
 
 /**
- * Heph's words, then each result, problem or feedback it showed, in Heph's words and in the order
- * Heph linked it, with a link to the developer's feedback on the work it is about.
+ * Hephaestus's words, then each result, problem or feedback it showed, in Hephaestus's words and in the order
+ * Hephaestus linked it, with a link to the developer's feedback on the work it is about.
  */
 export const FeedbackLinks: Story = {
 	args: { message: ANSWER_WITH_FEEDBACK, workspaceSlug: WORKSPACE_SLUG },
@@ -93,7 +94,7 @@ export const FeedbackLinks: Story = {
 	},
 };
 
-/** Without the workspace, Heph's words stay, and nothing links. */
+/** Without the workspace, Hephaestus's words stay, and nothing links. */
 export const FeedbackLinksUnlinked: Story = {
 	args: { message: ANSWER_WITH_FEEDBACK },
 	play: async ({ canvas }) => {
@@ -113,6 +114,15 @@ export const Grouped: Story = {
 	},
 };
 
+/** Every answer keeps its author and AI disclosure, including a follow-up beside another answer. */
+export const GroupedAnswer: Story = {
+	args: { message: ANSWER, grouped: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Hephaestus", { exact: true })).toBeVisible();
+		await expect(canvas.getByText("AI", { exact: true })).toBeVisible();
+	},
+};
+
 /** The developer deleted it. The row stays, so the answers around it still read in order. */
 export const Deleted: Story = {
 	args: { message: { ...QUESTION, deleted: true, text: "" } },
@@ -121,7 +131,7 @@ export const Deleted: Story = {
 	},
 };
 
-/** A weekly digest, written by Hephaestus rather than by Heph or the developer. */
+/** A weekly digest summarizes recorded work without a model. */
 export const Digest: Story = {
 	args: {
 		message: DIGEST,
@@ -129,13 +139,14 @@ export const Digest: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Weekly digest")).toBeVisible();
+		await expect(canvas.queryByText("AI", { exact: true })).toBeNull();
 		await expect(canvas.getByText("5–11 October 2026")).toBeVisible();
 		await expect(canvas.queryByText(/weekly_digest\.json/u)).toBeNull();
 	},
 };
 
 /**
- * Heph's words can quote text a teammate wrote. Neither they nor a shown result can make the browser
+ * Hephaestus's words can quote text a teammate wrote. Neither they nor a shown result can make the browser
  * load an image, so nothing the page renders sends the conversation to another address.
  */
 export const UntrustedText: Story = {
@@ -161,7 +172,7 @@ export const UntrustedText: Story = {
 	},
 };
 
-/** Still arriving: a construct Heph has not closed yet already renders as written. */
+/** Still arriving: a construct Hephaestus has not closed yet already renders as written. */
 export const Streaming: Story = {
 	args: {
 		message: { ...ANSWER, text: "Your team asks for pull request descriptions that **explain" },

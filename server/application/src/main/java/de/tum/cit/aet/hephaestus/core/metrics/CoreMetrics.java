@@ -17,16 +17,6 @@ public final class CoreMetrics {
     public static final String PRIVACY_JOB_COMPLETED = "privacy.job.completed";
     public static final String TENANCY_PARSE_FAILURE_TOTAL = "tenancy.parse_failure.total";
     public static final String TENANCY_VIOLATION_TOTAL = "tenancy.violation.total";
-    public static final String WORKER_HUB_BINARY_REFUSED = "worker.hub.binary.refused";
-    public static final String WORKER_HUB_DRAINING_SIGNALLED = "worker.hub.draining.signalled";
-    public static final String WORKER_HUB_FRAME_DECODE_FAILED = "worker.hub.frame.decode.failed";
-    public static final String WORKER_HUB_FRAME_DISPATCH_FAILED = "worker.hub.frame.dispatch.failed";
-    public static final String WORKER_HUB_HANDSHAKE_COMPLETED = "worker.hub.handshake.completed";
-    public static final String WORKER_HUB_HELLO_TIMEOUT = "worker.hub.hello.timeout";
-    public static final String WORKER_HUB_SESSIONS_ACTIVE = "worker.hub.sessions.active";
-    public static final String WORKER_HUB_TRANSPORT_ERRORS = "worker.hub.transport.errors";
-    public static final String WORKER_JWT_VERIFY = "worker.jwt.verify";
-    public static final String WORKER_TOKEN_EXCHANGE = "worker.token.exchange";
 
     private CoreMetrics() {}
 }

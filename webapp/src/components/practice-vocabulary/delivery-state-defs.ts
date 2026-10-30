@@ -85,13 +85,14 @@ const CONVERSATION_OVERRIDES = {
 		label: "Ready for conversation",
 		icon: MessageSquareDashedIcon,
 		badgeVariant: "secondary",
-		description: "Waiting for the developer’s next chat with Heph, which is what sends it.",
+		description:
+			"Waiting for the developer’s next question in their conversation, which is what delivers it.",
 	},
 	DELIVERED: {
 		label: "Delivered in conversation",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "success",
-		description: "Heph showed it to the developer in a reply to their next chat.",
+		description: "Hephaestus showed it in a reply in the developer’s conversation.",
 	},
 	UNCONFIRMED: {
 		...DELIVERY_STATE_DEFS.UNCONFIRMED,
@@ -101,7 +102,7 @@ const CONVERSATION_OVERRIDES = {
 		label: "Withheld, never raised",
 		icon: HourglassIcon,
 		badgeVariant: "warning",
-		description: "It stayed ready for conversation until it expired. Heph never raised it.",
+		description: "It stayed ready for conversation until it expired. Hephaestus never raised it.",
 	},
 } as const satisfies Record<string, StatusDef>;
 

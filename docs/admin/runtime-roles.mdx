@@ -17,8 +17,8 @@ Three boolean properties control the roles:
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true`  |
 
 All three properties default to on, which starts the monolith role set.
-Heph turns need at least one process with the worker role, even when the server and worker roles share that JVM.
-The server role never runs a Heph turn itself.
+Conversation turns need at least one process with the worker role, even when the server and worker roles share that JVM.
+The server role never runs a conversation turn itself.
 
 ## Boot log
 
@@ -94,7 +94,7 @@ Traefik never routes to this port.
 To deploy a worker pod:
 
 1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.
-2. Point `HEPHAESTUS_HUB_URL` at the app pod's WSS endpoint.
+2. Give it the app pod's database. Workers and the app pod coordinate only through PostgreSQL.
 
 `docker/compose.app.yaml` contains a functional Compose template.
 
@@ -296,7 +296,7 @@ These model calls take the same proxy path and rules as the sandbox's calls, so 
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 The worker removes orphaned sandbox resources at startup and then at a fixed interval.
-These resources include a Heph host whose worker is gone.
+These resources include a conversation host whose worker is gone.
 They also include the sandbox of a review attempt after its review moved to a later attempt.
 This maintenance does not enable server-wide scheduled jobs on the worker.
 API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
@@ -313,14 +313,27 @@ file sets the env var the base default leaves off:
   with NATS **on**. The `webhook` overlay pins it `true` regardless (it needs the shared `Connection`
   bean). The `worker` overlay pins it `false` (the job queue is PostgreSQL, ADR 0025).
 
-`hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
-deployment silently does half its job. They do **not** share a gate:
+`hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
+Server maintenance runs independently of this flag:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
   this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
-- **Orphan recovery** reclaims a dead worker's stuck jobs.
-  It needs this flag **and** the server role.
-  It therefore does not run twice on a dedicated worker pod.
+- **Orphan recovery** reclaims the jobs of a worker that stopped.
+  A worker holds a lease of 5 minutes on each job that it runs, on the database clock.
+  It renews the lease with each heartbeat (`hephaestus.agent.heartbeat-interval`).
+  The server checks the leases every 20 seconds. When a lease expires, the server requeues the job, or fails it at the retry limit.
+  - After the server starts, it requeues nothing for one heartbeat interval.
+    Every live worker renews its leases within that interval.
+  - A stall of more than 40 seconds between two checks also starts such an interval.
+    A slow check alone does not delay recovery.
+  - A job from before the upgrade to 1.0 has no lease.
+    The server recovers it as an expired lease.
+  - Orphan recovery needs the server role, including when `AGENT_ENABLED=false`.
+    It therefore does not run twice on a dedicated worker pod.
+  - If recovery cannot finish, the timeout backstop ends the attempt.
+    [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) defines the fresh timeout for a cutover claim.
+- **Completion** closes the parent review of a terminal job and records its stop reason.
+  This server maintenance also runs when `AGENT_ENABLED=false`.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
   A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
@@ -330,28 +343,29 @@ deployment silently does half its job. They do **not** share a gate:
 
 `AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
 
-1. Set it to `true` on **each** pod that needs submission, orphan recovery, or execution.
+1. Set it to `true` on **each** pod that needs submission or execution.
 
 In a split-pod topology, both pods need it:
 
-- `application-server`: submission and recovery.
+- `application-server`: submission. Recovery runs independently of the flag.
 - `application-worker`: execution.
 
-A pod without this setting claims nothing and spends nothing.
+A worker with this flag set to `false` claims no practice reviews.
+Server maintenance still records the spend of attempts that already ran.
 
-## Heph turns
+## Conversation turns
 
-Each question to Heph, in the webapp or in a Slack DM, starts one turn.
-Turns run in the Heph host, one long-lived container on each worker.
+Each question to Hephaestus, in the webapp or in a Slack DM, starts one turn.
+Turns run in the conversation host, one long-lived container on each worker.
 The [glossary](/contributor/practice-review-glossary#runtime-terms) defines both terms.
 The application server keeps these functions:
 
 - The web API, the live answer stream, and Slack delivery.
 - A first admission check when a question arrives. The worker admits the turn again, with the budget check, when it claims it.
-- The Heph conversation store in PostgreSQL.
+- The conversation store in PostgreSQL.
 
-The server role needs no Docker client and never connects to a Heph host.
-`AGENT_ENABLED` controls queued practice reviews, not Heph.
+The server role needs no Docker client and never connects to a conversation host.
+`AGENT_ENABLED` controls queued practice reviews, not Hephaestus.
 
 ### Dispatch
 
@@ -359,7 +373,7 @@ When a developer asks a question, the server stores it in PostgreSQL with a queu
 Each worker listens for turn changes through PostgreSQL `LISTEN/NOTIFY`.
 It also checks the queue every 30 seconds as a backstop.
 A worker with free capacity claims the next turn and holds a lease on it.
-The worker runs the turn in its Heph host and writes the answer to PostgreSQL while Heph writes it.
+The worker runs the turn in its conversation host and writes the answer to PostgreSQL while Hephaestus writes it.
 The server then sends the answer to the webapp or posts it to Slack.
 
 A turn that finds no free capacity waits in the queue until a worker can claim it.
@@ -368,57 +382,63 @@ A thread is a separate conversation, so a thread turn can run at the same time a
 Questions that arrive during a turn wait in their conversation.
 When `hephaestus.mentor.turn.max-follow-ups` questions wait, Hephaestus refuses the next one.
 
-### Heph capacity
+### Conversation turn capacity
 
-`hephaestus.worker.capacity.mentor-max` sets how many Heph turns one worker runs at once.
+`hephaestus.worker.capacity.mentor-max` sets how many conversation turns one worker runs at once.
 The default is 8.
 The model provider usually sets the real limit, not the worker:
 
-- A turn uses little of the Heph host. In a load test, one host ran 90 turns at once in 364 MiB of memory.
+- A turn uses little of the conversation host. In a load test, one host ran 90 turns at once in 364 MiB of memory.
 - Each turn that streams writes its partial answer up to 4 times each second, one short statement each time.
 - A provider that queues calls past its concurrency limit makes each call slower.
   In the same load test, one provider key answered a single call in 4 seconds.
   With 8 calls at once, each call took 34 seconds.
 
-A turn that waits in the Hephaestus queue does not count against its deadline.
+A turn that waits in the Hephaestus queue does not count against its execution deadline.
 A call that waits at the provider counts against the deadline and against the model idle timeout.
 Thus, find how many calls your provider serves at once at full speed.
 Keep the total capacity of all workers at or below that number.
 
+A queued turn has a separate wait of three minutes to start, counted from its stored queue time.
+Server maintenance ends an overdue queued question with a message that asks the developer to try again.
+
+A follow-up stays queued while an answer holds its conversation.
+The wait survives worker restarts. A lease retry gets a new wait.
+
 Within that limit, size the capacity from the expected load.
 Concurrent turns are about the questions each second multiplied by the seconds for each answer.
 For example, 1.8 questions each second with 4.5-second answers need 8 concurrent turns.
-`mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Observability](./observability.mdx#heph-turn-metrics)).
+`mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Observability](./observability.mdx#conversation-turn-metrics)).
 
 The server must also know the capacity of all workers together: `hephaestus.mentor.turn.capacity` (`HEPHAESTUS_MENTOR_TURN_CAPACITY`).
-While that many turns run, a question that a worker can start next says that Heph is answering other questions.
-The Helm chart sets the value to `worker.replicas` multiplied by `worker.hephTurns`.
+While that many turns run, a question that a worker can start next says that Hephaestus is answering other questions.
+The Helm chart sets the value to `worker.replicas` multiplied by `worker.conversationTurns`.
 If you run workers without the chart, set it on the server to the sum of their `mentor-max` values.
 If it is not set, no question says why it waits.
 
 During a rollout, the old workers finish their turns beside the new workers, and those turns count too.
-Thus, for a short time, a question can say that Heph is busy while a new worker has a free slot.
+Thus, for a short time, a question can say that Hephaestus is busy while a new worker has a free slot.
 The question starts at the next claim.
 
 ### Lease, retry, and deadline
 
 The worker renews the lease of each running turn at one third of `hephaestus.mentor.turn.lease`.
-If the worker or its Heph host stops, the lease expires.
+If the worker or its conversation host stops, the lease expires.
 The server's lease reaper then returns the turn to the queue once, and any worker can claim it.
-If the lease of the second attempt also expires, the turn fails with **Heph could not finish this reply. Try again.**
+If the lease of the second attempt also expires, the turn fails with **Hephaestus could not finish this reply. Try again.**
 
 The lease end and its expiry both use the database clock.
 Thus, a clock difference between the server and the worker does not take back a running turn.
 
-The timeout of the workspace's Heph model binding is the deadline of each attempt, at most 300 seconds.
-A binding accepts no longer Heph timeout, and an older binding with a longer one acts as 300 seconds.
+The timeout of the workspace's conversation model binding is the deadline of each attempt, at most 300 seconds.
+A binding accepts no longer Hephaestus timeout, and an older binding with a longer one acts as 300 seconds.
 A turn also stops after 40 model calls, retries included.
 
 At the deadline or the call limit, the worker stops the turn.
-The turn fails with **Heph took too long to reply and stopped. Try again.**
-The worker ends a stopped turn itself if the Heph host does not end it within 30 seconds.
+The turn fails with **Hephaestus took too long to reply and stopped. Try again.**
+The worker ends a stopped turn itself if the conversation host does not end it within 30 seconds.
 
-The worker's LLM proxy cuts a Heph model call whose provider stays silent too long.
+The worker's LLM proxy cuts a conversation model call whose provider stays silent too long.
 Two bounds apply:
 
 - `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
@@ -427,7 +447,7 @@ Two bounds apply:
 
 Any byte counts, also an SSE comment that a gateway sends to keep the connection alive.
 The turn's deadline also bounds both, because the stop at the deadline cancels the call.
-The turn fails with **Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment.**
+The turn fails with **Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.**
 The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
 
 In a load test, the slowest 5 % of single calls took 21 seconds, and calls under load took 34 seconds on average.
@@ -442,8 +462,8 @@ Each worker keeps a circuit breaker for each provider connection.
 A call that stalls, that cannot connect, or that ends with a server error counts as a failure.
 When at least 3 calls in 5 minutes ended, and half of them failed, the breaker opens for 60 seconds.
 
-While it is open, the worker starts no Heph turn on that connection.
-Each such turn fails at once with **Heph's AI model is not responding right now, so Heph did not start this reply. Try again in a few minutes.**
+While it is open, the worker starts no conversation turn on that connection.
+Each such turn fails at once with **Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes.**
 Model calls of turns that already run, and of practice reviews, get an error at once.
 
 After 60 seconds, one call probes the provider.
@@ -451,13 +471,13 @@ If it succeeds, the breaker closes.
 If it fails, the breaker opens again.
 
 A rate limit, a request error, or a client that went away does not count.
-[Observability](./observability.mdx#heph-turn-metrics) names the breaker's metrics.
+[Observability](./observability.mdx#conversation-turn-metrics) names the breaker's metrics.
 
 ### Model calls in flight for each attempt
 
 The worker limits the model calls that one attempt has in flight at the same time, on every model:
 
-- A Heph turn has at most 2: one call, and one that a stop left open.
+- A conversation turn has at most 2: one call, and one that a stop left open.
 - A practice review has at most 2 × (practice concurrency + 1) + 4.
   With the default practice concurrency of 3, the limit is 12.
 
@@ -474,21 +494,91 @@ Thus, no attempt takes more than its share of the provider's capacity.
 
 A refused call is not lost:
 
-- The review's sessions and Heph ask again with their own retries.
+- The review's sessions and Hephaestus ask again with their own retries.
 - A practice script's direct call waits as the refusal asks, and then asks again. It stops at the review's work deadline. Thus, a full limit delays a script's call but does not leave it unrated.
 - The feedback composition of a review counts against the same limit, because it is a call of the same attempt. It starts after the review's sandbox ends. Then, only calls that a stalled session left open can fill the limit. The composition treats a refusal as a provider pause and tries again.
 
 `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the practice concurrency, and the limit follows it.
 
-### The Heph host
+### Call pools
 
-Each worker starts its Heph host when it claims its first turn.
+A call pool represents one provider quota boundary across workers, models, and workspaces.
+The instance admin assigns model membership explicitly.
+A shared host name alone does not establish a shared quota.
+[AI providers](./ai-providers.mdx#6-sharing-provider-capacity) owns the setup procedure.
+
+Every call takes a database grant before it reaches the provider.
+Review calls, composition, and direct script calls share the background capacity.
+Conversation calls can also use the interactive reserve.
+The reserve is never lent to background work.
+Both the total limit and the background limit apply independently.
+A finite pool must leave background capacity above zero.
+
+A fair queue gives workspaces, composition, and individual attempts turns before repeated grants to a busy peer.
+Retry and backfill origins receive no extra priority.
+A review claim reserves its first grant before capture or Pod creation.
+A saturated pool leaves the review queued.
+The first call consumes only its exact attempt and worker reservation.
+
+A script can call another pool before its primary model.
+The worker first releases its unused reservation.
+That release commits before another pool lock or capacity wait.
+Active calls retain their grants until their transports close.
+
+Unused reservations expire when their owner stops renewing them for a full permit lease.
+Any worker can reclaim these reservations under the pool lock, with an atomic state fence against activation.
+Active grants never use that expiry path.
+The fair queue counts grants even when unused provider debits are refunded.
+
+A review that cannot claim records its demand in the same fair queue as background calls.
+It stays queued and creates no Pod.
+After a capacity refusal, the same poll scans other endpoint pools before it sleeps.
+The job retains its original readiness time.
+
+If another claim owns the next turn, the poll dispatches that claim.
+A budget hold or workspace limit withdraws ineligible claim demand.
+A paused workspace or future readiness time also withdraws that demand.
+Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
+
+The pool also accounts for request and token rates across workers.
+Each physical request, including a protocol retry, consumes a rate debit.
+A configured per-call token bound reserves the provider's maximum input-plus-output charge.
+The reservation remains conservative when usage is absent or the call is cancelled.
+Closed calls retain their debit for a full minute after closure.
+The rate account also leaves an interactive share when the pool has an interactive reserve.
+
+An expired lease cancels the call but never frees an active grant.
+The proxy releases capacity only after the response completes or the cancelled transport closes.
+Cancellation also closes a JSON response body after its headers arrive.
+The request UUID fences renewal and release.
+A late release cannot affect another call.
+An ended attempt cannot start a provider call after a capacity wait.
+
+A worker crash can leave capacity held when transport closure cannot be confirmed.
+This state fails closed. Time alone does not prove that the provider stopped serving the call.
+Before an operator removes such a record, they must verify closure of the old worker's transports at the provider.
+Do not reset a pool merely because its worker heartbeat expired.
+Pool edits, deletion, and membership changes wait for open requests to close.
+
+An instance-controlled connection can impose a shared cooldown after HTTP 429.
+A workspace-controlled connection cannot impose that cooldown on other tenants.
+The response still reaches its caller.
+The cooldown follows the retry headers and never shortens an existing pause.
+
+The worker loads at most four compositions at once by default.
+It acquires this local capacity before it loads or restores composition inputs.
+This bound is separate from the existing sixteen-local-attempt ceiling.
+It does not reduce the resident review limit to four.
+
+### The conversation host
+
+Each worker starts its conversation host when it claims its first turn.
 A worker that never claims a turn starts no host.
 The host runs in a container of the agent image. Its script comes from the worker, not from the image.
 The host has these fixed limits:
 
 - 2 GiB of memory on Docker. On Kubernetes, 1 GiB ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
-- 2 CPUs.
+- 1 CPU. On Kubernetes, it requests 50m.
 - 256 processes.
 
 These limits do not come from the `SANDBOX_*` variables, and the host does not count against `SANDBOX_MAX_CONCURRENT`.
@@ -505,13 +595,13 @@ Two cases change the network:
   The host reaches the worker through `host.docker.internal`.
   Local development runs this way.
 - A worker in a container that it cannot identify starts no host.
-  Each Heph turn on it fails with **Heph could not start. Try again in a moment.**
+  Each conversation turn on it fails with **Hephaestus could not start. Try again in a moment.**
   The worker logs why.
   [Docker configuration](./configuration-readiness.mdx#docker-configuration) gives the hostname rule.
 
 The host is ready when it opens its command channel to the worker's sandbox gateway.
 If the host cannot start, or the channel does not open within 3 minutes, the turn fails.
-The developer then sees **Heph could not start. Try again in a moment.**
+The developer then sees **Hephaestus could not start. Try again in a moment.**
 
 If the command channel closes, the worker removes the host.
 The worker pings the channel every 5 seconds.
@@ -537,14 +627,14 @@ PostgreSQL remains the billing record.
 
 ### Turn sandboxes
 
-Heph reads its context documents, code, and Git history in a [turn sandbox](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the Heph host.
+Hephaestus reads its context documents, code, and Git history in a [turn sandbox](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the conversation host.
 The first read of a turn attempt takes one turn sandbox.
 The worker removes it when the attempt ends.
 Each worker also keeps a pool of 2 empty turn sandboxes, so that a turn does not wait for a container start.
 
-Plan for these containers on each worker, beside the review sandboxes and the Heph host:
+Plan for these containers on each worker, beside the review sandboxes and the conversation host:
 
-- One turn sandbox for each running Heph turn that reads, at most `hephaestus.worker.capacity.mentor-max`.
+- One turn sandbox for each running conversation turn that reads, at most `hephaestus.worker.capacity.mentor-max`.
 - 2 empty turn sandboxes in the pool.
 
 Each turn sandbox has these fixed limits:
@@ -559,10 +649,10 @@ The limits are bounds, not reservations. An idle sandbox runs only `sleep`.
 Their containers have the label `hephaestus.kind=heph-sandbox`.
 
 Turn sandboxes need Docker on the worker and the agent image of the release.
-If the worker cannot start a turn sandbox, Heph cannot read the developer's work and says so.
+If the worker cannot start a turn sandbox, Hephaestus cannot read the developer's work and says so.
 The worker logs `Could not fill the turn sandbox pool` at `WARN` and tries again every 60 seconds.
-Heph reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
-Without Git mirrors, Heph tells the developer that it cannot read the code.
+Hephaestus reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
+Without Git mirrors, Hephaestus tells the developer that it cannot read the code.
 No setting turns turn sandboxes on or off.
 
 The worker removes leftover turn sandboxes at startup and every 60 seconds.
@@ -570,7 +660,7 @@ It never removes a turn sandbox of another worker that still runs.
 A worker that runs outside a container, as in local development, cannot find its leftovers after a crash.
 Remove them with `docker rm -f $(docker ps -aq --filter label=hephaestus.kind=heph-sandbox)`.
 
-The [Heph runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
+The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
 
 ### Live answers
 
@@ -593,13 +683,13 @@ A load test that asks more questions as one account must raise the capacity.
 
 | Property                                    | Default       | Effect                                                                  |
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of Heph turns that one worker's Heph host runs at once ([Heph capacity](#heph-capacity)) |
+| `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of conversation turns that one worker's conversation host runs at once ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.turn.lease`              | `PT1M`        | The lease of a running turn. The worker renews it at one third of this. |
 | `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn may wait for the provider's response headers |
 | `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn may send nothing |
 | `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
-| `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or Heph thread |
-| `hephaestus.mentor.turn.capacity`           | Not set       | The Heph turns that all workers together run at once. Only the server reads it ([Heph capacity](#heph-capacity)) |
+| `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
+| `hephaestus.mentor.turn.capacity`           | Not set       | The conversation turns that all workers together run at once. Only the server reads it ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.
@@ -607,26 +697,24 @@ The Compose files forward only the capacity, as `HEPHAESTUS_WORKER_MENTOR_MAX`.
 To change another key, add its environment variable to the services with a Compose override.
 An example is `HEPHAESTUS_MENTOR_TURN_LEASE`.
 
-[Observability](./observability.mdx#heph-turn-metrics) lists the Heph turn metrics.
+[Observability](./observability.mdx#conversation-turn-metrics) lists the conversation turn metrics.
 
 ## Worker pod env vars
 
-The bare minimum to boot a worker against a remote hub:
+The bare minimum to boot a worker, beside the database settings:
 
 ```sh
 SPRING_PROFILES_ACTIVE=prod,worker
-HEPHAESTUS_HUB_URL=wss://app.example.com/api/workers/connect
-HEPHAESTUS_WORKER_REGISTRATION_TOKEN=<shared bootstrap secret>
 HEPHAESTUS_WORKER_DRAIN_TIMEOUT=5m
 AGENT_ENABLED=true
 ```
 
-Without the last line, the worker boots and registers but claims no practice-review jobs.
-It can still run Heph turns: `AGENT_ENABLED` does not gate them.
+Without the last line, the worker boots but claims no practice-review jobs.
+It can still run conversation turns: `AGENT_ENABLED` does not gate them.
 
 No LLM environment variables are necessary.
 The LLM proxy runs in-process on each pod with the worker role, whatever `AGENT_ENABLED` says.
-It serves queued practice reviews and Heph turns.
+It serves queued practice reviews and conversation turns.
 It reads providers from the same instance/workspace catalog as the app pod.
 
 1. Register providers at runtime under Instance admin → AI models, or under the workspace's AI models page.
@@ -634,7 +722,7 @@ It reads providers from the same instance/workspace catalog as the app pod.
 
 Both capacities default to `auto`.
 Review capacity then sizes from `Runtime.availableProcessors()`.
-[Tunables](#tunables) gives the Heph capacity.
+[Tunables](#tunables) gives the Conversation turn capacity.
 Override them only if the host is noisy.
 
 The JVM binds `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` and `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
@@ -650,11 +738,8 @@ A higher review capacity there has no effect until you also raise the sandbox li
 
 1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
 
-The app pod signs worker tokens from a key *ring*, not a single value:
-`hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
-`hephaestus.worker.hub.token.active-kid`. Indexed list binding has no single env-var form, so
-configure it through a mounted YAML/config-tree rather than a flat variable. Unset, the app logs a
-warning and generates an ephemeral key that invalidates every worker token on restart.
+Each worker signs the attempt tokens of its sandboxes with a key that it generates at start and keeps in memory.
+A sandbox calls only the gateway of the worker that runs its attempt, so the key needs no configuration.
 
 [Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
 
@@ -668,20 +753,19 @@ The Kubernetes runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of 
 The [Helm chart](./kubernetes#worker) sets each of them.
 
 Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
-The other workers keep a worker's Heph host and turn sandboxes while it beats.
+The other workers keep a worker's conversation host and turn sandboxes while it beats.
 
 ## Graceful drain
 
 On SIGTERM, the worker does these actions in order:
 
-1. It sends `Heartbeat{draining=true}` to the hub.
-   The dispatcher stops claiming new jobs for it.
+1. It reports itself not ready and stops claiming new jobs.
 2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
 3. It settles each remaining job under its ownership fence before it waits for any container stop.
 4. It stops the settled jobs' containers in parallel, with one 30s cleanup deadline for the batch.
 
 The drain phase may take `hephaestus.worker.drain.timeout` plus 55 seconds for the poll thread, step 3 and step 4.
-Running Heph turns drain in the same phase, under the same timeout.
+Running conversation turns drain in the same phase, under the same timeout.
 Every other shutdown phase keeps `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`, 20 seconds).
 Give the worker a stop grace period of at least the drain timeout plus 2 minutes.
 The chart sets `drainTimeoutSeconds` plus 2 minutes.
@@ -713,6 +797,13 @@ Leftover containers remain subject to normal sandbox reconciliation.
 The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 3600 by default, and the grace period to that value plus two minutes.
 The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 
+## Cancellation
+
+A cancel ends a review on its row at once.
+The sandbox gateway then refuses the review's next model call.
+The worker that runs the review stops its sandbox at its next heartbeat (`hephaestus.agent.heartbeat-interval`).
+A requeue or a reap of the review ends it in the same way.
+
 ## See also
 
 The full design rationale lives in the architecture decision records, which are kept in the
@@ -720,5 +811,5 @@ repository rather than on this site:
 
 - [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
 - [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — webhook role rationale.
-- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate + WSS control channel.
+- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate. Its WSS control channel is superseded by ADR 0068.
 - [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.

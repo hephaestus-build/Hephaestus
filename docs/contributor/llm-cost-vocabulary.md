@@ -87,7 +87,7 @@ Its `PRICED` option needs separate text: "Price per 1M tokens".
 These numbers cannot label a radio.
 
 The usage tables use "No price set" as the heading of a count, `unpricedEventCount` on the wire.
-It counts runs, not usage rows: a review attempt or a Heph turn with at least one `UNPRICED` row counts one time.
+It counts runs, not usage rows: a review attempt or a conversation turn with at least one `UNPRICED` row counts one time.
 A usage row of a model for practice scripts counts toward the run of its review.
 The table by practice counts reviews instead, because its other count is **Reviews**.
 `usage-utils.ts#UNPRICED_RUNS` owns the heading.

@@ -37,7 +37,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Ends a turn's attempts: bills each attempt when it ends or its lease expires, from the attempt's usage measurement
- * ({@link MentorAttemptUsageService}), and settles the conversational feedback Heph's answer showed
+ * ({@link MentorAttemptUsageService}), and settles the conversational feedback Hephaestus's answer showed
  * ({@code docs/contributor/unified-pi-runtime.mdx} § Delivery of shown feedback).
  */
 @Service
@@ -48,12 +48,14 @@ public class MentorTurnCompletion {
 
     private static final Logger log = LoggerFactory.getLogger(MentorTurnCompletion.class);
 
-    static final String NOT_SHOWN = "Heph's answer did not show the feedback.";
-    static final String CUT_OFF = "Heph's answer stopped or failed after it showed the feedback.";
-    static final String LEASE_LOST = "Heph's answer was lost while it showed the feedback.";
-    static final String SILENCED = "Silent Mode kept Heph's answer from Slack.";
-    static final String SLACK_UNCERTAIN = "Slack did not confirm what Heph's answer showed.";
-    static final String SLACK_PARTLY = "Slack showed only part of what Heph's answer showed of the feedback.";
+    public static final String COULD_NOT_START = "Hephaestus could not start. Try again in a moment.";
+
+    static final String NOT_SHOWN = "Hephaestus's answer did not show the feedback.";
+    static final String CUT_OFF = "Hephaestus's answer stopped or failed after it showed the feedback.";
+    static final String LEASE_LOST = "Hephaestus's answer was lost while it showed the feedback.";
+    static final String SILENCED = "Silent Mode kept Hephaestus's answer from Slack.";
+    static final String SLACK_UNCERTAIN = "Slack did not confirm what Hephaestus's answer showed.";
+    static final String SLACK_PARTLY = "Slack showed only part of what Hephaestus's answer showed of the feedback.";
 
     private final MentorTurnService turns;
     private final FeedbackStore feedback;
@@ -113,7 +115,7 @@ public class MentorTurnCompletion {
             String cause = ending.cause() == null ? ending.error() : ending.cause();
             MentorTurn.FailedCall lastFailedCall = ending.lastFailedCall();
             TransactionCallbacks.afterCommit(() -> log.warn(
-                    "Heph turn {} attempt {} failed: {}; last failed model call: {}",
+                    "conversation turn {} attempt {} failed: {}; last failed model call: {}",
                     turnId,
                     attempt,
                     cause,

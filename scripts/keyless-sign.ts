@@ -24,6 +24,13 @@ const ociDigest = /^[a-z0-9][^\s@]*@sha256:[a-f0-9]{64}$/u;
 const isDigestSign = (args: readonly string[]) =>
 	args.length === 3 && args[0] === "sign" && args[1] === "--yes" && ociDigest.test(args[2] ?? "");
 
+function signingCommand(args: readonly string[]): { args: readonly string[]; config?: string } {
+	if (args[1] === "--signing-config" && args[2] !== undefined) {
+		return { args: [args[0] ?? "", ...args.slice(3)], config: args[2] };
+	}
+	return { args };
+}
+
 function signingFiles(args: readonly string[]): { input?: string; bundle?: string } {
 	if (isDigestSign(args)) {
 		return {};
@@ -120,8 +127,10 @@ async function discardPartialBundle(bundle: string | undefined, cause: unknown):
 
 /** Retry a transient token or Rekor failure with fresh keyless processes, never as proof of a signature. */
 export async function keylessSign(args: string[], dependencies: Dependencies = {}): Promise<void> {
-	const { input, bundle } = signingFiles(args);
+	const { args: normalizedArgs, config } = signingCommand(args);
+	const { input, bundle } = signingFiles(normalizedArgs);
 	const expected = await digest(input);
+	const expectedConfig = await digest(config);
 	if (bundle !== undefined && (await exists(bundle))) {
 		throw new Error("Signing bundle already exists");
 	}
@@ -139,7 +148,7 @@ export async function keylessSign(args: string[], dependencies: Dependencies = {
 		});
 	const deadline = now() + BUDGET_MS;
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-		if ((await digest(input)) !== expected) {
+		if ((await digest(input)) !== expected || (await digest(config)) !== expectedConfig) {
 			throw new Error("Signing input changed");
 		}
 		const remaining = deadline - now();
@@ -149,7 +158,7 @@ export async function keylessSign(args: string[], dependencies: Dependencies = {
 		try {
 			// No --key is accepted: Cosign creates a new ephemeral key in each process.
 			await execute([...args], AbortSignal.timeout(Math.min(ATTEMPT_MS, remaining)));
-			if ((await digest(input)) !== expected) {
+			if ((await digest(input)) !== expected || (await digest(config)) !== expectedConfig) {
 				throw new Error("Signing input changed");
 			}
 			await requireBundle(bundle);

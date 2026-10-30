@@ -46,7 +46,7 @@ public record FeedbackCopyDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The Heph answer that showed a conversation copy")
+                description = "The Hephaestus answer that showed a conversation copy")
         @Nullable
         UUID mentorEntryId,
 

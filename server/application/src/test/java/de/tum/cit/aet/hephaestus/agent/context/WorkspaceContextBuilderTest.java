@@ -303,7 +303,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 UUID.randomUUID(),
                 0,
                 Set.of(new SourceKind("scm.pull-request.core"), new SourceKind("zz.uninstalled.source")),
-                "2.0.0",
+                "3.0.0",
                 3);
         var contexts = new WorkspaceContextBuilder(
                 List.of(), List.of(owner), registry, new JobFolderIndexBuilder(registry, mapper, Clock.systemUTC()));
@@ -316,7 +316,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
         var core = new SourceKind("scm.pull-request.core");
         var diff = new SourceKind("scm.pull-request.diff");
         assertThatThrownBy(() -> new CaptureRequest(
-                        UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(diff), "2.0.0", 3, null, Set.of(core)))
+                        UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(diff), "3.0.0", 3, null, Set.of(core)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Selected capture sources are outside the permitted plan");
     }

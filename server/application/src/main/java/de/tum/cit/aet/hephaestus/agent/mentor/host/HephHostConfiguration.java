@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextRevocations;
@@ -11,7 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -45,8 +45,11 @@ public class HephHostConfiguration {
         return new HephHost(sandbox);
     }
 
-    /** Turn sandboxes that wait empty, ahead of the turns that take them. */
-    static final int SANDBOX_POOL = 2;
+    /**
+     * Turn sandboxes that wait empty, ahead of the turns that take them. The chart's {@code sandbox-pod-requests.json} sizes the
+     * conversations quota by it.
+     */
+    public static final int SANDBOX_POOL = 2;
 
     /** How often {@link TurnSandboxes#reconcile} runs; its first run is at startup. */
     static final Duration SANDBOX_RECONCILE = Duration.ofSeconds(60);
@@ -82,7 +85,7 @@ public class HephHostConfiguration {
             HephHost host,
             ProxyCallsInFlight callsInFlight,
             TurnSandboxes sandboxes,
-            WorkerJwtIssuer issuer,
+            AttemptTokenIssuer issuer,
             ObjectMapper mapper,
             Clock clock,
             MeterRegistry meters,

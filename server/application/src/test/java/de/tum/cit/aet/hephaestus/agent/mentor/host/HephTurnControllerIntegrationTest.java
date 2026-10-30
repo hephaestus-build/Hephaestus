@@ -18,7 +18,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -30,9 +35,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -51,6 +53,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -92,7 +95,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The worker endpoints a Heph host calls for one turn. The worker role is off in the test context, so the controller
+ * The worker endpoints a Hephaestus host calls for one turn. The worker role is off in the test context, so the controller
  * is built by hand from the context's own beans. The gateway client sends the contract files in
  * {@code heph-turn-contract/} with a signed turn credential, authenticated by the gateway's own filter, and maps
  * errors with the production controller advice. The direct client passes an authenticated credential as the gateway
@@ -131,11 +134,12 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private ReviewJobRepository jobRepository;
 
-    @Autowired
-    private WorkerJwtIssuer issuer;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtVerifier verifier;
+    private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(KEY);
+
+    private final AttemptTokenVerifier verifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
 
     @Autowired
     private JsonMapper mapper;
@@ -151,27 +155,22 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MentorConversation conversation;
     private MentorTurn turn;
     private Authentication authentication;
+    private TurnAttempt attempt;
 
     @BeforeEach
     void claimATurn() throws Exception {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         developer = persistUser("heph-turn-" + suffix);
-        workspace = createWorkspace("heph-turn-" + suffix, "Heph Turn", "heph-turn-org", AccountType.ORG, developer);
+        workspace =
+                createWorkspace("heph-turn-" + suffix, "Hephaestus Turn", "heph-turn-org", AccountType.ORG, developer);
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
         turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), QUESTION, WORKER);
-        authentication = HephTurnFixtures.authenticated(new TurnJwt(
-                turn.getId(),
-                workspace.getId(),
-                developerAccount,
-                conversation.getId(),
-                turn.getAttempt(),
-                Set.of("llm_proxy"),
-                UUID.randomUUID().toString(),
-                Instant.now(),
-                Instant.now().plus(Duration.ofMinutes(5))));
+        attempt = new TurnAttempt(
+                turn.getId(), workspace.getId(), developerAccount, conversation.getId(), turn.getAttempt());
+        authentication = HephTurnFixtures.authenticated(attempt);
         dispatcher = mock(HephTurnDispatcher.class);
-        when(dispatcher.runs(turn.getId(), turn.getAttempt())).thenReturn(true);
+        when(dispatcher.running(turn.getId(), turn.getAttempt())).thenReturn(Optional.of(attempt));
         controller = controller(HephTurnFixtures.contexts(beans));
         gateway = gateway(controller);
         direct = MockMvcBuilders.standaloneSetup(controller)
@@ -184,7 +183,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldBuildTheDocumentsAgainWhenTheWorkspaceContextChangedAfterTheyWereCached() {
         TurnContextGenerations generations = new TurnContextGenerations();
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans, generations);
-        TurnJwt credential = (TurnJwt) Objects.requireNonNull(authentication.getDetails());
+        TurnAttempt credential = attempt;
         Map<String, byte[]> first = contexts.documents(credential);
         assertThat(contexts.documents(credential)).as("cached for the attempt").isSameAs(first);
 
@@ -234,12 +233,12 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     /** The signed credential the worker issues for this attempt of the turn. */
     private String credential(int attempt) {
-        return issuer.issueForTurn(
+        return issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 turn.getId(),
                 workspace.getId(),
-                developerAccount,
-                conversation.getId(),
                 attempt,
+                null,
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 
@@ -255,7 +254,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     /**
-     * A request body exactly as the Heph host sends it, or the context it reads. {@code heph-turn-api.spec.ts} checks
+     * A request body exactly as the Hephaestus host sends it, or the context it reads. {@code heph-turn-api.spec.ts} checks
      * that the host's own HTTP client sends and reads these same files.
      */
     private static String contract(String name) throws IOException {
@@ -487,6 +486,32 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldRefuseATokenOfAnotherWorkspaceAndReadOrWriteNothingOfTheTurn() throws Exception {
+        String foreign = issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
+                turn.getId(),
+                workspace.getId() + 1,
+                turn.getAttempt(),
+                null,
+                Instant.now().plus(Duration.ofMinutes(5)));
+        int entries = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
+                .size();
+
+        gateway.perform(get(TURN_PATH + "context", turn.getId()).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign))
+                .andExpect(status().isNotFound());
+        gateway.perform(post(TURN_PATH + "end", turn.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(contract("end.request.json")))
+                .andExpect(status().isNotFound());
+
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId()))
+                .as("the foreign end stored nothing")
+                .hasSize(entries);
+    }
+
+    @Test
     void shouldRefuseTheEndAndStoreNothingWhenAnEntryHasNoTypeOrId() throws Exception {
         String withoutType = piId();
         String withoutId = piId();
@@ -514,7 +539,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
-        assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported DEADLINE: deadline");
+        assertThat(ended.getFailureCause()).isEqualTo("its Hephaestus host reported DEADLINE: deadline");
         assertThat(ended.getFailedCall())
                 .as("no model call of the attempt failed")
                 .isNull();
@@ -537,7 +562,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported ERROR: provider_unavailable");
+        assertThat(ended.getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: provider_unavailable");
         assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
         assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
@@ -580,7 +605,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider said: rate limited for alice@example.com"}""").andExpect(status().isNoContent());
 
-        assertThat(reloaded().getFailureCause()).isEqualTo("its Heph host reported ERROR: unrecognized");
+        assertThat(reloaded().getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: unrecognized");
     }
 
     @Test
@@ -593,7 +618,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.MODEL_STOPPED_ANSWERING);
-        assertThat(output.getAll()).contains("failed: its Heph host reported STALLED: upstream_stalled");
+        assertThat(output.getAll()).contains("failed: its Hephaestus host reported STALLED: upstream_stalled");
     }
 
     /**
@@ -614,8 +639,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_FINISH);
         assertThat(output.getAll())
-                .contains("Heph turn " + turn.getId() + " attempt " + turn.getAttempt()
-                        + " failed: its Heph host reported ERROR: unrecognized")
+                .contains("conversation turn " + turn.getId() + " attempt " + turn.getAttempt()
+                        + " failed: its Hephaestus host reported ERROR: unrecognized")
                 .doesNotContain(key)
                 .doesNotContain(quoted);
     }

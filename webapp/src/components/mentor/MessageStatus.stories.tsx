@@ -29,10 +29,10 @@ function iconStandsOut(canvasElement: HTMLElement): boolean {
 	return getComputedStyle(icon).color !== getComputedStyle(line).color;
 }
 
-/** A follow-up waits while Heph answers the question before it, and can be stopped before it runs. */
+/** A follow-up waits while Hephaestus answers the question before it, and can be stopped before it runs. */
 export const Default: Story = {
 	play: async ({ canvas, canvasElement }) => {
-		await expect(canvas.getByText("Queued. Heph answers this next.")).toBeVisible();
+		await expect(canvas.getByText("Queued. This is answered next.")).toBeVisible();
 		const stop = canvas.getByRole("button", { name: "Stop queued message (Ada Lovelace, 10:42)" });
 		await expect(stop).toBeVisible();
 		// On a line of its own, so the inline-text exception to WCAG 2.5.8 does not apply.
@@ -50,7 +50,7 @@ export const QueuedBehindAnother: Story = {
 	},
 };
 
-/** The developer stopped the turn. What Heph wrote before stays above. */
+/** The developer stopped the turn. What Hephaestus wrote before stays above. */
 export const Stopped: Story = {
 	args: { state: { kind: "stopped" } },
 	play: async ({ canvas, canvasElement }) => {
@@ -61,7 +61,7 @@ export const Stopped: Story = {
 };
 
 /**
- * Heph's answer to a question asked in Slack did not fully reach Slack: Slack may show part of it or
+ * Hephaestus's answer to a question asked in Slack did not fully reach Slack: Slack may show part of it or
  * none. The full answer is here, and the line says so without claiming which.
  */
 export const NotFullyDeliveredToSlack: Story = {
@@ -77,15 +77,15 @@ export const NotFullyDeliveredToSlack: Story = {
 const onTryAgain = fn();
 
 /**
- * Heph could not answer. Unlike Queued and Stopped, which only report, this line needs the
+ * Hephaestus could not answer. Unlike Queued and Stopped, which only report, this line needs the
  * developer, so its icon takes the `destructive` tone and Try again is a full button.
  */
 export const Failed: Story = {
 	args: {
-		state: { kind: "failed", reason: "Heph took too long to answer.", onTryAgain },
+		state: { kind: "failed", reason: "Hephaestus took too long to answer.", onTryAgain },
 	},
 	play: async ({ canvas, canvasElement, userEvent }) => {
-		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
+		await expect(canvas.getByText("Hephaestus took too long to answer.")).toBeVisible();
 		await expect(iconStandsOut(canvasElement)).toBe(true);
 		const tryAgain = canvas.getByRole("button", { name: "Try again (Ada Lovelace, 10:42)" });
 		await expectTargetSize(tryAgain);
@@ -96,7 +96,9 @@ export const Failed: Story = {
 
 /** The same line in the dark theme. */
 export const FailedDark: Story = {
-	args: { state: { kind: "failed", reason: "Heph took too long to answer.", onTryAgain: fn() } },
+	args: {
+		state: { kind: "failed", reason: "Hephaestus took too long to answer.", onTryAgain: fn() },
+	},
 	globals: { theme: "dark" },
 };
 

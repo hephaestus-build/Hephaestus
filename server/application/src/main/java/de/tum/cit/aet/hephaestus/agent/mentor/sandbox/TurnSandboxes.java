@@ -49,7 +49,8 @@ public class TurnSandboxes implements AutoCloseable {
      * One CPU, 1 GiB and 256 processes. A sandbox lives as long as its attempt, so the runtime bound is the longest
      * one any sandbox may have; each command has its own.
      */
-    static final ResourceLimits LIMITS = new ResourceLimits(1024L * 1024 * 1024, 1.0, 256, ResourceLimits.MAX_RUNTIME);
+    public static final ResourceLimits LIMITS =
+            new ResourceLimits(1024L * 1024 * 1024, 1.0, 256, ResourceLimits.MAX_RUNTIME);
 
     /** The attempt a sandbox serves. */
     public record Attempt(UUID turnId, int number) {}

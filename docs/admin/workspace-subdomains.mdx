@@ -75,6 +75,35 @@ The server trusts only the actual Traefik ingress address.
 See [Cloudflare wildcard records](https://developers.cloudflare.com/dns/manage-dns-records/reference/wildcard-dns-records/) and [API token creation](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/).
 The permissions follow [lego's Cloudflare provider](https://go-acme.github.io/lego/dns/cloudflare/).
 
+### Helm chart and k3s
+
+Set `workspaceSubdomains.enabled: true` in `site.yaml`.
+The base domain is `host`. The chart passes both settings to the server and webapp.
+Prepare DNS-only apex and wildcard records first.
+The Gateway needs a DNS-01 certificate for both `host` and `*.host`.
+
+The chart adds a wildcard HTTPRoute to the webapp alone.
+nginx rejects reserved or invalid workspace hosts and the API, auth and webhook paths on tenant hosts.
+Apex GET and HEAD requests to valid workspace paths return a 308 redirect that keeps the path and query.
+No workspace lookup controls that redirect.
+The server still checks every workspace permission.
+
+For the one-host platform, prepare a cert-manager ClusterIssuer with a DNS-01 solver for your zone.
+Keep its scoped credentials in a private Secret in cert-manager's namespace.
+Do not put a credential value in `site.yaml`.
+Use the [cert-manager DNS-01 configuration](https://cert-manager.io/docs/configuration/acme/dns01/) for your DNS provider.
+
+Make the issuer and its credential available when k3s applies the platform manifests.
+On a fresh host, protected manifests can be placed in k3s's manifests directory before the installer runs.
+Then add `--workspace-subdomains --dns01-issuer <issuer-name>` to `k3s-install.sh`.
+The installer requests the apex and wildcard certificate from that issuer.
+For a test certificate, select a test issuer. The installer's `--staging` flag controls only its built-in HTTP-01 issuer.
+
+On an existing install, update `site.yaml` yourself and prepare the wildcard certificate before the chart upgrade.
+The installer preserves an existing `site.yaml`.
+To turn workspace hosts off, set `workspaceSubdomains.enabled: false` and upgrade.
+Keep the DNS records and certificate while other services need them.
+
 ### Compose settings
 
 Use the same settings for the multi-file and single-host Compose stacks.

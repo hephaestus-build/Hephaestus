@@ -1,4 +1,4 @@
-{{- if ne (include "hephaestus.restoring" .) "true" }}
+{{- if and .Values.migration.enabled (ne (include "hephaestus.restoring" .) "true") }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "migration") }}
 # The release's database migration, once per revision: the server image in its migrate run mode
 # applies the changelog and exits. A plain Job, not a Helm hook: a pre-install hook would run before

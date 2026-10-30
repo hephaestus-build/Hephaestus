@@ -3,13 +3,13 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -63,6 +65,13 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
     private SimpleMeterRegistry meterRegistry;
 
     private ReviewJobZombieSweeper sweeper;
+
+    private static final Instant START = Instant.parse("2026-10-27T20:00:00Z");
+
+    private final AtomicReference<Instant> databaseClock = new AtomicReference<>(START);
+
+    /** The sweeper's monotonic clock, which a test advances to stall the checks. */
+    private final AtomicLong ticker = new AtomicLong();
 
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
             true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90), 16);
@@ -98,7 +107,14 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                 attemptUsage,
                 meterRegistry,
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                new ReviewJobRecovery(jobRepository, AGENT_PROPS, objectMapper, attemptUsage, Optional.empty()));
+                new ReviewJobRecovery(jobRepository, AGENT_PROPS, objectMapper, attemptUsage, Optional.empty()),
+                AGENT_PROPS);
+        sweeper.ticker = ticker::get;
+        lenient().when(jobRepository.databaseNow()).thenAnswer(inv -> databaseClock.get());
+        // The first lease check after a start reaps nothing; each test's check then follows it, past the quiet time.
+        databaseClock.set(START);
+        sweeper.recoverOrphanedJobs();
+        databaseClock.set(START.plusSeconds(30));
     }
 
     private ConfigSnapshot admittedSnapshot(int timeoutSeconds) {
@@ -114,7 +130,8 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                                 null,
                                 null,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         timeoutSeconds,
@@ -222,10 +239,94 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
     class RecoverOrphaned {
 
         @Test
+        @DisplayName("the first lease check after a start reaps nothing")
+        void shouldReapNothingWhenTheLeaseCheckRunsForTheFirstTime() {
+            var fresh = new ReviewJobZombieSweeper(
+                    jobRepository,
+                    workerRegistryRepository,
+                    objectMapper,
+                    transactionTemplate,
+                    TerminalUsageTestFixtures.attemptUsageOverMocks(jobRepository, usageRecorder),
+                    meterRegistry,
+                    new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
+                    new ReviewJobRecovery(
+                            jobRepository,
+                            AGENT_PROPS,
+                            objectMapper,
+                            TerminalUsageTestFixtures.attemptUsageOverMocks(jobRepository, usageRecorder),
+                            Optional.empty()),
+                    AGENT_PROPS);
+            clearInvocations(jobRepository);
+
+            fresh.recoverOrphanedJobs();
+
+            verify(jobRepository, never()).findExpiredLeases(any());
+        }
+
+        @Test
+        @DisplayName("a lease counts as expired only one renewal interval before the previous check")
+        void shouldGraceOneRenewalIntervalWhenItJudgesALease() {
+            sweeper.recoverOrphanedJobs();
+
+            verify(jobRepository).findExpiredLeases(START.minus(AGENT_PROPS.heartbeatInterval()));
+        }
+
+        @Test
+        @DisplayName("after a stall, no lease counts as expired until every worker could renew")
+        void shouldReapNothingForOneRenewalIntervalWhenTheChecksStalled() {
+            sweeper.recoverOrphanedJobs();
+            clearInvocations(jobRepository);
+            Instant resumed =
+                    START.plusSeconds(30).plus(ReviewJobZombieSweeper.STALL_GAP).plusSeconds(1);
+            databaseClock.set(resumed);
+            ticker.addAndGet(ReviewJobZombieSweeper.STALL_GAP.plusSeconds(1).toNanos());
+
+            sweeper.recoverOrphanedJobs();
+            databaseClock.set(resumed.plusSeconds(20));
+            sweeper.recoverOrphanedJobs();
+            verify(jobRepository, never()).findExpiredLeases(any());
+
+            databaseClock.set(resumed.plus(AGENT_PROPS.heartbeatInterval()).plusSeconds(1));
+            sweeper.recoverOrphanedJobs();
+            verify(jobRepository).findExpiredLeases(resumed.plusSeconds(20).minus(AGENT_PROPS.heartbeatInterval()));
+        }
+
+        @Test
+        @DisplayName("checks that each take longer than the stall gap still recover expired leases")
+        void shouldRecoverWhenEveryCheckIsSlow() {
+            when(jobRepository.findExpiredLeases(any())).thenAnswer(inv -> {
+                ticker.addAndGet(ReviewJobZombieSweeper.STALL_GAP.plusSeconds(5).toNanos());
+                return List.of();
+            });
+            Instant check = START.plusSeconds(30);
+            for (int i = 0; i < 3; i++) {
+                sweeper.recoverOrphanedJobs();
+                check = check.plus(ReviewJobZombieSweeper.STALL_GAP).plusSeconds(25);
+                databaseClock.set(check);
+            }
+
+            verify(jobRepository, times(3)).findExpiredLeases(any());
+        }
+
+        @Test
+        @DisplayName("a lease that a heartbeat renewed after the select is not recovered")
+        void shouldKeepTheAttemptWhenItsLeaseWasRenewedSinceTheSelect() {
+            UUID jobId = UUID.randomUUID();
+            when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
+            ReviewJob renewed = new ReviewJob();
+            renewed.setLeasedUntil(START.plusSeconds(330));
+            when(jobRepository.lockById(jobId)).thenReturn(Optional.of(renewed));
+
+            sweeper.recoverOrphanedJobs();
+
+            verify(jobRepository, never()).requeueOrphan(any(), any(), anyInt(), any());
+        }
+
+        @Test
         @DisplayName("requeues (RUNNING → QUEUED) and counts it once the CAS wins")
         void shouldRequeueWithoutUsageWhenTheOrphanMadeNoModelCalls() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
+            when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any()))
                     .thenReturn(1);
             ReviewJob persistedJob = orphanedJob(jobId, 7L, 0);
@@ -244,7 +345,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("jobs without an admission snapshot are recovered as explicitly unpriced")
         void recoversJobWithoutPriceSnapshot() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
+            when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), anyInt(), any()))
                     .thenReturn(1);
             ReviewJob legacyJob = orphanedJob(jobId, 7L, 0);
@@ -261,7 +362,8 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                                     snapshot.model().workspaceId(),
                                     null,
                                     snapshot.model().reasoningEffort(),
-                                    null),
+                                    null,
+                                    false),
                             snapshot.contextWindow(),
                             snapshot.maxOutputTokens(),
                             snapshot.timeoutSeconds(),
@@ -287,7 +389,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("does not count a requeue win if the CAS lost the race to another sweeper")
         void skipsWhenRequeueRaced() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
+            when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any()))
                     .thenReturn(0);
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(orphanedJob(jobId, 7L, 0)));
@@ -309,7 +411,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("fails (not requeues) an orphan that hit the retry cap")
         void failsOrphanPastRetryCap() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 5)));
+            when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 5)));
             ReviewJob persistedJob = orphanedJob(jobId, 7L, 5);
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(persistedJob));
             when(jobRepository.transitionStatusOwnedBy(

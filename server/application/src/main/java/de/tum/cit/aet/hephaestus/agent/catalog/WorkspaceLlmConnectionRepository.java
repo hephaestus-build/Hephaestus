@@ -30,8 +30,9 @@ public interface WorkspaceLlmConnectionRepository extends JpaRepository<Workspac
     Optional<WorkspaceLlmConnection> findByIdAndWorkspaceIdForUpdate(
             @Param("id") Long id, @Param("workspaceId") Long workspaceId);
 
-    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.catalog.LlmProbeTarget(c.baseUrl, c.authMode, c.apiKey) "
-            + "FROM WorkspaceLlmConnection c WHERE c.id = :id AND c.workspace.id = :workspaceId")
+    @Query(
+            "SELECT new de.tum.cit.aet.hephaestus.agent.catalog.LlmProbeTarget(c.baseUrl, c.authMode, c.apiKey, c.apiProtocol) "
+                    + "FROM WorkspaceLlmConnection c WHERE c.id = :id AND c.workspace.id = :workspaceId")
     Optional<LlmProbeTarget> findProbeTargetByIdAndWorkspaceId(
             @Param("id") Long id, @Param("workspaceId") Long workspaceId);
 }

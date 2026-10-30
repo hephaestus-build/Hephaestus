@@ -21,6 +21,8 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
@@ -39,6 +41,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -55,7 +58,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -82,12 +84,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -108,7 +113,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final SandboxManager sandbox = mock(SandboxManager.class);
     private final LlmBudgetService budgets = mock(LlmBudgetService.class);
     private final PracticePiAdapter practiceAgent = mock(PracticePiAdapter.class);
-    private final WorkerJwtIssuer jwtIssuer = mock(WorkerJwtIssuer.class);
+    private final AttemptTokenIssuer jwtIssuer = mock(AttemptTokenIssuer.class);
     private Optional<WorkerCapacityState> capacity = Optional.empty();
     private WorkerProperties worker = workerNamed("worker-1");
     private SandboxProperties sandboxProperties = SandboxTestLimits.PROPERTIES;
@@ -153,6 +158,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
             return callback.doInTransaction(mock(TransactionStatus.class));
         });
         var telemetry = new ReviewJobTelemetry(meters, Tracer.NOOP);
+        var callPermits = mock(LlmCallPermits.class);
+        lenient().when(callPermits.poolFor(any())).thenReturn(null);
         return new ReviewJobExecutor(
                 properties(),
                 jobs,
@@ -182,7 +189,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         budgets,
                         null,
                         telemetry,
-                        Optional.empty()),
+                        Optional.empty(),
+                        callPermits),
                 recovery);
     }
 
@@ -354,7 +362,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        when(jwtIssuer.issueForJobUntil(eq(job.getId()), eq(job.getWorkspaceId()), anyInt(), any(), any()))
+        when(jwtIssuer.issueForAttempt(
+                        eq(AttemptJwt.Kind.REVIEW), eq(job.getId()), eq(job.getWorkspaceId()), anyInt(), any(), any()))
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
@@ -607,7 +616,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                                 null,
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,
@@ -634,7 +644,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        when(jwtIssuer.issueForJobUntil(eq(job.getId()), eq(job.getWorkspaceId()), eq(2), any(), any()))
+        when(jwtIssuer.issueForAttempt(
+                        eq(AttemptJwt.Kind.REVIEW), eq(job.getId()), eq(job.getWorkspaceId()), eq(2), any(), any()))
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
@@ -659,7 +670,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var issuedDeadline = ArgumentCaptor.forClass(Instant.class);
         var issuedExpiry = ArgumentCaptor.forClass(Instant.class);
         verify(jwtIssuer)
-                .issueForJobUntil(
+                .issueForAttempt(
+                        eq(AttemptJwt.Kind.REVIEW),
                         eq(job.getId()),
                         eq(job.getWorkspaceId()),
                         eq(2),
@@ -701,6 +713,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @BeforeEach
     void sandboxRuntimeReady() {
         when(sandbox.ready()).thenReturn(true);
+        // A claim leases its attempt on the database clock.
+        lenient().when(jobs.lease(any(), anyLong())).thenReturn(1);
+        lenient().when(jobs.databaseNow()).thenAnswer(invocation -> Instant.now());
         lenient().when(sandbox.roomFor(any())).thenReturn(Integer.MAX_VALUE);
     }
 
@@ -927,6 +942,33 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldStopTheLocalAttemptOfAJobWhoseRowThisWorkerNoLongerRuns(boolean stillRuns) {
+        var job = configuredJob();
+        var properties = mock(WorkerProperties.class);
+        when(properties.resolvedWorkerId()).thenReturn("worker-1");
+        worker = properties;
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        // A cancel, a requeue or a reap ended the attempt on its row alone.
+        when(jobs.findRunningIdsOwnedBy("worker-1", Set.of(job.getId())))
+                .thenReturn(stillRuns ? List.of(job.getId()) : List.of());
+
+        executor.stopEndedAttempts();
+
+        verify(sandbox, stillRuns ? never() : times(1)).cancel(job.getId());
+    }
+
     @Test
     void shouldNotCancelAJobThisWorkerDoesNotOwn() {
         assertThat(executor(mock(AsyncTaskExecutor.class)).cancelLocalJob(UUID.randomUUID(), "cancelled"))
@@ -1000,7 +1042,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                                 null,
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,
@@ -1124,7 +1167,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                                 null,
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,
@@ -1147,7 +1191,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var now = Instant.now();
         var source = new SourceKind("scm.pull-request.diff");
-        var contract = new SourceContractVersion("2.0.0");
+        var contract = new SourceContractVersion("3.0.0");
         var readiness = new AutomatedReviewReadinessDecision(
                 "clear-names",
                 now,

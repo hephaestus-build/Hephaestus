@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -27,7 +27,115 @@ import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
 const PREFIX = "Review this captured work.\n\nShared work description and diff.\n\n";
 const JOB = "10000000-0000-4000-8000-000000000001";
 
-/** Native SDK requests stop at this local proxy; no provider response or cache hit is simulated. */
+void test("Responses preserves text and roles with system, change and core cache boundaries", async () => {
+	await wire(async ({ open, bodies }) => {
+		const prefix = "task\nchange\ncore\nindex\n";
+		const session = await open(
+			{ apiProtocol: "openai-responses", modelId: "gpt-6-luna" },
+			9,
+			JOB,
+			prefix,
+			[12, 17],
+		);
+		await session.prompt(`${prefix}Evaluate alpha.`);
+		const body = bodies[0];
+		assert.ok(body && Array.isArray(body.input));
+		assert.equal("prompt_cache_retention" in body, false);
+		assert.equal("prompt_cache_options" in body, false);
+		const user = firstUser(body);
+		assert.ok(Array.isArray(user.content));
+		assert.deepEqual(
+			user.content.map((entry: unknown) => {
+				assert.ok(isRecord(entry));
+				return entry.text;
+			}),
+			["task\nchange\n", "core\n", "index\nEvaluate alpha."],
+		);
+		assert.equal(JSON.stringify(body).match(/prompt_cache_breakpoint/gu)?.length, 3);
+		const system: unknown = body.input[0];
+		assert.ok(isRecord(system));
+		assert.equal(system.role, "system");
+		assert.ok(Array.isArray(system.content));
+		const instructions: unknown = system.content[0];
+		assert.ok(isRecord(instructions) && typeof instructions.text === "string");
+		assert.equal(instructions.text, session.systemPrompt);
+		assert.partialDeepStrictEqual(instructions, {
+			type: "input_text",
+			prompt_cache_breakpoint: { mode: "explicit" },
+		});
+	});
+});
+
+void test("native Responses emits message_start at headers and message_update only after SSE body data", async () => {
+	const bodyReady = Promise.withResolvers<undefined>();
+	try {
+		await wire(
+			async ({ open }) => {
+				const session = await open({ apiProtocol: "openai-responses", modelId: "gpt-6-luna" });
+				const headers = Promise.withResolvers<undefined>();
+				let receivedContent = false;
+				const unsubscribe = session.subscribe((event) => {
+					if (event.type === "message_start" && event.message.role === "assistant") {
+						headers.resolve(undefined);
+					}
+					if (event.type === "message_update") {
+						receivedContent = true;
+					}
+				});
+				try {
+					const reply = session.prompt(`${PREFIX}Evaluate alpha.`);
+					await headers.promise;
+					assert.equal(
+						receivedContent,
+						false,
+						"headers do not prove that provider body data arrived",
+					);
+					bodyReady.resolve(undefined);
+					await reply;
+					assert.equal(receivedContent, true, "the native SSE response produces a content update");
+				} finally {
+					unsubscribe();
+				}
+			},
+			(response) => {
+				response.writeHead(200, { "content-type": "text/event-stream" });
+				response.flushHeaders();
+				void bodyReady.promise.then(() => {
+					const part = { type: "output_text", text: "ok", annotations: [] };
+					const item = { id: "m", type: "message", role: "assistant", content: [part] };
+					for (const event of [
+						{ type: "response.created", response: { id: "r", status: "in_progress", output: [] } },
+						{ type: "response.output_item.added", output_index: 0, item: { ...item, content: [] } },
+						{
+							type: "response.content_part.added",
+							output_index: 0,
+							content_index: 0,
+							part: { ...part, text: "" },
+						},
+						{ type: "response.output_text.delta", output_index: 0, content_index: 0, delta: "ok" },
+						{ type: "response.output_item.done", output_index: 0, item },
+						{
+							type: "response.completed",
+							response: {
+								id: "r",
+								status: "completed",
+								output: [item],
+								usage: { input_tokens: 100, output_tokens: 1 },
+							},
+						},
+					]) {
+						response.write(`data: ${JSON.stringify(event)}\n\n`);
+					}
+					response.end("data: [DONE]\n\n");
+				});
+			},
+		);
+	} finally {
+		bodyReady.resolve(undefined);
+	}
+});
+
+/** Native SDK calls stop at this local server; no external provider is contacted. */
 async function wire(
 	run: (context: {
 		open: (
@@ -35,9 +143,11 @@ async function wire(
 			workspace?: number,
 			job?: string,
 			prefix?: string,
+			boundaries?: readonly number[],
 		) => Promise<Awaited<ReturnType<typeof createAgentSession>>["session"]>;
 		bodies: Record<string, unknown>[];
 	}) => Promise<void>,
+	respond?: (response: ServerResponse) => void,
 ) {
 	const bodies: Record<string, unknown>[] = [];
 	const server = createServer((request, response) => {
@@ -49,6 +159,10 @@ async function wire(
 			const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 			assert.ok(isRecord(body));
 			bodies.push(body);
+			if (respond !== undefined) {
+				respond(response);
+				return;
+			}
 			response.writeHead(400, { "content-type": "application/json" });
 			response.end(
 				JSON.stringify({
@@ -72,16 +186,29 @@ async function wire(
 			allowModelNetwork: false,
 		});
 		const settingsManager = SettingsManager.inMemory({ retry: { enabled: false } });
-		const open = async (config: ProviderConfig, workspace = 9, job = JOB, prefix = PREFIX) => {
+		const open = async (
+			config: ProviderConfig,
+			workspace = 9,
+			job = JOB,
+			prefix = PREFIX,
+			boundaries: readonly number[] = [],
+		) => {
 			assert.ok(
 				registerHephaestusProvider(modelRuntime, config, {
-					LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
+					LLM_PROXY_URL: `http://127.0.0.1:${address.port}${config.apiProtocol === "anthropic-messages" ? "" : "/v1"}`,
 					LLM_PROXY_TOKEN: "test-only",
 				}),
 			);
 			const model = modelRuntime.getModel("hephaestus", config.modelId);
 			assert.ok(model);
-			const cache = assessmentCacheExtension(config, modelRuntime, prefix, workspace, job);
+			const cache = assessmentCacheExtension(
+				config,
+				modelRuntime,
+				prefix,
+				workspace,
+				job,
+				boundaries,
+			);
 			const resourceLoader = new DefaultResourceLoader({
 				cwd,
 				agentDir: cwd,
@@ -270,5 +397,67 @@ void test("Chat Completions does not receive Responses cache fields", async () =
 		assert.ok(body && Array.isArray(body.messages));
 		assert.equal(JSON.stringify(body).includes("prompt_cache_breakpoint"), false);
 		assert.equal("prompt_cache_options" in body, false);
+	});
+});
+
+void test("Anthropic caches the system, change and core with five-minute TTL and keeps the session slot", async () => {
+	await wire(async ({ open, bodies }) => {
+		const prefix = "task\nchange\ncore\nindex\n";
+		const config = {
+			apiProtocol: "anthropic-messages",
+			modelId: "review-alias",
+			forcedToolChoice: true,
+		};
+		for (const practice of ["Evaluate alpha.", "Evaluate beta."]) {
+			const session = await open(config, 9, JOB, prefix, [12, 17]);
+			await session.prompt(`${prefix}${practice}`);
+			await session.prompt("Repair the citation.");
+		}
+		assert.equal(bodies.length, 4);
+		for (const [at, body] of bodies.entries()) {
+			assert.equal("prompt_cache_key" in body, false);
+			assert.equal("prompt_cache_breakpoint" in body, false);
+			assert.equal(JSON.stringify(body).match(/cache_control/gu)?.length, 4);
+			assert.doesNotMatch(JSON.stringify(body), /"ttl":"1h"/u);
+			assert.ok(Array.isArray(body.tools));
+			assert.ok(body.tools.every((tool: unknown) => isRecord(tool) && !("cache_control" in tool)));
+			assert.ok(Array.isArray(body.system));
+			assert.partialDeepStrictEqual(body.system.at(-1), {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+			assert.ok(Array.isArray(body.messages));
+			const first: unknown = body.messages[0];
+			assert.ok(isRecord(first) && Array.isArray(first.content));
+			const texts = first.content.map((part: unknown) => {
+				assert.ok(isRecord(part));
+				return part.text;
+			});
+			assert.deepEqual(texts.slice(0, 2), ["task\nchange\n", "core\n"]);
+			assert.equal(texts.join(""), `${prefix}${at < 2 ? "Evaluate alpha." : "Evaluate beta."}`);
+			assert.partialDeepStrictEqual(first.content[0], {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+			assert.partialDeepStrictEqual(first.content[1], {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+			const last: unknown = body.messages.at(-1);
+			assert.ok(isRecord(last) && Array.isArray(last.content));
+			assert.partialDeepStrictEqual(last.content.at(-1), {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+		}
+		assert.deepEqual(bodies[0]?.tools, bodies[2]?.tools);
+		assert.deepEqual(bodies[0]?.system, bodies[2]?.system);
+	});
+});
+
+void test("Anthropic retains system and session caching when the exact opening is unavailable", async () => {
+	await wire(async ({ open, bodies }) => {
+		const session = await open({ apiProtocol: "anthropic-messages", modelId: "review-alias" });
+		await session.prompt("Compacted context without the original opening.");
+		const body = bodies[0];
+		assert.ok(body);
+		assert.equal(JSON.stringify(body).match(/cache_control/gu)?.length, 2);
+		assert.doesNotMatch(JSON.stringify(body), /prompt_cache_/u);
 	});
 });

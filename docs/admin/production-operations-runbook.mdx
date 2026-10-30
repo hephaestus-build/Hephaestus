@@ -30,13 +30,13 @@ A switch cannot recall a request that a provider already accepted.
 
 | Control and location                                                                                                                | What it stops                                                                                                                                                                                                                                                                                | What it does not stop                                                                                                            |
 | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, Heph replies, weekly digest notes, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, webhook-redelivery, and operator-alert exemptions |
-| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers                                            | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, Heph turns, sync, or every external write. Not a runtime global AI stop                               |
+| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, Hephaestus replies, weekly digest notes, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, webhook-redelivery, and operator-alert exemptions |
+| `AGENT_ENABLED=false`, deployment environment on submitting servers and claiming workers                                            | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, conversation turns, sync, or every external write. Not a runtime global AI stop                               |
 | Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews**                                   | Their respective review entry points                                                                                                                                                                                                                                                         | Other workspaces, existing work, or external delivery already in progress                                                        |
 | Workspace/group/practice Feedback mode **Off**                                                                                      | New feedback at all destinations                                                                                                                                                                                                                                                             | Eligible reviews and stored results                                                                                              |
-| Workspace **Sending feedback → Send feedback** off                                                                                  | External practice feedback and Heph delivery for that workspace                                                                                                                                                                                                                            | Measurement and in-app feedback. Not an instance restore boundary                                                                |
-| Recipient **Comments on your work** off                                                                                             | Covered feedback comments for that recipient                                                                                                                                                                                                                                                 | All other recipients, integration plumbing, or all Heph activity                                                                 |
-| Every **Heph** row turned off under the workspace's **AI models**. `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features                                                                                                                                                                                                                                                             | SCM writes, other AI work, or restored database credentials                                                                      |
+| Workspace **Sending feedback → Send feedback** off                                                                                  | External practice feedback and Hephaestus delivery for that workspace                                                                                                                                                                                                                            | Measurement and in-app feedback. Not an instance restore boundary                                                                |
+| Recipient **Comments on your work** off                                                                                             | Covered feedback comments for that recipient                                                                                                                                                                                                                                                 | All other recipients, integration plumbing, or all Hephaestus activity                                                                 |
+| Every **Conversations** row turned off under the workspace's **AI models**. `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features                                                                                                                                                                                                                                                             | SCM writes, other AI work, or restored database credentials                                                                      |
 | Model/connection disabled. Each funding source's budget set to zero                                                                 | Work using that model/connection or budget                                                                                                                                                                                                                                                   | Other funding sources. Already-incurred costs. Budgets are not strict reservations                                               |
 
 [Practice review](./practice-review#feedback-mode-review-scope-and-delivery) defines workspace and recipient
@@ -112,7 +112,7 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 31. Remain silent if writes are unexplained, migrations fail, or spend is unaccounted for.
 32. If necessary, use recovery below.
 
-33. **Turn off silent mode deliberately**. Only after the rollout gates pass, review all workspace review scope, account consent, Heph settings, and feedback mode.
+33. **Turn off silent mode deliberately**. Only after the rollout gates pass, review all workspace review scope, account consent, Hephaestus settings, and feedback mode.
 34. After the rollout gates pass, turn silent mode off with the current ETag.
 35. Prefer **Approve first** for a bounded pilot.
 36. Prove that old suppressed work stays suppressed.
@@ -189,7 +189,7 @@ The supported self-host clone needs a separate host.
 Its Compose project name and network/subnet are fixed.
 A different directory or `-p` alone does not provide isolation.
 Silent mode permits model calls and control-plane traffic.
-A disabled Heph row alone is never an isolation boundary.
+A disabled Hephaestus row alone is never an isolation boundary.
 
 1. Stop ingress, all server/worker replicas, and active sandboxes.
 2. Suspend automatic restarts/reconcilers.
@@ -205,7 +205,7 @@ A disabled Heph row alone is never an isolation boundary.
     Removal of `.env` seeds does not remove database-backed credentials.
 
 11. Keep network denial while inspecting those credentials.
-12. Before interactive access, turn off all Heph model rows.
+12. Before interactive access, turn off all conversation model rows.
     The restore-clone lockdown does this.
 13. Arrange admin authentication under isolation before the drill.
 14. If admin authentication is unavailable, stop.
@@ -393,9 +393,9 @@ The system does not treat it as never delivered.
 2. If the preview is stale, inspect the current locators before confirming removal again.
 
    Practice results and feedback belong to the developer they describe.
-   The person's own results and feedback are exported and erased, including feedback copies in another person's Heph conversation.
+   The person's own results and feedback are exported and erased, including feedback copies in another person's conversation.
    Another developer's results and feedback remain, even when the person commented on that work.
-   Instead, erasure removes the review's captured inputs and Heph's hidden memory in affected workspaces.
+   Instead, erasure removes the review's captured inputs and Hephaestus's hidden memory in affected workspaces.
 
    Exact provider-key suppression is separate from the audit receipt.
    It prevents further processing of the erased identity.
@@ -509,19 +509,19 @@ Deleting in-app data does not delete a provider comment. If external copies must
      AND f.id = :'feedback_id'::uuid;
    ```
 
-8. For conversation copies, follow `mentor_entry_id` to the `mentor_entry` row of the Heph message that showed the feedback.
+8. For conversation copies, follow `mentor_entry_id` to the `mentor_entry` row of the Hephaestus message that showed the feedback.
 
    `mentor_turn_id` is the turn that claimed the feedback.
-   A copy with `mentor_turn_id` and no `mentor_entry_id` has no stored Heph message that showed it.
+   A copy with `mentor_turn_id` and no `mentor_entry_id` has no stored Hephaestus message that showed it.
    For that copy, find the turn's question as described below.
-   A copy from before the upgrade to one Heph conversation per developer has neither value.
+   A copy from before the upgrade to one conversation per developer has neither value.
 
    Read the message's `conversation_id`, `turn_id`, and `surface`.
    A message with the surface `APP` has no Slack copy.
    For a thread, follow `mentor_conversation.parent_conversation_id` to the main conversation.
    The main conversation's `slack_team_id`, `slack_user_id`, and `slack_channel_id` identify the Slack DM.
 
-   One Slack message shows all Heph messages of a turn.
+   One Slack message shows all Hephaestus messages of a turn.
    The question of the turn records the state of that Slack reply: it is the `mentor_entry` row with the same `turn_id` and the kind `USER`.
    Read its `slack_delivery` and `slack_stream_ts`.
    Then read `slack_ts` of the last `HEPH` row of the turn.
@@ -551,7 +551,7 @@ Deleting in-app data does not delete a provider comment. If external copies must
     | GitHub inline review comment                 | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request)           |
     | GitLab issue or merge-request note           | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/)    |
     | GitLab discussion/diff note                  | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note)                                                    |
-    | Slack feedback or Heph answer                | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
+    | Slack feedback or Hephaestus answer                | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
     | Outline                                      | No current external feedback destination. Do not delete source documents as a substitute for removing feedback                                                                      |
 
     A submitted GitHub review/approval is not an issue comment.

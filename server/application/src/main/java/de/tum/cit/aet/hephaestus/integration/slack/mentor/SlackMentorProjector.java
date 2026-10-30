@@ -48,7 +48,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Projects the Heph turns asked in Slack into the developer's Slack DM, on the server that claims the question
+ * Projects the conversation turns asked in Slack into the developer's Slack DM, on the server that claims the question
  * ({@link MentorSlackDelivery#claim}). {@code docs/contributor/unified-pi-runtime.mdx} § Slack replies tells what each
  * reply shows and how each case ends.
  */
@@ -79,11 +79,12 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     /** How long a question waits for its turn to start before the developer is told why nothing happens. */
     static final Duration WAITING_NOTICE_AFTER = Duration.ofSeconds(10);
 
-    static final String WAITING_NOTICE = "Heph has not started on this question yet. It answers as soon as it can.";
+    static final String WAITING_NOTICE =
+            "Hephaestus has not started on this question yet. It answers as soon as it can.";
 
-    /** The notice while the question waits for a free Heph ({@link MentorTurn.WaitingFor#FREE_HEPH}). */
+    /** The notice while the question waits for a free Hephaestus ({@link MentorTurn.WaitingFor#FREE_HEPH}). */
     static final String WAITING_FOR_HEPH_NOTICE =
-            "Heph is answering other questions and starts on this one when it is free.";
+            "Hephaestus is answering other questions. Yours starts when one finishes.";
 
     /**
      * How far Slack's clock may differ from this server's when the stream that a refused start may have opened is
@@ -105,7 +106,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /**
      * The Slack error of a stream that is not open. Slack ends a stream on its own after a timeout that it does not
-     * document, for example while Heph waits for a tool. A developer stop also makes the turn {@code STOPPED}.
+     * document, for example while Hephaestus waits for a tool. A developer stop also makes the turn {@code STOPPED}.
      */
     private static final String NOT_STREAMING = "message_not_in_streaming_state";
 
@@ -266,7 +267,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                 try {
                     step(projection);
                 } catch (RuntimeException e) {
-                    log.warn("Slack Heph projection failed: turnId={}", projection.turnId, e);
+                    log.warn("Slack Hephaestus projection failed: turnId={}", projection.turnId, e);
                 }
             }
         } finally {
@@ -304,7 +305,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             return;
         }
         if (status != MentorTurn.Status.RUNNING && turn.isLeased()) {
-            return; // Stopped; its host still commits what Heph wrote.
+            return; // Stopped; its host still commits what Hephaestus wrote.
         }
         if (projection.owner == Owner.UNKNOWN && !take(projection, status)) {
             return;
@@ -328,7 +329,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     /**
      * Tells the developer once that their question waits, when its turn has not run {@link #WAITING_NOTICE_AFTER} after
      * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. The notice says
-     * that Heph answers other questions only when the question waits for a free Heph ({@link MentorTurnWaits}). It
+     * that Hephaestus answers other questions only when the question waits for a free Hephaestus ({@link MentorTurnWaits}). It
      * goes once the turn runs or ends. A turn that already ran and waits again gets none: it did start. The notice
      * does not claim the reply: a claim before the turn runs would leave the reply with this server, and a restart
      * during the wait would lose the answer. So it relies on the one server that the chart runs, which also keeps the
@@ -361,7 +362,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                         SlackMentorPosts.noticeMetadata());
             } catch (SlackSendException e) {
                 log.warn(
-                        "Slack could not show that a Heph question waits: workspaceId={}, turnId={}, error={}",
+                        "Slack could not show that a Hephaestus question waits: workspaceId={}, turnId={}, error={}",
                         projection.workspaceId,
                         projection.turnId,
                         e.slackError());
@@ -380,7 +381,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             slack.deleteMessage(projection.workspaceId, notice.channelId(), notice.ts());
         } catch (SlackSendException e) {
             log.warn(
-                    "Slack could not remove the notice that a Heph question waited: workspaceId={}, turnId={}, error={}",
+                    "Slack could not remove the notice that a Hephaestus question waited: workspaceId={}, turnId={}, error={}",
                     projection.workspaceId,
                     projection.turnId,
                     e.slackError());
@@ -418,7 +419,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         projections.remove(projection.turnId, projection);
     }
 
-    /** Claims the question, and for a running turn shows that Heph works on it. {@code false} when it is not ours. */
+    /** Claims the question, and for a running turn shows that Hephaestus works on it. {@code false} when it is not ours. */
     private boolean take(Projection projection, MentorTurn.Status status) {
         long workspaceId = projection.workspaceId;
         Optional<SlackTurn> found = delivery.slackTurn(workspaceId, projection.turnId);
@@ -439,7 +440,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     }
 
     /**
-     * Shows that Heph works on a running turn that this server owns: the reaction, and in a thread the stream and
+     * Shows that Hephaestus works on a running turn that this server owns: the reaction, and in a thread the stream and
      * Slack's Stop. The notice that the question waited goes.
      */
     private void show(Projection projection, SlackTurn turn) {
@@ -467,7 +468,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             }
         } catch (SlackSendException e) {
             log.warn(
-                    "Slack could not show that Heph works: workspaceId={}, turnId={}, error={}",
+                    "Slack could not show that Hephaestus works: workspaceId={}, turnId={}, error={}",
                     workspaceId,
                     projection.turnId,
                     e.slackError());
@@ -479,7 +480,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     }
 
     /**
-     * Shows in the reply's Slack thread that Heph works, with Slack's Stop, while this attempt is the thread's running
+     * Shows in the reply's Slack thread that Hephaestus works, with Slack's Stop, while this attempt is the thread's running
      * Slack work. An attempt that no longer runs shows nothing.
      */
     private void showWorking(long workspaceId, ReplyStream stream) {
@@ -494,7 +495,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                     });
         } catch (SlackSendException e) {
             log.warn(
-                    "Slack could not show that Heph works in its thread: workspaceId={}, turnId={}, error={}",
+                    "Slack could not show that Hephaestus works in its thread: workspaceId={}, turnId={}, error={}",
                     workspaceId,
                     stream.turnId,
                     e.slackError());
@@ -505,7 +506,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
      * Makes one Slack call that changes the agent session of a reply's Slack thread, under the thread's guard
      * ({@link MentorSlackDelivery#callInThreadSession}).
      *
-     * @throws SlackSendException {@code no_active_slack_connection}, without a call, when the turn's Heph thread no
+     * @throws SlackSendException {@code no_active_slack_connection}, without a call, when the turn's Hephaestus thread no
      *     longer belongs to that Slack thread of the DM, as after a Slack disconnect
      */
     private void inSession(
@@ -524,7 +525,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         }
     }
 
-    /** Sends the part of Heph's partial answer that Slack does not show yet. */
+    /** Sends the part of Hephaestus's partial answer that Slack does not show yet. */
     private void stream(Projection projection, ReplyStream stream, MentorTurn turn) {
         if (turn.getAttempt() != stream.attempt) {
             restart(projection, stream);
@@ -536,9 +537,9 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             return;
         }
         if (!text.startsWith(stream.sent)) {
-            // Heph's answer no longer starts with what Slack shows, for example after a retried model call.
+            // Hephaestus's answer no longer starts with what Slack shows, for example after a retried model call.
             stream.end = StreamEnd.REPLACE;
-            log.info("Slack stream of Heph turn {} shows text the answer no longer has", projection.turnId);
+            log.info("Slack stream of conversation turn {} shows text the answer no longer has", projection.turnId);
             return;
         }
         if (text.substring(stream.sent.length()).isBlank()) {
@@ -561,7 +562,10 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             if (stream.end == StreamEnd.SEND_REST) {
                 later(projection, APPEND_INTERVAL);
             } else {
-                log.info("Slack stream of Heph turn {} takes no more text: {}", projection.turnId, e.slackError());
+                log.info(
+                        "Slack stream of conversation turn {} takes no more text: {}",
+                        projection.turnId,
+                        e.slackError());
             }
         }
         stream.next = clock.instant().plus(APPEND_INTERVAL);
@@ -681,7 +685,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /**
      * Sends the reply of a turn that ended, settles its question, and ends Slack's working state. The reply is
-     * Heph's answer; or the reason the turn failed; or nothing when the developer stopped the turn before Heph wrote
+     * Hephaestus's answer; or the reason the turn failed; or nothing when the developer stopped the turn before Hephaestus wrote
      * anything or deleted the question.
      *
      * @param stream the reply's stream on this server; {@code null} for a top-level reply or a reconciled one
@@ -951,7 +955,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         long workspaceId = turn.turn().getWorkspaceId();
         UUID questionId = turn.question().getId();
         log.warn(
-                "Slack did not end or replace the stream of Heph's reply: workspaceId={}, turnId={}, error={}",
+                "Slack did not end or replace the stream of Hephaestus's reply: workspaceId={}, turnId={}, error={}",
                 workspaceId,
                 turn.turn().getId(),
                 e.slackError());
@@ -1000,7 +1004,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                         session -> slack.setSessionStatus(workspaceId, turn.channelId(), threadTs, session.working()));
             } catch (SlackSendException e) {
                 log.debug(
-                        "Slack session status of Heph turn {} did not settle: {}",
+                        "Slack session status of conversation turn {} did not settle: {}",
                         turn.turn().getId(),
                         e.slackError());
             }
@@ -1014,7 +1018,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                     turn.turn().getWorkspaceId(), turn.channelId(), questionTs, SlackMentorPosts.WORKING_EMOJI, false);
         } catch (SlackSendException e) {
             log.debug(
-                    "Slack working state of Heph turn {} did not end: {}",
+                    "Slack working state of conversation turn {} did not end: {}",
                     turn.turn().getId(),
                     e.slackError());
         }
@@ -1119,7 +1123,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     /** The stream of a reply in a Slack thread that this server projects. Changes under its projection's lock. */
     private static final class ReplyStream {
         final UUID turnId;
-        /** The Heph thread, whose session calls are guarded ({@link MentorSlackDelivery#callInThreadSession}). */
+        /** The Hephaestus thread, whose session calls are guarded ({@link MentorSlackDelivery#callInThreadSession}). */
         final UUID conversationId;
 
         final String channelId;
@@ -1130,7 +1134,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         @Nullable
         String ts;
 
-        /** The text of Heph's reply that the stream shows; after an append with an unknown effect, it may show more. */
+        /** The text of Hephaestus's reply that the stream shows; after an append with an unknown effect, it may show more. */
         String sent = "";
 
         StreamEnd end = StreamEnd.SEND_REST;

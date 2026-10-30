@@ -59,9 +59,9 @@ export function UserViewDialog({
 					<DialogHeader>
 						<DialogTitle>View as {name}</DialogTitle>
 						<DialogDescription>
-							You can view this user’s workspace pages, including private feedback and saved Heph
-							conversations. Access is read-only, and you stay signed in as yourself. Each access is
-							audited. You cannot change this user’s account or settings.
+							You can view this user’s workspace pages, including private feedback and saved
+							Hephaestus conversations. Access is read-only, and you stay signed in as yourself.
+							Each access is audited. You cannot change this user’s account or settings.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="py-1">

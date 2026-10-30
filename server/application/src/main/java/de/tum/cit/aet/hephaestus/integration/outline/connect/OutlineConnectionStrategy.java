@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient.OutlineIdentity;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
-import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import java.util.Map;
@@ -56,7 +55,6 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     private final OutlineWebhookRegistrar webhookRegistrar;
     private final OutlineDocumentRepository outlineDocumentRepository;
     private final OutlineCollectionRepository outlineCollectionRepository;
-    private final OutlineDocumentEventRepository outlineDocumentEventRepository;
     private final OutlineOriginPolicy originPolicy;
 
     public OutlineConnectionStrategy(
@@ -64,13 +62,11 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
             OutlineWebhookRegistrar webhookRegistrar,
             OutlineDocumentRepository outlineDocumentRepository,
             OutlineCollectionRepository outlineCollectionRepository,
-            OutlineDocumentEventRepository outlineDocumentEventRepository,
             OutlineOriginPolicy originPolicy) {
         this.outlineApiClient = outlineApiClient;
         this.webhookRegistrar = webhookRegistrar;
         this.outlineDocumentRepository = outlineDocumentRepository;
         this.outlineCollectionRepository = outlineCollectionRepository;
-        this.outlineDocumentEventRepository = outlineDocumentEventRepository;
         this.originPolicy = originPolicy;
     }
 
@@ -116,15 +112,13 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     public void eraseLocalData(IntegrationRef ref) {
         long erased = outlineDocumentRepository.deleteByWorkspaceId(ref.workspaceId());
         long collections = outlineCollectionRepository.deleteByWorkspaceId(ref.workspaceId());
-        long events = outlineDocumentEventRepository.deleteByWorkspaceId(ref.workspaceId());
-        if (erased > 0 || collections > 0 || events > 0) {
+        if (erased > 0 || collections > 0) {
             log.info(
-                    "outline.audit: disconnect erase — actor={} erased {} mirrored document(s), {} collection registration(s) and {} document event(s) for workspace={}",
+                    "outline.audit: disconnect erase — actor={} erased {} mirrored document(s), and {} collection registration(s) for workspace={}",
                     LoggingUtils.sanitizeForLog(
                             SecurityUtils.getCurrentUserLogin().orElse("system")),
                     erased,
                     collections,
-                    events,
                     ref.workspaceId());
         }
     }

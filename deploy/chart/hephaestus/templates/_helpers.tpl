@@ -84,7 +84,7 @@ capabilities:
 {{- end -}}
 
 {{/*
-The sandbox namespace, of review sandboxes, the Heph host and turn sandboxes. The operator creates
+The sandbox namespace, of review sandboxes, the conversation host and turn sandboxes. The operator creates
 it with the Restricted Pod Security level and names it here; the chart writes into it and never
 creates it. The worker receives the same string, and the runtime derives no name of its own.
 */}}
@@ -404,7 +404,7 @@ readinessProbe:
 {{- end -}}
 
 {{/*
-The sandbox pods that may reach the workers' gateway: review sandboxes and Heph hosts, by their kind.
+The sandbox pods that may reach the workers' gateway: review sandboxes and conversation hosts, by their kind.
 A sandbox's credential, not this selector, binds it to its own worker. Turn sandboxes never match.
 */}}
 {{- define "hephaestus.policy.gatewaySources" -}}
@@ -544,13 +544,13 @@ spec:
     # The backup client certificate. The key belongs to root and the fsGroup 999.
     - name: tls
       secret:
-        secretName: {{ include "hephaestus.postgresqlTlsSecret" $root }}
+        secretName: {{ required "postgresql.backup.clientTlsSecret is required with backups" $root.Values.postgresql.backup.clientTlsSecret }}
         items:
           - key: ca.crt
             path: ca.crt
-          - key: backup.crt
+          - key: tls.crt
             path: backup.crt
-          - key: backup.key
+          - key: tls.key
             path: backup.key
         defaultMode: 288 # 0440
     - name: tmp
@@ -567,15 +567,15 @@ PostgreSQL volume.
 {{- end -}}
 
 {{/*
-The Heph turns that one worker runs at once, as a number: worker.hephTurns, where auto is the autoHephTurns of
-sandbox-pod-requests.json, the number that the worker itself resolves auto to. The worker's capacity, the server's
+The conversation turns that one worker runs at once, as a number: worker.conversationTurns, where auto is
+the autoConversationTurns of sandbox-pod-requests.json, the number that the worker itself resolves auto to. The worker's capacity, the server's
 capacity and the sandbox quotas all read it here.
 */}}
-{{- define "hephaestus.hephTurns" -}}
-{{- if eq (toString .Values.worker.hephTurns) "auto" -}}
-{{- (.Files.Get "sandbox-pod-requests.json" | fromJson).autoHephTurns | int -}}
+{{- define "hephaestus.conversationTurns" -}}
+{{- if eq (toString .Values.worker.conversationTurns) "auto" -}}
+{{- (.Files.Get "sandbox-pod-requests.json" | fromJson).autoConversationTurns | int -}}
 {{- else -}}
-{{- .Values.worker.hephTurns | int -}}
+{{- .Values.worker.conversationTurns | int -}}
 {{- end -}}
 {{- end -}}
 

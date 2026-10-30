@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { rehearsalRelease, rehearseChart } from "./rehearse-chart-signing.ts";
+import { rehearseChart } from "./rehearse-chart-signing.ts";
 import type { Execute } from "./release-chart.ts";
 
 const source = fileURLToPath(new URL("../deploy/chart/hephaestus", import.meta.url));
@@ -41,7 +41,7 @@ function helm() {
 		}
 		if (mode === "pull") {
 			const bytes = registry.get(target.replace(/^oci:\/\//u, "")) ?? "";
-			const name = `hephaestus-${rehearsalRelease("42").slice(1)}.tgz`;
+			const name = `hephaestus@${pushed.replace(":", "-")}.tgz`;
 			await writeFile(path.join(option(args, "--destination"), name), bytes);
 			return "";
 		}

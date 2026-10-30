@@ -47,8 +47,8 @@
  *       store and exposed via the {@code IdentityProviderCatalog}/{@code GitProviderRegistry} SPI
  *       ports implemented in {@code integration.identity.connect}.
  *   <li>ArchUnit ({@code NoKeycloakImportTest}) forbids any {@code org.keycloak.*} import. {@code
- *       com.auth0:java-jwt} is intentionally retained (worker-control-channel + GitHub App token
- *       JWTs) and is NOT banned.
+ *       com.auth0:java-jwt} is intentionally retained (the attempt tokens of sandboxes + GitHub App
+ *       token JWTs) and is NOT banned.
  * </ul>
  *
  * <p>See ADR 0017 for the full rationale.

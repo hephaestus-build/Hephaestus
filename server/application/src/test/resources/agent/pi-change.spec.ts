@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { environmentForGitFixture } from "../../../../../../scripts/lib/git-environment.ts";
+
 import {
 	annotateDiff,
 	authoredDescription,
@@ -141,15 +143,12 @@ N/A
 function git(repository: string, ...args: string[]): string {
 	return execFileSync("git", ["-C", repository, ...args], {
 		encoding: "utf8",
-		env: {
-			...process.env,
+		env: environmentForGitFixture({
 			GIT_AUTHOR_NAME: "Ada",
 			GIT_AUTHOR_EMAIL: "ada@example.invalid",
 			GIT_COMMITTER_NAME: "Ada",
 			GIT_COMMITTER_EMAIL: "ada@example.invalid",
-			GIT_CONFIG_GLOBAL: "/dev/null",
-			GIT_CONFIG_SYSTEM: "/dev/null",
-		},
+		}),
 	}).trim();
 }
 

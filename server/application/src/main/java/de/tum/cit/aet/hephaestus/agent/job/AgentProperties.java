@@ -17,11 +17,12 @@ import org.springframework.validation.annotation.Validated;
  * @param enabled           Turns on agent jobs, which run practice reviews. The server role submits jobs and the
  *                          worker role runs them, so set it on both.
  * @param pollInterval      how long the poll loop sleeps when a poll claimed nothing
- * @param claimBatchSize    max QUEUED jobs considered per poll iteration
+ * @param claimBatchSize    Maximum candidate batch. A blocked endpoint does not consume a local execution slot.
  * @param maxRetries        How many times a job whose worker was lost goes back to the queue before it fails. The
  *                          counter is the attempt number less the attempts that a worker's drain stopped or that
  *                          found no sandbox room: those spend no retry.
- * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats
+ * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats, which also renew the leases of
+ *     the review attempts that the worker runs
  * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code capture}
  *                          and {@code output} are stripped to NULL
  * @param rowRetention      Age, counted from the end of a job, at which an ended job row that waits for no delivery

@@ -392,13 +392,18 @@ class KubernetesSandboxRuntimeTest {
                         .longValueExact())
                 .as("the stager writes the workspace to disk, not into its memory")
                 .isEqualTo(32L * 1024 * 1024);
-        for (Container each : pod.getSpec().getContainers()) {
-            var limits = each.getResources().getLimits();
-            var requests = each.getResources().getRequests();
-            assertThat(Quantity.getAmountInBytes(requests.get("cpu")).multiply(BigDecimal.TEN))
-                    .as(each.getName())
-                    .isEqualByComparingTo(Quantity.getAmountInBytes(limits.get("cpu")));
-        }
+        // An idle turn Pod requests 25m of CPU, so that a rolling update fits a second worker's pool on one node; a
+        // turn's short bursts run on the limits.
+        assertThat(Quantity.getAmountInBytes(
+                        sandbox.getResources().getRequests().get("cpu")))
+                .isEqualByComparingTo(new BigDecimal("0.020"));
+        assertThat(Quantity.getAmountInBytes(container(pod, KubernetesPods.STAGER)
+                        .getResources()
+                        .getRequests()
+                        .get("cpu")))
+                .isEqualByComparingTo(new BigDecimal("0.005"));
+        assertThat(Quantity.getAmountInBytes(sandbox.getResources().getLimits().get("cpu")))
+                .isEqualByComparingTo(BigDecimal.ONE);
         assertThat(pod.getSpec().getVolumes())
                 .filteredOn(volume -> volume.getName().equals("workspace"))
                 .singleElement()
@@ -787,10 +792,10 @@ class KubernetesSandboxRuntimeTest {
                         .build())
                 .create();
 
-        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor").roomFor(LIMITS))
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor", "").roomFor(LIMITS))
                 .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
                 .isEqualTo(1);
-        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "").roomFor(LIMITS))
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "", "").roomFor(LIMITS))
                 .as("the cluster's default runtime has no overhead")
                 .isEqualTo(2);
     }
@@ -798,7 +803,7 @@ class KubernetesSandboxRuntimeTest {
     @Test
     void shouldSendTheApiServerNoRequestWhenClaimPollsAskForRoom() {
         quotaWithRoomForTwoReviews();
-        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "");
+        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "", "");
         int before = Objects.requireNonNull(server).getRequestCount();
 
         for (int poll = 0; poll < 20; poll++) {
@@ -810,7 +815,7 @@ class KubernetesSandboxRuntimeTest {
 
     @Test
     void shouldAdmitByTheNewQuotaWhenItChangesAfterTheCacheListed() {
-        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "");
+        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "", "");
         assertThat(quota.roomFor(LIMITS)).as("no quota yet").isEqualTo(Integer.MAX_VALUE);
 
         quotaWithRoomForTwoReviews();
@@ -874,7 +879,7 @@ class KubernetesSandboxRuntimeTest {
     void shouldAdmitAsWithoutAQuotaWhenTheCacheNoLongerWatches() {
         quotaWithRoomForTwoReviews();
         var cache = cache();
-        var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "");
+        var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "", "");
         assertThat(quota.roomFor(LIMITS)).isEqualTo(2);
 
         cache.close();
@@ -1375,6 +1380,7 @@ class KubernetesSandboxRuntimeTest {
     private static void assertRestricted(Container container, long uid) {
         var security = container.getSecurityContext();
         assertThat(security.getRunAsUser()).isEqualTo(uid);
+        assertThat(security.getRunAsGroup()).isEqualTo(uid);
         assertThat(security.getRunAsNonRoot()).isTrue();
         assertThat(security.getPrivileged()).isFalse();
         assertThat(security.getAllowPrivilegeEscalation()).isFalse();

@@ -7,8 +7,8 @@ import tools.jackson.databind.JsonNode;
 /**
  * Normalized usage buckets for one proxied response.
  *
- * @param billableInputTokens prompt tokens MINUS cache reads and writes, because OpenAI-compatible
- *     providers report both as details of the inclusive prompt total
+ * @param billableInputTokens uncached input tokens; OpenAI includes cache reads and writes in its prompt
+ *     total, while Anthropic reports these buckets separately
  * @param reasoningTokens already counted inside {@link #outputTokens}; reported, never priced twice
  * @param searchUnits the search units that a Cohere reranking call billed instead of tokens; 0 for every other
  *     response
@@ -41,6 +41,15 @@ public record ProxyTokenUsage(
         JsonNode reported = body.get("usage");
         JsonNode usage = reported != null && reported.isObject() ? reported : null;
         return switch (protocol) {
+            case ANTHROPIC_MESSAGES ->
+                usage == null
+                        ? null
+                        : new ProxyTokenUsage(
+                                requiredCount(usage, "input_tokens"),
+                                requiredCount(usage, "output_tokens"),
+                                0,
+                                count(usage, "cache_read_input_tokens"),
+                                count(usage, "cache_creation_input_tokens"));
             case OPENAI_COMPLETIONS -> from(body, false);
             case OPENAI_RESPONSES -> from(body, true);
             // The Decisions API documents no usage object; the AI SDK reads it in the Responses shape with every

@@ -53,7 +53,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmWorkCapture;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestChecksRecord;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -100,9 +103,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.FrozenModel;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -150,6 +156,7 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @RecordApplicationEvents
 class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTest {
@@ -181,6 +188,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     PullRequestRepository pulls;
 
     @Autowired
+    HeadCheckRunsRecorder checkRuns;
+
+    @Autowired
     PullRequestReviewRepository providerReviews;
 
     @Autowired
@@ -209,6 +219,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ItemEventRepository events;
+
+    @Autowired
+    ReviewAssignmentQuery assignmentQuery;
 
     @Autowired
     ReviewRepository reviews;
@@ -688,6 +701,76 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         }
     }
 
+    // GitLab captures no check runs yet: a trigger job reports success when it starts its child pipeline.
+    @Test
+    void shouldRecordChecksCompletedOncePerSettledRunSetOnlyWhenTheWholeListOfRunsEnded() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        long repositoryId = Objects.requireNonNull(pull.getRepository()).getId();
+        var context = Objects.requireNonNull(transactions.execute(status -> ProcessingContext.forWebhook(
+                item.workspaceId(), repositories.findById(repositoryId).orElseThrow(), "completed")));
+        String head = Objects.requireNonNull(pull.getHeadRefOid());
+        Instant readAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        var running = new HeadCheckRuns(
+                head,
+                List.of(checkRun("build", "in_progress", null), checkRun("test", "success", readAt)),
+                true,
+                readAt,
+                null);
+        // Every listed run ended, but the provider still waited for one it had not listed yet.
+        var partial = new HeadCheckRuns(
+                head, List.of(checkRun("build", "success", readAt)), false, readAt.plusSeconds(30), null);
+        var red = List.of(checkRun("build", "failure", readAt.plusSeconds(50)), checkRun("test", "success", readAt));
+        var green = List.of(checkRun("build", "success", readAt.plusSeconds(170)), checkRun("test", "success", readAt));
+        var redAgain =
+                List.of(checkRun("build", "failure", readAt.plusSeconds(290)), checkRun("test", "success", readAt));
+
+        checkRuns.observe(repositoryId, running, context);
+        checkRuns.observe(repositoryId, partial, context);
+        assertThat(checksCompleted(item)).isEmpty();
+
+        checkRuns.observe(repositoryId, settled(head, red, readAt.plusSeconds(60)), context);
+        checkRuns.observe(repositoryId, settled(head, red, readAt.plusSeconds(120)), context);
+        assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
+
+        // A re-run that settles with other results is a new occasion at the same version. A later read of the same
+        // runs,
+        // a lagging read that still shows the earlier runs, and a read that lists them in another order are not.
+        checkRuns.observe(repositoryId, settled(head, green, readAt.plusSeconds(180)), context);
+        checkRuns.observe(repositoryId, settled(head, red, readAt.plusSeconds(200)), context);
+        checkRuns.observe(repositoryId, settled(head, green.reversed(), readAt.plusSeconds(240)), context);
+        assertThat(checksCompleted(item))
+                .containsExactly(prepared.version().value(), prepared.version().value());
+
+        // A third run that settles as the first did is a new occasion too: red, green, red.
+        checkRuns.observe(repositoryId, settled(head, redAgain, readAt.plusSeconds(300)), context);
+        assertThat(checksCompleted(item))
+                .containsExactly(
+                        prepared.version().value(),
+                        prepared.version().value(),
+                        prepared.version().value());
+        assertThat(pulls.findById(pull.getId()).orElseThrow().getHeadCheckRuns())
+                .isEqualTo(settled(head, redAgain, readAt.plusSeconds(300)));
+    }
+
+    private List<@Nullable String> checksCompleted(ItemRef item) {
+        return jdbc.queryForList(
+                "SELECT item_version FROM item_event WHERE workspace_id=? AND item_id=? AND name=?",
+                String.class,
+                item.workspaceId(),
+                item.itemId(),
+                ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED.value());
+    }
+
+    private static HeadCheckRuns.Run checkRun(String name, String state, @Nullable Instant finishedAt) {
+        return new HeadCheckRuns.Run(name, "ci", state, finishedAt != null, null, null, finishedAt);
+    }
+
+    private static HeadCheckRuns settled(String head, List<HeadCheckRuns.Run> runs, Instant readAt) {
+        return new HeadCheckRuns(head, runs, true, readAt, null);
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = IdentityProviderType.class,
@@ -790,6 +873,108 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         item.workspaceId(),
                         item.itemId()))
                 .isEqualTo(1L);
+    }
+
+    @Test
+    void shouldResumeAndCaptureAQueuedReviewWithACustomizedPracticeAfterItsSourceContractMigrates() throws Exception {
+        var mirror = new JsonMapper();
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        long workspace = prepared.item().workspaceId();
+        long practice = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM practice WHERE workspace_id=? AND slug='event-test'", Long.class, workspace));
+        String criteria = "Keep my customized criterion.\n  Preserve its whitespace.\n";
+        var original = mirror.readValue(
+                Objects.requireNonNull(jdbc.queryForObject(
+                        "SELECT v.definition::text FROM practice p JOIN practice_version v ON v.id=p.current_version_id WHERE p.id=?",
+                        String.class,
+                        practice)),
+                ObjectNode.class);
+        original.withObject("/reads").put("contract", "2.0.0");
+        original.put("criteria", criteria);
+        long recorded = Objects.requireNonNull(transactions.execute(ignored -> {
+            long id = Objects.requireNonNull(jdbc.queryForObject(
+                    "INSERT INTO practice_version(workspace_id,practice_id,number,definition,created_at) VALUES (?,?,2,?::jsonb,now()) RETURNING id",
+                    Long.class,
+                    workspace,
+                    practice,
+                    original.toString()));
+            jdbc.update(
+                    "UPDATE practice SET current_version_id=? WHERE id=? AND workspace_id=?", id, practice, workspace);
+            return id;
+        }));
+        publish(prepared);
+        var review = itemReviews(prepared).getFirst();
+        assertThat(jdbc.queryForObject(
+                        "SELECT practice_version_id FROM review_practice WHERE review_id=? AND practice_id=? AND workspace_id=?",
+                        Long.class,
+                        review.getId(),
+                        practice,
+                        workspace))
+                .isEqualTo(recorded);
+        try (var input =
+                Objects.requireNonNull(getClass().getResourceAsStream("/db/changelog/source-contract-3.sql"))) {
+            String migration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            transactions.executeWithoutResult(ignored -> jdbc.execute(migration));
+        }
+        var current = practices
+                .findByWorkspaceIdAndSlug(workspace, "event-test")
+                .orElseThrow()
+                .getCurrentVersion();
+        var definition = versions.definitionOf(current);
+        assertThat(current.getId()).isNotEqualTo(recorded);
+        assertThat(definition.reads().contract()).isEqualTo("3.0.0");
+        assertThat(definition.criteria()).isEqualTo(criteria);
+        assertThat(definition.script())
+                .isEqualTo(
+                        original.path("script").isNull()
+                                ? null
+                                : original.path("script").asString());
+        assertThat(definition.reads().sources()).anySatisfy(read -> {
+            assertThat(read.source()).isEqualTo(PullRequestContentSource.CHECKS);
+            assertThat(read.need()).isEqualTo(ReadNeed.OPTIONAL);
+        });
+        var historical = mirror.readTree(Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT definition::text FROM practice_version WHERE id=?", String.class, recorded)));
+        assertThat(historical).isEqualTo(original);
+
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(review.getId());
+        assertThat(onlyEvent(prepared).getState()).isEqualTo(ItemEventState.STARTED);
+        assertThat(jdbc.queryForObject(
+                        "SELECT v.definition#>>'{reads,contract}' FROM review_practice r JOIN practice_version v ON v.id=r.practice_version_id WHERE r.review_id=? AND r.practice_id=?",
+                        String.class,
+                        review.getId(),
+                        practice))
+                .isEqualTo("3.0.0");
+        var assignment = assignmentQuery
+                .find(
+                        workspace,
+                        new ReviewAssignmentId(
+                                review.getId(), practice, prepared.item().itemId()))
+                .orElseThrow();
+        assertThat(assignment.practice().definition().reads().contract()).isEqualTo("3.0.0");
+        assertThat(assignment.practice().definition().criteria()).isEqualTo(criteria);
+        var core = PullRequestContentSource.CORE;
+        var checks = PullRequestContentSource.CHECKS;
+        var pinned = source.pin(prepared.item(), prepared.version());
+        var files = source.capture(
+                        pinned,
+                        new CaptureRequest(
+                                review.getId(),
+                                UUID.randomUUID(),
+                                1,
+                                Set.of(core, checks),
+                                "3.0.0",
+                                3,
+                                null,
+                                Set.of(core, checks)))
+                .files();
+        assertThat(files).containsKeys("context/metadata.json", "context/checks.json");
+        assertThat(mirror.readTree(files.get("context/checks.json"))
+                        .path("commit_sha")
+                        .asString())
+                .isEqualTo("b".repeat(40));
+        assertThat(mirror.readTree(files.get("context/metadata.json")).has("head_checks"))
+                .isFalse();
     }
 
     private ReviewIntegrationData.Scenario reviewScenario(Prepared prepared) {
@@ -1027,7 +1212,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         UUID.randomUUID(),
                         1,
                         Set.of(core),
-                        "2.0.0",
+                        "3.0.0",
                         3,
                         null,
                         Set.of(core),
@@ -1052,7 +1237,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThatThrownBy(() -> source.capture(
                         pinned,
                         new CaptureRequest(
-                                admitted.getId(), UUID.randomUUID(), 1, Set.of(core), "2.0.0", 3, null, Set.of(core))))
+                                admitted.getId(), UUID.randomUUID(), 1, Set.of(core), "3.0.0", 3, null, Set.of(core))))
                 .isInstanceOfSatisfying(
                         ItemCaptureException.class,
                         failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.VERSION_UNAVAILABLE));
@@ -1094,7 +1279,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 UUID.randomUUID(),
                 1,
                 Set.of(threads),
-                "2.0.0",
+                "3.0.0",
                 3,
                 null,
                 Set.of(threads),
@@ -1116,7 +1301,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(staged.toString()).doesNotContain("An edited later decision.");
         // The same request without its occasion reads the edited review, which no longer has the pinned version.
         var current = new CaptureRequest(
-                admitted.getId(), UUID.randomUUID(), 1, Set.of(threads), "2.0.0", 3, null, Set.of(threads));
+                admitted.getId(), UUID.randomUUID(), 1, Set.of(threads), "3.0.0", 3, null, Set.of(threads));
         assertThatThrownBy(() -> source.capture(pinned, current))
                 .isInstanceOfSatisfying(
                         ItemCaptureException.class,
@@ -1306,7 +1491,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     private static void assertOriginalMergedRecord(
             MergedWork merged, JsonNode retainedRecord, Map<String, byte[]> files) throws Exception {
         var record = new JsonMapper().readTree(Objects.requireNonNull(files.get("context/metadata.json")));
-        assertThat(record).isEqualTo(retainedRecord);
+        assertThat(record).isEqualTo(PullRequestChecksRecord.core((ObjectNode) retainedRecord));
         assertThat(record.path("title").asString()).isEqualTo("A bounded change");
         assertThat(record.path("body").asString()).isEqualTo("Describe this change");
         assertThat(record.path("commit_sha").asString()).isEqualTo("b".repeat(40));
@@ -1335,7 +1520,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                                 UUID.randomUUID(),
                                 1,
                                 Set.of(kind),
-                                "2.0.0",
+                                "3.0.0",
                                 3,
                                 null,
                                 Set.of(kind),
@@ -1976,7 +2161,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var pinned = source.pinOccasion(prepared.item(), withAssignee.version(), occasion);
         var core = PullRequestContentSource.CORE;
         var request = new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(core), "2.0.0", 3, null, Set.of(core), occasion);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(core), "3.0.0", 3, null, Set.of(core), occasion);
         UUID restriction = databaseTestUtils.erase(providerId(assignee), Long.toString(assignee.getNativeId()), "");
         try {
             assertThatThrownBy(() -> source.capture(pinned, request))

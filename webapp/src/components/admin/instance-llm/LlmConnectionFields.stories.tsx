@@ -65,14 +65,14 @@ export const ApiOptions: Story = {
 			within(chat)
 				.getAllByRole("option")
 				.map((option) => option.textContent),
-		).toStrictEqual(["Responses API", "Chat Completions API"]);
+		).toStrictEqual(["Responses API", "Chat Completions API", "Messages API (Anthropic)"]);
 		const practiceScripts = screen.getByRole("group", { name: "For practice scripts" });
 		await expect(
 			within(practiceScripts)
 				.getAllByRole("option")
 				.map((option) => option.textContent),
 		).toStrictEqual(["Decisions API", "Embeddings API", "Rerank API (Cohere-compatible)"]);
-		await expect(screen.getAllByRole("option")).toHaveLength(5);
+		await expect(screen.getAllByRole("option")).toHaveLength(6);
 
 		await userEvent.click(within(practiceScripts).getByRole("option", { name: "Embeddings API" }));
 		await expect(args.onChange).toHaveBeenLastCalledWith(
@@ -126,7 +126,7 @@ export const RerankApiLeavesOpenAiPreset: Story = {
 		await userEvent.click(
 			await screen.findByRole("option", { name: "Rerank API (Cohere-compatible)" }),
 		);
-		await expectClosedSelectShows(canvas, "Endpoint preset", "Other OpenAI-compatible endpoint");
+		await expectClosedSelectShows(canvas, "Endpoint preset", "Other endpoint");
 		await expect(canvas.getByLabelText("Base URL")).toHaveValue("");
 	},
 };
@@ -140,7 +140,7 @@ export const RerankApiKeepsTypedUrl: Story = {
 		await userEvent.click(
 			await screen.findByRole("option", { name: "Rerank API (Cohere-compatible)" }),
 		);
-		await expectClosedSelectShows(canvas, "Endpoint preset", "Other OpenAI-compatible endpoint");
+		await expectClosedSelectShows(canvas, "Endpoint preset", "Other endpoint");
 		await expect(canvas.getByLabelText("Base URL")).toHaveValue("https://rerank.example.test/v1");
 	},
 };
@@ -169,6 +169,36 @@ export const EditReadOnlyApi: Story = {
 		await expect(canvas.getByLabelText("API key")).toHaveAttribute(
 			"placeholder",
 			"Key ends in ab12",
+		);
+	},
+};
+
+export const Anthropic: Story = {
+	args: {
+		value: {
+			...connectionFieldsValueOf(null),
+			preset: "ANTHROPIC",
+			apiProtocol: "anthropic-messages",
+			baseUrl: "https://api.anthropic.com",
+			authMode: "API_KEY",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expectClosedSelectShows(canvas, "API", "Messages API (Anthropic)");
+		await expect(canvas.getByRole("textbox", { name: "Base URL" })).toHaveValue(
+			"https://api.anthropic.com",
+		);
+	},
+};
+
+export const PreservesCompatibleApiChoice: Story = {
+	args: { value: { ...connectionFieldsValueOf(null), apiProtocol: "openai-completions" } },
+	play: async ({ canvas, args }) => {
+		await userEvent.click(canvas.getByRole("combobox", { name: "Endpoint preset" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Other endpoint" }));
+		await expectClosedSelectShows(canvas, "API", "Chat Completions API");
+		await expect(args.onChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({ preset: "OTHER", apiProtocol: "openai-completions" }),
 		);
 	},
 };

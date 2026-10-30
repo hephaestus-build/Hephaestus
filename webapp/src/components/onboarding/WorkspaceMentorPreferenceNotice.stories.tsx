@@ -5,7 +5,7 @@ import { WorkspaceMentorPreferenceNotice } from "./WorkspaceMentorPreferenceNoti
 
 /**
  * Every sentence here is quoted from `MENTOR_PREFERENCE_COPY`, the one home for the notice's words,
- * so the same fact is never paraphrased between the setup page and Heph's own screen; the choice an
+ * so the same fact is never paraphrased between the setup page and Hephaestus's own screen; the choice an
  * `unavailable` notice names takes its title from the registry, so it reads exactly as its card did.
  * The link carries `returnTo` so changing the choice lands the reader back in the conversation they
  * left.
@@ -14,7 +14,7 @@ const meta = {
 	component: WorkspaceMentorPreferenceNotice,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { workspaceSlug: "acme", returnTo: "/w/acme/mentor", notice: { reason: "no-ai" } },
+	args: { workspaceSlug: "acme", returnTo: "/w/acme/conversation", notice: { reason: "no-ai" } },
 } satisfies Meta<typeof WorkspaceMentorPreferenceNotice>;
 
 export default meta;
@@ -23,11 +23,11 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"Heph is off for you",
+			"Ask Hephaestus is off for you",
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("returnTo=/w/acme/mentor"),
+			expect.stringContaining("returnTo=/w/acme/conversation"),
 		);
 	},
 };
@@ -40,28 +40,28 @@ export const ChoiceRequired: Story = {
 		);
 		await expect(canvas.getByRole("link", { name: "Make your AI choice" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("returnTo=/w/acme/mentor"),
+			expect.stringContaining("returnTo=/w/acme/conversation"),
 		);
 	},
 };
 
-/** No Heph model serves a member who has made no AI choice; only a workspace owner can change that. */
+/** No conversation model serves a member who has made no AI choice; only a workspace owner can change that. */
 export const NotSetUp: Story = {
 	args: { notice: { reason: "not-set-up" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"Heph is not set up in this workspace yet",
+			"Ask Hephaestus is not set up in this workspace yet",
 		);
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},
 };
 
-/** The member's personal data was erased, so Heph does not answer them and nothing they choose changes it. */
+/** The member's personal data was erased, so Hephaestus does not answer them and nothing they choose changes it. */
 export const Erased: Story = {
 	args: { notice: { reason: "erased" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"Heph cannot reply to you",
+			"Hephaestus cannot reply to you",
 		);
 		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
 	},
@@ -71,7 +71,7 @@ export const Unavailable: Story = {
 	args: { notice: { reason: "unavailable", choice: "CLOUD" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
-			"Heph is not set up for your AI choice yet",
+			"Ask Hephaestus is not set up for your AI choice yet",
 		);
 		// The title is emphasised so its comma does not split the sentence.
 		const title = canvas.getByText("Cloud", {
@@ -79,11 +79,11 @@ export const Unavailable: Story = {
 		});
 		await expect(title).toBeVisible();
 		await expect(title.parentElement).toHaveTextContent(
-			"No Heph model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
+			"No conversation model is set up for Cloud yet. Nothing switches you elsewhere. Ask a workspace owner, or change your choice.",
 		);
 		await expect(canvas.getByRole("link", { name: "Change your AI choice" })).toHaveAttribute(
 			"href",
-			expect.stringContaining("returnTo=/w/acme/mentor"),
+			expect.stringContaining("returnTo=/w/acme/conversation"),
 		);
 	},
 };

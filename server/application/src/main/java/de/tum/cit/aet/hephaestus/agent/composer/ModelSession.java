@@ -16,7 +16,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One composer conversation with the attempt's frozen chat model: the system prompt, the turns, the tools and what the
- * model called. It speaks the two chat protocols the proxy serves, and it never streams.
+ * model called. It speaks the chat protocols the proxy serves, and it never streams.
  */
 final class ModelSession {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
@@ -57,7 +57,8 @@ final class ModelSession {
         /** The provider refused the request itself, such as a revoked key or a request over the context window. */
         REFUSED,
         /** The provider failed or answered with something unreadable; another call may succeed. */
-        PROVIDER
+        PROVIDER,
+        CAPACITY
     }
 
     /** The model settings frozen on the attempt. */
@@ -103,6 +104,17 @@ final class ModelSession {
 
     /** Answers the model's tool calls, and optionally adds a user turn after them, and returns its next reply. */
     Reply answer(List<ToolResult> results, @Nullable String then) {
+        if (settings.protocol() == LlmApiProtocol.ANTHROPIC_MESSAGES) {
+            var content = JSON.arrayNode();
+            for (var result : results)
+                content.add(JSON.objectNode()
+                        .put("type", "tool_result")
+                        .put("tool_use_id", result.callId())
+                        .put("content", result.text()));
+            if (then != null) content.add(JSON.objectNode().put("type", "text").put("text", then));
+            history.add(JSON.objectNode().put("role", "user").set("content", content));
+            return call();
+        }
         for (var result : results) {
             if (settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS)
                 history.add(JSON.objectNode()
@@ -123,7 +135,7 @@ final class ModelSession {
     String requestText(String nextTurn) {
         var probe = request();
         var turns =
-                (ArrayNode) probe.path(settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS ? "messages" : "input");
+                (ArrayNode) probe.path(settings.protocol() == LlmApiProtocol.OPENAI_RESPONSES ? "input" : "messages");
         turns.add(JSON.objectNode().put("role", "user").put("content", nextTurn));
         return probe.toString();
     }
@@ -131,7 +143,20 @@ final class ModelSession {
     private ObjectNode request() {
         var body = JSON.objectNode();
         body.put("model", settings.modelId());
-        if (settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS) {
+        if (settings.protocol() == LlmApiProtocol.ANTHROPIC_MESSAGES) {
+            body.put("system", system);
+            body.set("messages", history.deepCopy());
+            body.put("max_tokens", settings.maxOutputTokens());
+            body.putObject("tool_choice").put("type", "auto");
+            var list = body.putArray("tools");
+            for (var tool : tools)
+                list.add(JSON.objectNode()
+                        .put("name", tool.name())
+                        .put("description", tool.description())
+                        .set("input_schema", tool.parameters()));
+            // An opaque native model id carries no thinking-mode or sampling contract. Composition
+            // uses the provider defaults; the review runner resolves native options through its SDK.
+        } else if (settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS) {
             body.set("messages", history.deepCopy());
             body.put("store", false);
             body.put("max_completion_tokens", settings.maxOutputTokens());
@@ -162,7 +187,8 @@ final class ModelSession {
                 body.putArray("include").add("reasoning.encrypted_content");
             }
         }
-        if (settings.temperature() != null) body.put("temperature", settings.temperature());
+        if (settings.protocol() != LlmApiProtocol.ANTHROPIC_MESSAGES && settings.temperature() != null)
+            body.put("temperature", settings.temperature());
         return body;
     }
 
@@ -187,6 +213,7 @@ final class ModelSession {
                         case ATTEMPT_ENDED -> Failure.OWNERSHIP_LOST;
                         // Transient, as a provider's rate limit is.
                         case CALLS_IN_FLIGHT -> Failure.PROVIDER;
+                        case CAPACITY -> Failure.CAPACITY;
                     });
         int status = answer.status();
         if (status == 408 || status == 429 || status >= 500) return new Reply(null, List.of(), Failure.PROVIDER);
@@ -198,7 +225,31 @@ final class ModelSession {
         } catch (JacksonException unreadable) {
             return new Reply(null, List.of(), Failure.PROVIDER);
         }
-        return settings.protocol() == LlmApiProtocol.OPENAI_COMPLETIONS ? completion(response) : responses(response);
+        return switch (settings.protocol()) {
+            case OPENAI_COMPLETIONS -> completion(response);
+            case ANTHROPIC_MESSAGES -> anthropic(response);
+            default -> responses(response);
+        };
+    }
+
+    private Reply anthropic(JsonNode response) {
+        if (response.path("stop_reason").asString("").equals("refusal"))
+            return new Reply(null, List.of(), Failure.REFUSED);
+        JsonNode content = response.path("content");
+        if (!content.isArray()) return new Reply(null, List.of(), Failure.PROVIDER);
+        var text = new StringBuilder();
+        var calls = new ArrayList<ToolCall>();
+        for (JsonNode part : content) {
+            switch (part.path("type").asString("")) {
+                case "text" -> text.append(part.path("text").asString(""));
+                case "tool_use" ->
+                    calls.add(new ToolCall(
+                            part.path("id").asString(""), part.path("name").asString(""), part.path("input")));
+                default -> {}
+            }
+        }
+        history.add(JSON.objectNode().put("role", "assistant").set("content", content));
+        return new Reply(text.isEmpty() ? null : text.toString(), calls, null);
     }
 
     private Reply completion(JsonNode response) {

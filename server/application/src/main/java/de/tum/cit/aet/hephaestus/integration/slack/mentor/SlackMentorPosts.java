@@ -18,9 +18,10 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** What Heph's Slack messages look like: answer blocks, notification text, feedback buttons and post metadata. */
+/** What Hephaestus's Slack messages look like: answer blocks, notification text, feedback buttons and post metadata. */
 public final class SlackMentorPosts {
 
+    // Posted messages keep these metadata types and button action ids for readback and old buttons.
     static final String EVENT_TYPE = "heph_entry";
 
     static final String NOTICE_EVENT_TYPE = "heph_notice";
@@ -30,10 +31,10 @@ public final class SlackMentorPosts {
     /** The {@code action_id} of the feedback buttons under an answer in a Slack thread. */
     public static final String FEEDBACK_ACTION = "heph_feedback";
 
-    /** Heph reacts with 👀 to a top-level question while it works on it. */
+    /** Hephaestus reacts with 👀 to a top-level question while it works on it. */
     static final String WORKING_EMOJI = "eyes";
 
-    static final String FAILED_REPLY = "Heph could not finish this reply. Try again.";
+    static final String FAILED_REPLY = "Hephaestus could not finish this reply. Try again.";
 
     /** The most Markdown characters that Slack renders in one message. */
     private static final int MAX_MARKDOWN_CHARS = 12_000;
@@ -42,7 +43,7 @@ public final class SlackMentorPosts {
     static final String CUT_NOTE = "\n\n… The full answer is in Hephaestus.";
 
     /** Ends the stream of an attempt that was lost; the retry streams its answer below. */
-    static final String RESTART_NOTE = "\n\n… Heph had to start again. The answer follows below.";
+    static final String RESTART_NOTE = "\n\n… The answer had to start again. It follows below.";
 
     /** Notifications show the start of the message text. */
     private static final int NOTIFICATION_CHARS = 280;
@@ -60,7 +61,7 @@ public final class SlackMentorPosts {
     }
 
     /**
-     * Tags a Heph notice in the DM, such as a refusal. Every Heph message then carries metadata except a stream that
+     * Tags a Hephaestus notice in the DM, such as a refusal. Every Hephaestus message then carries metadata except a stream that
      * no one ended, so a history search never takes a notice for a stream.
      */
     public static Message.Metadata noticeMetadata() {
@@ -80,7 +81,7 @@ public final class SlackMentorPosts {
         return payload != null && entryId.toString().equals(String.valueOf(payload.get(ENTRY_ID)));
     }
 
-    /** Heph's Markdown as one Markdown block, cut with a note when Slack cannot show all of it. */
+    /** Hephaestus's Markdown as one Markdown block, cut with a note when Slack cannot show all of it. */
     public static List<LayoutBlock> markdown(String text) {
         String shown = text.length() <= MAX_MARKDOWN_CHARS ? text : text.substring(0, shownLength(text)) + CUT_NOTE;
         return List.of(MarkdownBlock.builder().text(shown).build());
@@ -92,7 +93,7 @@ public final class SlackMentorPosts {
     }
 
     /**
-     * Heph's reply in Slack ({@link #reply}).
+     * Hephaestus's reply in Slack ({@link #reply}).
      *
      * @param shown each result, problem and piece of feedback the reply shows, with the quote that shows it
      */
@@ -147,7 +148,7 @@ public final class SlackMentorPosts {
         }
     }
 
-    /** Each of Heph's messages as the app shows it: its text, then what it showed, quoted. */
+    /** Each of Hephaestus's messages as the app shows it: its text, then what it showed, quoted. */
     static Reply reply(List<MentorEntryDTO> messages) {
         StringBuilder text = new StringBuilder();
         List<Reply.Shown> shown = new ArrayList<>();
@@ -182,13 +183,13 @@ public final class SlackMentorPosts {
     public static String notification(String text) {
         String line = text.replaceAll("[*_`#>~]", "").replaceAll("\\s+", " ").strip();
         if (line.length() <= NOTIFICATION_CHARS) {
-            return line.isEmpty() ? "Heph replied." : line;
+            return line.isEmpty() ? "Hephaestus replied." : line;
         }
         int cut = line.lastIndexOf(' ', NOTIFICATION_CHARS);
         return line.substring(0, cut > 0 ? cut : NOTIFICATION_CHARS) + "…";
     }
 
-    /** Helpful and Not helpful buttons that vote on Heph's answer. */
+    /** Helpful and Not helpful buttons that vote on Hephaestus's answer. */
     static List<LayoutBlock> feedbackButtons(UUID answerId) {
         FeedbackButtonsElement buttons = FeedbackButtonsElement.builder()
                 .actionId(FEEDBACK_ACTION)

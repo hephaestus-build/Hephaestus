@@ -195,7 +195,7 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
                 new ReviewOn(List.of(events), Map.of()),
                 null,
                 AboutRole.AUTHOR,
-                new PracticeReads("2.0.0", List.of(FixtureIntegration.need())),
+                new PracticeReads("3.0.0", List.of(FixtureIntegration.need())),
                 new ReviewedBy(ReviewedByKind.HEPHAESTUS, null, List.of()),
                 "Check the widget.",
                 null,

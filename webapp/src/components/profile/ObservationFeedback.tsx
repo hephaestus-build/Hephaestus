@@ -13,7 +13,7 @@ import { hasText } from "@/lib/text";
 
 /**
  * Where a piece of feedback that lives in Hephaestus itself opens, as a link to render: the
- * practice's Feedback tab for feedback on the practice page, the conversation with Heph for feedback
+ * practice's Feedback tab for feedback on the practice page, the conversation with Hephaestus for feedback
  * raised there. Feedback on the work links to its comment from its own copies.
  */
 export interface ObservationFeedbackLinks {
@@ -38,7 +38,7 @@ const FEEDBACK_BOX = "rounded-xl border border-foreground/15 bg-background p-3 s
 
 /**
  * The delivered feedback an observation gave, one box each: where it went (on the work, on the
- * practice page, in the conversation with Heph), when it was delivered, and the way to read it there.
+ * practice page, in the conversation with Hephaestus), when it was delivered, and the way to read it there.
  * Nothing here answers it: the reader responds where the feedback is. An observation has no rating
  * of its own (the server records responses per piece of feedback only). A response already given is
  * said in one read-only line.
@@ -128,7 +128,7 @@ function FeedbackWhere({
 			<InlineLink render={target} className={LINK_AT_REST}>
 				{feedback.destination === "PRACTICE_PAGE"
 					? "Read it on this practice’s Feedback tab"
-					: "Read it in your conversation with Heph"}
+					: "Read it in your conversation"}
 			</InlineLink>
 		</p>
 	);

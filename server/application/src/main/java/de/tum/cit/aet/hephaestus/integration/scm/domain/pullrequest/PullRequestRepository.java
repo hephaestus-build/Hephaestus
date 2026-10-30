@@ -167,6 +167,9 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
 
     List<PullRequest> findAllByRepository_Id(Long repositoryId);
 
+    /** The pull requests of a repository in {@code state} that hold check runs read for some head. */
+    List<PullRequest> findAllByRepository_IdAndStateAndHeadCheckRunsIsNotNull(Long repositoryId, Issue.State state);
+
     /**
      * The provider's closing candidates for the pull request, with their labels, in number order:
      * the rows of {@code pull_request_closing_issue} for one pull request whose issue belongs to the

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793149918875-1" author="hephaestus">
+        <!--
+            Before research consent moved to the account ledger, the Slack App Home recorded a research
+            opt-out in slack_participant_consent.research_opted_out. Nothing has read that column since,
+            so those opt-outs stopped applying. The change sets after this one drop the column. This one
+            first copies each opt-out into the ledger as the linked account's research decision.
+
+            - Only a Slack user linked to an account through an enabled Slack identity of the workspace's
+              team has an account to carry the decision to. An unlinked Slack user has no research
+              decision to override, because research needs a grant from an account.
+            - The column kept no time of its own. decided_at is the latest Slack consent change of the
+              row, so it is no earlier than the opt-out. Thus, a grant recorded after it still wins, and an
+              earlier grant gives way to the opt-out.
+            - An account whose latest research decision already declines gets no row: the copy would
+              change nothing except ask the account the research question again.
+            - mechanism keeps an existing value. notice_version names the Slack App Home, because the
+              opt-out answered no wording that a release published.
+            - The NOT EXISTS on that notice version makes a second run add nothing, for example after a
+              crash before Liquibase records the change set.
+        -->
+        <preConditions onFail="HALT">
+            <columnExists tableName="slack_participant_consent" columnName="research_opted_out"/>
+            <columnExists tableName="consent_decision" columnName="research_organization"/>
+        </preConditions>
+        <comment>Carry the Slack research opt-outs into the consent ledger.</comment>
+        <sql><![CDATA[
+INSERT INTO consent_decision (account_id, purpose, granted, mechanism, notice_version, research_organization, occurred_at)
+SELECT i.account_id, 'RESEARCH_PARTICIPATION', false, 'ACCOUNT_SETTINGS', 'slack-app-home', NULL, max(s.decided_at)
+  FROM slack_participant_consent s
+  JOIN connection c ON c.workspace_id = s.workspace_id
+  JOIN identity i ON i.provider_user_key = s.slack_user_id
+                 AND i.team_key = c.config->>'teamId'
+                 AND i.disabled_at IS NULL
+  JOIN identity_provider p ON p.id = i.provider_id AND p.type = 'SLACK' AND p.server_url = 'https://slack.com'
+ WHERE s.research_opted_out
+   AND NOT EXISTS (
+       SELECT 1 FROM consent_decision d
+        WHERE d.account_id = i.account_id
+          AND d.purpose = 'RESEARCH_PARTICIPATION'
+          AND d.notice_version = 'slack-app-home')
+   AND COALESCE((
+       SELECT d.granted FROM consent_decision d
+        WHERE d.account_id = i.account_id AND d.purpose = 'RESEARCH_PARTICIPATION'
+        ORDER BY d.occurred_at DESC, d.id DESC
+        LIMIT 1), true)
+ GROUP BY i.account_id
+]]></sql>
+        <rollback>
+            <stop>The copied decisions are in the append-only consent ledger, and the change sets after this one drop their source. Restore the database backup taken before this upgrade.</stop>
+        </rollback>
+    </changeSet>
+    <!--
+        Columns that nothing reads any more. This release stops every role (see the release's migration
+        notes), so the previous release does not run on the schema without them.
+        - workspace_slug_history.redirect_expires_at: slug redirects no longer expire.
+        - issue.review_snapshot_id and review_snapshot_digest: no code read them. The id held random
+          UUIDs, and nothing wrote the digest.
+        - slack_participant_consent.research_opted_out and source: change set 1 copied the opt-outs.
+          Since 0.94.1, nothing has written source.
+    -->
+    <changeSet id="1793149918875-2" author="hephaestus">
+        <dropColumn tableName="workspace_slug_history" columnName="redirect_expires_at"/>
+        <rollback>
+            <stop>The dropped values are gone. Restore the database backup taken before this upgrade.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793149918875-3" author="hephaestus">
+        <dropColumn tableName="issue">
+            <column name="review_snapshot_id"/>
+            <column name="review_snapshot_digest"/>
+        </dropColumn>
+        <rollback>
+            <stop>The dropped values are gone. Restore the database backup taken before this upgrade.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793149918875-4" author="hephaestus">
+        <dropColumn tableName="slack_participant_consent">
+            <column name="research_opted_out"/>
+            <column name="source"/>
+        </dropColumn>
+        <rollback>
+            <stop>The dropped values are gone. Restore the database backup taken before this upgrade.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

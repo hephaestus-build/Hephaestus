@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Owns the measurement of each Heph turn attempt ({@link MentorAttemptUsage}) and its ledger row, which is its
+ * Owns the measurement of each conversation turn attempt ({@link MentorAttemptUsage}) and its ledger row, which is its
  * projection. Admission creates the measurement, under the account's person-data write fence, before the proxy can
  * route a call; the proxy adds each returned call; the transaction that ends the attempt, or takes back its lease,
  * dates it ({@link #attemptEnded}); billing then projects it at that date; an erasure removes it. Each path takes the
@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * feedback or lease, nor the counters of the attempt that runs now. A call whose attempt has no measurement is not
  * counted, and nothing here creates one for it.
  *
- * <p>Only the proxy measures a Heph turn, so the projection is the proxy's own total: verified when it has tokens,
+ * <p>Only the proxy measures a conversation turn, so the projection is the proxy's own total: verified when it has tokens,
  * unverifiable when it has calls without any. It covers the calls the proxy observed with reported usage, not every
  * call a provider bills.
  */
@@ -146,11 +146,11 @@ public class MentorAttemptUsageService {
         MentorAttemptUsage measured =
                 attempts.lock(turn.getWorkspaceId(), turnId, attempt).orElse(null);
         if (measured == null) {
-            log.warn("Heph turn {} attempt {} has no usage measurement; it is not billed", turnId, attempt);
+            log.warn("conversation turn {} attempt {} has no usage measurement; it is not billed", turnId, attempt);
             return Optional.empty();
         }
         if (!measured.isDated()) {
-            log.warn("Heph turn {} attempt {} has no end date; it is not billed yet", turnId, attempt);
+            log.warn("conversation turn {} attempt {} has no end date; it is not billed yet", turnId, attempt);
             return Optional.empty();
         }
         return project(turn, measured, recordOnTurn);

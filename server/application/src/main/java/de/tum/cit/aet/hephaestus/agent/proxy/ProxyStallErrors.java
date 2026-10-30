@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
@@ -64,15 +65,24 @@ final class ProxyStallErrors {
 
     /**
      * Ends a stream whose provider went silent with an error event. The response headers are already sent, and a
-     * stream that just stops would read as a broken one; both OpenAI protocols' clients raise this event as an error.
+     * stream that just stops would read as a broken one. The event name and envelope match the selected protocol.
      */
-    void writeStallFrame(HttpServletResponse response, String message) {
+    void writeStallFrame(HttpServletResponse response, LlmApiProtocol protocol, String message) {
+        writeErrorFrame(response, protocol, LlmProxyService.UPSTREAM_STALLED, message);
+    }
+
+    /** Ends a stream the proxy stopped with an error event, so a client cannot read the cut answer as complete. */
+    void writeErrorFrame(HttpServletResponse response, LlmApiProtocol protocol, String code, String message) {
         try {
             OutputStream out = response.getOutputStream();
-            out.write(
-                    ("data: " + objectMapper.writeValueAsString(errorPayload(LlmProxyService.UPSTREAM_STALLED, message))
-                                    + "\n\n")
-                            .getBytes(StandardCharsets.UTF_8));
+            var payload = errorPayload(code, message);
+            String event = "";
+            if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) {
+                event = "event: error\n";
+                payload.put("type", "error");
+            }
+            out.write((event + "data: " + objectMapper.writeValueAsString(payload) + "\n\n")
+                    .getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (IOException clientGone) {
             log.debug("The client left before the stall was reported");

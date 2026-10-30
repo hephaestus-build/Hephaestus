@@ -65,7 +65,7 @@ type LinkableProvider = IdentityProviderView & { registrationId: string };
  * has to earn the click on its own — the account it links to is not a way into Hephaestus.
  */
 const LINK_ONLY_RATIONALE: Record<string, string> = {
-	SLACK: "Connect Slack to manage your channel-message preference and talk to Heph in a DM.",
+	SLACK: "Connect Slack to manage your channel-message preference and talk to Hephaestus in a DM.",
 	OUTLINE: "Connect Outline so the documents you write there are recognized as your work.",
 };
 

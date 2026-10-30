@@ -1,15 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -17,10 +19,12 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -66,11 +70,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     @Autowired
     private MeterRegistry metrics;
 
-    @Autowired
-    private WorkerJwtVerifier jwtVerifier;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtIssuer jwtIssuer;
+    private final AttemptTokenVerifier jwtVerifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
+
+    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(KEY);
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -104,12 +109,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private String token(UUID turnId, long workspaceId, int attempt) {
-        return jwtIssuer.issueForTurn(
+        return jwtIssuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 turnId,
                 workspaceId,
-                developerAccount,
-                conversation.getId(),
                 attempt,
+                null,
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 
@@ -142,7 +147,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(result.status()).isEqualTo(200);
         Authentication authentication = Objects.requireNonNull(result.authentication());
         ProxyIdentity identity = (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal());
-        ProxyRouting routing = new ProxyRoutingService(jobRepository, turnRepository, objectMapper, reviewAttemptUsage)
+        ProxyRouting routing = new ProxyRoutingService(
+                        jobRepository,
+                        turnRepository,
+                        objectMapper,
+                        reviewAttemptUsage,
+                        mock(ReviewSnapshotQuery.class))
                 .resolve(identity, new MockHttpServletRequest("POST", "/internal/llm/responses"));
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         assertThat(routing.workspaceId()).isEqualTo(workspace.getId());
@@ -152,7 +162,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(attempt.number()).isEqualTo(turn.getAttempt());
         // $10 per million input tokens, frozen at admission.
         assertThat(routing.inFlightSpendUsd()).isEqualByComparingTo("1.00");
-        assertThat(authentication.getDetails()).isInstanceOf(TurnJwt.class);
+        assertThat(authentication.getDetails()).isInstanceOf(AttemptJwt.class);
     }
 
     @Test
@@ -189,7 +199,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         Result result = call(WORKER, "PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
 
         assertThat(result.status()).isEqualTo(200);
-        assertThat(Objects.requireNonNull(result.authentication()).getDetails()).isInstanceOf(TurnJwt.class);
+        assertThat(Objects.requireNonNull(result.authentication()).getDetails()).isInstanceOf(AttemptJwt.class);
     }
 
     @Test

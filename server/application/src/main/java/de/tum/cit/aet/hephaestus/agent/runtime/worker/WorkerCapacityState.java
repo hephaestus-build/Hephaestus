@@ -1,11 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Per-worker in-flight count of review jobs. Read by the capacity reporter, drain coordinator, and
- * {@code ReviewJobExecutor}; the resolved max comes from {@link WorkerProperties}.
+ * Per-worker in-flight count of review jobs, which {@code ReviewJobExecutor} claims against and the capacity gauges
+ * read; the resolved max comes from {@link WorkerProperties}.
  */
 public final class WorkerCapacityState {
 
@@ -37,9 +36,12 @@ public final class WorkerCapacityState {
         }
     }
 
-    public CapacityReport snapshot() {
-        int review = inFlightReview.get();
-        return new CapacityReport(reviewMax, review, Math.max(0, reviewMax - review));
+    public int inFlightReview() {
+        return inFlightReview.get();
+    }
+
+    public int spareReview() {
+        return Math.max(0, reviewMax - inFlightReview.get());
     }
 
     public int reviewMax() {

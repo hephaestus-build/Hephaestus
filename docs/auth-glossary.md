@@ -30,8 +30,8 @@ The implementation column gives exact code names for those separate concepts.
 - `Jwt.getTokenValue()` / `.getToken()` — only inside `core.auth.jwt.*`.
 - New `@RestController` without `@Tag`; new public mapping without `@Operation(summary, operationId)`.
 
-`com.auth0.jwt.*` is **not** banned: it signs and verifies the worker-hub tokens
-(`core.runtime.hub.auth`) and the GitHub App installation token, and `NoKeycloakImportTest` says so
+`com.auth0.jwt.*` is **not** banned: it signs and verifies the attempt tokens of sandboxes
+(`agent.attempt`) and the GitHub App installation token, and `NoKeycloakImportTest` says so
 explicitly. Cookie-session JWTs are a separate path and do not use it.
 
 Login lookup never queries by email — the identity repository deliberately has no `findByEmail`, the

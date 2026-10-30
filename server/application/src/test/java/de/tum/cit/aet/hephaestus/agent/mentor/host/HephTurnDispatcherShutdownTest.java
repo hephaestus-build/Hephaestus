@@ -10,18 +10,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerControlClient;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -34,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -41,25 +40,100 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.DefaultLifecycleProcessor;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The worker's review drain and Heph drain share one shutdown phase. Spring's lifecycle processor stops each bean of a
+ * The worker's review drain and Hephaestus drain share one shutdown phase. Spring's lifecycle processor stops each bean of a
  * phase in turn and then waits for all their callbacks, so the two drains overlap only when neither waits inside
  * {@code stop(Runnable)}. Every wait here is a latch the test opens.
  */
 class HephTurnDispatcherShutdownTest extends BaseUnitTest {
 
+    private static final class IdleSandbox implements HostSandbox {
+        final BlockingQueue<Host> launched = new LinkedBlockingQueue<>();
+        final BlockingQueue<Host> removed = new LinkedBlockingQueue<>();
+
+        @Override
+        public Host launch(UUID id, HostSpec spec) {
+            Host host = new Host(id);
+            launched.add(host);
+            return host;
+        }
+
+        @Override
+        public boolean isRunning(Host host) {
+            return !removed.contains(host);
+        }
+
+        @Override
+        public void remove(Host host) {
+            removed.add(host);
+        }
+    }
+
+    @Test
+    void shouldStartAnIdleReplacementBeforeTheOldHostDrains() throws Exception {
+        IdleSandbox oldSandbox = new IdleSandbox();
+        IdleSandbox replacementSandbox = new IdleSandbox();
+        HephHost oldHost = new HephHost(oldSandbox);
+        HephHost replacement = new HephHost(replacementSandbox);
+        HephTurnDispatcher oldWorker = dispatcher(
+                mock(MentorTurnStarter.class),
+                mock(MentorTurnService.class),
+                mock(MentorTurnCompletion.class),
+                oldHost);
+        HephTurnDispatcher newWorker = dispatcher(
+                mock(MentorTurnStarter.class),
+                mock(MentorTurnService.class),
+                mock(MentorTurnCompletion.class),
+                replacement);
+        try {
+            CompletableFuture<Boolean> started =
+                    CompletableFuture.supplyAsync(() -> oldHost.awaitReady(Duration.ofSeconds(10)));
+            HostSandbox.Host oldLaunch = Objects.requireNonNull(oldSandbox.launched.poll(10, TimeUnit.SECONDS));
+            assertThat(oldHost.connected(oldLaunch.id(), mock(WebSocketSession.class)))
+                    .isTrue();
+            assertThat(started.get(10, TimeUnit.SECONDS)).isTrue();
+            oldWorker.start();
+
+            newWorker.start();
+            HostSandbox.Host next = Objects.requireNonNull(
+                    replacementSandbox.launched.poll(10, TimeUnit.SECONDS),
+                    "an idle replacement starts its host without a queued turn");
+            assertThat(replacement.isReady()).isFalse();
+            assertThat(newWorker.health().getStatus()).isEqualTo(Status.DOWN);
+            assertThat(oldWorker.health().getStatus()).isEqualTo(Status.UP);
+            assertThat(oldHost.isReady()).isTrue();
+            assertThat(oldSandbox.removed).isEmpty();
+
+            assertThat(replacement.connected(next.id(), mock(WebSocketSession.class)))
+                    .isTrue();
+            await().atMost(Duration.ofSeconds(10)).until(replacement::isReady);
+            assertThat(newWorker.health().getStatus()).isEqualTo(Status.UP);
+            oldWorker.stop();
+
+            assertThat(oldSandbox.removed).containsExactly(oldLaunch);
+            assertThat(oldHost.isReady()).isFalse();
+            assertThat(replacement.isReady()).isTrue();
+            assertThat(newWorker.health().getStatus()).isEqualTo(Status.UP);
+        } finally {
+            oldWorker.stop();
+            newWorker.stop();
+        }
+    }
+
     /** Opens every drain the test holds. */
     private final CountDownLatch release = new CountDownLatch(1);
 
-    /** Counted once the Heph drain removes the host; it then waits for {@link #release}. */
+    /** Counted once the Hephaestus drain removes the host; it then waits for {@link #release}. */
     private final CountDownLatch hephWaits = new CountDownLatch(1);
 
     private final AtomicBoolean hephEnded = new AtomicBoolean();
@@ -68,7 +142,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
     private final BlockingQueue<String> frames = new LinkedBlockingQueue<>();
 
     /**
-     * A host that is ready and takes every command, and whose removal is the end of the Heph drain, held until the test
+     * A host that is ready and takes every command, and whose removal is the end of the Hephaestus drain, held until the test
      * releases it.
      */
     private final class HeldHost extends HephHost {
@@ -118,12 +192,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         });
         WorkerProperties properties = WorkerPropertiesFixtures.withDrain(Duration.ofMinutes(5));
         var coordinator = new WorkerDrainCoordinator(
-                mock(WorkerControlClient.class),
-                new WorkerCapacityState(properties),
-                properties,
-                Optional.of(executor),
-                mock(ApplicationEventPublisher.class),
-                new SimpleMeterRegistry());
+                properties, Optional.of(executor), mock(ApplicationEventPublisher.class), new SimpleMeterRegistry());
         HephTurnDispatcher dispatcher = dispatcher();
         var webServer = new WebServerPhase(() -> reviewEnded.get() && hephEnded.get());
 
@@ -148,10 +217,10 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                     .as("the review drain waits for the review in flight")
                     .isTrue();
             assertThat(hephWaits.await(10, TimeUnit.SECONDS))
-                    .as("the Heph drain ends its turns while the review drain still waits")
+                    .as("the Hephaestus drain ends its turns while the review drain still waits")
                     .isTrue();
             verify(executor).stopAcceptingNewJobs();
-            assertThat(dispatcher.isRunning()).as("Heph claims no turn").isFalse();
+            assertThat(dispatcher.isRunning()).as("Hephaestus claims no turn").isFalse();
             assertThat(closing.isAlive()).as("the phase waits for both drains").isTrue();
             assertThat(webServer.isRunning())
                     .as("the web server still serves the gateway")
@@ -247,7 +316,6 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         when(turn.getId()).thenReturn(turnId);
         when(turn.getWorkspaceId()).thenReturn(7L);
         when(turn.getAttempt()).thenReturn(1);
-        when(turn.getConversationId()).thenReturn(UUID.randomUUID());
         when(turn.getStatus()).thenReturn(MentorTurn.Status.RUNNING);
         MentorTurnService turns = mock(MentorTurnService.class);
         when(turns.require(7L, turnId)).thenReturn(turn);
@@ -285,7 +353,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
             String start =
                     Objects.requireNonNull(frames.poll(10, TimeUnit.SECONDS), "the claimed turn starts on the host");
             assertThat(new JsonMapper().readTree(start).path("type").asString()).isEqualTo("start");
-            assertThat(dispatcher.runs(turnId, 1)).isTrue();
+            assertThat(dispatcher.running(turnId, 1)).isPresent();
             assertThat(hephWaits.getCount()).as("the drain waits for the turn").isEqualTo(1);
 
             dispatcher.ended(turnId, 1);
@@ -359,7 +427,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                 host,
                 new ProxyCallsInFlight(3),
                 mock(TurnSandboxes.class),
-                mock(WorkerJwtIssuer.class),
+                mock(AttemptTokenIssuer.class),
                 new JsonMapper(),
                 Clock.systemUTC(),
                 new SimpleMeterRegistry(),

@@ -1,11 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -37,7 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The endpoints a Heph host calls for one turn, on this worker's sandbox gateway, with the turn's credential. Each
+ * The endpoints a Hephaestus host calls for one turn, on this worker's sandbox gateway, with the turn's credential. Each
  * acts only for the turn, developer and conversation the credential names, and only while the attempt runs on this
  * worker ({@link MentorLeaseLostException}). The ledger classifies the
  * entries that the end carries; the host's word is not taken for that.
@@ -80,7 +81,7 @@ public class HephTurnController {
 
     @GetMapping("/context")
     public HephTurnContexts.Context context(@PathVariable UUID turnId, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         return contexts.context(turn);
     }
 
@@ -90,13 +91,13 @@ public class HephTurnController {
     @PostMapping("/link-result")
     public ResultLink linkResult(
             @PathVariable UUID turnId, @Valid @RequestBody ResultLink request, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "link_result",
                 () -> {
                     if (!contexts.admitsResult(turn, request.resultId())) {
-                        throw refused("it is not a result of the developer that Heph may show");
+                        throw refused("it is not a result of the developer that Hephaestus may show");
                     }
                     return request;
                 },
@@ -109,13 +110,13 @@ public class HephTurnController {
     @PostMapping("/link-problem")
     public ProblemLink linkProblem(
             @PathVariable UUID turnId, @Valid @RequestBody ProblemLink request, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "link_problem",
                 () -> {
                     if (!contexts.admitsProblem(turn, request.problemId())) {
-                        throw refused("it is not a problem on a result of the developer that Heph may show");
+                        throw refused("it is not a problem on a result of the developer that Hephaestus may show");
                     }
                     return request;
                 },
@@ -131,7 +132,7 @@ public class HephTurnController {
     @PostMapping("/show-feedback")
     public FeedbackShow showFeedback(
             @PathVariable UUID turnId, @Valid @RequestBody FeedbackShow request, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "show_feedback",
@@ -163,7 +164,7 @@ public class HephTurnController {
     @PostMapping("/search")
     public SearchResponse search(
             @PathVariable UUID turnId, @Valid @RequestBody SearchRequest request, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         String branch = request.branch();
         MentorEntryService.SearchScope scope;
         try {
@@ -188,7 +189,7 @@ public class HephTurnController {
     @PutMapping("/partial")
     public ResponseEntity<Void> partial(
             @PathVariable UUID turnId, @RequestBody JsonNode partial, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         if (!partial.isObject()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A partial answer is a JSON object");
         }
@@ -244,7 +245,7 @@ public class HephTurnController {
     @PostMapping("/end")
     public ResponseEntity<Void> end(
             @PathVariable UUID turnId, @Valid @RequestBody EndRequest request, Authentication authentication) {
-        TurnJwt turn = turn(turnId, authentication);
+        TurnAttempt turn = turn(turnId, authentication);
         List<JsonNode> entries = validated(request.entries());
         MentorTurn.Status outcome = switch (request.outcome()) {
             case DONE -> MentorTurn.Status.DONE;
@@ -262,12 +263,12 @@ public class HephTurnController {
         String detail = request.detail();
         String cause = outcome != MentorTurn.Status.FAILED
                 ? null
-                : "its Heph host reported " + reason
+                : "its Hephaestus host reported " + reason
                         + (detail == null ? "" : ": " + (FAILURE_DETAILS.contains(detail) ? detail : "unrecognized"));
         // A host that gave up on its model call cannot wait for it: a silent provider would hold the end.
         if (!callsInFlight.settle(turn.turnId(), turn.attempt(), outcome != MentorTurn.Status.DONE)) {
             log.warn(
-                    "Heph turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
+                    "conversation turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
                     turn.turnId(),
                     turn.attempt());
         }
@@ -292,20 +293,25 @@ public class HephTurnController {
      *
      * @throws MentorLeaseLostException when the attempt no longer runs here
      */
-    private TurnJwt turn(UUID turnId, Authentication authentication) {
+    private TurnAttempt turn(UUID turnId, Authentication authentication) {
         return turn(dispatcher, turnId, authentication);
     }
 
     /** {@link #turn(UUID, Authentication)}, for the other controllers of the turn endpoints. */
-    static TurnJwt turn(HephTurnDispatcher dispatcher, UUID turnId, Authentication authentication) {
-        if (!(authentication.getDetails() instanceof TurnJwt turn)
-                || !turn.turnId().equals(turnId)) {
+    static TurnAttempt turn(HephTurnDispatcher dispatcher, UUID turnId, Authentication authentication) {
+        if (!(authentication.getDetails() instanceof AttemptJwt token)
+                || token.kind() != AttemptJwt.Kind.TURN
+                || !token.id().equals(turnId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        if (!dispatcher.runs(turn.turnId(), turn.attempt())) {
-            throw new MentorLeaseLostException(turn.turnId(), turn.attempt());
+        TurnAttempt attempt = dispatcher
+                .running(turnId, token.attempt())
+                .orElseThrow(() -> new MentorLeaseLostException(turnId, token.attempt()));
+        // The token binds its workspace: a token of another workspace reaches no turn, whatever its id.
+        if (!attempt.workspaceId().equals(token.workspaceId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        return turn;
+        return attempt;
     }
 
     private static List<JsonNode> validated(List<JsonNode> entries) {

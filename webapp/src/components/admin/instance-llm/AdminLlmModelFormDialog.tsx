@@ -1,4 +1,8 @@
 import { useState } from "react";
+import {
+	LlmModelCapabilities,
+	type LlmModelCapabilitiesProps,
+} from "@/components/admin/instance-llm/LlmModelCapabilities";
 
 import type {
 	CreateLlmModelRequest,
@@ -19,7 +23,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldLegend, FieldSet } from "@/components/ui/field";
+import {
+	Field,
+	FieldDescription,
+	FieldLegend,
+	FieldSeparator,
+	FieldSet,
+} from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
@@ -43,6 +53,7 @@ export interface AdminLlmModelFormDialogProps {
 	workspaceOptions: WorkspaceOption[];
 	probedModelIds: string[];
 	isSubmitting: boolean;
+	capabilities?: LlmModelCapabilitiesProps;
 	onSave: (body: AdminLlmModelSaveBody) => void;
 }
 
@@ -87,6 +98,7 @@ function AdminLlmModelFormDialogContent({
 	workspaceOptions,
 	probedModelIds,
 	isSubmitting,
+	capabilities,
 	onSave,
 }: AdminLlmModelFormDialogContentProps) {
 	const isEdit = editing !== null;
@@ -205,6 +217,12 @@ function AdminLlmModelFormDialogContent({
 								</Field>
 							)}
 						</FieldSet>
+					)}
+					{isEdit && capabilities && (
+						<>
+							<FieldSeparator />
+							<LlmModelCapabilities {...capabilities} />
+						</>
 					)}
 				</DialogBody>
 

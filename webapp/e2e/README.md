@@ -38,10 +38,10 @@ E2E_LIVE_USERNAME=e2e E2E_GITHUB_WORKSPACE=github-workspace \
 
 Set `E2E_MUTATE_LIVE_INTEGRATIONS=true` as well to run the provider-sync mutation test.
 
-`heph.spec.ts` drives the Heph page with no model: the packaged-server suite runs without a worker, so a
-question stays queued. `heph.live.spec.ts` checks that Heph answers. It needs a server with the worker role
+`heph.spec.ts` drives the Hephaestus page with no model: the packaged-server suite runs without a worker, so a
+question stays queued. `heph.live.spec.ts` checks that Hephaestus answers. It needs a server with the worker role
 (the `e2e` profile without `playwright`), Docker and the agent image, as in
-[the testing guide](../../docs/contributor/testing.mdx#heph-turn-live-test). It is skipped unless
+[the testing guide](../../docs/contributor/testing.mdx#conversation-turn-live-test). It is skipped unless
 `E2E_LLM_BASE_URL`, `E2E_LLM_KEY` and `E2E_MODEL` are set. It reads and provisions the model with the same
 code as `scripts/e2e-setup.ts` (`scripts/lib/e2e-llm.ts`), so `E2E_LLM_PROTOCOL` (default
 `openai-responses`) and `E2E_LLM_AUTH_MODE` (default `BEARER`) apply too:
@@ -54,7 +54,7 @@ E2E_LLM_BASE_URL=https://llm.example/v1 E2E_LLM_KEY=... E2E_MODEL=... \
 The live spec keeps one instance connection, `e2e-live-llm`. Each run sets its key again, so a rotated key
 takes effect. If its base URL, protocol or auth mode differ from the variables, the run stops and says so,
 because the server cannot change them. Delete the connection to switch providers. The spec binds the model to
-Heph in the `e2e` workspace and binds the seeded model again when it ends.
+Hephaestus in the `e2e` workspace and binds the seeded model again when it ends.
 
 `accessibility.spec.ts` is the integrated half of the accessibility evaluation: axe on every route in both
 colour schemes, a Tab walk, reflow, menus, dialogs and three keyboard-only processes. It needs only the

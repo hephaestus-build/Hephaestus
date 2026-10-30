@@ -1,11 +1,15 @@
 /**
- * The OpenAI-compatible model an E2E run talks to, read and provisioned once for every caller:
+ * The model an E2E run talks to, read and provisioned once for every caller:
  * `scripts/e2e-setup.ts` and the live Playwright specs. One reader keeps the defaults the same,
  * and one provisioner refreshes the key and refuses a changed route on every run.
  */
 import { asArray, asRecord } from "./json.ts";
 
-export const LLM_PROTOCOLS = ["openai-completions", "openai-responses"] as const;
+export const LLM_PROTOCOLS = [
+	"openai-completions",
+	"openai-responses",
+	"anthropic-messages",
+] as const;
 export const LLM_AUTH_MODES = ["BEARER", "API_KEY"] as const;
 
 export interface E2eLlmRoute {

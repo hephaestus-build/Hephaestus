@@ -1,11 +1,9 @@
 /**
- * The chart half of a release, rehearsed: chart-signing-rehearsal.yml packages the checked-out
+ * The chart half of a release, rehearsed: chart-signing-rehearsal.yml packages the selected
  * chart with throwaway image values and pushes it through the release's own publishReleaseChart,
  * then signs and verifies it as the release and an operator do. It pushes only to a scratch
  * repository that no release uses, so it never writes a release chart, a release, a tag or a lock.
  */
-import path from "node:path";
-
 import type { ChartImage, ChartValues } from "./kubernetes-chart.ts";
 import { type Execute, publishReleaseChart } from "./release-chart.ts";
 import type { ReleaseChart } from "./release-image-lock.ts";
@@ -65,16 +63,13 @@ export async function rehearseChart(
 }
 
 if (import.meta.main) {
-	const [runId = "", commit = "", repository = "", destination = ""] = process.argv.slice(2);
+	const [runId = "", commit = "", repository = "", source = "", destination = ""] =
+		process.argv.slice(2);
 	if (destination === "") {
-		throw new Error("usage: rehearse-chart-signing <run-id> <commit> <repository> <directory>");
+		throw new Error(
+			"usage: rehearse-chart-signing <run-id> <commit> <repository> <source> <directory>",
+		);
 	}
-	const chart = await rehearseChart(
-		runId,
-		commit,
-		repository,
-		path.join(import.meta.dirname, "..", "deploy/chart/hephaestus"),
-		destination,
-	);
+	const chart = await rehearseChart(runId, commit, repository, source, destination);
 	process.stdout.write(`${JSON.stringify(chart)}\n`);
 }

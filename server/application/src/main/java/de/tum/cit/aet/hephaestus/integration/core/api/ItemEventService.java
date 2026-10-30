@@ -98,10 +98,12 @@ public class ItemEventService {
             publisher.publishEvent(new ItemEventRecorded(input.workspaceId(), id, input.itemId()));
             return id;
         }
-        var existing = repository
-                .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
-                        input.workspaceId(), input.itemId(), input.name().value(), version)
-                .or(() -> bySource(input))
+        // A conflict is a redelivery of one provider event, found by its source key, or a second occasion at a version
+        // that keeps one occasion of the name. The checks event repeats per version and always has a source key, so
+        // it never reaches the version lookup, which could match more than one of its rows.
+        var existing = bySource(input)
+                .or(() -> repository.findByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                        input.workspaceId(), input.itemId(), input.name().value(), version))
                 .orElseThrow();
         observeSource(input.workspaceId(), input.itemId(), input.name());
         return existing.getId();
@@ -161,10 +163,8 @@ public class ItemEventService {
     public boolean pin(long workspaceId, long itemId, Unresolved event, String itemVersion, @Nullable String evidence) {
         if (evidence != null && !ItemEventInput.fits(evidence))
             throw new IllegalArgumentException("Invalid item event evidence");
-        if (repository
-                .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
-                        workspaceId, itemId, event.name().value(), itemVersion)
-                .isPresent()) {
+        if (repository.existsByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                workspaceId, itemId, event.name().value(), itemVersion)) {
             decide(workspaceId, event.id(), event.state(), ItemEventState.WITHHELD, ReviewRequestReason.COALESCED);
             observeSource(workspaceId, itemId, event.name());
             return false;

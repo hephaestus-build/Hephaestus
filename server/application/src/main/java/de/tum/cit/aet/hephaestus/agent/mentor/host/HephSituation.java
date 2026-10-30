@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
@@ -51,7 +51,7 @@ public class HephSituation {
     private final Clock clock;
 
     @Transactional(readOnly = true)
-    public String render(TurnJwt turn, ZoneId zone) {
+    public String render(TurnAttempt turn, ZoneId zone) {
         String situation = situations.render(turn.workspaceId(), turn.turnId(), zone);
         int close = situation.lastIndexOf(CLOSE);
         return situation.substring(0, close) + identity(turn.accountId()) + calendar(zone) + situation.substring(close);

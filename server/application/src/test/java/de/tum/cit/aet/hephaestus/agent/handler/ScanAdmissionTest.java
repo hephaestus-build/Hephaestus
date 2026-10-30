@@ -28,8 +28,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmCitationVerifier;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeReads;
+import de.tum.cit.aet.hephaestus.practices.ScanDefinition;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
@@ -96,9 +101,30 @@ class ScanAdmissionTest extends BaseUnitTest {
                 new PinnedPractice(
                         practice.practiceId(),
                         practice.practiceVersionId(),
-                        DefinitionTestFixtures.definition(KIND, "Clear names", "Use clear names.", null),
+                        scanned(DefinitionTestFixtures.definition(KIND, "Clear names", "Use clear names.", null)),
                         practice.reviewDigest(),
                         practice.method()));
+    }
+
+    /** The practice as a scan runs it: its scan settings read the repository files. */
+    private static PracticeDefinition scanned(PracticeDefinition original) {
+        return new PracticeDefinition(
+                original.name(),
+                original.reviewOn(),
+                original.appliesWhen(),
+                original.about(),
+                original.reads(),
+                original.reviewedBy(),
+                original.criteria(),
+                original.script(),
+                new ScanDefinition(
+                        KIND,
+                        List.of("**/*"),
+                        List.of(),
+                        List.of("**/*"),
+                        new PracticeReads("3.0.0", List.of(new PracticeReadSource(SOURCE, ReadNeed.REQUIRED)))),
+                original.lineNotes(),
+                original.guidance());
     }
 
     private JobEvidenceFiles files() {

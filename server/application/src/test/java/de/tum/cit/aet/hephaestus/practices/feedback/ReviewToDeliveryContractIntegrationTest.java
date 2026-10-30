@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -56,6 +58,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
+import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeReads;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
@@ -78,6 +85,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -123,6 +131,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewAdmissionData admissions;
+
+    @Autowired
+    private PracticeVersionService versions;
 
     @Autowired
     private ResultAdmissionService admission;
@@ -308,6 +319,94 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(member.getReason()).isEqualTo("source_unavailable");
                         assertThat(member.getResultId()).isNull();
                     });
+        }
+    }
+
+    @Test
+    void shouldWithholdAnUndeclaredSourceAndComposeOnlyTheValidSibling() {
+        var d = DefinitionTestFixtures.definition();
+        var definition = new PracticeDefinition(
+                d.name(),
+                d.reviewOn(),
+                d.appliesWhen(),
+                d.about(),
+                new PracticeReads(
+                        "3.0.0",
+                        List.of(new PracticeReadSource(new SourceKind("scm.pull-request.diff"), ReadNeed.REQUIRED))),
+                d.reviewedBy(),
+                d.criteria(),
+                d.script(),
+                d.scan(),
+                d.lineNotes(),
+                d.guidance());
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC, definition)) {
+            var scenario = review.pending().scenario();
+            var sibling = versions.create(new PracticeVersionService.NewPractice(
+                    scenario.workspace(),
+                    "declared-sibling",
+                    scenario.item().getKind(),
+                    d,
+                    null,
+                    1,
+                    review.developerId()));
+            jdbc.update(
+                    "UPDATE practice SET feedback_mode='AUTOMATIC' WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    sibling.getId());
+            admissions.assigned(review.pending(), sibling);
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            var original = request(review);
+            var sent = original.results().getFirst();
+            var request = new AdmissionRequestDTO(
+                    3,
+                    review.reviewId(),
+                    job.getId(),
+                    0,
+                    List.of(
+                            sent,
+                            new SubmittedResultDTO(
+                                    sibling.getSlug(),
+                                    sent.itemId(),
+                                    sent.itemVersion(),
+                                    sent.candidate(),
+                                    sent.readReceipts())),
+                    List.of());
+
+            var response = admission.admit(review.identity(), request);
+
+            assertThat(response.withheld()).singleElement().satisfies(row -> {
+                assertThat(row.practiceSlug()).isEqualTo(review.practiceSlug());
+                assertThat(row.reason()).isEqualTo("undeclared_source_cited");
+            });
+            assertThat(response.admitted())
+                    .singleElement()
+                    .satisfies(row -> assertThat(row.practiceSlug()).isEqualTo(sibling.getSlug()));
+            assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .hasValueSatisfying(row -> {
+                        assertThat(row.getState()).isEqualTo(ReviewItemState.WITHHELD);
+                        assertThat(row.getReason()).isEqualTo("undeclared_source_cited");
+                        assertThat(row.getResultId()).isNull();
+                    });
+            var result = results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(
+                    review.workspaceId(), review.reviewId());
+            assertThat(result)
+                    .singleElement()
+                    .satisfies(row -> assertThat(row.getPracticeId()).isEqualTo(sibling.getId()));
+            assertThat(problems.findByWorkspaceIdAndResultIdOrderByPositionAsc(
+                            review.workspaceId(), result.getFirst().getId()))
+                    .hasSize(1);
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            var prepared =
+                    admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            assertThat(basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(
+                            review.workspaceId(), prepared.feedbackIds().getFirst()))
+                    .singleElement()
+                    .satisfies(row -> assertThat(row.getResultId())
+                            .isEqualTo(result.getFirst().getId()));
         }
     }
 
@@ -525,7 +624,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     reviewProperties,
                     agentProperties,
                     meters,
-                    mapper);
+                    mapper,
+                    new CompositionCapacity(4));
             composer.composeAfterMeasurement(job, WORKER, Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
@@ -679,7 +779,11 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     /** A running attempt of one ITEM review of a GitHub pull request, claimed by {@link #WORKER}, with its capture. */
     private ClaimedReview claimedReview(FeedbackMode mode) {
-        var scenario = data.scenario();
+        return claimedReview(mode, DefinitionTestFixtures.definition());
+    }
+
+    private ClaimedReview claimedReview(FeedbackMode mode, PracticeDefinition definition) {
+        var scenario = data.scenario(definition);
         var workspace = scenario.workspace();
         jdbc.update(
                 "UPDATE practice SET feedback_mode=? WHERE workspace_id=? AND id=?",
@@ -796,7 +900,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 pull.getId(),
                 repository.getNameWithOwner(),
                 pull.getNumber(),
-                inputs);
+                inputs,
+                pending);
     }
 
     /** What the worker's capture recorded: the pull request record, staged and citable as one text. */
@@ -904,7 +1009,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             long pullRequestId,
             String repository,
             int pullRequestNumber,
-            PreparedJobInputs inputs)
+            PreparedJobInputs inputs,
+            ReviewAdmissionData.Pending pending)
             implements AutoCloseable {
         long workspaceId() {
             return identity.workspaceId();

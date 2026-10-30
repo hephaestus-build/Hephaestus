@@ -45,6 +45,10 @@ The Avoid columns apply to the named concept in UI, code, API contracts and pros
 They do not ban unrelated technical meanings, such as Slack channels, SQL triggers or operating-system signals.
 Historical ADR bodies and released migration records keep their exact terms.
 
+*Heph* is retired as a name.
+Write Hephaestus, or Ask Hephaestus for the area.
+Slack wire identifiers keep `heph_*`.
+
 *Habit* is retired for a practice or a repeated pattern in someone's work.
 *Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for activity.
 [ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-activity-counts-work-and-never-ranks-people.md) owns that decision.
@@ -197,7 +201,7 @@ Hephaestus never sends an open question as feedback.
 | **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit, AI mentoring, AI code review |
 | **Destination** | Where feedback is intended to appear: on the work, on the practice page, or in conversation. | channel, location, surface |
 | **Delivery** | Whether feedback is awaiting approval, ready, delivered, withheld, rejected, replaced, failed or unconfirmed. | surface |
-| **Copy** | One appearance of feedback: a summary, line note, file note or Heph answer. | placement |
+| **Copy** | One appearance of feedback: a summary, line note, file note or conversation answer. | placement |
 | **Decision** | An admin action on feedback: approve, reject, withdraw or restore. |  |
 | **Response** | The developer's answer to feedback. Resolution and usefulness are separate dimensions. |  |
 | **Disagreement** | A response that says the feedback is wrong and gives a reason. | dispute, disputed |
@@ -209,14 +213,14 @@ Hephaestus never sends an open question as feedback.
 | --- | --- | --- |
 | ON_WORK | On the work | Guidance about the current work, at the provider that holds it. |
 | PRACTICE_PAGE | On the practice page | Private guidance about a pattern in the developer's work. |
-| CONVERSATION | In conversation | Private feedback that Heph can show when it fits a conversation. |
+| CONVERSATION | In conversation | Private feedback that Hephaestus can show when it fits a conversation. |
 
 A provider is a separate fact from a destination.
 A Slack conversation and an app conversation have the same destination.
 A destination does not establish a scientific level of feedback.
 The [standard terms](./practice-review-glossary.mdx#standard-terms) explain the limits of that comparison.
 
-Feedback in conversation counts as delivered only when Heph shows it to the developer.
+Feedback in conversation counts as delivered only when Hephaestus shows it in an answer.
 A link alone does not establish delivery.
 A record of an uncertain write does not establish delivery either.
 Unconfirmed means a write began and its visibility is unknown.
@@ -239,10 +243,9 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Workspace** | One team's tenant, with its connected repositories, members, practices and feedback. |  |
 | **Instance** | One running deployment that hosts workspaces. |  |
 | **Integration** | One connected provider: GitHub, GitLab, Slack or Outline. |  |
-| **Heph** | The conversational assistant. | agent, bot, mentor |
-| **Conversations** | The product area for conversations with Heph. | Mentor |
+| **Ask Hephaestus** | The product area where a developer talks with Hephaestus: its menu item, page and panel. | Heph, Mentor, Conversations (as the area), chat, AI assistant |
 | **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. |  |
-| **Hephaestus** | The application. | agent, AI mentor |
+| **Hephaestus** | The application. It also answers in a developer's conversation. | agent, AI mentor, Heph, mentor, assistant |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
 | **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. A change to the work keeps its last decision until a newer review decides again. | score, grade, rating |
@@ -287,22 +290,22 @@ Use the research word only when you quote or cite the research.
 | Assessment | Observation and its outcome |
 | Delivery strategy: in-context, in-app, in-chat | Destination: On the work, On the practice page, In conversation |
 | Mentor approves feedback | A workspace admin approves feedback in the Approve first feedback mode |
-| Reply: agree, disagree, question, usefulness | Response (resolution and usefulness), Disagreement, or a question in the Heph conversation |
+| Reply: agree, disagree, question, usefulness | Response (resolution and usefulness), Disagreement, or a question in the conversation |
 
 The outcomes, problem, severity and next step have the same names in both.
 A destination matches a delivery strategy only by the place where feedback appears.
 [Destinations](#destinations) states that a destination does not establish a level of feedback.
 
-### Heph
+### Conversation
 
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
-| **Heph conversation** | The one conversation that an account has with Heph in a workspace. The app shows all of it. A Slack direct message shows the part that the developer asked in Slack. | chat, session, chat history |
-| **Heph thread** | A conversation that starts at one top-level message of the Heph conversation. It is one level deep. Each message has at most one. A Heph thread started in Slack also appears in Slack. UI and user docs say thread. | fork, branch, sub-chat |
-| **Message** (Heph) | One question, answer or weekly digest in a Heph conversation. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
-| **Weekly digest** | A message that Hephaestus writes into a developer's Heph conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
+| **Conversation** | The one conversation that an account has with Hephaestus in a workspace. The app shows all of it. A Slack direct message shows the part that the developer asked in Slack. | chat, session, chat history |
+| **Thread** | A conversation that starts at one top-level message of the conversation. It is one level deep. Each message has at most one. A thread started in Slack also appears in Slack. UI and user docs say thread. | fork, branch, sub-chat |
+| **Message** (conversation) | One question, answer or weekly digest in a conversation. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
+| **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
 
-The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the Heph host, the context folder, the context document, the context loader and the turn sandbox.
+The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation host, the context folder, the context document, the context loader and the turn sandbox.
 [ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) owns the decisions behind these terms.
 
 ### Member onboarding and AI choices
@@ -369,7 +372,7 @@ A workspace admin cannot grant another person's research consent.
 | --- | --- | --- |
 | **Runtime role** | Server, worker or webhook: the part of one application JAR that a container starts. |  |
 | **Server** | The service that handles application requests. |  |
-| **Worker** | The runtime role that executes reviews and Heph turns. |  |
+| **Worker** | The runtime role that executes reviews and conversation turns. |  |
 | **Webhook** | A provider's HTTP request that reports an event. Also the runtime role that receives it. |  |
 | **API** | An interface for software calls. |  |
 | **UI** | The interface that a person uses. |  |

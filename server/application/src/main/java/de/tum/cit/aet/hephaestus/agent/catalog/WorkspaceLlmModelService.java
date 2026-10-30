@@ -179,6 +179,32 @@ public class WorkspaceLlmModelService {
     }
 
     @Transactional
+    public void recordCapability(
+            WorkspaceContext context,
+            Long id,
+            String upstream,
+            LlmProbeTarget target,
+            LlmModelCapabilitiesDTO capability) {
+        if (capability.forcedToolChoice() == null) return;
+        var model = modelRepository
+                .findByIdAndWorkspaceIdForUpdate(id, context.id())
+                .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmModel", id));
+        var connection = model.getConnection();
+        var current = new LlmProbeTarget(
+                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+        if (!upstream.equals(model.getUpstreamModelId()) || !target.equals(current))
+            throw new IllegalArgumentException("The model connection changed. Test it again.");
+        var before = WorkspaceLlmModelSnapshot.of(model);
+        model.setForcedToolChoice(capability.forcedToolChoice());
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.WORKSPACE_LLM_MODEL,
+                model.getId(),
+                context.id(),
+                before,
+                WorkspaceLlmModelSnapshot.of(model)));
+    }
+
+    @Transactional
     public void delete(WorkspaceContext workspaceContext, Long id) {
         WorkspaceLlmModel model = load(workspaceContext, id);
         if (agentBindingRepository.existsByWorkspaceModelIdAndWorkspaceId(id, workspaceContext.id())) {

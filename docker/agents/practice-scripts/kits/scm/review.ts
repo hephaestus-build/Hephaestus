@@ -11,7 +11,7 @@ import { optionalString } from "../../lib/core/json.ts";
 import { UnratedError, type Evidence } from "../../lib/core/practice-script.ts";
 import type { ChangeCommit } from "./change.ts";
 import type { SubIssueSource } from "./issue-classification.ts";
-import type { pullRequestRecordSchema } from "./records.ts";
+import { pullRequestChecksRecordSchema, type pullRequestRecordSchema } from "./records.ts";
 import type { DiffFile } from "./types.ts";
 
 export interface LinkedWorkItem {
@@ -124,6 +124,7 @@ const generalCommentsSchema = z
 	.object({ comments: z.array(commentSchema) })
 	.transform((record) => record.comments);
 const reviewThreadsSchema = z.object({
+	review_decision: z.string().optional(),
 	threads: z.array(
 		z.object({
 			id: z.int().nonnegative().optional(),
@@ -273,19 +274,28 @@ export async function readGeneralComments(
 }
 
 /** Null means review_threads.json was not captured; an empty array is a captured empty record. */
-export async function readReviewThreads(
-	evidence: Pick<Evidence, "record">,
-): Promise<{ threads: ReviewThread[]; decisions: ReviewDecision[] } | null> {
+export async function readReviewThreads(evidence: Pick<Evidence, "record">): Promise<{
+	threads: ReviewThread[];
+	decisions: ReviewDecision[];
+	reviewDecision?: string;
+} | null> {
 	const record = await readReviewRecord(evidence, "review_threads.json", reviewThreadsSchema);
 	return record === null
 		? null
 		: {
 				threads: record.data.threads,
+				reviewDecision: record.data.review_decision,
 				decisions: record.data.reviewDecisions.map((decision) => ({
 					...decision,
 					bot: decision.bot ?? false,
 				})),
 			};
+}
+
+/** Null means the checks source was not captured, never that CI was absent. */
+export async function readPullRequestChecks(evidence: Pick<Evidence, "record">) {
+	const record = await readReviewRecord(evidence, "checks.json", pullRequestChecksRecordSchema);
+	return record?.data ?? null;
 }
 
 interface CheckableItem {
@@ -410,7 +420,7 @@ interface MergeFacts {
 
 type MergeRecord = Pick<
 	z.infer<typeof pullRequestRecordSchema>,
-	"merged_at" | "merged_by" | "author" | "review_decision" | "merge_state_status" | "head_checks"
+	"merged_at" | "merged_by" | "author"
 >;
 
 /**
@@ -433,7 +443,8 @@ export function mergeFacts(record: MergeRecord): MergeFacts {
 	};
 }
 
-export function mergeLead(record: MergeRecord, merge: MergeFacts, label: string): ReviewLead {
+/** Stored practice programs call this API with the work record before the merge facts. */
+export function mergeLead(_record: MergeRecord, merge: MergeFacts, label: string): ReviewLead {
 	return {
 		at: { record: "metadata.json" },
 		label,
@@ -442,9 +453,6 @@ export function mergeLead(record: MergeRecord, merge: MergeFacts, label: string)
 			mergedByIsAuthor: merge.mergedByIsAuthor,
 			mergedAt: merge.mergedAt ?? "",
 			author: merge.author ?? "",
-			reviewDecision: record.review_decision ?? "",
-			mergeStateStatus: record.merge_state_status ?? "",
-			headChecks: record.head_checks ?? "",
 		}),
 	};
 }

@@ -1,7 +1,7 @@
 {
 	"NOT_FOUND": {
-		"contractVersion": "2.0.0",
-		"catalogDigest": "da3e46cdff053f2554b5f2c4c667bb6d3fae2146977b547684d693b58098a681",
+		"contractVersion": "3.0.0",
+		"catalogDigest": "01b9ea3673a3b7b5b0870ea660eff53d3102599e1aa3b2907cefc5e5a3252027",
 		"itemKind": "scm.pull_request",
 		"manifestCapturedAt": "2026-01-01T00:00:00Z",
 		"decidedAt": "2026-01-01T00:00:00Z",
@@ -14,7 +14,7 @@
 				"sourceChecks": [
 					{
 						"sourceKind": "scm.pull-request.diff",
-						"sourceContractVersion": "2.0.0",
+						"sourceContractVersion": "3.0.0",
 						"checkedAt": "2026-01-01T00:00:00Z",
 						"temporalAnchor": "2026-01-01T00:00:00Z",
 						"meetsRequirements": true,
@@ -38,8 +38,8 @@
 		}
 	},
 	"FOUND": {
-		"contractVersion": "2.0.0",
-		"catalogDigest": "da3e46cdff053f2554b5f2c4c667bb6d3fae2146977b547684d693b58098a681",
+		"contractVersion": "3.0.0",
+		"catalogDigest": "01b9ea3673a3b7b5b0870ea660eff53d3102599e1aa3b2907cefc5e5a3252027",
 		"itemKind": "scm.pull_request",
 		"manifestCapturedAt": "2026-01-01T00:00:00Z",
 		"decidedAt": "2026-01-01T00:00:00Z",
@@ -52,7 +52,7 @@
 				"sourceChecks": [
 					{
 						"sourceKind": "scm.pull-request.diff",
-						"sourceContractVersion": "2.0.0",
+						"sourceContractVersion": "3.0.0",
 						"checkedAt": "2026-01-01T00:00:00Z",
 						"temporalAnchor": "2026-01-01T00:00:00Z",
 						"meetsRequirements": true,
@@ -76,8 +76,8 @@
 		}
 	},
 	"UNDECIDABLE": {
-		"contractVersion": "2.0.0",
-		"catalogDigest": "da3e46cdff053f2554b5f2c4c667bb6d3fae2146977b547684d693b58098a681",
+		"contractVersion": "3.0.0",
+		"catalogDigest": "01b9ea3673a3b7b5b0870ea660eff53d3102599e1aa3b2907cefc5e5a3252027",
 		"itemKind": "scm.pull_request",
 		"manifestCapturedAt": "2026-01-01T00:00:00Z",
 		"decidedAt": "2026-01-01T00:00:00Z",
@@ -90,7 +90,7 @@
 				"sourceChecks": [
 					{
 						"sourceKind": "scm.pull-request.diff",
-						"sourceContractVersion": "2.0.0",
+						"sourceContractVersion": "3.0.0",
 						"checkedAt": "2026-01-01T00:00:00Z",
 						"temporalAnchor": "2026-01-01T00:00:00Z",
 						"meetsRequirements": true,

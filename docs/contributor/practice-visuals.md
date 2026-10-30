@@ -34,7 +34,7 @@ The guide is for a developer who wants more depth.
 - Draw nothing that the criteria do not state: no count, no threshold, no limit, and no format.
 - Never repeat a whole clause of the lead or the caption in a label, a description, or a guide.
 
-Heph and screen readers get the descriptions, not the pictures.
+Hephaestus and screen readers get the descriptions, not the pictures.
 Thus, a description must give the full meaning of its picture.
 
 ## Clear at a glance

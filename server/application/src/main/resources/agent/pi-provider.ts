@@ -5,7 +5,6 @@ import type { ExtensionFactory, ModelRuntime } from "@earendil-works/pi-coding-a
 import { errorText } from "./pi-error-text.ts";
 import { hasText } from "./pi-text.ts";
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
-import { supportsForcedToolChoice } from "./work/practice-scripts/lib/core/model-capabilities.ts";
 
 /** One chat model as {@link ModelRuntime.registerProvider} takes it; the extension-facing type omits sampling. */
 export type RegisteredModel = Extract<
@@ -33,6 +32,7 @@ export type SessionThinkingLevel = "off" | "minimal" | "low" | "medium" | "high"
 export interface ProviderConfig {
 	apiProtocol?: string;
 	modelId?: string;
+	forcedToolChoice?: boolean;
 	/** Absent: the provider's own default applies and no effort is sent. */
 	reasoningEffort?: ReasoningEffort;
 	contextWindow?: number;
@@ -46,7 +46,12 @@ export function submissionExtension(
 ): ExtensionFactory {
 	return (pi) => {
 		pi.on("before_provider_request", ({ payload }) => {
-			if (!required() || !isRecord(payload) || !supportsForcedToolChoice(config.modelId)) {
+			if (
+				!required() ||
+				!isRecord(payload) ||
+				config.forcedToolChoice !== true ||
+				config.apiProtocol === "anthropic-messages"
+			) {
 				return;
 			}
 			const tools: unknown[] = Array.isArray(payload.tools) ? payload.tools : [];
@@ -69,14 +74,6 @@ export function submissionExtension(
 				)
 			) {
 				return { ...payload, tool_choice: { type: "function", name: "submit_result" } };
-			}
-			if (
-				config.apiProtocol === "anthropic-messages" &&
-				// Manual extended thinking permits only auto/none tool choice.
-				!(isRecord(payload.thinking) && payload.thinking.type === "enabled") &&
-				tools.some((tool) => isRecord(tool) && tool.name === "submit_result")
-			) {
-				return { ...payload, tool_choice: { type: "tool", name: "submit_result" } };
 			}
 			if (
 				(config.apiProtocol === "google-generative-ai" || config.apiProtocol === "google-vertex") &&
@@ -157,12 +154,14 @@ function asProviderConfig(parsed: unknown): ProviderConfig | null {
 	if (
 		("contextWindow" in parsed && !positiveInteger(parsed.contextWindow)) ||
 		("maxOutputTokens" in parsed && !positiveInteger(parsed.maxOutputTokens)) ||
-		("reasoningEffort" in parsed && asReasoningEffort(parsed.reasoningEffort) === undefined)
+		("reasoningEffort" in parsed && asReasoningEffort(parsed.reasoningEffort) === undefined) ||
+		("forcedToolChoice" in parsed && typeof parsed.forcedToolChoice !== "boolean")
 	) {
 		return null;
 	}
 	return {
 		apiProtocol: typeof parsed.apiProtocol === "string" ? parsed.apiProtocol : undefined,
+		forcedToolChoice: parsed.forcedToolChoice === true,
 		modelId: typeof parsed.modelId === "string" ? parsed.modelId : undefined,
 		reasoningEffort: asReasoningEffort(parsed.reasoningEffort),
 		contextWindow: typeof parsed.contextWindow === "number" ? parsed.contextWindow : undefined,
@@ -194,7 +193,7 @@ export type RegisteredProviderConfig = ProviderConfig & { apiProtocol: string; m
  * `apiKey`, so one turn's calls never carry another's.
  */
 export function registerHephaestusProvider(
-	modelRuntime: Pick<ModelRuntime, "registerProvider">,
+	modelRuntime: Pick<ModelRuntime, "registerProvider" | "getModel">,
 	config: ProviderConfig | null,
 	env: Record<string, string | undefined> = process.env,
 	apiKey = "$LLM_PROXY_TOKEN",
@@ -218,11 +217,33 @@ export function registerHephaestusProvider(
 			? { temperature }
 			: undefined;
 	const setting = reasoningSetting(config.reasoningEffort);
+	const native = config.apiProtocol === "anthropic-messages";
+	const candidate = native ? modelRuntime.getModel("anthropic", config.modelId) : undefined;
+	const known = candidate?.api === "anthropic-messages" ? candidate : undefined;
+	const thinkingLevelMap = native ? known?.thinkingLevelMap : setting.thinkingLevelMap;
+	const compat = known?.compat;
+	const supportsTemperature =
+		compat !== undefined && "supportsTemperature" in compat
+			? (compat.supportsTemperature ?? false)
+			: false;
 	const model: RegisteredModel = {
 		id: config.modelId,
 		name: config.modelId,
-		reasoning: setting.reasoning,
-		...(setting.thinkingLevelMap ? { thinkingLevelMap: setting.thinkingLevelMap } : {}),
+		reasoning: native && known === undefined ? false : setting.reasoning,
+		...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+		...(native
+			? {
+					compat: {
+						...compat,
+						supportsTemperature,
+						// The gateway permits client tools and a top-level system prompt. SDK tool discovery
+						// and in-band system updates require a different provider surface.
+						supportsMidConvoEffort: false,
+						supportsMidConvoSystemMessages: false,
+						supportsMidConvoToolChanges: false,
+					},
+				}
+			: {}),
 		// Pi decides from the base URL whether an OpenAI-compatible endpoint takes reasoning_effort, and
 		// ours is the LLM proxy's; the effort was configured for this model, so it is sent.
 		...(setting.reasoning && config.apiProtocol === "openai-completions"

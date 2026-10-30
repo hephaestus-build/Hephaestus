@@ -66,7 +66,7 @@ class ScanServiceTest extends BaseUnitTest {
                 List.of("generated/**"),
                 List.of("pom.xml"),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(new SourceKind("scm.repository.tree"), ReadNeed.COMPLETE))));
         var definition = new PracticeDefinition(
                 d.name(),

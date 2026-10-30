@@ -220,11 +220,10 @@ erDiagram
         TIMESTAMPTZ deleted_at
         VARCHAR(40) head_check_sha
         VARCHAR(16) head_check_state
-        UUID review_snapshot_id
-        VARCHAR(128) review_snapshot_digest
         TIMESTAMPTZ reviewers_observed_at
         TIMESTAMPTZ head_check_observed_at
         TIMESTAMPTZ discussions_observed_at
+        JSONB head_check_runs
     }
 
     IssueAssignee {
@@ -281,7 +280,7 @@ erDiagram
         BIGINT workspace_id FK,UK "NOT NULL"
         BIGINT item_id FK,UK "NOT NULL"
         VARCHAR(128) name UK "NOT NULL"
-        TEXT item_version UK
+        TEXT item_version
         TIMESTAMPTZ occurred_at "NOT NULL"
         VARCHAR(16) found_by "NOT NULL"
         BIGINT actor_user_id FK
@@ -405,17 +404,6 @@ erDiagram
         TIMESTAMPTZ body_evicted_at
         TIMESTAMPTZ archived_at
         BIGINT version "NOT NULL"
-    }
-
-    OutlineDocumentEvent {
-        BIGINT id PK
-        BIGINT workspace_id FK "NOT NULL"
-        BIGINT connection_id FK "NOT NULL"
-        VARCHAR(64) document_id "NOT NULL"
-        VARCHAR(64) event_name "NOT NULL"
-        VARCHAR(64) actor_subject
-        TIMESTAMPTZ occurred_at
-        TIMESTAMPTZ created_at "NOT NULL"
     }
 
     Project {
@@ -655,8 +643,6 @@ erDiagram
         BIGINT workspace_id PK,FK
         VARCHAR(32) slack_user_id PK
         BOOLEAN ingestion_opted_out "NOT NULL"
-        BOOLEAN research_opted_out "NOT NULL"
-        VARCHAR(32) source
         TIMESTAMPTZ decided_at "NOT NULL"
     }
 
@@ -811,8 +797,6 @@ erDiagram
     Workspace ||--o{ OutlineCollection : has
     Connection ||--o{ OutlineDocument : has
     Workspace ||--o{ OutlineDocument : has
-    Connection ||--o{ OutlineDocumentEvent : has
-    Workspace ||--o{ OutlineDocumentEvent : has
     User ||--o{ Project : created_by
     IdentityProvider ||--o{ Project : references
     Project ||--o{ ProjectField : has

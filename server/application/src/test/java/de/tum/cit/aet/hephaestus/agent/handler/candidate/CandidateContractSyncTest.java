@@ -41,7 +41,9 @@ class CandidateContractSyncTest extends BaseUnitTest {
                                 && value != CandidateRefusal.SOURCE_UNAVAILABLE
                                 && value != CandidateRefusal.BASIS_WITNESS_MISSING
                                 && value != CandidateRefusal.DUTY_QUOTE_UNVERIFIED
-                                && value != CandidateRefusal.CONSULTED_SOURCE_UNREAD)
+                                && value != CandidateRefusal.CONSULTED_SOURCE_UNREAD
+                                && value != CandidateRefusal.UNDECLARED_SOURCE_CITED
+                                && value != CandidateRefusal.UNFINISHED_RUN_CITED)
                         .map(CandidateRefusal::wireValue)
                         .toList());
     }

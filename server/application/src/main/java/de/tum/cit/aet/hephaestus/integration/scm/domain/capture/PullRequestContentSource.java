@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestChecksRecord;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
@@ -53,11 +54,13 @@ public class PullRequestContentSource {
     private static final int MAX_COMMIT_RECORD_BYTES = 4 * 1024 * 1024;
 
     public static final SourceKind CORE = new SourceKind("scm.pull-request.core");
+    public static final SourceKind CHECKS = PullRequestChecksRecord.KIND;
+    public static final String CHECKS_FILE = OUTPUT_PREFIX + PullRequestChecksRecord.FILE_NAME;
     public static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     public static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
 
     public Set<SourceKind> sourceKinds() {
-        return Set.of(CORE, DIFF, COMMENTS);
+        return Set.of(CORE, CHECKS, DIFF, COMMENTS);
     }
 
     /** Pins {@code base_sha} and {@code head_sha} for derived change views and diff citations. */
@@ -78,6 +81,7 @@ public class PullRequestContentSource {
     public SourceKind sourceKindFor(String path) {
         var recordSource = ScmCitableTexts.recordSource(path);
         if (recordSource != null && sourceKinds().contains(recordSource)) return recordSource;
+        if (path.equals(CHECKS_FILE)) return CHECKS;
         if (path.endsWith("comments.json")) return COMMENTS;
         if (path.equals(CHANGE_FILE) || path.startsWith("context/citable/")) return DIFF;
         return CORE;
@@ -151,26 +155,50 @@ public class PullRequestContentSource {
         if (prepared != null) {
             ensureRepositoryAvailable(new RepositoryKey(capture.workspaceId(), repositoryId));
         }
-        if (selectedKinds.contains(CORE)) {
-            // An event review stages the record its occasion retained, whole: today's words and status never join it.
-            ObjectNode staged =
+        if (selectedKinds.contains(CORE) || selectedKinds.contains(CHECKS)) {
+            ObjectNode observed =
                     occasion != null ? occasion.record() : workRecord(pullRequest, metadata, capture.capturedAt());
-            storeMetadata(files, staged);
-            // The words of the verified pinned version, read at capture. A body known to be absent
-            // stages an empty description; a body the record does not carry as text stays unknown,
-            // so no description is staged.
-            JsonNode body = staged.get("body");
-            if (body != null) {
-                files.put(DESCRIPTION_FILE, (body.isNull() ? "" : body.asString()).getBytes(StandardCharsets.UTF_8));
+            if (selectedKinds.contains(CHECKS)) {
+                ObjectNode checks = PullRequestChecksRecord.retained(observed);
+                files.put(
+                        CHECKS_FILE,
+                        objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(checks));
+                boolean complete =
+                        checks.path("head_check_runs").path("complete").asBoolean(false);
+                completeness.put(CHECKS, complete ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
+                contentStates.put(
+                        CHECKS,
+                        complete && checks.path("head_check_runs").path("runs").isEmpty()
+                                ? SourceContentState.EMPTY
+                                : SourceContentState.NON_EMPTY);
+                if (!complete)
+                    limitations.put(
+                            CHECKS,
+                            List.of(
+                                    checks.has("head_check_runs")
+                                            ? "CHECK_RUNS_INCOMPLETE"
+                                            : "CHECK_RUNS_NOT_OBSERVED"));
             }
-            List<String> unknown = new ArrayList<>();
-            if (!staged.has("title")) unknown.add("RETAINED_TITLE_UNKNOWN");
-            if (body == null) unknown.add("RETAINED_BODY_UNKNOWN");
-            completeness.put(CORE, unknown.isEmpty() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
-            if (!unknown.isEmpty()) limitations.put(CORE, unknown);
-            // No observedAt: the record mixes words read at capture with status as last synced,
-            // and the sync time would date the words to a moment they were not read.
-            // metadata.json dates each part.
+            if (selectedKinds.contains(CORE)) {
+                ObjectNode staged = PullRequestChecksRecord.core(observed);
+                storeMetadata(files, staged);
+                // The words of the verified pinned version, read at capture. A body known to be absent
+                // stages an empty description; a body the record does not carry as text stays unknown,
+                // so no description is staged.
+                JsonNode body = staged.get("body");
+                if (body != null) {
+                    files.put(
+                            DESCRIPTION_FILE, (body.isNull() ? "" : body.asString()).getBytes(StandardCharsets.UTF_8));
+                }
+                List<String> unknown = new ArrayList<>();
+                if (!staged.has("title")) unknown.add("RETAINED_TITLE_UNKNOWN");
+                if (body == null) unknown.add("RETAINED_BODY_UNKNOWN");
+                completeness.put(CORE, unknown.isEmpty() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
+                if (!unknown.isEmpty()) limitations.put(CORE, unknown);
+                // No observedAt: the record mixes words read at capture with status as last synced,
+                // and the sync time would date the words to a moment they were not read.
+                // metadata.json dates each part.
+            }
         }
         if (selectedKinds.contains(COMMENTS)) {
             CommentCapture comments = loadComments(capture.workspaceId(), pullRequestId);
@@ -378,19 +406,9 @@ public class PullRequestContentSource {
         if (pullRequest.getMilestone() != null) {
             result.put("milestone", pullRequest.getMilestone().getTitle());
         }
-        // Both come from the GraphQL sync only; a webhook-only record has neither, and an absent
-        // key says so rather than a null a program might read as a value.
-        if (pullRequest.getMergeStateStatus() != null) {
-            result.put("merge_state_status", pullRequest.getMergeStateStatus().name());
-        }
+        result.setAll(PullRequestChecksRecord.current(pullRequest, reviewedHead));
         if (pullRequest.getReviewDecision() != null) {
             result.put("review_decision", pullRequest.getReviewDecision().name());
-        }
-        // What the checks said about the reviewed head, as last observed. A state observed for any
-        // other commit, the current mirror head included, is not about the reviewed change and is
-        // left out, as is a head no sync or event has reported on.
-        if (pullRequest.getHeadCheckState() != null && reviewedHead.equals(pullRequest.getHeadCheckSha())) {
-            result.put("head_checks", pullRequest.getHeadCheckState().name());
         }
 
         return result;

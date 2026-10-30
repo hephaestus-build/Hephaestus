@@ -1010,7 +1010,7 @@ export type CreateLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -1163,7 +1163,7 @@ export type CreateWorkspaceLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -1502,7 +1502,7 @@ export type FeedbackCopy = {
     kind: 'SUMMARY' | 'LINE_NOTE' | 'FILE_NOTE' | 'CHAT_TURN';
     lastError: string | null;
     /**
-     * The Heph answer that showed a conversation copy
+     * The Hephaestus answer that showed a conversation copy
      */
     mentorEntryId: string | null;
     path: string | null;
@@ -2154,6 +2154,84 @@ export type ListedScanReportItem = {
 };
 
 /**
+ * Provider capacity that the models in it share
+ */
+export type LlmCallPool = {
+    /**
+     * Human-readable name
+     */
+    displayName: string;
+    /**
+     * Pool id
+     */
+    id: number;
+    /**
+     * Calls only conversations may use
+     */
+    interactiveReserve: number;
+    /**
+     * Most model calls in flight at once; null does not limit them
+     */
+    maxConcurrentCalls?: number;
+    /**
+     * The provider asked for no call before this time
+     */
+    noCallBefore?: string;
+    requestsPerMinute?: number;
+    /**
+     * Unique slug; also the pool label of its metrics
+     */
+    slug: string;
+    tokensPerCall?: number;
+    tokensPerMinute?: number;
+};
+
+/**
+ * Tenant-visible membership, without shared activity or cooldown information.
+ */
+export type LlmCallPoolMembership = {
+    displayName: string;
+    id: number;
+    interactiveReserve: number;
+    maxConcurrentCalls?: number;
+    slug: string;
+};
+
+/**
+ * A model and the pool its calls share
+ */
+export type LlmCallPoolModel = {
+    /**
+     * The pool the model is in; null for none
+     */
+    callPoolId?: number;
+    /**
+     * Connection's display name
+     */
+    connectionDisplayName: string;
+    /**
+     * Human-readable name
+     */
+    displayName: string;
+    /**
+     * The connection's host; null when its URL has none
+     */
+    host?: string;
+    /**
+     * Model id within its scope
+     */
+    modelId: number;
+    /**
+     * INSTANCE for the instance catalog, WORKSPACE for a workspace's own model
+     */
+    scope: 'INSTANCE' | 'WORKSPACE';
+    /**
+     * Slug of the workspace that owns the model; null for an instance model
+     */
+    workspaceSlug?: string;
+};
+
+/**
  * Instance LLM provider connection (API key redacted)
  */
 export type LlmConnection = {
@@ -2164,7 +2242,7 @@ export type LlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape
      */
@@ -2220,6 +2298,10 @@ export type LlmModel = {
      */
     brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
     /**
+     * The pool whose capacity the model's calls share; null for none
+     */
+    callPoolId?: number;
+    /**
      * Owning connection's display name
      */
     connectionDisplayName: string;
@@ -2256,6 +2338,10 @@ export type LlmModel = {
      */
     enabled: boolean;
     /**
+     * Probed forced_tool_choice capability; null until established
+     */
+    forcedToolChoice?: boolean;
+    /**
      * Workspace ids shared with; only meaningful when visibility is GRANTED
      */
     grantedWorkspaceIds: Array<number>;
@@ -2291,6 +2377,16 @@ export type LlmModel = {
      * Share with all workspaces (PUBLIC) or only selected ones (GRANTED)
      */
     visibility: 'PUBLIC' | 'GRANTED';
+};
+
+/**
+ * A synthetic probe result, not a claim about the quality of the model's answers.
+ */
+export type LlmModelCapabilities = {
+    /**
+     * forced_tool_choice; null when the probe could not establish support
+     */
+    forcedToolChoice?: boolean;
 };
 
 /**
@@ -2497,7 +2593,7 @@ export type LoginProviderView = {
 };
 
 /**
- * The developer's Heph conversation in a workspace at one moment
+ * The developer's Hephaestus conversation in a workspace at one moment
  */
 export type MentorConversation = {
     /**
@@ -2505,15 +2601,15 @@ export type MentorConversation = {
      */
     activeTurns: Array<MentorTurn>;
     /**
-     * The main conversation; absent until the developer writes to Heph or gets a weekly digest
+     * The main conversation; absent until the developer writes to Hephaestus or gets a weekly digest
      */
     id?: string;
     /**
-     * When Heph's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.
+     * When Hephaestus's newest shown answer in the conversation or any of its threads was written; absent before the first. Compare it with the newest answer the client has seen.
      */
     lastAnswerAt?: string;
     /**
-     * How far the developer read the conversation on any device; absent before the first read. Heph has an unread answer when lastAnswerAt is later.
+     * How far the developer read the conversation on any device; absent before the first read. Hephaestus has an unread answer when lastAnswerAt is later.
      */
     lastReadAt?: string;
     /**
@@ -2527,7 +2623,7 @@ export type MentorConversation = {
 };
 
 /**
- * One message of a Heph conversation
+ * One message of a Hephaestus conversation
  */
 export type MentorEntry = {
     conversationId: string;
@@ -2547,7 +2643,7 @@ export type MentorEntry = {
     id: string;
     kind: 'USER' | 'HEPH' | 'DIGEST';
     /**
-     * The results, problems and prepared feedback Heph showed in this message, in order
+     * The results, problems and prepared feedback Hephaestus showed in this message, in order
      */
     links: Array<MentorLink>;
     /**
@@ -2563,7 +2659,7 @@ export type MentorEntry = {
      */
     seq: number;
     /**
-     * Only on a question asked in Slack: whether Heph's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.
+     * Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means Slack does not show the whole reply: it is not there, or a stream showed only part of it before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means Slack cannot tell.
      */
     slackDelivery?: 'PENDING' | 'DELIVERED' | 'UNCERTAIN' | 'FAILED';
     /**
@@ -2571,7 +2667,7 @@ export type MentorEntry = {
      */
     surface: 'APP' | 'SLACK' | 'SYSTEM';
     /**
-     * The developer's words or Heph's answer; for a weekly digest, the note that points Heph to it; empty when the message was deleted
+     * The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted
      */
     text: string;
     /**
@@ -2591,7 +2687,7 @@ export type MentorEntry = {
      */
     turnStatus?: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'STOPPED';
     /**
-     * The developer's vote; only on Heph's messages
+     * The developer's vote; only on Hephaestus's messages
      */
     vote?: 'HELPFUL' | 'NOT_HELPFUL';
 };
@@ -2608,7 +2704,7 @@ export type MentorEntryPage = {
 };
 
 /**
- * A practice result, problem or prepared feedback Heph showed in a message
+ * A practice result, problem or prepared feedback Hephaestus showed in a message
  */
 export type MentorLink = {
     /**
@@ -2625,13 +2721,13 @@ export type MentorLink = {
      */
     practiceSlug?: string;
     /**
-     * Heph's words about it, shown to the developer
+     * Hephaestus's words about it, shown to the developer
      */
     text: string;
 };
 
 /**
- * How far the developer read their Heph conversation
+ * How far the developer read their Hephaestus conversation
  */
 export type MentorRead = {
     /**
@@ -2641,7 +2737,7 @@ export type MentorRead = {
 };
 
 /**
- * How far the developer read their Heph conversation
+ * How far the developer read their Hephaestus conversation
  */
 export type MentorReadRequest = {
     /**
@@ -2692,13 +2788,13 @@ export type MentorThreadSummary = {
      */
     parentEntryId: string;
     /**
-     * Messages in the thread; can count a Heph message without text whose feedback is no longer shown
+     * Messages in the thread; can count a Hephaestus message without text whose feedback is no longer shown
      */
     replyCount: number;
 };
 
 /**
- * One question to Heph and the work to answer it
+ * One question to Hephaestus and the work to answer it
  */
 export type MentorTurn = {
     /**
@@ -2718,7 +2814,7 @@ export type MentorTurn = {
      */
     parentEntryId?: string;
     /**
-     * Heph's answer in progress; only while the turn runs
+     * Hephaestus's answer in progress; only while the turn runs
      */
     partial?: MentorTurnPartial;
     /**
@@ -2728,32 +2824,32 @@ export type MentorTurn = {
     status: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'STOPPED';
     surface: 'APP' | 'SLACK';
     /**
-     * Why a queued turn has not started. FREE_HEPH: a worker may start it, and every Heph slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured Heph capacity.
+     * Why a queued turn has not started. FREE_HEPH: a worker may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
      */
     waitingFor?: 'FREE_HEPH';
 };
 
 /**
- * What Heph is doing in a running turn
+ * What Hephaestus is doing in a running turn
  */
 export type MentorTurnPartial = {
     activity: 'THINKING' | 'WRITING' | 'TOOL';
     /**
-     * What Heph is doing, in the developer's words, for example "Reading your practice feedback…"
+     * What Hephaestus is doing, in the developer's words, for example "Reading your practice feedback…"
      */
     stage: string;
     /**
-     * The text Heph has written in this turn so far
+     * The text Hephaestus has written in this turn so far
      */
     text: string;
     /**
-     * The tool Heph runs, while the activity is TOOL
+     * The tool Hephaestus runs, while the activity is TOOL
      */
     tool?: string;
 };
 
 /**
- * A question to Heph from the app
+ * A question to Hephaestus from the app
  */
 export type MentorTurnRequest = {
     /**
@@ -2779,13 +2875,13 @@ export type MentorTurnRequest = {
  */
 export type MentorTurnStatusRequest = {
     /**
-     * STOPPED stops a queued or running turn. Heph keeps what it already wrote.
+     * STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.
      */
     status: 'STOPPED';
 };
 
 /**
- * The developer's vote on one of Heph's messages
+ * The developer's vote on one of Hephaestus's messages
  */
 export type MentorVoteRequest = {
     vote: 'HELPFUL' | 'NOT_HELPFUL';
@@ -2825,7 +2921,7 @@ export type NotificationPreferences = {
      */
     weeklyDigest: boolean;
     /**
-     * Heph can answer in at least one of your workspaces, so a weekly digest can be written
+     * Hephaestus can answer in at least one of your workspaces, so a weekly digest can be written
      */
     weeklyDigestAvailable: boolean;
     workspaceAlerts: boolean;
@@ -3934,7 +4030,7 @@ export type ProbeLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -5236,6 +5332,31 @@ export type RuntimeNonResult = {
     reason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM';
 };
 
+/**
+ * Create or change a pool of provider capacity
+ */
+export type SaveLlmCallPoolRequest = {
+    /**
+     * Human-readable name
+     */
+    displayName: string;
+    /**
+     * Calls only conversations may use
+     */
+    interactiveReserve: number;
+    /**
+     * Most model calls in flight at once; null does not limit them
+     */
+    maxConcurrentCalls?: number;
+    requestsPerMinute?: number;
+    /**
+     * Unique slug, lowercase words joined by hyphens; set at creation only
+     */
+    slug: string;
+    tokensPerCall?: number;
+    tokensPerMinute?: number;
+};
+
 export type ScanAvailability = {
     expired: boolean;
     expiredProofPairs: number;
@@ -5987,6 +6108,20 @@ export type UpdateLlmBudgetRequest = {
 };
 
 /**
+ * The models whose calls share a pool
+ */
+export type UpdateLlmCallPoolModelsRequest = {
+    /**
+     * Ids of instance models
+     */
+    instanceModelIds: Array<number>;
+    /**
+     * Ids of models on workspaces' own connections
+     */
+    workspaceModelIds: Array<number>;
+};
+
+/**
  * Update an instance LLM provider connection (all fields optional)
  */
 export type UpdateLlmConnectionRequest = {
@@ -6124,7 +6259,7 @@ export type UpdateNotificationPreferences = {
     researchSurveys: boolean;
     surveySummaries: boolean;
     /**
-     * The weekly digest in your Heph conversation, with one note in Slack or email that it is ready. Absent keeps the saved choice.
+     * The weekly digest in your Hephaestus conversation, with one note in Slack or email that it is ready. Absent keeps the saved choice.
      */
     weeklyDigest?: boolean;
     workspaceAlerts: boolean;
@@ -6511,7 +6646,7 @@ export type WeeklyDigest = {
 export type WeeklyDigestFeedback = {
     deliveredAt: string;
     /**
-     * Where it was delivered: on the work (ON_WORK) or in the conversation with Heph (CONVERSATION). Practice page feedback is never listed; the waiting count covers it
+     * Where it was delivered: on the work (ON_WORK) or in the conversation with Hephaestus (CONVERSATION). Practice page feedback is never listed; the waiting count covers it
      */
     destination: 'ON_WORK' | 'PRACTICE_PAGE' | 'CONVERSATION';
     feedbackId: string;
@@ -6522,11 +6657,11 @@ export type WeeklyDigestFeedback = {
      */
     item?: ItemRef;
     /**
-     * The Heph message it appeared in; only for CONVERSATION, and never when withdrawn
+     * The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn
      */
     mentorEntryId?: string;
     /**
-     * The top-level message whose thread holds that Heph message; only for CONVERSATION, and absent when the message is not in a thread
+     * The top-level message whose thread holds that Hephaestus message; only for CONVERSATION, and absent when the message is not in a thread
      */
     mentorParentEntryId?: string;
     practiceName: string;
@@ -6838,7 +6973,7 @@ export type WorkspaceLlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape
      */
@@ -6894,6 +7029,10 @@ export type WorkspaceLlmModel = {
      */
     brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
     /**
+     * The instance pool whose capacity the model's calls share; only an instance admin sets it
+     */
+    callPool?: LlmCallPoolMembership;
+    /**
      * Owning connection's display name
      */
     connectionDisplayName: string;
@@ -6929,6 +7068,10 @@ export type WorkspaceLlmModel = {
      * Active toggle
      */
     enabled: boolean;
+    /**
+     * Probed forced_tool_choice capability; null until established
+     */
+    forcedToolChoice?: boolean;
     /**
      * Model id
      */
@@ -7092,7 +7235,7 @@ export type WorkspaceMembership = {
 /**
  * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
  * every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
- * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Heph's admission.
+ * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export type WorkspaceOnboarding = {
     aiChoice?: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
@@ -7101,7 +7244,7 @@ export type WorkspaceOnboarding = {
     enabled: boolean;
     links: Array<WorkspaceOnboardingLink>;
     /**
-     * Why Heph declines this member here, by the rule that admits each question; null when Heph can answer
+     * Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer
      */
     mentorRefusal?: 'PERSON_ERASED' | 'NO_AI' | 'CHOICE_REQUIRED' | 'UNAVAILABLE';
     needsSetup: boolean;
@@ -7428,6 +7571,152 @@ export type AdminSendTestEmailResponses = {
 
 export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
 
+export type AdminListLlmCallPoolsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/llm/call-pools';
+};
+
+export type AdminListLlmCallPoolsResponses = {
+    /**
+     * OK
+     */
+    200: Array<LlmCallPool>;
+};
+
+export type AdminListLlmCallPoolsResponse = AdminListLlmCallPoolsResponses[keyof AdminListLlmCallPoolsResponses];
+
+export type AdminCreateLlmCallPoolData = {
+    body: SaveLlmCallPoolRequest;
+    path?: never;
+    query?: never;
+    url: '/admin/llm/call-pools';
+};
+
+export type AdminCreateLlmCallPoolErrors = {
+    /**
+     * A pool with this slug already exists
+     */
+    409: unknown;
+};
+
+export type AdminCreateLlmCallPoolResponses = {
+    /**
+     * Pool created; URL in the Location header
+     */
+    201: LlmCallPool;
+};
+
+export type AdminCreateLlmCallPoolResponse = AdminCreateLlmCallPoolResponses[keyof AdminCreateLlmCallPoolResponses];
+
+export type AdminListLlmCallPoolModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/llm/call-pools/models';
+};
+
+export type AdminListLlmCallPoolModelsResponses = {
+    /**
+     * OK
+     */
+    200: Array<LlmCallPoolModel>;
+};
+
+export type AdminListLlmCallPoolModelsResponse = AdminListLlmCallPoolModelsResponses[keyof AdminListLlmCallPoolModelsResponses];
+
+export type AdminDeleteLlmCallPoolData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/call-pools/{id}';
+};
+
+export type AdminDeleteLlmCallPoolErrors = {
+    /**
+     * Pool not found
+     */
+    404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
+};
+
+export type AdminDeleteLlmCallPoolResponses = {
+    /**
+     * Pool deleted
+     */
+    204: void;
+};
+
+export type AdminDeleteLlmCallPoolResponse = AdminDeleteLlmCallPoolResponses[keyof AdminDeleteLlmCallPoolResponses];
+
+export type AdminUpdateLlmCallPoolData = {
+    body: SaveLlmCallPoolRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/call-pools/{id}';
+};
+
+export type AdminUpdateLlmCallPoolErrors = {
+    /**
+     * The pool slug cannot change or the limits are invalid
+     */
+    400: unknown;
+    /**
+     * Pool not found
+     */
+    404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
+};
+
+export type AdminUpdateLlmCallPoolResponses = {
+    /**
+     * OK
+     */
+    200: LlmCallPool;
+};
+
+export type AdminUpdateLlmCallPoolResponse = AdminUpdateLlmCallPoolResponses[keyof AdminUpdateLlmCallPoolResponses];
+
+export type AdminUpdateLlmCallPoolModelsData = {
+    body: UpdateLlmCallPoolModelsRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/call-pools/{id}/models';
+};
+
+export type AdminUpdateLlmCallPoolModelsErrors = {
+    /**
+     * Pool or model not found
+     */
+    404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
+};
+
+export type AdminUpdateLlmCallPoolModelsResponses = {
+    /**
+     * OK
+     */
+    200: Array<LlmCallPoolModel>;
+};
+
+export type AdminUpdateLlmCallPoolModelsResponse = AdminUpdateLlmCallPoolModelsResponses[keyof AdminUpdateLlmCallPoolModelsResponses];
+
 export type AdminListLlmConnectionsData = {
     body?: never;
     path?: never;
@@ -7707,6 +7996,24 @@ export type AdminUpdateLlmModelResponses = {
 };
 
 export type AdminUpdateLlmModelResponse = AdminUpdateLlmModelResponses[keyof AdminUpdateLlmModelResponses];
+
+export type AdminProbeLlmModelCapabilitiesData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/models/{id}/capabilities';
+};
+
+export type AdminProbeLlmModelCapabilitiesResponses = {
+    /**
+     * OK
+     */
+    200: LlmModelCapabilities;
+};
+
+export type AdminProbeLlmModelCapabilitiesResponse = AdminProbeLlmModelCapabilitiesResponses[keyof AdminProbeLlmModelCapabilitiesResponses];
 
 export type AdminUpdateLlmModelPriceData = {
     body: UpdateLlmModelPriceRequest;
@@ -11353,6 +11660,28 @@ export type WorkspaceUpdateLlmModelResponses = {
 
 export type WorkspaceUpdateLlmModelResponse = WorkspaceUpdateLlmModelResponses[keyof WorkspaceUpdateLlmModelResponses];
 
+export type WorkspaceProbeLlmModelCapabilitiesData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        id: number;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/llm/models/{id}/capabilities';
+};
+
+export type WorkspaceProbeLlmModelCapabilitiesResponses = {
+    /**
+     * OK
+     */
+    200: LlmModelCapabilities;
+};
+
+export type WorkspaceProbeLlmModelCapabilitiesResponse = WorkspaceProbeLlmModelCapabilitiesResponses[keyof WorkspaceProbeLlmModelCapabilitiesResponses];
+
 export type WorkspaceGetLlmSettingsData = {
     body?: never;
     path: {
@@ -11709,7 +12038,7 @@ export type SetMentorVoteData = {
 
 export type SetMentorVoteErrors = {
     /**
-     * The message is not one of Heph's
+     * The message is not one of Hephaestus's
      */
     409: ProblemDetail;
 };
@@ -11739,7 +12068,7 @@ export type SubmitMentorTurnData = {
 
 export type SubmitMentorTurnErrors = {
     /**
-     * Heph declines the developer (mentor-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (mentor-rejected)
+     * Hephaestus declines the developer (mentor-refused), too many follow-ups wait, the requestId was used for another message, or the parent cannot have a thread (mentor-rejected)
      */
     409: ProblemDetail;
 };

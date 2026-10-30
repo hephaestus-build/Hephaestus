@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
@@ -18,6 +19,14 @@ public final class SandboxLayout {
 
     public static final int PRACTICE_CONTRACT_VERSION = 3;
     public static final String SOURCE_CONTRACT_VERSION = ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE;
+
+    /**
+     * The sources every review session reads through Git in its checkout: the change and the repository. A practice
+     * may cite them without declaring them (ADR 0069). The runner names the same kinds ({@code readableKinds} in
+     * {@code pi-declared-sources.ts}).
+     */
+    public static final Set<SourceKind> READ_THROUGH_GIT =
+            Set.of(new SourceKind("scm.pull-request.diff"), new SourceKind("scm.repository.tree"));
 
     /** Container workspace root. */
     public static final String WORKSPACE_ROOT = "/workspace";

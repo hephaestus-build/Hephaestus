@@ -11,7 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The worker container that creates a Heph host's resources. Only the process that started a host
+ * The worker container that creates a Hephaestus host's resources. Only the process that started a host
  * tracks it, in memory, and processes sharing a Docker daemon cannot see each other's memory. So
  * every host resource records its creator when it is created, and automatic cleanup can wait until
  * that creator is gone.
@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
  * <p>The creator is the container this process runs in, found by the id Docker gives it as its default
  * hostname; it is also the one container {@link SandboxNetworkManager} joins to a sandbox network. A
  * process outside any container records no creator and joins no network, and automatic cleanup never
- * removes what it creates. A process in a container that it cannot identify starts no Heph host
+ * removes what it creates. A process in a container that it cannot identify starts no Hephaestus host
  * ({@link DockerSandboxBackend}).
  */
 public class SandboxCreator {
@@ -95,12 +95,12 @@ public class SandboxCreator {
             reportedUnidentified = true;
             if (outsideContainer()) {
                 log.warn(
-                        "This process runs outside a container ({}); a Heph host it starts records no creator, so "
+                        "This process runs outside a container ({}); a Hephaestus host it starts records no creator, so "
                                 + "automatic cleanup never removes it",
                         reason);
             } else {
                 log.warn(
-                        "Cannot identify this process's container ({}); it starts no Heph host while this lasts. "
+                        "Cannot identify this process's container ({}); it starts no Hephaestus host while this lasts. "
                                 + "Keep the container's default hostname",
                         reason);
             }

@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.springframework.security.oauth2.core.authorization.OAuth2AuthorizationManagers.hasScope;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -11,8 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.core.web.PayloadSizeFilter;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -73,7 +73,7 @@ class LlmProxySecurityConfig {
             ReviewJobRepository agentJobRepository,
             MentorTurnRepository mentorTurnRepository,
             SandboxGatewaySessions gatewaySessions,
-            WorkerJwtVerifier jwtVerifier,
+            AttemptTokenVerifier jwtVerifier,
             BucketResolver bucketResolver,
             ProxyAccounting accounting,
             ObjectMapper objectMapper,
@@ -83,7 +83,8 @@ class LlmProxySecurityConfig {
         RequestMatcher practiceScriptCalls = paths.matcher(HttpMethod.POST, "/internal/llm/practice-script/{slot}/**");
         RequestMatcher models = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/chat/completions"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/responses"));
+                paths.matcher(HttpMethod.POST, "/internal/llm/responses"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/v1/messages"));
         RequestMatcher reviewCalls = new OrRequestMatcher(
                 practiceScriptCalls, paths.matcher(HttpMethod.POST, "/internal/llm/admit-results"));
         RequestMatcher modelCalls = new OrRequestMatcher(models, reviewCalls);
@@ -121,18 +122,20 @@ class LlmProxySecurityConfig {
                         .access(AuthorizationManagers.anyOf(
                                 caller(identity -> identity.hostSession() != null),
                                 AuthorizationManagers.allOf(
-                                        hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE),
+                                        hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
                                         caller(identity -> identity.job() != null))))
                         .requestMatchers(models)
                         .access(AuthorizationManagers.allOf(
-                                hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE),
+                                hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
                                 caller(identity -> identity.job() != null || identity.turn() != null)))
                         .requestMatchers(turnEndpoints)
                         .access(AuthorizationManagers.allOf(
-                                hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE), caller(identity -> identity.turn() != null)))
+                                hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
+                                caller(identity -> identity.turn() != null)))
                         .anyRequest()
                         .access(AuthorizationManagers.allOf(
-                                hasScope(WorkerJwtIssuer.LLM_PROXY_SCOPE), caller(identity -> identity.job() != null))))
+                                hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
+                                caller(identity -> identity.job() != null))))
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
                                 agentJobRepository,

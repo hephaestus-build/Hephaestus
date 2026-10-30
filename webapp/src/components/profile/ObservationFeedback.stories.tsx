@@ -60,7 +60,7 @@ export const Delivered: Story = {
 			page?.getByRole("link", { name: "Read it on this practice’s Feedback tab" }),
 		).toHaveAttribute("href", `#feedback-${onPage.id}`);
 		await expect(
-			conversation?.getByRole("link", { name: "Read it in your conversation with Heph" }),
+			conversation?.getByRole("link", { name: "Read it in your conversation" }),
 		).toHaveAttribute("href", "#conversation");
 	},
 };

@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
@@ -36,7 +38,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
@@ -47,7 +48,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.UncheckedIOException;
@@ -59,6 +59,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -88,7 +89,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.annotation.Order;
 import org.springframework.core.retry.RetryException;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -167,7 +167,7 @@ public class ReviewJobExecutor {
     private final ReviewJobRepository jobRepository;
     private final DefaultReviewExecutionHandler handler;
     private final PracticePiAdapter practiceAgent;
-    private final WorkerJwtIssuer workerJwtIssuer;
+    private final AttemptTokenIssuer attemptTokenIssuer;
 
     private final SandboxManager sandboxManager;
     private final SandboxProperties.DefaultResourceLimits reviewLimits;
@@ -242,7 +242,7 @@ public class ReviewJobExecutor {
             ReviewJobRepository jobRepository,
             DefaultReviewExecutionHandler handler,
             PracticePiAdapter practiceAgent,
-            WorkerJwtIssuer workerJwtIssuer,
+            AttemptTokenIssuer attemptTokenIssuer,
             SandboxManager sandboxManager,
             SandboxProperties sandboxProperties,
             @Qualifier("sandboxExecutor") AsyncTaskExecutor sandboxExecutor,
@@ -263,7 +263,7 @@ public class ReviewJobExecutor {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.practiceAgent = practiceAgent;
-        this.workerJwtIssuer = workerJwtIssuer;
+        this.attemptTokenIssuer = attemptTokenIssuer;
         this.sandboxManager = sandboxManager;
         this.reviewLimits = sandboxProperties.defaultResourceLimits();
         this.sandboxSlots = sandboxProperties.maxConcurrentContainers();
@@ -311,7 +311,6 @@ public class ReviewJobExecutor {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Order(2) // WorkerLivenessReporter must register this worker before the first claim.
     public void start() {
         if (!running.compareAndSet(false, true)) {
             return;
@@ -456,6 +455,23 @@ public class ReviewJobExecutor {
     }
 
     /**
+     * Stops each local attempt whose row this worker no longer runs: a cancel, a requeue or a reap ended it on the row
+     * alone.
+     */
+    public void stopEndedAttempts() {
+        Map<UUID, Integer> local = Map.copyOf(localRunningJobs);
+        if (local.isEmpty()) return;
+        Set<UUID> running = Set.copyOf(jobRepository.findRunningIdsOwnedBy(workerId, local.keySet()));
+        local.forEach((jobId, attempt) -> {
+            // A later attempt of the job that this worker claimed since the read is not the one that ended, and an
+            // attempt that composes has no sandbox left: its own end writes the row.
+            if (!running.contains(jobId)
+                    && attempt.equals(localRunningJobs.get(jobId))
+                    && !composingJobs.contains(jobId)) cancelLocalJob(jobId, "its row no longer runs on this worker");
+        });
+    }
+
+    /**
      * Stops the container only; whoever ended or requeued the attempt already wrote its status.
      *
      * @return true if this worker owns the job and a stop was requested
@@ -474,13 +490,6 @@ public class ReviewJobExecutor {
         }
     }
 
-    /** Used when no {@code WorkerDrainCoordinator} owns the worker lifecycle (monolith mode). */
-    @PreDestroy
-    public void stop() {
-        stopAcceptingNewJobs();
-        awaitInFlight(Duration.ofSeconds(30));
-    }
-
     private void pollLoop() {
         while (running.get()) {
             try {
@@ -491,30 +500,7 @@ public class ReviewJobExecutor {
                     continue;
                 }
 
-                List<UUID> candidates = jobRepository.findQueuedIdsOldestFirst(capacity);
-                if (candidates.isEmpty()) {
-                    sleepPollInterval();
-                    continue;
-                }
-
-                boolean anyStarted = false;
-                boolean poolRejected = false;
-                for (UUID jobId : candidates) {
-                    if (!running.get()) {
-                        break;
-                    }
-                    if (poolRejected) {
-                        break;
-                    }
-                    StartOutcome outcome = processJob(jobId);
-                    poolRejected = outcome == StartOutcome.POOL_REJECTED;
-                    anyStarted |= outcome == StartOutcome.STARTED;
-                }
-                // Busy-spin protection: without this backoff, an all-skipped batch re-queries immediately
-                // and a saturated pool claims-then-requeues in a tight loop, hammering the DB.
-                if (!anyStarted || poolRejected) {
-                    sleepPollInterval();
-                }
+                if (!pollEndpoints(capacity)) sleepPollInterval();
             } catch (Exception e) {
                 log.warn(
                         "Poll loop error, retrying in {}: {}",
@@ -524,6 +510,32 @@ public class ReviewJobExecutor {
             }
         }
         log.info("Agent job executor poll loop stopped");
+    }
+
+    /** Each unavailable endpoint is tried once before sleeping; rejected jobs retain no local slot. */
+    private boolean pollEndpoints(int capacity) {
+        int remaining = capacity;
+        Set<Long> blockedPools = new HashSet<>();
+        Set<UUID> seen = new HashSet<>();
+        boolean anyStarted = false;
+        while (remaining > 0 && running.get()) {
+            List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(remaining, blockedPools, seen);
+            if (candidates.isEmpty()) break;
+            int blockedBefore = blockedPools.size();
+            for (UUID jobId : candidates) {
+                if (!running.get()) break;
+                StartOutcome outcome = processJob(jobId, blockedPools, seen);
+                if (outcome == StartOutcome.POOL_REJECTED) return false;
+                if (outcome == StartOutcome.STARTED) {
+                    anyStarted = true;
+                    remaining--;
+                }
+                if (blockedPools.size() > blockedBefore) break;
+            }
+            // A non-pool refusal keeps the normal poll backoff. Pool refusals scan the other endpoints now.
+            if (blockedPools.size() == blockedBefore) break;
+        }
+        return anyStarted;
     }
 
     // The sandbox slots bound the jobs that hold a sandbox; a job that composes holds none. Every local job composes
@@ -567,23 +579,47 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
+        return processJob(jobId, new HashSet<>(), new HashSet<>());
+    }
+
+    private StartOutcome processJob(UUID jobId, Set<Long> blockedPools, Set<UUID> seen) {
+        UUID selected = jobId;
+        while (seen.add(selected)) {
+            var attempt = tryClaim(selected);
+            if (attempt instanceof ReviewJobClaimService.ClaimTurn next) {
+                selected = next.jobId();
+                continue;
+            }
+            return processClaim(selected, attempt, blockedPools);
+        }
+        return StartOutcome.SKIPPED;
+    }
+
+    private ReviewJobClaimService.@Nullable ClaimAttempt tryClaim(UUID jobId) {
         // The poll offers only queued jobs, so a local attempt of this job was requeued: stop it and claim the job
         // once it has ended. One job never has two sandboxes on one worker.
         if (localRunningJobs.containsKey(jobId)) {
             cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
-            return StartOutcome.SKIPPED;
+            return null;
         }
-        ReviewJobClaimService.ClaimAttempt attempt;
         try {
-            attempt = claims.claimJob(jobId);
+            return claims.claimJob(jobId);
         } catch (CannotAcquireLockException e) {
             log.debug("Lock timeout during claim for job {}, will retry on next poll", jobId);
-            return StartOutcome.SKIPPED;
+            return null;
         } catch (Exception e) {
             log.warn(
                     "Claim failed for job {}, will retry on next poll: {}",
                     jobId,
                     e.getClass().getName());
+            return null;
+        }
+    }
+
+    private StartOutcome processClaim(
+            UUID jobId, ReviewJobClaimService.@Nullable ClaimAttempt attempt, Set<Long> blockedPools) {
+        if (attempt instanceof ReviewJobClaimService.PoolWait waiting) {
+            blockedPools.add(waiting.poolId());
             return StartOutcome.SKIPPED;
         }
         if (attempt instanceof ReviewJobClaimService.TerminalClaim terminal) {
@@ -1048,8 +1084,8 @@ public class ReviewJobExecutor {
             Instant workDeadline =
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
-            String jobToken = workerJwtIssuer.issueForJobUntil(
-                    jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
+            String jobToken = attemptTokenIssuer.issueForAttempt(
+                    AttemptJwt.Kind.REVIEW, jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
             stage.set(PreparationFailure.Stage.SPEC);
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.model().apiProtocol().wire(),
@@ -1059,7 +1095,8 @@ public class ReviewJobExecutor {
                     snapshot.model().reasoningEffort(),
                     jobToken,
                     snapshot.timeoutSeconds(),
-                    snapshot.practiceScriptModels());
+                    snapshot.practiceScriptModels(),
+                    snapshot.model().forcedToolChoice());
 
             PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
             SandboxSpec sandboxSpec = buildSandboxSpec(
@@ -1465,8 +1502,8 @@ public class ReviewJobExecutor {
         if (since == null) {
             starvedSince.set(now);
             log.warn(
-                    "The sandbox quota has no room for a review while no review runs: other sandboxes, such as Heph's,"
-                            + " hold it. Raise worker.sandbox.quota (docs/admin/kubernetes.mdx); queued reviews end"
+                    "The sandbox quota has no room for a review while no review runs: other sandboxes hold it. Check a"
+                            + " sandbox quota of your own (docs/admin/kubernetes.mdx); queued reviews end"
                             + " after {} without room",
                     STARVATION_BOUND);
             return;

@@ -14,7 +14,8 @@ import {
 
 function registered(env: Record<string, string | undefined>): RegisteredModel {
 	let models: RegisteredModel[] = [];
-	const runtime: Pick<ModelRuntime, "registerProvider"> = {
+	const runtime: Pick<ModelRuntime, "registerProvider" | "getModel"> = {
+		getModel: () => undefined,
 		registerProvider(_name, provider) {
 			const all = typeof _name === "string" && "models" in provider ? (provider.models ?? []) : [];
 			models = all.filter((model): model is RegisteredModel => "reasoning" in model);

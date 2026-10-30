@@ -98,8 +98,8 @@ export function PriceModeEditor({
 		<FieldSet>
 			<FieldLegend variant="label">Price</FieldLegend>
 			<FieldDescription>
-				Enter the rate billed by the provider. OpenAI-compatible usage responses report tokens, not
-				your account’s dollar charge.
+				Enter the rate billed by the provider. Usage responses report tokens, not your account’s
+				dollar charge.
 			</FieldDescription>
 			<RadioGroup
 				value={value.pricingMode}

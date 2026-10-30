@@ -10,7 +10,8 @@ import org.springframework.data.repository.query.Param;
 public interface LlmConnectionRepository extends JpaRepository<LlmConnection, Long> {
     Optional<LlmConnection> findBySlug(String slug);
 
-    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.catalog.LlmProbeTarget(c.baseUrl, c.authMode, c.apiKey) "
-            + "FROM LlmConnection c WHERE c.id = :id")
+    @Query(
+            "SELECT new de.tum.cit.aet.hephaestus.agent.catalog.LlmProbeTarget(c.baseUrl, c.authMode, c.apiKey, c.apiProtocol) "
+                    + "FROM LlmConnection c WHERE c.id = :id")
     Optional<LlmProbeTarget> findProbeTargetById(@Param("id") Long id);
 }

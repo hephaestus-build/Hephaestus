@@ -8,8 +8,8 @@
     "context/citable-records/scm.pull-request.core/3def842354871a3cd17f74a605e0b0589cf3d70eee0b395c9deeec8953d5668b.txt" : "First line\nSecond line"
   },
   "manifest" : {
-    "contractVersion" : "2.0.0",
-    "catalogDigest" : "da3e46cdff053f2554b5f2c4c667bb6d3fae2146977b547684d693b58098a681",
+    "contractVersion" : "3.0.0",
+    "catalogDigest" : "01b9ea3673a3b7b5b0870ea660eff53d3102599e1aa3b2907cefc5e5a3252027",
     "itemKind" : "scm.pull_request",
     "capturedAt" : "2026-10-14T00:00:00Z",
     "sources" : [ {

@@ -119,8 +119,8 @@ export const Default: Story = {
 		await expect(summary.getBoundingClientRect().bottom).toBeLessThanOrEqual(
 			line.getBoundingClientRect().top,
 		);
-		// No summary card: no Heph mark, no held rows, no next step, no reviewed work.
-		await expect(screen.queryByRole("img", { name: "Heph, AI assistant" })).toBeNull();
+		// No summary card: no Hephaestus mark, no held rows, no next step, no reviewed work.
+		await expect(screen.queryByRole("img", { name: "Ask Hephaestus" })).toBeNull();
 		await expect(screen.queryByText("What is holding up well")).toBeNull();
 		await expect(screen.queryByText("Next step")).toBeNull();
 		// One column: no tabs over the practices.
@@ -271,7 +271,7 @@ export const Loading: Story = {
 		await expect(table).toHaveAttribute("aria-busy", "true");
 		// Nothing is claimed about a standing that has not loaded.
 		await expect(screen.queryByRole("button", { name: "No standing yet" })).toBeNull();
-		await expect(screen.queryByRole("img", { name: "Heph, AI assistant" })).toBeNull();
+		await expect(screen.queryByRole("img", { name: "Ask Hephaestus" })).toBeNull();
 		await expect(screen.queryByRole("tab")).toBeNull();
 	},
 };

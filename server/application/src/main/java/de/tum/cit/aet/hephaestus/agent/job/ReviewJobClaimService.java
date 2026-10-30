@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -63,6 +65,7 @@ public class ReviewJobClaimService {
     private final @Nullable String workerId;
     private final Counter concurrencyRejected;
     private final Timer claimLatency;
+    private final LlmCallPermits callPermits;
 
     public ReviewJobClaimService(
             ReviewJobRepository jobRepository,
@@ -75,8 +78,10 @@ public class ReviewJobClaimService {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
-            Optional<WorkerProperties> workerProperties) {
+            Optional<WorkerProperties> workerProperties,
+            LlmCallPermits callPermits) {
         this.jobRepository = jobRepository;
+        this.callPermits = callPermits;
         this.memberAiPolicy = memberAiPolicy;
         this.methods = methods;
         this.assignments = assignments;
@@ -96,6 +101,10 @@ public class ReviewJobClaimService {
     }
 
     sealed interface ClaimAttempt {}
+
+    record PoolWait(long poolId) implements ClaimAttempt {}
+
+    record ClaimTurn(UUID jobId) implements ClaimAttempt {}
 
     enum ClaimOutcome implements ClaimAttempt {
         ALREADY_CLAIMED,
@@ -132,7 +141,11 @@ public class ReviewJobClaimService {
 
             ReviewJob job = locked.get();
             try {
-                return claimLocked(job);
+                ClaimAttempt result = claimLocked(job);
+                if (result instanceof ClaimOutcome || result instanceof TerminalClaim)
+                    callPermits.withdrawClaim(
+                            new LlmCallPermits.Caller(job.getWorkspaceId(), job.getId(), job.getAttempt(), null));
+                return result;
             } catch (JobPreparationException failure) {
                 PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
                 job.setStatus(ReviewJobStatus.FAILED);
@@ -155,6 +168,17 @@ public class ReviewJobClaimService {
                 return new TerminalClaim(job, ReviewJobStatus.FAILED);
             }
         });
+    }
+
+    /**
+     * Leases the claimed attempt on the database clock. Within the claim's transaction, {@code now()} is its start, so
+     * the entity takes the very value that the row holds.
+     */
+    private void lease(ReviewJob job) {
+        long ttl = AgentProperties.WORKER_LEASE_TTL.toSeconds();
+        if (jobRepository.lease(job.getId(), ttl) != 1)
+            throw new IllegalStateException("The claimed attempt is no longer running");
+        job.setLeasedUntil(jobRepository.databaseNow().plusSeconds(ttl));
     }
 
     private ClaimAttempt claimLocked(ReviewJob job) {
@@ -229,6 +253,22 @@ public class ReviewJobClaimService {
             return ClaimOutcome.CONCURRENCY_FULL;
         }
 
+        Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
+        if (!composing && poolId != null) {
+            var reservation = callPermits.reserve(
+                    poolId,
+                    LlmCallClass.REQUEST,
+                    new LlmCallPermits.Caller(
+                            job.getWorkspaceId(),
+                            job.getId(),
+                            job.getAttempt(),
+                            snapshot.model().connectionRef()));
+            if (!reservation.granted()) {
+                UUID next = reservation.nextClaim();
+                return next == null ? new PoolWait(poolId) : new ClaimTurn(next);
+            }
+        }
+
         Instant claimedAt = Instant.now();
         // The first claim only: a requeued review would sample its submission again, later each time.
         if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
@@ -242,6 +282,7 @@ public class ReviewJobClaimService {
         job.setWorkerId(workerId);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
+        lease(job);
 
         return new ClaimResult(job, snapshot, itemKind);
     }
@@ -255,6 +296,7 @@ public class ReviewJobClaimService {
         job.setHoldReason(null);
         job.setWorkerId(workerId);
         jobRepository.save(job);
+        lease(job);
         return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
     }
 

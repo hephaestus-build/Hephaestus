@@ -374,7 +374,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
 
     private static CaptureRequest request() {
         return new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(ThreadCaptureSource.SOURCE), "2.0.0", 3);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(ThreadCaptureSource.SOURCE), "3.0.0", 3);
     }
 
     private record Fixture(ItemRef item, long secondAccountId, long providerId, String teamId) {}

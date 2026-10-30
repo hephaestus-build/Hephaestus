@@ -95,7 +95,7 @@
 					}
 				],
 				"bodyRole": "CONVERSATION_WORDS",
-				"body": "Heph said the catch drops the error."
+				"body": "Hephaestus said the catch drops the error."
 			},
 			{
 				"id": "50000000-0000-4000-8000-000000000002",
@@ -132,7 +132,7 @@
 					}
 				],
 				"bodyRole": "MENTOR_NOTES",
-				"body": "Notes queued for Heph about dropped errors."
+				"body": "Notes queued for Hephaestus about dropped errors."
 			}
 		]
 	},

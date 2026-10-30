@@ -52,7 +52,8 @@ class EmailRendererTest extends BaseUnitTest {
                         "0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4",
                         "unsubscribeUrl",
                         "https://hephaestus.example/unsubscribe"));
-        String link = "https://delivery-team.hephaestus.example/mentor?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
+        String link =
+                "https://delivery-team.hephaestus.example/conversation?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
         assertThat(email.text()).contains(link).doesNotContain("/w/delivery-team");
         assertThat(email.html()).contains("href=\"" + link + "\"");
     }
@@ -109,7 +110,7 @@ class EmailRendererTest extends BaseUnitTest {
             case SURVEY_ENDED_SUMMARY -> "/admin/surveys";
             case SURVEY_INVITATION -> "/w/survey-team?survey=7bc509de-ce47-498f-bec3-2a5ea141c241";
             case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
-            case MENTOR_DIGEST -> "/w/delivery-team/mentor?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
+            case MENTOR_DIGEST -> "/w/delivery-team/conversation?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
         };
         String actionUrl = EmailTestSupport.WEBAPP_URL + actionPath;
         assertThat(rendered.text()).contains(actionUrl);

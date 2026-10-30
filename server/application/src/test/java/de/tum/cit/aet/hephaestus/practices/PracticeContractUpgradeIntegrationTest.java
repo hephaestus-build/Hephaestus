@@ -48,7 +48,7 @@ class PracticeContractUpgradeIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(retained.getDefinition()).isEqualTo(previousBytes);
         assertThat(versions.definitionOf(retained).reads().contract()).isEqualTo("1.3.0");
         assertThat(appended.getNumber()).isEqualTo(3);
-        assertThat(versions.definitionOf(appended).reads().contract()).isEqualTo("2.0.0");
+        assertThat(versions.definitionOf(appended).reads().contract()).isEqualTo("3.0.0");
         assertThat(versions.definitionOf(appended).criteria())
                 .isEqualTo(versions.definitionOf(retained).criteria());
         assertThat(versions.definitionOf(appended).guidance())

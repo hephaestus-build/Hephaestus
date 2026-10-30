@@ -13,6 +13,6 @@ each check that the cluster failed:
 
   kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "hephaestus.name" (dict "root" . "component" "worker") }}
 {{ else -}}
-No worker is enabled, so practice reviews and Heph turns do not run.
+No worker is enabled, so practice reviews and conversation turns do not run.
 {{ end -}}
 https://docs.hephaestus.build/admin/kubernetes describes the installation and its troubleshooting.

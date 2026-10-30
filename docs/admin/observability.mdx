@@ -412,10 +412,10 @@ It has no phase, outcome or duration.
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
 
-## Heph turn metrics
+## Conversation turn metrics
 
-Each claim of a Heph turn by a worker is one attempt.
-A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime-roles.mdx#heph-turns)).
+Each claim of a conversation turn by a worker is one attempt.
+A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime-roles.mdx#conversation-turns)).
 
 | Prometheus name                            | Type      | Labels    | Meaning                                                                 |
 | ------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------- |
@@ -424,30 +424,30 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `mentor_turn_retried_total`                | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
 | `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a worker, sampled by the server every 30 seconds    |
 | `mentor_turn_queue_wait_seconds`           | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
-| `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | Heph model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
+| `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
 | `mentor_turn_lease_reaper_failure_total`   | Counter   | none      | Expired leases that the lease reaper could not take back on one pass    |
 | `mentor_turn_duration_seconds`             | Histogram | none      | An attempt, from its claim to its end                                   |
-| `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Heph's answer         |
+| `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Hephaestus's answer         |
 | `mentor_turn_cost_usd`                     | Summary   | none      | The cost of one billed attempt in US dollars                            |
-| `mentor_host_ready`                        | Gauge     | none      | `1` while the Heph host of this worker has its command channel open     |
-| `mentor_host_turns_active`                 | Gauge     | none      | Turns that run in the Heph host of this worker now                      |
+| `mentor_host_ready`                        | Gauge     | none      | `1` while the conversation host of this worker has its command channel open     |
+| `mentor_host_turns_active`                 | Gauge     | none      | Turns that run in the conversation host of this worker now                      |
 | `mentor_turn_claim_failure_total`          | Counter   | none      | Claims and starts of a turn that failed with an error                   |
 | `mentor_slack_reply_total`                 | Counter   | `state`   | Replies to questions asked in Slack, by the state they were left in     |
-| `mentor_live_streams`                      | Gauge     | none      | Live Heph streams that the app holds open on this server                |
+| `mentor_live_streams`                      | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
 
 `outcome` is one of `success`, `stopped`, `failed`, or `lease_expired`.
 `state` is one of `delivered`, `failed`, or `uncertain`.
 `failed` includes a reply that Silent Mode kept from Slack.
-A turn with nothing to post, such as a turn that the developer stopped before Heph wrote, is not counted.
+A turn with nothing to post, such as a turn that the developer stopped before Hephaestus wrote, is not counted.
 
 The Slack reconciler takes each unsettled reply once and counts it again in its new state.
 It reads the Slack history once for a reply that a server tried to post.
 A reply that it finds is `delivered`.
 A reply that it does not find is `failed`, and Hephaestus never posts it again.
 A reply whose history it cannot read stays `uncertain`.
-[Heph runtime](/contributor/unified-pi-runtime#reconciler) gives its limits.
+[Conversation runtime](/contributor/unified-pi-runtime#reconciler) gives its limits.
 
 Web and Slack turns both count.
 An attempt that ends before any part of an answer records no first-token time.
@@ -471,7 +471,7 @@ sum(increase(mentor_turn_completed_total{outcome=~"failed|lease_expired"}[1h]))
   / sum(increase(mentor_turn_completed_total[1h]))
 ```
 
-A high `lease_expired` share shows workers or Heph hosts that stop during turns.
+A high `lease_expired` share shows workers or conversation hosts that stop during turns.
 A high `failed` share with no lease expiries shows one of these causes:
 
 - Admission declines turns.
@@ -479,16 +479,16 @@ A high `failed` share with no lease expiries shows one of these causes:
 - Turns cannot start a host.
 - Turns get an error from the model.
 
-The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
-The reason tells which of these happened, for example `its Heph host reported ERROR: model_error`.
-The Heph host reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
+The worker logs each failed attempt at `WARN` as `conversation turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
+The reason tells which of these happened, for example `its conversation host reported ERROR: model_error`.
+The conversation host reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
 It does not report the error text of the model provider, a tool or the worker, or the messages of the conversation.
 A worker that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
 
-The worker logs each failed model call of a turn at `WARN` as `Heph model call failed`.
+The worker logs each failed model call of a turn at `WARN` as `conversation model call failed`.
 The line has the turn id, the attempt, the kind of failure and the status that the provider or the proxy sent.
 It does not have the request or the response.
-It is the only `WARN` line for a failed model call of a Heph turn.
+It is the only `WARN` line for a failed model call of a conversation turn.
 A call that the end of its turn cancelled is not a failure.
 
 The turn row keeps the cause, so the cause stays after the worker stops:
@@ -500,7 +500,7 @@ The turn row keeps the cause, so the cause stays after the worker stops:
 | `failed_call_status` | The HTTP status that the provider or the proxy sent for that call, if one was sent |
 | `llm_calls` | The model calls of the attempt that completed |
 
-The Heph host's end, the worker's own end and a lease that expires write the first three columns.
+The conversation host's end, the worker's own end and a lease that expires write the first three columns.
 A lease that expires writes no `failed_call`, because the server role, not the worker, ends the turn.
 The columns are empty for a turn that did not fail, and for a turn that admission declines.
 
@@ -510,7 +510,28 @@ Its `failure_cause` is `its lease expired on its last attempt`.
 
 An increase in `mentor_turn_claim_failure_total` shows a worker that claims turns but cannot start them.
 The worker fails each such turn and continues to claim.
-[Runtime roles](./runtime-roles.mdx#the-heph-host) tells when a worker replaces its Heph host, what it logs, and what happens to the turns of that host.
+[Runtime roles](./runtime-roles.mdx#the-conversation-host) tells when a worker replaces its conversation host, what it logs, and what happens to the turns of that host.
+
+## Call pool metrics
+
+Each worker reports the [call pools](./runtime-roles.mdx#call-pools) whose models it calls.
+A worker registers every series of a pool at start, so a rate starts from zero.
+The labels are `pool` (the pool's slug), `class` and `reason`, each from a closed set.
+`class` is `turn`, `composition`, `request`, `event`, `schedule`, or `backfill`.
+It identifies conversation, composition, or the origin of a review call.
+No series names a workspace, a model, a job or a turn.
+
+| Prometheus name                            | Type      | Labels                     | Meaning |
+| ------------------------------------------ | --------- | -------------------------- | ------- |
+| `llm_pool_permits_active`                  | Gauge     | `pool`, `class`            | Permits that this worker holds. Sum over the workers for the pool's calls in flight |
+| `llm_pool_permit_wait_seconds`             | Histogram | `pool`, `class`, `reason`  | How long a queued call waited for its permit. `reason=capacity` includes concurrency, rate, and cooldown admission |
+| `llm_pool_permit_abandoned_total`          | Counter   | `pool`, `class`, `reason`  | Calls whose attempt ended, or whose work deadline passed, while they waited |
+| `llm_pool_upstream_throttled_total`        | Counter   | `pool`                     | HTTP 429 answers from the pool's provider |
+| `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a 429. Take the maximum over the workers |
+| `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a worker cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, or `attempt_ended` |
+| `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a worker's permits |
+
+Claim reservations do not add a second wait observation when the model call uses them.
 
 ## Privacy-job metrics
 

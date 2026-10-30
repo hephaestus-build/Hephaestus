@@ -52,7 +52,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a Heph turn attempt keeps one call and one that a stop left closing")
+    @DisplayName("a conversation turn attempt keeps one call and one that a stop left closing")
     void shouldRefuseTheThirdCallWhenATurnAttemptHasTwo() {
         ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.MENTOR_TURN);
 

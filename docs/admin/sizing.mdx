@@ -20,7 +20,7 @@ It covers these memory limits, which are ceilings, not reservations:
 | `webhook-server`               | 2 GiB        | `WEBHOOK_SERVER_MEM_LIMIT`                                                                  |
 | `postgres`                     | 4 GiB        | `POSTGRES_MEM_LIMIT`                                                                        |
 | each concurrent review sandbox | 3 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (1 in the self-hosted Compose file)        |
-| the Heph host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-heph-host) gives the limits of the Heph host |
+| the conversation host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-conversation-host) gives the limits of the conversation host |
 
 With the defaults of the self-hosted Compose file, these limits add up to 19 GiB, about 20.4 GB.
 During an upgrade, the one-shot `database-migration` container runs beside the previous roles for a few minutes.
@@ -42,7 +42,7 @@ The application default of `SANDBOX_MAX_CONCURRENT` is 5.
 The self-hosted Compose file sets 1.
 The review capacity (`HEPHAESTUS_WORKER_REVIEW_MAX`) defaults to `auto`: the number of CPUs minus 1.
 
-Each worker also runs [turn sandboxes](./runtime-roles.mdx#turn-sandboxes) for Heph, beside the review sandboxes and the Heph host.
+Each worker also runs [turn sandboxes](./runtime-roles.mdx#turn-sandboxes) for Hephaestus, beside the review sandboxes and the conversation host.
 Their limits are fixed and do not count against `SANDBOX_MAX_CONCURRENT`.
 
 ## PostgreSQL memory
@@ -100,12 +100,13 @@ You scale the work of the worker, not the number of containers:
   The self-hosted Compose file allows 1 concurrent sandbox.
   Raise `SANDBOX_MAX_CONCURRENT` only with sufficient RAM.
   [Worker pod env vars](./runtime-roles#worker-pod-env-vars) explains how it caps the review capacity of the worker.
-- **Heph turns.** `HEPHAESTUS_WORKER_MENTOR_MAX` sets how many Heph turns the worker runs at once.
+- **conversation turns.** `HEPHAESTUS_WORKER_MENTOR_MAX` sets how many conversation turns the worker runs at once.
+  In the Helm chart, set `worker.conversationTurns`.
   The model provider usually sets the real limit.
-  [Heph capacity](./runtime-roles#heph-capacity) explains how to size it.
+  [Conversation turn capacity](./runtime-roles#conversation-turn-capacity) explains how to size it.
 
 These are deployment limits, not a claim that all workloads fit. Before raising webhook volume,
-Heph turn capacity (`HEPHAESTUS_WORKER_MENTOR_MAX`), or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
+Conversation turn capacity (`HEPHAESTUS_WORKER_MENTOR_MAX`), or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
 [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
 your host shape. A release baseline is valid only with the raw k6 and container-resource evidence described there.
 Without that evidence, keep the conservative defaults above.
@@ -132,7 +133,7 @@ Budget all clients against `max_connections`:
 | Clients                                                          | Connections        |
 | ---------------------------------------------------------------- | ------------------ |
 | The pools of one server, one worker and one webhook server       | 20 + 32 + 2 = 54   |
-| The Heph listener of the server and of the worker, outside pools | 2                  |
+| The Hephaestus listener of the server and of the worker, outside pools | 2                  |
 | A database migration or a backup                                 | up to 10           |
 | Operator sessions and monitoring                                 | a few              |
 | The superuser reserve of PostgreSQL                              | 3                  |

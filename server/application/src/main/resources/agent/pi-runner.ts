@@ -36,6 +36,7 @@ import {
 	writeChangeView,
 } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
+import { OpeningQueue } from "./pi-opening-queue.ts";
 
 import {
 	CONTEXT_IS_LOOP_ONLY,
@@ -1088,12 +1089,10 @@ export async function runReviewJob(): Promise<void> {
 								complete: completeSourceKinds.has(TREE_SOURCE),
 							}
 						: undefined,
-					askAboutWords: !askedAboutCheckoutWords.has(slug),
+					ask: !askedAboutCheckout.has(slug),
 				});
 		if (unread !== undefined) {
-			if (unread.byWords) {
-				askedAboutCheckoutWords.add(slug);
-			}
+			askedAboutCheckout.add(slug);
 			throw new UnreadEvidenceError(unread.text);
 		}
 		const parsed = parseCandidate({ ...submission, coverage });
@@ -1444,8 +1443,8 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const refusals = new Map<string, number>();
-	// Practices already asked once about words that say the checkout lacks something.
-	const askedAboutCheckoutWords = new Set<string>();
+	// Practices already asked once about a claim that the checkout lacks something; admission withholds a repeat.
+	const askedAboutCheckout = new Set<string>();
 	// Per practice, across its review sessions: the execution report carries these.
 	const reviewSessions = new Map<
 		string,
@@ -2286,12 +2285,23 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		const streamUsage = newUsageLedger();
+		let releaseOpening: ((key: string) => void) | undefined;
 		let providerFailures = 0;
 		const measurementReply = { received: false };
 		const subscribeSession = (trackedSession: AgentSession) => {
 			const scope = sessionState();
 			return trackedSession.subscribe((event: AgentSessionEvent) =>
 				sessionScopes.run(scope, () => {
+					// Responses can start the SDK message at headers. Wait for content or a successful reply.
+					if (
+						event.type === "message_update" ||
+						(event.type === "message_end" &&
+							event.message.role === "assistant" &&
+							event.message.stopReason !== "error" &&
+							event.message.stopReason !== "aborted")
+					) {
+						releaseOpening?.(JSON.stringify([...declaredOf(scope.activePractice)].toSorted()));
+					}
 					chargeWork(event);
 					const label = practiceLogLabel();
 					if (event.type === "tool_execution_start") {
@@ -2459,6 +2469,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				practice === null ? "" : assessmentOpening(briefOf(practice).text),
 				taskEnvelope.workspaceId,
 				taskEnvelope.jobId,
+				practice === null
+					? []
+					: briefOf(practice).cacheBoundaries.map((end) => prompt.length + 2 + end),
 			);
 			// Extension bindings belong to the native session that uses them.
 			const resourceLoader = new DefaultResourceLoader({
@@ -3067,7 +3080,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					}
 				}
 			} else {
-				const queue = turns.flatMap((turn, index) => {
+				const planned = turns.flatMap((turn, index) => {
 					const budget = turnBudget(turn.slugs.length, PER_PRACTICE_WORK);
 					return turn.slugs.map((slug, position) => ({
 						slug,
@@ -3077,17 +3090,28 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						position: { index: position, count: turn.slugs.length },
 					}));
 				});
-				let next = 0;
+				// Turns partition budgets; the server's index still owns the start order across groups.
+				const order = new Map(practiceIndex.map((practice, index) => [practice.slug, index]));
+				planned.sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0));
+				const signature = (work: (typeof planned)[number]) =>
+					JSON.stringify([...declaredOf(work.slug)].toSorted());
+				const queue = new OpeningQueue(planned, signature);
+				releaseOpening = (key) => queue.firstStream(key);
+				const cancelQueue = () => queue.dispose();
+				const queueDeadline = setTimeout(
+					cancelQueue,
+					Math.max(0, measureEnd - RETURN_MS - Date.now()),
+				);
+				measuringEnded.signal.addEventListener("abort", cancelQueue, { once: true });
 				const workers = await Promise.allSettled(
-					Array.from({ length: Math.min(PRACTICE_CONCURRENCY, queue.length) }, async () => {
-						while (
-							next < queue.length &&
-							Date.now() < measureEnd - RETURN_MS &&
-							!measurementClosed
-						) {
-							const work = queue[next];
-							next += 1;
-							if (work === undefined) {
+					Array.from({ length: Math.min(PRACTICE_CONCURRENCY, planned.length) }, async () => {
+						while (Date.now() < measureEnd - RETURN_MS && !measurementClosed) {
+							const work = await queue.take();
+							if (
+								work === undefined ||
+								measuringEnded.signal.aborted ||
+								Date.now() >= measureEnd - RETURN_MS
+							) {
 								return;
 							}
 							const scope = newSessionState();
@@ -3104,11 +3128,17 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 								);
 								throw error;
 							} finally {
+								// A scripted practice or failed leader may finish without a streamed response.
+								queue.firstStream(signature(work));
 								activeScopes.delete(scope);
 							}
 						}
 					}),
 				);
+				measuringEnded.signal.removeEventListener("abort", cancelQueue);
+				clearTimeout(queueDeadline);
+				queue.dispose();
+				releaseOpening = undefined;
 				const failure = workers.find((worker) => worker.status === "rejected");
 				if (failure?.status === "rejected") {
 					console.error(

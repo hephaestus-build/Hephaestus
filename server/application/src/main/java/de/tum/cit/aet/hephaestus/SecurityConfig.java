@@ -186,25 +186,20 @@ public class SecurityConfig {
     }
 
     /**
-     * Dedicated filter chain for the worker control channel (POST exchange + WSS upgrade) and
-     * webhook ingress + actuator probes. These paths carry their own auth — worker JWT signed
-     * by {@link de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerKeyRing}, HMAC/token at
-     * the controller layer for webhooks, or no auth at all for health/info — and must NOT be
-     * processed by the user-facing OAuth2 resource server. Running BearerTokenAuthenticationFilter
-     * on the worker JWT runs it through the resource-server's ES256 decoder, which either fails
-     * (signing key unavailable) or rejects (different signer), masking the real auth.
+     * Dedicated filter chain for webhook ingress and the actuator probes. These paths carry their own auth — HMAC or a
+     * token at the controller layer for webhooks, or no auth at all for health and info — and must NOT be processed by
+     * the user-facing OAuth2 resource server.
      *
      * <p>Always present, so a dev / worker-only pod can
      * boot without the resource-server JWT decoder configured.
      */
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 4)
-    SecurityFilterChain workerHubSecurityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain ingressSecurityFilterChain(HttpSecurity http) throws Exception {
         // Only paths whose auth lives at the controller / handshake layer go on this chain.
         // Prometheus has its own listener-restricted chain. Other actuator endpoints
         // (metrics, loggers, heapdump, …) fall through to the OAuth2 chain.
         http.securityMatcher(
-                        "/api/workers/**",
                         "/actuator/health",
                         "/actuator/health/**",
                         "/actuator/info",
@@ -225,7 +220,7 @@ public class SecurityConfig {
     }
 
     /**
-     * Application security chain (fallback after {@link #workerHubSecurityFilterChain}).
+     * Application security chain (fallback after {@link #ingressSecurityFilterChain}).
      *
      * <p>The {@link JwtDecoder} is resolved via {@link ObjectProvider} when this bean is built, so
      * it sees the decoder even when it comes from Spring Boot's OAuth2 autoconfig (registered after
@@ -343,14 +338,14 @@ public class SecurityConfig {
             // ORIGINAL status is preserved. The error view carries no sensitive data.
             requests.requestMatchers("/error").permitAll();
             requests.requestMatchers(EMAIL_UNSUBSCRIBE_MATCHER).permitAll();
-            // NOTE: /webhooks/**, /oauth/callback/**, /api/workers/** and /actuator/health|info are
+            // NOTE: /webhooks/**, /oauth/callback/** and /actuator/health|info are
             // claimed by higher-precedence chains and NEVER reach this fallback chain:
-            //   - /webhooks/** + /oauth/callback/**  → workerHubSecurityFilterChain (the
+            //   - /webhooks/** + /oauth/callback/**  → ingressSecurityFilterChain (the
             //     highest-precedence chain that matches by path)
             //   - /oauth2/authorization/** + /login/oauth2/code/** + /auth/login|error → AuthSecurityConfig
             // Spring dispatches to the FIRST matching SecurityFilterChain only, so permitAll rules for
-            // those paths here would be dead code. Their controller/handshake-layer auth (HMAC, shared
-            // token, signed state, worker JWT) is unaffected.
+            // those paths here would be dead code. Their controller-layer auth (HMAC, shared token,
+            // signed state) is unaffected.
             // Dev-only: permit the dev trigger endpoint when explicitly enabled (defaults to false).
             if (devTriggerEnabled) {
                 requests.requestMatchers(DEV_TRIGGER_MATCHER).permitAll();
@@ -429,7 +424,7 @@ public class SecurityConfig {
     /**
      * Single canonical matcher for the optional dev-trigger surface, shared by the authorize rules and
      * the CSRF predicate so they cannot diverge. The webhook / OAuth-callback / {@code /login/oauth2/code/}
-     * paths need no CSRF skip here: they are owned by the higher-precedence worker-hub and oauth2Login
+     * paths need no CSRF skip here: they are owned by the higher-precedence ingress and oauth2Login
      * chains and never reach this chain.
      */
     static final RequestMatcher DEV_TRIGGER_MATCHER =

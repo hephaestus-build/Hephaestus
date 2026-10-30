@@ -15,6 +15,7 @@ import { NavAdmin } from "./NavAdmin";
 
 const PATHS = [
 	"w/$workspaceSlug/admin/settings",
+	"w/$workspaceSlug/admin/teams",
 	"w/$workspaceSlug/admin/practices",
 	"w/$workspaceSlug/admin/practices/review",
 	"w/$workspaceSlug/admin/practices/reviews",
@@ -57,6 +58,7 @@ describe("NavAdmin", () => {
 	});
 
 	it.each([
+		["/w/acme/admin/teams", "Team setup"],
 		["/w/acme/admin/practices", "Practice setup"],
 		["/w/acme/admin/practices/review", "Review settings"],
 		// Both directions, because the two paths differ by one trailing character and a matcher that

@@ -126,8 +126,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an OpenAI-compatible or Cohere-compatible endpoint. Add and price its models
-						next.
+						Connect an AI endpoint. Add and price its models next.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -164,8 +163,8 @@ function WorkspaceLlmConnectionFormDialogContent({
 							<AlertTriangle aria-hidden />
 							<AlertTitle>All workspace models will stop immediately</AlertTitle>
 							<AlertDescription>
-								Practice reviews and Heph cannot run until you reactivate this provider or pick
-								another model.
+								Practice reviews and conversations cannot run until you reactivate this provider or
+								pick another model.
 							</AlertDescription>
 						</Alert>
 					)}

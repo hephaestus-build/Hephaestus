@@ -772,6 +772,7 @@ export const zCreateFeedbackDecisionRequest = z.object({
 export const zCreateLlmConnectionRequest = z.object({
     apiKey: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -888,6 +889,7 @@ export const zCreateReviewRequest = z.object({
 export const zCreateWorkspaceLlmConnectionRequest = z.object({
     apiKey: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -1899,11 +1901,51 @@ export const zCurrentUserView = z.object({
 });
 
 /**
+ * Provider capacity that the models in it share
+ */
+export const zLlmCallPool = z.object({
+    displayName: z.string(),
+    id: z.int(),
+    interactiveReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    maxConcurrentCalls: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    noCallBefore: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    requestsPerMinute: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    slug: z.string(),
+    tokensPerCall: z.int().optional(),
+    tokensPerMinute: z.int().optional()
+});
+
+/**
+ * Tenant-visible membership, without shared activity or cooldown information.
+ */
+export const zLlmCallPoolMembership = z.object({
+    displayName: z.string(),
+    id: z.int(),
+    interactiveReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    maxConcurrentCalls: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    slug: z.string()
+});
+
+/**
+ * A model and the pool its calls share
+ */
+export const zLlmCallPoolModel = z.object({
+    callPoolId: z.int().optional(),
+    connectionDisplayName: z.string(),
+    displayName: z.string(),
+    host: z.string().optional(),
+    modelId: z.int(),
+    scope: z.enum(['INSTANCE', 'WORKSPACE']),
+    workspaceSlug: z.string().optional()
+});
+
+/**
  * Instance LLM provider connection (API key redacted)
  */
 export const zLlmConnection = z.object({
     apiKeyLast4: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -1948,6 +1990,13 @@ export const zLlmConnection = z.object({
 });
 
 /**
+ * A synthetic probe result, not a claim about the quality of the model's answers.
+ */
+export const zLlmModelCapabilities = z.object({
+    forcedToolChoice: z.boolean().optional()
+});
+
+/**
  * A model's price, per 1M tokens
  */
 export const zLlmModelPrice = z.object({
@@ -1985,6 +2034,7 @@ export const zLlmModel = z.object({
         'Z_AI',
         'MOONSHOT'
     ]).optional(),
+    callPoolId: z.int().optional(),
     connectionDisplayName: z.string(),
     connectionId: z.int(),
     contextWindow: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -1998,6 +2048,7 @@ export const zLlmModel = z.object({
     ]),
     displayName: z.string(),
     enabled: z.boolean(),
+    forcedToolChoice: z.boolean().optional(),
     grantedWorkspaceIds: z.array(z.int()),
     id: z.int(),
     maxOutputTokens: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -2106,7 +2157,7 @@ export const zLoginProviderView = z.object({
 });
 
 /**
- * A practice result, problem or prepared feedback Heph showed in a message
+ * A practice result, problem or prepared feedback Hephaestus showed in a message
  */
 export const zMentorLink = z.object({
     id: z.uuid(),
@@ -2121,14 +2172,14 @@ export const zMentorLink = z.object({
 });
 
 /**
- * How far the developer read their Heph conversation
+ * How far the developer read their Hephaestus conversation
  */
 export const zMentorRead = z.object({
     lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
 });
 
 /**
- * How far the developer read their Heph conversation
+ * How far the developer read their Hephaestus conversation
  */
 export const zMentorReadRequest = z.object({
     at: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
@@ -2146,7 +2197,7 @@ export const zMentorThreadSummary = z.object({
 });
 
 /**
- * What Heph is doing in a running turn
+ * What Hephaestus is doing in a running turn
  */
 export const zMentorTurnPartial = z.object({
     activity: z.enum([
@@ -2160,7 +2211,7 @@ export const zMentorTurnPartial = z.object({
 });
 
 /**
- * One question to Heph and the work to answer it
+ * One question to Hephaestus and the work to answer it
  */
 export const zMentorTurn = z.object({
     attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
@@ -2184,7 +2235,7 @@ export const zMentorTurn = z.object({
 });
 
 /**
- * The developer's Heph conversation in a workspace at one moment
+ * The developer's Hephaestus conversation in a workspace at one moment
  */
 export const zMentorConversation = z.object({
     activeTurns: z.array(zMentorTurn),
@@ -2196,7 +2247,7 @@ export const zMentorConversation = z.object({
 });
 
 /**
- * A question to Heph from the app
+ * A question to Hephaestus from the app
  */
 export const zMentorTurnRequest = z.object({
     pageContext: z.string().min(0).max(500).optional(),
@@ -2213,7 +2264,7 @@ export const zMentorTurnStatusRequest = z.object({
 });
 
 /**
- * The developer's vote on one of Heph's messages
+ * The developer's vote on one of Hephaestus's messages
  */
 export const zMentorVoteRequest = z.object({
     vote: z.enum(['HELPFUL', 'NOT_HELPFUL'])
@@ -2719,6 +2770,7 @@ export const zPrivateProgress = z.object({
 export const zProbeLlmConnectionRequest = z.object({
     apiKey: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -4527,6 +4579,19 @@ export const zRuntimeNonResult = z.object({
     ])
 });
 
+/**
+ * Create or change a pool of provider capacity
+ */
+export const zSaveLlmCallPoolRequest = z.object({
+    displayName: z.string().min(0).max(128),
+    interactiveReserve: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    maxConcurrentCalls: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    requestsPerMinute: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    slug: z.string().min(0).max(64).regex(/[a-z0-9]+(-[a-z0-9]+)*/),
+    tokensPerCall: z.int().optional(),
+    tokensPerMinute: z.int().optional()
+});
+
 export const zScanAvailability = z.object({
     expired: z.boolean(),
     expiredProofPairs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
@@ -5769,6 +5834,14 @@ export const zUpdateLlmBudgetRequest = z.object({
 });
 
 /**
+ * The models whose calls share a pool
+ */
+export const zUpdateLlmCallPoolModelsRequest = z.object({
+    instanceModelIds: z.array(z.int()),
+    workspaceModelIds: z.array(z.int())
+});
+
+/**
  * Update an instance LLM provider connection (all fields optional)
  */
 export const zUpdateLlmConnectionRequest = z.object({
@@ -6250,7 +6323,7 @@ export const zWeeklyDigest = z.object({
 });
 
 /**
- * One message of a Heph conversation
+ * One message of a Hephaestus conversation
  */
 export const zMentorEntry = z.object({
     conversationId: z.uuid(),
@@ -6465,6 +6538,7 @@ export const zWorkspaceListItem = z.object({
 export const zWorkspaceLlmConnection = z.object({
     apiKeyLast4: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -6526,6 +6600,7 @@ export const zWorkspaceLlmModel = z.object({
         'Z_AI',
         'MOONSHOT'
     ]).optional(),
+    callPool: zLlmCallPoolMembership.optional(),
     connectionDisplayName: z.string(),
     connectionId: z.int(),
     contextWindow: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -6539,6 +6614,7 @@ export const zWorkspaceLlmModel = z.object({
     ]),
     displayName: z.string(),
     enabled: z.boolean(),
+    forcedToolChoice: z.boolean().optional(),
     id: z.int(),
     maxOutputTokens: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     operatedBy: z.enum(['OWN_ORGANISATION', 'PROVIDER']).optional(),
@@ -6660,7 +6736,7 @@ export const zWorkspaceOnboardingLink = z.object({
 /**
  * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
  * every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
- * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Heph's admission.
+ * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export const zWorkspaceOnboarding = z.object({
     aiChoice: z.enum([

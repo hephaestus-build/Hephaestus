@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +18,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Why a queued turn has not started. A turn waits for a free Heph when a worker may start it
+ * Tracks why a queued turn has not started and ends an eligible question past its start budget.
+ * A turn waits for a free conversation slot when a worker may start it
  * ({@link MentorTurnRepository#CLAIMABLE}) and the turns that hold a Heph slot are at least
  * {@code hephaestus.mentor.turn.capacity}: every slot of the deployment is taken. Both facts are rows, so the reason
  * is as fresh as the read. Otherwise the reason is not known: the turn starts at once, waits for an earlier question
@@ -24,6 +27,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
  */
 @Service
 public class MentorTurnWaits {
+
+    /** Each entry to the queue gets this wait, including the one automatic retry. */
+    public static final Duration START_WAIT = Duration.ofMinutes(3);
 
     /**
      * The most queued turns that one change of the held slots publishes again, the newest first: a developer who just
@@ -70,6 +76,37 @@ public class MentorTurnWaits {
         }
         return turns.findClaimableIds(workspaceId, queued).stream()
                 .collect(Collectors.toMap(Function.identity(), id -> MentorTurn.WaitingFor.FREE_HEPH));
+    }
+
+    /** Questions whose stored queue time is past the start budget; a worker restart cannot extend it. */
+    @Transactional(readOnly = true)
+    public List<UUID> overdueQueued(Instant now) {
+        return turns.findOverdueQueued(now.minus(START_WAIT));
+    }
+
+    /** Ends an overdue question without claiming an attempt. A ready worker can win the row lock first. */
+    @Transactional
+    public boolean expireQueued(UUID turnId, Instant now, String error) {
+        MentorTurn turn = turns.lockById(turnId).orElse(null);
+        if (turn == null
+                || turn.getStatus() != MentorTurn.Status.QUEUED
+                || turn.getQueuedAt().plus(START_WAIT).isAfter(now)
+                || !turns.findClaimableIds(turn.getWorkspaceId(), List.of(turnId))
+                        .contains(turnId)) {
+            return false;
+        }
+        turn.end(MentorTurn.Status.FAILED, error, now);
+        turn.recordFailure("start_wait_expired", null);
+        turns.flush();
+        events.publishEvent(new MentorLedgerEvents.TurnChanged(
+                turn.getWorkspaceId(),
+                turn.getConversationId(),
+                turn.getId(),
+                turn.getStatus(),
+                turn.getSurface(),
+                turn.getAttempt()));
+        events.publishEvent(new SlotsChanged(turn.getWorkspaceId()));
+        return true;
     }
 
     /**

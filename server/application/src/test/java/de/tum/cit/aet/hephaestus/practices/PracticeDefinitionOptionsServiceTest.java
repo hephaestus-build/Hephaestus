@@ -37,7 +37,7 @@ class PracticeDefinitionOptionsServiceTest extends BaseUnitTest {
         var name = new ItemEventName("scm.pull_request.opened");
         when(items.all()).thenReturn(List.of(descriptor));
         when(sources.current()).thenReturn(catalog);
-        when(catalog.version()).thenReturn(new SourceContractVersion("2.0.0"));
+        when(catalog.version()).thenReturn(new SourceContractVersion("3.0.0"));
         when(catalog.sources()).thenReturn(List.of());
         when(descriptor.kind()).thenReturn(new ItemKind("scm.pull_request"));
         when(descriptor.displayName()).thenReturn("Pull request");

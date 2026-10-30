@@ -17,7 +17,7 @@ vi.setConfig({ testTimeout: 30_000 });
 // developer opens it.
 vi.mock("./-HephConversationView", () => ({
 	MainConversation: () => {
-		throw new Error("Heph conversation failed to render");
+		throw new Error("Hephaestus conversation failed to render");
 	},
 	ThreadConversation: () => null,
 }));
@@ -35,7 +35,7 @@ async function toastSaying(text: string): Promise<HTMLElement> {
 	return toast;
 }
 
-it("offers Retry, then a page load once Retry did not help, and goes when Heph is back", async () => {
+it("offers Retry, then a page load once Retry did not help, and goes when Hephaestus is back", async () => {
 	const user = userEvent.setup();
 	const ready: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
@@ -50,24 +50,22 @@ it("offers Retry, then a page load once Retry did not help, and goes when Heph i
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
 	const openHeph = async () =>
-		user.click(
-			await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
-		);
+		user.click(await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT));
 
 	await openHeph();
-	const first = await toastSaying("We could not show Heph.");
-	expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull();
+	const first = await toastSaying("We could not open Ask Hephaestus.");
+	expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull();
 	// The page under it still works.
 	screen.getByRole("heading", { name: "Teams" });
 
 	// Retry renders the panel again: the launcher is back and the message goes.
 	await user.click(within(first).getByRole("button", { name: "Retry" }));
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" });
-	await waitFor(() => expect(screen.queryByText("We could not show Heph.")).toBeNull());
+	await screen.findByRole("button", { name: "Ask Hephaestus" });
+	await waitFor(() => expect(screen.queryByText("We could not open Ask Hephaestus.")).toBeNull());
 
 	// It fails again on open, so the message says Retry ran and offers a page load instead.
 	await openHeph();
-	const again = await toastSaying("Heph still could not be shown.");
+	const again = await toastSaying("Ask Hephaestus still could not open.");
 	within(again).getByRole("button", { name: "Reload page" });
 	expect(within(again).queryByRole("button", { name: "Retry" })).toBeNull();
 });

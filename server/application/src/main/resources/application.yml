@@ -245,10 +245,10 @@ management:
             #
             # `practiceReview` is the worker's own configuration. `kubernetesSandbox` holds a Kubernetes
             # worker unready until its isolation probe passed, so a rollout drains an old worker only after
-            # the new one proved the cluster.
+            # the new one proved the cluster. `hephTurnDispatcher` also requires its conversation host's command channel.
             group:
                 readiness:
-                    include: readinessState,practiceReview,kubernetesSandbox
+                    include: readinessState,practiceReview,kubernetesSandbox,hephTurnDispatcher
             # Most of the group is role-gated, and the default (true) aborts the refresh wherever a
             # named contributor is absent — so every container that is not a Kubernetes worker, plus the
             # specs and test profiles. What it removes is a spelling check, and
@@ -681,6 +681,8 @@ hephaestus:
         # Max candidate QUEUED jobs considered per poll iteration; bounded by this worker's own
         # free local capacity so one poll never over-claims.
         claim-batch-size: ${AGENT_CLAIM_BATCH_SIZE:5}
+        # The most compositions whose inputs one worker loads at once. Further attempts wait without loading inputs.
+        max-active-compositions: ${AGENT_MAX_ACTIVE_COMPOSITIONS:4}
         # The most review attempts one worker runs at once. An attempt composes its feedback after its sandbox
         # ends and holds no sandbox slot then, so this bounds the concurrent compositions.
         max-concurrent-compositions: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:16}
@@ -712,6 +714,12 @@ hephaestus:
         # like GBP: an instance that accepted GBP could only ever have shown USD, so a currency this
         # instance cannot convert to is a deploy-time typo, not something to start up and warn about.
         display-currency: ${HEPHAESTUS_LLM_DISPLAY_CURRENCY:}
+        call-pools:
+            # Renewal window for unused reservations and cancellation on a live worker. ACTIVE crash leftovers
+            # remain counted until transport closure is confirmed; this setting never expires an active call.
+            permit-lease: ${HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE:PT1M}
+            # The longest pause of a call pool after a rate limit answer, whatever its Retry-After asks for.
+            max-cooldown: ${HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN:PT5M}
         egress:
             # Allow http://localhost provider base URLs, for testing against an Ollama/vLLM running
             # beside the app. NEVER set this in production: it is an SSRF hole that lets a workspace

@@ -358,6 +358,20 @@ for (const scenario of [
 	});
 }
 
+await test("historical names keep their wording while other word replacements still apply", async () => {
+	const vale = await prepareVale();
+	try {
+		const filename = ".vale/fixtures/docs/decisions/historical-name.md";
+		const alerts = (valeAlerts(vale, [filename], "error").get(filename) ?? []).filter(
+			(alert) => alert.Check === "STE.Words",
+		);
+		assert.equal(alerts.length, 1);
+		assert.equal(alerts[0]?.Line, 2);
+	} finally {
+		await vale.dispose();
+	}
+});
+
 await test("each Vale rule has a passing sample, a failing sample, and a repair message", async () => {
 	const vale = await prepareVale();
 	try {

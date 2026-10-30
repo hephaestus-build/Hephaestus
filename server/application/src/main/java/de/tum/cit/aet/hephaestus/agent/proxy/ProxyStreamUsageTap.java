@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
@@ -8,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Reads a streamed call's token usage out of the SSE bytes on their way to the client. Without it a
@@ -18,6 +20,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@code response.incomplete} and {@code response.failed}, so a truncated response is still billed for
  * what it burned. The figure is cumulative for the whole response, so the tap replaces rather than
  * sums, and never estimates from the deltas.
+ *
+ * <p>Anthropic reports input and cache buckets in message_start and cumulative updates in
+ * message_delta. A partial update keeps the other buckets, also when the stream stops early.
  *
  * <p>Not thread-safe: one instance serves one call, whose request thread both feeds it each chunk and reads
  * {@link #observed()} once the stream has returned.
@@ -33,7 +38,8 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     private static final byte[] USAGE_MARKER = "usage".getBytes(StandardCharsets.US_ASCII);
 
     private final ObjectMapper objectMapper;
-    private final boolean responsesProtocol;
+    private final LlmApiProtocol protocol;
+    private final ObjectNode anthropicUsage;
 
     private final ByteArrayOutputStream pending = new ByteArrayOutputStream(512);
 
@@ -46,8 +52,13 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
     private boolean malformedUsage;
 
     ProxyStreamUsageTap(ObjectMapper objectMapper, boolean responsesProtocol) {
+        this(objectMapper, responsesProtocol ? LlmApiProtocol.OPENAI_RESPONSES : LlmApiProtocol.OPENAI_COMPLETIONS);
+    }
+
+    ProxyStreamUsageTap(ObjectMapper objectMapper, LlmApiProtocol protocol) {
         this.objectMapper = objectMapper;
-        this.responsesProtocol = responsesProtocol;
+        this.protocol = protocol;
+        this.anthropicUsage = objectMapper.createObjectNode();
     }
 
     @Override
@@ -89,6 +100,28 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
             if (!event.isObject()) {
                 return;
             }
+            if (protocol == LlmApiProtocol.ANTHROPIC_MESSAGES) {
+                String type = event.path("type").asString("");
+                JsonNode usage = switch (type) {
+                    case "message_start" -> event.path("message").path("usage");
+                    case "message_delta" -> event.path("usage");
+                    default -> null;
+                };
+                if (usage != null && usage.isObject()) {
+                    ObjectNode merged = anthropicUsage.deepCopy();
+                    for (String field : new String[] {
+                        "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"
+                    }) {
+                        if (usage.hasNonNull(field)) merged.set(field, usage.get(field));
+                    }
+                    ProxyTokenUsage parsed =
+                            ProxyTokenUsage.from(objectMapper.createObjectNode().set("usage", merged), protocol);
+                    anthropicUsage.setAll(merged);
+                    observed = parsed;
+                }
+                return;
+            }
+            boolean responsesProtocol = protocol == LlmApiProtocol.OPENAI_RESPONSES;
             // The responses API nests usage under the `response` envelope of the terminal event.
             ProxyTokenUsage parsed = ProxyTokenUsage.from(event, responsesProtocol);
             if (parsed == null) {

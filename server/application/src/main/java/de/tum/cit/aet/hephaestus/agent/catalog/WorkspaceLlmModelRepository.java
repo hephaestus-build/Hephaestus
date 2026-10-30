@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +17,12 @@ public interface WorkspaceLlmModelRepository extends JpaRepository<WorkspaceLlmM
     int deleteAllByWorkspaceId(@Param("workspaceId") Long workspaceId);
 
     List<WorkspaceLlmModel> findByWorkspaceId(Long workspaceId);
+
+    /** Read live membership without returning a model from the persistence context. */
+    @Query(
+            "SELECT m.callPoolId FROM WorkspaceLlmModel m WHERE m.id = :id AND m.connection.id = :connectionId AND m.workspace.id = :workspaceId")
+    Optional<Long> findCallPoolId(
+            @Param("id") Long id, @Param("connectionId") Long connectionId, @Param("workspaceId") Long workspaceId);
 
     @Query("SELECT m FROM WorkspaceLlmModel m JOIN FETCH m.connection WHERE m.workspace.id = :workspaceId ORDER BY"
             + " m.id")
@@ -51,4 +59,18 @@ public interface WorkspaceLlmModelRepository extends JpaRepository<WorkspaceLlmM
     @Query("SELECT m FROM WorkspaceLlmModel m JOIN FETCH m.connection c "
             + "WHERE m.workspace.id = :workspaceId AND m.enabled = true AND c.enabled = true ORDER BY m.id")
     List<WorkspaceLlmModel> findEnabledWithEnabledConnection(@Param("workspaceId") Long workspaceId);
+
+    @WorkspaceAgnostic("Instance-admin pool editor lists every workspace's own models")
+    @Query("SELECT m FROM WorkspaceLlmModel m JOIN FETCH m.connection JOIN FETCH m.workspace ORDER BY m.id")
+    List<WorkspaceLlmModel> findAllForCallPools();
+
+    @WorkspaceAgnostic("Instance-admin pool editor removes the pool's models, in any workspace")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE WorkspaceLlmModel m SET m.callPoolId = NULL WHERE m.callPoolId = :poolId")
+    int leaveCallPool(@Param("poolId") Long poolId);
+
+    @WorkspaceAgnostic("Instance-admin pool editor puts models of any workspace into a pool")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE WorkspaceLlmModel m SET m.callPoolId = :poolId WHERE m.id IN :ids")
+    int joinCallPool(@Param("poolId") Long poolId, @Param("ids") Collection<Long> ids);
 }

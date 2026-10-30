@@ -30,7 +30,7 @@ public final class DefinitionTestFixtures {
                 null,
                 AboutRole.AUTHOR,
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED))),
                 new ReviewedBy(ReviewedByKind.HEPHAESTUS, null, List.of()),
                 criteria,
@@ -87,7 +87,7 @@ public final class DefinitionTestFixtures {
                 new ReviewOn(List.of(new ItemEventName(kind.value() + "." + event)), Map.of()),
                 null,
                 kind.value().equals("scm.file") || kind.value().equals("scm.repository") ? null : AboutRole.AUTHOR,
-                new PracticeReads("2.0.0", List.of(new PracticeReadSource(new SourceKind(source), ReadNeed.REQUIRED))),
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(new SourceKind(source), ReadNeed.REQUIRED))),
                 new ReviewedBy(ReviewedByKind.HEPHAESTUS, null, List.of()),
                 criteria,
                 script,

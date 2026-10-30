@@ -115,11 +115,12 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "LlmConnection", // Instance-owned provider connection; global, not tenant-scoped
             "LlmModel", // Instance-curated model behind a connection; global
             "LlmModelPrice", // Instance model price history; global pricing authority
+            "LlmCallPool", // Provider capacity shared by the workspaces whose models are in it
+            "LlmCallPermit", // Global provider admission metadata; workspace IDs attribute calls, not ownership
             "InstanceLlmSettings", // Instance LLM settings singleton (egress allowlist + BYO enable + default policy);
             // global
             "CatalogEntry",
             "FxRate", // ECB daily reference rate for display-only conversion; a world fact, not tenant data
-            "WorkerTokenDenylist", // Fleet-wide JWT revocation; worker JWTs are not workspace-scoped
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
             // Account ↔ Workspace association lives on Membership, not on these rows.
             "PersonDataRequest", // Instance-wide rights request, never a workspace endpoint
