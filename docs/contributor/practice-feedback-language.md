@@ -270,7 +270,8 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Reviewed by you** | A provider review request that the developer already approved or returned for changes. | done, completed, handled |
 | **Requested from your team** | A GitHub review request to one of the developer's teams rather than to that developer. | team inbox, shared queue |
 | **Chrome extension** | The browser extension that shows recorded observations for work open in a GitHub or GitLab tab. | plugin, add-on, Hephaestus overlay, extension channel |
-| **Instance admin** | A person with the admin role for the instance. |  |
+| **Product feedback** | An idea, bug report or feedback about Hephaestus itself that a person sends to the instance admins, and the survey answers that go with it. It is never practice feedback. | Feedback (alone), user feedback |
+| **Instance admin** | A person with the admin role for the instance. The place where an instance admin works is **Instance administration**. | Instance admin (for the place) |
 | **Workspace admin** | A person with the admin role in one workspace. |  |
 | **Instance operator** | The person or team that runs the deployment. |  |
 

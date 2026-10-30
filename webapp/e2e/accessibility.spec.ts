@@ -314,7 +314,7 @@ base.describe("keyboard", () => {
 			await page.keyboard.press("Enter");
 
 			const menu = page.getByRole("menu");
-			await expect(menu.getByRole("menuitem", { name: "Settings" })).toBeVisible();
+			await expect(menu.getByRole("menuitem", { name: "User settings" })).toBeVisible();
 			await expect(menu).toContainText("Sign out");
 			expect(await axeViolations(page, { overlay: true })).toEqual([]);
 
@@ -455,7 +455,7 @@ base.describe("complete processes, keyboard only", () => {
 
 	signedInTest("an idea is sent to the instance admins", async ({ page }) => {
 		await open(page, "/w/e2e/admin/members");
-		await page.getByRole("banner").getByRole("button", { name: "Feedback" }).focus();
+		await page.getByRole("banner").getByRole("button", { name: "Product feedback" }).focus();
 		await page.keyboard.press("Enter");
 		await page.getByRole("menuitem", { name: "Share an idea" }).focus();
 		await page.keyboard.press("Enter");

@@ -24,11 +24,11 @@ export function NavFooter({ isAppAdmin = false, workspaceSlug }: NavFooterProps)
 					<SidebarMenu>
 						<SidebarMenuItem>
 							<SidebarMenuButton
-								tooltip="Instance admin"
+								tooltip="Instance administration"
 								render={<Link to="/admin" search={{ chromeWorkspace: workspaceSlug }} />}
 							>
 								<ShieldCheck />
-								<span>Instance admin</span>
+								<span>Instance administration</span>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
 					</SidebarMenu>

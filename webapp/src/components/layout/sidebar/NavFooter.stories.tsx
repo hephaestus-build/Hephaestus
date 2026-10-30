@@ -42,6 +42,22 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+/** Each entry names the place it opens, never the person who may open it. */
+export const InstanceAdmin: Story = {
+	args: { isAppAdmin: true, workspaceSlug: "engineering" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Instance administration" })).toHaveAttribute(
+			"href",
+			"/admin?chromeWorkspace=engineering",
+		);
+		await expect(canvas.getAllByRole("link").map((link) => link.textContent)).toEqual([
+			"Instance administration",
+			"Your AI choice",
+			"User settings",
+		]);
+	},
+};
+
 export const WithWorkspace: Story = {
 	args: { workspaceSlug: "engineering" },
 	play: async ({ canvas }) => {
@@ -59,7 +75,7 @@ export const Collapsed: Story = {
 	parameters: { layout: "fullscreen", sidebarCollapsed: true },
 	play: async ({ canvas }) => {
 		const aiChoice = canvas.getByRole("link", { name: "Your AI choice" });
-		const instanceAdmin = canvas.getByRole("link", { name: "Instance admin" });
+		const instanceAdmin = canvas.getByRole("link", { name: "Instance administration" });
 		// Lucide names each glyph on its svg; the rail shows nothing else, so the two must differ.
 		await expect(aiChoice.querySelector("svg")).toHaveClass("lucide-sliders-horizontal");
 		await expect(instanceAdmin.querySelector("svg")).toHaveClass("lucide-shield-check");

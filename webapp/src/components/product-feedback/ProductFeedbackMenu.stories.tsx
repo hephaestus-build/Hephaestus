@@ -24,7 +24,9 @@ type Story = StoryObj<typeof meta>;
 /** The count on the trigger is the only signal; nothing opens until the member chooses. */
 export const WithInvitation: Story = {
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 1 survey waiting" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Product feedback, 1 survey waiting" }),
+		);
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByText(/4 questions · about 2 minutes/u));
 		await userEvent.click(menu.getByRole("menuitem", { name: /Help improve practice feedback/u }));
@@ -35,7 +37,7 @@ export const WithInvitation: Story = {
 export const NoSurveys: Story = {
 	args: { invitations: [] },
 	play: async ({ canvas, args }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Feedback" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Product feedback" }));
 		const menu = within(await screen.findByRole("menu"));
 		const idea = menu.getByRole("menuitem", { name: "Share an idea" });
 		await expectSettledVisible(idea);
@@ -57,7 +59,9 @@ export const NoSurveys: Story = {
 export const Compact: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Feedback, 1 survey waiting" })).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "Product feedback, 1 survey waiting" }),
+		).toBeVisible();
 	},
 };
 
@@ -65,7 +69,9 @@ export const Compact: Story = {
 export const WithResearchInvitation: Story = {
 	args: { invitations: [surveyInvitation, researchInvitation] },
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Feedback, 2 surveys waiting" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Product feedback, 2 surveys waiting" }),
+		);
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByText(/Research · 3 questions · about 2 minutes/u));
 	},
@@ -74,7 +80,9 @@ export const WithResearchInvitation: Story = {
 /** The trigger's name counts the invitations, so a screen reader hears how many are waiting. */
 export const SeveralSurveys: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Feedback, 2 surveys waiting" })).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "Product feedback, 2 surveys waiting" }),
+		).toBeVisible();
 	},
 	args: {
 		invitations: [
