@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { parseAllDocuments } from "yaml";
 
+import { placeholders as springPlaceholders } from "./lib/configuration-reference.ts";
 import {
 	applicationImage,
 	readDeployContainers,
@@ -207,7 +208,6 @@ export async function readProfileRoles(root = REPO_ROOT): Promise<ProfileRoles> 
 }
 
 /** `${VAR:default}` — Spring's syntax. Stops at `$` so a nested placeholder is skipped, not misread. */
-const SPRING_PLACEHOLDER = /\$\{(?<variable>[A-Z0-9_]+):[^}$]*\}/u;
 
 function yamlDocuments(text: string): unknown[] {
 	return parseAllDocuments(text, { merge: true }).map((document) => {
@@ -250,9 +250,8 @@ export function readApplicationConfig(text: string): ApplicationConfig {
 			const dotted = keyPath.join(".");
 			paths.add(dotted);
 			if (typeof child === "string") {
-				const variable = SPRING_PLACEHOLDER.exec(child)?.groups?.variable;
-				if (variable !== undefined) {
-					placeholders.set(variable, dotted);
+				for (const variable of springPlaceholders(child)) {
+					placeholders.set(variable.name, dotted);
 				}
 			}
 			visit(child, keyPath);
@@ -414,7 +413,7 @@ function collectDeliveries(
 		}
 		for (const [name, service] of read.services) {
 			const id = `${label}:${name}`;
-			if (service.image.includes(APPLICATION_IMAGE)) {
+			if (service.image === APPLICATION_IMAGE) {
 				applicationContainers.push({ id, service });
 			}
 			for (const variable of service.env) {
