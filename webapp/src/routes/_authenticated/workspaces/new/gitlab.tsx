@@ -169,7 +169,7 @@ function StepHeading({ children }: { children: ReactNode }) {
 			id="wizard-heading"
 			ref={headingRef}
 			tabIndex={-1}
-			className="text-2xl font-semibold tracking-tight outline-none"
+			className="text-2xl font-semibold tracking-tight focus-visible:outline-hidden"
 		>
 			{children}
 		</h1>

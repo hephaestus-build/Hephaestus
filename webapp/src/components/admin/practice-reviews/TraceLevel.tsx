@@ -196,7 +196,7 @@ function UnreviewedTrace({
 							data-step-key="moment"
 							title="Open its sheet"
 							onClick={onOpen}
-							className="block w-full rounded-md px-1.5 py-1 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+							className="block w-full rounded-md px-1.5 py-1 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 						>
 							{eventLine}
 						</button>

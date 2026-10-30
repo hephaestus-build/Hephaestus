@@ -654,7 +654,7 @@ function PracticeFeedbackModeRow({
 							to="/w/$workspaceSlug/admin/practices"
 							params={{ workspaceSlug }}
 							search={detailSearch(practiceSetupLevel(practice.slug))}
-							className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+							className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 						>
 							{name}
 						</Link>

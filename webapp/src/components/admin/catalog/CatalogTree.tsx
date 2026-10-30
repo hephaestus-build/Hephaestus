@@ -246,7 +246,7 @@ function PracticeDetails({ entry }: { entry: TreePractice }) {
 			<ItemTitle className="line-clamp-none w-full min-w-0">
 				<DetailStackLink
 					entry={catalogPracticeLevel(practice.slug)}
-					className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+					className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 				>
 					{entry.name}
 				</DetailStackLink>

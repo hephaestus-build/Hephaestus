@@ -356,7 +356,7 @@ function LinkedAccountsFrame({
 					ref={headingRef}
 					tabIndex={-1}
 					id="linked-accounts-heading"
-					className="rounded-sm text-xl font-semibold outline-none focus:ring-2 focus:ring-ring"
+					className="rounded-sm text-xl font-semibold focus:ring-2 focus:ring-ring focus-visible:outline-hidden"
 				>
 					Connected accounts
 				</h2>

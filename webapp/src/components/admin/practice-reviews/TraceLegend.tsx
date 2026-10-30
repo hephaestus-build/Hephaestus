@@ -112,7 +112,11 @@ export function TraceLegend({ open, onOpenChange }: TraceLegendProps) {
 			>
 				<div className="text-xs">
 					<div className="border-b px-4 pt-3 pb-2.5">
-						<h3 ref={title} tabIndex={-1} className="text-sm font-semibold outline-none">
+						<h3
+							ref={title}
+							tabIndex={-1}
+							className="text-sm font-semibold focus-visible:outline-hidden"
+						>
 							How to read the trace
 						</h3>
 						<p className="text-muted-foreground">Each mark as the trace draws it.</p>
