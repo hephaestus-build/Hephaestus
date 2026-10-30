@@ -395,7 +395,10 @@ export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 						defaultValue: value,
 						type: "object",
 						required: Array.isArray(required) && required.includes(name),
-						constraint: typeof node.description === "string" ? node.description : "Conditional requirements apply. See the chart schema.",
+						constraint:
+							typeof node.description === "string"
+								? node.description
+								: "Conditional requirements apply. See the chart schema.",
 					});
 				}
 				walk(node.properties, isRecord(value) ? value : {}, key, node.required);
@@ -555,17 +558,23 @@ export function renderPage(rows: readonly Row[], values: readonly ChartRow[]): s
 		"| --- | --- | --- | --- | --- |",
 	];
 	for (const row of values) {
+		const machine =
+			/^(?:enum|minimum|maximum|pattern|minItems|maxItems|additionalProperties|oneOf|if|then|else):/u.test(
+				row.constraint,
+			) || row.constraint.startsWith("{");
+		const constraint = machine ? code(row.constraint) : escapeText(row.constraint || "—");
 		lines.push(
-			`| ${code(row.key)} | ${row.type} | ${code(row.defaultValue === undefined ? "supplied by release or operator" : JSON.stringify(row.defaultValue))} | ${row.required ? "yes" : ""} | ${/^(?:enum|minimum|maximum|pattern|minItems|maxItems|additionalProperties|oneOf|if|then|else):/u.test(row.constraint) ? code(row.constraint) : row.constraint.startsWith("{") ? code(row.constraint) : escapeText(row.constraint || "—")} |`,
+			`| ${code(row.key)} | ${row.type} | ${code(row.defaultValue === undefined ? "supplied by release or operator" : JSON.stringify(row.defaultValue))} | ${row.required ? "yes" : ""} | ${constraint} |`,
 		);
 	}
+
 	lines.push(
 		"",
 		"## Application environment",
 		"",
 		"The chart sets these variables on the listed workload containers.",
 		"Use Helm values and Secret keys for configurable inputs.",
- "The chart fixes role flags, profiles, and runtime connections internally.",
+		"The chart fixes role flags, profiles, and runtime connections internally.",
 		"A host `.env` file does not configure a Pod.",
 		"",
 
