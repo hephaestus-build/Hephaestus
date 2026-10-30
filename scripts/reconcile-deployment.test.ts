@@ -1829,8 +1829,10 @@ for (const [release, direction, allowRollback] of [
 				});
 				if (release === "v0.95.1") {
 					assert.equal(result.status, 0, result.stderr);
-					assert.equal((await readApplied(path.join(directory, "applied.json")))?.commit, target);
-					assert.ok((await log()).some((call) => call.startsWith("upgrade ")));
+					const rollbackRecord = await readApplied(path.join(directory, "applied.json"));
+					const calls = await log();
+					assert.equal(rollbackRecord?.commit, target);
+					assert.ok(calls.some((call) => call.startsWith("upgrade ")));
 					return;
 				}
 				assert.notEqual(result.status, 0, result.stderr);
