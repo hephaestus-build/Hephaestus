@@ -421,15 +421,22 @@ If operator action is required, state it in the summary.
 Add a migration fragment exactly as for a `major`.
 :::
 
+### Release candidate policy
+
+Use a release candidate for every major release.
+Also use one for a stopped cutover or an irreversible migration.
+Other patches and minor releases ship directly through the normal release gates.
+Promote a qualified candidate by its signed image digests, without a rebuild.
+`latest`, the stable image aliases and stable release channels must never point at a release candidate.
+
 ### Release candidates
 
 All releases use `main`. A release candidate has the version `X.Y.Z-rc.N`.
-Use candidates for major releases and upgrades that cannot be undone. Ordinary patches and minors use the stable release path.
 Before the first candidate, install the stable release that supports candidate channels and signed release charts.
 
 The first public candidate is `rc.1`. Later candidates increase the number.
 GitHub marks each candidate as a prerelease. It does not become the latest release.
-Only its complete version image alias moves. The stable series and `latest` image aliases stay unchanged.
+Only its complete version image alias moves.
 
 1. Before the cutover merges, run `vp exec changeset pre enter rc` in a pull request.
    Commit the prerelease state file that the command creates. For 1.0, also follow [Cut 1.0.0](#cut-100).
@@ -458,13 +465,13 @@ The workflow requires the latest immutable published candidate, its exact Git ta
 It refuses pending changesets and a newer candidate, including a draft.
 It verifies the candidate's signed joint lock and takes image index and platform digests from that lock.
 It pulls and verifies the candidate chart, then packages the same source with stable release metadata.
-The templates and image pins come from that exact candidate commit. No image is rebuilt.
+The templates and image pins come from that exact candidate commit.
 
 The normal policy, signatures, SBOM, provenance, seeded-upgrade and host gates run again against the same images and the promoted chart.
 Before signing the stable joint lock, the workflow checks that its source commit, image digests and chart repository equal the candidate's lock.
 It publishes the stable tag at the same commit and then moves the stable image aliases.
 
-Fresh evidence and signatures describe the stable release. The image bytes do not change.
+Fresh evidence and signatures describe the stable release.
 The complete release notes retain their candidate headings from the qualified source.
 A stable draft from another source blocks promotion. Delete only that unpublished draft after checking its source and failed run, then qualify the new candidate.
 
