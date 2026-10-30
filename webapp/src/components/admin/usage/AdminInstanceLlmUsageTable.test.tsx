@@ -9,11 +9,11 @@ import type {
 } from "@/api/types.gen";
 
 import {
-	type AdminInstanceUsageView,
 	AdminInstanceLlmUsageTable,
 	type AdminInstanceLlmUsageTableProps,
 } from "./AdminInstanceLlmUsageTable";
 import { NO_PRACTICE_SCRIPT_USAGE } from "./fixtures";
+import type { AdminInstanceUsageView } from "./usage-search";
 
 const workspace: AdminWorkspaceLlmUsage = {
 	workspaceSlug: "example-workspace",

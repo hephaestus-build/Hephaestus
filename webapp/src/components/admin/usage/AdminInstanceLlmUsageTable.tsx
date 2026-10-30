@@ -44,6 +44,12 @@ import { LlmUsageByPracticeTable } from "./LlmUsageByPracticeTable";
 import { MoneyCell } from "./MoneyCell";
 import { PurseHeading, PurseLeaf } from "./PurseHeading";
 import {
+	type AdminInstanceUsageView,
+	INSTANCE_USAGE_SEARCH_MAX_LENGTH,
+	INSTANCE_USAGE_SORTS,
+	type InstanceUsageSort,
+} from "./usage-search";
+import {
 	budgetUsedPercent,
 	FIRST_COLUMN,
 	practiceScriptByPracticeDescription,
@@ -52,25 +58,7 @@ import {
 	pursesOf,
 } from "./usage-utils";
 
-export const INSTANCE_USAGE_SORTS = [
-	"workspace",
-	"sharedSpend",
-	"ownProviderSpend",
-	"runs",
-] as const;
-export type InstanceUsageSort = (typeof INSTANCE_USAGE_SORTS)[number];
-
-export interface AdminInstanceUsageView {
-	q: string;
-	sort: InstanceUsageSort;
-	desc: boolean;
-	/** Zero-based. */
-	page: number;
-}
-
 export const INSTANCE_USAGE_PAGE_SIZE = 25;
-
-export const INSTANCE_USAGE_SEARCH_MAX_LENGTH = 200;
 
 export interface AdminInstanceLlmUsageTableProps {
 	rows: AdminWorkspaceLlmUsage[];

@@ -1,11 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, Users } from "lucide-react";
-import { z } from "zod";
 
 import { getUserViewUser } from "@/api/sdk.gen";
 import type { UserViewAccount } from "@/api/types.gen";
 import { accountName } from "@/components/admin/users/account-labels";
+import type { UserViewSearch } from "@/components/admin/users/user-view-search";
 import { UserViewDialog } from "@/components/admin/users/UserViewDialog";
 import { UserViewUsersTable } from "@/components/admin/users/UserViewUsersTable";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
@@ -20,26 +20,15 @@ import { pageParam, useSearchPatch } from "@/lib/search-params";
 import { currentUserQueryOptions } from "@/runtime/auth/guard";
 import { startUserView } from "@/runtime/user-view/session";
 
-export const userViewSearchSchema = z.object({
-	page: z.number().int().nonnegative().optional().catch(undefined),
-	/** The account to view. A provider login is never an account id. */
-	account: z
-		.string()
-		.regex(/^[1-9][0-9]*$/u)
-		.optional()
-		.catch(undefined),
-});
-type Search = z.infer<typeof userViewSearchSchema>;
-
 export function WorkspaceUsersRoute({
 	workspaceSlug,
 	search,
 }: {
 	workspaceSlug: string;
-	search: Search;
+	search: UserViewSearch;
 }) {
 	const { page: searchPage, account: selectedId } = search;
-	const updateSearch = useSearchPatch<Search>();
+	const updateSearch = useSearchPatch<UserViewSearch>();
 	const page = searchPage ?? 0;
 	const workspace = useUserViewWorkspace(workspaceSlug);
 	const users = useUserViewUsers(workspaceSlug, page);

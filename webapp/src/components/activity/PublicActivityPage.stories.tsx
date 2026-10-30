@@ -25,11 +25,8 @@ import {
 	PUBLIC_ACTIVITY_LEVEL_KINDS,
 } from "./activity-search";
 import { weekStarts } from "./activity-tally";
-import {
-	PublicActivityPage,
-	PublicActivityPageSkeleton,
-	type PublicActivityPageProps,
-} from "./PublicActivityPage";
+import { PublicActivityPage, type PublicActivityPageProps } from "./PublicActivityPage";
+import { PublicActivityPageSkeleton } from "./PublicActivityPageSkeleton";
 
 const activity = publicActivityOf(PEOPLE);
 

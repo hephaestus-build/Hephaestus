@@ -213,6 +213,12 @@ Declare routes with `createFileRoute`. Keep loaders side-effect free and prefer
 auth) on the router context. Never hand-edit `routeTree.gen.ts` — there is no `tsr` CLI here. The
 TanStack Router Vite plugin regenerates it when the dev server runs.
 
+**With the router plugin's default groupings, only a route's `component`, `errorComponent` and `notFoundComponent` are code-split.**
+`validateSearch`, `beforeLoad`, `loader`, `pendingComponent` and everything they import load with the entry chunk, on every page's cold load.
+Thus, keep a search schema, its constants and a skeleton in a light module of their own, never in a component module.
+The build fails when the entry's static JavaScript passes its ceiling or contains a route-only package (`tools/entry-chunk/entry-chunk-budget.ts`).
+When a change lowers it, lower the ceiling with it.
+
 The route's `workspaceSlug` is the only source for workspace-scoped data. There is no store.
 
 The app chrome reads `chromeWorkspaceSlug`: on global settings and instance-admin routes, the validated

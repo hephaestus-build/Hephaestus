@@ -29,3 +29,21 @@ export function monthOf(search: UsageSearch): string {
 }
 
 export const USAGE_SEARCH_PARAMS: (keyof UsageSearch)[] = ["month"];
+
+export const INSTANCE_USAGE_SORTS = [
+	"workspace",
+	"sharedSpend",
+	"ownProviderSpend",
+	"runs",
+] as const;
+export type InstanceUsageSort = (typeof INSTANCE_USAGE_SORTS)[number];
+
+export interface AdminInstanceUsageView {
+	q: string;
+	sort: InstanceUsageSort;
+	desc: boolean;
+	/** Zero-based. */
+	page: number;
+}
+
+export const INSTANCE_USAGE_SEARCH_MAX_LENGTH = 200;

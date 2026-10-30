@@ -1,8 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
+import { userViewSearchSchema } from "@/components/admin/users/user-view-search";
 import { instanceAdminHead } from "@/lib/page-title";
 import { isAppAdmin, resolveCurrentUser } from "@/runtime/auth/guard";
-import { userViewSearchSchema, WorkspaceUsersRoute } from "./-WorkspaceUsersRoute";
+
+import { WorkspaceUsersRoute } from "./-WorkspaceUsersRoute";
 
 export const Route = createFileRoute("/_authenticated/w_/$workspaceSlug/view-as")({
 	head: instanceAdminHead("View as user"),
