@@ -28,6 +28,9 @@ public final class SlackMentorPosts {
 
     static final String ENTRY_ID = "entry_id";
 
+    /** The payload key of the turn a progress notice belongs to. */
+    private static final String TURN_ID = "turn_id";
+
     /** The {@code action_id} of the feedback buttons under an answer in a Slack thread. */
     public static final String FEEDBACK_ACTION = "heph_feedback";
 
@@ -69,6 +72,27 @@ public final class SlackMentorPosts {
                 .eventType(NOTICE_EVENT_TYPE)
                 .eventPayload(Map.of("kind", "notice"))
                 .build();
+    }
+
+    /**
+     * Tags the progress notice of one turn, so that a server that lost its receipt, for example after a restart, finds
+     * and deletes it once the reply posts ({@link #isProgressOf}).
+     */
+    public static Message.Metadata progressMetadata(UUID turnId) {
+        return Message.Metadata.builder()
+                .eventType(NOTICE_EVENT_TYPE)
+                .eventPayload(Map.of("kind", "progress", TURN_ID, turnId.toString()))
+                .build();
+    }
+
+    /** Whether a Slack message is the progress notice of this turn, by its metadata. */
+    static boolean isProgressOf(Message message, UUID turnId) {
+        Message.Metadata metadata = message.getMetadata();
+        if (metadata == null || !NOTICE_EVENT_TYPE.equals(metadata.getEventType())) {
+            return false;
+        }
+        Map<String, Object> payload = metadata.getEventPayload();
+        return payload != null && turnId.toString().equals(String.valueOf(payload.get(TURN_ID)));
     }
 
     /** Whether a Slack message is the post of this entry, by its metadata. */

@@ -233,8 +233,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         }
         if (projection.owner == Owner.HERE
                 && projection.stream == null
+                && projection.runningSince != null
                 && change.status() == MentorTurn.Status.RUNNING) {
-            return; // A partial answer changes nothing in a top-level reply, which is posted when the turn ends.
+            // A partial answer changes nothing in a top-level reply, which is posted when the turn ends; its progress
+            // notice follows the stage on the projector's timer.
+            return;
         }
         signal(projection);
     }
@@ -256,6 +259,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         try {
             if (!projection.finished) {
                 finish(found.get(), null, taken);
+                removeLostProgress(projection, found.get());
                 finished(projection);
             }
         } finally {
@@ -309,6 +313,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             if (stream != null) {
                 restart(projection, stream);
             } else {
+                // A retried attempt runs again later: its progress notice goes, and the next run starts a new one.
+                if (projection.noticeText != null) {
+                    clearNotice(projection);
+                }
+                projection.runningSince = null;
                 noticeWaiting(projection, turn, now);
             }
             return;
@@ -331,6 +340,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         Optional<SlackTurn> ended = delivery.slackTurn(projection.workspaceId, projection.turnId);
         if (ended.isPresent()) {
             finish(ended.get(), stream, false);
+            removeLostProgress(projection, ended.get());
         } else {
             giveUp(projection.workspaceId, projection.turnId);
         }
@@ -399,7 +409,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         }
         later(projection, PROGRESS_INTERVAL);
         String stage = MentorSlackDelivery.stage(turn);
-        if (stage == null || stage.equals(projection.noticeText)) {
+        Instant resumes = projection.progressResumesAt;
+        if (projection.progressUnknown
+                || stage == null
+                || stage.equals(projection.noticeText)
+                || (resumes != null && now.isBefore(resumes))) {
             return;
         }
         SlackMessageService.Posted notice = projection.notice;
@@ -415,7 +429,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                         null,
                         List.of(),
                         stage,
-                        SlackMentorPosts.noticeMetadata());
+                        SlackMentorPosts.progressMetadata(projection.turnId));
             } else {
                 slack.updateMessage(
                         projection.workspaceId,
@@ -423,16 +437,68 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                         notice.ts(),
                         List.of(),
                         stage,
-                        SlackMentorPosts.noticeMetadata());
+                        SlackMentorPosts.progressMetadata(projection.turnId));
             }
             projection.noticeText = stage;
         } catch (SlackSendException e) {
+            if (e.isRateLimited()) {
+                projection.progressResumesAt = now.plusMillis(e.retryAfterMillis());
+            } else if (notice == null && SlackMentorPoster.leavesEffectUnknown(e)) {
+                // Slack may show the notice: posting again could show two. The reply's end looks for it.
+                projection.progressUnknown = true;
+            }
             log.debug(
                     "Slack could not show what Hephaestus does: workspaceId={}, turnId={}, error={}",
                     projection.workspaceId,
                     projection.turnId,
                     e.slackError());
         }
+    }
+
+    /**
+     * Deletes the progress notice of a top-level turn whose receipt this server does not hold: another server or an
+     * earlier process posted it, or Slack's answer to the post was lost. Only a turn that ran past
+     * {@link #PROGRESS_NOTICE_AFTER} can have one. Runs after the reply posted.
+     */
+    private void removeLostProgress(Projection projection, SlackTurn turn) {
+        if (projection.notice != null
+                || turn.inThread()
+                || !(projection.progressUnknown || ranLong(projection, turn))) {
+            return;
+        }
+        long workspaceId = projection.workspaceId;
+        try {
+            for (String ts : slack.readWorkspaceMessages(
+                            workspaceId,
+                            turn.channelId(),
+                            null,
+                            oldest(turn),
+                            message -> SlackMentorPosts.isProgressOf(message, projection.turnId))
+                    .ts()) {
+                slack.deleteMessage(workspaceId, turn.channelId(), ts);
+            }
+        } catch (SlackSendException e) {
+            log.debug(
+                    "Slack progress notice of conversation turn {} was not removed: {}",
+                    projection.turnId,
+                    e.slackError());
+        }
+    }
+
+    /**
+     * Whether the turn ran long enough for a progress notice: by this server's clock when it saw the run, else by the
+     * turn's own record.
+     */
+    private boolean ranLong(Projection projection, SlackTurn turn) {
+        Instant since = projection.runningSince;
+        if (since != null) {
+            return !clock.instant().isBefore(since.plus(PROGRESS_NOTICE_AFTER));
+        }
+        Instant started = turn.turn().getStartedAt();
+        Instant ended = turn.turn().getFinishedAt();
+        return started != null
+                && ended != null
+                && Duration.between(started, ended).compareTo(PROGRESS_NOTICE_AFTER) >= 0;
     }
 
     /** Deletes the notice that the question waited, once the turn runs or ends. */
@@ -737,16 +803,31 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         stream.failedStart = null;
     }
 
-    /** Looks at the turn again after {@code delay}, once however often it is asked. Runs under the lock. */
+    /**
+     * Looks at the turn again after {@code delay}, once however often it is asked; an earlier time replaces a later
+     * pending one. Runs under the lock.
+     */
     private void later(Projection projection, Duration delay) {
         if (projection.finished) {
             return;
         }
         ScheduledFuture<?> pending = projection.wakeUp;
-        if (pending == null || pending.isDone()) {
-            projection.wakeUp =
-                    timer.schedule(() -> signal(projection), Math.max(1, delay.toMillis()), TimeUnit.MILLISECONDS);
+        Instant now = clock.instant();
+        Instant at = now.plus(delay);
+        Instant scheduled = projection.wakeUpAt;
+        if (pending != null
+                && !pending.isDone()
+                && scheduled != null
+                && scheduled.isAfter(now)
+                && !at.isBefore(scheduled)) {
+            return;
         }
+        if (pending != null) {
+            pending.cancel(false);
+        }
+        projection.wakeUpAt = at;
+        projection.wakeUp =
+                timer.schedule(() -> signal(projection), Math.max(1, delay.toMillis()), TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -1179,8 +1260,19 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         /** The text of a progress notice that Slack shows, so an unchanged stage changes nothing. */
         volatile @Nullable String noticeText;
 
-        /** When this server first saw the turn run, by its clock: a progress notice counts from it. */
+        /** When this server first saw the turn's current run, by its clock: a progress notice counts from it. */
         volatile @Nullable Instant runningSince;
+
+        /** Until when Slack asked for no more calls after a rate limit on the progress notice. */
+        @Nullable
+        Instant progressResumesAt;
+
+        /** Slack may show a progress notice whose post did not answer: no second one is posted. */
+        boolean progressUnknown;
+
+        /** When the pending wake-up runs, by this server's clock. */
+        @Nullable
+        Instant wakeUpAt;
 
         volatile Owner owner = Owner.UNKNOWN;
         volatile MentorTurn.@Nullable Status status;

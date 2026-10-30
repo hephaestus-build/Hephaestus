@@ -318,6 +318,12 @@ The server deletes the notice when the turn runs or ends.
 A turn that ran and waits again gets no notice.
 If the turn waits for a free Hephaestus (`MentorTurnWaits`), the notice says that Hephaestus answers other questions (`WAITING_FOR_HEPH_NOTICE`).
 
+The progress notice of a top-level question carries its turn id in its metadata.
+A retried attempt deletes it, and the next run posts a new one.
+A rate limit pauses it for the time that Slack asks.
+Sometimes Slack did not answer its post, or another server posted it.
+Then the end of the reply finds it in the DM history and deletes it.
+
 The notice does not claim the reply.
 A claim before the turn runs would lose the answer if the server restarted during the wait.
 Thus, the notice relies on the one server that the chart runs.
