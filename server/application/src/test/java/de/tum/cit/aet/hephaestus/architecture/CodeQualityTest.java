@@ -124,10 +124,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         void methodsHaveLimitedParameters() {
             Set<String> allowedMethods = Set.of(
                     // Activity writes carry the event identity and its context through the SPI.
-                    "ActivityEventService.record",
-                    "ActivityRecorder.record",
-                    // @Bean factory wiring Spring dependencies — not business logic complexity
-                    "DockerSandboxConfiguration.dockerSandboxBackend");
+                    "ActivityEventService.record", "ActivityRecorder.record");
 
             // Repository native SQL methods require individual @Param annotations and cannot use
             // parameter objects. These are atomic upsert operations that map directly to DB columns.

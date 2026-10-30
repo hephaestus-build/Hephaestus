@@ -54,7 +54,6 @@ jobs:
       api-clients: ${{ steps.filter.outputs.api-clients }}
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
-      supported-host-smoke: ${{ steps.filter.outputs.supported-host-smoke }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
       docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
@@ -101,19 +100,19 @@ jobs:
       # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
       queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
-      # A draft runs the fast tier and builds no image: no host smoke, no image scan, unless it
+      # A draft runs the fast tier and builds no image: no cluster jobs, no image scan, unless it
       # carries `preview`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
       draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
       # A same-repository pull request needs every image at its head tag for the `preview` label, the
-      # host boot smoke or the Kubernetes cluster jobs. An unreadable `preview` label counts as present,
+      # Kubernetes cluster jobs. An unreadable `preview` label counts as present,
       # except on a draft.
-      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true'))) }}
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
       # changed image before it lands. ci-cd.mdx § The `preview` label.
-      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true')))) }}
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.kubernetes == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
@@ -501,25 +500,25 @@ jobs:
               - 'docker/agents/**'
             postgres-image:
               - 'docker/postgres/**'
-            # What a fresh installation binds at boot. `ci-contract.test.ts` fails if a source that
-            # declares or scans `@ConfigurationProperties` is not selected here, so the Java globs
-            # are the whole binding tree rather than the part someone remembered.
-            supported-host-smoke:
-              - 'docker/**'
-              - 'server/application/src/main/resources/application*.yml'
-              - 'server/application/src/main/java/**/*Properties.java'
-              - 'server/application/src/main/java/**/Application.java'
-              - '.github/workflows/cicd.yml'
-              - '.github/workflows/ci-build.yml'
             # What a cluster install of the chart exercises: the chart, its script, the worker's sandbox
             # runtime and what it binds, and the agent image that its sandboxes run. A change to the
             # one-host platform files runs it too; the k3s smoke itself runs only at a release or by
             # dispatch.
             kubernetes:
+              - 'docker/**'
+              - 'server/application/src/main/java/**/*Properties.java'
+              - 'server/application/src/main/java/**/Application.java'
+              - '.github/workflows/cicd.yml'
+              - '.github/workflows/ci-build.yml'
               - 'deploy/chart/**'
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
               - 'scripts/prepare-kubernetes-runner.ts'
+              - 'server/application/build.gradle.kts'
+              - 'server/application/src/test/java/**/kubernetes/KubernetesSandboxLiveTest.java'
+              - 'server/application/src/test/java/**/kubernetes/KubernetesLiveSuite.java'
+              - 'server/application/src/test/java/**/gateway/LiveSandboxGateway.java'
+              - 'server/application/src/test/java/**/sandbox/TurnSandboxFixtures.java'
               - 'scripts/resolve-release-images.ts'
               - 'server/application/src/main/java/**/agent/sandbox/**'
               - 'server/application/src/main/java/**/agent/gateway/**'
@@ -746,10 +745,11 @@ jobs:
         needs.detect-changes.outputs.head-images == 'true' ||
         needs.detect-changes.outputs.all-images == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
+        needs.detect-changes.outputs.kubernetes == 'true' ||
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true'
       ) && (
-        needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -833,7 +833,7 @@ jobs:
         (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
           needs.detect-changes.outputs.all-images == 'true' ||
           needs.detect-changes.outputs.application-server-image == 'true' ||
-          needs.detect-changes.outputs.supported-host-smoke == 'true' ||
+          needs.detect-changes.outputs.kubernetes == 'true' ||
           needs.detect-changes.outputs.webapp-image == 'true' ||
           needs.detect-changes.outputs.agent-images == 'true' ||
           needs.detect-changes.outputs.postgres-image == 'true' ||
@@ -1018,7 +1018,7 @@ jobs:
 
   # Every image of the run: one build job per platform and one manifest job. The application-server
   # image is built from the package job's executable JAR, so the job waits for it.
-  # The `preview` label and the host boot smoke need every image at the head tag; unchanged images
+  # The `preview` label and the Kubernetes cluster jobs need every image at the head tag; unchanged images
   # are aliased here. Other runs' image builds stay path-filtered.
   Docker:
     uses: ./.github/workflows/ci-docker-build.yml
@@ -1027,7 +1027,7 @@ jobs:
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') && (
         (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
-        (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     permissions:
       actions: write
@@ -1045,82 +1045,16 @@ jobs:
       reuse_images: ${{ needs.detect-changes.outputs.queue-images }}
       scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
       webapp_changed: ${{ (needs.detect-changes.outputs.webapp-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
-      application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
+      application_server_changed: ${{ (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
-      dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) && 'true' || 'false' }}
-      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
+      dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true' || needs.detect-changes.outputs.kubernetes == 'true')) && 'true' || 'false' }}
+      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.kubernetes == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
       application-artifact: server-build-${{ github.run_id }}
       project-descriptor: "server/application/project.toml"
       # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
       run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
-
-  Supported-host-smoke:
-    name: "Supported-host boot smoke"
-    # `Docker` builds the application-server image this job boots by digest, and puts the other
-    # images at the head tag — by building them, or by aliasing the base image when the diff left
-    # one alone.
-    needs: [detect-changes, Docker]
-    # A fork pull request builds its images without publishing them, so there is nothing to pull
-    # and no boot to check; the release path exercises a fork's install path once it is on `main`.
-    if: >-
-      needs.detect-changes.outputs.head-images == 'true' &&
-      needs.detect-changes.outputs.should_skip != 'true' &&
-      needs.detect-changes.outputs.supported-host-smoke == 'true' &&
-      needs.Docker.outputs.application-server-digest != ''
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-
-      - name: Log in to GitHub Container Registry
-        uses: ./.github/actions/ghcr-login
-        with:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # The worker pulls and checks the agent image at startup, so it boots this commit's own, which the
-      # `Docker` job built or aliased under the head commit's tag.
-      - name: Resolve this commit's images
-        id: images
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/resolve-release-images.ts "$HEAD_SHA" release-images.tsv
-
-      - name: Boot the operator installation path
-        working-directory: docker/self-host
-        env:
-          APPLICATION_DIGEST: ${{ needs.Docker.outputs.application-server-digest }}
-          AGENT_PI_DIGEST: ${{ steps.images.outputs.agent-pi-digest }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          cleanup() {
-            status=$?
-            if [ "$status" -ne 0 ]; then
-              docker compose --env-file .env --env-file smoke-lock.env logs --no-color || true
-            fi
-            docker compose --env-file .env --env-file smoke-lock.env down -v --remove-orphans || true
-            exit "$status"
-          }
-          trap cleanup EXIT
-
-          node ../../scripts/prepare-host-smoke-env.ts
-          node ../../scripts/prepare-smoke-lock.ts
-          docker compose --env-file .env --env-file smoke-lock.env config --quiet
-          docker compose --env-file .env --env-file smoke-lock.env up -d --wait \
-            --wait-timeout 600 postgres nats-server application-server application-worker
-          node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file smoke-lock.env
 
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed.
   # A push to main that a merge group tested runs none: its commit is the group's. A push with no
@@ -1152,7 +1086,7 @@ jobs:
 
   Kubernetes:
     name: "Kubernetes (${{ matrix.leg }} ${{ matrix.minor }} ${{ matrix.arch }})"
-    needs: [Kubernetes-chart]
+    needs: [Kubernetes-chart, server-package]
     if: ${{ !cancelled() && needs.Kubernetes-chart.result == 'success' }}
     strategy:
       fail-fast: false
@@ -1162,6 +1096,7 @@ jobs:
       contents: read
       actions: write
     with:
+      application-artifact: ${{ needs.server-package.result == 'success' && format('server-build-{0}', github.run_id) || '' }}
       leg: ${{ matrix.leg }}
       minor: ${{ matrix.minor }}
       arch: ${{ matrix.arch }}
@@ -1262,7 +1197,6 @@ jobs:
         Changesets,
         Compose,
         Docker,
-        Supported-host-smoke,
         Kubernetes-chart,
         Kubernetes,
         Release-preflight,
@@ -1292,7 +1226,6 @@ jobs:
           echo "Changesets:     ${{ needs.Changesets.result }}"
           echo "Compose:        ${{ needs.Compose.result }}"
           echo "Docker:         ${{ needs.Docker.result }}"
-          echo "Host smoke:     ${{ needs.Supported-host-smoke.result }}"
           echo "Chart:          ${{ needs.Kubernetes-chart.result }}"
           echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
@@ -1520,14 +1453,6 @@ jobs:
     name: "Fail fast: Docker"
     needs: [Docker]
     if: ${{ always() && github.event_name == 'merge_group' && needs.Docker.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Supported-host-smoke:
-    name: "Fail fast: Supported-host-smoke"
-    needs: [Supported-host-smoke]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Supported-host-smoke.result == 'failure' }}
     uses: ./.github/workflows/fail-fast.yml
     permissions:
       actions: write # cancel this run

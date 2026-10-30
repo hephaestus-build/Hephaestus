@@ -1,11 +1,12 @@
 ---
 id: sizing
 title: Sizing and scaling
-description: The memory, CPU, process, and database budget of the self-hosted Compose stack, and what you can scale.
+description: The memory, CPU, process, storage and database budget of the Kubernetes deployment.
 ---
 
-This page owns the resource budget of the self-hosted Compose stack.
-The [Install guide](./install#requirements) gives the host requirements.
+The [Kubernetes guide](./kubernetes#profiles) owns the deployment profiles and their resource budgets.
+Use measured requests to plan capacity, and keep room for the operating system, the cluster and a rolling update.
+A resource limit is a ceiling, not evidence that every workload fits.
 
 ## Measured conversation baseline
 
@@ -59,41 +60,9 @@ No deploy-outage measurement or error-budget qualification is available from the
 
 ## Initial budget
 
-**4 vCPUs, 24 GB RAM, 40 GB SSD** is a conservative initial budget for one concurrent review sandbox.
-It is not a measured requirement.
-It covers these memory limits, which are ceilings, not reservations:
-
-| Container                      | Memory limit | Setting                                                                                     |
-| ------------------------------ | ------------ | ------------------------------------------------------------------------------------------- |
-| `application-server`           | 5 GiB        | `APPLICATION_SERVER_MEM_LIMIT`                                                              |
-| `application-worker`           | 3 GiB        | `APPLICATION_WORKER_MEM_LIMIT`                                                              |
-| `webhook-server`               | 2 GiB        | `WEBHOOK_SERVER_MEM_LIMIT`                                                                  |
-| `postgres`                     | 4 GiB        | `POSTGRES_MEM_LIMIT`                                                                        |
-| each concurrent review sandbox | 3 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (1 in the self-hosted Compose file)        |
-| the conversation host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-conversation-host) gives the limits of the conversation host |
-
-With the defaults of the self-hosted Compose file, these limits add up to 19 GiB, about 20.4 GB.
-During an upgrade, the one-shot `database-migration` container runs beside the previous roles for a few minutes.
-Keep 1 GiB free for it (`DATABASE_MIGRATION_MEM_LIMIT`).
-NATS, Traefik, and the webapp have no limit.
-The rest of the 24 GB is for them and the operating system.
-
-A limit caps a container but reserves nothing.
-Each JVM sizes its heap from its own limit and can grow toward it.
-The host must hold simultaneous use by all containers and sandboxes, plus the operating system and spare capacity.
-If demand exceeds memory, the host swaps where swap is configured.
-The kernel can kill a container or sandbox.
-
-To use a smaller memory budget, lower the limits in `.env` before the first start.
-
-A worker runs no more review sandboxes at once than `SANDBOX_MAX_CONCURRENT` and its review capacity allow.
-A review whose sandbox has ended writes its feedback without a sandbox, so it does not count against these limits.
-The application default of `SANDBOX_MAX_CONCURRENT` is 5.
-The self-hosted Compose file sets 1.
-The review capacity (`HEPHAESTUS_WORKER_REVIEW_MAX`) defaults to `auto`: the number of CPUs minus 1.
-
-Each worker also runs [turn sandboxes](./runtime-roles.mdx#turn-sandboxes) for Hephaestus, beside the review sandboxes and the conversation host.
-Their limits are fixed and do not count against `SANDBOX_MAX_CONCURRENT`.
+Select a [chart profile](./kubernetes#profiles) for the host.
+Check the rendered requests against the node's allocatable resources before installation.
+A sandbox quota bounds the installation's sandbox requests independently of the worker JVM.
 
 ## PostgreSQL memory
 
@@ -138,50 +107,23 @@ Keep the larger limit and lower concurrency if the trial fails.
 
 ## Review sandbox limits
 
-Each review sandbox has a limit of 3 GiB of memory (`SANDBOX_MEMORY_BYTES`), 1 CPU (`SANDBOX_CPUS`), and 256 processes (`SANDBOX_PIDS_LIMIT`).
-On Kubernetes, the worker sizes each sandbox Pod by its kind and ignores `SANDBOX_MEMORY_BYTES` ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
-The CPU limit is a share of CPU time that the sandbox can use, not a reserved core.
-The memory limit holds the sandbox's temporary file systems, which can grow to 2.06 GiB, and its processes.
-Hephaestus refuses to start if `SANDBOX_MEMORY_BYTES` leaves less than 512 MiB beside those file systems.
-
-These limits come from one measurement on release 0.82.0.
-Later releases are not re-measured.
-On that release, a review of a small course repository reached a cgroup `memory.peak` of 194 MiB.
-It used at most 19 processes and 0.2 CPU, in samples taken once per second.
-The workspace initializer used less than 1 MiB of its own memory for a 437 MB workspace.
-The rest of its memory was file cache, which the kernel reclaims under the limit.
-
-A larger repository or a review that runs heavy commands can need more memory.
-If the kernel stops a review sandbox at its memory limit, the review fails with exit code 137.
-Then increase `SANDBOX_MEMORY_BYTES`.
+The [Pod-kind table](./kubernetes#sandbox-sizes) owns each sandbox's memory, CPU request and disk sizes.
+`SANDBOX_CPUS` sets the review's CPU ceiling.
+The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
+The kubelet enforces the per-Pod process limit, which the worker's isolation probe verifies.
 
 ## CPU and processes
 
-The application server and worker each default to 4 CPUs / 512 PIDs.
-The webhook server defaults to 2 CPUs / 256 PIDs. Override them with the corresponding `APPLICATION_SERVER_*`,
-`APPLICATION_WORKER_*` or `WEBHOOK_SERVER_*` limit variables. Keep the worker's PID limit: it is the
-role with Docker access.
+CPU requests determine scheduling and CPU limits bound use.
+Keep the node's process limit configured as the [Kubernetes installation](./kubernetes#worker) requires.
+A worker that cannot prove isolation starts no sandbox work.
 
 ## What you can scale
 
-The self-hosted stack runs one container for each runtime role: one server, one worker, and one webhook server.
-You scale the work of the worker, not the number of containers:
-
-- **Practice reviews.** `SANDBOX_MAX_CONCURRENT` sets how many review sandboxes the worker runs at once.
-  On Docker, each concurrent review sandbox may use up to `SANDBOX_MEMORY_BYTES` (default 3 GiB).
-  The self-hosted Compose file allows 1 concurrent sandbox.
-  Raise `SANDBOX_MAX_CONCURRENT` only with sufficient RAM.
-  [Worker pod env vars](./runtime-roles#worker-pod-env-vars) explains how it caps the review capacity of the worker.
-- **conversation turns.** `HEPHAESTUS_WORKER_MENTOR_MAX` sets how many conversation turns the worker runs at once.
-  In the Helm chart, set `worker.conversationTurns`.
-  The model provider usually sets the real limit.
-  [Conversation turn capacity](./runtime-roles#conversation-turn-capacity) explains how to size it.
-
-These are deployment limits, not a claim that all workloads fit. Before raising webhook volume,
-Conversation turn capacity (`HEPHAESTUS_WORKER_MENTOR_MAX`), or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
-[Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
-your host shape. A release baseline is valid only with the raw k6 and container-resource evidence described there.
-Without that evidence, keep the conservative defaults above.
+The chart controls worker replicas, review capacity and conversation capacity.
+Each replica also needs its JVM, database connections and conversation host budget.
+Before raising capacity, qualify the workload on the target host shape.
+Keep the workload, logs and before/after measurements with the qualification result.
 
 ## Database connections
 
@@ -227,7 +169,7 @@ The default headroom is 0 %.
 Thus, if you increase the container memory limit, the heap can also increase at the next start.
 Select the headroom for the actual workload of your worker.
 
-The split Compose stack passes `BPL_JVM_HEAD_ROOM` to the worker only.
+Set the worker's headroom through the chart worker settings.
 If you do not set it, the buildpack's default behavior applies.
 The value applies only when the JVM starts.
 To apply a change, drain and restart the worker, as [Graceful drain](./runtime-roles#graceful-drain) describes.
@@ -235,20 +177,10 @@ For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/r
 
 ## Disk
 
-Docker's data directory holds the images, the containers and the volumes.
-On a host with [pull-based deployment](./pull-based-deployment.mdx#images-and-free-space), plan for these parts:
-
-| Part | Size | What bounds it |
-| --- | --- | --- |
-| The images of one release | About 1 GB to download for `linux/amd64`. The application server is about half of it | The reconciler keeps the running and the previous release. During an apply, it pulls a third set |
-| PostgreSQL data (`app_postgresql-data`) | Grows with your workspaces and their history | Your data. Back it up as [Backup and restore](./backup-restore.mdx) describes |
-| Git repositories (`app_git-repos`, `app_worker-git-repos`) | Grows with the repositories that reviews read | Not bounded yet |
-| NATS JetStream (`core_nats-data`) | Grows with buffered provider events | Not bounded yet |
-| A restore rehearsal | A full copy of the database volume | Remove the clone's containers and volumes when the rehearsal ends |
-| Free space before a pull | 10 GiB, set by `HEPHAESTUS_MIN_FREE_GIB` | The reconciler refuses an apply below it |
-
-On a small disk, lower `HEPHAESTUS_MIN_FREE_GIB`.
-`docker system df -v` shows what each image, container and volume uses on disk.
+Budget the node's images, logs and sandbox scratch space separately from persistent database and Git-cache storage.
+The chart bounds sandbox ephemeral-storage requests, limits and volumes.
+The [Kubernetes guide](./kubernetes#sandbox-sizes) owns these bounds.
+Back up persistent state as [Backup and restore](./backup-restore) describes.
 
 ## Conversation turn admission
 

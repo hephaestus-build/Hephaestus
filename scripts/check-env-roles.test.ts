@@ -34,8 +34,6 @@ hephaestus:
     release:
         check-enabled: true
     sandbox:
-        docker:
-            host: unix:///var/run/docker.sock
         gateway:
             port: 8081
             max-request-bytes: 4194304
@@ -453,12 +451,12 @@ await test("an application container without the worker role that mounts the Doc
 		assert.equal(failures.length, 1, failures.join("\n"));
 		assert.match(
 			failureAt(failures, 0),
-			/compose\.yaml:application-server mounts \/var\/run\/docker\.sock, and disables the worker role/u,
+			/compose\.yaml:application-server mounts \/var\/run\/docker\.sock/u,
 		);
 	}
 });
 
-await test("a container running the worker role may mount the Docker socket", () => {
+await test("a worker must not mount the host daemon socket", () => {
 	const { failures } = analyse(
 		APPLICATION,
 		serverMounting(
@@ -467,7 +465,8 @@ await test("a container running the worker role may mount the Docker socket", ()
 		),
 	);
 
-	assert.deepEqual(failures, []);
+	assert.equal(failures.length, 1);
+	assert.match(failureAt(failures, 0), /Remove the mount/u);
 });
 
 await test("a setting named in PER_CONTAINER may differ", () => {
@@ -549,35 +548,6 @@ await test("the shipped topology delivers every role-scoped variable to a contai
 		"docker/compose.app.yaml:application-worker",
 		"docker/compose.core.yaml:webhook-server",
 	]);
-});
-
-await test("Docker settings are rejected on a container that disables the worker role", () => {
-	const application = APPLICATION.replace(
-		"host: unix:///var/run/docker.sock",
-		`host: \${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}`,
-	);
-	const { failures } = analyse(
-		application,
-		compose(`${RECEIVER}  non-worker:
-    environment:
-      HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
-      SANDBOX_DOCKER_HOST: unix:///var/run/docker.sock
-`),
-	);
-	assert.equal(failures.length, 2, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /disables the worker role that reads it/u);
-	assert.match(failureAt(failures, 1), /no service running the worker role receives it/u);
-});
-
-await test("Docker settings must be forwarded to a worker rather than only documented", () => {
-	const application = APPLICATION.replace(
-		"host: unix:///var/run/docker.sock",
-		`host: \${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}`,
-	);
-	const { failures } = analyse(application, compose(RECEIVER));
-	assert.equal(failures.length, 1, failures.join("\n"));
-	assert.match(failureAt(failures, 0), /SANDBOX_DOCKER_HOST is offered by/u);
-	assert.match(failureAt(failures, 0), /no service in the deployment forwards it/u);
 });
 
 await test("production overlays retain environment forwarding checks", () => {

@@ -610,7 +610,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .toJson(OBJECT_MAPPER));
         return job;

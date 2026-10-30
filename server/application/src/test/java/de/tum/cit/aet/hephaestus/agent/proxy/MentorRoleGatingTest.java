@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxConfiguration;
+import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -22,7 +22,7 @@ class MentorRoleGatingTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheSandboxAvailableWheneverWorkerRoleIsEnabled() {
-        assertWorkerRoleCondition(DockerSandboxConfiguration.class);
+        assertWorkerRoleCondition(KubernetesSandboxConfiguration.class);
     }
 
     private void assertWorkerRoleCondition(Class<?> type) {

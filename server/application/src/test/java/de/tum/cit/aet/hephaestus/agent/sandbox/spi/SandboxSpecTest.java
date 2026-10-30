@@ -58,88 +58,50 @@ class SandboxSpecTest extends BaseUnitTest {
     class ResourceLimitsValidation {
 
         @Test
-        void shouldRejectZeroMemory() {
-            assertThatThrownBy(() -> new ResourceLimits(0, 2.0, 256, Duration.ofMinutes(10)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("memoryBytes");
-        }
-
-        @Test
         void shouldRejectNegativeCpus() {
-            assertThatThrownBy(() -> new ResourceLimits(4L * 1024 * 1024 * 1024, -1.0, 256, Duration.ofMinutes(10)))
+            assertThatThrownBy(() -> new ResourceLimits(-1.0, Duration.ofMinutes(10)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("cpus");
         }
 
         @Test
-        void shouldRejectZeroPids() {
-            assertThatThrownBy(() -> new ResourceLimits(4L * 1024 * 1024 * 1024, 2.0, 0, Duration.ofMinutes(10)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("pidsLimit");
-        }
-
-        @Test
         void shouldRejectNullMaxRuntime() {
             assertThatNullPointerException()
-                    .isThrownBy(() -> new ResourceLimits(4L * 1024 * 1024 * 1024, 2.0, 256, null))
+                    .isThrownBy(() -> new ResourceLimits(2.0, null))
                     .withMessageContaining("maxRuntime");
         }
 
         @Test
         void shouldRejectZeroMaxRuntime() {
-            assertThatThrownBy(() -> new ResourceLimits(4L * 1024 * 1024 * 1024, 2.0, 256, Duration.ZERO))
+            assertThatThrownBy(() -> new ResourceLimits(2.0, Duration.ZERO))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("maxRuntime");
         }
 
         @Test
         void shouldAcceptDefaults() {
-            assertThat(SandboxTestLimits.ATTEMPT.memoryBytes()).isEqualTo(4L * 1024 * 1024 * 1024);
             assertThat(SandboxTestLimits.ATTEMPT.cpus()).isEqualTo(2.0);
-            assertThat(SandboxTestLimits.ATTEMPT.pidsLimit()).isEqualTo(512);
             assertThat(SandboxTestLimits.ATTEMPT.maxRuntime()).isEqualTo(Duration.ofMinutes(10));
         }
 
         @Test
-        void shouldRejectExcessiveMemory() {
-            assertThatThrownBy(() ->
-                            new ResourceLimits(ResourceLimits.MAX_MEMORY_BYTES + 1, 2.0, 256, Duration.ofMinutes(10)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("exceeds maximum");
-        }
-
-        @Test
         void shouldRejectExcessiveCpus() {
-            assertThatThrownBy(() -> new ResourceLimits(
-                            4L * 1024 * 1024 * 1024, ResourceLimits.MAX_CPUS + 0.1, 256, Duration.ofMinutes(10)))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("exceeds maximum");
-        }
-
-        @Test
-        void shouldRejectExcessivePids() {
-            assertThatThrownBy(() -> new ResourceLimits(
-                            4L * 1024 * 1024 * 1024, 2.0, ResourceLimits.MAX_PIDS + 1, Duration.ofMinutes(10)))
+            assertThatThrownBy(() -> new ResourceLimits(ResourceLimits.MAX_CPUS + 0.1, Duration.ofMinutes(10)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("exceeds maximum");
         }
 
         @Test
         void shouldRejectExcessiveRuntime() {
-            assertThatThrownBy(() -> new ResourceLimits(
-                            4L * 1024 * 1024 * 1024, 2.0, 256, ResourceLimits.MAX_RUNTIME.plusSeconds(1)))
+            assertThatThrownBy(() -> new ResourceLimits(2.0, ResourceLimits.MAX_RUNTIME.plusSeconds(1)))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("exceeds maximum");
         }
 
         @Test
         void shouldAcceptAtMaximumBounds() {
-            var limits = new ResourceLimits(
-                    ResourceLimits.MAX_MEMORY_BYTES,
-                    ResourceLimits.MAX_CPUS,
-                    ResourceLimits.MAX_PIDS,
-                    ResourceLimits.MAX_RUNTIME);
-            assertThat(limits.memoryBytes()).isEqualTo(ResourceLimits.MAX_MEMORY_BYTES);
+            var limits = new ResourceLimits(ResourceLimits.MAX_CPUS, ResourceLimits.MAX_RUNTIME);
+            assertThat(limits.cpus()).isEqualTo(ResourceLimits.MAX_CPUS);
         }
     }
 }

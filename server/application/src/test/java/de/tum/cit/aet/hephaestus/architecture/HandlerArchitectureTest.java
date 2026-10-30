@@ -50,14 +50,14 @@ class HandlerArchitectureTest extends HephaestusArchitectureTest {
     class HandlerImplIsolation {
 
         @Test
-        void handlersShouldNotDependOnDockerInternals() {
+        void handlersShouldNotDependOnKubernetesInternals() {
             noClasses()
                     .that()
                     .resideInAPackage("..agent.handler..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAPackage("..agent.sandbox.docker..")
-                    .because("Handlers prepare context but never interact with Docker directly")
+                    .resideInAPackage("..agent.sandbox.kubernetes..")
+                    .because("Handlers prepare context but never interact with Kubernetes directly")
                     .check(classes);
         }
 

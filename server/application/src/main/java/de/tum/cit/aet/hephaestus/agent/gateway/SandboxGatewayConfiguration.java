@@ -28,7 +28,7 @@ public class SandboxGatewayConfiguration {
 
     /**
      * Deliberately carries no {@code address}, so it binds every interface: a sandbox dials the worker
-     * across a per-job Docker bridge, on an address the worker does not know in advance. The
+     * from its Pod, or through the k3d host address during development. The
      * application and management connectors are the ones {@code server.address} keeps on loopback.
      */
     @Bean

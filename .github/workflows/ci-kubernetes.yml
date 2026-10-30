@@ -27,6 +27,10 @@ on:
         description: Whether to run the lowest minor on amd64 and arm64, kind with Calico and the backup drill too; a pull request runs the latest k3s alone
         type: boolean
         default: false
+      application-artifact:
+        description: The package job's compiled server and tests; empty keeps a cluster-only qualification
+        type: string
+        default: ""
       ref:
         description: The commit whose chart and scripts to check out; empty checks out the caller's commit
         type: string
@@ -87,6 +91,7 @@ jobs:
     if: inputs.leg == 'k3d'
     permissions:
       contents: read
+      actions: read
     timeout-minutes: 45
     runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     env:
@@ -107,6 +112,12 @@ jobs:
           install: "none"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
+      - uses: ./.github/actions/setup-caches
+        if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+      - uses: ./.github/actions/restore-server-build
+        if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        with:
+          artifact: ${{ inputs.application-artifact }}
       - name: Resolve this run's images
         env:
           COMMIT: ${{ inputs.commit }}
@@ -141,6 +152,12 @@ jobs:
           node scripts/kubernetes-cluster.ts upgrade --work "$work" $PROFILES --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
           node scripts/kubernetes-cluster.ts request --work "$work"
+      - name: Qualify the sandbox adapters in the chart worker Pod
+        if: ${{ inputs.application-artifact != '' && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
+        run: |
+          set -euo pipefail
+          echo "Live sandbox kernel: $(uname -r)" >> "$GITHUB_STEP_SUMMARY"
+          node scripts/kubernetes-cluster.ts live --packaged
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       # On the latest minor, amd64, in the queue.
       - name: Back up, then restore to a point in time

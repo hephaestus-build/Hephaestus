@@ -23,8 +23,7 @@
  *                  names the settings whose absence is itself the failure, and the roles reading them.
  *
  * One capability is a mount rather than a variable and is checked the same way: the Docker socket
- * gives whoever holds it control of the host's daemon, and only the worker role opens sandboxes with
- * it, so an application container with that role off must not mount it.
+ * gives whoever holds it control of the host's daemon. No application role needs that authority.
  *
  * `ROLE_SCOPES` and `REQUIRED_SETTINGS` are the two things to extend, and they answer the same
  * question — which containers read a setting — from opposite ends: a scope says where a setting
@@ -75,11 +74,6 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 		path: "hephaestus.release.check-enabled",
 		role: "server",
 		why: "ReleaseCheckService and ReleaseCheckClient are @ConditionalOnServerRole; RunningRelease, which reads the rest of hephaestus.release, is ungated",
-	},
-	{
-		path: "hephaestus.sandbox.docker",
-		role: "worker",
-		why: "DockerSandboxConfiguration registers Docker connection, network and runtime settings only when hephaestus.runtime.worker.enabled is active",
 	},
 	{
 		path: "hephaestus.sandbox.gateway.port",
@@ -344,7 +338,7 @@ export interface ComposeService {
 	image: string;
 }
 
-/** The host's Docker API, which only a container running the worker role uses. */
+/** The host daemon is outside every application role's authority. */
 const DOCKER_SOCKET = "/var/run/docker.sock";
 
 /** The source of each `volumes:` entry: `source:target[:mode]` or a mapping with `source`. */
@@ -695,21 +689,13 @@ function omissionFailures(
 	return failures;
 }
 
-/** Application containers that mount the Docker socket without running the worker role. */
-function dockerSocketFailures(
-	applicationContainers: readonly Delivery[],
-	profileRoles: ProfileRoles,
-): string[] {
+/** No application role needs the host daemon: sandbox work uses the Kubernetes API. */
+function dockerSocketFailures(applicationContainers: readonly Delivery[]): string[] {
 	return applicationContainers
-		.filter(
-			({ service }) =>
-				service.mounts.includes(DOCKER_SOCKET) && !runsRole(service, "worker", profileRoles),
-		)
+		.filter(({ service }) => service.mounts.includes(DOCKER_SOCKET))
 		.map(
 			({ id }) =>
-				`${id} mounts ${DOCKER_SOCKET}, and disables the worker role, the only role that opens sandboxes with it.\n` +
-				"  The socket controls the host's Docker daemon, so here it is host access that nothing needs.\n" +
-				"  Remove the mount, and the docker group with it, or run the worker role on this container.",
+				`${id} mounts ${DOCKER_SOCKET}. Remove the mount and its supplementary group; sandbox work uses Kubernetes.`,
 		);
 }
 
@@ -740,7 +726,7 @@ export function analyse(
 		...unforwardedFailures(ownership, delivered),
 		...disagreementFailures(applicationContainers),
 		...omissionFailures(applicationContainers, paths, profileRoles),
-		...dockerSocketFailures(applicationContainers, profileRoles),
+		...dockerSocketFailures(applicationContainers),
 	);
 
 	return { failures, delivered, applicationContainers: applicationContainers.map((c) => c.id) };

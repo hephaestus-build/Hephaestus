@@ -469,109 +469,6 @@ jobs:
       postgres-image: ghcr.io/hephaestus-build/postgres@${{ needs.tag-images.outputs.postgres-digest }}
       candidate-source-sha: ${{ needs.release.outputs.sha }}
 
-  supported-host-smoke:
-    needs: [release, tag-images]
-    if: needs.release.outputs.released == 'true'
-    name: Host smoke (${{ matrix.architecture }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - architecture: amd64
-            runner: ubuntu-24.04
-          - architecture: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
-    permissions:
-      # The release is still a draft here, so its assets require authenticated push access.
-      contents: write
-      packages: read
-    steps:
-      - name: Check out the released tree
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.release.outputs.sha }}
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
-        with:
-          cosign-release: v3.1.4
-
-      - name: Log in to GitHub Container Registry
-        uses: ./.github/actions/ghcr-login
-        with:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Smoke-test the blessed install
-        shell: bash
-        env:
-          ARCHITECTURE: ${{ matrix.architecture }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_SHA: ${{ needs.release.outputs.sha }}
-          TAG_NAME: ${{ needs.release.outputs.tag_name }}
-        run: |
-          set -euo pipefail
-          cd docker/self-host
-          cleanup() {
-            status=$?
-            if [ "$status" -ne 0 ]; then
-              docker compose --env-file .env --env-file release-lock.env logs --no-color || true
-            fi
-            docker compose --env-file .env --env-file release-lock.env down -v --remove-orphans || true
-            exit "$status"
-          }
-          trap cleanup EXIT
-
-          actual_arch=$(docker version --format '{{.Server.Arch}}')
-          [ "$actual_arch" = "$ARCHITECTURE" ] || { echo "::error::Expected native $ARCHITECTURE, got $actual_arch"; exit 1; }
-          . /etc/os-release
-          [ "$ID" = ubuntu ] && [ "$VERSION_ID" = 24.04 ] || { echo "::error::Ubuntu 24.04 is required"; exit 1; }
-          docker_major=$(docker version --format '{{.Server.Version}}' | cut -d. -f1)
-          [ "$docker_major" -ge 28 ] || { echo "::error::Docker Engine 28 or newer is required"; exit 1; }
-          compose_version=$(docker compose version --short)
-          [ "$(printf '%s\n' 2.24.4 "$compose_version" | sort -V | head -n1)" = 2.24.4 ] || {
-            echo "::error::Docker Compose 2.24.4 or newer is required"; exit 1; }
-
-          node ../../scripts/prepare-host-smoke-env.ts
-          node ../../scripts/prepare-release-lock.ts "$TAG_NAME"
-          docker compose --env-file .env --env-file release-lock.env config --quiet
-          docker compose --env-file .env --env-file release-lock.env up -d --wait --wait-timeout 600
-          node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file release-lock.env
-          # Traefik routes by the hostname the installer answered with: SMOKE_HOSTNAME in
-          # scripts/prepare-host-smoke-env.ts, which release-deployment-policy.test.ts holds to this.
-          curl --fail --insecure --silent --show-error --max-time 10 --noproxy '*' \
-            --resolve hephaestus-smoke.invalid:443:127.0.0.1 \
-            https://hephaestus-smoke.invalid/ >/dev/null
-
-          jq -n \
-            --arg schemaVersion "1" \
-            --arg release "$TAG_NAME" \
-            --arg commit "$RELEASE_SHA" \
-            --arg testedAt "$(date -u +%FT%TZ)" \
-            --arg os "$(. /etc/os-release; printf '%s %s' "$NAME" "$VERSION_ID")" \
-            --arg architecture "$actual_arch" \
-            --arg dockerEngine "$(docker version --format '{{.Server.Version}}')" \
-            --arg dockerCompose "$compose_version" \
-            --argjson services "$(docker compose --env-file .env --env-file release-lock.env ps --all --format json | jq -s 'map({service: .Service, state: .State, health: .Health, exitCode: .ExitCode}) | sort_by(.service)')" \
-            '{schemaVersion: ($schemaVersion | tonumber), release: $release, commit: $commit,
-              testedAt: $testedAt, host: {os: $os, architecture: $architecture,
-              dockerEngine: $dockerEngine, dockerCompose: $dockerCompose}, services: $services}' \
-            > "../../host-smoke-$ARCHITECTURE.json"
-
-      - name: Upload smoke-test record
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: host-smoke-${{ matrix.architecture }}
-          path: host-smoke-${{ matrix.architecture }}.json
-          if-no-files-found: error
-
   # The one-host install on k3s, on both supported architectures, from the draft's own assets.
   k3s-host-smoke:
     needs: [release, tag-images]
@@ -587,7 +484,7 @@ jobs:
       sha: ${{ needs.release.outputs.sha }}
 
   publish-release:
-    needs: [release, tag-images, upgrade-test, supported-host-smoke, k3s-host-smoke]
+    needs: [release, tag-images, upgrade-test, k3s-host-smoke]
     if: needs.release.outputs.released == 'true'
     # Same lock as the tag moves: publication is the other half of that promotion.
     concurrency:
@@ -625,14 +522,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download supported-host smoke records
+      - name: Download k3s host smoke records
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: host-smoke-*
-          path: host-smoke
+          pattern: host-smoke-k3s-*
+          path: host-smoke-k3s
           merge-multiple: true
 
-      - name: Verify supported-host smoke records
+      - name: Verify k3s host smoke records
         env:
           RELEASE_SHA: ${{ needs.release.outputs.sha }}
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
@@ -643,15 +540,15 @@ jobs:
             ([.[].host.architecture] | sort) == ["amd64", "arm64"] and
             all(.[];
               .schemaVersion == 1 and .release == $release and .commit == $commit and
-              (.testedAt | fromdateiso8601) and
+              (.testedAt | sub("\\.[0-9]{3}Z$"; "Z") | fromdateiso8601) and
               .host.os == "Ubuntu 24.04" and
-              (.host.dockerEngine | type) == "string" and
-              (.host.dockerCompose | type) == "string" and
-              (.services | length) > 0 and
-              ([.services[].service] | length) == ([.services[].service] | unique | length) and
-              all(.services[];
-                if .state == "exited" then .exitCode == 0
-                else .state == "running" and .health == "healthy" end))' host-smoke/*.json >/dev/null
+              (.host.kernel | type) == "string" and (.host.kernel | length) > 0 and
+              (.host.kubeletVersion | startswith("v")) and
+              (.workers | type) == "number" and .workers > 0 and .workers == (.workers | floor) and
+              .checks == {install: true, secondInstall: true, upgrade: true,
+                workloadsReady: true, isolation: true, reviewsEnabled: true,
+                gateway: true, shutdownBudget: true, statefulPodsPreserved: true,
+                secretsPreserved: true})' host-smoke-k3s/*.json >/dev/null
 
       - name: Verify durable assets from a clean environment
         env:
@@ -724,7 +621,7 @@ jobs:
             echo "$state"; exit 1; }
           if [ "$state" = draft ]; then
             if [ -n "$CANDIDATE" ]; then node scripts/plan-release.ts --candidate-source "$CANDIDATE" "$RELEASE_SHA"; fi
-            gh release upload "$TAG_NAME" host-smoke/*.json --clobber --repo "${{ github.repository }}"
+            gh release upload "$TAG_NAME" host-smoke-k3s/*.json --clobber --repo "${{ github.repository }}"
             flags=(--draft=false "--prerelease=$PRERELEASE")
             if [ "$PRERELEASE" = true ]; then flags+=(--latest=false); fi
             gh release edit "$TAG_NAME" --repo "${{ github.repository }}" "${flags[@]}"
@@ -732,7 +629,7 @@ jobs:
             # A failed alias promotion leaves an immutable release. Its assets must match the
             # qualified artifacts from this run; retrying must never replace published evidence.
             for architecture in amd64 arm64; do
-              cmp "host-smoke/host-smoke-$architecture.json" "evidence/host-smoke-$architecture.json" || {
+              cmp "host-smoke-k3s/host-smoke-k3s-$architecture.json" "evidence/host-smoke-k3s-$architecture.json" || {
                 echo "::error::Published $architecture host smoke record differs or is missing; refusing image aliases"; exit 1; }
             done
           fi
