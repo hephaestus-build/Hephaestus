@@ -107,7 +107,7 @@ describe("instance workspaces route", () => {
 		await screen.findByText("These workspaces may be out of date");
 		expect(screen.queryByText(/^We could not load workspaces/u)).toBeNull();
 		expect(screen.getByRole("button", viewAsUser("AET"))).toHaveProperty("disabled", false);
-		expect(screen.getByRole("button", viewAsUser("Intro Course"))).toHaveProperty("disabled", true);
+		expect(screen.queryByRole("button", viewAsUser("Intro Course"))).toBeNull();
 
 		const retry = deferred();
 		served.hold = retry.promise;
@@ -133,7 +133,7 @@ describe("instance workspaces route", () => {
 		await user.type(screen.getByRole("searchbox", { name: "Search workspaces" }), "intro");
 		await waitFor(() => expect(screen.queryByRole("button", viewAsUser("AET"))).toBeNull());
 		expect(screen.queryByRole("button", viewAsUser("Design Lab"))).toBeNull();
-		expect(screen.getByRole("button", viewAsUser("Intro Course"))).toHaveProperty("disabled", true);
+		expect(screen.queryByRole("button", viewAsUser("Intro Course"))).toBeNull();
 	});
 
 	it("takes refused workspaces away and lists only what a later authorized read returns", async () => {

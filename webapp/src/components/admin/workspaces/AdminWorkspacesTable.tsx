@@ -147,8 +147,8 @@ export function AdminWorkspacesTable({
 								{formatCreatedAt(ws.createdAt)}
 							</TableCell>
 							<TableCell className="text-right">
-								<div className="flex justify-end gap-2">
-									{ws.status === "ACTIVE" ? (
+								{ws.status === "ACTIVE" ? (
+									<div className="flex justify-end gap-2">
 										<Link
 											to="/w/$workspaceSlug/admin/settings"
 											params={{ workspaceSlug: ws.workspaceSlug }}
@@ -158,34 +158,19 @@ export function AdminWorkspacesTable({
 											<Settings aria-hidden />
 											Open administration
 										</Link>
-									) : (
-										// The server answers no administration read of a workspace that is not active.
 										<Button
 											variant="outline"
 											size="sm"
-											aria-label={`Open administration of ${ws.displayName}`}
-											disabled
+											aria-label={`View as user in ${ws.displayName}`}
+											onClick={() => onViewAsUser(ws)}
 										>
-											<Settings aria-hidden />
-											Open administration
+											<Users aria-hidden />
+											View as user
 										</Button>
-									)}
-									<Button
-										variant="outline"
-										size="sm"
-										aria-label={`View as user in ${ws.displayName}`}
-										disabled={ws.status !== "ACTIVE"}
-										onClick={() => onViewAsUser(ws)}
-									>
-										<Users aria-hidden />
-										View as user
-									</Button>
-								</div>
-								{ws.status !== "ACTIVE" && (
-									<span className="sr-only">
-										This workspace is not active, so you cannot open its administration or view it
-										as a user.
-									</span>
+									</div>
+								) : (
+									// The server answers no administration or user-view read of a workspace that is not active.
+									<span className="text-sm text-muted-foreground">Available when active</span>
 								)}
 							</TableCell>
 						</TableRow>

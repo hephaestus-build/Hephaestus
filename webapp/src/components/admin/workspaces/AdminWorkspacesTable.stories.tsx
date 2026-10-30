@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import type { AdminWorkspaceView } from "@/api/types.gen";
 import { expectNoPageOverflow } from "@/stories/reflow";
-import { expectGenuinelyDisabled } from "@/test/controls";
 
 import { AdminWorkspacesTable } from "./AdminWorkspacesTable";
 
@@ -49,7 +48,7 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * An active workspace opens its administration on the workspace settings, or starts a user view. A
- * workspace that is not active offers neither.
+ * workspace that is not active offers neither, and says so in place of the actions.
  */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
@@ -59,18 +58,11 @@ export const Default: Story = {
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "View as user in AET" }));
 		await expect(args.onViewAsUser).toHaveBeenCalledWith(activeWorkspace);
-		await expect(
-			canvas.queryByRole("link", { name: "Open administration of Intro Course" }),
-		).not.toBeInTheDocument();
-		await expectGenuinelyDisabled(
-			canvas.getByRole("button", { name: "Open administration of Intro Course" }),
-		);
-		await expectGenuinelyDisabled(
-			canvas.getByRole("button", { name: "View as user in Intro Course" }),
-		);
-		canvas.getByText(
-			"This workspace is not active, so you cannot open its administration or view it as a user.",
-		);
+		// A workspace that is not active says why it offers no action, instead of showing dead buttons.
+		const suspended = canvas.getByRole("row", { name: /Intro Course/u });
+		await expect(within(suspended).queryByRole("link")).toBeNull();
+		await expect(within(suspended).queryByRole("button")).toBeNull();
+		await expect(within(suspended).getByText("Available when active")).toBeVisible();
 		// Statuses and providers in words, never the constants the wire carries.
 		canvas.getByText("Active");
 		canvas.getByText("Suspended");
@@ -140,9 +132,7 @@ export const RefreshFailed: Story = {
 		canvas.getByText("These workspaces may be out of date");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 		await expect(canvas.getByRole("button", { name: "View as user in AET" })).toBeEnabled();
-		await expectGenuinelyDisabled(
-			canvas.getByRole("button", { name: "View as user in Intro Course" }),
-		);
+		await expect(canvas.queryByRole("button", { name: "View as user in Intro Course" })).toBeNull();
 	},
 };
 
