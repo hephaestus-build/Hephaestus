@@ -16,6 +16,7 @@ import {
 	type PreservedPeopleIds,
 	type StoredDelivery,
 } from "./lib/release-upgrade-fingerprint.ts";
+import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
 const [
@@ -59,7 +60,7 @@ if (requiredSeeds.size > 0 && upgradePath !== "latest") {
 // guide entries say that its release stops every role. Those entries come after the previous version.
 const previousVersion = process.env.PREVIOUS_VERSION ?? "";
 const previousAgentImage = process.env.PREVIOUS_AGENT_IMAGE ?? "";
-if (upgradePath === "latest" && !/^\d+\.\d+\.\d+$/u.test(previousVersion)) {
+if (upgradePath === "latest" && parseVersion(previousVersion) === undefined) {
 	throw new Error("The latest path needs PREVIOUS_VERSION, the previous release as X.Y.Z");
 }
 if (upgradePath === "latest" && previousAgentImage === "") {

@@ -78,9 +78,10 @@ The webhook role has no database.
 
 The chart package of a release names the release version, the source commit, and the release's five images by digest.
 Thus, you give Helm only your own values.
-The chart version and its `appVersion` are the release version without the leading `v`.
+The chart version and its `appVersion` equal the release version without the leading `v`.
+A stable promotion keeps the candidate's images and packages the chart with stable release metadata.
+The signed joint lock records the resulting chart digest.
 The chart source in the repository names no image, tag, or registry.
-No release has published the chart yet.
 
 You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, the Helm CLI, `curl`, and `jq`.
 The release signs the chart with Cosign 3.1 in the Sigstore bundle format.

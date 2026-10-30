@@ -5,7 +5,7 @@ on:
     inputs:
       previous-version:
         description: >-
-          Previous stable release version (X.Y.Z). Its image repository is resolved per
+          Previous release version (X.Y.Z or X.Y.Z-rc.N). Its image repository is resolved per
           version from security/release-identities.json — releases published before the
           repository transfer stay in the old GHCR namespace forever (issue #1599).
         type: string
@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       previous-tag:
-        description: Previous stable release tag (defaults to latest)
+        description: Previous stable or RC tag (defaults to the last stable tag)
         required: false
       candidate-sha:
         description: Candidate commit SHA (defaults to this workflow commit)

@@ -119,15 +119,18 @@ async function scratch(t: { after: (callback: () => Promise<void>) => void }) {
 	return directory;
 }
 
-const lockFor = (chart: {
-	repository: string;
-	version: string;
-	digest: string;
-}): ReleaseImageLockV2 => {
+const lockFor = (
+	chart: {
+		repository: string;
+		version: string;
+		digest: string;
+	},
+	identity = release,
+): ReleaseImageLockV2 => {
 	const lock = parseReleaseImageLock(
 		{
 			schemaVersion: 2,
-			release,
+			release: identity,
 			commit: "c".repeat(40),
 			// The lock names the images that `values` pins.
 			images: chartImages.map((name) => {
@@ -142,7 +145,7 @@ const lockFor = (chart: {
 			}),
 			chart,
 		},
-		release,
+		identity,
 	);
 	assert.ok(lock.schemaVersion === 2);
 	return lock;
@@ -347,6 +350,33 @@ const otherImages: ChartValues = {
 	...values,
 	images: { ...values.images, webapp: image("webapp", "9") },
 };
+
+await test("a release candidate verifies its signed chart at the candidate version", async (t) => {
+	const artifact = `${version}-rc.2`;
+	const candidateValues = { ...values, release: { ...values.release, version: `v${artifact}` } };
+	const bytes = chartBytes(candidateValues);
+	const registry = lockedRegistry(bytes);
+	const tool = tools({ registry, chartYaml: metadata(artifact) });
+	const directory = await scratch(t);
+	const candidateLock = lockFor(
+		{ repository, version: artifact, digest: digest("b") },
+		`v${artifact}`,
+	);
+	const verified = await verifyReleaseChart(candidateLock, inventory, directory, {}, tool.execute);
+	assert.equal(path.basename(verified), `hephaestus-${artifact}.tgz`);
+	assert.equal(await readFile(verified, "utf8"), bytes);
+	assert.ok(tool.calls.every((call) => call[1] !== "package" && call[1] !== "push"));
+	await assert.rejects(
+		verifyReleaseChart(
+			candidateLock,
+			inventory,
+			await scratch(t),
+			{},
+			tools({ registry, chartYaml: metadata() }).execute,
+		),
+		/is not the hephaestus chart/u,
+	);
+});
 
 await test("verification leaves nothing behind for a foreign, unlocked, unsigned, renamed or unpinned chart", async (t) => {
 	for (const [label, chart, options, message] of [

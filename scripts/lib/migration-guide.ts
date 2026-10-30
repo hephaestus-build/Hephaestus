@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { fromMarkdown } from "mdast-util-from-markdown";
 
+import { compareVersions, parseVersion } from "./release-version.ts";
+
 const template = readFileSync(new URL("../templates/migration-guide.md", import.meta.url), "utf8");
 const marker = "<!-- VERSION_HISTORY -->\n\n";
 
@@ -32,13 +34,8 @@ export function migrationGuideSections(migration: string) {
  */
 export const STOP_EVERY_ROLE_HEADING = "#### 🔴 Stop every role";
 
-const releaseVersion = (heading: string): readonly number[] | undefined =>
-	/^### v(?<version>\d+\.\d+\.\d+)$/u.exec(heading)?.groups?.version?.split(".").map(Number);
-
-function newer(version: readonly number[], than: readonly number[]): boolean {
-	const index = version.findIndex((part, position) => part !== than[position]);
-	return index !== -1 && (version[index] ?? 0) > (than[index] ?? 0);
-}
+const releaseVersion = (heading: string) =>
+	heading.startsWith("### v") ? parseVersion(heading.slice(5)) : undefined;
 
 /**
  * The stop-every-role headings of the entries that an upgrade from `previousVersion` (X.Y.Z) runs: pending
@@ -59,7 +56,7 @@ export function stopEveryRoleEntries(
 			const version = releaseVersion(section.heading);
 			return (
 				section.heading === "### Next release" ||
-				(version !== undefined && newer(version, previous))
+				(version !== undefined && compareVersions(version, previous) > 0)
 			);
 		})
 		.map((section) => section.content);

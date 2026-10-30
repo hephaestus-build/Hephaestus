@@ -7,6 +7,7 @@ import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identi
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { previousReleaseOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { parseVersion } from "./lib/release-version.ts";
 
 // The candidate is built by this repository's CI, so it lives in the current
 // namespace. The previous release keeps the namespace it was published under —
@@ -100,8 +101,8 @@ if (
 	candidateApplication !== undefined &&
 	postgres !== undefined
 ) {
-	if (!/^[0-9]+\.[0-9]+\.[0-9]+$/u.test(suppliedPreviousVersion)) {
-		throw new Error("Previous version must be a stable X.Y.Z version");
+	if (parseVersion(suppliedPreviousVersion) === undefined) {
+		throw new Error("Previous version must be X.Y.Z or X.Y.Z-rc.N");
 	}
 	previousApplication = previousApplicationReference(pinnedVersion ?? suppliedPreviousVersion);
 } else {
@@ -109,8 +110,8 @@ if (
 		pinnedVersion === undefined ? nonEmpty(process.env.REQUESTED_PREVIOUS) : `v${pinnedVersion}`;
 	// The changelog compatibility guard judges the same baseline.
 	const previous = requestedPrevious ?? previousReleaseOf("HEAD") ?? "";
-	if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(previous)) {
-		throw new Error("Previous release must be a stable vX.Y.Z tag");
+	if (!previous.startsWith("v") || parseVersion(previous.slice(1)) === undefined) {
+		throw new Error("Previous release must be a vX.Y.Z or vX.Y.Z-rc.N tag");
 	}
 	const candidate = nonEmpty(process.env.REQUESTED_CANDIDATE) ?? nonEmpty(process.env.GITHUB_SHA);
 	if (candidate === undefined || !/^[a-f0-9]{40}$/u.test(candidate)) {

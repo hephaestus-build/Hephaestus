@@ -133,7 +133,7 @@ skipped() { case " $SKIPPED " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
 
 if [ "$VERIFY" = false ]; then
 	LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
-	matches "$VERSION" '[0-9]+\.[0-9]+\.[0-9]+' || die "--version takes a release such as 0.95.0"
+	matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?' || die "--version takes a release such as 0.95.0 or 1.0.0-rc.1"
 	matches "$HOST" "($LABEL\\.)+[a-z]$LABEL" || die "--host takes a lowercase DNS name, such as hephaestus.example.com"
 	if [ -z "$CERTIFICATES" ]; then
 		matches "$EMAIL" "[A-Za-z0-9._%+-]+@($LABEL\\.)+[a-z]$LABEL" || die "--email takes an address, such as ops@example.com"

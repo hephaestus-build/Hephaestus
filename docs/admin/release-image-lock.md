@@ -30,6 +30,12 @@ The release workflow signs each asset with the same keyless identity, `release.y
 | `manifest.json`, the SBOM, vulnerability and license files, and `SHA256SUMS` with its bundle | The release evidence. | The verifiers that [release management](/contributor/release-management#operator-verification) describes. |
 | `host-smoke-amd64.json`, `host-smoke-arm64.json` | The supported-host smoke records. | Operators who check the hosts that the release passed on. |
 
+When a stable release promotes a qualified candidate, image digests stay unchanged.
+The chart is packaged from the same source with stable release metadata.
+The joint lock names its new digest.
+Image build metadata retains the candidate version.
+The stable chart's values name the stable release and source commit.
+
 ## Independent verification
 
 The certificate identity belongs to the release, not necessarily the current repository.

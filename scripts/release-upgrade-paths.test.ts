@@ -47,6 +47,7 @@ await test("release and weekly runs require latest, baseline, and refusal paths"
 
 for (const [upgradePath, version] of [
 	["latest", "0.80.0"],
+	["latest", "1.0.0-rc.1"],
 	["baseline", "0.77.4"],
 	["refusal", "0.76.0"],
 ] as const) {
@@ -86,12 +87,12 @@ mock.module("node:child_process", { exports: {
 						env: {
 							...process.env,
 							UPGRADE_PATH: upgradePath,
-							INPUT_PREVIOUS_VERSION: source === "release" ? "0.80.0" : "",
+							INPUT_PREVIOUS_VERSION: source === "release" ? version : "",
 							INPUT_CANDIDATE_APP:
 								source === "release" ? `${namespace}/application-server:candidate` : "",
 							INPUT_POSTGRES: source === "release" ? `${namespace}/postgres:candidate` : "",
 							// A pinned path must ignore the caller's latest-release selection.
-							REQUESTED_PREVIOUS: upgradePath === "latest" ? "v0.80.0" : "not-a-release",
+							REQUESTED_PREVIOUS: upgradePath === "latest" ? `v${version}` : "not-a-release",
 							GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
 							GITHUB_SHA: "b".repeat(40),
 							GITHUB_OUTPUT: output,

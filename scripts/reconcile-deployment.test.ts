@@ -70,9 +70,18 @@ await test("a channel names an immutable release", () => {
 		allowRollback: false,
 		freeze: false,
 	});
-	assert.throws(() => parseChannel({ release: "main" }), /immutable vX\.Y\.Z tag/u);
-	assert.throws(() => parseChannel({ release: "v01.2.3" }), /immutable vX\.Y\.Z tag/u);
-	assert.throws(() => parseChannel({ release: "v1.2.3-rc.1" }), /immutable vX\.Y\.Z tag/u);
+	assert.throws(
+		() => parseChannel({ release: "main" }),
+		/immutable vX\.Y\.Z or vX\.Y\.Z-rc\.N tag/u,
+	);
+	assert.throws(
+		() => parseChannel({ release: "v01.2.3" }),
+		/immutable vX\.Y\.Z or vX\.Y\.Z-rc\.N tag/u,
+	);
+	assert.throws(
+		() => parseChannel({ release: "v1.2.3-rc.01" }),
+		/immutable vX\.Y\.Z or vX\.Y\.Z-rc\.N tag/u,
+	);
 	assert.throws(() => parseChannel({}), /channel\.release/u);
 	assert.throws(() => parseChannel({ release: "v1.2.3", freeze: "yes" }), /must be a boolean/u);
 });
@@ -868,7 +877,7 @@ const reconcilerSubprocess = {
 	skip: process.platform === "win32" && "the systemd host uses POSIX executable stubs",
 };
 
-async function reconcilerFixture(directory: string) {
+async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 	const checkout = path.join(directory, "checkout");
 	const bootstrap = path.join(directory, "bootstrap");
 	const units = path.join(directory, "units");
@@ -893,6 +902,7 @@ async function reconcilerFixture(directory: string) {
 			"lib/env.ts",
 			"lib/json.ts",
 			"lib/process.ts",
+			"lib/release-version.ts",
 		]) {
 			await copyFile(path.join(import.meta.dirname, file), path.join(tree, "scripts", file));
 		}
@@ -948,10 +958,10 @@ async function reconcilerFixture(directory: string) {
 	for (const [release, services] of [
 		["v0.8.0", { app: {} }],
 		["v0.9.0", { app: {}, "application-worker": { stop_grace_period: "6m" } }],
-		["v1.0.0", { app: {}, "database-migration": {} }],
+		[targetRelease, { app: {}, "database-migration": {} }],
 	] as const) {
 		await writeFile(appCompose, JSON.stringify({ services }));
-		if (release === "v1.0.0") {
+		if (release === targetRelease) {
 			await writeFile(
 				path.join(checkout, "scripts/prepare-release-lock.ts"),
 				'throw new Error("candidate release must not verify itself");\n',
@@ -974,7 +984,10 @@ writeFileSync(process.argv[3], "HEPHAESTUS_RELEASE_COMMIT=" + commit + "\\nHEPHA
 	const releaseCommit = gitIn(checkout, "rev-parse", "HEAD");
 	gitIn(checkout, "checkout", "--quiet", "-b", "deploy-state");
 	await mkdir(path.join(checkout, "channels"));
-	await writeFile(path.join(checkout, "channels/test.json"), JSON.stringify({ release: "v1.0.0" }));
+	await writeFile(
+		path.join(checkout, "channels/test.json"),
+		JSON.stringify({ release: targetRelease }),
+	);
 	await writeFile(path.join(checkout, "channels/test.json.sigstore.json"), "{}\n");
 	// A chart host follows a commit channel: the candidate commit with the chart's images.
 	await writeFile(
@@ -1075,7 +1088,7 @@ else writeFileSync(packaged, "verified chart fixture");
 writeFileSync(path.join(destination, release + ".images.yaml"), JSON.stringify({ release: { version: release, commit }, images: {} }));
 `,
 	);
-	const record = { release: "v1.0.0", channelCommit, appliedAt: applied.appliedAt };
+	const record = { release: targetRelease, channelCommit, appliedAt: applied.appliedAt };
 	return {
 		bootstrap,
 		checkout,
@@ -1459,7 +1472,7 @@ await test(
 );
 
 await test(
-	"installed 0.95.1 reconciler applies the next chart on Kubernetes",
+	"this tree's installed reconciler applies the rc.1 chart on Kubernetes",
 	{
 		skip:
 			process.env.RECONCILER_TEST_CONTEXT === undefined &&
@@ -1469,6 +1482,7 @@ await test(
 		const directory = await mkdtemp(path.join(tmpdir(), "reconciler-transition-"));
 		const namespace = `reconciler-${Date.now()}`;
 		const context = process.env.RECONCILER_TEST_CONTEXT ?? "";
+		const target = "v1.0.0-rc.1";
 		const realHelm = execFileSync("which", ["helm"], { encoding: "utf8" }).trim();
 		const realKubectl = execFileSync("which", ["kubectl"], { encoding: "utf8" }).trim();
 		const kubectl = (...args: string[]) =>
@@ -1476,7 +1490,7 @@ await test(
 		const helm = (...args: string[]) =>
 			execFileSync(realHelm, ["--kube-context", context, ...args], { encoding: "utf8" });
 		try {
-			const fixture = await reconcilerFixture(directory);
+			const fixture = await reconcilerFixture(directory, target);
 			const source = path.join(directory, "source");
 			await mkdir(path.join(source, "templates"), { recursive: true });
 			await writeFile(
@@ -1499,7 +1513,7 @@ await test(
 			helm("install", "hephaestus", source, "--namespace", namespace, "--wait", "--timeout", "30s");
 			await writeFile(
 				path.join(source, "Chart.yaml"),
-				"apiVersion: v2\nname: hephaestus\nversion: 1.0.0\nappVersion: 1.0.0\n",
+				`apiVersion: v2\nname: hephaestus\nversion: ${target.slice(1)}\nappVersion: ${target.slice(1)}\n`,
 			);
 			helm("package", source, "--destination", directory);
 			// Transport and signature admission have their own failure tests. This leg uses real Helm
@@ -1525,7 +1539,7 @@ await test(
 					HEPHAESTUS_CHART_NAMESPACE: namespace,
 					HEPHAESTUS_SECRETS: directory,
 					HEPHAESTUS_WAIT_TIMEOUT: "30",
-					TRANSITION_PACKAGE: path.join(directory, "hephaestus-1.0.0.tgz"),
+					TRANSITION_PACKAGE: path.join(directory, `hephaestus-${target.slice(1)}.tgz`),
 				},
 			});
 			assert.equal(result.status, 0, result.stderr);
@@ -1533,19 +1547,19 @@ await test(
 				parseJson(kubectl("get", "configmap", "transition-proof", "-n", namespace, "-o", "json")),
 				"transition proof",
 			);
-			assert.equal(asRecord(proof.data, "proof data").version, "1.0.0");
+			assert.equal(asRecord(proof.data, "proof data").version, target.slice(1));
 			const record = await readApplied(path.join(directory, "applied.json"));
-			assert.equal(record?.release, "v1.0.0");
+			assert.equal(record?.release, target);
 			assert.equal(
 				await readlink(path.join(directory, "tooling")),
-				path.join(directory, "releases/v1.0.0"),
+				path.join(directory, `releases/${target}`),
 			);
-			assert.equal(await carriesToolingLink(path.join(directory, "releases/v1.0.0")), true);
+			assert.equal(await carriesToolingLink(path.join(directory, `releases/${target}`)), true);
 			await assert.rejects(
 				readFile(
 					path.join(
 						directory,
-						"releases/v1.0.0/docker/self-host/systemd/hephaestus-reconcile.service",
+						`releases/${target}/docker/self-host/systemd/hephaestus-reconcile.service`,
 					),
 				),
 				{ code: "ENOENT" },

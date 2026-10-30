@@ -33,6 +33,7 @@ const chart = {
 	digest: `sha256:${"b".repeat(64)}`,
 };
 const chartPackage = `hephaestus-${chart.version}.tgz`;
+const defaultChart = chart;
 /**
  * The other images that the chart runs, as upstream pins: their evidence needs no attestation and
  * no alias, so webapp stays the one first-party image that this suite promotes.
@@ -132,7 +133,9 @@ if (tool === 'gh') {
     if (process.env.AUTHORITY_UNAVAILABLE === 'true') throw new Error('Release authority unavailable');
     const endpoint = args.find(arg => arg.startsWith('repos/')) ?? '';
     let response;
-    if (endpoint.endsWith('/releases?per_page=100')) {
+    if (endpoint.endsWith('/commits/main')) {
+      console.log(process.env.MAIN_SHA ?? read('manifest.json').commit); process.exit(0);
+    } else if (endpoint.endsWith('/releases?per_page=100')) {
       if (!args.includes('--paginate') || !args.includes('--jq') || args.includes('--slurp')) throw new Error('Expected projected paginated release listing');
       response = read('releases').map(release => ({target_commitish:'main', ...release}));
     } else if (endpoint.includes('/git/matching-refs/tags/')) {
@@ -158,8 +161,8 @@ if (tool === 'gh') {
   } else if (args[1] === 'view') {
     if (args.includes('--jq')) {
       const field = option('--jq');
-      if (!['.isDraft', '.isImmutable'].includes(field)) throw new Error('Unexpected release query');
-      console.log(current[field.slice(1)]);
+      if (!['.isDraft', '.isImmutable', '.isPrerelease'].includes(field)) throw new Error('Unexpected release query');
+      console.log(field === '.isPrerelease' ? (current.isPrerelease ?? false) : current[field.slice(1)]);
     } else if (args.includes('--json')) {
       const fields = option('--json').split(',');
       if (!fields.every(field => ['isDraft', 'targetCommitish'].includes(field))) throw new Error('Unexpected release fields');
@@ -167,13 +170,13 @@ if (tool === 'gh') {
     } else console.log(current.isDraft ? 'draft' : 'published');
   } else if (args[1] === 'create') {
     if (current !== null) throw new Error('a release with the same tag name already exists');
-    write('state', {isDraft:true, isImmutable:false, targetCommitish:option('--target')});
+    write('state', {isDraft:true, isImmutable:false, isPrerelease:args.includes('--prerelease'), targetCommitish:option('--target')});
   } else if (args[1] === 'upload') {
     if (!current.isDraft) throw new Error('Immutable assets cannot be overwritten');
     for (const file of args.slice(3, args.indexOf('--clobber'))) fs.copyFileSync(file, path.join(store, path.basename(file)));
   } else if (args[1] === 'edit') {
     if (!current.isDraft) throw new Error('Published releases cannot be edited');
-    write('state', {...current, isDraft:false, isImmutable:process.env.PUBLISH_MUTABLE !== 'true'});
+    write('state', {...current, isDraft:false, isPrerelease:args.includes('--prerelease=true'), isImmutable:process.env.PUBLISH_MUTABLE !== 'true'});
     // Publication creates a missing tag at the draft's target, as GitHub does.
     const tags = read('tags');
     if (!(args[2] in tags)) write('tags', {...tags, [args[2]]: {type:'commit', sha:current.targetCommitish}});
@@ -216,6 +219,7 @@ if (tool === 'gh') {
     fs.readFileSync(0);
   } else if (args[0] === 'package') {
     fs.writeFileSync(path.join(option('--destination'), 'hephaestus-' + option('--version') + '.tgz'), 'packaged at ' + option('--app-version') + '\n' + fs.readFileSync(path.join(args[1], 'values.yaml'), 'utf8'));
+    fs.writeFileSync(path.join(store, 'chart-metadata'), 'apiVersion: v2\nname: hephaestus\nversion: ' + option('--version') + '\nappVersion: ' + option('--app-version') + '\n');
   } else if (args[0] === 'push') {
     // A push writes the version tag; the registry answers with the manifest digest on stdout.
     const bytes = fs.readFileSync(args[1]);
@@ -247,7 +251,10 @@ if (tool === 'gh') {
 } else throw new Error('Unexpected tool');
 `;
 
-async function fixture(directory: string, source = commit) {
+async function fixture(directory: string, source = commit, tag = release) {
+	const fixtureRelease = tag;
+	const fixtureChart = { ...defaultChart, version: tag.slice(1) };
+	const fixtureJointLock = `release-${fixtureRelease}.chart.json`;
 	const archive = path.join(directory, "archive");
 	const bin = path.join(directory, "bin");
 	const smoke = path.join(directory, "host-smoke");
@@ -270,10 +277,12 @@ async function fixture(directory: string, source = commit) {
 		GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
 		GITHUB_ACTIONS: "true",
 		GH_TOKEN: "fixture-not-a-secret",
-		TAG_NAME: release,
+		TAG_NAME: fixtureRelease,
 		RELEASE_SHA: source,
-		VERSION: release.slice(1),
+		VERSION: fixtureRelease.slice(1),
 		SERIES: "0.93",
+		CANDIDATE: "",
+		PRERELEASE: String(fixtureRelease.includes("-rc.")),
 	};
 	const subjects = [
 		...platforms.map((architecture, index) => ({
@@ -295,7 +304,7 @@ async function fixture(directory: string, source = commit) {
 			})),
 		),
 	];
-	const manifest = { schemaVersion: 1, release, commit: source, subjects };
+	const manifest = { schemaVersion: 1, release: fixtureRelease, commit: source, subjects };
 	await json("manifest.json", manifest);
 	await json("release-images.json", inventory);
 	// The checkout's inventory, which the release scripts read beside the evidence.
@@ -311,7 +320,7 @@ async function fixture(directory: string, source = commit) {
 		exceptions: [],
 	});
 	// Both locks come from the release's own producer: one joint lock, and its schema 1 projection.
-	await writeFile(path.join(directory, "chart.json"), JSON.stringify(chart));
+	await writeFile(path.join(directory, "chart.json"), JSON.stringify(fixtureChart));
 	const produced = spawnSync(
 		process.execPath,
 		[
@@ -319,9 +328,9 @@ async function fixture(directory: string, source = commit) {
 			"write",
 			path.join(archive, "manifest.json"),
 			path.join(directory, "chart.json"),
-			release,
-			path.join(archive, jointLock),
-			path.join(archive, `release-${release}.json`),
+			fixtureRelease,
+			path.join(archive, fixtureJointLock),
+			path.join(archive, `release-${fixtureRelease}.json`),
 		],
 		{ encoding: "utf8", env: environment, timeout: 30_000 },
 	);
@@ -393,7 +402,7 @@ async function fixture(directory: string, source = commit) {
 		files.map(async (file) => `${hash(await readFile(path.join(archive, file)))}  ${file}\n`),
 	);
 	await writeFile(path.join(archive, "SHA256SUMS"), checksums.join(""));
-	for (const file of ["SHA256SUMS", `release-${release}.json`, jointLock]) {
+	for (const file of ["SHA256SUMS", `release-${fixtureRelease}.json`, fixtureJointLock]) {
 		await sign(path.join(archive, file));
 	}
 	// The k3s platform assets: collected in the job's workspace, where the producer signs them, and
@@ -408,27 +417,27 @@ async function fixture(directory: string, source = commit) {
 	// The chart is not evidence: the registry, not the release, holds the package and its signature.
 	// Its values pin the images of the lock that the evidence makes.
 	const pinned = releaseValuesLines(
-		chartValues(lockFromEvidence(manifest, release), parseInventory(inventory)),
+		chartValues(lockFromEvidence(manifest, fixtureRelease), parseInventory(inventory)),
 	);
-	const packageBytes = `hephaestus chart ${chart.version} from ${source}\n${pinned}`;
-	await json("chart-signatures", [`${chart.repository}@${chart.digest}`]);
+	const packageBytes = `hephaestus chart ${fixtureChart.version} from ${source}\n${pinned}`;
+	await json("chart-signatures", [`${fixtureChart.repository}@${fixtureChart.digest}`]);
 	await json("chart-tags", {});
 	await json("chart-registry", {
-		[`${chart.repository}@${chart.digest}`]: {
-			version: chart.version,
+		[`${fixtureChart.repository}@${fixtureChart.digest}`]: {
+			version: fixtureChart.version,
 			bytes: Buffer.from(packageBytes).toString("base64"),
 		},
 	});
 	await writeFile(
 		path.join(archive, "chart-metadata"),
-		`apiVersion: v2\nname: hephaestus\nversion: ${chart.version}\nappVersion: ${chart.version}\n`,
+		`apiVersion: v2\nname: hephaestus\nversion: ${fixtureChart.version}\nappVersion: ${fixtureChart.version}\n`,
 	);
 	for (const architecture of platforms) {
 		await writeFile(
 			path.join(smoke, `host-smoke-${architecture}.json`),
 			JSON.stringify({
 				schemaVersion: 1,
-				release,
+				release: fixtureRelease,
 				commit: source,
 				testedAt: "2026-10-15T10:00:00Z",
 				host: { architecture, os: "Ubuntu 24.04", dockerEngine: "28.0.0", dockerCompose: "2.24.4" },
@@ -436,12 +445,23 @@ async function fixture(directory: string, source = commit) {
 			}),
 		);
 	}
-	await json("state", { isDraft: true, isImmutable: false, targetCommitish: source });
+	await json("state", {
+		isDraft: true,
+		isImmutable: false,
+		isPrerelease: fixtureRelease.includes("-rc."),
+		targetCommitish: source,
+	});
 	await json("tags", {});
 	await json("tag-objects", {});
 	await json("aliases", {});
 	await json("releases", [
-		{ tag_name: release, draft: false, prerelease: false },
+		{
+			tag_name: fixtureRelease,
+			draft: false,
+			prerelease: fixtureRelease.includes("-rc."),
+			immutable: true,
+			target_commitish: source,
+		},
 		{ tag_name: "v0.9.0", draft: false, prerelease: false },
 		{ tag_name: "v99.0.0", draft: false, prerelease: true },
 		{ tag_name: "v100.0.0", draft: true, prerelease: false },
@@ -630,6 +650,7 @@ for (const scenario of [
 				assert.deepEqual(JSON.parse(await readFile(path.join(archive, "state"), "utf8")), {
 					isDraft: false,
 					isImmutable: true,
+					isPrerelease: false,
 					targetCommitish: commit,
 				});
 				assert.deepEqual(JSON.parse(await readFile(path.join(archive, "tags"), "utf8")), {
@@ -690,13 +711,25 @@ for (const scenario of [
 			}
 			if (scenario === "authority-malformed") {
 				await json("releases", [
-					{ tag_name: release, draft: false, prerelease: false },
+					{
+						tag_name: release,
+						draft: false,
+						prerelease: false,
+						immutable: true,
+						target_commitish: commit,
+					},
 					{ tag_name: "v0.93.1", draft: false },
 				]);
 			}
 			if (scenario === "authority-malformed-draft") {
 				await json("releases", [
-					{ tag_name: release, draft: false, prerelease: false },
+					{
+						tag_name: release,
+						draft: false,
+						prerelease: false,
+						immutable: true,
+						target_commitish: commit,
+					},
 					{ tag_name: "v0.93.1", prerelease: false },
 				]);
 			}
@@ -806,10 +839,20 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 				await json("state", null);
 			}
 			if (scenario === "same-source-draft") {
-				await json("state", { isDraft: true, isImmutable: false, targetCommitish: later });
+				await json("state", {
+					isDraft: true,
+					isImmutable: false,
+					isPrerelease: false,
+					targetCommitish: later,
+				});
 			}
 			if (scenario === "published") {
-				await json("state", { isDraft: false, isImmutable: true, targetCommitish: later });
+				await json("state", {
+					isDraft: false,
+					isImmutable: true,
+					isPrerelease: false,
+					targetCommitish: later,
+				});
 				await json("tags", { [release]: { type: "commit", sha: later } });
 			}
 			if (scenario === "other-source-tag") {
@@ -829,6 +872,7 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 				assert.deepEqual(JSON.parse(await releaseState(directory)), {
 					isDraft: true,
 					isImmutable: false,
+					isPrerelease: false,
 					targetCommitish: later,
 				});
 				assert.deepEqual(
@@ -878,7 +922,12 @@ for (const scenario of ["annotated-tag-retry", ...sourceRefusals.keys()]) {
 				scenario === "other-source-draft" ? later : commit,
 			);
 			if (scenario === "other-source-draft") {
-				await json("state", { isDraft: true, isImmutable: false, targetCommitish: commit });
+				await json("state", {
+					isDraft: true,
+					isImmutable: false,
+					isPrerelease: false,
+					targetCommitish: commit,
+				});
 			}
 			if (scenario === "other-source-tag") {
 				await json("tags", { [release]: { type: "commit", sha: later } });
@@ -930,6 +979,155 @@ const producerRefusals = new Map([
 	["other-source-draft", /draft v0\.93\.0 targets f{40}, not c{40}/u],
 ]);
 
+void test(
+	"RC publication marks prerelease, preserves stable aliases and promotes only its version",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-prerelease-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const tag = "v1.0.0-rc.2";
+		const { archive, json, run, manifest } = await fixture(directory, commit, tag);
+		const aliases = {
+			[`${repository}:latest`]: `sha256:${"f".repeat(64)}`,
+			[`${repository}:1.0`]: `sha256:${"f".repeat(64)}`,
+		};
+		await json("aliases", aliases);
+		const stableChartTag = `${chart.repository}:0.95.1`;
+		await json("chart-tags", { [stableChartTag]: `sha256:${"f".repeat(64)}` });
+		await mkdir(path.join(directory, "evidence"));
+		await writeFile(path.join(directory, "evidence/manifest.json"), JSON.stringify(manifest));
+		const chartPublished = await run(
+			{
+				SHA: commit,
+				ACTOR: "release-bot",
+				REGISTRY_TOKEN: "fixture-token",
+				GITHUB_OUTPUT: path.join(directory, "chart-outputs"),
+			},
+			jobSteps("tag-images", ["Publish the chart by digest", "Write release image lock"]),
+		);
+		assert.equal(chartPublished.status, 0, chartPublished.output);
+		const tags = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-tags"), "utf8")),
+			"chart tags",
+		);
+		assert.equal(tags[stableChartTag], `sha256:${"f".repeat(64)}`);
+		assert.ok(`${chart.repository}:1.0.0-rc.2` in tags);
+		assert.equal(`${chart.repository}:1.0.0` in tags, false);
+		const result = await run();
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.calls, /"--prerelease=true","--latest=false"/u);
+		assert.deepEqual(parseJson(await readFile(path.join(archive, "aliases"), "utf8")), {
+			...aliases,
+			[`${repository}:1.0.0-rc.2`]: indexDigest,
+		});
+		assert.equal(
+			asRecord(parseJson(await readFile(path.join(archive, "state"), "utf8")), "release")
+				.isPrerelease,
+			true,
+		);
+	},
+);
+
+void test(
+	"stable promotion preserves signed RC images and source while packaging stable chart metadata",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-promotion-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const tag = "v1.0.0-rc.2";
+		const { archive, json, run, manifest } = await fixture(directory, commit, tag);
+		await json("tags", { [tag]: { type: "commit", sha: commit } });
+		const overrides = {
+			CANDIDATE: tag,
+			SOURCE_TAG: commit,
+			SHA: commit,
+			VERSION: "1.0.0",
+			TAG_NAME: "v1.0.0",
+			ACTOR: "release-bot",
+			GH_TOKEN: "github-token",
+			REGISTRY_TOKEN: "registry-token",
+			GITHUB_OUTPUT: path.join(directory, "outputs"),
+		};
+		const capture = jobSteps("tag-images", ["Capture release image digests"]);
+		const captured = await run(overrides, capture);
+		assert.equal(captured.status, 0, captured.output);
+		assert.match(captured.calls, /"verify-blob"/u);
+		assert.doesNotMatch(
+			captured.calls,
+			/"docker"/u,
+			"candidate image identities come from its signed lock",
+		);
+		const resolved = await readFile(path.join(directory, "release-images.tsv"), "utf8");
+		assert.ok(resolved.includes(indexDigest));
+		assert.doesNotMatch(resolved, new RegExp(`:${commit}`, "u"));
+		await mkdir(path.join(directory, "evidence"));
+		await writeFile(
+			path.join(directory, "evidence/manifest.json"),
+			JSON.stringify({ ...manifest, release: "v1.0.0" }),
+		);
+		const before = await readFile(path.join(archive, "chart-registry"));
+		const produced = await run(
+			overrides,
+			jobSteps("tag-images", ["Publish the chart by digest", "Write release image lock"]),
+		);
+		assert.equal(produced.status, 0, produced.output);
+		assert.doesNotMatch(produced.calls, /"docker"/u);
+		assert.match(produced.calls, /"helm","package"/u);
+		assert.match(produced.calls, /"helm","push"/u);
+		const original = asRecord(
+			parseJson(await readFile(path.join(archive, `release-${tag}.chart.json`), "utf8")),
+			"candidate",
+		);
+		const promoted = asRecord(
+			parseJson(await readFile(path.join(directory, "release-v1.0.0.chart.json"), "utf8")),
+			"stable",
+		);
+		assert.equal(promoted.release, "v1.0.0");
+		assert.equal(promoted.commit, original.commit);
+		assert.deepEqual(promoted.images, original.images);
+		const stableChart = asRecord(promoted.chart, "stable chart");
+		const candidateChart = asRecord(original.chart, "candidate chart");
+		assert.equal(stableChart.repository, candidateChart.repository);
+		assert.equal(stableChart.version, "1.0.0");
+		assert.notEqual(stableChart.digest, candidateChart.digest);
+		assert.match(
+			await readFile(path.join(directory, "chart/hephaestus-1.0.0.tgz"), "utf8"),
+			/packaged at 1\.0\.0\n/u,
+		);
+		assert.equal(
+			await readFile(path.join(directory, "candidate-chart/hephaestus-1.0.0-rc.2.tgz"), "utf8"),
+			Buffer.from(
+				String(
+					asRecord(
+						asRecord(parseJson(before.toString()), "registry")[
+							`${chart.repository}@${chart.digest}`
+						],
+						"package",
+					).bytes,
+				),
+				"base64",
+			).toString(),
+		);
+		// Main or the signed archive changing after planning must fail before artifact selection.
+		const movedMain = await run(
+			{ ...overrides, MAIN_SHA: "f".repeat(40), RUNNER_TEMP: path.join(directory, "moved") },
+			capture,
+		);
+		assert.notEqual(movedMain.status, 0);
+		assert.match(movedMain.output, /Main advanced/u);
+		await writeFile(
+			path.join(archive, `release-${tag}.chart.json`),
+			JSON.stringify({ ...original, commit: "f".repeat(40) }),
+		);
+		const tampered = await run(
+			{ ...overrides, RUNNER_TEMP: path.join(directory, "tampered") },
+			capture,
+		);
+		assert.notEqual(tampered.status, 0);
+		assert.match(tampered.output, /Signature mismatch/u);
+	},
+);
+
 for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys()]) {
 	void test(`release producer: ${scenario}`, { skip: process.platform === "win32" }, async (t) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "release-producer-"));
@@ -946,11 +1144,21 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			await json("state", null);
 		}
 		if (scenario === "published") {
-			await json("state", { isDraft: false, isImmutable: true, targetCommitish: commit });
+			await json("state", {
+				isDraft: false,
+				isImmutable: true,
+				isPrerelease: false,
+				targetCommitish: commit,
+			});
 			await json("tags", { [release]: { type: "commit", sha: commit } });
 		}
 		if (scenario === "other-source-draft") {
-			await json("state", { isDraft: true, isImmutable: false, targetCommitish: later });
+			await json("state", {
+				isDraft: true,
+				isImmutable: false,
+				isPrerelease: false,
+				targetCommitish: later,
+			});
 		}
 		const registryBefore = await readFile(path.join(archive, "chart-registry"), "utf8");
 		const result = await run(

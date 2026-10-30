@@ -207,6 +207,21 @@ function installerAt(platform: string, ...args: string[]) {
 	return { status: result.status, stderr: result.stderr, resources: documents(result.stdout) };
 }
 
+await test("the installer accepts RC versions and refuses malformed candidate numbers", () => {
+	for (const version of ["1.0.0-rc.1", "1.0.0-rc.10"]) {
+		assert.equal(
+			rendered("--host", "heph.example.org", "--email", "ops@example.org", "--version", version)
+				.status,
+			0,
+		);
+	}
+	assert.notEqual(
+		rendered("--host", "heph.example.org", "--email", "ops@example.org", "--version", "1.0.0-rc.01")
+			.status,
+		0,
+	);
+});
+
 await test("workspace certificates use DNS-01, and backup Jobs get their own client identity", () => {
 	const result = rendered(
 		"--host",
