@@ -47,6 +47,7 @@ jobs:
       # Whether the server suites run. The package job reads it too, because the suites run its classes.
       server-tests: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       tooling: ${{ steps.filter.outputs.tooling }}
+      windows: ${{ steps.filter.outputs.windows }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' }}
       e2e: ${{ steps.filter.outputs.e2e }}
       extension-e2e: ${{ steps.filter.outputs.extension-e2e }}
@@ -393,6 +394,15 @@ jobs:
               - 'openapitools.json'
               - 'project.code-workspace'
               - '.vscode/settings.json'
+            # Select Windows early for paths outside the excluded trees and instruction files.
+            # The merge queue retains the full tooling leg.
+            windows:
+              - '**'
+              - '!server/**'
+              - '!docs/**'
+              - '!.changeset/**'
+              - '!**/AGENTS.md'
+              - '!**/CLAUDE.md'
             application-server-image:
               - 'scripts/summarize-buildpack-log.ts'
               - 'server/application/src/main/**'
@@ -715,6 +725,7 @@ jobs:
       extension_changed: ${{ (needs.detect-changes.outputs.extension == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      windows_changed: ${{ (needs.detect-changes.outputs.windows != 'false' || needs.detect-changes.outputs.queue-tier != 'false') && 'true' || 'false' }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
 
@@ -1422,7 +1433,6 @@ jobs:
     permissions:
       actions: write # cancel this run
 
-
   fail-fast-Security-merge-group:
     name: "Fail fast: Security-merge-group"
     needs: [Security-merge-group]
@@ -1438,7 +1448,6 @@ jobs:
     uses: ./.github/workflows/fail-fast.yml
     permissions:
       actions: write # cancel this run
-
 
   fail-fast-Compose:
     name: "Fail fast: Compose"
