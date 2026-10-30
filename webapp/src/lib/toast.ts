@@ -1,4 +1,3 @@
-// oxlint-disable-next-line no-restricted-imports -- the one module that adapts sonner's `toast`.
 import { toast as sonner } from "sonner";
 
 const UNTIL_CLOSED = { duration: Number.POSITIVE_INFINITY };

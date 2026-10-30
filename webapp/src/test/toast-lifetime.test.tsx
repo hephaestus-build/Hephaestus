@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "@/lib/toast";
 
+// The keyboard path (Alt+T, Tab, Enter) needs a real browser's focus: `ui/sonner.stories.tsx`.
+
 /** Sonner's own lifetime for a toast without a `duration`. */
 const SONNER_LIFETIME_MS = 4000;
 
@@ -23,7 +25,7 @@ describe("toast lifetime", () => {
 	it.each([
 		["error", () => toast.error("We could not save the budget")],
 		["warning", () => toast.warning("We could not save the budget")],
-	])("keeps a %s until the reader closes it from the keyboard", async (_kind, show) => {
+	])("keeps a %s until the reader closes it", async (_kind, show) => {
 		const user = userEvent.setup();
 		render(<Toaster />);
 		show();
@@ -31,8 +33,7 @@ describe("toast lifetime", () => {
 		await passTime(SONNER_LIFETIME_MS * 15);
 		screen.getByText("We could not save the budget");
 
-		screen.getByRole("button", { name: "Close message" }).focus();
-		await user.keyboard("{Enter}");
+		await user.click(screen.getByRole("button", { name: "Close message" }));
 		await passTime(1000);
 		expect(screen.queryByText("We could not save the budget")).toBeNull();
 	});

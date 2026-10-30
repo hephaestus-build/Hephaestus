@@ -243,7 +243,8 @@
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
 		{
-			// The three entries below restate the `sonner` entry for their own trees.
+			// The three entries below restate the `sonner` entry for their own trees, and the entry after them
+			// exempts the two adapters.
 			"files": ["src/**"],
 			"excludeFiles": ["src/lib/**", "src/components/**"],
 			"rules": {
@@ -259,8 +260,8 @@
 							},
 							{
 								"name": "sonner",
-								"importNames": ["toast"],
-								"message": "Import `toast` from `@/lib/toast`, where a failure stays until the reader closes it."
+								"allowTypeImports": true,
+								"message": "Use `toast` from `@/lib/toast` and `Toaster` from `@/components/ui/sonner`: there a failure stays until the reader closes it."
 							}
 						]
 					}
@@ -282,8 +283,8 @@
 							},
 							{
 								"name": "sonner",
-								"importNames": ["toast"],
-								"message": "Import `toast` from `@/lib/toast`, where a failure stays until the reader closes it."
+								"allowTypeImports": true,
+								"message": "Use `toast` from `@/lib/toast` and `Toaster` from `@/components/ui/sonner`: there a failure stays until the reader closes it."
 							}
 						],
 						"patterns": [
@@ -317,8 +318,8 @@
 							},
 							{
 								"name": "sonner",
-								"importNames": ["toast"],
-								"message": "Import `toast` from `@/lib/toast`, where a failure stays until the reader closes it."
+								"allowTypeImports": true,
+								"message": "Use `toast` from `@/lib/toast` and `Toaster` from `@/components/ui/sonner`: there a failure stays until the reader closes it."
 							}
 						],
 						"patterns": [
@@ -352,8 +353,8 @@
 							},
 							{
 								"name": "sonner",
-								"importNames": ["toast"],
-								"message": "Import `toast` from `@/lib/toast`, where a failure stays until the reader closes it."
+								"allowTypeImports": true,
+								"message": "Use `toast` from `@/lib/toast` and `Toaster` from `@/components/ui/sonner`: there a failure stays until the reader closes it."
 							}
 						],
 						"patterns": [
@@ -365,6 +366,12 @@
 					}
 				]
 			}
+		},
+		{
+			// The two adapters over sonner, and the only files that may import it. Each imports nothing else
+			// that the entries above restrict.
+			"files": ["src/lib/toast.ts", "src/components/ui/sonner.tsx"],
+			"rules": { "no-restricted-imports": "off" }
 		},
 		{
 			// SPA source only. E2E and build tooling may use globals that do not belong in a bundled module.

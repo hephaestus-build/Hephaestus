@@ -59,8 +59,13 @@ export function usePracticeFeedbackModeMutations(workspaceSlug: string) {
 
 	const setPracticeFeedbackMode = useMutation({
 		...filedUnder(practiceMutationKey, setPracticeFeedbackModeMutation()),
-		onError: (error) =>
-			toast.error("We could not change the practice", { description: problemDetailOf(error) }),
+		// A bulk write reports once, in its summary: a failure stays until it is closed, so one message per
+		// practice would leave a pile to close.
+		onError: (error) => {
+			if (!bulkRunning.current) {
+				toast.error("We could not change the practice", { description: problemDetailOf(error) });
+			}
+		},
 		// Bulk writes share one final refetch instead of refetching after each member write.
 		onSettled: () => {
 			if (!bulkRunning.current) {

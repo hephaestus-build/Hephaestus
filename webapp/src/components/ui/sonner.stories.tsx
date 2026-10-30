@@ -2,23 +2,20 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, userEvent, waitFor } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
 import { toast } from "@/lib/toast";
 
 /**
- * A short message about a write that just settled. The preview mounts the `Toaster`, as `__root.tsx`
- * does for the app, so each story raises a toast from a button. Every toast has a close button. A
- * failure, and a toast that offers Undo, stays until the reader closes it; a plain success leaves
- * after a few seconds.
+ * How messages behave. The preview mounts the `Toaster`, as `__root.tsx` does for the app, so each
+ * story raises messages from a button and has no Controls. A failure, and a message that offers Undo,
+ * stays until the reader closes it. A plain success leaves after a few seconds.
  */
 const meta = {
-	component: Toaster,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
 	beforeEach: () => () => {
 		toast.dismiss();
 	},
-} satisfies Meta<typeof Toaster>;
+} satisfies Meta;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -104,5 +101,48 @@ export const Success: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Save" }));
 		await screen.findByText("Budget saved");
 		screen.getByRole("button", { name: "Close message" });
+	},
+};
+
+/**
+ * Alt+T moves focus from the page to the messages, and Tab walks through them. Closing one with Enter
+ * keeps focus among the others. Closing the last one returns focus to where the reader was.
+ */
+export const KeyboardDismiss: Story = {
+	render: () => (
+		<Button
+			onClick={() => {
+				toast.error("We could not save the budget");
+				toast.error("We could not save the cap");
+			}}
+		>
+			Save
+		</Button>
+	),
+	play: async ({ canvas }) => {
+		const save = canvas.getByRole("button", { name: "Save" });
+		save.focus();
+		await userEvent.keyboard("{Enter}");
+		await screen.findByText("We could not save the budget");
+		const messages = screen.getByRole("region", { name: /^Notifications/u });
+
+		await userEvent.keyboard("{Alt>}t{/Alt}");
+		await expect(messages.contains(document.activeElement)).toBe(true);
+		await userEvent.tab();
+		await userEvent.tab();
+		await expect(document.activeElement).toHaveAccessibleName("Close message");
+		await userEvent.keyboard("{Enter}");
+		await waitFor(async () =>
+			expect(messages.querySelectorAll("[data-sonner-toast]")).toHaveLength(1),
+		);
+		await expect(messages.contains(document.activeElement)).toBe(true);
+
+		await userEvent.tab();
+		await userEvent.tab();
+		await expect(document.activeElement).toHaveAccessibleName("Close message");
+		await userEvent.keyboard("{Enter}");
+		await waitFor(async () => expect(document.activeElement).toBe(save));
+		await expect(screen.queryByText("We could not save the budget")).toBeNull();
+		await expect(screen.queryByText("We could not save the cap")).toBeNull();
 	},
 };
