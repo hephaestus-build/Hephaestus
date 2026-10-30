@@ -10,7 +10,7 @@ export function UsageGuide() {
 		<ol className="grid gap-3 sm:grid-cols-2">
 			<li className="flex gap-3 rounded-lg border border-border p-3.5">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-					<PanelTopIcon aria-hidden className="size-4 text-mentor" />
+					<PanelTopIcon aria-hidden className="size-4 text-highlight" />
 				</span>
 				<div className="flex min-w-0 flex-col gap-1">
 					<h3 className="text-sm font-medium">On the work itself</h3>
@@ -23,7 +23,7 @@ export function UsageGuide() {
 			</li>
 			<li className="flex gap-3 rounded-lg border border-border p-3.5">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
-					<AppWindowIcon aria-hidden className="size-4 text-mentor" />
+					<AppWindowIcon aria-hidden className="size-4 text-highlight" />
 				</span>
 				<div className="flex min-w-0 flex-col gap-1">
 					<h3 className="text-sm font-medium">You confirm every change</h3>

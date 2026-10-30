@@ -36,7 +36,7 @@ function renderMobileSidebar() {
 				<AppSidebar
 					isAdmin={false}
 					isAppAdmin={false}
-					showMentor
+					showConversation
 					integrationKinds={[]}
 					context="main"
 					workspaces={[workspace]}

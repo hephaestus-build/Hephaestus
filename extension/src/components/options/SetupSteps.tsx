@@ -37,8 +37,8 @@ export function SetupSteps({ current }: SetupStepsProps) {
 							aria-hidden
 							className={cn(
 								"flex size-6 items-center justify-center rounded-full border text-xs font-semibold",
-								done && "border-mentor bg-mentor text-mentor-foreground",
-								active && "border-mentor text-mentor",
+								done && "border-highlight bg-highlight text-highlight-foreground",
+								active && "border-highlight text-highlight",
 								!done && !active && "border-border text-muted-foreground",
 							)}
 						>

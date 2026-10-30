@@ -1,7 +1,7 @@
 import { ShieldCheckIcon } from "lucide-react";
 import { useId } from "react";
 
-import { HephMark } from "@/components/brand/HephaestusLogo";
+import { HephaestusLogoMark } from "@/components/brand/HephaestusLogo";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 import { Disclosure } from "~/components/common/Disclosure";
@@ -57,7 +57,7 @@ export function WelcomeCard({
 			className="flex flex-col gap-6 rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-xs sm:p-8"
 		>
 			<div className="flex flex-col gap-3">
-				<HephMark className="size-12" />
+				<HephaestusLogoMark className="size-12" />
 				<h2 id={titleId} className="text-2xl font-semibold tracking-display">
 					Practice reviews, in context
 				</h2>
@@ -71,7 +71,7 @@ export function WelcomeCard({
 			<div className="flex flex-col gap-2">
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 					<Button
-						variant="mentor"
+						variant="highlight"
 						size="lg"
 						disabled={pending !== undefined}
 						aria-describedby={hostedError === undefined ? undefined : hostedErrorId}
@@ -104,7 +104,7 @@ export function WelcomeCard({
 				</div>
 			)}
 			<div className="flex gap-2.5 rounded-lg bg-muted/60 p-3.5 text-sm text-muted-foreground">
-				<ShieldCheckIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-mentor" />
+				<ShieldCheckIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-highlight" />
 				<p>
 					On the sites you allow, the extension sends the address of each pull request, merge
 					request or issue to your Hephaestus. It does this when you open the page, to find its

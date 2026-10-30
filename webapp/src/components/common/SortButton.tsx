@@ -63,7 +63,7 @@ export function SortButton({
 			<SortIcon
 				className={cn(
 					"size-3.5 shrink-0",
-					sorted === false ? "opacity-40 group-hover:opacity-70" : "text-mentor",
+					sorted === false ? "opacity-40 group-hover:opacity-70" : "text-highlight",
 				)}
 				aria-hidden
 			/>

@@ -423,8 +423,8 @@ export const ChoiceRequired: Story = {
 		await expect(canvas.queryByText("Not chosen")).toBeNull();
 		const reviews = await openPurpose(canvas, "Practice reviews");
 		await expect(row(reviews, UNCHOSEN_ROW).getByText(/no one uses it now/u)).toBeVisible();
-		const heph = await openPurpose(canvas, "Conversations");
-		await expect(heph.queryByRole("group", { name: UNCHOSEN_ROW })).toBeNull();
+		const conversations = await openPurpose(canvas, "Conversations");
+		await expect(conversations.queryByRole("group", { name: UNCHOSEN_ROW })).toBeNull();
 	},
 };
 
@@ -627,9 +627,9 @@ export const Saving: Story = {
 		await expect(
 			row(reviews, "Cloud").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
-		const heph = await openPurpose(canvas, "Conversations");
+		const conversations = await openPurpose(canvas, "Conversations");
 		await expect(
-			row(heph, "In-house").getByRole("button", { name: /^Save assignment/u }),
+			row(conversations, "In-house").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
 	},
 };
@@ -673,10 +673,10 @@ export const AdvancedDisclosure: Story = {
 		const reviews = row(await openPurpose(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(reviews);
 		await expect(reviews.getByLabelText(/^Max concurrent runs/u)).toHaveValue(3);
-		const mentor = row(await openPurpose(canvas, "Conversations"), "In-house");
-		await openAdvanced(mentor);
-		await expect(mentor.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
-		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
+		const conversations = row(await openPurpose(canvas, "Conversations"), "In-house");
+		await openAdvanced(conversations);
+		await expect(conversations.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
+		await expect(conversations.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
 		await expect(
 			row(await openPurpose(canvas, "Embedding model"), "In-house").queryByRole("button", {
 				name: /^Advanced/u,

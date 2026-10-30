@@ -121,7 +121,7 @@ export interface MemberAiChoiceFact {
 	tone: "pro" | "caveat" | "con" | "none";
 	text: string;
 	/** The words for one workspace that has no conversation model ready, where `text` would promise Hephaestus. */
-	withoutHeph?: string;
+	withoutConversation?: string;
 }
 
 export interface MemberAiChoiceDef extends StatusDef {
@@ -139,7 +139,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 			"AI help": {
 				tone: "pro",
 				text: "Feedback and conversations",
-				withoutHeph: "Practice feedback where set up",
+				withoutConversation: "Practice feedback where set up",
 			},
 			Models: { tone: "pro", text: "Only in-house models" },
 			"Sent to": { tone: "pro", text: "Only your organization" },
@@ -155,7 +155,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 			"AI help": {
 				tone: "pro",
 				text: "Feedback and conversations",
-				withoutHeph: "Practice feedback where set up",
+				withoutConversation: "Practice feedback where set up",
 			},
 			Models: { tone: "pro", text: "In-house and cloud models" },
 			"Sent to": { tone: "caveat", text: "Your organization or a cloud provider" },

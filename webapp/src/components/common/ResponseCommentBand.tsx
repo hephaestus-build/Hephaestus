@@ -18,7 +18,7 @@ export interface ResponseCommentBandProps {
 	placeholder: string;
 	/** A required sentence: Send does nothing until one is typed, and the field says so. */
 	required?: boolean;
-	/** Who else reads the sentence, said under the field before it is sent; nothing when only the reader and Heph do. */
+	/** Who else reads the sentence, said under the field before it is sent; nothing when only the reader and Hephaestus do. */
 	audience?: string;
 	/** Any write is in flight, so every control waits. */
 	isPending?: boolean;
@@ -83,7 +83,7 @@ export function ResponseCommentBand({
 				>
 					Skip
 				</Button>
-				<Button variant="mentor" type="submit" disabled={isPending}>
+				<Button variant="highlight" type="submit" disabled={isPending}>
 					{sending && <Spinner />}
 					{sending ? "Sending…" : "Send"}
 				</Button>

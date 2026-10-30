@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-import { HEPH_LABEL } from "@/components/brand/HephIcon";
+import { ASK_HEPHAESTUS_LABEL } from "@/components/brand/HephaestusMark";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import {
 	groups,
@@ -79,7 +79,7 @@ export const Default: Story = {
 		await expect(
 			precedes(canvas.getByRole("heading", { level: 1, name: "Practice profile" }), firstSection),
 		).toBe(true);
-		await expect(canvas.queryByRole("img", { name: HEPH_LABEL })).toBeNull();
+		await expect(canvas.queryByRole("img", { name: ASK_HEPHAESTUS_LABEL })).toBeNull();
 		await expect(canvas.queryByText("What changed")).toBeNull();
 		// A card's practice pill opens the practice's level on its default tab; its "Learn more" asks
 		// for the Guide tab, where the practice is explained.
@@ -162,7 +162,7 @@ export const ColdStart: Story = {
 		).toBeVisible();
 		await expect(canvas.queryByRole("article")).toBeNull();
 		await expect(canvas.queryByText("Latest review")).toBeNull();
-		await expect(canvas.queryByRole("img", { name: HEPH_LABEL })).toBeNull();
+		await expect(canvas.queryByRole("img", { name: ASK_HEPHAESTUS_LABEL })).toBeNull();
 	},
 };
 

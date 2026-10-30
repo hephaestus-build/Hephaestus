@@ -120,7 +120,7 @@ export const scheduledSurvey = {
 export const pausedSurvey = {
 	...adminSurvey,
 	id: "33333333-3333-3333-3333-333333333333",
-	title: "Mentor conversations",
+	title: "Ask Hephaestus answers",
 	active: false,
 	createdAt: daysBefore(10),
 	participation: { invited: 12, responded: 3, declined: 1 },

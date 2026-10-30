@@ -63,7 +63,9 @@ export const Default: Story = {
 		await expect(canvas.getByText("· 40%")).toBeVisible();
 		await expect(canvas.getByText("0 of 0")).toBeVisible();
 
-		await userEvent.click(canvas.getByRole("button", { name: "Actions for Mentor conversations" }));
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Actions for Ask Hephaestus answers" }),
+		);
 		await userEvent.click(await screen.findByRole("menuitem", { name: "Resume" }));
 		await expect(args.onToggleActive).toHaveBeenCalledWith(pausedSurvey, true);
 		await waitFor(async () => expect(screen.queryByRole("menu")).toBeNull());

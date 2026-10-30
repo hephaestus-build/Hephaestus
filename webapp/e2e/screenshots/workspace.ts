@@ -26,7 +26,7 @@ import type {
 	WorkspaceOnboarding,
 } from "@/api/types.gen";
 import { buildFeedbackModeFixture } from "@/components/admin/practices/practice-feedback-mode/fixtures";
-import { entry } from "@/components/mentor/fixtures";
+import { entry } from "@/components/conversation/fixtures";
 import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";

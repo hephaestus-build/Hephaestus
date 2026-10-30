@@ -80,7 +80,7 @@ function DevSignIn({
 					type="checkbox"
 					checked={admin}
 					onChange={(event) => setAdmin(event.target.checked)}
-					className="size-4 accent-(--mentor)"
+					className="size-4 accent-(--highlight)"
 				/>
 				Instance admin
 			</label>

@@ -40,14 +40,14 @@ function trace(review: Partial<OwnItemTrace["review"]>): OwnItemTrace {
 
 const ready: ReadyContext = {
 	status: "ready",
-	instanceHost: "heph.test",
+	instanceHost: "hephaestus.test",
 	workspace: { slug: "team", displayName: "Team" },
 	alternatives: [],
 	item: ITEM,
 	requestAllowed: true,
 	canInspectReviewDetails: true,
 	trace: trace({}),
-	links: { trace: "https://heph.test/w/team/feedback/1" },
+	links: { trace: "https://hephaestus.test/w/team/feedback/1" },
 	pageUrl: "https://github.com/org/repo/issues/1",
 	view: "overview",
 	fetchedAt: NOW,

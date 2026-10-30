@@ -15,10 +15,13 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await expect(canvas.queryByLabelText(/Web app address/u)).toBeNull();
-		await userEvent.type(canvas.getByLabelText("Hephaestus address"), "https://heph.example.test");
+		await userEvent.type(
+			canvas.getByLabelText("Hephaestus address"),
+			"https://hephaestus.example.test",
+		);
 		await userEvent.click(canvas.getByRole("button", { name: "Connect instance" }));
 		await expect(args.onConnect).toHaveBeenCalledWith({
-			origin: "https://heph.example.test",
+			origin: "https://hephaestus.example.test",
 			webAppOrigin: undefined,
 		});
 	},

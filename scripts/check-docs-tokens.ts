@@ -23,8 +23,8 @@ interface CopiedToken {
 
 const COPIED_TOKENS: CopiedToken[] = [
 	{ infima: "--ifm-global-radius", app: "--radius", docsTheme: "light" },
-	{ infima: "--ifm-color-primary", app: "--mentor", docsTheme: "light" },
-	{ infima: "--ifm-color-primary", app: "--mentor", docsTheme: "dark" },
+	{ infima: "--ifm-color-primary", app: "--highlight", docsTheme: "light" },
+	{ infima: "--ifm-color-primary", app: "--highlight", docsTheme: "dark" },
 	{ infima: "--ifm-color-emphasis-100", app: "--muted", docsTheme: "light" },
 	{ infima: "--ifm-color-emphasis-200", app: "--border", docsTheme: "light" },
 	{ infima: "--ifm-color-emphasis-700", app: "--muted-foreground", docsTheme: "light" },
@@ -32,10 +32,10 @@ const COPIED_TOKENS: CopiedToken[] = [
 	{ infima: "--ifm-color-emphasis-200", app: "--border", docsTheme: "dark" },
 	{ infima: "--ifm-color-emphasis-700", app: "--muted-foreground", docsTheme: "dark" },
 	{ infima: "--ifm-toc-border-color", app: "--border", docsTheme: "dark" },
-	// White on the dark-mode mentor blue is ~2.6:1, so the dark search hit keeps the light one.
+	// White on the dark-mode highlight blue is ~2.6:1, so the dark search hit keeps the light one.
 	{
 		infima: "--search-local-highlight-color",
-		app: "--mentor",
+		app: "--highlight",
 		docsTheme: "dark",
 		appTheme: "light",
 	},

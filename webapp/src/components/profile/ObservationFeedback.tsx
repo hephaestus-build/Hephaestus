@@ -31,7 +31,7 @@ export interface ObservationFeedbackProps {
  * The block's links in the accent and underlined at rest, so the way to the feedback reads as a
  * link before a hover, as the guide's outbound links do.
  */
-const LINK_AT_REST = "text-mentor underline";
+const LINK_AT_REST = "text-highlight underline";
 
 /** The feedback card's edge, so the feedback an observation gave reads as the card it became. */
 const FEEDBACK_BOX = "rounded-xl border border-foreground/15 bg-background p-3 shadow-sm";

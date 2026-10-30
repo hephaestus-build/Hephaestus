@@ -44,8 +44,8 @@ export interface AiChoiceCardsProps {
 	workspace?: {
 		name: string;
 		models: Partial<Record<MemberAiChoice, readonly WorkspaceAiModel[]>>;
-		/** A Heph model is ready here under some answer; without one, no card promises Heph. */
-		mentorSetUp: boolean;
+		/** A conversation model is ready here under some answer; without one, no card promises Hephaestus. */
+		conversationSetUp: boolean;
 	};
 }
 
@@ -85,7 +85,7 @@ export function AiChoiceCards({ choice, saved, onChoice, workspace }: AiChoiceCa
 									"inline-flex size-10 shrink-0 items-center justify-center rounded-lg",
 									ceiling === null
 										? "bg-muted-foreground/10 text-muted-foreground"
-										: "bg-mentor/10 text-mentor",
+										: "bg-highlight/10 text-highlight",
 								)}
 							>
 								<Icon aria-hidden="true" className="size-5" />
@@ -108,7 +108,9 @@ export function AiChoiceCards({ choice, saved, onChoice, workspace }: AiChoiceCa
 							const fact = facts[dimension];
 							const { tone } = fact;
 							const text =
-								workspace?.mentorSetUp === false ? (fact.withoutHeph ?? fact.text) : fact.text;
+								workspace?.conversationSetUp === false
+									? (fact.withoutConversation ?? fact.text)
+									: fact.text;
 							const { icon: ToneIcon, className } = TONES[tone];
 							return (
 								<span

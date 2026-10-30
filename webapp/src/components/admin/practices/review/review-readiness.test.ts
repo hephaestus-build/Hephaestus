@@ -41,7 +41,7 @@ describe("workspace review model readiness", () => {
 		expect(availableReviewBinding([cloud, inHouse])).toBe(inHouse);
 	});
 
-	it("does not mistake a ready mentor assignment for a practice-review model", () => {
+	it("does not mistake a ready conversation assignment for a practice-review model", () => {
 		expect(
 			availableReviewBinding([
 				{

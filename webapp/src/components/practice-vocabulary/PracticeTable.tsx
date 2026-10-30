@@ -341,7 +341,7 @@ export const ROW_ACTIONS_RULE =
  * screen reader hears and what the eye sees are one fact.
  */
 export const OPEN_ROW_BAR =
-	"relative before:absolute before:inset-y-0 before:left-0 before:w-0.5 group-data-[state=open]/row:before:bg-mentor group-aria-[current=true]/row:before:bg-mentor group-has-[[data-row-link][aria-current=page]]/row:before:bg-mentor";
+	"relative before:absolute before:inset-y-0 before:left-0 before:w-0.5 group-data-[state=open]/row:before:bg-highlight group-aria-[current=true]/row:before:bg-highlight group-has-[[data-row-link][aria-current=page]]/row:before:bg-highlight";
 
 /**
  * A row whose "Open …" link at its end is the keyboard path and whose whole surface is the pointer
@@ -480,7 +480,7 @@ export function SubjectCell({
  * and an underline while the row (`group/row`) is hovered, with its arrow after the words.
  */
 export const ROW_LINK_CLASS = cn(
-	"inline-flex items-center gap-1 font-medium whitespace-nowrap group-hover/row:text-mentor group-hover/row:underline",
+	"inline-flex items-center gap-1 font-medium whitespace-nowrap group-hover/row:text-highlight group-hover/row:underline",
 	ROW_CONTROL_FOCUS,
 );
 

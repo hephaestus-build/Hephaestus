@@ -41,7 +41,7 @@ export interface DetailPathProps extends LevelPath {
  *
  * The breadcrumb primitive's list, without its `nav`: covered levels stay in the accessibility
  * tree, and two landmarks with the same name would be one too many. Its link is not used either,
- * since it paints its own hover where the house link rule wants mentor blue.
+ * since it paints its own hover where the house link rule wants highlight blue.
  */
 export function DetailPath({ behind, current, onClose, className }: DetailPathProps) {
 	return (

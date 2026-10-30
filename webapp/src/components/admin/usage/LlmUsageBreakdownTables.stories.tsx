@@ -99,9 +99,9 @@ export const ByJobType: Story = {
 				.filter((header) => header.getAttribute("colspan") === "2")
 				.map((header) => header.textContent),
 		).toStrictEqual(["Shared models", "Own provider"]);
-		const heph = table.getByRole("row", { name: /^Conversation answer/u });
+		const conversations = table.getByRole("row", { name: /^Conversation answer/u });
 		await expect(
-			within(heph)
+			within(conversations)
 				.getAllByRole("cell")
 				.slice(1, 7)
 				.map((cell) => cell.textContent),

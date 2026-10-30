@@ -7,13 +7,13 @@ import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { HephaestusSays } from "@/components/conversation/HephaestusSays";
 import { AI_CONNECTION_PLATFORM_META } from "@/components/icons/ai-connection-platform-logos";
 import { AI_MODEL_BRAND_META } from "@/components/icons/ai-model-brand-logos";
 import { AiMark } from "@/components/icons/AiMark";
 import { getProviderIcon } from "@/components/icons/integration-provider-icons";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
-import { HephSays } from "@/components/mentor/HephSays";
 import {
 	type MemberAiChoice,
 	memberAiChoiceTitle,
@@ -101,7 +101,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 		requiredSatisfied,
 		canSubmit,
 		coverage,
-		mentorSetUp,
+		conversationSetUp,
 		heading,
 		intro,
 		hint,
@@ -167,8 +167,8 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 					<header className="space-y-4">
 						<h1 className="text-2xl font-semibold tracking-tight break-words">{heading}</h1>
 						{/* Hephaestus speaks only where a conversation model is ready; until that is known, the page does. */}
-						{mentorSetUp ? (
-							<HephSays intro={intro} narration={narration} />
+						{conversationSetUp ? (
+							<HephaestusSays intro={intro} narration={narration} />
 						) : (
 							<div>
 								<p>{intro}</p>
@@ -211,7 +211,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									</span>
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
-									{mentorSetUp
+									{conversationSetUp
 										? "Hephaestus reviews your work against your team’s practices and talks it through with you."
 										: "Hephaestus can review your work against your team’s practices where set up."}{" "}
 									Choose which AI may do that. Cloud also allows in-house models. What Hephaestus
@@ -227,7 +227,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 											models: Object.fromEntries(
 												state.data.aiOptions.map((option) => [option.choice, option.models]),
 											),
-											mentorSetUp,
+											conversationSetUp,
 										}}
 									/>
 								</fieldset>
@@ -240,7 +240,10 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								)}
 								{hasText(coverage?.sentence) && (
 									<p className="flex items-start gap-2 text-sm text-muted-foreground">
-										<InfoIcon className="mt-0.5 size-4 shrink-0 text-mentor" aria-hidden="true" />
+										<InfoIcon
+											className="mt-0.5 size-4 shrink-0 text-highlight"
+											aria-hidden="true"
+										/>
 										{coverage.sentence}
 									</p>
 								)}
@@ -484,13 +487,13 @@ function memberSetupState(
 	const models = data?.aiOptions.find((option) => option.choice === choice)?.models ?? [];
 	const workspaceName = data?.workspaceName ?? "this workspace";
 	// Whether any choice would bring Hephaestus here, so the question names it.
-	const mentorSetUp = data?.aiOptions.some((option) => option.mentorReady) === true;
+	const conversationSetUp = data?.aiOptions.some((option) => option.mentorReady) === true;
 	let intro = "Your answer controls future AI requests across all your workspaces.";
 	if (firstVisit) {
-		intro = mentorSetUp
+		intro = conversationSetUp
 			? `Before you start in ${workspaceName}, one question. Your answer controls future AI requests for practice reviews and conversations across all your workspaces.`
 			: `Before you start in ${workspaceName}, one question. ${intro}`;
-	} else if (mentorSetUp) {
+	} else if (conversationSetUp) {
 		intro = `Your answer controls future AI requests for practice reviews and conversations in ${workspaceName}, and holds in all your workspaces.`;
 	}
 	let hint: string | undefined;
@@ -517,7 +520,7 @@ function memberSetupState(
 		requiredSatisfied,
 		canSubmit,
 		coverage,
-		mentorSetUp,
+		conversationSetUp,
 		heading,
 		intro,
 		hint,

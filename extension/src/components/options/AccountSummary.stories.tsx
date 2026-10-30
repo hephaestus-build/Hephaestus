@@ -9,7 +9,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		account: { displayName: "Ada Lovelace", username: "ada", instanceAdmin: false },
-		instanceHost: "heph.example.test",
+		instanceHost: "hephaestus.example.test",
 		signingOut: false,
 		onSignOut: fn(),
 	},

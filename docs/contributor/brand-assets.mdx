@@ -5,11 +5,11 @@ title: Brand assets
 # Brand assets
 
 Hephaestus uses the solid signal-blue Hephaestus mark for product identity. The bare, animated Hephaestus drawing
-is reserved for the mentor persona.
+is reserved for Ask Hephaestus.
 
 ## Source and generation
 
-`webapp/brand/hephaestus-mark.svg` is the source for the static mark. The React `HephMark` renders
+`webapp/brand/hephaestus-mark.svg` is the source for the static mark. The React `HephaestusLogoMark` renders
 that file directly. One exporter produces every tracked browser, app, documentation, README,
 social-card, and external-profile asset. It embeds the pinned Inter font so raster output does not
 depend on fonts installed on a contributor's computer:
@@ -56,8 +56,8 @@ favicons, and maskable icons keep their platform-appropriate spacing.
 
 | Context                                                   | Asset                                                                 |
 | --------------------------------------------------------- | --------------------------------------------------------------------- |
-| In-app product lockup                                     | `HephaestusLogo` or `HephMark`                                        |
-| Mentor conversation                                       | `HephIcon`                                                            |
+| In-app product lockup                                     | `HephaestusLogo` or `HephaestusLogoMark`                                        |
+| Ask Hephaestus                                            | `HephaestusMark`                                                      |
 | README and documentation navbar                           | Light/dark lockup PNGs                                                |
 | Browser tab                                               | `favicon.png`                                                         |
 | Installed web app                                         | 192px, 512px, and maskable PNGs from `webapp/public/manifest.json`    |

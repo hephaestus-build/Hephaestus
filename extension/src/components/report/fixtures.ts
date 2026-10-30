@@ -2,7 +2,7 @@ import type { ItemRef, OwnItemTrace } from "~/api/types.gen";
 import type { ReadyContext, ResultPage, ResultRow, WorkFeedback } from "~/shared/review-context";
 import { minutesBefore } from "~/stories/story-clock";
 
-export const WEB_APP = "https://heph.example.test";
+export const WEB_APP = "https://hephaestus.example.test";
 
 const GITLAB_ITEM = {
 	id: "4009",
@@ -41,7 +41,7 @@ export const OWN_TRACE: OwnItemTrace = {
 
 export const READY: ReadyContext = {
 	status: "ready",
-	instanceHost: "heph.example.test",
+	instanceHost: "hephaestus.example.test",
 	workspace: { slug: "intro-course", displayName: "Intro Course 2026" },
 	alternatives: [],
 	item: GITLAB_ITEM,

@@ -42,7 +42,7 @@ export function ExternalLink({
 				button === undefined
 					? cn(
 							"inline-flex items-center gap-1 rounded-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50",
-							tone === "link" ? "text-link" : "hover:text-mentor",
+							tone === "link" ? "text-link" : "hover:text-highlight",
 						)
 					: buttonClasses(button.variant ?? "outline", button.size),
 				className,

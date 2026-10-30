@@ -12,7 +12,7 @@ export function StepMarker({ icon: Icon, done }: { icon: LucideIcon; done: boole
 			aria-hidden="true"
 			className={cn(
 				"inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors [&_svg]:size-4",
-				done ? "bg-mentor text-mentor-foreground" : "bg-mentor/10 text-mentor",
+				done ? "bg-highlight text-highlight-foreground" : "bg-highlight/10 text-highlight",
 			)}
 		>
 			{done ? <CheckIcon /> : <Icon />}

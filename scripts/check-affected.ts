@@ -75,7 +75,7 @@ const serverInputsOfTheWebapp = [
 ];
 
 // The docs page the server packages into its jar (`processResources` in `server/application/build.gradle.kts`):
-// the composers and Heph read its feedback writing guide. Keep in step with the server filters in `cicd.yml`.
+// the composers and Hephaestus read its feedback writing guide. Keep in step with the server filters in `cicd.yml`.
 export const FEEDBACK_WRITING_GUIDE = "docs/contributor/practice-feedback-language.md";
 
 // Server resources the tooling tests judge (`practice-catalog-schema.test.ts`, `practice-guidance.test.ts`).

@@ -23,7 +23,7 @@ export const isOpenFeedback = (state: FeedbackState): boolean =>
 export interface FeedbackStateDef extends StatusDef {
 	/**
 	 * The badge's colour where the palette gives the state one beyond its variant: a new card is
-	 * the one thing on the page the eye should land on, so its badge wears the mentor accent
+	 * the one thing on the page the eye should land on, so its badge wears the highlight accent
 	 * (`webapp/DESIGN.md` § Practice surfaces palette).
 	 */
 	className?: string;
@@ -36,7 +36,7 @@ export const FEEDBACK_STATE_DEFS: Record<FeedbackState, FeedbackStateDef> = {
 		label: "New",
 		icon: SparkleIcon,
 		badgeVariant: "outline",
-		className: "border-mentor/35 text-mentor",
+		className: "border-highlight/35 text-highlight",
 		description: "Feedback you have not opened yet.",
 	},
 	open: {

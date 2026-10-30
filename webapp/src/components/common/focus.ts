@@ -26,4 +26,4 @@ export const HIT_AREA_24 = "relative before:absolute before:-inset-1 before:cont
  * focus alike, in the accent that the practice surfaces palette gives a link on focus.
  */
 export const ROW_CONTROL_FOCUS =
-	"outline-none focus-visible:ring-2 focus-visible:ring-mentor focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+	"outline-none focus-visible:ring-2 focus-visible:ring-highlight focus-visible:ring-offset-2 focus-visible:ring-offset-background";

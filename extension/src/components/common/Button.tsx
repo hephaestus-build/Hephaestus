@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { cn } from "cn";
 
-export type ButtonVariant = "default" | "outline" | "ghost" | "destructive-outline" | "mentor";
+export type ButtonVariant = "default" | "outline" | "ghost" | "destructive-outline" | "highlight";
 export type ButtonSize = "default" | "sm" | "lg" | "icon";
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
@@ -11,7 +11,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 	ghost: "hover:bg-muted",
 	"destructive-outline":
 		"border-destructive/30 bg-background text-destructive hover:bg-destructive/10",
-	mentor: "bg-mentor text-mentor-foreground shadow-xs hover:bg-mentor/90",
+	highlight: "bg-highlight text-highlight-foreground shadow-xs hover:bg-highlight/90",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

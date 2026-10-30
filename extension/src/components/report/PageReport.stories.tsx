@@ -105,8 +105,8 @@ export const OneHeightInEveryState: Story = {
 		const states: Partial<PageReportProps>[] = [
 			{ state: { status: "loading" } },
 			{ state: { status: "failed", message: "We could not reach Hephaestus." } },
-			{ state: { status: "signed-out", instanceHost: "heph.example.test" } },
-			{ state: { status: "not-found", instanceHost: "heph.example.test", workLabel: "!1" } },
+			{ state: { status: "signed-out", instanceHost: "hephaestus.example.test" } },
+			{ state: { status: "not-found", instanceHost: "hephaestus.example.test", workLabel: "!1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
 			{ feedback: { status: "error", message: "We could not load." } },
 			{ activity: "RUNNING" },

@@ -7,7 +7,7 @@ const TILE = {
 	md: "size-8 rounded-md",
 };
 
-/** Pixels, because Heph's mark takes its size from a number, not from a class. */
+/** Pixels, because Hephaestus's mark takes its size from a number, not from a class. */
 const GLYPH = { sm: 14, md: 16 };
 
 export interface ModelKindMarkProps {

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, waitFor } from "storybook/test";
 
-import { HephMark, HephaestusLogo, HephaestusWordmark } from "./HephaestusLogo";
+import { HephaestusLogoMark, HephaestusLogo, HephaestusWordmark } from "./HephaestusLogo";
 
 const meta = {
 	component: HephaestusLogo,
@@ -43,7 +43,7 @@ export const PlatformFit: Story = {
 			].map(({ label, shape }) => (
 				<div key={label} className="text-center">
 					<div className={`mx-auto overflow-hidden ${shape}`}>
-						<HephMark className="size-full" />
+						<HephaestusLogoMark className="size-full" />
 					</div>
 					<p className="mt-3 text-xs text-muted-foreground">{label}</p>
 				</div>
@@ -64,7 +64,7 @@ export const MarkScale: Story = {
 			].map(({ size, className }) => (
 				<div key={size} className="text-center">
 					<span className={`mx-auto block ${className}`}>
-						<HephMark className="size-full" />
+						<HephaestusLogoMark className="size-full" />
 					</span>
 					<p className="mt-2 text-xs text-muted-foreground">{size}px</p>
 				</div>

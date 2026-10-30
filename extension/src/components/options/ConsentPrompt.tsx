@@ -37,7 +37,7 @@ export function ConsentPrompt({
 					<ExternalLink
 						href={webAppOrigin}
 						allowedOrigin={webAppOrigin}
-						button={{ variant: "mentor" }}
+						button={{ variant: "highlight" }}
 					>
 						Open Hephaestus
 					</ExternalLink>

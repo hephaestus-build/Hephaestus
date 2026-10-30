@@ -2,7 +2,7 @@ import { CircleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import { HephMark } from "@/components/brand/HephaestusLogo";
+import { HephaestusLogoMark } from "@/components/brand/HephaestusLogo";
 import { ExternalLink } from "~/components/common/ExternalLink";
 import { where } from "~/components/report/comment-location";
 import { PageLink } from "~/components/report/PageLink";
@@ -169,7 +169,7 @@ export function RowPreview({
 					)}
 				/>
 			) : (
-				<HephMark className="size-3.5" />
+				<HephaestusLogoMark className="size-3.5" />
 			)}
 			<p role="status" className="m-0 min-w-0 shrink truncate" title={stale?.message}>
 				<span className="sr-only">Practice review: </span>

@@ -9,12 +9,12 @@ const PRACTICE_SVG_THEME = [
 	"[&_.pv-fill-ink]:fill-foreground",
 	"[&_.pv-fill-muted]:fill-muted-foreground",
 	"[&_.pv-fill-surface]:fill-card",
-	"[&_.pv-fill-accent]:fill-mentor",
-	"[&_.pv-fill-accent-soft]:fill-mentor/15",
+	"[&_.pv-fill-accent]:fill-highlight",
+	"[&_.pv-fill-accent-soft]:fill-highlight/15",
 	"[&_.pv-stroke-ink]:stroke-foreground",
 	"[&_.pv-stroke-muted]:stroke-muted-foreground",
 	"[&_.pv-stroke-line]:stroke-border",
-	"[&_.pv-stroke-accent]:stroke-mentor",
+	"[&_.pv-stroke-accent]:stroke-highlight",
 ];
 
 /**

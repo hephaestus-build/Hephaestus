@@ -28,9 +28,9 @@ describe("readCallback", () => {
 
 describe("signInUrl", () => {
 	const instance = {
-		origin: "https://heph.example.test",
-		apiBase: "https://heph.example.test/api",
-		webAppOrigin: "https://heph.example.test",
+		origin: "https://hephaestus.example.test",
+		apiBase: "https://hephaestus.example.test/api",
+		webAppOrigin: "https://hephaestus.example.test",
 	};
 	const params = { clientId: "id", redirectUri: REDIRECT, challenge: "c", state: "s" };
 
@@ -38,7 +38,7 @@ describe("signInUrl", () => {
 		const url = new URL(
 			signInUrl(instance, { kind: "provider", registrationId: "gitlab-lrz" }, params),
 		);
-		expect(url.origin + url.pathname).toBe("https://heph.example.test/api/auth/login");
+		expect(url.origin + url.pathname).toBe("https://hephaestus.example.test/api/auth/login");
 		expect(Object.fromEntries(url.searchParams)).toStrictEqual({
 			provider: "gitlab-lrz",
 			mode: "client",

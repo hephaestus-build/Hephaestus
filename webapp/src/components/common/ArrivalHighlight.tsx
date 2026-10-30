@@ -9,7 +9,7 @@ export const ARRIVAL_STILL_MS = 2000;
 
 /**
  * A one-time sheen over what a link arrived at, such as the feedback card an observation points
- * to: a band of the new card's mentor wash sweeps once diagonally from the top left to the bottom
+ * to: a band of the new card's highlight wash sweeps once diagonally from the top left to the bottom
  * right, then the highlight leaves the page as it was. No pulse and no repeat. Under reduced motion
  * nothing moves: a still wash stays for {@link ARRIVAL_STILL_MS}, then goes. Place it as the first
  * child of a `relative` box; it takes the box's rounding and lets every press through.
@@ -59,12 +59,12 @@ export function ArrivalHighlight({ onDone }: { onDone?: () => void }) {
 			className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-[inherit]"
 		>
 			{still ? (
-				<span className="absolute inset-0 bg-mentor/10" />
+				<span className="absolute inset-0 bg-highlight/10" />
 			) : (
 				<span
 					ref={band}
 					data-arrival-sheen=""
-					className="absolute inset-y-0 left-0 w-1/2 bg-linear-to-r from-transparent via-mentor/15 to-transparent"
+					className="absolute inset-y-0 left-0 w-1/2 bg-linear-to-r from-transparent via-highlight/15 to-transparent"
 				/>
 			)}
 		</span>

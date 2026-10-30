@@ -112,7 +112,7 @@ is the shape that survives: spread `{...args}`, call the spy, patch only the pro
 ## Dimension 5 — Which states does the file actually show?
 
 - **D** — One story, no play, for a component with branches
-  (`webapp/src/components/admin/teams/TeamTree.stories.tsx` and `.../mentor/Greeting.stories.tsx` are
+  (`webapp/src/components/admin/teams/TeamTree.stories.tsx` and `.../conversation/Greeting.stories.tsx` are
   the shape).
 - **C** — Default + each `variant` enum value.
 - **B** — C plus every branch of the component's own state union.

@@ -1,9 +1,9 @@
-import { HephMark, HephaestusWordmark } from "@/components/brand/HephaestusLogo";
+import { HephaestusLogoMark, HephaestusWordmark } from "@/components/brand/HephaestusLogo";
 
 export function AboutHeroSection() {
 	return (
 		<section aria-labelledby="about-hero-heading" className="space-y-6 py-4 text-center">
-			<HephMark className="mx-auto size-16" />
+			<HephaestusLogoMark className="mx-auto size-16" />
 
 			<h1 id="about-hero-heading" className="text-4xl font-bold tracking-display sm:text-5xl">
 				About <HephaestusWordmark />

@@ -1,7 +1,7 @@
 import { ServerIcon } from "lucide-react";
 import { useState } from "react";
 
-import { HephMark } from "@/components/brand/HephaestusLogo";
+import { HephaestusLogoMark } from "@/components/brand/HephaestusLogo";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 
@@ -24,7 +24,7 @@ export function InstanceCard({ host, hosted, disconnecting, onDisconnect }: Inst
 		<div className="flex flex-col gap-3">
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 				{hosted ? (
-					<HephMark className="size-8" />
+					<HephaestusLogoMark className="size-8" />
 				) : (
 					<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted">
 						<ServerIcon aria-hidden className="size-4 text-muted-foreground" />

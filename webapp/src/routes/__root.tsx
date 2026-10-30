@@ -78,7 +78,7 @@ import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
-import { isMentorOutOfReach } from "@/lib/mentor-preference";
+import { isConversationOutOfReach } from "@/lib/conversation-availability";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState } from "@/lib/search-params";
@@ -89,10 +89,10 @@ import { FeatureFlagDevTools } from "@/runtime/feature-flags/FeatureFlagDevTools
 import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
-import { isHephPanelExcludedRoute } from "./-heph-panel-route";
-import { showHephUnavailable } from "./-heph-unavailable";
+import { isConversationPanelExcludedRoute } from "./-conversation-panel-route";
+import { showConversationUnavailable } from "./-conversation-unavailable";
 
-const GlobalHephPanel = lazy(async () => import("./-GlobalHephPanel"));
+const GlobalConversationPanel = lazy(async () => import("./-GlobalConversationPanel"));
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -119,8 +119,8 @@ function RootLayout() {
 		},
 	});
 	const { isAuthenticated, isLoading, userView } = useAuth();
-	const showHephPanel =
-		!userView && !isLoading && isAuthenticated && !isHephPanelExcludedRoute(pathname);
+	const showConversationPanel =
+		!userView && !isLoading && isAuthenticated && !isConversationPanelExcludedRoute(pathname);
 
 	if (surface === "auth") {
 		return (
@@ -187,14 +187,14 @@ function RootLayout() {
 			<Toaster />
 			<PublicLoginOverlay />
 			{userView && <UserViewConfirmAccess />}
-			{showHephPanel && (
+			{showConversationPanel && (
 				<CatchBoundary
 					getResetKey={() => 0}
-					onCatch={() => showHephUnavailable({ again: false })}
-					errorComponent={HephPanelUnavailable}
+					onCatch={() => showConversationUnavailable({ again: false })}
+					errorComponent={ConversationPanelUnavailable}
 				>
 					<Suspense fallback={null}>
-						<GlobalHephPanel />
+						<GlobalConversationPanel />
 					</Suspense>
 				</CatchBoundary>
 			)}
@@ -206,9 +206,9 @@ function RootLayout() {
 /**
  * The panel's code did not load, often a file replaced by a deploy. `React.lazy` keeps that failure,
  * so the toast from `onCatch` offers a page load, not a retry. A panel that fails after it loaded
- * has its own boundary, in `-GlobalHephPanel.tsx`.
+ * has its own boundary, in `-GlobalConversationPanel.tsx`.
  */
-function HephPanelUnavailable() {
+function ConversationPanelUnavailable() {
 	return null;
 }
 
@@ -603,14 +603,15 @@ function AppSidebarContainer() {
 
 	const isMember = workspaceAccess.role !== undefined;
 	// The server refuses this read in a user view, since it carries the signed-in account's own
-	// choice. A view keeps Heph listed, as before, for the viewed member's saved conversations.
+	// choice. A view keeps Hephaestus listed, as before, for the viewed member's saved conversations.
 	const onboarding = useQuery({
 		...getMemberOnboardingOptions({ path: { workspaceSlug: chromeWorkspaceSlug ?? "" } }),
 		enabled: sidebarContext === "main" && isAuthenticated && isMember && !userView && hasWorkspace,
 	});
-	const showMentor =
+	const showConversation =
 		isMember &&
-		(Boolean(userView) || (onboarding.data !== undefined && !isMentorOutOfReach(onboarding.data)));
+		(Boolean(userView) ||
+			(onboarding.data !== undefined && !isConversationOutOfReach(onboarding.data)));
 
 	if (!isAuthenticated || username === undefined) {
 		return null;
@@ -632,7 +633,7 @@ function AppSidebarContainer() {
 			isAdmin={workspaceAccess.isAdmin}
 			isOwner={workspaceAccess.role === "OWNER"}
 			isAppAdmin={isAppAdmin}
-			showMentor={showMentor}
+			showConversation={showConversation}
 			readOnly={Boolean(userView)}
 			integrationKinds={integrationKinds}
 			awaitingApproval={awaitingApproval}

@@ -13,7 +13,7 @@ import type { FacetOption } from "@/components/common/FacetMultiSelect";
  */
 export interface StatusDef {
 	label: string;
-	/** A provider's own mark where the value names a provider: GitHub, GitLab, Slack, Heph. */
+	/** A provider's own mark where the value names a provider: GitHub, GitLab, Slack, Hephaestus. */
 	icon: LucideIcon | BrandIcon;
 	badgeVariant: BadgeVariant;
 	description: string;

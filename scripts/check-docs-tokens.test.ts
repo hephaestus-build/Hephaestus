@@ -30,12 +30,12 @@ await describe("readTokens", async () => {
 await describe("findDrift", async () => {
 	await test("reports a recoloured app token the docs did not follow", () => {
 		const recoloured = appCss.replace(
-			"--mentor: oklch(0.707 0.165 254.624)",
-			"--mentor: oklch(0.6 0.2 30)",
+			"--highlight: oklch(0.707 0.165 254.624)",
+			"--highlight: oklch(0.6 0.2 30)",
 		);
 		assert.ok(
 			findDrift(docsCss, recoloured).includes(
-				"dark --ifm-color-primary is oklch(0.707 0.165 254.624), but the dark --mentor it copies is oklch(0.6 0.2 30).",
+				"dark --ifm-color-primary is oklch(0.707 0.165 254.624), but the dark --highlight it copies is oklch(0.6 0.2 30).",
 			),
 		);
 	});
