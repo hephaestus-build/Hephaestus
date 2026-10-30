@@ -4,9 +4,11 @@ import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
+import timers from "node:timers/promises";
 import { collectTraces, upload } from "./gateway-run.ts";
 
 function traceManifest(text: string) {
@@ -494,35 +496,34 @@ void test("does not add trace members when the result already occupies the archi
 });
 
 for (const scenario of [
-	{ name: "retries an unfinished upload", responses: [503, 204] },
+	{ name: "uploads and confirms the result", status: 204 },
 	{
 		name: "accepts an already committed result",
-		responses: [409],
+		status: 409,
 		converged: true,
 	},
 	{
 		name: "rejects a non-owning worker conflict",
-		responses: [409],
+		status: 409,
 		expectedError: "Result upload was not confirmed: 409",
 	},
 	{
 		name: "rejects a different admitted result",
-		responses: [409],
+		status: 409,
 		expectedError: "Result upload was not confirmed: 409",
 		wrongDigest: true,
 	},
 	{
 		name: "rejects an unconfirmed successful upload",
-		responses: [204],
+		status: 204,
 		expectedError: "Result upload was not confirmed: 204",
 		wrongDigest: true,
 	},
 	{
 		name: "does not retry a refused archive",
-		responses: [422],
+		status: 422,
 		expectedError: "Result upload refused: 422",
 	},
-	{ name: "retries a disconnected response", responses: [null, 204] },
 ]) {
 	void test(scenario.name, async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "gateway-upload-"));
@@ -540,7 +541,7 @@ for (const scenario of [
 				chunks.push(chunk);
 			});
 			request.on("end", () => {
-				const status = scenario.responses[requests.length];
+				const { status } = scenario;
 				requests.push({
 					method: request.method,
 					authorization: request.headers.authorization,
@@ -549,23 +550,19 @@ for (const scenario of [
 					length: request.headers["content-length"],
 					body: Buffer.concat(chunks),
 				});
-				if (status === null) {
-					request.socket.destroy();
-				} else {
-					response.statusCode = status ?? 500;
-					if (
-						status === 204 ||
-						(status === 409 && ("converged" in scenario || "wrongDigest" in scenario))
-					) {
-						response.setHeader(
-							"ETag",
-							`"${createHash("sha256")
-								.update("wrongDigest" in scenario ? "other" : Buffer.concat(chunks))
-								.digest("hex")}"`,
-						);
-					}
-					response.end();
+				response.statusCode = status;
+				if (
+					status === 204 ||
+					(status === 409 && ("converged" in scenario || "wrongDigest" in scenario))
+				) {
+					response.setHeader(
+						"ETag",
+						`"${createHash("sha256")
+							.update("wrongDigest" in scenario ? "other" : Buffer.concat(chunks))
+							.digest("hex")}"`,
+					);
 				}
+				response.end();
 			});
 		});
 		try {
@@ -585,7 +582,7 @@ for (const scenario of [
 			} else {
 				await uploaded;
 			}
-			assert.equal(requests.length, scenario.responses.length);
+			assert.equal(requests.length, 1);
 			for (const request of requests) {
 				assert.equal(request.method, "POST");
 				assert.equal(request.authorization, "Bearer test-credential");
@@ -607,33 +604,67 @@ for (const scenario of [
 	});
 }
 
-void test("stops retries at the upload deadline", async () => {
-	const directory = await mkdtemp(path.join(tmpdir(), "gateway-deadline-"));
-	const server = createServer((_request, response) => {
-		response.statusCode = 503;
-		response.end();
-	});
-	try {
+for (const scenario of [
+	{ name: "retries an unfinished upload", first: 503, expires: false },
+	{ name: "retries a disconnected response", first: null, expires: false },
+	{ name: "stops retries at the upload deadline", first: 503, expires: true },
+]) {
+	void test(scenario.name, async (context) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "gateway-retry-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
 		const archive = path.join(directory, "result.tar");
-		await writeFile(archive, "test archive");
-		server.listen(0, "127.0.0.1");
-		await once(server, "listening");
-		const address = server.address();
-		assert.ok(address !== null && typeof address !== "string");
-		await assert.rejects(
-			upload(
-				new URL(`http://127.0.0.1:${address.port}/result`),
-				"token",
+		const bytes = Buffer.from("test archive");
+		await writeFile(archive, bytes);
+		const digest = createHash("sha256").update(bytes).digest();
+		const requests: { method: string | undefined; headers: Headers; body: Buffer }[] = [];
+		let now = 0;
+		context.mock.method(Date, "now", () => now);
+		// Advance protocol time at backoff; archive I/O and host scheduling consume no deadline.
+		context.mock.method(timers, "setTimeout", async (delay = 0) => {
+			now += delay;
+		});
+		context.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
+			assert.ok(init?.body instanceof Blob);
+			requests.push({
+				method: init.method,
+				headers: new Headers(init.headers),
+				body: Buffer.from(await init.body.arrayBuffer()),
+			});
+			if (requests.length === 1 || scenario.expires) {
+				if (scenario.first === null) {
+					throw new TypeError("Disconnected response");
+				}
+				return new Response(null, { status: scenario.first });
+			}
+			return new Response(null, { status: 204, headers: { ETag: `"${digest.toString("hex")}"` } });
+		});
+		syncBuiltinESMExports();
+		try {
+			const uploaded = upload(
+				new URL("http://gateway.test/result"),
+				"test-credential",
 				archive,
-				Date.now() + 150,
-			),
-			{ message: "Result upload deadline expired" },
-		);
-	} finally {
-		const closed = once(server, "close");
-		server.close();
-		server.closeAllConnections();
-		await closed;
-		await rm(directory, { recursive: true, force: true });
-	}
-});
+				1000,
+			);
+			if (scenario.expires) {
+				await assert.rejects(uploaded, { message: "Result upload deadline expired" });
+			} else {
+				await uploaded;
+			}
+			assert.equal(requests.length, 2);
+			for (const request of requests) {
+				assert.equal(request.method, "POST");
+				assert.equal(request.headers.get("Authorization"), "Bearer test-credential");
+				assert.equal(request.headers.get("Content-Type"), "application/x-tar");
+				assert.equal(
+					request.headers.get("Content-Digest"),
+					`sha-256=:${digest.toString("base64")}:`,
+				);
+				assert.deepEqual(request.body, bytes);
+			}
+		} finally {
+			context.mock.restoreAll();
+			syncBuiltinESMExports();
+		}
+	});
+}

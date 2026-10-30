@@ -2384,6 +2384,7 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					const budgetMs = stage === "stall" || stage.endsWith("-stall") ? "3600000" : "60000";
+					// The fixture's runner clock excludes the native SDK's startup time.
 					const child = spawnSync(
 						process.execPath,
 						[
@@ -2419,7 +2420,6 @@ if (scenario !== undefined && scenario !== "") {
 								LLM_PROXY_TOKEN: "test-token",
 							},
 							encoding: "utf8",
-							timeout: 10_000,
 						},
 					);
 					assert.equal(child.error, undefined);
