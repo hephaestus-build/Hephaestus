@@ -16,14 +16,8 @@ import java.util.UUID;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
-import liquibase.command.CommandScope;
-import liquibase.command.core.DiffCommandStep;
-import liquibase.command.core.helpers.DbUrlConnectionArgumentsCommandStep;
-import liquibase.command.core.helpers.PreCompareCommandStep;
-import liquibase.command.core.helpers.ReferenceDbUrlConnectionCommandStep;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
-import liquibase.diff.DiffResult;
 import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.Tag;
@@ -129,118 +123,13 @@ class LiquibaseBaselineIntegrationTest {
         update(database, BASELINE, "prod");
     }
 
-    @Tag("slow")
-    @ParameterizedTest
-    @ValueSource(strings = {"dev", "prod"})
-    void shouldMatchArchivedSchemaAndSynchronizeWithoutDdlOrDataLoss(String context) throws Exception {
-        TestDatabase archived = emptyDatabase();
-        TestDatabase baseline = emptyDatabase();
-        update(archived, "db/archive-master.xml", context);
-        update(baseline, BASELINE, context);
-
-        DiffResult diff = Objects.requireNonNull(new CommandScope(DiffCommandStep.COMMAND_NAME)
-                .addArgumentValue(
-                        PreCompareCommandStep.DIFF_TYPES_ARG,
-                        "tables,columns,foreignkeys,indexes,primarykeys,sequences,uniqueconstraints,views")
-                .addArgumentValue(DbUrlConnectionArgumentsCommandStep.URL_ARG, baseline.jdbcUrl())
-                .addArgumentValue(DbUrlConnectionArgumentsCommandStep.USERNAME_ARG, baseline.username())
-                .addArgumentValue(DbUrlConnectionArgumentsCommandStep.PASSWORD_ARG, baseline.password())
-                .addArgumentValue(ReferenceDbUrlConnectionCommandStep.REFERENCE_URL_ARG, archived.jdbcUrl())
-                .addArgumentValue(ReferenceDbUrlConnectionCommandStep.REFERENCE_USERNAME_ARG, archived.username())
-                .addArgumentValue(ReferenceDbUrlConnectionCommandStep.REFERENCE_PASSWORD_ARG, archived.password())
-                .execute()
-                .getResult(DiffCommandStep.DIFF_RESULT));
-        assertThat(diff.getMissingObjects()).as("missing schema objects").isEmpty();
-        assertThat(diff.getUnexpectedObjects()).as("unexpected schema objects").isEmpty();
-        assertThat(diff.getChangedObjects()).as("changed schema objects").isEmpty();
-
-        assertNativeSchemaEqual(archived, baseline, "functions", """
-            SELECT pg_get_functiondef(p.oid) FROM pg_proc p
-            JOIN pg_namespace n ON n.oid = p.pronamespace
-            WHERE n.nspname = 'public' AND NOT EXISTS (
-                SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass
-                AND d.objid = p.oid AND d.deptype = 'e')
-            ORDER BY p.proname, pg_get_function_identity_arguments(p.oid)
-            """);
-        assertNativeSchemaEqual(archived, baseline, "triggers", """
-            SELECT t.tgenabled::text || ':' || pg_get_triggerdef(t.oid) FROM pg_trigger t
-            JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public' AND NOT t.tgisinternal
-            ORDER BY c.relname, t.tgname
-            """);
-        assertNativeExpressionsEqual(archived, baseline, "check, not-null and exclusion constraints", """
-            SELECT c.relname || ':' || k.contype::text || ':' ||
-                   ARRAY(SELECT a.attname FROM unnest(k.conkey) WITH ORDINALITY AS key(attnum, position)
-                         JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = key.attnum
-                         ORDER BY key.position)::text || ':' ||
-                   CASE WHEN k.contype = 'n' THEN '' ELSE k.conname END || ':' || pg_get_constraintdef(k.oid)
-            FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public' AND k.contype IN ('c', 'n', 'x')
-              AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock')
-            ORDER BY c.relname, k.contype, k.conkey, pg_get_constraintdef(k.oid)
-            """);
-        assertNativeExpressionsEqual(archived, baseline, "index expressions, predicates and usability", """
-            SELECT c.relname || ':' || i.relname || ':' || x.indisvalid::text || ':' || x.indisready::text || ':' ||
-                   coalesce(pg_get_expr(x.indexprs, x.indrelid), '') || ':' ||
-                   coalesce(pg_get_expr(x.indpred, x.indrelid), '')
-            FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid
-            JOIN pg_class c ON c.oid = x.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public' AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock')
-            ORDER BY c.relname, i.relname
-            """);
-        assertNativeSchemaEqual(archived, baseline, "partition parents", """
-            SELECT c.relname || ':' || pg_get_partkeydef(c.oid)
-            FROM pg_partitioned_table p JOIN pg_class c ON c.oid = p.partrelid
-            JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'
-            ORDER BY c.relname
-            """);
-
-        execute(archived, """
-            UPDATE instance_settings SET silent_mode_engaged = false, silent_mode_reason = 'preserve operator choice'
-            WHERE id = 1;
-            CREATE FUNCTION reject_baseline_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
-            BEGIN RAISE EXCEPTION 'synchronization must not execute DDL'; END $$;
-            CREATE EVENT TRIGGER reject_baseline_ddl ON ddl_command_start EXECUTE FUNCTION reject_baseline_ddl();
-            """);
-        List<String> oldHistory =
-                query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        assertThatThrownBy(() -> update(archived, "db/master.xml", context))
-                .isInstanceOf(LiquibaseException.class)
-                .hasStackTraceContaining(
-                        "Existing databases must complete the baseline synchronization runbook before deployment.");
-        try (Liquibase liquibase = liquibase(archived, "db/master.xml")) {
-            liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression());
-        }
-        update(archived, BASELINE, context);
-        List<String> syncedHistory =
-                query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        assertThat(syncedHistory).startsWith(oldHistory.toArray(String[]::new));
-        assertThat(syncedHistory).hasSize(oldHistory.size() + (context.equals("prod") ? 4 : 3));
-        assertThat(query(
-                        archived,
-                        "SELECT silent_mode_engaged::text || ':' || silent_mode_reason FROM instance_settings"))
-                .containsExactly("false:preserve operator choice");
-        update(archived, BASELINE, context);
-        assertThat(query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
-                .isEqualTo(syncedHistory);
-        execute(archived, "DROP EVENT TRIGGER reject_baseline_ddl; DROP FUNCTION reject_baseline_ddl()");
-        update(archived, "db/master.xml", context);
-        assertThat(query(archived, "SELECT id FROM databasechangelog")).contains("baseline_v0_77_4-tag");
-    }
-
     @ParameterizedTest
     @ValueSource(strings = {"dev", "prod"})
     void shouldRejectPreCutPointHistoryForUpdateAndSynchronization(String context) throws Exception {
         TestDatabase database = emptyDatabase();
-        try (Liquibase liquibase = liquibase(database, "db/archive-master.xml")) {
-            var chain = liquibase.getDatabaseChangeLog();
-            chain.getChangeSets().removeIf(change -> change.getId().equals("1788679885460-1"));
-            liquibase.update(new Contexts(context));
-        }
+        update(database, BASELINE, context);
         List<String> history =
                 query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        assertThat(history).isNotEmpty().noneMatch(row -> row.startsWith("1788679885460-1:"));
         execute(database, """
             CREATE FUNCTION reject_upgrade_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
             BEGIN RAISE EXCEPTION 'refused upgrade must not execute DDL'; END $$;
@@ -251,18 +140,18 @@ class LiquibaseBaselineIntegrationTest {
         assertThat(refusal)
                 .isInstanceOf(LiquibaseException.class)
                 .hasStackTraceContaining(
-                        "install v0.77.4 and start it once, then follow the baseline synchronization runbook");
+                        "Existing databases must first run v0.95.0");
         // Logs drop exception messages, so the startup failure analysis is where an operator reads the refusal.
         assertThat(new LiquibaseRefusalFailureAnalyzer().analyze(refusal))
                 .extracting(FailureAnalysis::getDescription)
                 .asString()
-                .contains("install v0.77.4 and start it once, then follow the baseline synchronization runbook");
+                .contains("Existing databases must first run v0.95.0");
         try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
             assertThatThrownBy(() ->
                             liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression()))
                     .isInstanceOf(LiquibaseException.class)
                     .hasStackTraceContaining(
-                            "install v0.77.4 and start it once, then follow the baseline synchronization runbook");
+                            "Existing databases must first run v0.95.0");
         }
 
         assertThat(query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
@@ -273,14 +162,14 @@ class LiquibaseBaselineIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"author", "filename"})
-    void shouldRejectBaselineTagWithWrongMigrationIdentity(String field) throws Exception {
+    void shouldRejectCutPointWithWrongMigrationIdentity(String field) throws Exception {
         TestDatabase database = emptyDatabase();
-        update(database, BASELINE, "prod");
+        initializeThroughCutPoint(database, "prod");
         // Only the identity is false: a complete schema must not turn a false history into proof.
         execute(
                 database,
                 "UPDATE databasechangelog SET " + field
-                        + " = 'not-the-released-identity' WHERE id = 'baseline_v0_77_4-tag'");
+                        + " = 'not-the-released-identity' WHERE id = '1793208610071-3'");
         List<String> history = query(
                 database,
                 "SELECT id || ':' || author || ':' || filename || ':' || md5sum "
@@ -288,12 +177,12 @@ class LiquibaseBaselineIntegrationTest {
 
         assertThatThrownBy(() -> update(database, "db/master.xml", "prod"))
                 .isInstanceOf(LiquibaseException.class)
-                .hasStackTraceContaining("install v0.77.4 and start it once");
+                .hasStackTraceContaining("Existing databases must first run v0.95.0");
         try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
             assertThatThrownBy(() ->
                             liquibase.changeLogSync("baseline_v0_77_4", new Contexts("prod"), new LabelExpression()))
                     .isInstanceOf(LiquibaseException.class)
-                    .hasStackTraceContaining("install v0.77.4 and start it once");
+                    .hasStackTraceContaining("Existing databases must first run v0.95.0");
         }
         assertThat(query(
                         database,
@@ -304,41 +193,42 @@ class LiquibaseBaselineIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"dev", "prod"})
-    void shouldApplyMasterToFreshAndSynchronizedDatabases(String context) throws Exception {
+    void shouldApplyMasterToFreshDatabases(String context) throws Exception {
         TestDatabase database = emptyDatabase();
         update(database, "db/master.xml", context);
         List<String> history =
                 query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        assertThat(history).anyMatch(row -> row.startsWith("baseline_v0_77_4-tag:"));
+        assertThat(history).anyMatch(row -> row.startsWith("1793208610071-3:"));
         update(database, "db/master.xml", context);
         assertThat(query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
                 .isEqualTo(history);
     }
 
-    private static void assertNativeSchemaEqual(
-            TestDatabase reference, TestDatabase baseline, String objectType, String sql) throws SQLException {
-        assertThat(query(baseline, sql)).as(objectType).isEqualTo(query(reference, sql));
+    @ParameterizedTest
+    @ValueSource(strings = {"dev", "prod"})
+    void shouldUpgradeTheReleasedCutPointAndPreserveSettings(String context) throws Exception {
+        TestDatabase database = emptyDatabase();
+        initializeThroughCutPoint(database, context);
+        execute(database, "UPDATE instance_settings SET silent_mode_engaged = false WHERE id = 1");
+        update(database, "db/master.xml", context);
+        assertThat(query(database, "SELECT silent_mode_engaged::text FROM instance_settings WHERE id = 1"))
+                .containsExactly("false");
     }
 
-    private static void assertNativeExpressionsEqual(
-            TestDatabase reference, TestDatabase baseline, String objectType, String sql) throws SQLException {
-        assertThat(query(baseline, sql).stream()
-                        .map(LiquibaseBaselineIntegrationTest::normalizeVarcharArrayCasts)
-                        .sorted()
-                        .toList())
-                .as(objectType)
-                .isEqualTo(query(reference, sql).stream()
-                        .map(LiquibaseBaselineIntegrationTest::normalizeVarcharArrayCasts)
-                        .sorted()
-                        .toList());
-    }
-
-    private static String normalizeVarcharArrayCasts(String definition) {
-        // pg_dump casts a varchar literal array as a whole; replay casts each literal to text.
-        return definition
-                .replaceAll("\\(('(?:[^']|'')*'::character varying)\\)::text", "$1")
-                .replaceAll(
-                        "\\(ARRAY\\[((?:'(?:[^']|'')*'::character varying(?:, )?)+)\\]\\)::text\\[\\]", "ARRAY[$1]");
+    private static void initializeThroughCutPoint(TestDatabase database, String context) throws Exception {
+        try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
+            var changes = liquibase.getDatabaseChangeLog().getChangeSets();
+            int cutPoint = -1;
+            for (int index = 0; index < changes.size(); index++) {
+                if (changes.get(index).getId().equals("1793208610071-3")) {
+                    cutPoint = index;
+                    break;
+                }
+            }
+            assertThat(cutPoint).as("the final v0.95.0 changeset remains in the released chain").isNotNegative();
+            changes.subList(cutPoint + 1, changes.size()).clear();
+            liquibase.update(new Contexts(context));
+        }
     }
 
     private static TestDatabase emptyDatabase() {

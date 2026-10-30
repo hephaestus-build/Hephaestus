@@ -8,11 +8,6 @@ import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const directory = "server/application/src/main/resources/db/changelog/";
 const master = "server/application/src/main/resources/db/master.xml";
-const archive = "docs/db/archive/v0.77.4/";
-const baseline = "0000000000000_baseline_v0_77_4.xml";
-// The only permitted rewrite retires this exact released master, not a future migration chain.
-const releasedMasterBlob = "5ac453b04033d85484ebf4c85d7f39e11581afc5";
-
 export interface ChangelogSnapshot {
 	blobs: ReadonlyMap<string, string>;
 	master: string;
@@ -41,25 +36,6 @@ function includes(xml: string): string[] {
 	});
 }
 
-/** Whether the change is the one permitted archival rewrite: the released master retired whole. */
-function isArchivalTransition(
-	before: ChangelogSnapshot,
-	after: ChangelogSnapshot,
-	newIncludes: readonly string[],
-): boolean {
-	return (
-		before.blobs.get(master) === releasedMasterBlob &&
-		!before.blobs.has(`${archive}archive-master.xml`) &&
-		after.blobs.get(`${archive}archive-master.xml`) === releasedMasterBlob &&
-		newIncludes.length === 1 &&
-		newIncludes[0] ===
-			includes(
-				`<databaseChangeLog><include file="./changelog/${baseline}" relativeToChangelogFile="true"/></databaseChangeLog>`,
-			)[0] &&
-		after.blobs.has(`${directory}${baseline}`)
-	);
-}
-
 export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot): string[] {
 	const errors: string[] = [];
 	let oldIncludes: string[];
@@ -70,28 +46,12 @@ export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot):
 	} catch (error) {
 		return [`Invalid changelog: ${error instanceof Error ? error.message : String(error)}`];
 	}
-	const transition = isArchivalTransition(before, after, newIncludes);
-
 	for (const [path, blob] of before.blobs) {
-		if (path.startsWith("docs/db/archive/")) {
-			if (after.blobs.get(path) !== blob) {
-				errors.push(`Archived migration changed: ${path}`);
-			}
-		} else if (path.startsWith(directory) && after.blobs.get(path) !== blob) {
-			const archivedPath = `${archive}changelog/${path.slice(directory.length)}`;
-			if (!transition || after.blobs.has(path) || after.blobs.get(archivedPath) !== blob) {
-				errors.push(`Released migration changed without a byte-identical archive: ${path}`);
-			}
+		if (path.startsWith(directory) && after.blobs.get(path) !== blob) {
+			errors.push(`Released migration changed: ${path}`);
 		}
 	}
-
-	if (transition) {
-		for (const path of before.blobs.keys()) {
-			if (path.startsWith(directory) && after.blobs.has(path)) {
-				errors.push(`Retired migration remains on the production classpath: ${path}`);
-			}
-		}
-	} else if (oldIncludes.some((include, index) => newIncludes[index] !== include)) {
+	if (oldIncludes.some((include, index) => newIncludes[index] !== include)) {
 		errors.push("master.xml is append-only; existing includes must not change or move.");
 	}
 	return errors;
@@ -103,7 +63,7 @@ function git(...args: string[]): string {
 
 function snapshot(revision: string): ChangelogSnapshot {
 	const commit = git("rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`).trim();
-	const entries = git("ls-tree", "-r", "-z", commit, "--", directory, master, "docs/db/archive/");
+	const entries = git("ls-tree", "-r", "-z", commit, "--", directory, master);
 	const blobs = new Map<string, string>();
 	for (const entry of entries.split("\0").filter(Boolean)) {
 		const [metadata, path] = entry.split("\t");
@@ -127,6 +87,6 @@ if (import.meta.main) {
 	if (errors.length > 0) {
 		process.exitCode = 1;
 	} else {
-		console.log("Released migrations and archived history are unchanged.");
+		console.log("Released migrations are unchanged.");
 	}
 }

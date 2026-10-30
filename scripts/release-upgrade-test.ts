@@ -5,6 +5,7 @@ import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
 	deliveryDifference,
@@ -19,23 +20,14 @@ import {
 import { parseVersion } from "./lib/release-version.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
-const [
-	previousImage = "",
-	candidateImage = "",
-	postgresImage = "",
-	upgradePath = "latest",
-	...options
-] = process.argv.slice(2);
+const [previousImage = "", candidateImage = "", postgresImage = "", ...options] =
+	process.argv.slice(2);
 
 const USAGE =
-	"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image> [latest|baseline|refusal] [--require-seed=heph-chat]";
+	"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image> [--require-seed=heph-chat]";
 
 if (previousImage === "" || candidateImage === "" || postgresImage === "") {
 	throw new Error(USAGE);
-}
-
-if (!["latest", "baseline", "refusal"].includes(upgradePath)) {
-	throw new Error(`Unknown upgrade path: ${upgradePath}`);
 }
 
 /**
@@ -52,38 +44,26 @@ for (const option of options) {
 	}
 	requiredSeeds.add(seed);
 }
-if (requiredSeeds.size > 0 && upgradePath !== "latest") {
-	throw new Error("--require-seed applies only to the latest upgrade path");
-}
-
-// The latest path also starts the previous release on the candidate's schema, unless the candidate's migration
+// The upgrade also starts the previous release on the candidate's schema, unless the candidate's migration
 // guide entries say that its release stops every role. Those entries come after the previous version.
 const previousVersion = process.env.PREVIOUS_VERSION ?? "";
 const previousAgentImage = process.env.PREVIOUS_AGENT_IMAGE ?? "";
-if (upgradePath === "latest" && parseVersion(previousVersion) === undefined) {
-	throw new Error("The latest path needs PREVIOUS_VERSION, the previous release as X.Y.Z");
+if (parseVersion(previousVersion) === undefined) {
+	throw new Error("The upgrade needs PREVIOUS_VERSION, the previous release as X.Y.Z");
 }
-if (upgradePath === "latest" && previousAgentImage === "") {
+if (previousAgentImage === "") {
 	throw new Error(
-		"The latest path needs PREVIOUS_AGENT_IMAGE, the agent image of the previous release",
+		"The upgrade needs PREVIOUS_AGENT_IMAGE, the agent image of the previous release",
 	);
 }
-let stopEveryRole: string[] = [];
-if (upgradePath === "latest") {
-	// Only this path needs the installed dependencies, so the pinned paths run without an install.
-	const { stopEveryRoleEntries } = await import("./lib/migration-guide.ts");
-	const fragmentDirectory = new URL("../.migration/", import.meta.url);
-	stopEveryRole = stopEveryRoleEntries(
-		readFileSync(new URL("../MIGRATION.md", import.meta.url), "utf8"),
-		readdirSync(fragmentDirectory)
-			.filter((file) => file.endsWith(".md") && file !== "README.md")
-			.map((file) => readFileSync(new URL(file, fragmentDirectory), "utf8")),
-		previousVersion,
-	);
-}
-
-const CUT_POINT_MESSAGE =
-	"install v0.77.4 and start it once, then follow the baseline synchronization runbook";
+const fragmentDirectory = new URL("../.migration/", import.meta.url);
+const stopEveryRole = stopEveryRoleEntries(
+	readFileSync(new URL("../MIGRATION.md", import.meta.url), "utf8"),
+	readdirSync(fragmentDirectory)
+		.filter((file) => file.endsWith(".md") && file !== "README.md")
+		.map((file) => readFileSync(new URL(file, fragmentDirectory), "utf8")),
+	previousVersion,
+);
 
 const WORKSPACE_SLUG = "upgrade-fixture";
 const ADOPTION_WORKSPACE_SLUG = "upgrade-adoption-fixture";
@@ -685,124 +665,6 @@ function appliedChangeCount(database = "hephaestus"): number {
 	return count("SELECT count(*) FROM databasechangelog;", database);
 }
 
-// Use the target image's bundled Liquibase and resources, not a separately versioned CLI.
-function baselineSynchronization(image: string) {
-	return spawnSync(
-		"docker",
-		[
-			"run",
-			"--rm",
-			"--name",
-			`${runId}-sync`,
-			"--network",
-			network,
-			"--entrypoint",
-			"/cnb/lifecycle/launcher",
-			image,
-			"--",
-			"java",
-			"-cp",
-			"runner.jar:lib/*",
-			"liquibase.integration.commandline.Main",
-			"--changeLogFile=db/master.xml",
-			"--url=jdbc:postgresql://postgres:5432/hephaestus",
-			"--username=root",
-			"--password=root",
-			"--contexts=prod",
-			"changeLogSyncToTag",
-			"baseline_v0_77_4",
-		],
-		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 180_000 },
-	);
-}
-
-function historyFingerprint(): string {
-	return docker(
-		"exec",
-		postgres,
-		"psql",
-		"--username=root",
-		"--dbname=hephaestus",
-		"--tuples-only",
-		"--no-align",
-		"--set=ON_ERROR_STOP=1",
-		"--command",
-		"SELECT row_to_json(history)::text FROM databasechangelog history ORDER BY orderexecuted;",
-	);
-}
-
-function assertRefusal(image: string, seededData: string): void {
-	if (count("SELECT count(*) FROM databasechangelog WHERE id = '1788679885460-1';") !== 0) {
-		throw new Error("Refusal fixture unexpectedly reached v0.77.4");
-	}
-	const history = historyFingerprint();
-	const result = baselineSynchronization(image);
-	if (
-		result.status === null ||
-		result.status === 0 ||
-		!`${result.stdout}${result.stderr}`.includes(CUT_POINT_MESSAGE)
-	) {
-		throw new Error(`Expected cut-point refusal from changeLogSyncToTag:
-${result.stdout}${result.stderr}`);
-	}
-	if (historyFingerprint() !== history || dataFingerprint("legacy") !== seededData) {
-		throw new Error("Refused synchronization changed migration history or seeded data");
-	}
-
-	const refused = migrate(image);
-	if (
-		refused.status === null ||
-		refused.status === 0 ||
-		!`${refused.stdout}${refused.stderr}`.includes(CUT_POINT_MESSAGE)
-	) {
-		throw new Error(`Expected cut-point refusal from the migration (exit ${String(refused.status)}):
-${refused.stdout}${refused.stderr}`);
-	}
-	if (historyFingerprint() !== history || dataFingerprint("legacy") !== seededData) {
-		throw new Error("Refused migration changed migration history or seeded data");
-	}
-	if (count("SELECT count(*) FROM databasechangeloglock WHERE locked;") !== 0) {
-		throw new Error("Refused upgrade left the Liquibase lock held");
-	}
-	console.log("Pinned v0.76.0 update and synchronization refusal passed.");
-}
-
-function synchronizeBaseline(image: string): void {
-	const baselineFile = "db/changelog/0000000000000_baseline_v0_77_4.xml";
-	if (
-		count(`SELECT count(*) FROM databasechangelog
-			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
-			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) === 1
-	) {
-		return;
-	}
-
-	if (
-		count(`SELECT count(*) FROM databasechangelog
-			WHERE id = '1788679885460-1' AND author = 'hephaestus'
-			AND filename = 'db/changelog/1788679885460_changelog.xml'
-			AND md5sum = '9:658c0b7abed980fcd0e8142337bec5be'
-			AND exectype IN ('EXECUTED', 'MARK_RAN');`) !== 1
-	) {
-		throw new Error(
-			"The previous release has not reached the verified v0.77.4 baseline cut-point.",
-		);
-	}
-
-	const result = baselineSynchronization(image);
-	if (result.status !== 0) {
-		throw new Error(`Baseline synchronization failed:\n${result.stdout}${result.stderr}`);
-	}
-
-	if (
-		count(`SELECT count(*) FROM databasechangelog
-			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
-			AND filename = '${baselineFile}' AND tag = 'baseline_v0_77_4';`) !== 1
-	) {
-		throw new Error("Baseline synchronization did not record the expected tag.");
-	}
-}
-
 /** A check that passed without testing anything: a warning in the log and a line in the job summary. */
 function summarize(line: string): void {
 	console.log(`::warning::${line}`);
@@ -1338,11 +1200,6 @@ try {
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
 	const layout = peopleLayout(query(PEOPLE_LAYOUT_SQL));
 	console.log(`Previous release people layout: ${layout}.`);
-	if (upgradePath !== "latest" && layout !== "legacy") {
-		throw new Error(
-			`The pinned ${upgradePath} path requires the legacy people layout, found ${layout}`,
-		);
-	}
 	const previousSession = await login(port, "alice");
 	await completeTransparencyNotice(port, previousSession);
 	await login(port, "root");
@@ -1353,13 +1210,12 @@ try {
 	docker("rm", application);
 	// The released-schema marker survives the cutover, so only a legacy layout takes the seed.
 	const exactMainSource =
-		upgradePath === "latest" &&
 		layout === "legacy" &&
 		count("SELECT count(*) FROM databasechangelog WHERE id='1791941746633-2'") === 1;
 	if (exactMainSource) {
 		executeFixture("released-seed.sql");
 	}
-	const hephChatSource = upgradePath === "latest" && keepsHephChatHistory();
+	const hephChatSource = keepsHephChatHistory();
 	if (hephChatSource) {
 		executeFixture("released-seed.sql", "heph-upgrade");
 	} else if (requiredSeeds.has("heph-chat")) {
@@ -1368,7 +1224,6 @@ try {
 		);
 	}
 	const preserved = preservedPeople(layout);
-	// Legacy stays unfiltered so a refused start that adds people is still detected.
 	const seededData =
 		layout === "legacy" ? dataFingerprint("legacy") : dataFingerprint("native", preserved);
 	for (const kind of ["account", "identity", "user", "workspace", "membership", "connection"]) {
@@ -1379,98 +1234,83 @@ try {
 	const previousPractices = workspacePracticeCount(WORKSPACE_SLUG);
 	const previousChanges = appliedChangeCount();
 
-	if (upgradePath === "refusal") {
-		assertRefusal(candidateImage, seededData);
-	} else {
-		if (
-			upgradePath === "baseline" &&
-			count("SELECT count(*) FROM databasechangelog WHERE id = 'baseline_v0_77_4-tag';") !== 0
-		) {
-			throw new Error("Pinned v0.77.4 fixture already has a baseline tag");
-		}
-		synchronizeBaseline(candidateImage);
-		if (upgradePath === "latest") {
-			// The template must have no other session.
-			query(
-				"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'hephaestus' AND pid <> pg_backend_pid()",
-				"postgres",
-			);
-			docker(
-				"exec",
-				postgres,
-				"createdb",
-				"--username=root",
-				"--template=hephaestus",
-				PARTIAL_DATABASE,
-			);
-		}
-		migrateCandidate(candidateImage);
-		application = `${runId}-candidate`;
-		port = startApplication(application, candidateImage, "hephaestus", false);
-		await waitUntilReady(application, port);
-		if (peopleLayout(query(PEOPLE_LAYOUT_SQL)) !== "native") {
-			throw new Error("Candidate did not reach the native people layout");
-		}
-		const upgradedData = dataFingerprint("native", preserved);
-		executeFixture("assert-migrated.sql");
-		if (hephChatSource) {
-			executeFixture("assert-upgraded.sql", "heph-upgrade");
-		}
-		if (upgradedData !== seededData) {
-			throw new Error("Seeded application data changed during upgrade");
-		}
-		const upgradedPractices = workspacePracticeCount(WORKSPACE_SLUG);
-		if (upgradedPractices < previousPractices) {
-			throw new Error(
-				`Workspace practices shrank during upgrade: before=${previousPractices}, after=${upgradedPractices}`,
-			);
-		}
-		const candidateChanges = appliedChangeCount();
-		if (candidateChanges < previousChanges) {
-			throw new Error(
-				`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
-			);
-		}
-		const candidateSession = await login(port, "alice");
-		await completeTransparencyNotice(port, candidateSession);
-		await assertCoreReads(port, candidateSession);
-
-		await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
-		await assertInstalledCatalog(port, candidateSession);
-		const installedPractices = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
-		docker("restart", "--time", "30", application);
-		port = publishedPort(application);
-		await waitUntilReady(application, port);
-		const restartedSession = await login(port, "alice");
-		await assertInstalledCatalog(port, restartedSession);
-		if (
-			workspacePracticeCount(WORKSPACE_SLUG) !== upgradedPractices ||
-			workspacePracticeCount(ADOPTION_WORKSPACE_SLUG) !== installedPractices
-		) {
-			throw new Error("Workspace practice counts changed after restart");
-		}
-
-		if (upgradePath === "latest") {
-			if (stopEveryRole.length === 0) {
-				docker("pull", "--quiet", previousAgentImage);
-				await assertPreviousReleaseRuns("hephaestus", "the candidate's schema");
-				await assertWebhookContract();
-			} else {
-				summarize(
-					`Mechanical N-on-N+1 coverage is off for this release, because it stops every role: ${stopEveryRole.join("; ")}`,
-				);
-			}
-			await assertPartialMigration(
-				PARTIAL_DATABASE,
-				previousChanges,
-				candidateChanges - previousChanges,
-			);
-			await assertFreshSchemaEqualsUpgraded(candidateImage);
-		}
-		console.log(
-			`Seeded ${upgradePath} release upgrade passed (origin/main review seed: ${exactMainSource}, Heph chat seed: ${hephChatSource}).`,
+	// The template must have no other session.
+	query(
+		"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'hephaestus' AND pid <> pg_backend_pid()",
+		"postgres",
+	);
+	docker(
+		"exec",
+		postgres,
+		"createdb",
+		"--username=root",
+		"--template=hephaestus",
+		PARTIAL_DATABASE,
+	);
+	migrateCandidate(candidateImage);
+	application = `${runId}-candidate`;
+	port = startApplication(application, candidateImage, "hephaestus", false);
+	await waitUntilReady(application, port);
+	if (peopleLayout(query(PEOPLE_LAYOUT_SQL)) !== "native") {
+		throw new Error("Candidate did not reach the native people layout");
+	}
+	const upgradedData = dataFingerprint("native", preserved);
+	executeFixture("assert-migrated.sql");
+	if (hephChatSource) {
+		executeFixture("assert-upgraded.sql", "heph-upgrade");
+	}
+	if (upgradedData !== seededData) {
+		throw new Error("Seeded application data changed during upgrade");
+	}
+	const upgradedPractices = workspacePracticeCount(WORKSPACE_SLUG);
+	if (upgradedPractices < previousPractices) {
+		throw new Error(
+			`Workspace practices shrank during upgrade: before=${previousPractices}, after=${upgradedPractices}`,
 		);
 	}
+	const candidateChanges = appliedChangeCount();
+	if (candidateChanges < previousChanges) {
+		throw new Error(
+			`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
+		);
+	}
+	const candidateSession = await login(port, "alice");
+	await completeTransparencyNotice(port, candidateSession);
+	await assertCoreReads(port, candidateSession);
+
+	await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
+	await assertInstalledCatalog(port, candidateSession);
+	const installedPractices = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
+	docker("restart", "--time", "30", application);
+	port = publishedPort(application);
+	await waitUntilReady(application, port);
+	const restartedSession = await login(port, "alice");
+	await assertInstalledCatalog(port, restartedSession);
+	if (
+		workspacePracticeCount(WORKSPACE_SLUG) !== upgradedPractices ||
+		workspacePracticeCount(ADOPTION_WORKSPACE_SLUG) !== installedPractices
+	) {
+		throw new Error("Workspace practice counts changed after restart");
+	}
+
+	if (stopEveryRole.length === 0) {
+		docker("pull", "--quiet", previousAgentImage);
+		await assertPreviousReleaseRuns("hephaestus", "the candidate's schema");
+		await assertWebhookContract();
+	} else {
+		summarize(
+			`Mechanical N-on-N+1 coverage is off for this release, because it stops every role: ${stopEveryRole.join("; ")}`,
+		);
+	}
+	await assertPartialMigration(
+		PARTIAL_DATABASE,
+		previousChanges,
+		candidateChanges - previousChanges,
+	);
+	await assertFreshSchemaEqualsUpgraded(candidateImage);
+	console.log(
+		`Seeded release upgrade passed (origin/main review seed: ${exactMainSource}, Heph chat seed: ${hephChatSource}).`,
+	);
 } catch (error) {
 	for (const name of [application, postgres]) {
 		printLogs(name);
@@ -1479,7 +1319,7 @@ try {
 } finally {
 	sweepSandboxes();
 	// --volumes removes only these containers' anonymous volumes, such as PostgreSQL's data.
-	spawnSync("docker", ["rm", "--force", "--volumes", application, `${runId}-sync`, postgres], {
+	spawnSync("docker", ["rm", "--force", "--volumes", application, postgres], {
 		stdio: "ignore",
 	});
 	spawnSync("docker", ["network", "rm", network], { stdio: "ignore" });

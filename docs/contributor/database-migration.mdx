@@ -109,7 +109,7 @@ if history never changes underneath an instance that already ran part of it.
    It ignores deleted changesets.
    Thus, those edits make installed instances inconsistent without an error.
 2. **`master.xml` is append-only.** Never remove or reorder existing `<include>` entries.
-   New changelogs go at the end. The maintainer-approved v0.77.4 cut-point guard is a
+   New changelogs go at the end. The maintainer-approved cut-point guard is a
    changelog-level precondition at the head, not a change to released changesets. It protects
    both startup and `changeLogSyncToTag` without changing checksums or include order.
 3. **Release *N* runs correctly on the schema of release *N+1*.** A single
@@ -125,10 +125,8 @@ For rule 3, the compatibility guard rejects the change sets that [Expand and con
 The seeded release upgrade also runs the previous release on the new schema.
 [CI validation](#ci-validation) describes both checks. Review covers what neither checks.
 
-The sole archival
-transition is the verified v0.77.4 baseline: archived files remain byte-identical and test-only.
-The baseline and subsequent migrations follow the same immutability policy. Existing installations
-must follow the [baseline synchronization runbook](../admin/liquibase-baseline-runbook).
+The baseline and subsequent migrations follow the same immutability policy.
+The [database prerequisites](../admin/compatibility-policy#database-baseline-prerequisites) define the supported upgrade history.
 
 ### Expand and contract
 
@@ -205,20 +203,16 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    Thus, the merge group judges migrations that reached `main` after that run.
    No file under `db/changelog/` can have a modification, rename, or deletion.
    No existing `<include>` in `master.xml` can have a removal, order change, or attribute change.
-   Either prohibited change fails the check. The v0.77.4 transition also requires the
-   pinned original master and byte-identical archives. It is not a general squash bypass.
+   Either prohibited change fails the check.
 3. **Changelog compatibility** — Security workflow, same job, step *Changelog compatibility guard*.
    `scripts/check-changelog-compatibility.ts` applies [Expand and contract](#expand-and-contract).
    It checks the changelogs that the latest release tag does not have.
    It reads the tags, so the job checks out the full history.
-4. **Seeded release upgrade** — `release-upgrade.yml` runs three independent paths.
-   One upgrades the previous stable release.
-   One follows pinned v0.77.4 → baseline synchronization → target release.
-   One follows pinned v0.76.0 → expected refusal. Successful upgrades check readiness, seeded relationships, the practice
-   catalog and authenticated reads. The refusal path checks both startup and `changeLogSyncToTag`.
-   It checks the required v0.77.4 message, unchanged data and history, and a released lock. Release publication
-   depends on every path. The same matrix also runs weekly.
-   [Previous release on the new schema](#previous-release-on-the-new-schema) describes the other checks of the first path.
+4. **Seeded release upgrade** — `release-upgrade.yml` upgrades the previous supported release.
+   It checks readiness, seeded relationships, the practice catalog and authenticated reads.
+   Release publication depends on this upgrade. The same procedure runs weekly.
+   [Previous release on the new schema](#previous-release-on-the-new-schema) describes its other checks.
+
 
 The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
 skip changesets. A successful replay does not prove that every change ran. It also does not reproduce
@@ -277,8 +271,9 @@ The log names the entry in a warning.
 
 ## Baseline release gates
 
-The practice model cutover retains the v0.77.4 baseline. **A future baseline requires both a major-version boundary and automated synchronization.** Released migrations and the
-archived chain remain immutable.
+The existing baseline and released migrations remain immutable.
+A future baseline requires both a major-version boundary and automated synchronization.
+The test-only archive and its replay paths are retired.
 
 A global Liquibase precondition checks the database cut-point before either update or synchronization.
 Liquibase permits one global `preConditions` container, so the guard shares it with the PostgreSQL 18
@@ -294,17 +289,9 @@ The baseline integration suite proves these properties in both `dev` and `prod`:
 
 - Refusal without DDL.
 - Fresh initialization.
-- Native-object equivalence.
-- Synchronization without DDL or data loss.
-- Subsequent upgrades.
+- Refusal of an incorrect cut-point identity.
+- Upgrade from the supported cut-point without changing existing instance settings.
 - Lock recovery.
-
-- Record a seven-calendar-day staging soak against a restored production snapshot before production.
-- Freeze new changelogs for at least 48 hours after production deployment.
-- Keep `docs/db/archive/v0.77.4/` for at least two release cycles. Historical regression tests use it
-  only as test resources. It must not enter the application JAR.
-- Announce the cut-point and synchronization requirement before merging. Developer reset:
-  `vp run dev:reset`, then `vp run dev`. This destroys local database data.
 
 ## Practice model cutover
 

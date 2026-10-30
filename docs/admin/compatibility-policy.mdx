@@ -70,32 +70,23 @@ That procedure owns the requirements to stop writers, verify the backup, apply t
 target release's Helm chart. Follow the [database migration instructions](#database-migrations) for its supported database baseline.
 
 **Before 1.0, do not assume an arbitrary older release can upgrade directly.** Read the target release's
-migration instructions first: they may require an intermediate release or manual preparation. Existing
-databases that cross the PostgreSQL 18/Liquibase baseline transition must reach the v0.77.4 schema cut-point.
-Before the new application starts, complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
-The target release refuses an unsynchronized existing schema.
-It does not replay archived migrations.
-
+migration instructions first: they may require an intermediate release or manual preparation.
+Existing databases must have completed the v0.95.0 migrations before the target release starts.
+The target release refuses an older migration history.
 Fresh databases initialize automatically.
 
 <a id="upgrade-paths-to-10"></a>
 
 ### Database baseline prerequisites
 
-| Installed release | Required path to the target release                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| ≤ v0.77.3         | Install v0.77.4 and start it once → [baseline synchronization runbook](./liquibase-baseline-runbook.md) → target release |
-| v0.77.4           | [Baseline synchronization runbook](./liquibase-baseline-runbook.md) → target release                                     |
-| ≥ v0.78.0         | The baseline is already synchronized. Follow the target release migration procedure                                                 |
+| Installed release | Required path to the target release |
+| --- | --- |
+| Older than v0.95.0 | Upgrade to v0.95.0 with its [versioned instructions](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/upgrade.mdx), then upgrade to the target release |
+| v0.95.0 or later | Follow the target release migration procedure |
 
-The v0.81.0 migration guide entry names v1.0.0 as the target release.
-Use the release that you upgrade to as the target release.
-Synchronize with the signed image of that release, as the [baseline synchronization runbook](./liquibase-baseline-runbook.md) describes.
-
-The database history, not the image tag alone, determines whether it has reached the cut-point.
-Startup and the runbook's synchronization command refuse nonempty migration history without the
-v0.77.4 final migration or the baseline tag. The refusal names v0.77.4 as the release to install first.
-Do not use synchronization to skip missing migrations. A fresh database needs no intermediate release.
+The database history determines whether it has reached the cut-point.
+The guard checks the final v0.95.0 migration's id, author and filename before update or synchronization.
+Do not use synchronization to skip missing migrations.
 
 Released migrations remain immutable. CI checks fresh initialization and selected upgrade fixtures.
 It does not prove that every migration is safe for every existing production dataset. Data-affecting
