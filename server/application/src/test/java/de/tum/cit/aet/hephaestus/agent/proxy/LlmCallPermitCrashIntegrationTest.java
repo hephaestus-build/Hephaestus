@@ -66,16 +66,28 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
         pool.setDisplayName("Crash recovery");
         pool.setMaxConcurrentCalls(1);
         long poolId = pools.save(pool).getId();
-        var survivor = new LlmCallPermits(pools, rows, transactions, PROPERTIES,
-                "survivor-" + UUID.randomUUID(), new SimpleMeterRegistry(), mock(LlmModelResolver.class));
+        var survivor = new LlmCallPermits(
+                pools,
+                rows,
+                transactions,
+                PROPERTIES,
+                "survivor-" + UUID.randomUUID(),
+                new SimpleMeterRegistry(),
+                mock(LlmModelResolver.class));
         var postgres = PostgreSQLTestContainer.getInstance();
         Path output = directory.resolve("worker.log");
         try (var provider = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             provider.setSoTimeout(30_000);
             String java = ProcessHandle.current().info().command().orElseThrow();
-            var builder = new ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), Worker.class.getName(),
-                    Long.toString(poolId), Integer.toString(provider.getLocalPort()))
-                    .redirectErrorStream(true).redirectOutput(output.toFile());
+            var builder = new ProcessBuilder(
+                            java,
+                            "-cp",
+                            System.getProperty("java.class.path"),
+                            Worker.class.getName(),
+                            Long.toString(poolId),
+                            Integer.toString(provider.getLocalPort()))
+                    .redirectErrorStream(true)
+                    .redirectOutput(output.toFile());
             builder.environment().put("CRASH_TEST_JDBC_URL", postgres.getJdbcUrl());
             builder.environment().put("CRASH_TEST_JDBC_USER", postgres.getUsername());
             builder.environment().put("CRASH_TEST_JDBC_PASSWORD", postgres.getPassword());
@@ -83,7 +95,9 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
             try (Socket upstream = provider.accept()) {
                 upstream.setSoTimeout(5_000);
                 assertThat(upstream.getInputStream().read()).isEqualTo((int) 'P');
-                upstream.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: started\n\n".getBytes(StandardCharsets.UTF_8));
+                upstream.getOutputStream()
+                        .write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\ndata: started\n\n"
+                                .getBytes(StandardCharsets.UTF_8));
                 upstream.getOutputStream().flush();
                 Instant firstRenewal = renewedAt(poolId);
                 await().atMost(PROPERTIES.renewEvery().plusSeconds(5)).untilAsserted(() -> {
@@ -98,8 +112,11 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 upstream.getInputStream().readAllBytes();
                 assertThat(rows.countActive(poolId)).isEqualTo(1);
                 survivor.start();
-                try (var replacement = Objects.requireNonNull(survivor.acquire(poolId, LlmCallClass.EVENT,
-                        new LlmCallPermits.Caller(2, UUID.randomUUID(), 0, null), () -> false,
+                try (var replacement = Objects.requireNonNull(survivor.acquire(
+                        poolId,
+                        LlmCallClass.EVENT,
+                        new LlmCallPermits.Caller(2, UUID.randomUUID(), 0, null),
+                        () -> false,
                         lastRenewal.plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
                     Duration age = Duration.between(lastRenewal, Instant.now());
                     assertThat(age).isLessThan(PROPERTIES.permitLease().plusSeconds(3));
@@ -107,7 +124,9 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                     assertThat(rows.rates(poolId).getRequests()).isEqualTo(2);
                     assertThat(replacement.isRevoked()).isFalse();
                     reporter.publishEntry("crashRecoveryAgeMs", Long.toString(age.toMillis()));
-                    reporter.publishEntry("permitLeaseMs", Long.toString(PROPERTIES.permitLease().toMillis()));
+                    reporter.publishEntry(
+                            "permitLeaseMs",
+                            Long.toString(PROPERTIES.permitLease().toMillis()));
                 }
             } finally {
                 worker.destroyForcibly();
@@ -119,35 +138,53 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
 
     private Instant renewedAt(long poolId) {
         return Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT renewed_at FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE'", Timestamp.class, poolId)).toInstant();
+                        "SELECT renewed_at FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE'",
+                        Timestamp.class,
+                        poolId))
+                .toInstant();
     }
 
     /** Isolated worker runs the production repositories, admission and renewal against the test database. */
     public static final class Worker {
         public static void main(String[] args) throws Exception {
-            var source = new DriverManagerDataSource(Objects.requireNonNull(System.getenv("CRASH_TEST_JDBC_URL")),
+            var source = new DriverManagerDataSource(
+                    Objects.requireNonNull(System.getenv("CRASH_TEST_JDBC_URL")),
                     Objects.requireNonNull(System.getenv("CRASH_TEST_JDBC_USER")),
                     Objects.requireNonNull(System.getenv("CRASH_TEST_JDBC_PASSWORD")));
             var factory = new LocalContainerEntityManagerFactoryBean();
             factory.setDataSource(source);
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-            factory.setManagedTypes(PersistenceManagedTypes.of(LlmCallPool.class.getName(), LlmCallPermit.class.getName()));
+            factory.setManagedTypes(
+                    PersistenceManagedTypes.of(LlmCallPool.class.getName(), LlmCallPermit.class.getName()));
             factory.afterPropertiesSet();
             try {
                 var entityManagerFactory = Objects.requireNonNull(factory.getObject());
-                var repositories = new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory));
-                var permits = new LlmCallPermits(repositories.getRepository(LlmCallPoolRepository.class),
+                var repositories = new JpaRepositoryFactory(
+                        SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory));
+                var permits = new LlmCallPermits(
+                        repositories.getRepository(LlmCallPoolRepository.class),
                         repositories.getRepository(LlmCallPermitRepository.class),
-                        new TransactionTemplate(new JpaTransactionManager(entityManagerFactory)), PROPERTIES,
-                        "crashed-" + UUID.randomUUID(), new SimpleMeterRegistry(), mock(LlmModelResolver.class));
+                        new TransactionTemplate(new JpaTransactionManager(entityManagerFactory)),
+                        PROPERTIES,
+                        "crashed-" + UUID.randomUUID(),
+                        new SimpleMeterRegistry(),
+                        mock(LlmModelResolver.class));
                 permits.start();
-                try (var permit = Objects.requireNonNull(permits.acquire(Long.parseLong(args[0]), LlmCallClass.EVENT,
-                        new LlmCallPermits.Caller(1, UUID.randomUUID(), 0, null), () -> false, Instant.now().plusSeconds(10)));
+                try (var permit = Objects.requireNonNull(permits.acquire(
+                                Long.parseLong(args[0]),
+                                LlmCallClass.EVENT,
+                                new LlmCallPermits.Caller(1, UUID.randomUUID(), 0, null),
+                                () -> false,
+                                Instant.now().plusSeconds(10)));
                         var call = new Socket(InetAddress.getLoopbackAddress(), Integer.parseInt(args[1]))) {
                     assertThat(permit.isRevoked()).isFalse();
-                    call.getOutputStream().write("POST /fake-provider HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+                    call.getOutputStream()
+                            .write("POST /fake-provider HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n"
+                                    .getBytes(StandardCharsets.UTF_8));
                     call.getOutputStream().flush();
-                    while (call.getInputStream().read() != -1) { /* The fake provider holds the body open. */ }
+                    while (call.getInputStream().read() != -1) {
+                        /* The fake provider holds the body open. */
+                    }
                 } finally {
                     permits.stop();
                 }

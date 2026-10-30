@@ -186,14 +186,17 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldRetainRateDebitsAndFenceTheExpiredOwnerAfterReclaimingCapacity() {
         long pool = pool(1, 0);
         var expired = admit(workerA, pool, LlmCallClass.EVENT, 1);
-        jdbc.update("UPDATE llm_call_permit SET tokens=17,renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?", pool);
+        jdbc.update(
+                "UPDATE llm_call_permit SET tokens=17,renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?",
+                pool);
         workerA.renew();
         assertThat(expired.isRevoked()).isTrue();
         try (var replacement = admit(workerB, pool, LlmCallClass.EVENT, 2)) {
             var rates = rows.rates(pool);
             assertThat(rates.getRequests()).isEqualTo(2);
             assertThat(rates.getTokens()).isEqualTo(17);
-            assertThat(workerA.beforeRetry(expired, () -> false, Instant.now().plusSeconds(1))).isFalse();
+            assertThat(workerA.beforeRetry(expired, () -> false, Instant.now().plusSeconds(1)))
+                    .isFalse();
             expired.close();
             assertThat(rows.countActive(pool)).isEqualTo(1);
             assertThat(replacement.isRevoked()).isFalse();
@@ -205,13 +208,18 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         long pool = pool(1, 0);
         var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
         var row = jdbc.queryForMap("SELECT id,worker_id FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE'", pool);
-        jdbc.update("UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?", pool);
+        jdbc.update(
+                "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?", pool);
         transactions.executeWithoutResult(status -> {
             String owner = (String) row.get("worker_id");
             UUID id = (UUID) row.get("id");
-            assertThat(rows.renew(owner, List.of(id), PROPERTIES.permitLease().toSeconds())).isZero();
-            assertThat(rows.findHeld(owner, List.of(id), PROPERTIES.permitLease().toSeconds())).isEmpty();
-            assertThat(rows.debitRetry(id, owner, 0, PROPERTIES.permitLease().toSeconds())).isZero();
+            assertThat(rows.renew(owner, List.of(id), PROPERTIES.permitLease().toSeconds()))
+                    .isZero();
+            assertThat(rows.findHeld(
+                            owner, List.of(id), PROPERTIES.permitLease().toSeconds()))
+                    .isEmpty();
+            assertThat(rows.debitRetry(id, owner, 0, PROPERTIES.permitLease().toSeconds()))
+                    .isZero();
         });
         call.close();
     }
