@@ -63,6 +63,14 @@ public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQue
 
     List<Result> findByWorkspaceIdAndItemIdAndEndedAtIsNull(long workspaceId, long itemId);
 
+    /** Of these practice versions, those with a result on the item at this version that has not ended. */
+    @Query("""
+        SELECT DISTINCT r.practiceVersionId FROM Result r WHERE r.workspaceId = :workspaceId AND r.itemId = :itemId
+        AND r.itemVersion = :itemVersion AND r.endedAt IS NULL AND r.practiceVersionId IN :practiceVersionIds
+        """)
+    List<Long> currentPracticeVersionIds(
+            long workspaceId, long itemId, String itemVersion, Collection<Long> practiceVersionIds);
+
     List<Result> findByWorkspaceIdAndItemIdInAndEndedAtIsNullAndDeveloperIdIsNull(
             long workspaceId, Collection<Long> itemIds);
 

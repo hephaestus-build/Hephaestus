@@ -616,11 +616,15 @@ hephaestus:
     # The pending-event reaper: what happens to an event the review gate refused. The blockers are
     # operator actions (re-activate a workspace, re-point a binding, wait for a budget month to roll
     # over), so the retry interval is a human timescale — retrying fast only multiplies the refusal.
-    # An event still refused after pending-lapse-after expires.
+    # An event still refused after pending-lapse-after expires. The quiet window holds an item's events
+    # until quiet-window after the newest, and at most quiet-window-cap after the first, so one review
+    # covers a burst of pushes.
     item-event-ledger:
         pending-retry-after: ${ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER:1h}
         pending-lapse-after: ${ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER:7d}
         sweep-batch-size: ${ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE:200}
+        quiet-window: ${ITEM_EVENT_LEDGER_QUIET_WINDOW:2m}
+        quiet-window-cap: ${ITEM_EVENT_LEDGER_QUIET_WINDOW_CAP:10m}
 
 
     sandbox:

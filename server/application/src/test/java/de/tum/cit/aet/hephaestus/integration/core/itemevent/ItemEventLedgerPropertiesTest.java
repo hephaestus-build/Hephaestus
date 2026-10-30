@@ -13,13 +13,24 @@ class ItemEventLedgerPropertiesTest extends BaseUnitTest {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
             assertThat(validator.validate(new ItemEventLedgerProperties(
-                            Duration.ofNanos(1), Duration.ofNanos(1), 1, Duration.ofNanos(1))))
+                            Duration.ofNanos(1),
+                            Duration.ofNanos(1),
+                            1,
+                            Duration.ofNanos(1),
+                            Duration.ofNanos(1),
+                            Duration.ofNanos(1))))
                     .isEmpty();
-            var violations = validator.validate(
-                    new ItemEventLedgerProperties(Duration.ZERO, Duration.ofNanos(-1), 0, Duration.ZERO));
+            var violations = validator.validate(new ItemEventLedgerProperties(
+                    Duration.ZERO, Duration.ofNanos(-1), 0, Duration.ZERO, Duration.ofNanos(-1), Duration.ZERO));
             assertThat(violations)
                     .extracting(v -> v.getPropertyPath().toString())
-                    .containsExactlyInAnyOrder("pendingRetryAfter", "pendingLapseAfter", "sweepBatchSize", "retainFor");
+                    .containsExactlyInAnyOrder(
+                            "pendingRetryAfter",
+                            "pendingLapseAfter",
+                            "sweepBatchSize",
+                            "retainFor",
+                            "quietWindow",
+                            "quietWindowCap");
         }
     }
 }

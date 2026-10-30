@@ -81,6 +81,12 @@ export const ITEM_EVENT_REASON_SENTENCES: Record<ItemEventReason, string> = {
 	LEGACY_REVIEW_UNBOUND:
 		"An earlier version recorded this review without naming which review it was, so it cannot start.",
 	OCCASION_EVIDENCE_UNAVAILABLE: "The original work for this event is unavailable.",
+	QUIET_WINDOW:
+		"It waits briefly for more changes to the same work, so that they are decided together.",
+	REVIEW_IN_PROGRESS:
+		"An earlier review of the same work, queued or running, still includes a practice that this event selects. This event is decided again after that review ends.",
+	ALREADY_CURRENT:
+		"Every practice that reviews on this event already has a current observation of this work.",
 };
 
 // Event discovery determines timestamp precision; shared origins use the review-origin wording.

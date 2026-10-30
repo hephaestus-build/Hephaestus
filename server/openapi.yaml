@@ -15603,6 +15603,9 @@ components:
           - ITEM_GONE
           - LEGACY_REVIEW_UNBOUND
           - OCCASION_EVIDENCE_UNAVAILABLE
+          - QUIET_WINDOW
+          - REVIEW_IN_PROGRESS
+          - ALREADY_CURRENT
           - null
         reviewId:
           type:
@@ -23222,6 +23225,9 @@ components:
           - ITEM_GONE
           - LEGACY_REVIEW_UNBOUND
           - OCCASION_EVIDENCE_UNAVAILABLE
+          - QUIET_WINDOW
+          - REVIEW_IN_PROGRESS
+          - ALREADY_CURRENT
           - null
         reviewId:
           type:

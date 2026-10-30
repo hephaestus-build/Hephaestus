@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventDefinition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersionScheme;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
 import java.util.List;
@@ -28,7 +29,13 @@ public class ThreadItemDescriptor implements ItemDescriptor {
     @Override
     public List<ItemEventDefinition> events() {
         return List.of(new ItemEventDefinition(
-                ThreadEvents.SETTLED, "Discussion settled", Set.of(), ItemVersionScheme.CONTENT_DIGEST, true, true));
+                ThreadEvents.SETTLED,
+                "Discussion settled",
+                Set.of(),
+                ItemVersionScheme.CONTENT_DIGEST,
+                true,
+                true,
+                OccasionKind.CONTINUING));
     }
 
     @Override

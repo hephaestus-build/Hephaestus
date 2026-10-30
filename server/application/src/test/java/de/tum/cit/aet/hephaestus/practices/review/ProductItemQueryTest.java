@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ProductItemQueryTest extends BaseUnitTest {
     final ProductItemRepository rows = mock(ProductItemRepository.class);
     final ItemSource source = mock(ItemSource.class);
-    final ProductItemQuery query = new ProductItemQuery(rows, List.of(source), List.of());
+    final ProductItemQuery query = new ProductItemQuery(rows, List.of(source), List.of(), List.of());
 
     @ParameterizedTest
     @ValueSource(strings = {"scm.issue", "scm.pull_request"})

@@ -17,6 +17,10 @@ import org.springframework.validation.annotation.Validated;
  * @param pendingLapseAfter Age at which an item event that is still recorded or waiting expires with the reason
  *     PENDING_DEADLINE_EXCEEDED. The age counts from when the event occurred.
  * @param sweepBatchSize Most item events that each step of the ledger sweep handles. The sweep runs every 15 minutes.
+ * @param quietWindow How long an item's quiet window stays open after its newest occasion before its practices run.
+ *     Zero lets each occasion reach its readiness edge at once.
+ * @param quietWindowCap Longest an item's quiet window stays open, counted from its first occasion, so a busy item
+ *     still gets a review.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.item-event-ledger")
@@ -24,4 +28,6 @@ public record ItemEventLedgerProperties(
         @DurationMin(nanos = 1) @DefaultValue("PT1H") Duration pendingRetryAfter,
         @DurationMin(nanos = 1) @DefaultValue("P7D") Duration pendingLapseAfter,
         @Min(1) @DefaultValue("200") int sweepBatchSize,
-        @DurationMin(nanos = 1) @DefaultValue("P30D") Duration retainFor) {}
+        @DurationMin(nanos = 1) @DefaultValue("P30D") Duration retainFor,
+        @DurationMin(nanos = 0) @DefaultValue("PT2M") Duration quietWindow,
+        @DurationMin(nanos = 1) @DefaultValue("PT10M") Duration quietWindowCap) {}
