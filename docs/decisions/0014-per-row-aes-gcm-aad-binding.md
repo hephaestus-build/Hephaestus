@@ -166,8 +166,8 @@ Amends the key-rotation consequence and corrects one path. The blob format, the 
   role, gated by `hephaestus.security.credential-rotation-enabled`) re-encrypts rows in batches under
   the same AAD. The operator procedure is `docs/admin/credential-key-rotation.mdx`. There is no
   KEK/DEK envelope.
-- `1780313973588_changelog.xml` is archived at `docs/db/archive/v0.77.4/changelog/`, and the
-  shipped chain starts at
-  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`
-  (`docs/contributor/database-migration.mdx`); `WorkspaceConnectionBackfillChange` stays in
-  `integration/core/connection/migration/` for `WorkspaceConnectionBackfillChangeIntegrationTest`.
+- The [v0.95.0 source](https://github.com/hephaestus-build/Hephaestus/tree/v0.95.0/docs/db/archive/v0.77.4/changelog) retains `1780313973588_changelog.xml`.
+  The current chain starts at
+  `server/application/src/main/resources/db/changelog/0000000000000_baseline_v0_77_4.xml`.
+  The test-only archive and `WorkspaceConnectionBackfillChange` are retired at 1.0
+  ([database prerequisites](../admin/compatibility-policy.mdx#database-baseline-prerequisites)).
