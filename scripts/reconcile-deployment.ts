@@ -72,6 +72,9 @@ export class OperatorActionRequiredError extends Error {
 	}
 }
 
+const MAJOR_DOWNGRADE_RECOVERY =
+	"A major downgrade requires a database restore. Pause reconciliation, follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover, restore the previous database, then manually helm rollback to its stopped revision before restoring writers.";
+
 export interface Channel {
 	/** What this channel asks the host to run: a release tag, or the commit a build came from. */
 	release: string;
@@ -981,12 +984,20 @@ async function targetIsBehindApplied(
 			);
 		}
 	}
-	return (
+	const behind =
 		channel.release !== previous &&
 		!(await succeeds("git", ["merge-base", "--is-ancestor", previous, channel.release], {
 			cwd: config.checkout,
-		}))
-	);
+		}));
+	if (
+		behind &&
+		channel.allowRollback === true &&
+		RELEASE_TAG.test(applied.release) &&
+		releaseMajor(applied.release) >= 1n
+	) {
+		throw new OperatorActionRequiredError(MAJOR_DOWNGRADE_RECOVERY);
+	}
+	return behind;
 }
 
 /**
@@ -1445,9 +1456,7 @@ export function isMajorCutover(target: string, applied?: string, installed?: str
 		version === undefined ? [] : [releaseMajor(version)],
 	);
 	if (previousMajors.some((major) => major > targetMajor)) {
-		throw new OperatorActionRequiredError(
-			"A major downgrade requires a database restore. Pause reconciliation, follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover, restore the previous database, then manually helm rollback to its stopped revision before restoring writers.",
-		);
+		throw new OperatorActionRequiredError(MAJOR_DOWNGRADE_RECOVERY);
 	}
 	return previousMajors.some((major) => major !== targetMajor);
 }

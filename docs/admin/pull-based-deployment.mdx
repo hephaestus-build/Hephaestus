@@ -429,8 +429,9 @@ If a stopped cutover fails or remains pending:
    Wait for its Complete or Failed condition before you restore data.
    After its 24-hour TTL, an absent Job is finished only if no migration Pod remains.
    If you must cancel it, delete that Job and wait for its Pods to disappear first.
-5. Restore the pre-upgrade database as [If migration fails](./upgrade#if-migration-fails) describes.
-   Keep every database writer stopped during the restore.
+5. Scale the server and worker Deployments to zero.
+   Wait for their Pods and sandboxes to stop.
+   Restore the pre-upgrade database with only steps 1 to 14 of [If migration fails](./upgrade#if-migration-fails).
 6. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
    Use the recorded source revision with zero server and worker replicas.
 7. To retry the target, resume the timer.
@@ -438,10 +439,12 @@ If a stopped cutover fails or remains pending:
 8. After the selected release succeeds, restore the worker count as phase 4 describes.
 
 A signed rollback request does not permit an automatic major release downgrade.
-Before a commit rollback across a schema boundary, restore the database through the same manual procedure.
+A commit channel must descend from the recorded release source.
+A signed request can permit an older commit only for a recorded pre-1.0 release.
+For 1.0 or later, use the manual recovery steps above first.
+
 If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json` after both restores succeed.
 Then promote the source release and resume the timer.
-A commit channel must descend from the recorded release source, unless its signed request permits rollback.
 
 ### Switch a host between Compose and the chart
 
