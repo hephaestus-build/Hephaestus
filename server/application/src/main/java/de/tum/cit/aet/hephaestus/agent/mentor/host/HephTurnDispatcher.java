@@ -30,6 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -154,6 +155,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile @Nullable JsonNode partial;
         /** The latest host snapshot before a local tools-wait stage is applied. */
         volatile @Nullable JsonNode hostPartial;
+        final ReentrantLock progress = new ReentrantLock();
 
         volatile boolean started;
         volatile @Nullable String stopReason;
@@ -354,7 +356,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     private void reportPartial(Running turn) {
-        synchronized (turn) {
+        turn.progress.lock();
+        try {
             JsonNode partial = turn.hostPartial;
             if (partial == null) return;
             if (partial instanceof ObjectNode snapshot
@@ -369,6 +372,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             if (partial.equals(stored)) return;
             completion.progress(turn.turnId, turn.attempt, workerId, partial, stored == null ? turn.claimed : null);
             turn.partial = partial;
+        } finally {
+            turn.progress.unlock();
         }
     }
 
