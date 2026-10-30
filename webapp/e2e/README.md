@@ -61,6 +61,17 @@ colour schemes, a Tab walk, reflow, menus, dialogs and three keyboard-only proce
 `e2e` account and runs on any browser project; `docs/contributor/accessibility-audit-plan.md` says what it
 leaves to a person with a screen reader.
 
+## Journey budgets
+
+`journeys.spec.ts` holds the journeys that make up most use to what they cost: a cold load of the practice profile, Ask Hephaestus and the feedback that waits for approval, and the step from the practice profile to Ask Hephaestus.
+It needs no server: like the user-guide screenshots, it answers the API from the synthetic workspace in `screenshots/workspace.ts`, and each answer waits 100 ms.
+For each journey it records the API reads, the round trips the reader waits for before the page shows its own content, and the landmarks that layout shifts move without the reader's input.
+The round trips come from Playwright's request timings: a read that starts only after another answered counts one more.
+`journey-budgets.ts` states the expected values exactly.
+A change that adds a read, a round trip or a moved landmark fails and prints the new value.
+Update the budget in the same change, so the review sees the cost.
+A saving fails in the same way, so the budget comes down with it.
+
 ## Reading the result
 
 `public-activity.spec.ts` uses the isolated `e2e-public` workspace in `seed.sql`.
