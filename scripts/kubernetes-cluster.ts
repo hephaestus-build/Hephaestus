@@ -28,7 +28,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { connect } from "node:net";
+import { BlockList, connect, isIP } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -1811,7 +1811,19 @@ async function portBusy(port: number): Promise<boolean> {
 	}
 }
 
-export type ClusterState = "absent" | "stopped" | "without-port" | "running";
+const LOOPBACK_ADDRESSES = new BlockList();
+LOOPBACK_ADDRESSES.addSubnet("127.0.0.0", 8, "ipv4");
+LOOPBACK_ADDRESSES.addAddress("::1", "ipv6");
+
+function isLoopbackPublication(binding: unknown): boolean {
+	if (!isRecord(binding) || typeof binding.HostIp !== "string") {
+		return false;
+	}
+	const family = isIP(binding.HostIp);
+	return family !== 0 && LOOPBACK_ADDRESSES.check(binding.HostIp, family === 4 ? "ipv4" : "ipv6");
+}
+
+export type ClusterState = "absent" | "stopped" | "without-port" | "needs-reset" | "running";
 
 /** The state of the `dev` cluster in `k3d cluster list -o json`. */
 export function clusterState(listed: unknown): ClusterState {
@@ -1832,6 +1844,19 @@ export function clusterState(listed: unknown): ClusterState {
 		);
 	if (!published) {
 		return "without-port";
+	}
+	const apiBindings = nodes
+		.map((node) => asRecord(node, "node"))
+		.map((node) => (isRecord(node.portMappings) ? node.portMappings["6443/tcp"] : undefined))
+		.filter((bindings) => bindings !== undefined);
+	if (
+		apiBindings.length === 0 ||
+		!apiBindings.every(
+			(bindings) =>
+				Array.isArray(bindings) && bindings.length > 0 && bindings.every(isLoopbackPublication),
+		)
+	) {
+		return "needs-reset";
 	}
 	return entry.serversRunning === 0 ? "stopped" : "running";
 }
@@ -2023,6 +2048,27 @@ export function devSummary(options: {
 
 const DEV_REGISTRY = "k3d-hephaestus-registry.localhost";
 
+/** The shared local cluster publishes both entry points only on this machine. */
+export function devClusterArguments(mirrors: string): string[] {
+	return [
+		"cluster",
+		"create",
+		DEV_CLUSTER,
+		"--agents",
+		"1",
+		"--api-port",
+		"127.0.0.1:random",
+		"--registry-use",
+		`${DEV_REGISTRY}:5000`,
+		"--registry-config",
+		mirrors,
+		"--port",
+		"127.0.0.1:443:443@loadbalancer",
+		"--k3s-arg",
+		"--kubelet-arg=pod-max-pids=4096@all",
+	];
+}
+
 async function dev(work: string): Promise<void> {
 	await preflight();
 	const savedFile = path.join(work, "sign-in.json");
@@ -2035,13 +2081,13 @@ async function dev(work: string): Promise<void> {
 			"create",
 			"hephaestus-registry.localhost",
 			"--port",
-			registryPort,
+			`127.0.0.1:${registryPort}`,
 		]);
 	}
 	const state = clusterState(parseJson(await output("k3d", ["cluster", "list", "-o", "json"])));
-	if (state === "without-port") {
+	if (state === "without-port" || state === "needs-reset") {
 		throw new Error(
-			`the cluster ${DEV_CLUSTER} publishes no HTTPS port: an older run created it. Run vp run dev:kubernetes:reset`,
+			`the cluster ${DEV_CLUSTER} needs a loopback API binding and a published HTTPS port. Run vp run dev:kubernetes:reset`,
 		);
 	}
 	if (state === "stopped") {
@@ -2056,21 +2102,7 @@ async function dev(work: string): Promise<void> {
 			`mirrors:\n  ghcr.io:\n    endpoint:\n      - http://${DEV_REGISTRY}:5000\n`,
 		);
 		try {
-			await run("k3d", [
-				"cluster",
-				"create",
-				DEV_CLUSTER,
-				"--agents",
-				"1",
-				"--registry-use",
-				`${DEV_REGISTRY}:5000`,
-				"--registry-config",
-				mirrors,
-				"--port",
-				"127.0.0.1:443:443@loadbalancer",
-				"--k3s-arg",
-				"--kubelet-arg=pod-max-pids=4096@all",
-			]);
+			await run("k3d", devClusterArguments(mirrors));
 		} catch (error) {
 			// A failed create can leave a half-made cluster that blocks the next one.
 			await succeeds("k3d", ["cluster", "delete", DEV_CLUSTER]);

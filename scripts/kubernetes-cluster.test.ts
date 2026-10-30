@@ -17,6 +17,7 @@ import {
 	DEV_HOST,
 	DEV_MEMORY,
 	devProblems,
+	devClusterArguments,
 	devSignIn,
 	devSummary,
 	trustSteps,
@@ -223,13 +224,17 @@ await test("dev reports one problem of each kind, and none when all is in place"
 });
 
 /** A `k3d cluster list -o json` with another cluster and the dev cluster. */
-const listed = (serversRunning: number, ports: Record<string, unknown> | null) => [
+const listed = (
+	serversRunning: number,
+	ports: Record<string, unknown> | null,
+	api: unknown = [{ HostIp: "127.0.0.1" }],
+) => [
 	{ name: "other", serversRunning: 1, nodes: [] },
 	{
 		name: DEV_CLUSTER,
 		serversRunning,
 		nodes: [
-			{ role: "loadbalancer", portMappings: { "6443/tcp": [{}], ...ports } },
+			{ role: "loadbalancer", portMappings: { "6443/tcp": api, ...ports } },
 			{ role: "server", portMappings: null },
 		],
 	},
@@ -240,6 +245,64 @@ await test("the dev cluster is absent, stopped, running, or from a run that publ
 	assert.equal(clusterState(listed(1, null)), "without-port");
 	assert.equal(clusterState(listed(0, { "443/tcp": [{}] })), "stopped");
 	assert.equal(clusterState(listed(1, { "443/tcp": [{}] })), "running");
+});
+
+await test("the created cluster publishes the API and HTTPS on loopback", () => {
+	const args = devClusterArguments("/tmp/registries.yaml");
+	assert.equal(args[args.indexOf("--api-port") + 1], "127.0.0.1:random");
+	assert.equal(args[args.indexOf("--port") + 1], "127.0.0.1:443:443@loadbalancer");
+});
+
+await test("an existing wildcard, non-loopback or unknown API binding needs reset even while stopped", () => {
+	for (const running of [0, 1]) {
+		for (const host of [
+			"0.0.0.0",
+			"::",
+			"",
+			"192.168.1.2",
+			"localhost",
+			"127.example.invalid",
+			null,
+		]) {
+			assert.equal(
+				clusterState(listed(running, { "443/tcp": [{}] }, [{ HostIp: host }])),
+				"needs-reset",
+			);
+		}
+		for (const api of [{}, null, [], [{}], [{ HostIp: "127.0.0.1" }, { HostIp: "0.0.0.0" }]]) {
+			assert.equal(clusterState(listed(running, { "443/tcp": [{}] }, api)), "needs-reset");
+		}
+	}
+	for (const host of ["127.0.0.1", "127.2.3.4", "::1", "0:0:0:0:0:0:0:1", "::ffff:127.0.0.1"]) {
+		assert.equal(clusterState(listed(1, { "443/tcp": [{}] }, [{ HostIp: host }])), "running");
+	}
+});
+
+await test("an extra API publication on a server node also requires reset", () => {
+	const clusters = [
+		{
+			name: DEV_CLUSTER,
+			serversRunning: 1,
+			nodes: [
+				{
+					role: "loadbalancer",
+					portMappings: { "443/tcp": [{}], "6443/tcp": [{ HostIp: "127.0.0.1" }] },
+				},
+				{ role: "server", portMappings: { "6443/tcp": [{ HostIp: "0.0.0.0" }] } },
+			],
+		},
+	];
+	assert.equal(clusterState(clusters), "needs-reset");
+	assert.equal(
+		clusterState([
+			{
+				name: DEV_CLUSTER,
+				serversRunning: 1,
+				nodes: [{ role: "loadbalancer", portMappings: { "443/tcp": [{}] } }],
+			},
+		]),
+		"needs-reset",
+	);
 });
 
 await test("sign-in takes the OAuth app from the shell, else keeps an earlier run's, and refuses half an app", () => {
