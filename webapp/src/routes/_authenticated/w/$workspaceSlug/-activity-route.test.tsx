@@ -184,6 +184,7 @@ function adaMembership(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		publicActivityAnswered: null,
 	};
 }
 

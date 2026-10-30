@@ -86,9 +86,10 @@ public class Account {
     @ColumnDefault("false")
     private boolean passkeyRecoveryRequired;
 
+    /** Hidden until the person answers: an account that never chose is on no public activity page. */
     @Column(name = "public_activity_visible", nullable = false)
-    @ColumnDefault("true")
-    private boolean publicActivityVisible = true;
+    @ColumnDefault("false")
+    private boolean publicActivityVisible;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "ai_choice", length = 24)

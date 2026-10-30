@@ -45,6 +45,7 @@ export function ownMembership(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		publicActivityAnswered: null,
 		...overrides,
 	};
 }

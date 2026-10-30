@@ -104,6 +104,7 @@ const membership: WorkspaceMembership = {
 	},
 	role: "MEMBER",
 	eligibleForPracticeReview: true,
+	publicActivityAnswered: null,
 	hidden: false,
 	reviewSelected: true,
 	joinedAt: new Date("2026-01-01T00:00:00Z"),

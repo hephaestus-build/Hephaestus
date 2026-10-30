@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
 import { assert, describe, expect, it, vi } from "vitest";
@@ -22,7 +22,8 @@ import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { workspaceRewrite } from "@/runtime/workspace-address";
-import { deferred } from "@/test/async";
+import { deferred, sleep } from "@/test/async";
+import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -761,88 +762,37 @@ describe("refreshing public activity", () => {
 	});
 });
 
-/** The page, the person's own workspace, and the answers the first-visit step records. */
+/** The page, the person's own workspace, and every read of the public activity notice's state. */
 function visit() {
-	const answers: unknown[] = [];
 	const requests: URL[] = [];
-	let hidden = false;
+	const asked: URL[] = [];
 	server.use(
 		http.get("*/public/workspaces/:slug/activity", ({ request }) => {
 			requests.push(new URL(request.url));
-			return HttpResponse.json(
-				publicActivity({
-					people: hidden
-						? [person("bob", "Bob Brenner")]
-						: [person("ada", "Ada Lovelace"), person("bob", "Bob Brenner")],
-				}),
-			);
+			return HttpResponse.json(publicActivity());
 		}),
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("other")])),
 		http.get("*/workspaces/other/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
-		http.get("*/user/public-activity/workspaces/acme/onboarding", () =>
-			HttpResponse.json({ seen: answers.length > 0, visible: !hidden }),
-		),
-		http.put<PathParams, PublicActivityOnboardingRequest>(
-			"*/user/public-activity/workspaces/acme/onboarding",
-			async ({ request }) => {
-				const body = await request.json();
-				answers.push(body);
-				hidden = !body.visible;
-				return HttpResponse.json({ seen: true, visible: body.visible });
-			},
-		),
+		http.get("*/user/public-activity/workspaces/acme/onboarding", ({ request }) => {
+			asked.push(new URL(request.url));
+			return HttpResponse.json({ seen: false, visible: false });
+		}),
 	);
-	return { answers, requests };
+	return { requests, asked };
 }
 
+const NOTICE = { name: "Acme has a public activity page" };
+
 describe("a signed-in person who is not a member", () => {
-	it("sees the page, and the step to show or hide themselves", async () => {
-		const user = userEvent.setup();
-		const { answers } = visit();
+	it("sees the page without the notice, which only a member can answer", async () => {
+		const { asked } = visit();
 		const { router } = renderRouteAtWithRouter("/w/acme");
 
-		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.pathname).toBe("/w/acme");
-		// The step is modal, so the page behind it is out of the accessibility tree.
-		const settings = within(screen.getByRole("main", { hidden: true })).getByRole("link", {
-			name: "User settings",
-			hidden: true,
-		});
-		expect(settings.getAttribute("href")).toBe("/settings");
-		await user.click(within(step).getByRole("button", { name: "Hide me" }));
-
-		await waitFor(() => expect(answers).toStrictEqual([{ visible: false }]));
-		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
-	});
-
-	it("no longer sees their own row once they hide, without reloading", async () => {
-		const user = userEvent.setup();
-		const { requests } = visit();
-		renderRouteAtWithRouter("/w/acme");
-
-		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
-		expect(requests).toHaveLength(1);
-		await user.click(within(step).getByRole("button", { name: "Hide me" }));
-
-		await waitFor(() => expect(requests.length).toBeGreaterThan(1));
-		await waitFor(() => expect(names()).toStrictEqual(["Bob Brenner"]));
-	});
-
-	it("can leave the step for this visit with Escape, and go on while a save never answers", async () => {
-		const user = userEvent.setup();
-		// Never answered: a save that settled later would read the page again, into the next case.
-		const hangs = deferred<Response>();
-		visit();
-		server.use(
-			http.put("*/user/public-activity/workspaces/acme/onboarding", async () => hangs.promise),
-		);
-		renderRouteAtWithRouter("/w/acme");
-
-		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
-		await user.click(within(step).getByRole("button", { name: "Hide me" }));
-		await user.click(within(step).getByRole("button", { name: "Decide later" }));
-
-		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+		expect(screen.queryByRole("region", NOTICE)).toBeNull();
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		expect(asked).toStrictEqual([]);
 	});
 
 	it("has no active workspace here, so the chrome reads nothing the server would refuse", async () => {
@@ -853,7 +803,7 @@ describe("a signed-in person who is not a member", () => {
 		});
 		renderRouteAtWithRouter("/w/acme");
 
-		await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		server.events.removeAllListeners();
 		expect(requests).toHaveLength(1);
 		// Membership, survey invitations and the Hephaestus setup are members-only reads of a workspace.
@@ -869,9 +819,9 @@ describe("a signed-in person who is not a member", () => {
 		);
 		renderRouteAtWithRouter("/w/acme");
 
-		await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(document.documentElement.dataset.provider).toBe("gitlab"));
-		screen.getByRole("columnheader", { name: /Merge requests/u, hidden: true });
+		screen.getByRole("columnheader", { name: /Merge requests/u });
 	});
 });
 
@@ -888,35 +838,117 @@ describe("a signed-in person whose consent is pending", () => {
 	});
 });
 
-describe("a member", () => {
-	it("is asked once, on the first page of a workspace that publishes", async () => {
-		const user = userEvent.setup();
-		const answers: unknown[] = [];
-		let seen = false;
-		server.use(
-			http.get("*/workspaces", () =>
-				HttpResponse.json([workspaceListItem("acme", { publishesPublicActivity: true })]),
-			),
-			http.get("*/workspaces/:workspaceSlug/members/me", () =>
-				HttpResponse.json(ownMembership("MEMBER")),
-			),
-			http.get("*/user/public-activity/workspaces/acme/onboarding", () =>
-				HttpResponse.json({ seen, visible: true }),
-			),
-			http.put("*/user/public-activity/workspaces/acme/onboarding", async ({ request }) => {
-				answers.push(await request.json());
+/**
+ * A member of a workspace that publishes. The notice's state answers when `held` settles, and every
+ * answer the member saves lands in `answers`; `saved` holds back the save's reply.
+ */
+function memberOfPublishingWorkspace({
+	held,
+	saved,
+}: { held?: Promise<void>; saved?: Promise<void> } = {}) {
+	const answers: unknown[] = [];
+	let seen = false;
+	let visible = false;
+	server.use(
+		http.get("*/workspaces", () =>
+			HttpResponse.json([
+				workspaceListItem("acme", { displayName: "Acme", publishesPublicActivity: true }),
+			]),
+		),
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(ownMembership("MEMBER")),
+		),
+		http.get("*/user/public-activity/workspaces/acme/onboarding", async () => {
+			await held;
+			return HttpResponse.json({ seen, visible });
+		}),
+		http.put<PathParams, PublicActivityOnboardingRequest>(
+			"*/user/public-activity/workspaces/acme/onboarding",
+			async ({ request }) => {
+				const body = await request.json();
+				answers.push(body);
+				await saved;
 				seen = true;
-				return HttpResponse.json({ seen, visible: true });
-			}),
-		);
-		vi.stubGlobal("IntersectionObserver", ObserverStub);
+				visible = body.visible;
+				return HttpResponse.json({ seen, visible });
+			},
+		),
+	);
+	vi.stubGlobal("IntersectionObserver", ObserverStub);
+	return { answers };
+}
+
+describe("a member", () => {
+	it("reads the notice's state in the workspace gate, so the notice arrives with the page", async () => {
+		const held = deferred();
+		memberOfPublishingWorkspace({ held: held.promise });
 		renderRouteAtWithRouter("/w/acme");
 
-		const step = await screen.findByRole("alertdialog", {}, ROUTE_RENDER_WAIT);
-		await user.click(within(step).getByRole("button", { name: "Show me" }));
+		// The gate waits for the state, so the page does not render without the notice and then move.
+		await act(async () => sleep(300));
+		expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+		held.resolve();
+
+		const heading = await screen.findByRole("heading", { level: 1 }, ROUTE_RENDER_WAIT);
+		const notice = screen.getByRole("region", NOTICE);
+		expect(precedes(notice, heading)).toBe(true);
+	});
+
+	it("sees a notice in the page, not a dialog, and it takes no focus", async () => {
+		memberOfPublishingWorkspace();
+		renderRouteAtWithRouter("/w/acme");
+
+		const notice = await screen.findByRole("region", NOTICE, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(notice.contains(document.activeElement)).toBe(false);
+		within(notice).getByText(/Right now, public pages hide you\./u);
+	});
+
+	it("answers in the notice, which leaves and hands focus to the page heading", async () => {
+		const user = userEvent.setup();
+		const { answers } = memberOfPublishingWorkspace();
+		renderRouteAtWithRouter("/w/acme");
+
+		const notice = await screen.findByRole("region", NOTICE, ROUTE_RENDER_WAIT);
+		await user.click(within(notice).getByRole("button", { name: "Show me" }));
 
 		await waitFor(() => expect(answers).toStrictEqual([{ visible: true }]));
-		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+		await waitFor(() => expect(screen.queryByRole("region", NOTICE)).toBeNull());
+		expect(document.activeElement).toBe(screen.getByRole("heading", { level: 1 }));
+	});
+
+	it("keeps focus where the member moved it while the answer was saving", async () => {
+		const user = userEvent.setup();
+		const saved = deferred();
+		const { answers } = memberOfPublishingWorkspace({ saved: saved.promise });
+		renderRouteAtWithRouter("/w/acme");
+
+		const notice = await screen.findByRole("region", NOTICE, ROUTE_RENDER_WAIT);
+		await user.click(within(notice).getByRole("button", { name: "Hide me" }));
+		await waitFor(() => expect(answers).toStrictEqual([{ visible: false }]));
+		const elsewhere = screen.getByRole("main");
+		elsewhere.focus();
+		expect(document.activeElement).toBe(elsewhere);
+		saved.resolve();
+
+		await waitFor(() => expect(screen.queryByRole("region", NOTICE)).toBeNull());
+		expect(document.activeElement).toBe(elsewhere);
+	});
+
+	it("can decide later, and is asked again on the next visit", async () => {
+		const user = userEvent.setup();
+		const { answers } = memberOfPublishingWorkspace();
+		renderRouteAtWithRouter("/w/acme");
+
+		const notice = await screen.findByRole("region", NOTICE, ROUTE_RENDER_WAIT);
+		await user.click(within(notice).getByRole("button", { name: "Decide later" }));
+		await waitFor(() => expect(screen.queryByRole("region", NOTICE)).toBeNull());
+		expect(answers).toStrictEqual([]);
+		cleanup();
+
+		renderRouteAtWithRouter("/w/acme");
+		await screen.findByRole("region", NOTICE, ROUTE_RENDER_WAIT);
 	});
 
 	it("is not asked where the workspace does not publish", async () => {
@@ -928,7 +960,7 @@ describe("a member", () => {
 			),
 			http.get("*/user/public-activity/workspaces/acme/onboarding", () => {
 				asked();
-				return HttpResponse.json({ seen: false, visible: true });
+				return HttpResponse.json({ seen: false, visible: false });
 			}),
 		);
 		vi.stubGlobal("IntersectionObserver", ObserverStub);
@@ -936,7 +968,7 @@ describe("a member", () => {
 
 		await screen.findByRole("heading", { name: /Activity/u }, ROUTE_RENDER_WAIT);
 		expect(asked).not.toHaveBeenCalled();
-		expect(screen.queryByRole("alertdialog")).toBeNull();
+		expect(screen.queryByRole("region", { name: /has a public activity page$/u })).toBeNull();
 	});
 });
 

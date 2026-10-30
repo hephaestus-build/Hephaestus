@@ -1,12 +1,13 @@
-import { createFileRoute, Outlet, redirect, useMatch } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useMatch, useMatches } from "@tanstack/react-router";
 import { hasText } from "@/lib/text";
 
 import {
 	getMemberOnboardingOptions,
+	getPublicActivityOnboardingOptions,
 	getWorkspaceOptions,
 	listWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
-import { PublicActivityOnboardingDialog } from "@/components/onboarding/PublicActivityOnboardingDialog";
+import { PublicActivityNotice } from "@/components/onboarding/PublicActivityNotice";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
@@ -30,13 +31,23 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 		);
 		if (workspace) {
 			const base = `/w/${encodeURIComponent(params.workspaceSlug)}`;
+			const userView = getUserViewSession() !== undefined;
+			const settingUp = location.pathname === `${base}/onboarding`;
+			// The public activity notice renders with the page, so nothing moves down after it loads.
+			// An outage only leaves the notice to arrive later, as the member onboarding below does.
+			const publicActivity =
+				workspace.publishesPublicActivity && !userView && !settingUp
+					? context.queryClient
+							.query({
+								...getPublicActivityOnboardingOptions({ path: { slug: params.workspaceSlug } }),
+								retry: false,
+							})
+							.catch(() => undefined)
+					: undefined;
 			// Owners must be able to repair setup; an outage must never revoke membership. A user view
 			// never completes setup: the saved choices belong to the signed-in account.
-			if (
-				getUserViewSession() !== undefined ||
-				location.pathname === `${base}/onboarding` ||
-				location.pathname.startsWith(`${base}/admin`)
-			) {
+			if (userView || settingUp || location.pathname.startsWith(`${base}/admin`)) {
+				await publicActivity;
 				return { workspace, administrationWorkspace: undefined };
 			}
 			const onboarding = await context.queryClient
@@ -53,6 +64,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 					replace: true,
 				});
 			}
+			await publicActivity;
 			return { workspace, administrationWorkspace: undefined };
 		}
 
@@ -91,9 +103,10 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 });
 
 /**
- * Where a workspace publishes its activity, the first page a member opens asks whether they show on
- * it. The AI setup comes first: it is a route of its own, which the step waits out. A user view
- * answers for no one.
+ * Where a workspace publishes its activity, a member's pages open with a notice that asks whether
+ * they show on it, until they answer. The AI setup comes first: it is a route of its own, which the
+ * notice waits out. A user view answers for no one, and an instance admin who administers the
+ * workspace without a membership has no workspace here, so neither sees it.
  */
 function WorkspaceLayout() {
 	const { workspaceSlug } = Route.useParams();
@@ -105,20 +118,26 @@ function WorkspaceLayout() {
 			from: "/_authenticated/w/$workspaceSlug/onboarding",
 			shouldThrow: false,
 		}) !== undefined;
-	const onboarding = usePublicActivityOnboarding({
+	// A full-screen page has no page padding, so the notice brings its own.
+	const fullscreen = useMatches({
+		select: (matches) => matches.some((match) => match.staticData.surface === "fullscreen"),
+	});
+	const { notice, ...onboarding } = usePublicActivityOnboarding({
 		workspaceSlug,
 		enabled: workspace?.publishesPublicActivity === true && userView === undefined && !settingUp,
 	});
 	return (
 		<>
-			<Outlet />
-			{workspace !== undefined && (
-				<PublicActivityOnboardingDialog
+			{workspace !== undefined && notice !== undefined && (
+				<PublicActivityNotice
+					{...notice}
 					{...onboarding}
 					workspaceName={workspace.displayName}
 					providerType={toScmProviderType(workspace.providerType)}
+					className={fullscreen ? "px-4 pt-4" : "pb-6"}
 				/>
 			)}
+			<Outlet />
 		</>
 	);
 }

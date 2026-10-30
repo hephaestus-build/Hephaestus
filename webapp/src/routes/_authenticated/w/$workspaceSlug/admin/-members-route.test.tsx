@@ -44,6 +44,7 @@ function member(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		publicActivityAnswered: null,
 		...overrides,
 	};
 }
@@ -663,4 +664,53 @@ it("renders the verified nonmember target's members without adding that target t
 	expect(requests).toHaveLength(1);
 	expect(requests[0]).toMatch(/\/workspaces\/tutors\/members$/u);
 	expect(screen.queryByText("Ada Lovelace", { selector: "div" })).toBeNull();
+});
+
+describe("public activity answers", () => {
+	it("marks the members who have not answered, and says nothing of the others' answers", async () => {
+		mockMembersRoute([
+			member("7", { displayName: "Ada Lovelace" }, { publicActivityAnswered: true }),
+			member(
+				"8",
+				{ displayName: "Sam Unclaimed", status: "UNCLAIMED" },
+				{ publicActivityAnswered: false },
+			),
+		]);
+		renderRouteAt("/w/acme/admin/members");
+
+		await screen.findByText("Ada Lovelace", { selector: "div" }, ROUTE_RENDER_WAIT);
+		screen.getByRole("columnheader", { name: "Public activity" });
+		within(rowOf("Sam Unclaimed")).getByRole("button", { name: "Not answered yet: Sam Unclaimed" });
+		const ada = within(rowOf("Ada Lovelace"));
+		expect(ada.queryByRole("button", { name: /^Not answered yet/u })).toBeNull();
+		expect(ada.queryByText(/Shown|Hidden/u)).toBeNull();
+	});
+
+	it("leaves the column out where the workspace does not publish", async () => {
+		mockMembersRoute();
+		renderRouteAt("/w/acme/admin/members");
+
+		await screen.findByText("Ada Lovelace", { selector: "div" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("columnheader", { name: "Public activity" })).toBeNull();
+	});
+
+	it("marks pending members for an instance admin who administers the workspace without a membership", async () => {
+		mockMembersRoute();
+		server.use(
+			http.get("*/user", () => HttpResponse.json(currentUser)),
+			http.get("*/workspaces/tutors", () => HttpResponse.json(TUTORS)),
+			http.get("*/workspaces/tutors/members/me", () =>
+				HttpResponse.json({ status: 403 }, { status: 403 }),
+			),
+			http.get("*/workspaces/tutors/members", () =>
+				HttpResponse.json(membershipPage([{ ...SAM, publicActivityAnswered: false }])),
+			),
+		);
+		renderRouteAt("/w/tutors/admin/members");
+
+		await screen.findByText("Sam Unclaimed", { selector: "div" }, ROUTE_RENDER_WAIT);
+		within(rowOf("Sam Unclaimed")).getByRole("button", { name: "Not answered yet: Sam Unclaimed" });
+		// The notice asks members only: this admin has no membership to answer with.
+		expect(screen.queryByRole("region", { name: /has a public activity page$/u })).toBeNull();
+	});
 });

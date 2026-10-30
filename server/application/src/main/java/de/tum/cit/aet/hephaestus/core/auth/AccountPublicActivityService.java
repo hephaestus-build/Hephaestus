@@ -31,6 +31,7 @@ class AccountPublicActivityService implements AccountPublicActivity {
                 .orElseThrow(() -> new EntityNotFoundException("Account", accountId));
         account.setPublicActivityVisible(visible);
         accounts.flush();
+        accounts.forgetPublicActivityHiddenByDefault(accountId);
         if (visible) {
             accounts.clearLinkedPublicActivityObjections(accountId);
         } else {

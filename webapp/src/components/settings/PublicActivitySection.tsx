@@ -46,7 +46,7 @@ export function PublicActivitySection({ state }: PublicActivitySectionProps) {
 						</FieldLabel>
 						<FieldDescription>
 							Public pages list your pull or merge requests, reviews and issues in public
-							repositories. Turn this off to leave every public page.
+							repositories. Off until you turn it on. Your choice covers every public page.
 						</FieldDescription>
 					</FieldContent>
 					<Switch

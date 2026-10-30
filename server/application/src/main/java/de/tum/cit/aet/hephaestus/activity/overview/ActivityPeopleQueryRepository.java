@@ -23,6 +23,16 @@ import org.springframework.data.repository.query.Param;
 
 @org.springframework.stereotype.Repository
 interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> {
+    /**
+     * An account shows on public pages only by its own answer. An unclaimed account never answered: it
+     * is hidden while it holds a membership, and otherwise reads as a contributor without an account,
+     * so an admin who hides and shows a contributor again leaves them as they were.
+     */
+    String ACCOUNT_HIDES_PUBLIC = """
+        NOT a.public_activity_visible AND (a.status <> 'UNCLAIMED'
+            OR EXISTS (SELECT 1 FROM membership asked WHERE asked.account_id = a.id AND asked.left_at IS NULL))
+        """;
+
     String PUBLIC_PERSON = """
               AND u.type = 'USER'
               AND EXISTS (SELECT 1 FROM identity_provider p WHERE p.id = u.provider_id AND p.type IN ('GITHUB', 'GITLAB'))
@@ -38,7 +48,9 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                   WHERE o.kind = 'HIDE_PUBLIC' AND o.team_key = '' AND o.provider_id = u.provider_id AND o.provider_user_key = CAST(u.native_id AS text))
               AND NOT EXISTS (SELECT 1 FROM identity l JOIN account a ON a.id = l.account_id
                   WHERE l.provider_id = u.provider_id AND l.provider_user_key = CAST(u.native_id AS text)
-                      AND (NOT a.public_activity_visible OR a.status IN ('DELETING', 'DELETED')))
+                      AND (a.status IN ('DELETING', 'DELETED') OR (
+        """ + ACCOUNT_HIDES_PUBLIC + """
+                      )))
         """;
     String PUBLIC_REPOSITORY_CONDITION = """
         r.visibility = 'PUBLIC' AND NOT r.is_private
@@ -478,7 +490,10 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                     OR coalesce(wm.hidden, false)
                     OR EXISTS (SELECT 1 FROM membership h WHERE h.workspace_id = :workspace AND h.hidden AND h.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = ''))
                     OR EXISTS (SELECT 1 FROM identity l JOIN account a ON a.id = l.account_id
-                        WHERE l.provider_id = u.provider_id AND l.provider_user_key = CAST(u.native_id AS text) AND NOT a.public_activity_visible))
+                        WHERE l.provider_id = u.provider_id AND l.provider_user_key = CAST(u.native_id AS text) AND
+                """
+                    + ACCOUNT_HIDES_PUBLIC + """
+                    ))
                 """,
             nativeQuery = true)
     long countPublicHiddenPeople(

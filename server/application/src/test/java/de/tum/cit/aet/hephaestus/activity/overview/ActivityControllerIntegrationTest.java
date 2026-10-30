@@ -95,6 +95,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -103,6 +104,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.StatusAssertions;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -250,6 +252,93 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             jdbc.update(
                     "INSERT INTO instance_settings (id, silent_mode_engaged, version, public_activity_allowed) VALUES"
                             + " (1,true,0,true) ON CONFLICT (id) DO UPDATE SET public_activity_allowed=true");
+            // A member is hidden until they answer: Ada and Zoe chose to show.
+            publicationChoice.setVisible(accountId(ada), true);
+            publicationChoice.setVisible(accountId(zoe), true);
+        }
+
+        @Test
+        void shouldShowOnlyTheMemberWhoAnsweredShowOnEveryPublicSurface() {
+            var shown = userRepository
+                    .findByLoginAndProviderId(
+                            "mentor",
+                            Objects.requireNonNull(ensureGitHubProvider().getId()))
+                    .orElseThrow();
+            var hidden = persistUser("testuser");
+            ensureMembership(workspace, hidden, WorkspaceRole.MEMBER);
+            var unanswered = member("public-unanswered", "Una");
+            answerNotice(TestAuthUtils.withCurrentUser(), true);
+            answerNotice(headers -> headers.setBearerAuth("testuser"), false);
+            for (User person : List.of(shown, hidden)) {
+                var pull = pullRequest(person, monitored, work -> work);
+                record(
+                        person,
+                        ActivityEventType.PULL_REQUEST_OPENED,
+                        ActivityTargetType.PULL_REQUEST,
+                        pull.getId(),
+                        DAY);
+            }
+            var unansweredPull = pullRequest(unanswered, monitored, work -> work);
+            record(
+                    unanswered,
+                    ActivityEventType.PULL_REQUEST_OPENED,
+                    ActivityTargetType.PULL_REQUEST,
+                    unansweredPull.getId(),
+                    DAY);
+            var approval = review(unansweredPull, shown, PullRequestReview.State.APPROVED);
+            record(shown, ActivityEventType.REVIEW_APPROVED, ActivityTargetType.REVIEW, approval.getId(), DAY);
+
+            var page = page();
+            assertThat(page.people())
+                    .extracting(p -> p.login())
+                    .contains(shown.getLogin())
+                    .doesNotContain(hidden.getLogin(), unanswered.getLogin());
+            assertThat(page.highlights().firstContributors()).doesNotContain(hidden.getLogin(), unanswered.getLogin());
+            assertThat(page.highlights().mostPeopleHelped()).doesNotContain(shown.getLogin());
+            // The review stays the reviewer's work, but a person who has not answered is nobody they helped.
+            var shownDetail = person(shown);
+            assertThat(shownDetail.person().login()).isEqualTo(shown.getLogin());
+            assertThat(shownDetail.counts().pullRequestsReviewed()).isEqualTo(1);
+            assertThat(shownDetail.counts().peopleHelped()).isZero();
+            assertThat(personWork(shown, uri -> uri).content()).isNotEmpty();
+            for (User person : List.of(hidden, unanswered)) {
+                for (String suffix : List.of("", "/work")) {
+                    personRead(person, suffix, uri -> uri).isNotFound().expectBody(Void.class);
+                }
+            }
+        }
+
+        @Test
+        void shouldHideAnUnclaimedRosterMemberUntilTheyAnswerAndShowThemAgainAfterTheyLeave() {
+            var roster = member("public-roster", "Roster");
+            long accountId = accountId(roster);
+            assertThat(accountRepository.findById(accountId).orElseThrow().getStatus())
+                    .isEqualTo(Account.Status.UNCLAIMED);
+            record(roster, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -1, DAY);
+            assertThat(page().people()).extracting(p -> p.login()).doesNotContain(roster.getLogin());
+            var membership = workspaceMembershipRepository
+                    .findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId)
+                    .orElseThrow();
+            membership.setLeftAt(membership.getJoinedAt());
+            workspaceMembershipRepository.save(membership);
+            // A former member nobody asks is an outside contributor again, as before they joined.
+            assertThat(page().people()).extracting(p -> p.login()).contains(roster.getLogin());
+        }
+
+        private void answerNotice(Consumer<HttpHeaders> caller, boolean visible) {
+            webTestClient
+                    .put()
+                    .uri("/user/public-activity/workspaces/{slug}/onboarding", workspace.getWorkspaceSlug())
+                    .headers(caller)
+                    .bodyValue(Map.of("visible", visible))
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.seen")
+                    .isEqualTo(true)
+                    .jsonPath("$.visible")
+                    .isEqualTo(visible);
         }
 
         @Test
@@ -842,7 +931,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .jsonPath("$.seen")
                     .isEqualTo(false)
                     .jsonPath("$.visible")
-                    .isEqualTo(true);
+                    .isEqualTo(false);
             webTestClient
                     .put()
                     .uri("/user/public-activity/workspaces/public-second/onboarding")

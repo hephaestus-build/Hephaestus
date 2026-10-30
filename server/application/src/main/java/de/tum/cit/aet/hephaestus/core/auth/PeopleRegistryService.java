@@ -96,7 +96,8 @@ public class PeopleRegistryService implements PeopleRegistry {
         for (var contributor : contributors) contributor.afterAbsorb(claimedAccountId, unclaimedAccountId);
         for (var contributor : contributors.reversed()) contributor.finish(claimedAccountId, unclaimedAccountId);
         target.setFeedbackDeliveryEnabled(target.isFeedbackDeliveryEnabled() && source.isFeedbackDeliveryEnabled());
-        target.setPublicActivityVisible(target.isPublicActivityVisible() && source.isPublicActivityVisible());
+        // An unclaimed account never signed in, so it never answered the public activity question:
+        // the claimed account's own answer, or its absence, stands.
         var sourceChoiceAt = source.getAiChoiceAt();
         var targetChoiceAt = target.getAiChoiceAt();
         if (sourceChoiceAt != null && (targetChoiceAt == null || sourceChoiceAt.isAfter(targetChoiceAt))) {

@@ -25,9 +25,7 @@ import { PublicActivityPage } from "@/components/activity/PublicActivityPage";
 import { PublicActivityPageSkeleton } from "@/components/activity/PublicActivityPageSkeleton";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
-import { PublicActivityOnboardingDialog } from "@/components/onboarding/PublicActivityOnboardingDialog";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { usePublicPersonActivity, usePublicPersonWork } from "@/hooks/use-public-person-activity";
 import { pageTitle } from "@/lib/page-title";
 import { problemStatusOf } from "@/lib/problem-detail";
@@ -174,7 +172,7 @@ function PublicActivityRoute() {
 	const openLogin = useLoginNavigation();
 	// The loader holds the previous period's page until the next one arrives.
 	const updating = useRouterState({ select: (state) => state.isLoading });
-	const { isAuthenticated, userView } = useAuth();
+	const { isAuthenticated } = useAuth();
 
 	// The loader owns requests; this observer owns only the exact query's mounted lifecycle.
 	const query = useQuery({ ...publicActivityOptions(workspaceSlug, search), enabled: false });
@@ -187,10 +185,6 @@ function PublicActivityRoute() {
 			: undefined;
 	const page = load.status === "ready" ? load.page : retained;
 	const providerType = toScmProviderType(page?.providerType);
-	const onboarding = usePublicActivityOnboarding({
-		workspaceSlug,
-		enabled: isAuthenticated && userView === undefined && page !== undefined,
-	});
 	const setView = (view: Partial<PeopleSearch>) => {
 		void setSearch((previous) => ({ ...previous, ...view }), { replace: true });
 	};
@@ -225,56 +219,47 @@ function PublicActivityRoute() {
 			? { status: "error", error: load.error, onRetry: retry, seedAllowed: false }
 			: person;
 
+	// Members never reach this page: the guard sends them to their workspace home. A visitor has no
+	// membership to answer the public activity notice with, so the page asks them nothing.
 	return (
-		<>
-			<PublicActivityPage
-				workspaceName={page?.workspaceName}
-				providerType={providerType}
-				viewer={
-					isAuthenticated ? { status: "signed-in" } : { status: "signed-out", onSignIn: openLogin }
-				}
-				period={periodFromSearch(search)}
-				onPeriodChange={(period) => setView(periodSearch(period))}
-				order={peopleOrder(search.sort, search.dir)}
-				onOrderChange={({ sort, desc }: PeopleOrder) =>
-					setView({ sort, dir: peopleDir(sort, desc) })
-				}
-				repo={search.repo ?? []}
-				onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
-				repositories={page?.repositories ?? []}
-				coverage={page?.coverage}
-				updating={updating}
-				refreshError={
-					retained !== undefined && load.status === "error"
-						? {
-								error: load.error,
-								onRetry: retry,
-								pending: updating,
-							}
-						: undefined
-				}
-				detail={{
-					stack: detailStack,
-					onClose: stackControls.close,
-				}}
-				personActivity={{ person: detailPerson, workLog, categoryWorkLog }}
-				people={
-					page === undefined
-						? {
-								status: "error",
-								error: load.status === "error" ? load.error : undefined,
-								onRetry: retry,
-							}
-						: { status: "ready", people: publicPeopleRows(page), stale: false }
-				}
-			/>
-			{page !== undefined && (
-				<PublicActivityOnboardingDialog
-					{...onboarding}
-					workspaceName={page.workspaceName}
-					providerType={providerType}
-				/>
-			)}
-		</>
+		<PublicActivityPage
+			workspaceName={page?.workspaceName}
+			providerType={providerType}
+			viewer={
+				isAuthenticated ? { status: "signed-in" } : { status: "signed-out", onSignIn: openLogin }
+			}
+			period={periodFromSearch(search)}
+			onPeriodChange={(period) => setView(periodSearch(period))}
+			order={peopleOrder(search.sort, search.dir)}
+			onOrderChange={({ sort, desc }: PeopleOrder) => setView({ sort, dir: peopleDir(sort, desc) })}
+			repo={search.repo ?? []}
+			onRepoChange={(repo) => setView({ repo: nonEmpty(repo) })}
+			repositories={page?.repositories ?? []}
+			coverage={page?.coverage}
+			updating={updating}
+			refreshError={
+				retained !== undefined && load.status === "error"
+					? {
+							error: load.error,
+							onRetry: retry,
+							pending: updating,
+						}
+					: undefined
+			}
+			detail={{
+				stack: detailStack,
+				onClose: stackControls.close,
+			}}
+			personActivity={{ person: detailPerson, workLog, categoryWorkLog }}
+			people={
+				page === undefined
+					? {
+							status: "error",
+							error: load.status === "error" ? load.error : undefined,
+							onRetry: retry,
+						}
+					: { status: "ready", people: publicPeopleRows(page), stale: false }
+			}
+		/>
 	);
 }

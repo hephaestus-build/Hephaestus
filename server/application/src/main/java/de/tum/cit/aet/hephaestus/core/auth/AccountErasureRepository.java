@@ -15,6 +15,12 @@ interface AccountErasureRepository extends Repository<Account, Long> {
     void deleteFeatures(@Param("accountId") Long accountId);
 
     @Modifying
+    @Query(
+            value = "DELETE FROM account_public_activity_hidden_by_default WHERE account_id = :accountId",
+            nativeQuery = true)
+    void deletePublicActivityHiddenByDefault(@Param("accountId") Long accountId);
+
+    @Modifying
     @Query(value = "DELETE FROM identity WHERE account_id = :accountId", nativeQuery = true)
     void deleteIdentities(@Param("accountId") Long accountId);
 

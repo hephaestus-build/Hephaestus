@@ -17,7 +17,13 @@ import type { TeamInfo } from "@/api/types.gen";
 import { ACCOUNT_STATUS_LABELS } from "@/components/admin/users/account-labels";
 import { type DataTableFeatures, dataTableFeatures } from "@/components/common/data-table";
 import { DataTableHeader } from "@/components/common/DataTableHeader";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { TablePagination } from "@/components/common/TablePagination";
+import {
+	MEMBER_PUBLIC_ACTIVITY_DEFS,
+	memberPublicActivity,
+} from "@/components/practice-vocabulary/member-public-activity-defs";
+import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +62,7 @@ const SKELETON_WIDTHS: Record<string, string> = {
 	role: "w-20",
 	joined: "w-20",
 	"review scope": "w-16",
+	"public activity": "w-24",
 	visibility: "w-6",
 };
 
@@ -132,6 +139,35 @@ function MemberRoleSelect({ member, items, pending, onRoleChange }: MemberRoleSe
 	);
 }
 
+/**
+ * Whether a member still has to answer the public activity question. A member who answered draws no
+ * badge, and the answer itself is never shown.
+ */
+function PublicActivityStatus({ row }: { row: WorkspaceMemberRow }) {
+	if (row.membership.publicActivityAnswered === null) {
+		return null;
+	}
+	const status = memberPublicActivity(row.membership);
+	if (status === null) {
+		return <span className="sr-only">Answered</span>;
+	}
+	const def = MEMBER_PUBLIC_ACTIVITY_DEFS[status];
+	return (
+		<StatusTooltip
+			openOnTap
+			def={def}
+			render={
+				<StatusBadge
+					def={def}
+					render={<button type="button" />}
+					aria-label={`${def.label}: ${row.name}`}
+					className="cursor-help"
+				/>
+			}
+		/>
+	);
+}
+
 // An unclaimed account has not signed in; it does not indicate a fault.
 function AccountStatus({ row }: { row: WorkspaceMemberRow }) {
 	const { account, leftAt } = row.membership;
@@ -163,6 +199,10 @@ export function WorkspaceMembersTable({
 	renderPageLink,
 }: WorkspaceMembersTableProps) {
 	const showUpdating = useSpinDelay(updating, { delay: 1000, minDuration: 0 });
+	// The server answers for a workspace admin, and only where the workspace publishes public activity.
+	const showsPublicActivity = members.some(
+		({ membership }) => membership.publicActivityAnswered !== null,
+	);
 	const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
 	// Identity matters as much as the value: `useTable` republishes controlled state on every render,
 	// so a fresh array here writes the sorting atom every time the parent re-renders.
@@ -243,6 +283,15 @@ export function WorkspaceMembersTable({
 					</span>
 				),
 			}),
+			...(showsPublicActivity
+				? [
+						columnHelper.display({
+							id: "public activity",
+							header: () => "Public activity",
+							cell: ({ row }) => <PublicActivityStatus row={row.original} />,
+						}),
+					]
+				: []),
 			...(onToggleHidden
 				? [
 						columnHelper.display({
@@ -277,7 +326,7 @@ export function WorkspaceMembersTable({
 					]
 				: []),
 		]);
-	}, [onToggleHidden, onRoleChange, assignableRoles, pendingRoleAccountId]);
+	}, [onToggleHidden, onRoleChange, assignableRoles, pendingRoleAccountId, showsPublicActivity]);
 
 	const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name));
 

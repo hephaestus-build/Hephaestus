@@ -33,13 +33,17 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.hibernate.SessionFactory;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -64,6 +68,71 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private TeamMembershipRepository teamMemberships;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private WorkspaceRepository workspaceRepository;
+
+    @Test
+    @WithAdminUser
+    void shouldShowAnAdminWhoHasNotAnsweredThePublicActivityQuestionOnlyWhereTheWorkspacePublishes() {
+        User owner = persistUser("public-answer-owner");
+        Workspace workspace =
+                createWorkspace("public-answers", "Public answers", "public-answers", AccountType.ORG, owner);
+        ensureAdminMembership(workspace);
+        User answered = persistUser("public-answer-answered");
+        User unanswered = persistUser("public-answer-unanswered");
+        User former = persistUser("public-answer-former");
+        User reader = persistUser("mentor");
+        for (User member : List.of(answered, unanswered, former, reader)) {
+            ensureMembership(workspace, member, WorkspaceRole.MEMBER);
+        }
+        var seen = ensureMembership(workspace, answered, WorkspaceRole.MEMBER);
+        seen.setPublicActivitySeen(true);
+        workspaceMembershipRepository.saveAndFlush(seen);
+        var left = ensureMembership(workspace, former, WorkspaceRole.MEMBER);
+        left.setLeftAt(left.getJoinedAt());
+        workspaceMembershipRepository.saveAndFlush(left);
+
+        var unpublished = publicActivityAnswered(workspace, TestAuthUtils.withCurrentUser());
+        assertThat(unpublished.get(Long.toString(accountId(answered)))).isNull();
+        assertThat(unpublished.get(Long.toString(accountId(unanswered)))).isNull();
+
+        jdbc.update("INSERT INTO instance_settings (id, silent_mode_engaged, version, public_activity_allowed) VALUES"
+                + " (1,true,0,true) ON CONFLICT (id) DO UPDATE SET public_activity_allowed=true");
+        workspace.setPublicActivityEnabled(true);
+        workspaceRepository.saveAndFlush(workspace);
+
+        var asAdmin = publicActivityAnswered(workspace, TestAuthUtils.withCurrentUser());
+        assertThat(asAdmin.get(Long.toString(accountId(answered)))).isTrue();
+        assertThat(asAdmin.get(Long.toString(accountId(unanswered)))).isFalse();
+        assertThat(asAdmin.get(Long.toString(accountId(former)))).isNull();
+
+        // A member does not learn who answered.
+        var asMember =
+                publicActivityAnswered(workspace, headers -> headers.setBearerAuth("mock-jwt-token-for-mentor-user"));
+        assertThat(asMember.get(Long.toString(accountId(answered)))).isNull();
+        assertThat(asMember.get(Long.toString(accountId(unanswered)))).isNull();
+    }
+
+    /** Whether each listed member answered, by account id; a missing fact maps to null. */
+    private Map<String, @Nullable Boolean> publicActivityAnswered(Workspace workspace, Consumer<HttpHeaders> caller) {
+        var page = Objects.requireNonNull(webTestClient
+                .get()
+                .uri("/workspaces/{slug}/members?size=50", workspace.getWorkspaceSlug())
+                .headers(caller)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(new ParameterizedTypeReference<PageResponseDTO<WorkspaceMembershipDTO>>() {})
+                .returnResult()
+                .getResponseBody());
+        Map<String, @Nullable Boolean> answers = new HashMap<>();
+        for (var member : page.content()) answers.put(member.account().id(), member.publicActivityAnswered());
+        return answers;
+    }
 
     @Test
     @WithAdminUser

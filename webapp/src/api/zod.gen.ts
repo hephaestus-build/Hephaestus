@@ -6704,6 +6704,7 @@ export const zWorkspaceMembership = z.object({
     hidden: z.boolean(),
     joinedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     leftAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+    publicActivityAnswered: z.boolean().nullable(),
     reviewSelected: z.boolean(),
     role: z.enum([
         'OWNER',

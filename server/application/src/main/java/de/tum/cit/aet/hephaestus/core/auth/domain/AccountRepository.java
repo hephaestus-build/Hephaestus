@@ -40,6 +40,16 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
         """, nativeQuery = true)
     int clearLinkedPublicActivityObjections(@Param("accountId") long accountId);
 
+    /**
+     * Forgets that the upgrade hid this account only because it never answered: from now on its value
+     * is its own choice, which a rollback of that upgrade must not overwrite.
+     */
+    @Modifying
+    @Query(
+            value = "DELETE FROM account_public_activity_hidden_by_default WHERE account_id = :accountId",
+            nativeQuery = true)
+    int forgetPublicActivityHiddenByDefault(@Param("accountId") long accountId);
+
     List<Account> findAllByIdInAndStatusNot(Collection<Long> ids, Account.Status status);
 
     @Query("""
