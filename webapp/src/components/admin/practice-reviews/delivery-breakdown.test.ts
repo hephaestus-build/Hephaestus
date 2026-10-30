@@ -9,7 +9,10 @@ const SEARCH = { ...SCOPE, practiceSlug: undefined, developerId: undefined };
 
 describe("deliveredByLocation", () => {
 	it("counts delivered feedback per location, in the Location filter's order", () => {
-		const rows = deliveredByLocation(deliveredByLocationCounts, SCOPE);
+		const rows = deliveredByLocation(
+			{ byLocation: deliveredByLocationCounts, partlyDelivered: 0 },
+			SCOPE,
+		);
 		expect(rows.map((row) => [row.key, row.count])).toStrictEqual([
 			["GITHUB", 8],
 			["SLACK", 2],
@@ -23,10 +26,24 @@ describe("deliveredByLocation", () => {
 
 	it("leaves out a location that delivered nothing", () => {
 		const rows = deliveredByLocation(
-			[{ reason: "GITLAB", description: "On GitLab", count: 0 }],
+			{
+				byLocation: [{ reason: "GITLAB", description: "On GitLab", count: 0 }],
+				partlyDelivered: 0,
+			},
 			SCOPE,
 		);
 		expect(rows).toStrictEqual([]);
+	});
+
+	it("counts partly delivered feedback in its own row, which opens only that feedback", () => {
+		const rows = deliveredByLocation({ byLocation: [], partlyDelivered: 2 }, SCOPE);
+		expect(rows.map((row) => [row.key, row.def.label, row.count])).toStrictEqual([
+			["PARTLY_DELIVERED", "Partly delivered", 2],
+		]);
+		expect(rows[0]?.target).toStrictEqual({
+			list: "feedback",
+			search: { ...SEARCH, partlyDelivered: true },
+		});
 	});
 });
 

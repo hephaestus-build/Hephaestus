@@ -120,6 +120,7 @@ export const feedbackSearchSchema = z
 		location: z.enum(statusValues(FEEDBACK_LOCATION_DEFS)).optional().catch(undefined),
 		withdrawn: flag,
 		disagreed: flag,
+		partlyDelivered: flag,
 	})
 	.transform(canonicalDateRange);
 
@@ -248,6 +249,7 @@ export function feedbackQuery(
 		location: search.location,
 		withdrawn: search.withdrawn,
 		disagreed: search.disagreed,
+		partlyDelivered: search.partlyDelivered,
 		sort: search.order,
 	};
 }

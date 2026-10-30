@@ -9,12 +9,31 @@ import {
 import { FEEDBACK_DECISION_DEFS } from "./feedback-decision-defs";
 
 describe("deliveryOutcome for unconfirmed feedback", () => {
+	it.each([
+		["UNCONFIRMED", "Part of this feedback appeared on the work. The rest is not confirmed yet."],
+		["FAILED", "Part of this feedback appeared on the work. Another part failed to post."],
+	] as const)("describes confirmed partial exposure when %s", (state, description) => {
+		const facts = {
+			destination: "ON_WORK",
+			state,
+			stopReason: null,
+			withdrawn: false,
+			deliveredAt: new Date("2026-10-14T10:00:00Z"),
+		} as const;
+		expect(deliveryOutcome(facts)).toMatchObject({ label: "Partly delivered", description });
+		expect(deliveryOutcome({ ...facts, withdrawn: true })).toMatchObject({
+			label: "Partly delivered",
+			description,
+		});
+		expect(withdrawalMark({ ...facts, withdrawn: true })).toBe(FEEDBACK_DECISION_DEFS.WITHDRAW);
+	});
 	it("names no conversation for a write on the work", () => {
 		const outcome = deliveryOutcome({
 			destination: "ON_WORK",
 			state: "UNCONFIRMED",
 			stopReason: "DELIVERY_UNCONFIRMED",
 			withdrawn: false,
+			deliveredAt: null,
 		});
 		expect(outcome).toBe(DELIVERY_STATE_DEFS.UNCONFIRMED);
 		expect(outcome.description).not.toMatch(/conversation/iu);
@@ -28,6 +47,7 @@ describe("deliveryOutcome for unconfirmed feedback", () => {
 				state: "UNCONFIRMED",
 				stopReason: "DELIVERY_UNCONFIRMED",
 				withdrawn: false,
+				deliveredAt: null,
 			}),
 		).toMatchObject({
 			label: DELIVERY_STATE_DEFS.UNCONFIRMED.label,
@@ -41,7 +61,13 @@ const DESTINATIONS = ["CONVERSATION", "PRACTICE_PAGE", "ON_WORK"] as const;
 describe("deliveryOutcome for withdrawn feedback", () => {
 	// A withdrawal keeps the stored READY, but nothing delivers the piece while it stands.
 	it.each(DESTINATIONS)("promises no delivery for ready feedback withdrawn %s", (destination) => {
-		const facts = { destination, state: "READY", stopReason: null, withdrawn: true } as const;
+		const facts = {
+			destination,
+			state: "READY",
+			stopReason: null,
+			withdrawn: true,
+			deliveredAt: null,
+		} as const;
 		const outcome = deliveryOutcome(facts);
 		expect(outcome).toMatchObject({
 			label: "Ready, then withdrawn",
@@ -62,7 +88,13 @@ describe("deliveryOutcome for withdrawn feedback", () => {
 	] as const)(
 		"keeps active readiness for %s, as the server reports it after a restore",
 		(destination, label) => {
-			const facts = { destination, state: "READY", stopReason: null, withdrawn: false } as const;
+			const facts = {
+				destination,
+				state: "READY",
+				stopReason: null,
+				withdrawn: false,
+				deliveredAt: null,
+			} as const;
 			expect(deliveryOutcome(facts).label).toBe(label);
 			expect(withdrawalMark(facts)).toBeUndefined();
 		},
@@ -76,7 +108,13 @@ describe("deliveryOutcome for withdrawn feedback", () => {
 	] as const)(
 		"keeps the receipt of feedback delivered %s, then withdrawn",
 		(destination, label) => {
-			const facts = { destination, state: "DELIVERED", stopReason: null, withdrawn: true } as const;
+			const facts = {
+				destination,
+				state: "DELIVERED",
+				stopReason: null,
+				withdrawn: true,
+				deliveredAt: null,
+			} as const;
 			expect(deliveryOutcome(facts).label).toBe(label);
 			expect(withdrawalMark(facts)).toBe(FEEDBACK_DECISION_DEFS.WITHDRAW);
 		},
@@ -88,6 +126,7 @@ describe("deliveryOutcome for withdrawn feedback", () => {
 			state: "UNCONFIRMED",
 			stopReason: "DELIVERY_UNCONFIRMED",
 			withdrawn: true,
+			deliveredAt: null,
 		} as const;
 		expect(deliveryOutcome(facts)).toBe(DELIVERY_STATE_DEFS.UNCONFIRMED);
 		expect(withdrawalMark(facts)).toBe(FEEDBACK_DECISION_DEFS.WITHDRAW);
@@ -102,6 +141,7 @@ describe("isDeliveryInProgress", () => {
 				state: "READY",
 				stopReason: null,
 				withdrawn: false,
+				deliveredAt: null,
 			}),
 		).toBe(true);
 	});
@@ -114,6 +154,7 @@ describe("isDeliveryInProgress", () => {
 				state: "READY",
 				stopReason: null,
 				withdrawn: true,
+				deliveredAt: null,
 			}),
 		).toBe(false);
 	});

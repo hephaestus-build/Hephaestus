@@ -6,7 +6,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { DeliveryBreakdownCard } from "./DeliveryBreakdownCard";
 import {
-	deliveredByLocationCounts,
+	deliveredCounts,
 	practiceReviewOverview,
 	readyReviewOverview,
 	reviewOverviewScope,
@@ -69,7 +69,7 @@ const meta = {
 		scope: reviewOverviewScope,
 		range: { label: "Last 30 days", during: "in the last 30 days" },
 		overview: readyReviewOverview(),
-		delivered: { status: "ready", counts: deliveredByLocationCounts, stale: false },
+		delivered: { status: "ready", counts: deliveredCounts, stale: false },
 		withheld: { status: "ready", counts: withheldByReasonCounts, stale: false },
 		failedDeliveries: { state: counted(1), list: FAILED_DELIVERIES, of: 15 },
 	},
@@ -86,10 +86,11 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
-		await expect(rowsOf(canvas, "Delivered by where it appeared")).toEqual([
+		await expect(rowsOf(canvas, "Delivered")).toEqual([
 			"On GitHub: 8",
 			"In conversation in Slack: 2",
 			"On the practice page: 4",
+			"Partly delivered: 1",
 		]);
 		await expect(rowsOf(canvas, "Withheld by reason")).toEqual([
 			"The work moved on: 2",
@@ -105,6 +106,11 @@ export const Default: Story = {
 				location: "GITHUB",
 			},
 		});
+		await expect(linkOf(canvas, "1, Partly delivered").search).toEqual({
+			from: reviewOverviewScope.from,
+			to: reviewOverviewScope.to,
+			partlyDelivered: "true",
+		});
 		await expect(linkOf(canvas, "2, The work moved on").search).toEqual({
 			from: reviewOverviewScope.from,
 			to: reviewOverviewScope.to,
@@ -112,10 +118,8 @@ export const Default: Story = {
 			withheldFamily: "WORK_MOVED_ON",
 		});
 		await expect(linkOf(canvas, "1, Rejected").search.state).toBe("REJECTED");
-		// Each split heads its table with its total, which the Feedback tile beside it counts too.
-		await expect(
-			canvas.getByText("Delivered by where it appeared").nextElementSibling,
-		).toHaveTextContent("14");
+		// The header counts complete delivery; the partial row has its own count.
+		await expect(canvas.getByText("Delivered").nextElementSibling).toHaveTextContent("14");
 		await expect(canvas.getByText("Withheld by reason").nextElementSibling).toHaveTextContent("4");
 		// The whole row is the link: its words stretch over the row.
 		await expect(canvas.getByRole("link", { name: "8, On GitHub" }).closest("tr")).toHaveClass(
@@ -132,7 +136,7 @@ export const Default: Story = {
 		await expect(
 			await screen.findByRole("dialog", { name: "About delivered and withheld feedback" }),
 		).toHaveTextContent(
-			"Feedback failed to deliver is the share of the feedback sent that failed. Above 5% it is red.",
+			"Feedback failed to deliver is the share of the feedback sent that failed. It includes partly delivered feedback when another part failed. Above 5% it is red.",
 		);
 	},
 };
@@ -173,7 +177,7 @@ export const NothingYet: Story = {
 			...practiceReviewOverview,
 			feedback: { ...practiceReviewOverview.feedback, withheld: 0, rejected: 0 },
 		}),
-		delivered: { status: "ready", counts: [], stale: false },
+		delivered: { status: "ready", counts: { byLocation: [], partlyDelivered: 0 }, stale: false },
 		withheld: { status: "ready", counts: [], stale: false },
 		failedDeliveries: { state: counted(0), list: FAILED_DELIVERIES, of: 0 },
 	},
@@ -205,7 +209,7 @@ export const OneSplitFailed: Story = {
 	args: { withheld: { status: "error", error: { status: 500 }, onRetry: fn() } },
 	play: async ({ canvas }) => {
 		canvas.getByText("We could not load withheld feedback by reason");
-		await expect(rowsOf(canvas, "Delivered by where it appeared")).toHaveLength(3);
+		await expect(rowsOf(canvas, "Delivered")).toHaveLength(4);
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };
@@ -213,13 +217,14 @@ export const OneSplitFailed: Story = {
 /** The previous range's counts stand in while the new ones load: drained and marked busy. */
 export const Stale: Story = {
 	args: {
-		delivered: { status: "ready", counts: deliveredByLocationCounts, stale: true },
+		delivered: { status: "ready", counts: deliveredCounts, stale: true },
 		failedDeliveries: { state: counted(1, true), list: FAILED_DELIVERIES, of: 15 },
 	},
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("table", { name: "Delivered by where it appeared" }),
-		).toHaveAttribute("aria-busy", "true");
+		await expect(canvas.getByRole("table", { name: "Delivered" })).toHaveAttribute(
+			"aria-busy",
+			"true",
+		);
 		await expect(rateOf(canvas, /^Feedback failed to deliver/u)).toHaveAttribute(
 			"aria-busy",
 			"true",

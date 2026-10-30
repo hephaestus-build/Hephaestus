@@ -367,10 +367,17 @@ export const DeliveredSummaryComment: Story = {
 	},
 };
 
+/** The summary is on the work and the line notes failed: partly delivered, and still withdrawable. */
 export const PartialPackage: Story = {
 	args: { feedback: ready(partialPackageFeedbackDetail) },
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
+		within(panelElement).getByText(
+			"Part of this feedback appeared on the work. Another part failed to post.",
+		);
+		await expect(
+			within(panelElement).getByRole("button", { name: "Withdraw feedback" }),
+		).toBeEnabled();
 		await expect(panelElement.querySelector("[data-sheet-status]")).toHaveTextContent(
 			/1 posted · 2 failed/u,
 		);
@@ -918,6 +925,46 @@ export const DeliveryCheckInProgress: Story = {
 		await expect(events.queryByText("Waiting to be sent")).toBeNull();
 		await expect(events.queryByText(/Post the copies/u)).toBeNull();
 		await expect(panel.queryByRole("button", { name: "Check delivery" })).toBeNull();
+	},
+};
+
+export const PartlyDeliveredCheckAvailable: Story = {
+	args: {
+		feedback: ready({
+			...partlyUnknownOnWork({ action: "POST", state: "DONE", attemptCount: 8 }),
+			disagreedAt: null,
+			response: null,
+		}),
+	},
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		const panel = within(panelElement);
+		await expectHeaderChip(panelElement, "Partly delivered");
+		panel.getByText(
+			"Part of this feedback appeared on the work. The rest is not confirmed yet. Check delivery to find out whether the remaining copies appeared. Until then, later reviews post no new feedback for this developer on this work.",
+		);
+		await expect(panel.getByRole("button", { name: "Check delivery" })).toBeEnabled();
+		await expect(panel.queryByText(/does not count as delivered/u)).toBeNull();
+	},
+};
+
+export const PartlyDeliveredCheckInProgress: Story = {
+	args: {
+		feedback: ready({
+			...partlyUnknownOnWork({ action: "POST", state: "PENDING", attemptCount: 8 }),
+			disagreedAt: null,
+			response: null,
+		}),
+	},
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		const panel = within(panelElement);
+		await expectHeaderChip(panelElement, "Partly delivered");
+		panel.getByText(
+			"Part of this feedback appeared on the work. The rest is not confirmed yet. Hephaestus is checking whether the remaining copies appeared on the work.",
+		);
+		await expect(panel.queryByRole("button", { name: "Check delivery" })).toBeNull();
+		await expect(panel.queryByText(/does not count as delivered/u)).toBeNull();
 	},
 };
 

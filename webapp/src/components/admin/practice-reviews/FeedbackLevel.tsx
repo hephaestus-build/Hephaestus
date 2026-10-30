@@ -23,6 +23,8 @@ import { UNVERIFIED_HISTORY_NOTE } from "@/components/practice-vocabulary/claim-
 import {
 	DELIVERY_STATE_DEFS,
 	deliveryOutcome,
+	isPartialDelivery,
+	partialDeliveryDescription,
 	withdrawalMark,
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import {
@@ -728,11 +730,13 @@ function feedbackNow(feedback: FeedbackRecord): ReactNode {
 		case "UNCONFIRMED": {
 			return unconfirmedLine(feedback);
 		}
+		case "FAILED": {
+			return isPartialDelivery(feedback) ? partialDeliveryDescription(feedback) : undefined;
+		}
 		case "DELIVERED":
 		case "WITHHELD":
 		case "REJECTED":
-		case "REPLACED":
-		case "FAILED": {
+		case "REPLACED": {
 			return undefined;
 		}
 	}
@@ -742,8 +746,23 @@ function unconfirmedLine(feedback: FeedbackRecord): string {
 	if (feedback.destination !== "ON_WORK") {
 		return "A conversation linked it, but its appearance was not recorded, so it does not count as delivered.";
 	}
+	const check = deliveryCheck(feedback);
+	if (isPartialDelivery(feedback)) {
+		const description = partialDeliveryDescription(feedback);
+		switch (check) {
+			case "available": {
+				return `${description} Check delivery to find out whether the remaining copies appeared. Until then, later reviews post no new feedback for this developer on this work.`;
+			}
+			case "checking": {
+				return `${description} Hephaestus is checking whether the remaining copies appeared on the work.`;
+			}
+			case undefined: {
+				return description;
+			}
+		}
+	}
 	// Only the approval stage holds later feedback; preparation and the write stop it instead.
-	switch (deliveryCheck(feedback)) {
+	switch (check) {
 		case "available": {
 			return "A comment was being written to the work, but the provider has not confirmed whether it appeared. It does not count as delivered until that is known. Until then, later reviews post no new feedback for this developer on this work.";
 		}
@@ -830,7 +849,8 @@ function canChangeWithdrawal(feedback: FeedbackRecord): boolean {
 		feedback.withdrawn ||
 		feedback.state === "READY" ||
 		feedback.state === "DELIVERED" ||
-		feedback.state === "UNCONFIRMED"
+		feedback.state === "UNCONFIRMED" ||
+		isPartialDelivery(feedback)
 	);
 }
 

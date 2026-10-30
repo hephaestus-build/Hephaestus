@@ -10,6 +10,7 @@ import type {
 	ReviewSummary,
 } from "@/api/types.gen";
 import { itemTrace } from "@/components/practice-trace/fixtures";
+import { isPartialDelivery } from "@/components/practice-vocabulary/delivery-state-defs";
 import { hasText } from "@/lib/text";
 import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -185,7 +186,8 @@ function filterFeedback(rows: readonly ReviewFeedback[], url: URL) {
 			equals(url, "location", row.location) &&
 			matches(values(url, "stopReason"), row.stopReason) &&
 			flag(url, "withdrawn", row.withdrawn) &&
-			flag(url, "disagreed", row.disagreedAt !== null),
+			flag(url, "disagreed", row.disagreedAt !== null) &&
+			flag(url, "partlyDelivered", isPartialDelivery(row)),
 	);
 }
 

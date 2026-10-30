@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
 import { subDays } from "date-fns";
 import { useEffect, useRef } from "react";
 
@@ -9,7 +9,7 @@ import {
 	getReviewQueueOptions,
 	getReviewTimingOptions,
 } from "@/api/@tanstack/react-query.gen";
-import type { ReviewOverview } from "@/api/types.gen";
+import type { ReasonCount, ReviewOverview } from "@/api/types.gen";
 import { DELIVERED_STATES } from "@/components/admin/practice-reviews/delivery-breakdown";
 import type {
 	DeliveredByLocationState,
@@ -33,7 +33,7 @@ import {
 import type { ReviewAttentionProps } from "@/components/admin/practice-reviews/ReviewAttention";
 import type { ReviewQueueState } from "@/components/admin/practice-reviews/ReviewQueueNow";
 import type { ReviewTimingState } from "@/components/admin/practice-reviews/ReviewTimeCard";
-import { panelState } from "@/components/common/panel-state";
+import { combinePanelStates, panelState, queryLoadState } from "@/components/common/panel-state";
 import { awaitingApprovalOptions } from "@/hooks/use-feedback-awaiting-approval";
 import { browserTimeZone } from "@/lib/dates";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
@@ -198,6 +198,13 @@ export function useDeliveryBreakdown(
 		}),
 		...live,
 	});
+	const partlyDeliveredQuery = useQuery({
+		...countReviewFeedbackByLocationOptions({
+			path,
+			query: { ...days, partlyDelivered: true },
+		}),
+		...live,
+	});
 	const withheldQuery = useQuery({
 		...countReviewFeedbackByReasonOptions({
 			path,
@@ -206,16 +213,31 @@ export function useDeliveryBreakdown(
 		...live,
 	});
 	return {
-		delivered: panelState(deliveredQuery, (counts) => ({
-			status: "ready" as const,
-			counts,
-			stale: deliveredQuery.isPlaceholderData,
-		})),
+		delivered: deliveredState(deliveredQuery, partlyDeliveredQuery),
 		withheld: panelState(withheldQuery, (counts) => ({
 			status: "ready" as const,
 			counts,
 			stale: withheldQuery.isPlaceholderData,
 		})),
+	};
+}
+
+/** The delivered feedback by location and the partly delivered count, as one state. */
+function deliveredState(
+	delivered: UseQueryResult<ReasonCount[]>,
+	partlyDelivered: UseQueryResult<ReasonCount[]>,
+): DeliveredByLocationState {
+	if (!delivered.isSuccess || !partlyDelivered.isSuccess) {
+		const state = combinePanelStates([queryLoadState(delivered), queryLoadState(partlyDelivered)]);
+		return state.status === "error" ? state : { status: "loading" };
+	}
+	return {
+		status: "ready",
+		counts: {
+			byLocation: delivered.data,
+			partlyDelivered: partlyDelivered.data.reduce((sum, entry) => sum + entry.count, 0),
+		},
+		stale: delivered.isPlaceholderData || partlyDelivered.isPlaceholderData,
 	};
 }
 

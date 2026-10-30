@@ -14,7 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { CardTitleLink } from "./CardTitleLink";
-import { type BreakdownRow, deliveredByLocation, withheldByReason } from "./delivery-breakdown";
+import {
+	type BreakdownRow,
+	type DeliveredCounts,
+	deliveredByLocation,
+	withheldByReason,
+} from "./delivery-breakdown";
 import { OVERVIEW_TYPE } from "./overview-type-scale";
 import { type AttentionTone, percentText, shareOf } from "./review-attention";
 import { PROBLEM_THRESHOLDS } from "./review-attention-thresholds";
@@ -24,7 +29,7 @@ import type { AttentionGroup, AttentionRange } from "./ReviewAttention";
 import { ReviewListLink } from "./ReviewListLink";
 
 export type DeliveredByLocationState = PanelState<{
-	counts: ReasonCount[];
+	counts: DeliveredCounts;
 	stale: boolean;
 }>;
 
@@ -78,7 +83,8 @@ export function DeliveryBreakdownCard({
 			<CardContent className="@container flex flex-1 flex-col gap-4">
 				<div className="grid grid-cols-1 gap-x-6 gap-y-4 @md:grid-cols-2">
 					<BreakdownTable
-						caption="Delivered by where it appeared"
+						caption="Delivered"
+						countTotal={({ byLocation }) => byLocation.reduce((sum, row) => sum + row.count, 0)}
 						what="delivered feedback by where it appeared"
 						state={delivered}
 						empty={`Nothing delivered ${range.during}`}
@@ -114,7 +120,11 @@ export function DeliveryBreakdownCard({
 const BREAKDOWN_INFO = [
 	{
 		term: "Delivered",
-		text: "counts the feedback that reached the developer, by where it appeared.",
+		text: "counts feedback whose delivery is complete, by where it appeared.",
+	},
+	{
+		term: "Partly delivered",
+		text: "counts feedback that appeared on the work while another part failed or is not confirmed. Its count is separate from Delivered.",
 	},
 	{
 		term: "Withheld",
@@ -122,7 +132,7 @@ const BREAKDOWN_INFO = [
 	},
 	{
 		term: "Feedback failed to deliver",
-		text: "is the share of the feedback sent that failed. Above 5% it is red.",
+		text: "is the share of the feedback sent that failed. It includes partly delivered feedback when another part failed. Above 5% it is red.",
 	},
 	{
 		term: "Each count",
@@ -159,6 +169,7 @@ function BreakdownTable<T>({
 	state,
 	empty,
 	rows,
+	countTotal,
 	workspaceSlug,
 }: {
 	caption: string;
@@ -166,6 +177,7 @@ function BreakdownTable<T>({
 	state: PanelState<{ counts: T; stale: boolean }>;
 	empty: string;
 	rows: (counts: T) => BreakdownRow[];
+	countTotal?: (counts: T) => number;
 	workspaceSlug: string;
 }) {
 	let body: ReactNode;
@@ -188,7 +200,7 @@ function BreakdownTable<T>({
 		);
 	} else {
 		const shown = rows(state.counts);
-		total = shown.reduce((sum, row) => sum + row.count, 0);
+		total = countTotal?.(state.counts) ?? shown.reduce((sum, row) => sum + row.count, 0);
 		body =
 			shown.length === 0 ? (
 				<p className={OVERVIEW_TYPE.empty}>{empty}</p>

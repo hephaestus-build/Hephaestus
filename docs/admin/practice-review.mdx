@@ -85,6 +85,12 @@ A confirmed copy is never posted again.
 
 A parent can stay Unconfirmed while another copy has a confirmed delivery time.
 Read copy details rather than treating the entire package as absent.
+The overview counts such feedback in its own **Partly delivered** row, and the row opens the feedback list filtered to it.
+The Delivered total counts only complete delivery.
+A failed part also counts toward delivery failures.
+
+After a retry, the feedback reads Unconfirmed while the retried copy is pending or its appearance is uncertain.
+If the retry fails, the feedback reads Failed.
 
 ## Correct observations and feedback
 

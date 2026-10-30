@@ -7,11 +7,18 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.RepeatedSummaryCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
     @Autowired
@@ -104,5 +111,79 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(current().getDeliveredAt()).isEqualTo(first);
         assertThat(provider.summaryCreates).isEqualTo(1);
         assertThat(provider.noteCreates).isEqualTo(1);
+    }
+
+    @Test
+    void shouldFailACopyTheProviderNeverSentOnceTheSendSettles() {
+        prepare(true);
+        provider.noteFailure = Failure.NOT_SENT;
+        sender.send(workspace.getId(), feedbackId);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.FAILED);
+        assertThat(children().get(1).getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(current().getDeliveredAt()).isNotNull();
+        provider.noteFailure = Failure.NONE;
+        store.retry(workspace.getId(), feedbackId, developerId);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(provider.noteCreates).isEqualTo(1);
+    }
+
+    @Test
+    @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldKeepAnUnsentCopyWithdrawnAndMakeItRetryableAfterRestore() {
+        prepare(true);
+        // The hook runs inside the recipient write; the withdrawal commits on its own, as an admin's would.
+        var apart = new TransactionTemplate(transactionManager);
+        apart.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        provider.beforeNotes = () -> apart.executeWithoutResult(status -> withdraw());
+        sender.send(workspace.getId(), feedbackId);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
+        assertThat(children().get(1).getReadback()).isNull();
+        assertThat(sends.findById(feedbackId).orElseThrow().getAction()).isEqualTo(FeedbackSendAction.RETRACT);
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children().get(0).getState()).isEqualTo(FeedbackCopyState.RETRACTED);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
+        assertThat(provider.noteCreates).isZero();
+        var first = current().getDeliveredAt();
+        provider.beforeNotes = null;
+        store.decide(
+                workspace.getId(),
+                feedbackId,
+                developerId,
+                new FeedbackDecisionInput(FeedbackDecisionAction.RESTORE, null, "Restore this guidance.", null));
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children().get(0).getState()).isEqualTo(FeedbackCopyState.POSTED);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.FAILED);
+        assertThat(children().get(1).getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        store.retry(workspace.getId(), feedbackId, developerId);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        assertThat(provider.noteCreates).isEqualTo(1);
+    }
+
+    @Test
+    void shouldNotReportDeliveryUntilARetriedSiblingCopyPosts() {
+        prepare(true);
+        provider.noteFailure = Failure.BEFORE_CREATE;
+        sender.send(workspace.getId(), feedbackId);
+        var first = current().getDeliveredAt();
+        assertThat(first).isNotNull();
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        provider.noteFailure = Failure.NONE;
+        store.retry(workspace.getId(), feedbackId, developerId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        assertThat(provider.summaryCreates).isEqualTo(1);
     }
 }

@@ -337,14 +337,6 @@ class FeedbackSendRecoveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(after.getAttempts()).isEqualTo(stopped.getAttempts());
     }
 
-    private void withdraw() {
-        store.decide(
-                workspace.getId(),
-                feedbackId,
-                developerId,
-                new FeedbackDecisionInput(FeedbackDecisionAction.WITHDRAW, null, "Withdraw this guidance.", null));
-    }
-
     private long decisionCount() {
         return decisions
                 .findByWorkspaceIdAndFeedbackIdOrderByDecidedAtDescIdDesc(workspace.getId(), feedbackId)

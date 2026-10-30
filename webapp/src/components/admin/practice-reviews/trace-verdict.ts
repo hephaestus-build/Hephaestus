@@ -163,6 +163,20 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 			};
 		}
 		case "FAILED": {
+			if (at !== undefined) {
+				return {
+					end: end(
+						"delivered",
+						"part of it reached the developer, and another part failed to post",
+						{
+							at,
+							label: "Partly delivered",
+						},
+					),
+					clause: ["was partly delivered", "were partly delivered"],
+					phrase: "partly delivered",
+				};
+			}
 			return {
 				end: end("lost", "it failed to deliver"),
 				clause: ["failed to deliver", "failed to deliver"],
@@ -170,6 +184,20 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 			};
 		}
 		case "UNCONFIRMED": {
+			if (at !== undefined && feedback.destination === "ON_WORK") {
+				return {
+					end: end(
+						"delivered",
+						"part of it reached the developer, and the rest is not confirmed yet",
+						{
+							at,
+							label: "Partly delivered",
+						},
+					),
+					clause: ["was partly delivered", "were partly delivered"],
+					phrase: "partly delivered",
+				};
+			}
 			return {
 				end: end("none", "no record confirms that it reached the developer", {
 					label: "Not known",
@@ -226,10 +254,14 @@ function feedbackSentence(feedback: LineageFeedback, item: ItemRef | undefined):
 				: `${reached}, then newer feedback replaced it.`;
 		}
 		case "FAILED": {
-			return "This feedback did not reach the developer: it failed to deliver.";
+			return feedback.deliveredAt === null
+				? "This feedback did not reach the developer: it failed to deliver."
+				: `Part of this feedback reached the developer ${place}, and another part failed to post.`;
 		}
 		case "UNCONFIRMED": {
-			return "This feedback was sent, but no record confirms that it reached the developer.";
+			return feedback.deliveredAt === null || feedback.destination !== "ON_WORK"
+				? "This feedback was sent, but no record confirms that it reached the developer."
+				: `Part of this feedback reached the developer ${place}, and the rest is not confirmed yet.`;
 		}
 		case "WITHHELD": {
 			return feedback.deliveredAt === null
@@ -341,7 +373,14 @@ function endOfMany(fates: readonly FeedbackFate[]): TraceEnd {
 					.map(({ kind, count }) => `${count} ${KIND_PHRASE[kind]}`)
 					.join(", ")
 			: [...counts.entries()].map(([phrase, count]) => `${count} ${phrase}`).join(", ");
-	return end(best.end.kind, `${countOf(fates.length, "piece", "pieces")} of feedback: ${reason}`);
+	const label =
+		best.end.kind === "delivered" &&
+		fates.every((fate) => fate.end.kind !== "delivered" || fate.end.label === "Partly delivered")
+			? "Partly delivered"
+			: TRACE_END_LABELS[best.end.kind];
+	return end(best.end.kind, `${countOf(fates.length, "piece", "pieces")} of feedback: ${reason}`, {
+		label,
+	});
 }
 
 function isRunning(review: ReviewRef | undefined): boolean {

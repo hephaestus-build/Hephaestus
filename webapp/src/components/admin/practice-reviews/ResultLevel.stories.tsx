@@ -597,6 +597,7 @@ export const WithItsFeedback: Story = {
 			state: "DELIVERED",
 			stopReason: null,
 			withdrawn: false,
+			deliveredAt: null,
 		});
 		for (const [name, id] of [
 			[

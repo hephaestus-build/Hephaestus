@@ -44,6 +44,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
@@ -207,6 +209,14 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         return copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspace.getId(), feedbackId);
     }
 
+    protected void withdraw() {
+        store.decide(
+                workspace.getId(),
+                feedbackId,
+                developerId,
+                new FeedbackDecisionInput(FeedbackDecisionAction.WITHDRAW, null, "Withdraw this guidance.", null));
+    }
+
     protected void due() {
         jdbc.update(
                 "UPDATE feedback_send SET next_attempt_at=? WHERE workspace_id=? AND feedback_id=?",
@@ -217,6 +227,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
     protected enum Failure {
         NONE,
+        NOT_SENT,
         BEFORE_CREATE,
         AFTER_CREATE
     }
@@ -227,6 +238,9 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         LookupPresence readback = LookupPresence.FOUND;
         CopyUpdateKind retraction = CopyUpdateKind.GONE;
         boolean fallback;
+
+        @Nullable
+        Runnable beforeNotes;
 
         @Nullable
         String lastSummaryLookupMarker;
@@ -279,9 +293,14 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         public CopyWriteResult postImmutablePackage(FeedbackTarget target, List<LineNote> notes, CopyWriteFence fence) {
             var receipts = new ArrayList<CopyReceipt>();
             var withheld = new ArrayList<UUID>();
+            if (beforeNotes != null) beforeNotes.run();
             for (var note : notes) {
                 if (!fence.beforeCreate(List.of(note.copyId()), List.copyOf(receipts))) {
                     withheld.add(note.copyId());
+                    continue;
+                }
+                if (noteFailure == Failure.NOT_SENT) {
+                    receipts.add(CopyReceipt.notSent(note.copyId()));
                     continue;
                 }
                 committed(note.copyId());

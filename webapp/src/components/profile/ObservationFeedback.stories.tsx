@@ -80,11 +80,32 @@ export const NotDelivered: Story = {
 				deliveredAt: null,
 			}),
 			ownFeedback("00000000-0000-4000-8000-0000000005a5", { state: "FAILED", deliveredAt: null }),
-			{ ...onWork, id: "00000000-0000-4000-8000-0000000005a6", state: "REPLACED" },
+			{
+				...onWork,
+				id: "00000000-0000-4000-8000-0000000005a6",
+				state: "REPLACED",
+				deliveredAt: null,
+			},
 		],
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("list")).toBeNull();
+	},
+};
+
+/** A confirmed copy is visible while the rest of the delivery remains unconfirmed. */
+export const PartlyDelivered: Story = {
+	args: { feedback: [{ ...onWork, state: "UNCONFIRMED" }] },
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText(
+				"Part of this feedback appeared on the work. The rest is not confirmed yet.",
+			),
+		).toBeVisible();
+		await expect(canvas.getByText(/^First appeared /u)).toBeVisible();
+		await expect(
+			canvas.getByRole("link", { name: /Read the comment on the work/u }),
+		).toHaveAttribute("href", COMMENT_URL);
 	},
 };
 

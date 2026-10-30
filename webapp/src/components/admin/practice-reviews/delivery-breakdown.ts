@@ -12,10 +12,16 @@ import {
 import { type OutcomeScope, type ReviewListTarget, scopeSearch } from "./review-outcomes";
 
 /**
- * The delivery states the Feedback tile counts as delivered. A package of which only some copies
- * posted is still delivered; its copy counts say which.
+ * The delivery states the Feedback tile counts as delivered. Feedback of which only some copies
+ * posted is failed or unconfirmed, so the table counts it in its own Partly delivered row.
  */
 export const DELIVERED_STATES = ["DELIVERED"] as const;
+
+/** The delivered feedback by where it appeared, and the partly delivered feedback of the range. */
+export interface DeliveredCounts {
+	byLocation: readonly ReasonCount[];
+	partlyDelivered: number;
+}
 
 export interface BreakdownRow {
 	key: string;
@@ -28,12 +34,9 @@ function isWithholdingReason(reason: string): reason is WithholdingReason {
 	return Object.hasOwn(WITHHOLDING_REASON_DEFS, reason);
 }
 
-export function deliveredByLocation(
-	counts: readonly ReasonCount[],
-	scope: OutcomeScope,
-): BreakdownRow[] {
-	return statusValues(FEEDBACK_LOCATION_DEFS).flatMap((location) => {
-		const count = counts.find((entry) => entry.reason === location)?.count ?? 0;
+export function deliveredByLocation(counts: DeliveredCounts, scope: OutcomeScope): BreakdownRow[] {
+	const located = statusValues(FEEDBACK_LOCATION_DEFS).flatMap((location): BreakdownRow[] => {
+		const count = counts.byLocation.find((entry) => entry.reason === location)?.count ?? 0;
 		return count === 0
 			? []
 			: [
@@ -52,6 +55,26 @@ export function deliveredByLocation(
 					},
 				];
 	});
+	if (counts.partlyDelivered === 0) {
+		return located;
+	}
+	return [
+		...located,
+		{
+			key: "PARTLY_DELIVERED",
+			def: {
+				...DELIVERY_STATE_DEFS.UNCONFIRMED,
+				label: "Partly delivered",
+				description:
+					"Part of this feedback appeared on the work. Another part failed or is not confirmed yet.",
+			},
+			count: counts.partlyDelivered,
+			target: {
+				list: "feedback",
+				search: { ...scopeSearch(scope, "feedback"), partlyDelivered: true },
+			},
+		},
+	];
 }
 
 export function withheldByReason(

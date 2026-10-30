@@ -172,6 +172,18 @@ describe("practice review list routes", () => {
 		vi.unstubAllGlobals();
 	});
 
+	it("opens the partly delivered overview count as its matching feedback row", async () => {
+		server.use(...reviewHandlers());
+		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/feedback?partlyDelivered=true");
+		await screen.findByText(
+			"1 piece of feedback matches your filters.",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		const link = screen.getByRole("link", { name: /^Open feedback .*Partly delivered/u });
+		expect(link.getAttribute("href")).toContain("44444444-4444-4444-4444-555555555555");
+	});
+
 	it("asks the endpoint for the ordering the URL chose, under the name the endpoint uses", async () => {
 		const { resultUrls } = recordRequests();
 

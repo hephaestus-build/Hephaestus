@@ -223,6 +223,10 @@ export function feedbackLoss(feedback: ReviewBoundFeedback): FeedbackLoss | unde
 			};
 		}
 		case "FAILED": {
+			// Partly delivered: a copy reached the developer, so the piece is not lost; its trace says which part failed.
+			if (feedback.deliveredAt !== null) {
+				return undefined;
+			}
 			return {
 				title: "Delivery failed",
 				text: "Sending it failed, so it never reached the developer.",

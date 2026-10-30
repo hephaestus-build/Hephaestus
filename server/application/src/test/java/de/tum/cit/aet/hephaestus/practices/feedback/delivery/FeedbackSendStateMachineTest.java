@@ -33,13 +33,22 @@ class FeedbackSendStateMachineTest {
     }
 
     @Test
-    void shouldKeepTheFirstConfirmedAppearanceWhenAnotherCopyFails() {
+    void shouldReportFailureAndKeepTheFirstConfirmedAppearanceWhenAnotherCopyFails() {
         var projection = FeedbackSendStateMachine.project(
                 feedback(FeedbackState.UNCONFIRMED, AT),
                 List.of(
                         copy(0, FeedbackCopyState.POSTED, AT.plusSeconds(10)),
                         copy(1, FeedbackCopyState.FAILED, null)));
-        assertThat(projection.state()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(projection.state()).isEqualTo(FeedbackState.FAILED);
+        assertThat(projection.deliveredAt()).isEqualTo(AT);
+    }
+
+    @Test
+    void shouldNotReportDeliveryWhileAnotherCopyIsPlanned() {
+        var projection = FeedbackSendStateMachine.project(
+                feedback(FeedbackState.READY, null),
+                List.of(copy(0, FeedbackCopyState.POSTED, AT), copy(1, FeedbackCopyState.PLANNED, null)));
+        assertThat(projection.state()).isEqualTo(FeedbackState.UNCONFIRMED);
         assertThat(projection.deliveredAt()).isEqualTo(AT);
     }
 

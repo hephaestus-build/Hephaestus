@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -313,6 +314,51 @@ class FeedbackReviewControllerIntegrationTest extends AbstractFeedbackIntegratio
                 .expectBody()
                 .jsonPath("$[0].reason")
                 .isEqualTo("PRACTICE_PAGES")
+                .jsonPath("$[0].count")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldSelectOnlyFeedbackThatPartlyReachedTheWorkForTheListAndItsCounts() {
+        var failedAfterExposure = piece(FeedbackDestination.ON_WORK, FeedbackState.FAILED, AT);
+        var unconfirmedAfterExposure = piece(FeedbackDestination.ON_WORK, FeedbackState.UNCONFIRMED, AT);
+        piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        piece(FeedbackDestination.ON_WORK, FeedbackState.FAILED, null);
+        piece(FeedbackDestination.CONVERSATION, FeedbackState.UNCONFIRMED, AT);
+        client.get()
+                .uri(route() + "?partlyDelivered=true&sort=OLDEST")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(2)
+                .jsonPath("$.content[*].id")
+                .value(ids -> assertThat(ids)
+                        .asInstanceOf(InstanceOfAssertFactories.LIST)
+                        .containsExactlyInAnyOrder(
+                                failedAfterExposure.getId().toString(),
+                                unconfirmedAfterExposure.getId().toString()));
+        client.get()
+                .uri(route() + "?partlyDelivered=false")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(3);
+        client.get()
+                .uri(route() + "/locations?partlyDelivered=true")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.length()")
+                .isEqualTo(1)
                 .jsonPath("$[0].count")
                 .isEqualTo(2);
     }

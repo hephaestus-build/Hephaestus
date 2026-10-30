@@ -7,6 +7,10 @@ import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { SectionLabel } from "@/components/common/SectionLabel";
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import {
+	isPartialDelivery,
+	partialDeliveryDescription,
+} from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
@@ -17,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
-import { deliveredOnly } from "./ObservationFeedback";
+import { exposedFeedback } from "./ObservationFeedback";
 import { type FeedbackResponseControls, isEmptyFeedbackResponse } from "./reviews";
 
 export interface OwnFeedbackListProps {
@@ -27,12 +31,10 @@ export interface OwnFeedbackListProps {
 }
 
 /**
- * The reader's feedback from a review: only what reached them (`deliveredOnly`). Feedback that was
- * withheld, awaits approval, was rejected or failed was never posted, so it is not listed as if it
- * were on the work.
+ * The reader's feedback from a review: only feedback with a recorded first exposure.
  */
 export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListProps) {
-	const feedback = deliveredOnly(given);
+	const feedback = exposedFeedback(given);
 	if (feedback.length === 0) {
 		return null;
 	}
@@ -43,11 +45,17 @@ export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListP
 					<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
 						{piece.deliveredAt !== null && (
-							<span>Delivered {formatShortDay(piece.deliveredAt)}</span>
+							<span>
+								{isPartialDelivery(piece) ? "First appeared" : "Delivered"}{" "}
+								{formatShortDay(piece.deliveredAt)}
+							</span>
 						)}
 					</p>
+					{isPartialDelivery(piece) && (
+						<p className="text-sm">{partialDeliveryDescription(piece)}</p>
+					)}
 					<CopyLinks feedback={piece} />
-					{responses !== undefined && piece.state === "DELIVERED" && (
+					{responses !== undefined && piece.deliveredAt !== null && (
 						<FeedbackResponse feedback={piece} responses={responses} />
 					)}
 				</li>

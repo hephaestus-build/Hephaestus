@@ -479,6 +479,20 @@ describe("feedbackLoss", () => {
 		});
 	});
 
+	it("counts a piece that failed only after part of it appeared as reached, not lost", () => {
+		const piece: ReviewBoundFeedback = {
+			id: STATE_FEEDBACK_ID,
+			destination: "ON_WORK",
+			state: "FAILED",
+			deliveredAt: at("13:41:30"),
+			withdrawn: false,
+		};
+		expect(feedbackLoss(piece)).toBeUndefined();
+		expect(feedbackLoss({ ...piece, deliveredAt: null })?.text).toBe(
+			"Sending it failed, so it never reached the developer.",
+		);
+	});
+
 	it("says a piece replaced before it was delivered was replaced", () => {
 		const piece: ReviewBoundFeedback = {
 			id: STATE_FEEDBACK_ID,

@@ -221,6 +221,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         Piece onTheWork = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         Piece unconfirmed = save(FeedbackDestination.ON_WORK, FeedbackState.UNCONFIRMED, inWeek(2));
         Piece inConversation = save(FeedbackDestination.CONVERSATION, FeedbackState.DELIVERED, inWeek(3));
+        // A copy appeared on the work before another one failed.
+        Piece partlyDelivered = save(FeedbackDestination.ON_WORK, FeedbackState.FAILED, inWeek(4), inWeek(4));
         // Feedback that did not reach the developer in the week, which the digest leaves out.
         save(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, inWeek(2));
         save(FeedbackDestination.ON_WORK, FeedbackState.AWAITING_APPROVAL, inWeek(3));
@@ -246,7 +248,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(
                         onTheWork.id().toString(),
                         unconfirmed.id().toString(),
-                        inConversation.id().toString());
+                        inConversation.id().toString(),
+                        partlyDelivered.id().toString());
         assertThat(conversations.findMain(workspaceId, accountId))
                 .map(MentorConversation::getId)
                 .contains(digest.getConversationId());

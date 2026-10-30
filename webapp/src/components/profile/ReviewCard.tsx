@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatShortDay, formatTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
-import { deliveredOnly } from "./ObservationFeedback";
+import { exposedFeedback } from "./ObservationFeedback";
 import { OwnFeedbackList } from "./OwnFeedbackList";
 import { ReviewResultRow } from "./ReviewResultRow";
 import type { FeedbackResponseControls, ReviewEntry } from "./reviews";
@@ -57,7 +57,7 @@ export function ReviewCard({
 	const [showAllResults, setShowAllResults] = useState(false);
 	const { results, feedback } = review;
 	// Only feedback that reached the reader is listed; the band goes when none did.
-	const delivered = deliveredOnly(feedback);
+	const delivered = exposedFeedback(feedback);
 	const at = review.review.createdAt;
 	const merged = results.length === 1;
 	const hiddenCount = Math.max(0, results.length - COLLAPSED_RESULT_COUNT);

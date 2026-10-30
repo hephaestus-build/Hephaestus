@@ -23,8 +23,25 @@ export type DeliveryState = ReviewFeedback["state"];
 
 export type DeliveryFacts = Pick<
 	ReviewFeedback,
-	"destination" | "state" | "stopReason" | "withdrawn"
+	"destination" | "state" | "stopReason" | "withdrawn" | "deliveredAt"
 >;
+
+type PartialFacts = Pick<ReviewFeedback, "destination" | "state" | "deliveredAt">;
+
+/** Part of the feedback is on the work, while another copy failed or is not confirmed yet. */
+export function isPartialDelivery(feedback: PartialFacts): boolean {
+	return (
+		feedback.destination === "ON_WORK" &&
+		(feedback.state === "UNCONFIRMED" || feedback.state === "FAILED") &&
+		feedback.deliveredAt !== null
+	);
+}
+
+export function partialDeliveryDescription(feedback: PartialFacts): string {
+	return feedback.state === "FAILED"
+		? "Part of this feedback appeared on the work. Another part failed to post."
+		: "Part of this feedback appeared on the work. The rest is not confirmed yet.";
+}
 
 export const DELIVERY_STATE_DEFS: StatusDefs<DeliveryState> = {
 	AWAITING_APPROVAL: {
@@ -133,6 +150,14 @@ const WITHDRAWN_READY: StatusDef = {
 
 export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 	const { destination, state, stopReason } = feedback;
+	// Withdrawn, it keeps this outcome and gains the withdrawal mark, as delivered feedback does.
+	if (isPartialDelivery(feedback)) {
+		return {
+			...DELIVERY_STATE_DEFS[state],
+			label: "Partly delivered",
+			description: partialDeliveryDescription(feedback),
+		};
+	}
 	if (feedback.withdrawn && state === "READY") {
 		return WITHDRAWN_READY;
 	}

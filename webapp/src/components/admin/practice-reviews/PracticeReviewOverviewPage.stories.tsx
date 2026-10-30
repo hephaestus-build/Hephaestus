@@ -14,7 +14,7 @@ import { precedes } from "@/test/dom";
 
 import {
 	busyReviewQueue,
-	deliveredByLocationCounts,
+	deliveredCounts,
 	feedbackCounts,
 	awaitingApprovalFeedback,
 	practiceReviewOverview,
@@ -63,7 +63,7 @@ const meta = {
 			},
 		},
 		delivery: {
-			delivered: { status: "ready", counts: deliveredByLocationCounts, stale: false },
+			delivered: { status: "ready", counts: deliveredCounts, stale: false },
 			withheld: { status: "ready", counts: withheldByReasonCounts, stale: false },
 		},
 		timing: { status: "ready", timing: practiceReviewTiming, stale: false },
