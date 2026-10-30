@@ -327,9 +327,9 @@ A loader is a fixed catalog that an operator approves. It uses `GET` only, and i
   A quota on limits would admit about half the reviews that the node holds.
   The scheduler places Pods by their requests, so the fit test checks the sum of requests against the allocatable memory.
   The limits bound each Pod's own peak, and the real headroom of the [fit](#fit-by-measured-use) covers peaks that coincide.
-- **The model call pool decides throughput.** The call pool of the model proxy, proposed in #3374, limits calls in flight for each provider endpoint. It keeps an interactive reserve for Heph turns.
+- **The model call pool decides provider throughput.** The model proxy limits calls at the provider quota boundary and keeps an interactive reserve for Heph turns. The reserve does not bypass a shared provider limit.
 - **A cap on model calls in flight for each attempt,** at the proxy, for both kinds. No attempt can take more than its share.
-- **The call pool admits review Pods** ([decision G](#g-review-pods-are-admitted-by-the-model-call-pool)). The limit is ⌈(pool − reserve) ÷ c_max⌉ + 1 for each pool.
+- **Review admission checks quota and provider demand** ([decision G](#g-review-pod-admission-checks-quota-and-provider-demand)). It reserves no model call.
 - **Informers** for Pods, Jobs and ResourceQuotas. No `list()` call on a claim or lease path.
 
 ### Fit by measured use
@@ -349,10 +349,11 @@ All values are in MiB, at measured use, with 1 GiB of real headroom.
 | **Reviews that fit** | **10** | 11 with 2 concurrent turns |
 
 The model call pool binds first.
-With a pool of 32 calls and a reserve of 8, admission takes 9 review Pods at practice concurrency 3.
-Thus, the reference node runs **about 9–10 reviews and 8 concurrent Heph turns**, bound by the model pool, not by memory.
+The earlier throughput estimate at a pool of 32 calls and a reserve of 8 was about 9 reviews at practice concurrency 3.
+Thus, **about 9–10 reviews and 8 concurrent Heph turns** is an estimate for the benchmark to qualify.
+These figures are not a Pod admission rule or a shipped capacity recommendation.
 
-| Option, 8 turns, concurrency 3 | Reviews that fit | Admitted at pool 32, reserve 8 |
+| Option, 8 turns, concurrency 3 | Reviews that fit | Earlier throughput estimate, pool 32, reserve 8 |
 |---|---|---|
 | X | 8 | 8 (memory) |
 | W | 10 | 9 |
@@ -495,14 +496,55 @@ One recovery model replaces two, and a worker release no longer cuts running att
 The upgrade from 0.x to 1.0 stops the old version and then starts 1.0, with no mixed-version window. ADR 0070 (1.0 is a cutover release) sets this rule. Thus, these layers carry no expand and contract for that upgrade.
 A rolling upgrade within 1.x still runs two versions at once. The attempt API and tool protocol v1 carry a version, and each side refuses an unknown version with a named reason.
 
-### G. Review Pods are admitted by the model call pool
+### G. Review Pod admission checks quota and provider demand
 
-The worker admits at most ⌈(pool − reserve) ÷ c_max⌉ + 1 review Pods for each call pool. `c_max` is the most practice sessions that one review runs at once (ADR 0069).
-The interactive reserve stays for Heph turns.
+A claim that starts a review Pod requires room in the review tier's ResourceQuota.
+The call pool of the review's model must have no live background waiter.
+Background demand includes review, composition and direct script calls across all workspaces and workers in that pool.
+A call waiting in another provider pool does not block the claim.
+An unavailable quota observation or a failed pool read prevents the claim.
 
-**Decided by the maintainer on 2026-10-28: adopt.**
-More review Pods than the pool feeds only hold memory and slow every call.
-A turn's latency is set by model contention far more than by any Pod start, and the reserve is the only control that fixes it.
+The worker checks both conditions at the claim transition.
+The observation reserves no memory or provider permit.
+Kubernetes enforces the ResourceQuota when it admits the Pod.
+A concurrent claim or a later call waiter can cause an admitted review to wait for the provider.
+Every physical model call still needs its own pool grant.
+
+Claims run started work first, then the workspace with fewer running reviews, then requested, event, scheduled and backfill work with aging, then the oldest work.
+Composition has priority, with a bound on consecutive composition grants while review calls wait.
+Composition does not start a review Pod.
+The existing composition capacity bounds composers before they load inputs.
+Each model call still needs a provider grant.
+Turns are ordered by the workspace's running turns.
+
+Resident turn admission follows CPU, separately from tools memory and provider calls.
+The automatic count is the declared allocatable CPU, less review reservations and resident role requests, divided by 50m per turn.
+Its ceiling is 32 turns across the worker replicas. An explicit turn count remains the operator's override.
+One declaration supplies the allocatable CPU to both this formula and the chart's fit test.
+
+The provider pool admits each call. Its interactive reserve does not cap resident turns.
+The conversation tier's existing quota holds eight tools Pods plus two warm Pods per worker.
+A turn requests a tools Pod only for a tool call. If the quota is full, the turn waits with a recorded phase duration and visible progress.
+
+Both single-node profiles admit 32 turns and use `Recreate` where Deployment surge would exceed the declared budget.
+This trades deploy continuity for fit. The deployment outage counts against the 99.5% availability budget.
+It changes no Pod's request or limit.
+
+The 2026-10-30 admission sweep on commit `af3ef372209c07d912a3d9f0354fec148524458f` is the evidence for this ceiling.
+Each case completed 40 synthetic users with three turns each.
+At 32 turns, first-text p95 was 17.877 seconds and node CPU p95 was 77.26% of four cores.
+The observed CPU cost was 0.044–0.051 cores per resident turn, including baseline activity.
+The 50m planning coefficient is not a measured marginal cost or a CPU limit.
+The replay used a three-second first-token delay and 500 output tokens, with no tools, reviews or throttling.
+
+It does not qualify tool-heavy traffic, sustained arrivals, real provider quotas, or the ten-second first-text objective.
+The evidence bundle is `af3-admission-sweep`, with validated `summary.csv` and `phases.csv` receipts.
+48 turns require the later tool-heavy and 80-user qualification.
+
+**Decision: amended on 2026-10-30.**
+Memory quota and provider-call admission are separate resources.
+The review Pod count is not calculated from the provider pool size or from practice-session concurrency.
+A review claim creates no model call reservation.
 
 ### H. Codemode stays in the review loop as QuickJS
 

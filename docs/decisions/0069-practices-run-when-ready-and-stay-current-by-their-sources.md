@@ -21,7 +21,10 @@
 **Relates to:** [ADR 0070](0070-1-0-is-a-cutover-release.md) (the 1.0 cutover), and [ADR 0068](https://github.com/hephaestus-build/Hephaestus/pull/3389) (Proposed).
 This ADR changes no part of W′.
 It changes the review loop's prompt layout, its practice order and its start stagger.
-It also changes the parameter `c_max` of decision G.
+
+Practice concurrency is an execution bound within a review.
+For Pod admission, see [decision G](0068-reviews-and-heph-run-on-one-agent-runtime.md#g-review-pod-admission-checks-quota-and-provider-demand).
+
 Driver 7 of ADR 0068 says that a review sends its results once, at the end. With [ADR 0063](0063-each-practice-is-staged-when-it-ends.md), each practice stages when it ends.
 
 Each amended ADR has a dated update block that points here.
@@ -610,11 +613,17 @@ The freshness layer adds the migration for `result.read_fingerprints`.
 
 ### D10. Practice concurrency
 
-Adaptive concurrency with `c_max = 6`, after the footprint benchmark with the real model (M-FOOT).
-The worker admits ⌈(pool − reserve) ÷ `c_max`⌉ + 1 review Pods for each call pool.
+Practice-session concurrency is adaptive within a measured maximum, `c_max`.
+The footprint benchmark qualifies changes to that maximum while reviews, composition and conversation turns run together.
+Each physical model request still obtains a grant from the shared provider call pool.
 
-**Decision: adopted.**
-**Consequence:** only parameters of W′ change. Decision G of ADR 0068 gains `c_max` in its formula. Driver 7 of ADR 0068 mentions staging.
+**Decision: amended on 2026-10-30.**
+**Consequence:** practice concurrency bounds work within a review Pod.
+Review Pod admission follows [ADR 0068 G](0068-reviews-and-heph-run-on-one-agent-runtime.md#g-review-pod-admission-checks-quota-and-provider-demand).
+
+This practice-concurrency amendment changes no practice width or measured footprint value.
+The separate resident-turn CPU rule and its 32-turn ceiling are in ADR 0068 G.
+The tools tier keeps its eight active plus two warm Pods. It does not grow with resident turn admission.
 
 ### D12. Batch APIs only for evals
 
