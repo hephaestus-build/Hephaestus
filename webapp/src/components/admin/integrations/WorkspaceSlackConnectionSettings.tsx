@@ -27,6 +27,12 @@ import { Spinner } from "@/components/ui/spinner";
 
 import { IntegrationCardHeading } from "./IntegrationCardHeading";
 
+/** What Slack said about the scopes the token holds; only a reconnect grants a missing one. */
+export type SlackScopeCheck =
+	| { state: "checking" }
+	| { state: "failed"; onRetry: () => void; isRetrying: boolean }
+	| { state: "checked"; missingScopes: string[] };
+
 export type WorkspaceSlackConnectionSettingsProps =
 	| {
 			state: "disconnected";
@@ -37,11 +43,7 @@ export type WorkspaceSlackConnectionSettingsProps =
 	| {
 			state: "connected";
 			credentialsUnreadableSince?: Date;
-			/**
-			 * The scopes that Hephaestus requests and the Slack token lacks. A token keeps the scopes of its
-			 * own authorization, so only a reconnect grants a scope added later. Absent while unknown.
-			 */
-			missingScopes?: string[];
+			scopeCheck: SlackScopeCheck;
 			/**
 			 * Starts Slack's OAuth again for the same Slack workspace, which replaces the stored token and
 			 * keeps the connection, its channels and their data; the page leaves for Slack when it succeeds.
@@ -94,43 +96,48 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 	);
 }
 
-/** What the connected card says about the token, most urgent first: each needs a reconnect but the last. */
-type TokenStatus = "unreadable" | "scopes-missing" | "connected";
+/** What the connected card says about the token, most urgent first. */
+type TokenStatus = "unreadable" | "scopes-missing" | "check-failed" | "checking" | "connected";
 
-function tokenStatusOf(credentialsUnreadableSince?: Date, missingScopes?: string[]): TokenStatus {
+function tokenStatusOf(
+	credentialsUnreadableSince: Date | undefined,
+	scopeCheck: SlackScopeCheck,
+): TokenStatus {
 	if (credentialsUnreadableSince != null) {
 		return "unreadable";
 	}
-	if (missingScopes != null && missingScopes.length > 0) {
-		return "scopes-missing";
+	if (scopeCheck.state === "checked") {
+		return scopeCheck.missingScopes.length > 0 ? "scopes-missing" : "connected";
 	}
-	return "connected";
+	return scopeCheck.state === "failed" ? "check-failed" : "checking";
 }
 
 const TOKEN_BADGE = {
 	unreadable: { label: "Token unreadable", variant: "warning" },
 	"scopes-missing": { label: "Permissions missing", variant: "warning" },
+	"check-failed": { label: "Permissions unknown", variant: "warning" },
+	checking: { label: "Checking permissions", variant: "muted" },
 	connected: { label: "Connected", variant: "success" },
-} as const satisfies Record<TokenStatus, { label: string; variant: "warning" | "success" }>;
+} as const satisfies Record<
+	TokenStatus,
+	{ label: string; variant: "warning" | "success" | "muted" }
+>;
 
-function TokenDescription({
-	status,
-	missingScopes,
-}: {
-	status: TokenStatus;
-	missingScopes?: string[];
-}) {
-	if (status === "unreadable") {
-		return "Hephaestus cannot post with this token. Reconnect Slack to replace it, or restore the original server key.";
-	}
-	if (status === "connected") {
-		return "Hephaestus is installed and can post in Slack.";
-	}
+const TOKEN_DESCRIPTION = {
+	unreadable:
+		"Hephaestus cannot post with this token. Reconnect Slack to replace it, or restore the original server key.",
+	"check-failed":
+		"Hephaestus could not ask Slack which permissions this token holds. Check again, or reconnect Slack if it keeps failing.",
+	checking: "Hephaestus is asking Slack which permissions this token holds.",
+	connected: "Hephaestus is installed and can post in Slack.",
+} as const satisfies Record<Exclude<TokenStatus, "scopes-missing">, string>;
+
+function MissingScopes({ scopes }: { scopes: string[] }) {
 	return (
 		<>
 			Slack has not granted Hephaestus every permission it needs, so some of its work in Slack
 			fails. Reconnect Slack to grant{" "}
-			{missingScopes?.map((scope, index) => (
+			{scopes.map((scope, index) => (
 				<span key={scope}>
 					{index > 0 && ", "}
 					<code>{scope}</code>
@@ -143,14 +150,15 @@ function TokenDescription({
 
 function SlackConnected({
 	credentialsUnreadableSince,
-	missingScopes,
+	scopeCheck,
 	onReconnect,
 	isReconnecting,
 	onDisconnect,
 	isDisconnecting,
 }: Extract<WorkspaceSlackConnectionSettingsProps, { state: "connected" }>) {
-	const status = tokenStatusOf(credentialsUnreadableSince, missingScopes);
-	const needsReconnect = status !== "connected";
+	const status = tokenStatusOf(credentialsUnreadableSince, scopeCheck);
+	const needsReconnect = status === "unreadable" || status === "scopes-missing";
+	const missingScopes = scopeCheck.state === "checked" ? scopeCheck.missingScopes : [];
 	const [disconnectOpen, setDisconnectOpen] = useState(false);
 
 	const confirmDisconnect = async () => {
@@ -174,8 +182,12 @@ function SlackConnected({
 					</ItemMedia>
 					<ItemContent>
 						<ItemTitle>Slack workspace</ItemTitle>
-						<ItemDescription className={needsReconnect ? "line-clamp-none" : undefined}>
-							<TokenDescription status={status} missingScopes={missingScopes} />
+						<ItemDescription className={status === "connected" ? undefined : "line-clamp-none"}>
+							{status === "scopes-missing" ? (
+								<MissingScopes scopes={missingScopes} />
+							) : (
+								TOKEN_DESCRIPTION[status]
+							)}
 						</ItemDescription>
 					</ItemContent>
 					<ItemActions>
@@ -185,6 +197,18 @@ function SlackConnected({
 			</CardContent>
 
 			<CardFooter className="justify-end gap-2">
+				{scopeCheck.state === "failed" && status === "check-failed" && (
+					<Button variant="outline" onClick={scopeCheck.onRetry} disabled={scopeCheck.isRetrying}>
+						{scopeCheck.isRetrying ? (
+							<>
+								<Spinner />
+								Checking…
+							</>
+						) : (
+							"Check again"
+						)}
+					</Button>
+				)}
 				<Button
 					variant={needsReconnect ? "default" : "outline"}
 					onClick={onReconnect}

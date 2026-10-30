@@ -232,6 +232,24 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseToNameTheGrantedScopesWhenSlackSendsNoScopeHeader() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
+            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\",\"user_id\":\"U1\"}"));
+            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.grantedScopes(7L))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                e -> assertThat(e.slackError()).isEqualTo("scopes_not_reported"));
+            } finally {
+                local.close();
+            }
+        }
+    }
+
+    @Test
     void shouldRefuseToNameTheGrantedScopesWhenSlackRefusesTheToken() throws Exception {
         try (MockWebServer slackApi = new MockWebServer()) {
             slackApi.start();

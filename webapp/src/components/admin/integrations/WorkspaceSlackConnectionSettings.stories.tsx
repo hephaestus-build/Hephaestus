@@ -12,8 +12,11 @@ const onRejectedDisconnect = fn(async () => {
 	throw new Error("Slack did not answer");
 });
 
+const onRetryScopes = fn();
+
 const connected = {
 	state: "connected",
+	scopeCheck: { state: "checked", missingScopes: [] },
 	onReconnect,
 	isReconnecting: false,
 	onDisconnect,
@@ -94,13 +97,47 @@ export const CredentialUnreadable: Story = {
  * so the card names the scope and makes Reconnect the main action.
  */
 export const MissingScopes: Story = {
-	args: { ...connected, missingScopes: ["reactions:write"] },
+	args: { ...connected, scopeCheck: { state: "checked", missingScopes: ["reactions:write"] } },
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("Permissions missing")).toBeVisible();
 		await expect(canvas.getByText("reactions:write")).toBeVisible();
 		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Reconnect Slack" }));
 		await expect(onReconnect).toHaveBeenCalled();
+	},
+};
+
+/** Until Slack answers, the card claims neither that the token can post nor that it lacks a scope. */
+export const CheckingPermissions: Story = {
+	args: { ...connected, scopeCheck: { state: "checking" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Checking permissions")).toBeVisible();
+		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/can post in Slack/u)).not.toBeInTheDocument();
+	},
+};
+
+/** A check that failed says so and can run again; it claims no missing scope. */
+export const PermissionCheckFailed: Story = {
+	args: {
+		...connected,
+		scopeCheck: { state: "failed", onRetry: onRetryScopes, isRetrying: false },
+	},
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByText("Permissions unknown")).toBeVisible();
+		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
+		await userEvent.click(canvas.getByRole("button", { name: "Check again" }));
+		await expect(onRetryScopes).toHaveBeenCalledOnce();
+	},
+};
+
+export const PermissionCheckRetrying: Story = {
+	args: {
+		...connected,
+		scopeCheck: { state: "failed", onRetry: onRetryScopes, isRetrying: true },
+	},
+	play: async ({ canvas }) => {
+		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Checking…" }));
 	},
 };
 

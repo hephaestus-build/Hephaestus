@@ -1462,20 +1462,45 @@ describe("Slack credential recovery", () => {
 		screen.getByRole("button", { name: "Reconnect Slack" });
 	});
 
-	it("claims no missing scope when Slack cannot be asked", async () => {
+	it("claims neither a post nor a missing scope while Slack has not answered", async () => {
 		mockSlackConnection();
+		const answer = deferred();
 		server.use(
-			http.get("*/workspaces/:workspaceSlug/slack/scopes", () =>
-				HttpResponse.json(
-					{ status: 502, title: "Slack channel is not reachable" },
-					{ status: 502 },
-				),
-			),
+			http.get("*/workspaces/:workspaceSlug/slack/scopes", async () => {
+				await answer.promise;
+				return HttpResponse.json({ missingScopes: [] });
+			}),
 		);
 		renderRouteAt("/w/acme/admin/integrations/slack");
 
-		await screen.findByText("Connected", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("Checking permissions", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("Connected")).toBeNull();
+		answer.resolve();
+		await screen.findByText("Connected");
+	});
+
+	it("says the scopes are unknown when Slack cannot be asked, and asks again", async () => {
+		mockSlackConnection();
+		let reads = 0;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/slack/scopes", () => {
+				reads += 1;
+				return reads === 1
+					? HttpResponse.json(
+							{ status: 502, title: "Slack did not complete the request" },
+							{ status: 502 },
+						)
+					: HttpResponse.json({ missingScopes: ["reactions:write"] });
+			}),
+		);
+		renderRouteAt("/w/acme/admin/integrations/slack");
+
+		await screen.findByText("Permissions unknown", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("Connected")).toBeNull();
 		expect(screen.queryByText("Permissions missing")).toBeNull();
+		await userEvent.setup().click(screen.getByRole("button", { name: "Check again" }));
+		await screen.findByText("Permissions missing");
+		expect(reads).toBe(2);
 	});
 });
 

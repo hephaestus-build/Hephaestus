@@ -87,6 +87,10 @@ class SlackScopesControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .expectStatus()
                 .isEqualTo(412)
                 .expectBody()
+                .jsonPath("$.title")
+                .isEqualTo("Slack did not complete the request")
+                .jsonPath("$.detail")
+                .isEqualTo("Reconnect Slack for this workspace, then try again.")
                 .jsonPath("$.slackError")
                 .isEqualTo("no_active_slack_connection");
     }

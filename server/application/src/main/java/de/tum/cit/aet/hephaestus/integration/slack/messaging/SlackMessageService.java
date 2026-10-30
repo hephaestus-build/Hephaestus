@@ -264,7 +264,8 @@ public class SlackMessageService {
      * The scopes that the workspace's bot token holds. Slack names them in the {@code X-OAuth-Scopes} header of every
      * Web API response; {@code auth.test} needs no scope of its own.
      *
-     * @throws SlackSendException when the workspace has no usable token, or Slack did not answer
+     * @throws SlackSendException when the workspace has no usable token, Slack did not answer, or Slack named no
+     *     scopes ({@code scopes_not_reported}): a missing header proves no missing scope
      */
     public Set<String> grantedScopes(long workspaceId) {
         String token = resolveToken(workspaceId)
@@ -280,10 +281,13 @@ public class SlackMessageService {
         if (!r.isOk()) {
             throw new SlackSendException(workspaceId, "", r.getError() == null ? "unknown" : r.getError());
         }
+        // The SDK stores header names in lower case.
         Map<String, List<String>> headers = r.getHttpResponseHeaders() == null ? Map.of() : r.getHttpResponseHeaders();
-        return headers.entrySet().stream()
-                .filter(header -> header.getKey().equalsIgnoreCase("X-OAuth-Scopes"))
-                .flatMap(header -> header.getValue().stream())
+        List<String> named = headers.get("x-oauth-scopes");
+        if (named == null) {
+            throw new SlackSendException(workspaceId, "", "scopes_not_reported");
+        }
+        return named.stream()
                 .flatMap(value -> Arrays.stream(value.split(",")))
                 .map(String::strip)
                 .filter(scope -> !scope.isEmpty())
