@@ -635,6 +635,23 @@ async function compactBeforePrompt(
 }
 
 /**
+ * Whether a compaction that keeps entries from `firstKeptEntryId` on would summarise part of this turn: its question,
+ * the files it read and what it wrote, all after the first `stored` entries. A summary of them reads like a memory, so
+ * an answer would cite a file it no longer has. Pi's threshold compaction runs before each model request, also inside
+ * a turn; while the turn still fits the model's window it waits for the next turn's prompt (`compactBeforePrompt`).
+ * An overflow still compacts: the turn would fail otherwise.
+ */
+export function cutsIntoTurn(
+	entries: readonly SessionEntry[],
+	stored: number,
+	firstKeptEntryId: string,
+): boolean {
+	const question = entries.findIndex((entry, index) => index >= stored && entry.type === "message");
+	const firstKept = entries.findIndex((entry) => entry.id === firstKeptEntryId);
+	return question !== -1 && firstKept > question;
+}
+
+/**
  * The summaries a failed turn still stores: those written before its question, which only shorten the conversation it
  * read. A later one covers the turn's own unstored entries, so it goes with them.
  */
@@ -1430,6 +1447,12 @@ export function createHephHost(options: HostOptions): HephHost {
 					messages: [...event.messages, situationMessage(context.situation)],
 				}));
 				pi.on("before_provider_request", (event) => breakpointBeforeSituation(event.payload));
+				pi.on("session_before_compact", (event) =>
+					event.reason === "threshold" &&
+					cutsIntoTurn(sessionManager.getEntries(), stored, event.preparation.firstKeptEntryId)
+						? { cancel: true }
+						: undefined,
+				);
 				pi.on("agent_before_settle", (event) =>
 					event.outcome === "completed"
 						? { entries: staleContextResults(sessionManager.getEntries(), stored) }

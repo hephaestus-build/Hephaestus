@@ -1001,7 +1001,12 @@ Hephaestus uses Pi's own compaction, with Pi's default summary prompt.
 - **Room to answer.** After a summary, the host estimates the messages and the fixed prompt. The answer needs min(output limit, an eighth of the window). If that does not fit the window, the turn fails with "still too long after shortening it".
 - **A repeat.** A conversation that stays past the trigger after its summary is shortened again on the next turn. Nothing guarantees that one summary is enough.
 - **A kept summary.** A turn that fails after its summary still stores that summary. The next turn starts from it. It summarises again only if the conversation is still past the trigger.
-- **During the turn.** Pi's own check between tool batches is the fallback.
+- **During the turn.** Pi checks the trigger again before each model request.
+  The host cancels that compaction if it would summarise part of this turn (`cutsIntoTurn`).
+  A summary of the turn's reads looks like a memory of the files.
+  An answer would then cite files that it no longer sees.
+  The next question compacts before its prompt instead.
+  If the turn no longer fits the model's window, Pi's overflow recovery still compacts it.
 
 Pi's own check before a prompt reads only the usage of its last answer.
 The host also counts what the ledger holds after that answer, for example the question of a failed turn.

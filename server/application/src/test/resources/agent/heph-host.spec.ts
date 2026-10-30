@@ -1177,6 +1177,50 @@ void test("a conversation past the working budget is compacted before the prompt
 	assert.doesNotMatch(sent, /question 0 /u);
 });
 
+/** A file of about 10,500 tokens by Pi's estimate. */
+function largeFile(name: string): string {
+	return `${name} ${"f".repeat(42_000)}`;
+}
+
+void test("a turn whose reads pass the working budget answers from the files it read, not from a summary of them", async () => {
+	// About 27,000 tokens by Pi's estimate of one token per four characters, below the working trigger.
+	const earlier: unknown[] = [];
+	for (let index = 0; index < 12; index += 1) {
+		const parent = idOf(earlier.at(-1));
+		earlier.push(...storedExchange(index, parent === "" ? null : parent));
+	}
+	// Each read is about 10,500 tokens: the third passes the trigger, and keeping the recent messages would cut the
+	// turn after its first read.
+	const read = (path: string) => (_request: FauxRequest) =>
+		faux.fauxAssistantMessage([faux.fauxToolCall("read", { path })], { stopReason: "toolUse" });
+	const answered: FauxRequest[] = [];
+	const step: FauxStep = (request) => {
+		if (asksForSummary(request)) {
+			return faux.fauxAssistantMessage("## Goal\nthe summary");
+		}
+		answered.push(request);
+		return faux.fauxAssistantMessage("the answer");
+	};
+	const worker = fakeWorker(contextOf(earlier, "walk me through the change"), async (request) => ({
+		ok: true,
+		text: largeFile(request.path),
+	}));
+
+	const end = await runTurn(
+		worker,
+		fauxModels([read("the-diff"), read("the-old-file"), read("the-new-file"), step, step, step]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	assert.equal(answered.length, 1);
+	const sent = answered[0]?.messages.map(textOf).join("\n") ?? "";
+	assert.ok(
+		sent.includes(largeFile("the-diff")),
+		"the first file the turn read reaches the answer whole",
+	);
+	assert.ok(!sent.includes("the summary"), "the answer does not rest on a summary of this turn");
+});
+
 void test("a summary is written with thinking off and the answer with the configured effort, and no level is stored", async () => {
 	const levels: { summary: (string | undefined)[]; answer: (string | undefined)[] } = {
 		summary: [],
