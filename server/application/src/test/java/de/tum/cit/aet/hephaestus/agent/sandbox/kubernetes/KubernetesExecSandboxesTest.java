@@ -204,8 +204,6 @@ class KubernetesExecSandboxesTest {
 
     private Throwable refusedCreate(String message) {
         try (var runtime = sandboxes(server.url("/").toString())) {
-            var pods =
-                    new KubernetesPods(shared(), KubernetesFixtures.worker(TURNS), 10, ImagePullPolicy.IF_NOT_PRESENT);
             server.setDispatcher(new Dispatcher() {
                 @Override
                 public MockResponse dispatch(RecordedRequest request) {
@@ -217,11 +215,7 @@ class KubernetesExecSandboxesTest {
                             .setResponseCode(403);
                 }
             });
-            return catchThrowable(() -> pods.create(new PodBuilder()
-                    .withNewMetadata()
-                    .withName("tools")
-                    .endMetadata()
-                    .build()));
+            return catchThrowable(() -> runtime.create("tools", TurnSandboxes.LIMITS));
         }
     }
 

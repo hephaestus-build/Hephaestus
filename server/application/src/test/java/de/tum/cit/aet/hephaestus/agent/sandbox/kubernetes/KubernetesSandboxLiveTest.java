@@ -321,7 +321,7 @@ class KubernetesSandboxLiveTest {
         backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
         hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
-        turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers, exits);
+        turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers, exits, cache);
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
         KubernetesIsolationProbe probe = configuration.kubernetesIsolationProbe(
@@ -924,7 +924,8 @@ class KubernetesSandboxLiveTest {
                         worker,
                         agentImage,
                         KubernetesFixtures.live(worker.workerId()),
-                        new SandboxExits(pods, new SimpleMeterRegistry()));
+                        new SandboxExits(pods, new SimpleMeterRegistry()),
+                        cache);
         try {
             assertThat(text(runtime.exec(
                                     sandbox, new ExecSandboxes.Command(List.of("echo", "owned"), COMMAND, OUTPUT_LIMIT))
