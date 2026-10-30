@@ -33,7 +33,7 @@ public class ConsumerDeadLetterService {
                 metadata.streamSequence(),
                 message.getSubject(),
                 metadata.timestamp().toInstant().truncatedTo(ChronoUnit.MICROS),
-                failure.getClass().getName(),
+                IntegrationPoisonHandler.diagnosticCause(failure).getClass().getName(),
                 Instant.now()));
     }
 

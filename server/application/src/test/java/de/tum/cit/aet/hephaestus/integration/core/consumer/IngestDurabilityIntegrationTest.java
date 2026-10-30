@@ -49,6 +49,7 @@ class IngestDurabilityIntegrationTest {
             }
             AtomicInteger failures = new AtomicInteger();
             List<String> attempted = new CopyOnWriteArrayList<>();
+            CountDownLatch independentApplied = new CountDownLatch(1);
             IntegrationMessageHandler handler = new IntegrationMessageHandler() {
                 @Override
                 public EventTypeKey key() {
@@ -57,6 +58,10 @@ class IngestDurabilityIntegrationTest {
 
                 @Override
                 public void onMessage(Message message) {
+                    if (message.getSubject().endsWith(".other")) {
+                        independentApplied.countDown();
+                        return;
+                    }
                     String value = new String(message.getData(), StandardCharsets.UTF_8);
                     attempted.add(value);
                     try (var sql = DriverManager.getConnection(url, postgres.getUsername(), postgres.getPassword());
@@ -112,7 +117,6 @@ class IngestDurabilityIntegrationTest {
                     message -> fleet.handleMessage(42L, message));
             var independentContext = context.createOrUpdateConsumer(IntegrationNatsConsumer.newConsumerConfiguration(
                     new String[] {stream + ".other"}, properties, "independent"));
-            CountDownLatch independentApplied = new CountDownLatch(1);
             ScopeConsumer independent = new ScopeConsumer(
                     43L,
                     "independent",
@@ -120,10 +124,7 @@ class IngestDurabilityIntegrationTest {
                     independentContext,
                     context,
                     new String[] {stream + ".other"},
-                    message -> {
-                        message.ack();
-                        independentApplied.countDown();
-                    });
+                    message -> fleet.handleMessage(43L, message));
             boolean paused = false;
             try {
                 postgres.getDockerClient()

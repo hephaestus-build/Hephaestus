@@ -760,7 +760,7 @@ public class IntegrationNatsConsumer {
                         && config.getMaxDeliver() == -1
                         && config.getMaxAckPending() == 1
                         && config.getAckPolicy() == AckPolicy.Explicit
-                        && Objects.equals(config.getBackoff(), retryTimeouts(consumerProperties))) {
+                        && Objects.equals(config.getAckWait(), consumerProperties.ackWait())) {
                     return existing;
                 }
                 log.info(
@@ -774,7 +774,7 @@ public class IntegrationNatsConsumer {
                         .ackPolicy(AckPolicy.Explicit)
                         .maxAckPending(1)
                         .maxDeliver(-1)
-                        .backoff(retryTimeouts(consumerProperties).toArray(Duration[]::new))
+                        .ackWait(consumerProperties.ackWait())
                         .inactiveThreshold(desiredThreshold)
                         .build());
             } catch (JetStreamApiException e) {
@@ -807,8 +807,7 @@ public class IntegrationNatsConsumer {
                 .ackWait(consumerProperties.ackWait())
                 .ackPolicy(AckPolicy.Explicit)
                 .maxAckPending(1)
-                .maxDeliver(-1)
-                .backoff(retryTimeouts(consumerProperties).toArray(Duration[]::new));
+                .maxDeliver(-1);
         if (!isBlank(durableName)) {
             // Only a durable is worth reaping: JetStream already deletes an ephemeral seconds after
             // its last pull, so a threshold here would lengthen that rather than bound it.
@@ -816,11 +815,6 @@ public class IntegrationNatsConsumer {
                     .inactiveThreshold(consumerProperties.inactiveThreshold());
         }
         return builder.build();
-    }
-
-    static List<Duration> retryTimeouts(NatsConsumerProperties properties) {
-        // Replace older multi-stage timeout lists so every timeout uses the configured acknowledgement wait.
-        return List.of(properties.ackWait());
     }
 
     private String durableBaseName() {
@@ -864,10 +858,8 @@ public class IntegrationNatsConsumer {
                             failure.getClass().getName());
                 }
             }
-            msg.ack();
-            stats.recordDispatch(Instant.now());
         } catch (Throwable e) {
-            if (e instanceof VirtualMachineError) throw e;
+            if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) throw e;
             if (!shuttingDown.get()) {
                 // Exception messages can contain raw provider payloads. Log only the failure type.
                 long delivery = IntegrationPoisonHandler.readDeliveredCount(msg);
@@ -878,10 +870,7 @@ public class IntegrationNatsConsumer {
                         .addKeyValue("error.type", e.getClass().getName());
                 if (scopeId != null) failure = failure.addKeyValue("integration.scope.id", scopeId);
                 if (delivery <= 1) {
-                    Throwable diagnostic = e;
-                    for (int depth = 0; depth < 16 && diagnostic.getCause() != null; depth++) {
-                        diagnostic = Objects.requireNonNull(diagnostic.getCause());
-                    }
+                    Throwable diagnostic = IntegrationPoisonHandler.diagnosticCause(e);
                     failure = failure.addKeyValue(
                                     "error.root_type", diagnostic.getClass().getName())
                             .addKeyValue(
@@ -895,6 +884,17 @@ public class IntegrationNatsConsumer {
             }
             stats.recordNak(Instant.now());
             poisonHandler.handleFailure(scopeId, msg, e);
+            return;
+        }
+        try {
+            msg.ack();
+            stats.recordDispatch(Instant.now());
+        } catch (Exception failure) {
+            log.warn(
+                    "Event acknowledgement failed: error.type={}",
+                    failure.getClass().getName());
+            stats.recordNak(Instant.now());
+            poisonHandler.nakWithBackoff(msg);
         }
     }
 

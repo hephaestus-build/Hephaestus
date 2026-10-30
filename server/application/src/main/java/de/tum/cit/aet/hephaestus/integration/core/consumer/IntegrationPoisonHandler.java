@@ -6,12 +6,18 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.nats.client.Message;
-import java.io.IOException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.sql.SQLException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLTransientException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -104,6 +110,21 @@ public class IntegrationPoisonHandler {
                         && readDeliveredCount(msg) >= properties.poison().maxRedeliver())) {
             try {
                 deadLetters.capture(workspaceId, msg, failure);
+                Throwable diagnostic = diagnosticCause(failure);
+                log.atError()
+                        .addKeyValue("event.name", "integration.message.captured")
+                        .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(msg.getSubject()))
+                        .addKeyValue("integration.scope.id", workspaceId)
+                        .addKeyValue("integration.delivery", readDeliveredCount(msg))
+                        .addKeyValue("error.type", failure.getClass().getName())
+                        .addKeyValue("error.root_type", diagnostic.getClass().getName())
+                        .addKeyValue(
+                                "error.stack_trace",
+                                Arrays.stream(diagnostic.getStackTrace())
+                                        .limit(32)
+                                        .map(StackTraceElement::toString)
+                                        .toList())
+                        .log("Failed event stored for replay");
                 msg.term();
                 poisonCounter(msg).increment();
                 return;
@@ -114,6 +135,15 @@ public class IntegrationPoisonHandler {
             }
         }
         nakWithBackoff(msg);
+    }
+
+    static Throwable diagnosticCause(Throwable failure) {
+        Throwable diagnostic = failure;
+        // Bound traversal even when a failure has a cyclic or unusually deep cause chain.
+        for (int depth = 0; depth < 16 && diagnostic.getCause() != null; depth++) {
+            diagnostic = Objects.requireNonNull(diagnostic.getCause());
+        }
+        return diagnostic;
     }
 
     private enum FailureKind {
@@ -127,7 +157,11 @@ public class IntegrationPoisonHandler {
         Set<Throwable> seen = new HashSet<>();
         for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
             if (cause instanceof PayloadParsingException) return FailureKind.PERMANENT;
-            if (cause instanceof IOException
+            if (cause instanceof SocketException
+                    || cause instanceof SocketTimeoutException
+                    || cause instanceof UnknownHostException
+                    || cause instanceof SQLTransientException
+                    || cause instanceof SQLRecoverableException
                     || cause instanceof TransientDataAccessException
                     || cause instanceof DataAccessResourceFailureException
                     || cause instanceof WebClientRequestException) {

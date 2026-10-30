@@ -33,6 +33,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -252,8 +254,9 @@ class ScopeConsumerTest {
             consumer.stop();
         }
 
-        @Test
-        void handlerExceptionDoesNotKillLoop() throws Exception {
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void handlerExceptionDoesNotKillLoop(boolean stackOverflow) throws Exception {
             ConsumerContext ctx = mock(ConsumerContext.class);
             ArgumentCaptor<MessageHandler> handlerCaptor = ArgumentCaptor.forClass(MessageHandler.class);
             MessageConsumer subscription = mock(MessageConsumer.class);
@@ -263,6 +266,7 @@ class ScopeConsumerTest {
             ScopeConsumer consumer = new ScopeConsumer(
                     SCOPE_ID, CONSUMER_NAME, STREAM, ctx, mock(StreamContext.class), SUBJECTS, msg -> {
                         if (msg.getSubject().endsWith(".boom")) {
+                            if (stackOverflow) throw new StackOverflowError();
                             throw new RuntimeException("simulated handler failure");
                         }
                         survivedFailure.countDown();
@@ -278,6 +282,34 @@ class ScopeConsumerTest {
                     .isTrue();
 
             consumer.stop();
+        }
+
+        @Test
+        void shouldStopOnFatalJvmErrorAndResumeWhenReconciled() throws Exception {
+            var context = mock(ConsumerContext.class);
+            var callbacks = ArgumentCaptor.forClass(MessageHandler.class);
+            var subscription = mock(MessageConsumer.class);
+            when(context.consume(callbacks.capture())).thenReturn(subscription);
+            var resumed = new CountDownLatch(1);
+            var consumer = new ScopeConsumer(
+                    SCOPE_ID, CONSUMER_NAME, STREAM, context, mock(StreamContext.class), SUBJECTS, message -> {
+                        if (message.getSubject().endsWith(".boom")) throw new InternalError();
+                        resumed.countDown();
+                    });
+            try {
+                consumer.start();
+                callbacks.getValue().onMessage(messageWithSubject("github.acme.repo.boom"));
+                await().atMost(Duration.ofSeconds(5)).until(() -> !consumer.isRunning());
+                assertThat(consumer.isAttached()).isFalse();
+
+                consumer.updateSubjects(SUBJECTS);
+                assertThat(consumer.isRunning()).isTrue();
+                callbacks.getValue().onMessage(messageWithSubject("github.acme.repo.ok"));
+                assertThat(resumed.await(5, TimeUnit.SECONDS)).isTrue();
+                verify(subscription, atLeastOnce()).close();
+            } finally {
+                consumer.stop();
+            }
         }
 
         @Test

@@ -15,11 +15,20 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.Message;
 import io.nats.client.impl.NatsJetStreamMetaData;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.MalformedURLException;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLTransientConnectionException;
 import java.time.Duration;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -63,9 +72,43 @@ class IntegrationPoisonHandlerTest extends BaseUnitTest {
     @Test
     void shouldRetryProviderOutage() {
         Message message = message(100);
-        handler.handleFailure(42L, message, new IOException("provider unavailable"));
+        handler.handleFailure(42L, message, new ConnectException("provider unavailable"));
         verify(message).nakWithDelay(any(Duration.class));
         verifyNoInteractions(deadLetters);
+    }
+
+    @ParameterizedTest
+    @MethodSource("connectionPoolFailures")
+    void shouldRetryJdbcConnectionFailuresWithoutSqlState(SQLException failure) {
+        Message message = message(100);
+        handler.handleFailure(42L, message, failure);
+        verify(message).nakWithDelay(any(Duration.class));
+        verify(message, never()).term();
+        verifyNoInteractions(deadLetters);
+    }
+
+    private static Stream<SQLException> connectionPoolFailures() {
+        return Stream.of(
+                new SQLTransientConnectionException("pool unavailable"),
+                new SQLRecoverableException("connection unavailable"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("unclassifiedIoFailures")
+    void shouldCaptureUnclassifiedIoFailuresWhenBudgetIsExhausted(IOException failure) {
+        Message message = message(100);
+        handler.handleFailure(42L, message, failure);
+        verify(deadLetters).capture(42L, message, failure);
+        verify(message).term();
+        verify(message, never()).nakWithDelay(any(Duration.class));
+    }
+
+    private static Stream<IOException> unclassifiedIoFailures() {
+        return Stream.of(
+                new IOException("unknown I/O failure"),
+                new FileNotFoundException(),
+                new MalformedURLException(),
+                new CharacterCodingException());
     }
 
     @ParameterizedTest

@@ -165,9 +165,7 @@ public final class ScopeConsumer {
         if (!wasRunning && thread == null) {
             return;
         }
-        if (wasRunning) {
-            closeSubscriptionQuietly();
-        }
+        closeSubscriptionQuietly();
         if (thread != null) {
             thread.interrupt();
             if (!isCurrentThread(thread)) {
@@ -213,8 +211,13 @@ public final class ScopeConsumer {
                     .build());
             currentSubjects = newSubjects.clone();
         }
-        closeSubscriptionQuietly();
-        subscription = context.consume(this::enqueueMessage);
+        if (running.get()) {
+            closeSubscriptionQuietly();
+            subscription = context.consume(this::enqueueMessage);
+        } else {
+            stop();
+            start();
+        }
         log.debug(
                 "Updated ScopeConsumer subjects: consumerName={}, scopeId={}, subjectCount={}",
                 consumerName,
@@ -281,7 +284,16 @@ public final class ScopeConsumer {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Throwable e) {
-                if (e instanceof VirtualMachineError) throw e;
+                if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) {
+                    running.set(false);
+                    closeSubscriptionQuietly();
+                    log.error(
+                            "Dispatch loop stopped after fatal JVM error: consumerName={}, scopeId={}, error.type={}",
+                            consumerName,
+                            scopeId,
+                            e.getClass().getName());
+                    return;
+                }
                 // Per-message failures must not kill the loop; the handler is responsible
                 // for ACK/NAK and surfaces ITS errors via the poison handler. Anything that
                 // escapes the handler here is an UNEXPECTED bug we log loudly.
