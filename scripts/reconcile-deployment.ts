@@ -73,7 +73,7 @@ export class OperatorActionRequiredError extends Error {
 }
 
 const MAJOR_DOWNGRADE_RECOVERY =
-	"A major downgrade requires a database restore. Pause reconciliation, follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover, restore the previous database, then manually helm rollback to its stopped revision before restoring writers.";
+	"A major downgrade requires a database restore. Pause reconciliation and follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover before restoring writers.";
 
 export interface Channel {
 	/** What this channel asks the host to run: a release tag, or the commit a build came from. */

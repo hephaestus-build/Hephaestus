@@ -1775,7 +1775,7 @@ for (const [release, direction, allowRollback] of [
 	["v0.95.1", "behind", true],
 ] as const) {
 	await test(
-		`a commit channel ${direction} ${release} obeys rollback ${allowRollback}`,
+		`a commit channel ${direction} ${release} with rollback ${allowRollback} is ${release === "v0.95.1" ? "applied" : "refused"}`,
 		reconcilerSubprocess,
 		async () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "release-commit-order-"));
