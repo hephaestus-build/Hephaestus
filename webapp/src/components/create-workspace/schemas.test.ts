@@ -45,12 +45,13 @@ describe("workspaceDetailsSchema", () => {
 		expect(result.success).toBe(false);
 	});
 
-	it("rejects uppercase slug", () => {
-		const result = workspaceDetailsSchema.safeParse({
-			displayName: "Test",
-			workspaceSlug: "INVALID",
-		});
-		expect(result.success).toBe(false);
+	it.each([
+		["Team_A", "team-a"],
+		["My Team", "my-team"],
+		[" QA-Team ", "qa-team"],
+	])("reads a typed slug %j as %j", (typed, slug) => {
+		const result = workspaceDetailsSchema.safeParse({ displayName: "Test", workspaceSlug: typed });
+		expect(result.data?.workspaceSlug).toBe(slug);
 	});
 
 	it("rejects slug with special characters", () => {
@@ -150,26 +151,10 @@ describe("workspaceDetailsSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("rejects slug with underscores", () => {
-		const result = workspaceDetailsSchema.safeParse({
-			displayName: "Test",
-			workspaceSlug: "my_workspace",
-		});
-		expect(result.success).toBe(false);
-	});
-
 	it("rejects slug with periods", () => {
 		const result = workspaceDetailsSchema.safeParse({
 			displayName: "Test",
 			workspaceSlug: "my.workspace",
-		});
-		expect(result.success).toBe(false);
-	});
-
-	it("rejects slug with spaces", () => {
-		const result = workspaceDetailsSchema.safeParse({
-			displayName: "Test",
-			workspaceSlug: "my workspace",
 		});
 		expect(result.success).toBe(false);
 	});
@@ -203,7 +188,7 @@ describe("workspaceDetailsSchema", () => {
 	it.each([
 		["", "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
 		["ab", "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
-		["-a_", "Use only lowercase letters, digits, and hyphens"],
+		["-a!", "Use only lowercase letters, digits, and hyphens"],
 		["a--b", "Do not use two hyphens in a row"],
 	])("names the first problem with the slug %j", (workspaceSlug, message) => {
 		const result = workspaceDetailsSchema.safeParse({ displayName: "Test", workspaceSlug });

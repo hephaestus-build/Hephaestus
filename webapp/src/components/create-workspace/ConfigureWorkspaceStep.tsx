@@ -4,7 +4,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { hasText } from "@/lib/text";
 
-import { type WorkspaceDetailsData, workspaceDetailsSchema } from "./schemas";
+import { normalizeTypedSlug, type WorkspaceDetailsData, workspaceDetailsSchema } from "./schemas";
 import { generateSlug } from "./slug-utils";
 import { useWizard, type WizardState } from "./wizard-context";
 
@@ -116,7 +116,14 @@ export function ConfigureWorkspaceStep({
 					aria-required="true"
 					value={state.workspaceSlug}
 					onChange={(e) => dispatch({ type: "SET_SLUG", value: e.target.value, manual: true })}
-					onBlur={() => handleBlur("workspaceSlug")}
+					onBlur={() => {
+						dispatch({
+							type: "SET_SLUG",
+							value: normalizeTypedSlug(state.workspaceSlug),
+							manual: state.slugManuallyEdited,
+						});
+						handleBlur("workspaceSlug");
+					}}
 					aria-invalid={hasText(slugError)}
 					aria-describedby={
 						hasText(slugError)
@@ -127,7 +134,7 @@ export function ConfigureWorkspaceStep({
 				<FieldDescription id="workspace-slug-description">
 					{hasText(state.workspaceSlug) ? (
 						<>
-							Used in URLs: /w/<strong>{state.workspaceSlug}</strong>
+							Used in URLs: /w/<strong>{normalizeTypedSlug(state.workspaceSlug)}</strong>
 						</>
 					) : (
 						"Used in URLs, such as /w/my-workspace."

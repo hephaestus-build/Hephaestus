@@ -204,13 +204,13 @@ describe("wizardReducer", () => {
 			expect(result.slugManuallyEdited).toBe(false);
 		});
 
-		it.each([
-			["Team_A", "team-a"],
-			["My Team", "my-team"],
-			["QA-Team", "qa-team"],
-		])("normalizes a typed %j to %j", (typed, slug) => {
-			const result = wizardReducer(stateAt(3), { type: "SET_SLUG", value: typed, manual: true });
-			expect(result.workspaceSlug).toBe(slug);
+		it("keeps what was typed, so the field never moves the caret", () => {
+			const result = wizardReducer(stateAt(3), {
+				type: "SET_SLUG",
+				value: "My Team",
+				manual: true,
+			});
+			expect(result.workspaceSlug).toBe("My Team");
 		});
 	});
 

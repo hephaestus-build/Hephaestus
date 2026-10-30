@@ -5,7 +5,7 @@ import type { GitLabGroup } from "@/api/types.gen";
 
 import { ConfigureWorkspaceStep } from "./ConfigureWorkspaceStep";
 import { ProjectScopeField } from "./ProjectScopeField";
-import { makeGroup, withWizardState } from "./stories-utils";
+import { makeGroup, withWizardReducer, withWizardState } from "./stories-utils";
 
 const defaultGroup: GitLabGroup = makeGroup(1, "Hephaestus", "ls1intum/hephaestus", {
 	visibility: "public",
@@ -124,6 +124,37 @@ export const PreFilled: Story = {
 			preflightResult: { valid: true, username: "admin-user" },
 		}),
 	],
+};
+
+/**
+ * Typing inside the slug keeps the caret where the typing is. The field keeps what was typed, and
+ * leaving it shows the slug the workspace gets: lowercase, with hyphens for spaces.
+ */
+export const TypingInsideTheSlug: Story = {
+	decorators: [
+		withWizardReducer({
+			step: 3,
+			selectedGroup: defaultGroup,
+			displayName: "My Custom Workspace",
+			workspaceSlug: "my-custom-workspace",
+			slugManuallyEdited: true,
+			preflightResult: { valid: true, username: "admin-user" },
+		}),
+	],
+	play: async ({ canvas }) => {
+		const slug = canvas.getByRole<HTMLInputElement>("textbox", { name: "URL slug" });
+		await userEvent.type(slug, "New ", { initialSelectionStart: 3, initialSelectionEnd: 3 });
+		await expect(slug).toHaveValue("my-New custom-workspace");
+		await expect(slug.selectionStart).toBe(7);
+		await expect(canvas.getByText("my-new-custom-workspace")).toBeVisible();
+		await userEvent.tab();
+		await expect(slug).toHaveValue("my-new-custom-workspace");
+		await expect(slug).toBeValid();
+		// Replacing a letter with its capital normalizes to the same slug; the caret still stays.
+		await userEvent.type(slug, "N", { initialSelectionStart: 3, initialSelectionEnd: 4 });
+		await expect(slug).toHaveValue("my-New-custom-workspace");
+		await expect(slug.selectionStart).toBe(4);
+	},
 };
 
 /**
