@@ -1134,7 +1134,7 @@ function readOf(evidence: Pr66Evidence) {
 
 /** A sentence that says that the tests were not read. */
 const TESTS_NOT_READ =
-	/\b(?:haven't|haven’t|have not|didn't|didn’t|did not)\b[^!?]*\b(?:read|check|open|look at)\b[^!?]*\b(?:the tests|its tests|UserServiceTest)\b/iu;
+	/\b(?:UserServiceTest|the tests?|its tests?)\b[^!?]*\b(?:was|were|is|are) not (?:read|checked|opened)\b|\b(?:haven't|haven’t|have not|didn't|didn’t|did not)\b[^!?]*\b(?:read|check|open|look at)\b[^!?]*\b(?:the tests|its tests|UserServiceTest)\b/iu;
 
 /** A sentence that says that the repository, or what `findById` does with null, was not checked. */
 const REPOSITORY_NOT_READ =
@@ -1143,6 +1143,21 @@ const REPOSITORY_NOT_READ =
 /** A sentence about the test file or what the tests cover. */
 const ABOUT_TESTS =
 	/\bUserServiceTest\b|\b(?:the|its|existing|current|three|two|only) tests?\b|\btests? (?:covers?|checks?|pins?|asserts?|exercises?)\b/iu;
+
+/** A sentence that proposes a test rather than saying that one exists. */
+const PROPOSES =
+	/\b(?:add|adding|write|writing|missing|should|could|would|consider|propose|suggest|no|not|needs?)\b/iu;
+
+/** A sentence about what the code did before the change. */
+const BEFORE_THE_CHANGE =
+	/\b(?:previously|used to|old code|earlier|threw|fell|went|was|were|did)\b/iu;
+
+/** The identifier of the last code span in `text` that is not a file name: what a citation after it quotes. */
+function quotedBefore(text: string): string | undefined {
+	return [...text.matchAll(/`(?<span>[^`]+)`/gu)]
+		.map((span) => /^[A-Za-z_]\w*/u.exec(span.groups?.span ?? "")?.[0] ?? "")
+		.findLast((name) => name !== "" && name !== "UserService");
+}
 
 /** The line `line` of the service at head or base, and its neighbours. */
 function serviceLines(line: number): string {
@@ -1165,39 +1180,40 @@ function serviceLines(line: number): string {
 function assertGroundedInPr66(text: string, evidence: Pr66Evidence) {
 	const read = readOf(evidence);
 	const all = sentences(text);
-	for (const name of text.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
-		assert.ok(PR66_TESTS.includes(name), `names a test the file does not have (${name}): ${text}`);
-	}
 	const testsLimited = all.some((sentence) => TESTS_NOT_READ.test(sentence));
 	const repositoryLimited = all.some((sentence) => REPOSITORY_NOT_READ.test(sentence));
 	for (const sentence of all) {
-		if (
-			!read.tests &&
-			!testsLimited &&
-			ABOUT_TESTS.test(sentence) &&
-			!/\bmissing\b/iu.test(sentence)
-		) {
+		// A test that the answer proposes ("add …", "is missing") is not a claim that it exists.
+		if (!PROPOSES.test(sentence)) {
+			for (const name of sentence.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
+				assert.ok(
+					PR66_TESTS.includes(name),
+					`names a test the file does not have (${name}): ${text}`,
+				);
+			}
+		}
+		if (!read.tests && !testsLimited && ABOUT_TESTS.test(sentence)) {
 			assert.fail(`describes tests it did not read: ${text}`);
 		}
+		// Only what null did before the change depends on the repository; the new service shows what it does now.
 		if (
 			!read.repository &&
 			!repositoryLimited &&
 			/\bnull\b/iu.test(sentence) &&
-			/\bUserNotFoundException\b/u.test(sentence)
+			/\bUserNotFoundException\b/u.test(sentence) &&
+			BEFORE_THE_CHANGE.test(sentence)
 		) {
 			assert.fail(
 				`relates null to UserNotFoundException without the repository's contract: ${text}`,
 			);
 		}
 	}
-	for (const cited of text.matchAll(
-		/`(?<code>[A-Za-z_][\w.]*)[^`]*`[^.!?]{0,40}?UserService\.java`?:(?<line>\d+)/gu,
-	)) {
-		const code = cited.groups?.code ?? "";
+	for (const cited of text.matchAll(/UserService\.java`?:(?<line>\d+)/gu)) {
 		const line = Number(cited.groups?.line);
+		const code = quotedBefore(text.slice(Math.max(0, cited.index - 80), cited.index));
 		assert.ok(
-			serviceLines(line).includes(code),
-			`cites UserService.java:${line} for \`${code}\`, which it does not hold: ${text}`,
+			code === undefined || serviceLines(line).includes(code),
+			`cites UserService.java:${line} for \`${code ?? ""}\`, which it does not hold: ${text}`,
 		);
 	}
 	assertNoInternalTerm(TERMS, text);
@@ -1234,6 +1250,7 @@ void test("T4-4: the oracle rejects staging's two claims and accepts grounded an
 		["UserServiceTest has createUser_validInput_returnsUser.", all],
 		["`validateId` is at UserService.java:1.", all],
 		["`validateId` is shown in `UserService.java:1`.", all],
+		["The tests cover successful creation but are missing null cases.", staging],
 	];
 	for (const [text, read] of wrong) {
 		assert.throws(() => assertGroundedInPr66(text, read), text);
@@ -1257,6 +1274,13 @@ void test("T4-4: the oracle rejects staging's two claims and accepts grounded an
 			"Null throws IllegalArgumentException, while a missing positive ID throws UserNotFoundException.",
 			all,
 		],
+		["Add `createUser_validInput_returnsUser` to cover successful creation.", all],
+		[
+			"The new validateId rejects null before the service can reach UserNotFoundException.",
+			staging,
+		],
+		["UserServiceTest was not read, so I cannot assess its coverage.", staging],
+		["`UserService.java` has `validateId` at UserService.java:48.", all],
 	];
 	for (const [text, read] of right) {
 		assertGroundedInPr66(text, read);
