@@ -20,6 +20,7 @@ import { commitChartValues, renderChartValues } from "./kubernetes-chart.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
+import { chartPackageName } from "./release-chart.ts";
 
 export type Stack = "proxy" | "core" | "app" | "chart";
 
@@ -205,6 +206,7 @@ function parseImages(value: unknown): Readonly<Record<string, string>> {
 }
 
 const releaseParts = (release: string): string[] => release.slice(1).split(".");
+const releaseMajor = (release: string) => BigInt(releaseParts(release)[0] ?? "0");
 
 function compareReleases(left: string, right: string): number {
 	const leftParts = releaseParts(left);
@@ -728,12 +730,14 @@ export function helmArguments(
 	imagesFile: string,
 	siteValuesFile: string,
 	timeoutSeconds: number,
+	chart = path.join(releaseTree, "deploy/chart/hephaestus"),
+	rollback = true,
 ): string[] {
 	return [
 		"upgrade",
 		"--install",
 		settings.release,
-		path.join(releaseTree, "deploy/chart/hephaestus"),
+		chart,
 		"--namespace",
 		settings.namespace,
 		...profiles.flatMap((file) => ["--values", file]),
@@ -741,7 +745,7 @@ export function helmArguments(
 		siteValuesFile,
 		"--values",
 		imagesFile,
-		"--rollback-on-failure",
+		...(rollback ? ["--rollback-on-failure"] : []),
 		"--wait=watcher",
 		"--wait-for-jobs",
 		"--timeout",
@@ -953,28 +957,27 @@ async function fetchSignedChannel(
 	};
 }
 
-/**
- * Whether the target is behind what runs. Both are commits of the default branch here, so the
- * clone answers it directly; between releases the version comparison in decide covers it, and a
- * change of form is a deliberate move only a version or an operator can order.
- *
- * The branch is fetched first: without the objects, `merge-base` fails and a failure would read
- * as "not behind", which is the wrong way for this check to be wrong.
- */
+/** A commit channel must descend from the accepted source, including a recorded release's source. */
 async function targetIsBehindApplied(
 	config: HostConfig,
 	channel: Channel,
 	applied: AppliedState | undefined,
 ): Promise<boolean> {
-	if (!applied || RELEASE_TAG.test(channel.release) || RELEASE_TAG.test(applied.release)) {
+	if (!applied || RELEASE_TAG.test(channel.release)) {
 		return false;
+	}
+	const previous = appliedCommit(applied);
+	if (previous === undefined) {
+		throw new OperatorActionRequiredError(
+			"The applied release has no recorded source commit. Pause reconciliation and promote the installed release again to record its source, then select a commit channel.",
+		);
 	}
 	await run(
 		"git",
 		["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
 		fetchOptions(config),
 	);
-	for (const commit of [channel.release, applied.release]) {
+	for (const commit of [channel.release, previous]) {
 		if (
 			!(await succeeds("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: config.checkout }))
 		) {
@@ -984,8 +987,8 @@ async function targetIsBehindApplied(
 		}
 	}
 	return (
-		channel.release !== applied.release &&
-		(await succeeds("git", ["merge-base", "--is-ancestor", channel.release, applied.release], {
+		channel.release !== previous &&
+		!(await succeeds("git", ["merge-base", "--is-ancestor", previous, channel.release], {
 			cwd: config.checkout,
 		}))
 	);
@@ -1029,15 +1032,41 @@ async function recordUnchanged(
 	}
 }
 
-/** The release lock's env file, written for a commit channel and verified for a release. */
-async function prepareLock(
+/** Prepare the signed package for a chart release, or the image lock for a commit or Compose. */
+async function prepareDeployment(
 	config: HostConfig,
 	channel: Channel,
 	applied: AppliedState | undefined,
 	release: string,
 	releaseCommit: string,
 	releaseTree: string,
-): Promise<{ lockEnv: string; lockFile: string }> {
+): Promise<{ lockEnv: string; lockFile: string; chartPackage?: string }> {
+	if (config.chart !== undefined && channel.images === undefined) {
+		const directory = path.join(config.stateDirectory, "chart");
+		await mkdir(directory, { recursive: true });
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			if (entry.isDirectory() && /^\.(?:release|chart)-/u.test(entry.name)) {
+				await rm(path.join(directory, entry.name), { recursive: true, force: true });
+			}
+		}
+		await run(
+			process.execPath,
+			[
+				path.join(import.meta.dirname, "prepare-release-chart.ts"),
+				release,
+				releaseCommit,
+				directory,
+				config.chart.helm,
+				path.join(releaseTree, "security/release-images.json"),
+			],
+			{ signal: AbortSignal.timeout(FETCH_TIMEOUT_MS * 3), stdin: "ignore" },
+		);
+		return {
+			lockEnv: "",
+			lockFile: "",
+			chartPackage: path.join(directory, chartPackageName(release)),
+		};
+	}
 	const lockDirectory = locksDirectory(config);
 	await mkdir(lockDirectory, { recursive: true });
 	const lockFile = path.join(lockDirectory, `${release}.env`);
@@ -1252,12 +1281,12 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	const startedAt = new Date();
 
 	await mkdir(config.stateDirectory, { recursive: true });
+	await mkdir(locksDirectory(config), { recursive: true });
 	if (applied && (await adoptedAppliedTooling(config, applied, unitsDirectory))) {
 		return;
 	}
 
 	const { channel, channelCommit, channelIdentity } = await fetchSignedChannel(config);
-	refuseReleaseChannelOnChart(config, channel);
 	const advances =
 		applied && channelCommit !== applied.channelCommit
 			? await succeeds(
@@ -1306,7 +1335,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	);
 	// Read before the new lock is written: a re-promotion of the running release rewrites its lock.
 	const runningLocks = await readLocks(config, [applied?.release, applied?.previous]);
-	const { lockEnv, lockFile } = await prepareLock(
+	const { lockEnv, lockFile, chartPackage } = await prepareDeployment(
 		config,
 		channel,
 		applied,
@@ -1341,7 +1370,16 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		}
 		await startStacks(config, releaseTree, composeArgsByStack);
 	} else {
-		await applyChart(config, config.chart, decision.release, previous, releaseTree, lockEnv);
+		await applyChart(
+			config,
+			config.chart,
+			decision.release,
+			previous,
+			releaseTree,
+			lockEnv,
+			chartPackage,
+			applied,
+		);
 	}
 
 	const finishedAt = new Date();
@@ -1375,15 +1413,6 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	}
 }
 
-/** ADR 0058: a release applies its signed chart package, which the chart stack cannot verify yet. */
-function refuseReleaseChannelOnChart(config: HostConfig, channel: Channel): void {
-	if (config.chart !== undefined && channel.images === undefined) {
-		throw new Error(
-			`a release channel applies the signed chart package; the chart stack does not support that yet, so ${config.channel} must be a commit channel`,
-		);
-	}
-}
-
 /** The images a verified lock names, by the `HEPHAESTUS_IMAGE_*` keys that the lock writers use. */
 function lockedImages(lockEnv: string): Record<string, string> {
 	const images: Record<string, string> = {};
@@ -1402,6 +1431,134 @@ const HELM_PENDING = /^pending-(?:install|upgrade|rollback)$/u;
 /** The revision statuses of a release that Helm finished, which a rollback can return to. */
 const HELM_FINISHED = new Set(["deployed", "superseded"]);
 
+/** A commit chart has no release version; an operator must establish one before switching forms. */
+export function isMajorCutover(target: string, applied?: string, installed?: string): boolean {
+	const normalized = installed?.startsWith("v") === true ? installed : `v${installed ?? ""}`;
+	const installedRelease = RELEASE_TAG.test(normalized) ? normalized : undefined;
+	const appliedRelease = applied !== undefined && RELEASE_TAG.test(applied) ? applied : undefined;
+	if (
+		installedRelease === undefined &&
+		appliedRelease === undefined &&
+		(installed !== undefined || applied !== undefined)
+	) {
+		throw new OperatorActionRequiredError(
+			"A commit chart has no release version. Pause reconciliation, apply the verified target release through Database maintenance, then resume the timer. The next tick reads that chart's release version.",
+		);
+	}
+	const targetMajor = releaseMajor(target);
+	const previousMajors = [installedRelease, appliedRelease].flatMap((version) =>
+		version === undefined ? [] : [releaseMajor(version)],
+	);
+	if (previousMajors.some((major) => major > targetMajor)) {
+		throw new OperatorActionRequiredError(
+			"A major downgrade requires a database restore. Pause reconciliation, follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover, restore the previous database, then manually helm rollback to its stopped revision before restoring writers.",
+		);
+	}
+	return previousMajors.some((major) => major !== targetMajor);
+}
+
+function matchesChartValues(
+	actual: Record<string, unknown>,
+	expected: Record<string, unknown>,
+): boolean {
+	return ["release", "images"].every((key) => {
+		const current = asRecord(actual[key] ?? {}, `installed ${key}`);
+		const target = asRecord(expected[key], `verified ${key}`);
+		return (
+			Object.keys(current).length === Object.keys(target).length &&
+			Object.entries(target).every(([name, value]) => current[name] === value)
+		);
+	});
+}
+
+async function checkStoppedUpgrade(
+	settings: ChartSettings,
+	imagesFile: string,
+	status: string | undefined,
+): Promise<"ready" | "applied"> {
+	const values = asRecord(
+		parseJson(
+			await output(
+				settings.helm,
+				[
+					"get",
+					"values",
+					settings.release,
+					"--namespace",
+					settings.namespace,
+					"--all",
+					"--output",
+					"json",
+				],
+				{ signal: AbortSignal.timeout(120_000) },
+			),
+		),
+		"installed Helm values",
+	);
+	const pinnedValues = await readFile(imagesFile, "utf8");
+	const expected = asRecord(
+		parseJson(pinnedValues.replace(/^#.*\n/u, "")),
+		"verified chart values",
+	);
+	if (status === "failed") {
+		throw new OperatorActionRequiredError(
+			`Helm marked ${settings.release} failed. Pause reconciliation with \`systemctl stop hephaestus-reconcile.timer\`, inspect \`helm history ${settings.release} --namespace ${settings.namespace}\`, then follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover before retrying.`,
+		);
+	}
+	// Helm can finish before applied.json is renamed. Resume only the verified target, already
+	// deployed; an operator can already have restored worker replicas before this tick.
+	if (status === "deployed" && matchesChartValues(values, expected)) {
+		return "applied";
+	}
+	if (
+		asRecord(values.server, "server values").replicas !== 0 ||
+		asRecord(values.worker, "worker values").replicas !== 0
+	) {
+		throw new OperatorActionRequiredError(
+			"A major upgrade requires stopped writers. Pause reconciliation and complete phase 1 of Database maintenance before promoting the next chart.",
+		);
+	}
+	const worker = asRecord(values.worker, "worker values");
+	const sandbox = asRecord(worker.sandbox, "sandbox values");
+	const sandboxNamespace = asString(sandbox.namespace, "sandbox namespace");
+	if (
+		!KUBERNETES_NAME.test(sandboxNamespace) &&
+		!(worker.enabled === false && sandboxNamespace === "")
+	) {
+		throw new Error("installed chart has no valid sandbox namespace");
+	}
+	for (const namespace of new Set(
+		[settings.namespace, sandboxNamespace].filter((name) => name !== ""),
+	)) {
+		const resources = asRecord(
+			parseJson(
+				await output(
+					"kubectl",
+					["get", "pods,jobs", "--namespace", namespace, "--output", "json"],
+					{ signal: AbortSignal.timeout(120_000) },
+				),
+			),
+			"namespace workloads",
+		);
+		for (const resource of asArray(resources.items, "workloads")) {
+			const labels = asRecord(
+				asRecord(asRecord(resource, "workload").metadata, "workload metadata").labels ?? {},
+				"workload labels",
+			);
+			if (
+				namespace === sandboxNamespace ||
+				(labels["app.kubernetes.io/instance"] === settings.release &&
+					["server", "worker"].includes(String(labels["app.kubernetes.io/component"])))
+			) {
+				throw new OperatorActionRequiredError(
+					"Wait for the server, worker, and sandbox Pods and Jobs to be removed before the major upgrade.",
+				);
+			}
+		}
+	}
+	return "ready";
+}
+
 /**
  * Helm leaves a release in a pending status when its upgrade was killed, by the unit's timeout, a
  * reboot or a power cut, and then refuses every later upgrade. Rolling back to the newest revision
@@ -1410,19 +1567,20 @@ const HELM_FINISHED = new Set(["deployed", "superseded"]);
  * with no finished revision, such as a cut-off first install, has nothing to return to; only
  * removing the release ends that state.
  */
-async function recoverPendingRelease(config: HostConfig, settings: ChartSettings): Promise<void> {
+async function recoverPendingRelease(
+	config: HostConfig,
+	settings: ChartSettings,
+	rollback: boolean,
+): Promise<void> {
 	let status: string;
 	try {
 		const info = asRecord(
 			parseJson(
-				await output(settings.helm, [
-					"status",
-					settings.release,
-					"--namespace",
-					settings.namespace,
-					"--output",
-					"json",
-				]),
+				await output(
+					settings.helm,
+					["status", settings.release, "--namespace", settings.namespace, "--output", "json"],
+					{ signal: AbortSignal.timeout(120_000) },
+				),
 			),
 			"helm status",
 		);
@@ -1434,16 +1592,18 @@ async function recoverPendingRelease(config: HostConfig, settings: ChartSettings
 	if (!HELM_PENDING.test(status)) {
 		return;
 	}
+	if (!rollback) {
+		throw new OperatorActionRequiredError(
+			`Helm left ${settings.release} in ${status}. Pause with \`systemctl stop hephaestus-reconcile.timer\`, inspect \`helm history ${settings.release} --namespace ${settings.namespace}\`, then follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover before retrying. Automatic rollback cannot restore a migration.`,
+		);
+	}
 	const history = asArray(
 		parseJson(
-			await output(settings.helm, [
-				"history",
-				settings.release,
-				"--namespace",
-				settings.namespace,
-				"--output",
-				"json",
-			]),
+			await output(
+				settings.helm,
+				["history", settings.release, "--namespace", settings.namespace, "--output", "json"],
+				{ signal: AbortSignal.timeout(120_000) },
+			),
 		),
 		"helm history",
 	);
@@ -1473,14 +1633,13 @@ async function recoverPendingRelease(config: HostConfig, settings: ChartSettings
 			"--timeout",
 			`${config.waitTimeoutSeconds}s`,
 		],
-		{ stdin: "ignore" },
+		{ stdin: "ignore", signal: AbortSignal.timeout((config.waitTimeoutSeconds + 60) * 1000) },
 	);
 }
 
 /**
- * Installs or upgrades the release tree's chart with the commit lock's images. Helm migrates in the
- * revision's Job, waits for every Pod and that Job, and rolls back to the previous revision when
- * either fails; the thrown error then fails this tick as a failed Compose apply does.
+ * Apply the verified release package or a commit chart. A major transition starts the server
+ * alone, with no automatic rollback onto a schema that may already have changed.
  */
 async function applyChart(
 	config: HostConfig,
@@ -1489,34 +1648,100 @@ async function applyChart(
 	previous: string | undefined,
 	releaseTree: string,
 	lockEnv: string,
+	packaged?: string,
+	applied?: AppliedState,
 ): Promise<void> {
-	const values = commitChartValues(
-		lockedImages(lockEnv),
-		parseInventory(await readJsonFile(path.join(releaseTree, "security/release-images.json"))),
-		lockedReleaseCommit(lockEnv),
-	);
+	const values =
+		packaged === undefined
+			? commitChartValues(
+					lockedImages(lockEnv),
+					parseInventory(
+						await readJsonFile(path.join(releaseTree, "security/release-images.json")),
+					),
+					lockedReleaseCommit(lockEnv),
+				)
+			: undefined;
 	const profiles = await profileFiles(settings, releaseTree);
 	const directory = path.join(config.stateDirectory, "chart");
 	await mkdir(directory, { recursive: true });
 	const imagesFile = path.join(directory, `${release}.images.yaml`);
-	await writeAtomic(imagesFile, renderChartValues(values));
-	await recoverPendingRelease(config, settings);
+	if (values !== undefined) {
+		await writeAtomic(imagesFile, renderChartValues(values));
+	}
+	const installed =
+		packaged === undefined
+			? []
+			: asArray(
+					parseJson(
+						await output(
+							settings.helm,
+							[
+								"list",
+								"--filter",
+								`^${settings.release}$`,
+								"--namespace",
+								settings.namespace,
+								"--output",
+								"json",
+							],
+							{ signal: AbortSignal.timeout(120_000) },
+						),
+					),
+					"Helm releases",
+				);
+	const current = installed
+		.map((entry) => asRecord(entry, "Helm release"))
+		.find((entry) => entry.name === settings.release);
+	const installedVersion =
+		current === undefined ? undefined : asString(current.app_version, "installed app version");
+	const stopped =
+		packaged !== undefined && isMajorCutover(release, applied?.release, installedVersion);
+	await recoverPendingRelease(
+		config,
+		settings,
+		!stopped && (packaged === undefined || applied !== undefined),
+	);
+	if (
+		stopped &&
+		(await checkStoppedUpgrade(
+			settings,
+			imagesFile,
+			current === undefined ? undefined : asString(current.status, "Helm release status"),
+		)) === "applied"
+	) {
+		console.log(`Helm already deployed ${release}; completing its record and tooling adoption`);
+		return;
+	}
 	await run(
 		settings.helm,
-		helmArguments(
-			settings,
-			releaseTree,
-			profiles,
-			imagesFile,
-			path.join(config.secretsDirectory, "chart.yaml"),
-			config.waitTimeoutSeconds,
-		),
-		{ cwd: releaseTree, stdin: "ignore" },
+		[
+			...helmArguments(
+				settings,
+				releaseTree,
+				profiles,
+				imagesFile,
+				path.join(config.secretsDirectory, "chart.yaml"),
+				config.waitTimeoutSeconds,
+				packaged,
+				!stopped,
+			),
+			...(stopped ? ["--set", "server.replicas=1", "--set", "worker.replicas=0"] : []),
+		],
+		{
+			cwd: releaseTree,
+			stdin: "ignore",
+			signal: AbortSignal.timeout((config.waitTimeoutSeconds * 2 + 60) * 1000),
+		},
 	);
 	// The previous release's file stays for a manual rollback, as its tree does.
-	const kept = new Set([release, previous ?? release].map((name) => `${name}.images.yaml`));
+	const kept = new Set(
+		[release, previous ?? release].flatMap((name) => [
+			`${name}.images.yaml`,
+			...(RELEASE_TAG.test(name) ? [chartPackageName(name)] : []),
+		]),
+	);
 	for (const entry of await readdir(directory)) {
-		if (entry.endsWith(".images.yaml") && !kept.has(entry)) {
+		if ((entry.endsWith(".images.yaml") || entry.endsWith(".tgz")) && !kept.has(entry)) {
 			await rm(path.join(directory, entry), { force: true });
 		}
 	}
@@ -1614,23 +1839,21 @@ async function followTooling(
 		console.log(`Keeping the current tooling: ${tree} predates the tooling link`);
 		return false;
 	}
-	const moved = await adoptTooling(config.tooling, tree);
 	const changed = await syncUnits(tree, unitsDirectory);
 	if (changed.length > 0) {
 		console.log(`Updated ${changed.join(", ")}`);
 	}
 	// systemd itself knows whether the units it loaded match the files, so a tick that stopped
 	// between writing a unit and reloading is finished by the next one.
-	const stale = await output("systemctl", [
-		"show",
-		"--property=NeedDaemonReload",
-		"--value",
-		...UNIT_FILES,
-	]);
+	const stale = await output(
+		"systemctl",
+		["show", "--property=NeedDaemonReload", "--value", ...UNIT_FILES],
+		{ signal: AbortSignal.timeout(120_000) },
+	);
 	if (stale.split("\n").includes("yes")) {
-		await run("systemctl", ["daemon-reload"]);
+		await run("systemctl", ["daemon-reload"], { signal: AbortSignal.timeout(120_000) });
 	}
-	return moved;
+	return adoptTooling(config.tooling, tree);
 }
 
 function releasesDirectory(config: HostConfig): string {
@@ -1760,7 +1983,7 @@ async function isDirectory(candidate: string): Promise<boolean> {
 export async function carriesToolingLink(tree: string): Promise<boolean> {
 	let unit: string;
 	try {
-		unit = await readFile(path.join(tree, "docker/self-host/systemd", UNIT_FILES[0]), "utf8");
+		unit = await readFile(path.join(tree, "deploy/reconcile", UNIT_FILES[0]), "utf8");
 	} catch (error) {
 		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
 			return false;
@@ -1792,8 +2015,13 @@ export async function adoptTooling(link: string, tree: string): Promise<boolean>
  */
 export async function syncUnits(tree: string, unitsDirectory: string): Promise<string[]> {
 	const changed: string[] = [];
-	for (const name of UNIT_FILES) {
-		const wanted = await readFile(path.join(tree, "docker/self-host/systemd", name), "utf8");
+	const contents = await Promise.all(
+		UNIT_FILES.map(async (name) => ({
+			name,
+			wanted: await readFile(path.join(tree, "deploy/reconcile", name), "utf8"),
+		})),
+	);
+	for (const { name, wanted } of contents) {
 		const unit = path.join(unitsDirectory, name);
 		const installed = await lstat(unit).catch(() => undefined);
 		if (installed && !installed.isSymbolicLink() && (await readFile(unit, "utf8")) === wanted) {

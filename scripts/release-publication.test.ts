@@ -206,6 +206,7 @@ if (tool === 'gh') {
     if (!(reference in packages)) { console.error('Error: ' + reference + ': not found'); process.exit(1); }
     const name = reference.split('/').at(-1).replace(':', '-') + '.tgz';
     fs.writeFileSync(path.join(option('--destination'), name), Buffer.from(packages[reference].bytes, 'base64'));
+    console.log('Digest: ' + reference.split('@')[1]);
   } else if (args[0] === 'show' && args[1] === 'chart') {
     process.stdout.write(fs.readFileSync(path.join(store, 'chart-metadata'), 'utf8'));
   } else if (args[0] === 'show' && args[1] === 'values') {
@@ -267,6 +268,8 @@ async function fixture(directory: string, source = commit) {
 		CALL_LOG: path.join(directory, "calls"),
 		RUNNER_TEMP: directory,
 		GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+		GITHUB_ACTIONS: "true",
+		GH_TOKEN: "fixture-not-a-secret",
 		TAG_NAME: release,
 		RELEASE_SHA: source,
 		VERSION: release.slice(1),
@@ -449,6 +452,7 @@ async function fixture(directory: string, source = commit) {
 			await rm(path.join(directory, "evidence"), { recursive: true, force: true });
 			await rm(path.join(directory, "release-lock.env"), { force: true });
 			await rm(path.join(directory, "chart"), { recursive: true, force: true });
+			await rm(path.join(directory, "installed-chart"), { recursive: true, force: true });
 		}
 		await writeFile(environment.CALL_LOG, "");
 		let status: number | null = 0;
@@ -604,6 +608,12 @@ for (const scenario of [
 					/\["helm","pull","oci:\/\/ghcr\.io\/hephaestus-build\/charts\/hephaestus@sha256:b{64}","--destination",/u,
 				);
 				assert.doesNotMatch(result.calls, /charts\/hephaestus:/u);
+				assert.match(result.calls, /"--destination","[^"]*\/installed-chart\/\.chart-[^"]*"/u);
+				assert.match(
+					await readFile(path.join(directory, "installed-chart", `${release}.images.yaml`), "utf8"),
+					/ghcr\.io\/hephaestus-build\/webapp@sha256:/u,
+				);
+
 				// Its signature is the registry signature of that digest, by the release workflow.
 				assert.match(
 					result.calls,

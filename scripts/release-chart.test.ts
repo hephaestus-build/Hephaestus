@@ -93,7 +93,7 @@ function tools({
 				throw new Error(`${args[1] ?? ""}: not found`);
 			}
 			await writeFile(path.join(option(args, "--destination"), pulledName), bytes);
-			return "";
+			return `Digest: ${digest("b")}\n`;
 		},
 	};
 	const execute: Execute = async (command, args) => {

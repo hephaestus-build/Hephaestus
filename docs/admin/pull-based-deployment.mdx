@@ -5,16 +5,19 @@ description: Reconcile a host to a signed release or commit channel without inbo
 ---
 
 A host polls a **channel** naming a release or commit, verifies its signature, and applies
-digest-pinned Compose stacks. Deployment needs no inbound administration connection to the host.
+the verified Helm chart or digest-pinned Compose stacks. Deployment needs no inbound administration connection to the host.
 
 ## What the host trusts
 
-For a release deployment, the host verifies two signatures:
+For a chart release deployment, the host verifies three signatures:
 
-| Artifact                                    | Signed by              | Answers                                                |
-| ------------------------------------------- | ---------------------- | ------------------------------------------------------ |
-| The channel (`channels/<env>.json`)         | the promotion workflow | may this host move, and who said so                    |
-| The release lock (`release-<version>.json`) | the release workflow   | which source commit and image digests are this release |
+| Artifact                                        | Signed by              | Answers                                                         |
+| ----------------------------------------------- | ---------------------- | --------------------------------------------------------------- |
+| The channel (`channels/<env>.json`)             | the promotion workflow | may this host move, and who said so                             |
+| The joint lock (`release-<version>.chart.json`) | the release workflow   | which source, chart digest, and image digests form this release |
+| The chart at its OCI digest                     | the release workflow   | whether the chart package came from that workflow               |
+
+Compose deployments verify the channel and the schema-1 release lock (`release-<version>.json`).
 
 The host rejects a new channel commit that does not descend from its last accepted channel commit.
 It also rejects lower release versions and older commits unless `allowRollback` is set. These checks
@@ -99,7 +102,7 @@ A release never replaces the tooling that verifies it.
    sudo ln -sfn /var/lib/hephaestus/checkout /var/lib/hephaestus/tooling
    ```
 
-2. Copy `docker/self-host/systemd/reconcile.env.example` to `/etc/hephaestus/reconcile.env`.
+2. Copy `deploy/reconcile/reconcile.env.example` to `/etc/hephaestus/reconcile.env`.
 3. Set its ownership to `root:root` and mode to `0600`.
 4. Set the channel, the stacks this host owns, and the promotion identity.
 5. Put one `<stack>.env` per stack in `/etc/hephaestus`, with mode `0600`.
@@ -109,8 +112,8 @@ A release never replaces the tooling that verifies it.
 
    ```bash
    sudo install -m 644 \
-     /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
-     /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
+     /var/lib/hephaestus/checkout/deploy/reconcile/hephaestus-reconcile.service \
+     /var/lib/hephaestus/checkout/deploy/reconcile/hephaestus-reconcile.timer \
      /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable --now hephaestus-reconcile.timer
@@ -211,8 +214,8 @@ Do not change the checkout underneath a tick.
    sudo git -C /var/lib/hephaestus/checkout reset --quiet --hard origin/main
    sudo ln -sfn /var/lib/hephaestus/checkout /var/lib/hephaestus/tooling
    sudo install -m 0644 \
-     /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.service \
-     /var/lib/hephaestus/checkout/docker/self-host/systemd/hephaestus-reconcile.timer \
+     /var/lib/hephaestus/checkout/deploy/reconcile/hephaestus-reconcile.service \
+     /var/lib/hephaestus/checkout/deploy/reconcile/hephaestus-reconcile.timer \
      /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl start hephaestus-reconcile.service
@@ -243,19 +246,74 @@ Do not change the checkout underneath a tick.
 ## Follow a channel with the chart
 
 A host can apply its channel with the [Helm chart](./kubernetes) instead of Compose stacks.
-The host must follow a commit channel.
-The reconciler verifies the signed channel and its commit lock, as for Compose.
-Then it runs one `helm upgrade --install` of the commit's chart with the images that the lock names.
+A release channel verifies the signed joint lock, its evidence manifest, and the chart signature.
+It pulls the chart by its OCI digest and checks the reported digest, metadata, and image pins.
+The installed verifier performs these checks before any candidate tooling runs.
+It does not download a schema-1 lock or apply the source chart for a release channel.
+A commit channel applies the source chart with the image pins from its signed channel.
 
-A release channel applies the signed chart package of the release ([ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md)).
-The chart stack cannot verify that package yet, so it refuses a release channel and applies nothing.
-To run a release on the chart, follow [Kubernetes § Upgrades](./kubernetes#upgrades).
+A commit chart has no release version.
+To switch it to a release channel, pause reconciliation and apply the verified target through Database maintenance first.
+Then resume the timer.
+The next tick reads the target chart's release version.
+
+Prepare the verified target source tree first, as [Database maintenance](./kubernetes#database-maintenance) describes.
+Keep writers stopped until the target migration and server succeed.
+Use the target source commit from its verified signed lock as `<commit>`:
+
+```bash
+sudo install -d -m 0750 /var/lib/hephaestus/chart
+sudo node /var/lib/hephaestus/tooling/scripts/prepare-release-chart.ts \
+  <tag> <commit> /var/lib/hephaestus/chart helm \
+  /var/lib/hephaestus/releases/<tag>/security/release-images.json
+helm upgrade --install <release> /var/lib/hephaestus/chart/hephaestus-<version>.tgz \
+  --namespace <namespace> \
+  --values /var/lib/hephaestus/releases/<tag>/deploy/chart/hephaestus/profiles/<profile>.yaml \
+  --values /etc/hephaestus/chart.yaml \
+  --values /var/lib/hephaestus/chart/<tag>.images.yaml \
+  --set server.replicas=1 --set worker.replicas=0 \
+  --wait=watcher --wait-for-jobs --timeout <timeout>s
+```
+
+Install the 0.95.1 reconciler before promoting 1.0.
+The reconciler units now live in `deploy/reconcile/`, independent of the Compose files.
+To update an existing 0.95.0 reconciler, stop its timer and wait for the active tick to finish, as [Upgrading a host](#upgrading-a-host-installed-before-the-tooling-link) describes.
+Then run these commands.
+
+The installed 0.95.0 verifier checks the 0.95.1 lock before the host runs the new tooling.
+This bootstrap uses the 0.95.1 lock only.
+The 1.0 chart path needs no schema-1 asset.
+
+```bash
+sudo install -d -m 0750 /var/lib/hephaestus/tooling-update
+sudo node /var/lib/hephaestus/tooling/scripts/prepare-release-lock.ts \
+  v0.95.1 /var/lib/hephaestus/tooling-update/lock.env
+tooling_commit=$(sudo sed -n 's/^HEPHAESTUS_RELEASE_COMMIT=//p' /var/lib/hephaestus/tooling-update/lock.env)
+sudo git -C /var/lib/hephaestus/checkout fetch --quiet origin tag v0.95.1
+if [ "$(sudo git -C /var/lib/hephaestus/checkout rev-parse 'v0.95.1^{commit}')" = "$tooling_commit" ]; then
+sudo git -C /var/lib/hephaestus/checkout worktree add --detach \
+  /var/lib/hephaestus/tooling-update/v0.95.1 "$tooling_commit"
+sudo install -m 0644 \
+  /var/lib/hephaestus/tooling-update/v0.95.1/deploy/reconcile/hephaestus-reconcile.service \
+  /var/lib/hephaestus/tooling-update/v0.95.1/deploy/reconcile/hephaestus-reconcile.timer \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo ln -sfn /var/lib/hephaestus/tooling-update/v0.95.1 /var/lib/hephaestus/tooling
+sudo systemctl start hephaestus-reconcile.timer
+else
+  echo "v0.95.1 does not match the verified lock" >&2
+fi
+```
+
+After an apply, the reconciler completes both unit copies and reloads systemd before it moves its tooling link.
+If that step stops, the next tick completes it before reading another channel.
 
 ### Requirements for the chart
 
 1. A cluster and the platform items that [Kubernetes](./kubernetes#supported-clusters) lists.
 2. The namespaces, the Secrets and the values that [Kubernetes § Install](./kubernetes#install) describes.
-3. Helm 4.3.1.
+3. `kubectl` on `PATH`, with access to read Pods and Jobs in the release and sandbox namespaces.
+4. Helm 4.3.1.
    Install the pinned binary and verify its checksum.
    On `amd64`:
 
@@ -273,23 +331,23 @@ To run a release on the chart, follow [Kubernetes § Upgrades](./kubernetes#upgr
 
 Set these values in `/etc/hephaestus/reconcile.env`:
 
-| Setting | Default | Value |
-| --- | --- | --- |
-| `HEPHAESTUS_STACKS` | None | `chart`. It takes no other stack. |
-| `HEPHAESTUS_CHART_RELEASE` | `hephaestus` | The Helm release name. |
-| `HEPHAESTUS_CHART_NAMESPACE` | `hephaestus` | The release namespace. |
-| `HEPHAESTUS_CHART_PROFILE` | `small` | One or more values files in the chart's `profiles/`, without `.yaml`, separated by spaces or commas. Each profile applies over the one before it, for example `"small small-16gib"`. The reconciler refuses a profile that the release does not have. |
-| `HEPHAESTUS_HELM` | `helm` | The path of the Helm binary, for example `/usr/local/bin/helm`. |
-| `KUBECONFIG` | None | The cluster's kubeconfig. On k3s, `/etc/rancher/k3s/k3s.yaml`. |
-| `HEPHAESTUS_WAIT_TIMEOUT` | `1200` on a chart host | The Helm timeout in seconds. It must be longer than the 10 minutes that a new Pod waits for the schema. |
+| Setting                      | Default                | Value                                                                                                                                                                                                                                                 |
+| ---------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEPHAESTUS_STACKS`          | None                   | `chart`. It takes no other stack.                                                                                                                                                                                                                     |
+| `HEPHAESTUS_CHART_RELEASE`   | `hephaestus`           | The Helm release name.                                                                                                                                                                                                                                |
+| `HEPHAESTUS_CHART_NAMESPACE` | `hephaestus`           | The release namespace.                                                                                                                                                                                                                                |
+| `HEPHAESTUS_CHART_PROFILE`   | `small`                | One or more values files in the chart's `profiles/`, without `.yaml`, separated by spaces or commas. Each profile applies over the one before it, for example `"small small-16gib"`. The reconciler refuses a profile that the release does not have. |
+| `HEPHAESTUS_HELM`            | `helm`                 | The path of the Helm binary, for example `/usr/local/bin/helm`.                                                                                                                                                                                       |
+| `KUBECONFIG`                 | None                   | The cluster's kubeconfig. On k3s, `/etc/rancher/k3s/k3s.yaml`.                                                                                                                                                                                        |
+| `HEPHAESTUS_WAIT_TIMEOUT`    | `1200` on a chart host | The Helm timeout in seconds. It must be longer than the 10 minutes that a new Pod waits for the schema.                                                                                                                                               |
 
 Put your values from [Kubernetes § Install](./kubernetes#install) in `/etc/hephaestus/chart.yaml`.
 Set its ownership to `root:root` and its mode to `0600`.
 Do not set `images` or `release` in it.
-The reconciler writes them from the verified commit lock to `/var/lib/hephaestus/chart/<commit>.images.yaml`.
+The reconciler writes the verified pins to `/var/lib/hephaestus/chart/<target>.images.yaml`.
 That file is the last values file, so it overrides any image in your file.
 
-Each apply runs this command:
+A commit apply runs this command:
 
 ```bash
 helm upgrade --install <release> <commit tree>/deploy/chart/hephaestus \
@@ -301,6 +359,16 @@ helm upgrade --install <release> <commit tree>/deploy/chart/hephaestus \
   --rollback-on-failure --wait=watcher --wait-for-jobs --timeout <timeout>s
 ```
 
+A release apply uses `/var/lib/hephaestus/chart/hephaestus-<version>.tgz` as the chart argument.
+It uses that release's profiles and pinned values.
+The chart and image downloads have finite time limits.
+Helm status and history reads have a two-minute limit.
+The upgrade and recovery commands have deadlines derived from `HEPHAESTUS_WAIT_TIMEOUT`.
+The unit stops the whole tick after two hours.
+
+If you increase the Helm timeout, set `TimeoutStartSec` above three times that timeout plus 40 minutes.
+Use a systemd drop-in for the override.
+
 The revision's Job migrates the database.
 If the migration or a Pod fails, Helm returns the workloads to their previous revision.
 Helm does not roll back the database.
@@ -308,7 +376,8 @@ The tick then fails, the metrics show the failure, and the applied record does n
 
 An upgrade that stops before it ends, for example at a reboot or at the unit's timeout, leaves the Helm release in a `pending-*` status.
 Helm then refuses every upgrade.
-The next tick finds that status and rolls the release back to the newest revision whose status is `deployed` or `superseded`, then upgrades.
+For an upgrade within the same major version, the next tick finds that status.
+It rolls back to the newest revision whose status is `deployed` or `superseded`, then upgrades.
 To do it by hand, read `helm history <release> --namespace <namespace>` and run `helm rollback <release> <revision> --namespace <namespace> --wait`.
 
 A release that Helm never finished, such as a first install that stopped, has no such revision.
@@ -316,8 +385,63 @@ The tick then fails and names `helm uninstall <release> --namespace <namespace>`
 The uninstall keeps the data volumes and Secrets ([Kubernetes § Uninstall](./kubernetes#uninstall)).
 After you run it, the next tick installs the release again.
 
+### Stopped major upgrades
+
+For 0.95.x → 1.0, follow [Database maintenance](./kubernetes#database-maintenance) and [Upgrade to 1.0](./upgrade-to-1-0).
+Pause the timer before phase 1.
+Save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json` before you change the release.
+Record the stopped phase-1 Helm revision from `helm history <release> --namespace <namespace>`.
+
+Verify the backups, record the worker count, and use the verified source chart to stop the server and workers.
+Wait until their Pods and every sandbox Pod and Job are removed.
+Then promote the target release and restart the timer for phase 2.
+
+The reconciler checks both its applied record and the installed chart version.
+For a major transition, it requires zero server and worker replicas in the installed values and no remaining writer workloads.
+It then applies the verified target chart with one server and zero workers.
+If Helm finished before the applied record was written, the next tick checks the target identity and image pins.
+A matching deployed target completes its record without running the migration hooks again.
+This also applies after you restore the worker count.
+
+It omits `--rollback-on-failure` because Helm cannot restore the old schema.
+A pending cutover stops reconciliation and requires database recovery.
+It never rolls old workloads onto a migrated database.
+
+After the server is ready, pause the timer and restore the recorded worker count with the verified target chart, as phase 4 describes.
+Keep the desired worker count in `/etc/hephaestus/chart.yaml`, then resume the timer.
+A new promotion of the same target can also restore that count after the cutover succeeds.
+
 The reconciler removes no image on a chart host.
 The kubelet's image garbage collection removes unused images.
+
+### Recover a stopped cutover
+
+Before you promote 1.0, set `HEPHAESTUS_WAIT_TIMEOUT` above the expected migration time.
+Set the systemd deadline as [Settings for the chart](#settings-for-the-chart) describes.
+A Helm timeout stops its wait. It does not stop a migration Job.
+
+If a stopped cutover fails or remains pending:
+
+1. Stop the timer: `sudo systemctl stop hephaestus-reconcile.timer`.
+2. Wait for the active reconciler service to finish.
+3. Read `helm history <release> --namespace <namespace>` and record the failed revision.
+4. Inspect `kubectl get job <release>-migration-<revision> --namespace <namespace>`.
+   Wait for its Complete or Failed condition before you restore data.
+   After its 24-hour TTL, an absent Job is finished only if no migration Pod remains.
+   If you must cancel it, delete that Job and wait for its Pods to disappear first.
+5. Restore the pre-upgrade database as [If migration fails](./upgrade#if-migration-fails) describes.
+   Keep every database writer stopped during the restore.
+6. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
+   Use the recorded source revision with zero server and worker replicas.
+7. To retry the target, resume the timer.
+   To return to the source release, promote its signed release with rollback enabled, then resume the timer.
+8. After the selected release succeeds, restore the worker count as phase 4 describes.
+
+A signed rollback request does not permit an automatic major release downgrade.
+Before a commit rollback across a schema boundary, restore the database through the same manual procedure.
+If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json` after both restores succeed.
+Then promote the source release and resume the timer.
+A commit channel must descend from the recorded release source, unless its signed request permits rollback.
 
 ### Switch a host between Compose and the chart
 
@@ -354,6 +478,7 @@ To move a Compose host to the chart:
 
    The run verifies the channel and the lock, applies the release that the channel names with Helm, and records it.
    It then adopts the tooling and the unit of that release.
+
 6. Enable the timer: `sudo systemctl enable --now hephaestus-reconcile.timer`.
    A tick does nothing while the channel names the release that the host runs.
    The next promotion runs Helm.
@@ -372,7 +497,7 @@ Data that the chart wrote after the switch is not in the Compose database.
 
 | You want to                                            | Do this                                                                                                                                                      |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Move an environment                                    | Run the **Release / Promote** workflow: pick the environment and release or commit                                                                                     |
+| Move an environment                                    | Run the **Release / Promote** workflow: pick the environment and release or commit                                                                           |
 | Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
 | Keep Staging on a release or commit                    | Promote it with **freeze**                                                                                                                                   |
 | Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on. Promoting the commit that runs applies it again                   |
@@ -641,7 +766,7 @@ A matching frontend version does not establish server, worker, webhook, database
 
 ## What it will not do
 
-**It does not roll back a failed deploy.** A failed apply may leave some services updated. Schema
+**It does not restore a database.** A failed Compose apply or stopped major upgrade may leave some services updated. Schema
 migrations are forward-only. Older images may be incompatible with the migrated database. Promote a
 fix, or follow [Rollback](./upgrade#rollback) if database recovery is needed.
 

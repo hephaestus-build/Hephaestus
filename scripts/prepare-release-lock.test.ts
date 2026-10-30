@@ -217,6 +217,7 @@ async function coldTree(t: { after: (callback: () => Promise<void>) => void }) {
 	const tree = path.join(directory, "tree");
 	const files = await moduleClosure([
 		"scripts/prepare-release-lock.ts",
+		"scripts/prepare-release-chart.ts",
 		"scripts/release-chart.ts",
 		"scripts/release-image-lock.ts",
 		"scripts/keyless-sign.ts",

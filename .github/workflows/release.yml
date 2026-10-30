@@ -635,6 +635,10 @@ jobs:
           gh attestation verify "$package" --repo "${{ github.repository }}" \
             --signer-workflow "${{ github.repository }}/.github/workflows/release.yml" \
             --predicate-type https://in-toto.io/attestation/release/v0.1
+          # Exercise the installed verifier composition against the signed draft assets.
+          mkdir "$RUNNER_TEMP/installed-chart"
+          node scripts/prepare-release-chart.ts "$TAG_NAME" "$RELEASE_SHA" \
+            "$RUNNER_TEMP/installed-chart" helm security/release-images.json
           node scripts/verify-release-evidence.ts evidence --verify-signatures
           gh attestation verify "evidence/$lock" \
             --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
