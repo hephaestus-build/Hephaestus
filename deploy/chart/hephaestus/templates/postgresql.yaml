@@ -103,7 +103,7 @@ spec:
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
           # ADR 0038 mounts persistence at /var/lib/postgresql. The image keeps its own versioned
-          # PGDATA below it (/var/lib/postgresql/18/docker, as docker/self-host/pgbackrest.conf
+          # PGDATA below it (/var/lib/postgresql/18/docker, as deploy/postgresql/pgbackrest.conf
           # names it), so the chart sets no PGDATA.
           volumeMounts:
             - name: data

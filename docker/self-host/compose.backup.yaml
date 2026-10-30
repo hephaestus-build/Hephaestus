@@ -22,7 +22,12 @@ services:
       - -c
       - archive_command=pgbackrest --stanza=hephaestus archive-push %p
     volumes:
-      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - type: bind
+        source: ../../deploy/postgresql/pgbackrest.conf
+        target: /etc/pgbackrest/pgbackrest.conf
+        read_only: true
+        bind:
+          create_host_path: false
       - postgres-socket:/var/run/postgresql
 
   pgbackrest:
@@ -34,7 +39,12 @@ services:
     environment:
       <<: *pgbackrest-env
     volumes:
-      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - type: bind
+        source: ../../deploy/postgresql/pgbackrest.conf
+        target: /etc/pgbackrest/pgbackrest.conf
+        read_only: true
+        bind:
+          create_host_path: false
       - postgresql-data:/var/lib/postgresql:ro
       - postgres-socket:/var/run/postgresql
     networks: [shared-network]

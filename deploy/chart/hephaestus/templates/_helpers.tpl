@@ -427,7 +427,7 @@ matchExpressions:
 {{- end -}}
 {{- end -}}
 
-{{/* The pgBackRest repository, as docker/self-host/pgbackrest.conf has it, on the configured bucket. */}}
+{{/* The pgBackRest repository, as deploy/postgresql/pgbackrest.conf has it, on the configured bucket. */}}
 {{- define "hephaestus.backup.repository" -}}
 {{- $s3 := .Values.postgresql.backup.s3 -}}
 repo1-type=s3
