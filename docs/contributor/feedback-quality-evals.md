@@ -56,13 +56,16 @@ A correct guess can be true and unsupported.
 
 | Case | Preserved material | Selected failure |
 | --- | --- | --- |
-| T4-9 | Stored explanation, verified citation, read receipts, and admission result IDs | An empty-body claim contradicted by `return 0;` in the cited catch |
+| T4-9 | Stored explanation, verified citation, read receipts, admission result IDs, and recovered source bytes | An empty-body claim contradicted by `return 0;` in the cited catch |
 | T4-4 | Exact answer, full selected tool results, tool calls, compaction summary, and independent source references | An invented successful creation test and an unsupported prior null-id claim |
 | T2-2 | Exact follow-up, prior answer, user request, compaction summary, and untruncated stored tool results | Redundant commentary after an answer, without a new request |
 
-T4-9's original candidate and full captured file are unavailable.
-The fixture retains that limit and uses the persisted citation.
-The producer capture was complete. The surviving evaluation evidence is partial.
+T4-9's original candidate is unavailable, and its job folder was cleaned.
+The full source file was recovered from the public reviewed commit.
+Its raw SHA-256 matches the persisted read receipt exactly.
+The case records the API, repository, path, commit, digest, and recovery date.
+It keeps the recovered bytes separate from the original verified citation.
+The surviving original job evidence remains partial.
 
 T2-2 scores the follow-up, not the truth of every claim in the earlier answer.
 The cases include true claims as controls.

@@ -15,13 +15,13 @@
 				"status": "partial",
 				"limitations": [
 					"Original candidate as produced is unavailable: review_job.output is SQL NULL; the admitted result is exported without claiming it is the original candidate.",
-					"Exact captured UserImportService.java file bytes could not be exported: the job folder is absent from the current worker emptyDir storage. Stored capture manifest, read receipts, source coordinates, commit and SHA-256 remain available and are exported.",
-					"Stored result explanation, not the unavailable original candidate. Capture was complete at production time; only the persisted citation and read receipts survive in this fixture. Outcome correctness and unselected claims are not scored."
+					"The original job folder was cleaned. Full UserImportService.java bytes were recovered independently from the public reviewed commit; raw SHA-256 matches the persisted read receipt exactly. e4 records that recovery, while e1 retains the original verified citation.",
+					"The output is the stored admitted explanation, not the unavailable original candidate. The production capture was complete; the full candidate and other original job artifacts are not recovered. Outcome correctness and unselected claims are not scored."
 				],
 				"producerStatus": "complete"
 			},
 			"provenance": {
-				"source": "Test workspace 6; result 0aa5105b-eb6f-4e2f-abe0-c140516938f7; redacted read-only export 2026-10-30; redacted export sha256 94e1f6f99de451af58a45568655bb17755637c1b98aa0f41378049034901296d",
+				"source": "Test workspace 6; result 0aa5105b-eb6f-4e2f-abe0-c140516938f7; redacted read-only export 2026-10-30; redacted export sha256 94e1f6f99de451af58a45568655bb17755637c1b98aa0f41378049034901296d; e4 recovered on 2026-10-30 through the GitHub contents API from HephaestusTest/practice-validation, path src/main/java/com/example/practice/UserImportService.java, ref 5c1a0f2f14799f8cb3de00f2fa2874fe8e5259b0. Raw bytes were used without normalization only after SHA-256 exactly matched the persisted COMPLETE read receipt contentDigest b629a697cb031eee5f7bbcee27b0671b33f8f377c566f106327d1a7c086f92cf. This is a verified recovery of the producer-read file, not an export from the cleaned job folder.",
 				"revision": "5c1a0f2f14799f8cb3de00f2fa2874fe8e5259b0",
 				"model": null,
 				"promptSha256": "d00e9ebe3a4b4f9818182fa5a6abe0ed7c13f09e3c6324cbe7fce3ec2a3889fb",
@@ -59,6 +59,16 @@
 					"revision": "5c1a0f2f14799f8cb3de00f2fa2874fe8e5259b0",
 					"side": "none",
 					"seenByProducer": false
+				},
+				{
+					"id": "e4",
+					"role": "seen",
+					"text": "package com.example.practice;\n\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\n\npublic class UserImportService {\n    public long countImportedUsers(Path file) {\n        try {\n            return Files.readAllLines(file).stream().filter(line -> !line.isBlank()).count();\n        } catch (IOException ignored) {\n            return 0;\n        }\n    }\n}\n\n",
+					"sha256": "b629a697cb031eee5f7bbcee27b0671b33f8f377c566f106327d1a7c086f92cf",
+					"complete": true,
+					"revision": "5c1a0f2f14799f8cb3de00f2fa2874fe8e5259b0",
+					"side": "new",
+					"seenByProducer": true
 				}
 			],
 			"output": {
@@ -72,7 +82,7 @@
 					"expected": "false",
 					"expectedGrounding": "unsupported",
 					"rationale": "The cited catch body contains an executable return 0; statement. This is a false body description, independent of the practice outcome.",
-					"evidenceIds": ["e1"],
+					"evidenceIds": ["e1", "e4"],
 					"checks": [
 						{
 							"kind": "literal-absence",
@@ -88,7 +98,7 @@
 					"expected": "true",
 					"expectedGrounding": "supported",
 					"rationale": "The verified source citation contains return 0; in the IOException catch.",
-					"evidenceIds": ["e1"],
+					"evidenceIds": ["e1", "e4"],
 					"checks": []
 				}
 			],

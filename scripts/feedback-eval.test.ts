@@ -17,7 +17,7 @@ import {
 } from "./feedback-eval/model.ts";
 import { deterministicChecks, report } from "./feedback-eval/score.ts";
 import { agreement, rate, workItemRate } from "./feedback-eval/statistics.ts";
-import { parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 
 const corpus = parseCorpus(
 	parseJson(readFileSync(new URL("feedback-eval/cases.json", import.meta.url), "utf8")),
@@ -472,4 +472,18 @@ void test("unsettled truth and unknown grounding cannot count as evidence that a
 	assert.equal(human.workItemsWithAnyFalseClaim.missingOrDisputedWorkItems, 1);
 	assert.equal(human.workItemsWithAnyUnsupportedClaim.estimate, null);
 	assert.equal(human.workItemsWithAnyUnsupportedClaim.missingOrDisputedWorkItems, 1);
+});
+
+void test("the recovered T4-9 file matches the persisted read receipt and contains the original citation", () => {
+	const item = firstCase();
+	const recovered = item.evidence.find((evidence) => evidence.id === "e4");
+	const citation = item.evidence.find((evidence) => evidence.id === "e1");
+	const capture = item.evidence.find((evidence) => evidence.id === "e2");
+	assert.ok(recovered && citation && capture);
+	const coverage = asRecord(parseJson(capture.text), "capture coverage");
+	const receipt = asRecord(asArray(coverage.receipts, "read receipts")[0], "file receipt");
+	assert.equal(recovered.sha256, asString(receipt.contentDigest, "receipt digest"));
+	assert.equal(recovered.revision, asString(receipt.version, "receipt revision"));
+	assert.ok(recovered.text.includes(citation.text));
+	assert.equal(recovered.seenByProducer, true);
 });
