@@ -52,8 +52,9 @@ first comment was written on. `state`, `isMerged`, `mergedAt` and `mergedBy` are
 
 Each carries the provider's merge state (`mergeable`, `mergeStateStatus`), its approval state (`reviewDecision`),
 head checks (`checks`; `checksFor` only says whether they ran on the current head), and each reviewer's latest
-review. `reviewDecision` is already in plain words: `approved`, `changes requested` or `not approved yet`; on GitLab,
-`not approved yet` also means that nobody approved. It is about reviews by people, never a practice review. A `DISMISSED` review approves nothing.
+review. `reviewDecision` is already in plain words: `approved`, `changes requested` or `not approved yet`.
+`not approved yet` means that the approvals do not meet what the work requires; it does not say how many people
+approved. It is about reviews by people, never a practice review. A `DISMISSED` review approves nothing.
 On GitHub, `commitFor=OTHER_COMMIT` is a review of a different commit. GitLab's `commit` is a recorded association,
 and `commitFor=UNKNOWN` cannot prove the originally approved head. A review marked `bot` came from an automated
 account, not a person.

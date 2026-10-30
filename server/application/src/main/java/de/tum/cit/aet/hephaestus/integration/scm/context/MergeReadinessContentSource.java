@@ -670,7 +670,7 @@ public class MergeReadinessContentSource implements ContentSource {
 
     /**
      * The provider's approval state in the words a developer reads: a conversation answer repeats this field to them.
-     * On GitLab, {@code REVIEW_REQUIRED} also means that nobody approved.
+     * {@code REVIEW_REQUIRED} says only that the approvals do not meet the requirement, not how many people approved.
      */
     private static String approval(@Nullable ReviewDecision decision) {
         if (decision == null) {
