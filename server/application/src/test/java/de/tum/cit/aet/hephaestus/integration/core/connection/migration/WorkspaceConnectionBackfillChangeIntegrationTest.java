@@ -102,11 +102,14 @@ class WorkspaceConnectionBackfillChangeIntegrationTest extends BaseIntegrationTe
                     + "DROP COLUMN IF EXISTS personal_access_token, "
                     + "DROP COLUMN IF EXISTS gitlab_group_id, "
                     + "DROP COLUMN IF EXISTS gitlab_webhook_id");
-            databaseTestUtils.cleanDatabase();
-            executeDdl("ALTER TABLE connection ADD CONSTRAINT ck_connection_encrypted_requires_key_version "
-                    + "CHECK (credentials_encrypted IS NULL OR credentials_key_version IS NOT NULL)");
         } finally {
-            restoreSystemProperty();
+            try {
+                databaseTestUtils.cleanDatabase();
+                executeDdl("ALTER TABLE connection ADD CONSTRAINT ck_connection_encrypted_requires_key_version "
+                        + "CHECK (credentials_encrypted IS NULL OR credentials_key_version IS NOT NULL)");
+            } finally {
+                restoreSystemProperty();
+            }
         }
     }
 
