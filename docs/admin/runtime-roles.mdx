@@ -559,6 +559,7 @@ When a worker process ends, its sockets close.
 A suspended worker can keep a provider connection open after its grant expires.
 A database connection failure or a cancellation that cannot close the transport can also leave such a connection open.
 The pool limit can then be exceeded until those connections close.
+
 The expired grant cannot renew or debit a retry.
 Its provider rate debit remains for one minute after lease expiry.
 Pool edits, deletion, and membership changes wait for open requests, retained rate debits, and cooldowns to end.
