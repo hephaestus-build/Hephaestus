@@ -148,7 +148,7 @@ export function NavAdmin({
 					// The section opens on what the reviews need from the admin; setup is the occasional visit.
 					landingLink={
 						<Link
-							to="/w/$workspaceSlug/admin/practices/reviews"
+							to="/w/$workspaceSlug/admin/practices/reviews/overview"
 							params={{ workspaceSlug }}
 							aria-current={onReviews ? "page" : undefined}
 						/>
@@ -158,7 +158,13 @@ export function NavAdmin({
 						<SidebarMenuSubButton
 							isActive={onReviews}
 							render={
-								<Link to="/w/$workspaceSlug/admin/practices/reviews" params={{ workspaceSlug }} />
+								// The overview holds the approval queue the count promises. The entry stays current
+								// on every reviews tab, which the link's own match on the overview would not say.
+								<Link
+									to="/w/$workspaceSlug/admin/practices/reviews/overview"
+									params={{ workspaceSlug }}
+									aria-current={onReviews ? "page" : undefined}
+								/>
 							}
 						>
 							<Workflow />

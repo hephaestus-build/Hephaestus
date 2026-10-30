@@ -92,7 +92,7 @@ export const FeedbackAwaitingApproval: Story = {
 			canvas.getByRole("link", {
 				name: "Practice reviews (7 pieces of feedback awaiting approval)",
 			}),
-		).toHaveAttribute("href", "/w/aet/admin/practices/reviews");
+		).toHaveAttribute("href", "/w/aet/admin/practices/reviews/overview");
 		canvas.getByRole("button", { name: "Practices" });
 		await expect(canvas.getAllByText("7")).toHaveLength(1);
 	},
@@ -111,7 +111,7 @@ export const FeedbackAwaitingApprovalFolded: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("link", { name: "Practices (7 pieces of feedback awaiting approval)" }),
-		).toHaveAttribute("href", "/w/aet/admin/practices/reviews");
+		).toHaveAttribute("href", "/w/aet/admin/practices/reviews/overview");
 	},
 };
 

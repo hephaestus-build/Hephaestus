@@ -7,6 +7,7 @@ import {
 	rangeToRestore,
 	rememberRange,
 } from "@/components/admin/practice-reviews/remembered-range";
+import { practiceReviewsHead } from "@/components/admin/practice-reviews/review-levels";
 import { rangeScope } from "@/components/admin/practice-reviews/review-outcomes";
 import { ALL_TIME, reviewRangeStart } from "@/components/admin/practice-reviews/review-range";
 import { clearedScope, readScope } from "@/components/admin/practice-reviews/review-scope";
@@ -49,6 +50,7 @@ export const Route = createFileRoute(
 			replace: true,
 		});
 	},
+	head: practiceReviewsHead("Overview"),
 	component: PracticeReviewOverviewRoute,
 });
 
