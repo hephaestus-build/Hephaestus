@@ -319,7 +319,7 @@ export const Default: Story = {
 			canvas.getByRole("columnheader", { name });
 		}
 		canvas.getByRole("columnheader", { name: "Last synced" });
-		await expect(canvas.queryByRole("columnheader", { name: "Items" })).toBeNull();
+		await expect(canvas.queryByRole("columnheader", { name: "Records" })).toBeNull();
 		await expect(canvas.queryByRole("columnheader", { name: "State" })).toBeNull();
 		await expect(canvas.queryByRole("columnheader", { name: /synced through/iu })).toBeNull();
 
@@ -402,7 +402,7 @@ export const RowHover: Story = {
 	args: { resources },
 	play: async ({ canvas }) => {
 		await userEvent.hover(canvas.getByText("ls1intum/Artemis"));
-		await expectSettledVisible(await screen.findByText("Items"));
+		await expectSettledVisible(await screen.findByText("Records"));
 		await expectSettledVisible(await screen.findByText(/no backfill has run/iu));
 	},
 };
@@ -442,7 +442,7 @@ export const OutlineCollections: Story = {
 		within(firstRow).getByRole("button", { name: /very stale/iu });
 
 		await userEvent.hover(canvas.getByText("Engineering Handbook"));
-		await expectSettledVisible(await screen.findByText("350 items"));
+		await expectSettledVisible(await screen.findByText("350 records"));
 
 		await userEvent.hover(canvas.getByRole("button", { name: /error for archived notes/iu }));
 		await expectSettledVisible(await screen.findByText(/api token was revoked/iu));

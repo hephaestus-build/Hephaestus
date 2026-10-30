@@ -108,7 +108,7 @@ export function ConfigureWorkspaceStep({
 			</Field>
 
 			<Field data-invalid={hasText(slugError) ? "true" : undefined}>
-				<FieldLabel htmlFor="workspace-slug">URL slug</FieldLabel>
+				<FieldLabel htmlFor="workspace-slug">Short name</FieldLabel>
 				<Input
 					id="workspace-slug"
 					form={formId}

@@ -254,7 +254,7 @@ const reviewCases: LineageStateCase[] = [
 	),
 	withCase(
 		"expired-runtime",
-		"Execution details expired",
+		"Timing details expired",
 		chain({
 			review: { completedAt: dayAt("05-02", "13:44:00"), createdAt: dayAt("05-02", "13:35:00") },
 		}),

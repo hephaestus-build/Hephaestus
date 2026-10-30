@@ -537,18 +537,18 @@ export const NoModelsAvailable: Story = {
 		await expect(trigger(canvas, "Practice reviews")).toHaveAttribute("aria-expanded", "true");
 		const reviews = within(canvas.getByRole("region", { name: "Practice reviews" }));
 		await expect(
-			row(reviews, "Cloud").getByText(/No model for this purpose declared as/u),
+			row(reviews, "Cloud").getByText(/No model for this use declared as/u),
 		).toHaveTextContent(
-			"No model for this purpose declared as Cloud is available yet. Ask an instance admin, or add one to a provider under Your providers.",
+			"No model for this use declared as Cloud is available yet. Ask an instance admin, or add one to a provider under Your providers.",
 		);
 		await expect(
-			row(reviews, UNCHOSEN_ROW).getByText(/No model for this purpose is available yet/u),
+			row(reviews, UNCHOSEN_ROW).getByText(/No model for this use is available yet/u),
 		).toBeVisible();
 		const embedding = row(await openPurpose(canvas, "Embedding model"), "Cloud");
 		await expect(embedding.getByRole("combobox", { name: /Cloud/u })).toHaveAccessibleDescription(
 			"No embedding model yet. Connect a provider with the Embeddings API under Your providers, then add its model.",
 		);
-		await expect(embedding.queryByText(/No model for this purpose/u)).toBeNull();
+		await expect(embedding.queryByText(/No model for this use/u)).toBeNull();
 		await userEvent.click(embedding.getByRole("link", { name: "Your providers" }));
 		await expect(
 			canvas.getByText("Connect your own provider").closest(`#${PROVIDER_PANEL_ID}`),
@@ -561,14 +561,14 @@ export const NoModelsOwnProvidersBlocked: Story = {
 	play: async ({ canvas }) => {
 		const reviews = within(canvas.getByRole("region", { name: "Practice reviews" }));
 		await expect(
-			row(reviews, "Cloud").getByText(/No model for this purpose declared as/u),
+			row(reviews, "Cloud").getByText(/No model for this use declared as/u),
 		).toHaveTextContent(
-			"No model for this purpose declared as Cloud is available yet. Ask an instance admin to share one.",
+			"No model for this use declared as Cloud is available yet. Ask an instance admin to share one.",
 		);
 		await expect(
-			row(reviews, UNCHOSEN_ROW).getByText(/No model for this purpose is available yet/u),
+			row(reviews, UNCHOSEN_ROW).getByText(/No model for this use is available yet/u),
 		).toHaveTextContent(
-			"No model for this purpose is available yet. Ask an instance admin to share one.",
+			"No model for this use is available yet. Ask an instance admin to share one.",
 		);
 	},
 };
@@ -672,10 +672,10 @@ export const AdvancedDisclosure: Story = {
 	play: async ({ canvas }) => {
 		const reviews = row(await openPurpose(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(reviews);
-		await expect(reviews.getByLabelText(/^Max concurrent runs/u)).toHaveValue(3);
+		await expect(reviews.getByLabelText(/^Max concurrent reviews/u)).toHaveValue(3);
 		const conversations = row(await openPurpose(canvas, "Conversations"), "In-house");
 		await openAdvanced(conversations);
-		await expect(conversations.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
+		await expect(conversations.queryByLabelText(/^Max concurrent reviews/u)).toBeNull();
 		await expect(conversations.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
 		await expect(
 			row(await openPurpose(canvas, "Embedding model"), "In-house").queryByRole("button", {

@@ -161,7 +161,7 @@ export function PracticeLevel({
 					<SheetTechnical
 						foldKey={levelFoldKey("practice", "technical")}
 						facts={[
-							{ label: "Slug", value: <code>{practice.slug}</code>, copy: practice.slug },
+							{ label: "Identifier", value: <code>{practice.slug}</code>, copy: practice.slug },
 							{ label: "Practice ID", value: practice.id, copy: practice.id },
 							{
 								label: "Group",

@@ -30,7 +30,7 @@ type Story = StoryObj<typeof meta>;
 /** No active job — the component renders nothing rather than an empty bar. */
 export const NoActiveJob: Story = { args: { job: null } };
 
-/** A known total drives a determinate bar with an accessible "X of Y items" value text. */
+/** A known total drives a determinate bar with an accessible "X of Y records" value text. */
 export const DeterminateProgress: Story = {
 	args: { job: { ...base, itemsProcessed: 4, itemsTotal: 12 } },
 };

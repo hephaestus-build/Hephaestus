@@ -394,7 +394,7 @@ describe("traceBottleneck where nothing was lost", () => {
 		});
 		const bottleneck = traceBottleneck(lineage, REVIEW, detail, NOW);
 		expect(bottleneck).toMatchObject({ kind: "slow", title: "Slow queue", span: "queue" });
-		expect(bottleneck.text).toBe("The review waited 2 h 10 min in the queue for a worker.");
+		expect(bottleneck.text).toBe("The review waited 2 h 10 min in the queue for capacity.");
 	});
 });
 

@@ -186,8 +186,8 @@ describe("workspaceDetailsSchema", () => {
 	});
 
 	it.each([
-		["", "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
-		["ab", "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
+		["", "Enter a short name of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
+		["ab", "Enter a short name of 3 to 51 characters: a to z, 0 to 9, or hyphens"],
 		["-a!", "Use only lowercase letters, digits, and hyphens"],
 		["a--b", "Do not use two hyphens in a row"],
 	])("names the first problem with the slug %j", (workspaceSlug, message) => {

@@ -94,7 +94,7 @@ function kindLabel(review: ReviewDetail): string {
 		: `Review of the ${itemKindNoun(review.item.kind, 1, review.item.provider)}`;
 }
 
-export const RUNTIME_EXPIRED = "Execution details are no longer available.";
+export const RUNTIME_EXPIRED = "Timing details are no longer available.";
 
 /** "9 min" between two times, or undefined while either is missing or they are out of order. */
 function between(from: Date | null | undefined, to: Date | null | undefined): string | undefined {
@@ -689,11 +689,11 @@ function UsageAttempts({ attempts }: { attempts: ReviewUsageAttempt[] }) {
 
 function ReviewJobs({ jobs }: { jobs: ReviewJob[] | undefined }) {
 	return (
-		<Section level={4} size="sm" title="Execution" className="space-y-2">
+		<Section level={4} size="sm" title="Timing" className="space-y-2">
 			{jobs === undefined || jobs.length === 0 ? (
 				<p className="text-sm text-muted-foreground">{RUNTIME_EXPIRED}</p>
 			) : (
-				<ol aria-label="Execution" className="space-y-3 text-sm">
+				<ol aria-label="Timing" className="space-y-3 text-sm">
 					{jobs.map((job, index) => (
 						<ReviewJobEntry
 							key={job.id}

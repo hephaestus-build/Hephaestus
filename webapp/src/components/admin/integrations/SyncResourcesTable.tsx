@@ -365,7 +365,7 @@ function ResourceNameCell({
 						<dd className="text-foreground">{stateLabel(resource.state)}</dd>
 						{resource.itemCount != null && (
 							<>
-								<dt>Items</dt>
+								<dt>Records</dt>
 								<dd className="text-foreground tabular-nums">
 									{resource.itemCount.toLocaleString()}
 								</dd>
@@ -375,7 +375,7 @@ function ResourceNameCell({
 							<>
 								<dt>Upstream</dt>
 								<dd className="text-foreground tabular-nums">
-									{resource.upstreamCount.toLocaleString()} items
+									{resource.upstreamCount.toLocaleString()} records
 								</dd>
 							</>
 						)}
@@ -478,7 +478,7 @@ function LastSyncedCell({
 					{divergent && (
 						<TriangleAlertIcon
 							className="size-3.5 text-warning"
-							aria-label="Some item types last synced longer ago than this"
+							aria-label="Some record types last synced longer ago than this"
 						/>
 					)}
 				</HoverCardTrigger>
@@ -742,7 +742,7 @@ export function SyncResourcesTable({
 						</EmptyMedia>
 						<EmptyTitle>No {resourceNounPlural} synced yet</EmptyTitle>
 						<EmptyDescription>
-							Synced {resourceNounPlural} and their item counts appear here once a sync job runs.
+							Synced {resourceNounPlural} and their record counts appear here once a sync runs.
 						</EmptyDescription>
 					</EmptyHeader>
 				</Empty>
@@ -848,7 +848,7 @@ export function SyncResourcesTable({
 					) : (
 						<>
 							{resources.length} {resources.length === 1 ? resourceNoun : resourceNounPlural} ·{" "}
-							{totalItems.toLocaleString()} {totalItems === 1 ? "item" : "items"}
+							{totalItems.toLocaleString()} {totalItems === 1 ? "record" : "records"}
 						</>
 					)}
 				</p>

@@ -92,7 +92,7 @@ type Story = StoryObj<typeof meta>;
 
 export const ByJobType: Story = {
 	play: async ({ canvas }) => {
-		const table = within(await canvas.findByRole("table", { name: "AI spend by run type" }));
+		const table = within(await canvas.findByRole("table", { name: "AI spend by use" }));
 		await expect(
 			table
 				.getAllByRole("columnheader")
@@ -140,7 +140,7 @@ export const CurrentRunTypes: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		const table = within(await canvas.findByRole("table", { name: "AI spend by run type" }));
+		const table = within(await canvas.findByRole("table", { name: "AI spend by use" }));
 		const runs = [/^Practice review/u, /^Conversation answer/u].map((name) => {
 			const cells = within(table.getByRole("row", { name }))
 				.getAllByRole("cell")
@@ -157,7 +157,7 @@ export const CurrentRunTypes: Story = {
 export const AllRunsPriced: Story = {
 	args: { report: report({ byJobType: [pullRequestReviewRow] }) },
 	play: async ({ canvas }) => {
-		const table = within(await canvas.findByRole("table", { name: "AI spend by run type" }));
+		const table = within(await canvas.findByRole("table", { name: "AI spend by use" }));
 		await expect(table.queryByRole("columnheader", { name: "Unavailable cost" })).toBeNull();
 		await expect(table.queryByRole("row", { name: /^Total/u })).toBeNull();
 	},
@@ -166,9 +166,9 @@ export const AllRunsPriced: Story = {
 export const SharedModelsOnly: Story = {
 	args: { purses: ["SHARED"] },
 	play: async ({ canvas }) => {
-		const table = within(await canvas.findByRole("table", { name: "AI spend by run type" }));
+		const table = within(await canvas.findByRole("table", { name: "AI spend by use" }));
 		await expect(table.queryByText("Own provider")).toBeNull();
-		await expect(table.getAllByRole("columnheader", { name: "Avg per run" })).toHaveLength(1);
+		await expect(table.getAllByRole("columnheader", { name: "Avg per use" })).toHaveLength(1);
 	},
 };
 
@@ -189,7 +189,7 @@ export const SubCentAveragePerRun: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		const table = within(await canvas.findByRole("table", { name: "AI spend by run type" }));
+		const table = within(await canvas.findByRole("table", { name: "AI spend by use" }));
 		const averages = [/^Pull request review/u, /^Document review/u, /^Total/u].map((name) =>
 			within(table.getByRole("row", { name }))
 				.getAllByRole("cell")
@@ -211,7 +211,7 @@ export const Loading: Story = {
 export const Empty: Story = {
 	args: { report: report({ byJobType: [] }) },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("No runs")).toBeVisible();
+		await expect(await canvas.findByText("No usage")).toBeVisible();
 	},
 };
 

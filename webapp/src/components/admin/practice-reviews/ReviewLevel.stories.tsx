@@ -365,7 +365,7 @@ export const Running: Story = {
 		await expect(panel.getByRole("button", { name: "Cancel review" })).toBeEnabled();
 		await expect(panel.queryByRole("button", { name: "Request another review" })).toBeNull();
 		// Processing starts when the attempt ends, so a running attempt shows only its own status.
-		const execution = within(panel.getByRole("list", { name: "Execution" }));
+		const execution = within(panel.getByRole("list", { name: "Timing" }));
 		execution.getByText("Running");
 		await expect(execution.queryByText("Nothing to process")).toBeNull();
 	},
@@ -379,7 +379,7 @@ export const Queued: Story = {
 			/Queued.*asked for/u,
 		);
 		within(panelElement).getByText("Practices appear here as the review reaches them.");
-		const execution = within(within(panelElement).getByRole("list", { name: "Execution" }));
+		const execution = within(within(panelElement).getByRole("list", { name: "Timing" }));
 		execution.getByText("Queued");
 		await expect(execution.queryByText("Nothing to process")).toBeNull();
 	},
@@ -390,7 +390,7 @@ export const BackingOff: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		within(panel.getByRole("list", { name: "History" })).getByText("Retry due");
-		const execution = within(panel.getByRole("list", { name: "Execution" }));
+		const execution = within(panel.getByRole("list", { name: "Timing" }));
 		execution.getByText("1 of 2 · Attempt 1");
 		execution.getByText("2 of 2 · Attempt 2");
 		execution.getByText(/out of memory/u);
@@ -466,7 +466,7 @@ export const ContinuedPastItsFirstAttempt: Story = {
 		);
 		history.getByText("19 min after it was asked for");
 		await expect(historyList).not.toHaveTextContent(/15 min|running|Retry due/u);
-		const execution = panel.getByRole("list", { name: "Execution" });
+		const execution = panel.getByRole("list", { name: "Timing" });
 		await expect(execution).toHaveTextContent("Attempt 2");
 		await expect(execution).toHaveTextContent("Wait to start: 4 seconds · Running: 3 minutes");
 	},
@@ -474,7 +474,7 @@ export const ContinuedPastItsFirstAttempt: Story = {
 
 /**
  * A first attempt keeps its start, but the review finishes a minute after the worker. The history
- * gives the whole elapsed time; Execution gives only the worker's time.
+ * gives the whole elapsed time; Timing gives only the attempt's time.
  */
 export const FirstAttemptKeepsItsStart: Story = {
 	args: {
@@ -494,11 +494,11 @@ export const FirstAttemptKeepsItsStart: Story = {
 		history.getByText("after 15 min in the queue");
 		history.getByText("20 min after it was asked for");
 		await expect(panel.getByRole("list", { name: "History" })).not.toHaveTextContent(/running/u);
-		await expect(panel.getByRole("list", { name: "Execution" })).toHaveTextContent(
+		await expect(panel.getByRole("list", { name: "Timing" })).toHaveTextContent(
 			"Running: 3 minutes",
 		);
 		await expect(history.queryByText("Latest attempt started")).toBeNull();
-		await expect(panel.getByRole("list", { name: "Execution" })).toHaveTextContent("Attempt 1");
+		await expect(panel.getByRole("list", { name: "Timing" })).toHaveTextContent("Attempt 1");
 	},
 };
 
@@ -540,7 +540,7 @@ export const ScanWithManyRuns: Story = {
 			"href",
 			expect.stringContaining(`/admin/practices/scans/${reviewDetailScanManyJobs.id}`),
 		);
-		const runs = within(panel.getByRole("list", { name: "Execution" })).getAllByRole("listitem");
+		const runs = within(panel.getByRole("list", { name: "Timing" })).getAllByRole("listitem");
 		await expect(runs).toHaveLength(reviewDetailScanManyJobs.runtime?.jobs.length ?? 0);
 	},
 };
@@ -654,7 +654,7 @@ export const ProcessingFailed: Story = {
 	args: { review: ready(reviewDetailProcessingFailed) },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		within(panel.getByRole("list", { name: "Execution" })).getByText("Processing failed");
+		within(panel.getByRole("list", { name: "Timing" })).getByText("Processing failed");
 	},
 };
 

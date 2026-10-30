@@ -94,7 +94,7 @@ export function GeneratedPathsSettings(props: GeneratedPathsSettingsProps) {
 							id={searchId}
 							type="search"
 							value={search}
-							placeholder="Name or item ID"
+							placeholder="Name or ID"
 							aria-describedby={`${searchId}-count`}
 							onChange={(event) => setSearch(event.currentTarget.value)}
 						/>

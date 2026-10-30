@@ -273,7 +273,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 				.getByRole("button", { name: "Details for Example Workspace" })
 				.getAttribute("aria-expanded"),
 		).toBe("true");
-		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
+		const byJobType = screen.getByRole("table", { name: "AI spend by use" });
 		within(byJobType).getByText("Conversation answer");
 		within(byJobType).getByText("$1.75");
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
@@ -297,7 +297,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 			},
 		});
 
-		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
+		const byJobType = screen.getByRole("table", { name: "AI spend by use" });
 		const reviews = within(byJobType).getByRole("row", { name: /^Practice review/u });
 		const cells = within(reviews)
 			.getAllByRole("cell")

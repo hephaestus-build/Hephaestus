@@ -81,7 +81,7 @@ export const RepositoryScanNeedsABudget: Story = {
 		await expect(canvas.getByText(/Enter an amount in US dollars/u)).toBeVisible();
 		await expect(args.onCreate).not.toHaveBeenCalled();
 
-		await userEvent.type(canvas.getByRole("textbox", { name: "Budget per run (USD)" }), "25");
+		await userEvent.type(canvas.getByRole("textbox", { name: "Budget per scan (USD)" }), "25");
 		await userEvent.click(start);
 		await expect(args.onCreate).toHaveBeenCalledWith({
 			itemKind: "scm.repository",
@@ -216,7 +216,7 @@ export const RepositoryScans: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				/every week, scanning each repository in the review scope, up to \$25 per run/iu,
+				/every week, scanning each repository in the review scope, up to \$25 per scan/iu,
 			),
 		).toBeVisible();
 	},

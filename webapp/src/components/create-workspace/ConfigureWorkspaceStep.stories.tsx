@@ -37,7 +37,7 @@ const meta = {
 		docs: {
 			description: {
 				component:
-					"Form step for workspace name, URL slug and the projects to monitor. Auto-generates slug from display name. Shows summary of instance, group, projects and token owner.",
+					"Form step for workspace name, short name and the projects to monitor. Auto-generates slug from display name. Shows summary of instance, group, projects and token owner.",
 			},
 		},
 	},
@@ -189,7 +189,7 @@ export const LongGroupName: Story = {
 };
 
 /** The short-slug problem, as a reader sees it under the field. */
-const shortSlug = "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens";
+const shortSlug = "Enter a short name of 3 to 51 characters: a to z, 0 to 9, or hyphens";
 
 /** A group with a short name, as the step opens for it: the slug made from the name is too short. */
 const shortName = withWizardState({
@@ -207,7 +207,7 @@ const shortName = withWizardState({
 export const SlugTooShortFromName: Story = {
 	decorators: [shortName],
 	play: async ({ canvas }) => {
-		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		const slug = canvas.getByRole("textbox", { name: "Short name" });
 		await expect(slug).toHaveValue("qa");
 		await expect(slug).toBeValid();
 		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
@@ -224,7 +224,7 @@ export const SlugTooShortAfterCreate: Story = {
 	args: { showErrors: true },
 	decorators: [shortName],
 	play: async ({ canvas }) => {
-		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		const slug = canvas.getByRole("textbox", { name: "Short name" });
 		await expect(slug).toBeInvalid();
 		await expect(slug).toHaveAccessibleDescription(`Used in URLs: /w/qa ${shortSlug}`);
 		await expect(canvas.getByRole("alert")).toHaveTextContent(shortSlug);
@@ -248,7 +248,7 @@ export const SlugEmptyFromNonLatinNameAfterCreate: Story = {
 		}),
 	],
 	play: async ({ canvas }) => {
-		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		const slug = canvas.getByRole("textbox", { name: "Short name" });
 		await expect(slug).toHaveValue("");
 		await expect(slug).toBeInvalid();
 		await expect(slug).toHaveAccessibleDescription(
@@ -270,7 +270,7 @@ export const SlugEnteredNotYetLeft: Story = {
 		}),
 	],
 	play: async ({ canvas }) => {
-		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		const slug = canvas.getByRole("textbox", { name: "Short name" });
 		await expect(slug).toBeValid();
 		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
 		await expect(slug).toHaveAccessibleDescription("Used in URLs: /w/he");

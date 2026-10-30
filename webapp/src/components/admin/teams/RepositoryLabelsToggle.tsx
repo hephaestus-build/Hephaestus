@@ -42,8 +42,8 @@ export function RepositoryLabelsToggle({
 		<div className="space-y-1.5">
 			<p className="text-sm font-medium">Labels</p>
 			<p className="text-xs text-muted-foreground">
-				If you select labels, only items with at least one of them count toward this team’s
-				contribution metrics for this repository.
+				Selected labels limit this team’s contribution metrics for this repository. Only issues,
+				pull requests and merge requests with at least one of them count.
 			</p>
 			{shown.length > 0 ? (
 				<div className="flex flex-wrap gap-1.5">

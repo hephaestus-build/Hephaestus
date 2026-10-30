@@ -57,7 +57,7 @@ function WorkspacesTableHeader() {
 		<TableHeader>
 			<TableRow>
 				<TableHead scope="col">Name</TableHead>
-				<TableHead scope="col">Slug</TableHead>
+				<TableHead scope="col">Short name</TableHead>
 				<TableHead scope="col">Status</TableHead>
 				<TableHead scope="col">Provider</TableHead>
 				<TableHead scope="col">Owner</TableHead>

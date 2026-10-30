@@ -607,8 +607,8 @@ function recordState(
 const RECORD_NOTES: Record<RepositoryRecordState, string | undefined> = {
 	listed: undefined,
 	removed: "The workspace removed this repository.",
-	unnamed: "No repository record names this item.",
-	unlisted: "No repository record of this workspace has this item.",
+	unnamed: "No record names this repository.",
+	unlisted: "No record of this workspace has this repository.",
 	"not-loaded": "Not among the repositories loaded so far.",
 };
 

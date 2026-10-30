@@ -479,7 +479,7 @@ Two further limits apply:
   The excess charge is less than a millionth of a dollar per call.
 - **The UI rounds differently from the ledger.** Published *rates* show up to four decimals (`$0.075 / 1M`) for price-list checks.
   *Spend* appears as cents, with `<$0.01` for a non-zero amount below one cent.
-  Each cell of an *average* column, such as **Avg per run**, has the same decimals.
+  Each cell of an *average* column, such as **Avg per use**, has the same decimals.
   Thus, the decimal points line up.
   The column shows whole cents when no average in it is below one cent.
   If an average is below one cent, the column shows three decimals, such as `$0.004`.
@@ -639,7 +639,7 @@ If a model's declaration becomes less restrictive, it no longer matches its row.
 It reads **Not ready** and stops serving until you reassign it.
 Nothing is substituted.
 Grants, prices, funding sources, the practice-review switch, and budgets still apply.
-**Max concurrent runs** applies independently to each row.
+**Max concurrent reviews** applies independently to each row.
 
 For workspace member setup:
 
@@ -1029,7 +1029,7 @@ The [workspace ABI](/contributor/agent/agent-workspace-abi#practice-script-valid
 
 ### Usage by practice
 
-The workspace's **AI usage** page has four sections: **Spend this month**, **By run type**, **Models for practice scripts, by practice**, and **By day**.
+The workspace's **AI usage** page has four sections: **Spend this month**, **By use**, **Models for practice scripts, by practice**, and **By day**.
 For an earlier month, the first section is **Spend in** and the month, such as **Spend in September 2026**.
 The first section shows one tile for each purse: **Shared models** and **Own provider**.
 
@@ -1061,7 +1061,7 @@ Each table has its own money columns for **Shared models** and for **Own provide
 The two purses are never added together.
 Two tables show an average next to the spend of each purse:
 
-- **By run type** shows **Spend** and **Avg per run**.
+- **By use** shows **Spend** and **Avg per use**.
 - **Models for practice scripts, by practice** shows **Spend** and **Avg per review**.
 
 **By day** shows only the spend of each purse.
@@ -1070,8 +1070,8 @@ The table of workspaces on **Instance admin → AI usage** shows the spend of ea
 On a narrow screen, the token and call columns are hidden.
 
 **No price set** appears only when a row has usage without a price.
-In **By run type** and **By day**, it counts the runs that have usage without a price.
-A run is one review attempt or one conversation turn, with all of its usage rows.
+In **By use** and **By day**, it counts the uses that have usage without a price.
+A use is one review attempt or one conversation answer, with all of its usage rows.
 In **Models for practice scripts, by practice**, it counts reviews.
 
 **Models for practice scripts, by practice** appears only in a month with decision, embedding, or reranking usage.
@@ -1119,10 +1119,10 @@ Its review counts one time in **No price set** for each practice that had a shar
 A model with **No metered API cost** adds a confirmed $0.
 
 The table shows the usage of finished reviews, to date in the current month.
-These costs are already part of the run types above it.
+These costs are already part of the uses above it.
 Chat calls from a script are not in this table, because they are part of each review's own cost.
-On **By run type** and **By day**, **Runs** counts review attempts and conversation turns only.
-A usage row of a model for practice scripts adds its calls and cost to its review, but it is not a run.
+On **By use** and **By day**, **Uses** counts review attempts and conversation answers only.
+A usage row of a model for practice scripts adds its calls and cost to its review, but it is not a use.
 
 :::caution[CAUTION: A priced reranking model that bills search units or reports no tokens]
 

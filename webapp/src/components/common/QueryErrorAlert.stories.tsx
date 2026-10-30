@@ -20,7 +20,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		title: "We could not load the job history",
+		title: "We could not load the sync history",
 		onRetry: fn(),
 	},
 } satisfies Meta<typeof QueryErrorAlert>;
@@ -69,7 +69,7 @@ export const Forbidden: Story = {
 		canvas.getByText(
 			"You are not an admin of this workspace. Ask a workspace admin or instance admin for access.",
 		);
-		canvas.getByText("You do not have access to the job history");
+		canvas.getByText("You do not have access to the sync history");
 		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
@@ -83,7 +83,7 @@ export const NotFound: Story = {
 		canvas.getByText(
 			"This connection no longer exists. It may have been deleted or moved. Go back to continue.",
 		);
-		canvas.getByText("We could not find the job history");
+		canvas.getByText("We could not find the sync history");
 		await expect(canvas.queryByRole("button", { name: /retry/iu })).not.toBeInTheDocument();
 	},
 };
@@ -101,7 +101,7 @@ export const NotFoundGenericDetail: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("We could not find the job history");
+		canvas.getByText("We could not find the sync history");
 		await expect(
 			canvas.getByText("It may have been deleted or moved. Go back to continue."),
 		).toBeVisible();

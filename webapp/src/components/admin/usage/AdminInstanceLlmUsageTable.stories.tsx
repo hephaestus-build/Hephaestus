@@ -344,7 +344,7 @@ export const Expanded: Story = {
 		await expect(panel.getByText("Usage details")).toBeVisible();
 		await expect(
 			panel.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent),
-		).toStrictEqual(["By run type", "By day"]);
+		).toStrictEqual(["By use", "By day"]);
 		await expect(
 			panel.queryByRole("heading", { name: "Models for practice scripts, by practice" }),
 		).toBeNull();
@@ -380,7 +380,7 @@ export const ExpandedWithPracticeScriptModels: Story = {
 			"$0.37",
 		);
 		for (const name of [
-			"AI spend by run type",
+			"AI spend by use",
 			"AI spend by day",
 			"Spend on models for practice scripts, by practice",
 		]) {
@@ -397,7 +397,7 @@ export const ExpandedNearCap: Story = {
 	},
 	play: async ({ canvas }) => {
 		const panel = within(await expandedPanelFor(canvas, nearingItsOwnProviderCap.displayName));
-		const runTypes = within(panel.getByRole("table", { name: "AI spend by run type" }));
+		const runTypes = within(panel.getByRole("table", { name: "AI spend by use" }));
 		const row = runTypes.getByRole("row", { name: /^Pull request review/u });
 		await expect(within(row).getByText("$13.48")).toBeVisible();
 		await expect(within(row).getByText("$21.40")).toBeVisible();

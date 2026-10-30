@@ -173,13 +173,13 @@ export function traceSpans(
 		),
 		span(
 			"queue",
-			"From when the review was asked for to when a worker picked it up",
+			"From when the review was asked for to when its first attempt started",
 			review.createdAt,
 			pickedUp,
 		),
 		span(
 			"run",
-			"From the first worker pickup to when all recorded worker invocations ended",
+			"From the first attempt's start to when all recorded attempts ended",
 			pickedUp,
 			invocationCompletedAt(detail?.runtime?.jobs ?? []),
 		),
@@ -350,7 +350,7 @@ function reviewBottleneck(
 				kind: "waiting",
 				stage: "review",
 				title: "In the queue",
-				text: `It has waited ${durationBetween(review.createdAt, now)} for a worker so far.`,
+				text: `It has waited ${durationBetween(review.createdAt, now)} for capacity so far.`,
 				tone: slow ? "warning" : "secondary",
 				icon: ClockIcon,
 				span: "queue",
@@ -364,13 +364,13 @@ function reviewBottleneck(
 					(job) => job.processingStatus === "NONE" || job.processingStatus === "PENDING",
 				);
 				let title = "Review still open";
-				let text = "The recorded worker invocations ended; this review has not closed.";
+				let text = "The recorded attempts ended; this review has not closed.";
 				if (failed) {
 					title = REVIEW_JOB_PROCESSING_DEFS.FAILED.label;
 					text = `${REVIEW_JOB_PROCESSING_DEFS.FAILED.description} The review remains open.`;
 				} else if (pending) {
 					title = "Awaiting finalization";
-					text = "The recorded worker invocations ended; the server has not finalized this review.";
+					text = "The recorded attempts ended; the server has not finalized this review.";
 				}
 				return {
 					kind: "waiting",
@@ -392,8 +392,8 @@ function reviewBottleneck(
 				title: running === undefined ? "Review still open" : "Running",
 				text:
 					running === undefined
-						? "The review remains open; no worker execution duration is known here."
-						: `A worker invocation has been running for ${durationBetween(running, now)}.`,
+						? "The review remains open; no attempt duration is known here."
+						: `An attempt has been running for ${durationBetween(running, now)}.`,
 				tone: "secondary",
 				icon: HourglassIcon,
 				span: "run",
@@ -616,7 +616,7 @@ const SLOW_TITLE: Record<MeasuredSpanKind, string> = {
 
 const SLOW_TEXT: Record<MeasuredSpanKind, (duration: string) => string> = {
 	asked: (duration) => `The review was asked for ${duration} after the event that started it.`,
-	queue: (duration) => `The review waited ${duration} in the queue for a worker.`,
+	queue: (duration) => `The review waited ${duration} in the queue for capacity.`,
 	run: (duration) => `The review ran for ${duration}.`,
 	delivery: (duration) =>
 		`Its feedback reached the developer ${duration} after the review finished.`,

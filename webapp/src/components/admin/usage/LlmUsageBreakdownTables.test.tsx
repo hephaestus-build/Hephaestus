@@ -82,11 +82,7 @@ function cellTexts(row: HTMLElement): (string | null)[] {
 describe("usage breakdown totals", () => {
 	it.each<[string, () => ReactElement, string]>([
 		["day", () => <LlmUsageByDayTable report={report} purses={BOTH} />, "AI spend by day"],
-		[
-			"run type",
-			() => <LlmUsageByJobTypeTable report={report} purses={BOTH} />,
-			"AI spend by run type",
-		],
+		["use", () => <LlmUsageByJobTypeTable report={report} purses={BOTH} />, "AI spend by use"],
 	])("prints the server's month spend, not a re-addition of the %s rows", (_name, table, name) => {
 		render(table());
 
@@ -100,7 +96,7 @@ describe("usage breakdown totals", () => {
 	it("adds the runs up itself, takes the runs with no price from the month, and averages each purse on its own", () => {
 		render(<LlmUsageByJobTypeTable report={report} purses={BOTH} />);
 
-		const footer = totalsRowOf("AI spend by run type");
+		const footer = totalsRowOf("AI spend by use");
 		within(footer).getByRole("rowheader", { name: "Total" });
 		expect(cellTexts(footer)).toStrictEqual([
 			"$4.25",
@@ -120,7 +116,7 @@ describe("usage breakdown totals", () => {
 	it("shows cache reads and writes separately", () => {
 		render(<LlmUsageByJobTypeTable report={report} purses={BOTH} />);
 
-		const table = screen.getByRole("table", { name: "AI spend by run type" });
+		const table = screen.getByRole("table", { name: "AI spend by use" });
 		within(table).getByRole("columnheader", { name: "Cache reads" });
 		within(table).getByRole("columnheader", { name: "Cache writes" });
 		const cells = cellTexts(within(table).getByRole("row", { name: /Pull request review/u }));
@@ -140,7 +136,7 @@ describe("usage breakdown columns", () => {
 	it("puts each purse's name over its own spend and average", () => {
 		render(<LlmUsageByJobTypeTable report={report} purses={BOTH} />);
 
-		const table = screen.getByRole("table", { name: "AI spend by run type" });
+		const table = screen.getByRole("table", { name: "AI spend by use" });
 		const groups = within(table)
 			.getAllByRole("columnheader")
 			.filter((header) => header.getAttribute("colspan") === "2");
@@ -148,7 +144,7 @@ describe("usage breakdown columns", () => {
 			["Shared models", "col"],
 			["Own provider", "col"],
 		]);
-		expect(within(table).getAllByRole("columnheader", { name: "Avg per run" })).toHaveLength(2);
+		expect(within(table).getAllByRole("columnheader", { name: "Avg per use" })).toHaveLength(2);
 	});
 
 	it("shows each purse's spend by day, with no daily average", () => {
@@ -159,7 +155,7 @@ describe("usage breakdown columns", () => {
 			within(table)
 				.getAllByRole("columnheader")
 				.map((header) => header.textContent),
-		).toStrictEqual(["Day", "Shared models", "Own provider", "Runs", "Unavailable cost"]);
+		).toStrictEqual(["Day", "Shared models", "Own provider", "Uses", "Unavailable cost"]);
 		expect(cellTexts(totalsRowOf("AI spend by day"))).toStrictEqual(["$4.25", "$1.75", "30", "2"]);
 	});
 
@@ -178,7 +174,7 @@ describe("usage breakdown columns", () => {
 		};
 		render(<LlmUsageByJobTypeTable report={priced} purses={BOTH} />);
 
-		const table = screen.getByRole("table", { name: "AI spend by run type" });
+		const table = screen.getByRole("table", { name: "AI spend by use" });
 		expect(within(table).queryByRole("columnheader", { name: "Unavailable cost" })).toBeNull();
 	});
 
@@ -206,7 +202,7 @@ describe("usage breakdown columns", () => {
 		};
 		render(<LlmUsageByJobTypeTable report={current} purses={BOTH} />);
 
-		const table = screen.getByRole("table", { name: "AI spend by run type" });
+		const table = screen.getByRole("table", { name: "AI spend by use" });
 		const row = within(table).getByRole("row", { name: /^Practice review/u });
 		expect(cellTexts(row)).toStrictEqual([
 			"Practice review",

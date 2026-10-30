@@ -280,9 +280,7 @@ export const ManyItems: Story = {
 		// The (i) names no figure that no list opens: neither the pace nor the number of workers.
 		await userEvent.click(canvas.getByRole("button", { name: "About the queue" }));
 		const about = await screen.findByRole("dialog", { name: "About the queue" });
-		await expect(about).toHaveTextContent(
-			"counts reviews a worker runs now. The count opens them.",
-		);
+		await expect(about).toHaveTextContent("counts reviews that run now. The count opens them.");
 		await expect(about).not.toHaveTextContent(/Pace|an hour|4 workers/u);
 	},
 };

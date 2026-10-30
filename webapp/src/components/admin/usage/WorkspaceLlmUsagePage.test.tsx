@@ -69,7 +69,7 @@ describe("WorkspaceLlmUsagePage", () => {
 		within(tiles).getByText("of $10");
 		within(tiles).getByText("Billed to you by your provider");
 
-		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
+		const byJobType = screen.getByRole("table", { name: "AI spend by use" });
 		within(byJobType).getByRole("columnheader", { name: "Shared models" });
 		within(byJobType).getByRole("columnheader", { name: "Own provider" });
 		within(byJobType).getByRole("columnheader", { name: "Unavailable cost" });
@@ -87,7 +87,7 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("leaves the own-provider columns out of every table while the workspace has none", async () => {
 		await renderPage(usageReport("2026-07"));
 
-		for (const name of ["AI spend by run type", "AI spend by day"]) {
+		for (const name of ["AI spend by use", "AI spend by day"]) {
 			const table = screen.getByRole("table", { name });
 			expect(within(table).queryByRole("columnheader", { name: "Own provider" })).toBeNull();
 			expect(within(table).queryByRole("columnheader", { name: "Unavailable cost" })).toBeNull();
@@ -106,7 +106,7 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("gives the right pricing owner an actionable no-price-set warning", async () => {
 		await renderPage();
 
-		screen.getByText("2 runs have unavailable cost");
+		screen.getByText("2 uses have unavailable cost");
 		screen.getByText(
 			paragraphContaining(
 				"Adding rates repairs only verified usage. Set rates for your own models in AI models. For shared models, ask an instance admin.",
@@ -117,8 +117,8 @@ describe("WorkspaceLlmUsagePage", () => {
 	it("averages each purse over the run count on its own, never the two summed", async () => {
 		await renderPage();
 
-		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
-		expect(within(byJobType).getAllByRole("columnheader", { name: "Avg per run" })).toHaveLength(2);
+		const byJobType = screen.getByRole("table", { name: "AI spend by use" });
+		expect(within(byJobType).getAllByRole("columnheader", { name: "Avg per use" })).toHaveLength(2);
 		const conversationAnswers = within(byJobType).getByRole("row", {
 			name: /^Conversation answer/u,
 		});
@@ -138,7 +138,7 @@ describe("WorkspaceLlmUsagePage", () => {
 			byJobType: [{ ...review, jobType: "PRACTICE_REVIEW" }, ...pricedReport.byJobType.slice(1)],
 		});
 
-		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
+		const byJobType = screen.getByRole("table", { name: "AI spend by use" });
 		const cells = within(within(byJobType).getByRole("row", { name: /^Practice review/u }))
 			.getAllByRole("cell")
 			.map((cell) => cell.textContent);

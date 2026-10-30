@@ -54,7 +54,7 @@ const QUEUE_ITEM_DEFS: Record<QueueItemState, StatusDef & { short: string }> = {
 		short: "Waiting",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description: "Waiting for a worker.",
+		description: "Waiting for capacity.",
 	},
 	held: {
 		label: "On hold for budget",
@@ -110,11 +110,11 @@ export function ReviewQueueNow({ workspaceSlug, state }: ReviewQueueNowProps) {
 const QUEUE_INFO: readonly InfoLine[] = [
 	{
 		term: "Waiting",
-		text: "counts reviews that wait for a worker now, a retry included, but not those on hold. The count opens them.",
+		text: "counts reviews that wait for capacity now, a retry included, but not those on hold. The count opens them.",
 	},
 	{
 		term: "Running",
-		text: "counts reviews a worker runs now. The count opens them.",
+		text: "counts reviews that run now. The count opens them.",
 	},
 	{
 		term: "On hold for budget",

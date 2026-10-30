@@ -96,7 +96,7 @@ export const PracticeScriptModelsByPractice: Story = {
 	args: { report: withPracticeScriptUsage(capped) },
 	play: async ({ canvas }) => {
 		const title = await canvas.findByRole("heading", { name: PRACTICE_SCRIPT_CARD });
-		const runTypes = canvas.getByRole("heading", { name: "By run type" });
+		const runTypes = canvas.getByRole("heading", { name: "By use" });
 		await expect(precedes(runTypes, title)).toBe(true);
 		const link = canvas.getByRole("link", { name: "Comments explain why" });
 		await expect(link.getAttribute("href")).toMatch(/^\/w\/acme\/admin\/practices\?/u);
@@ -108,7 +108,7 @@ export const PracticeScriptModelsByPractice: Story = {
 
 export const NoPracticeScriptCalls: Story = {
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("By run type")).toBeVisible();
+		await expect(await canvas.findByText("By use")).toBeVisible();
 		await expect(canvas.queryByText(PRACTICE_SCRIPT_CARD)).toBeNull();
 	},
 };
@@ -119,7 +119,7 @@ export const NoProviderConnected: Story = {
 		const own = within(await tileOf(canvas, "Own provider"));
 		own.getByText(/^Work on a provider you connect in/u);
 		await expect(canvas.queryByRole("button", { name: /cap/u })).toBeNull();
-		const runTypes = within(canvas.getByRole("table", { name: "AI spend by run type" }));
+		const runTypes = within(canvas.getByRole("table", { name: "AI spend by use" }));
 		await expect(runTypes.queryByRole("columnheader", { name: "Own provider" })).toBeNull();
 	},
 };
@@ -144,7 +144,7 @@ export const ConnectedBeforeFirstSpend: Story = {
 		await expect(own.getByText("$0.00")).toBeVisible();
 		own.getByText("No cap set");
 		await expect(canvas.getByRole("button", { name: "Set provider cap" })).toBeVisible();
-		const runTypes = within(canvas.getByRole("table", { name: "AI spend by run type" }));
+		const runTypes = within(canvas.getByRole("table", { name: "AI spend by use" }));
 		await expect(runTypes.getByRole("columnheader", { name: "Own provider" })).toBeVisible();
 	},
 };
@@ -233,7 +233,7 @@ export const BothCapsUnverifiable: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Your provider cap cannot be enforced");
 		canvas.getByText("Shared-model spend cannot be verified");
-		canvas.getByText("7 runs have unavailable cost");
+		canvas.getByText("7 uses have unavailable cost");
 		const banners = canvas.getAllByRole("alert");
 		await expect(banners).toHaveLength(2);
 		for (const banner of banners) {
@@ -304,7 +304,7 @@ export const RunsWithUnavailableCost: Story = {
 		report: withMonthTotals(capped, { unpricedEventCount: 42 }),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("42 runs have unavailable cost");
+		canvas.getByText("42 uses have unavailable cost");
 	},
 };
 
@@ -313,7 +313,7 @@ export const SingleRunWithUnavailableCost: Story = {
 		report: withMonthTotals(capped, { unpricedEventCount: 1 }),
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("1 run has unavailable cost");
+		canvas.getByText("1 use has unavailable cost");
 	},
 };
 
