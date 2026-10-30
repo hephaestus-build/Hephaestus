@@ -1,12 +1,14 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
+import de.tum.cit.aet.hephaestus.core.auth.consent.ConsentService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyAssurancePolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,12 +37,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountWebController {
 
     private final AccountService accountService;
+    private final ConsentService consentService;
     private final PasskeyAssurancePolicy passkeys;
     private final GitProviderRegistry gitProviderRegistry;
 
     public AccountWebController(
-            AccountService accountService, GitProviderRegistry gitProviderRegistry, PasskeyAssurancePolicy passkeys) {
+            AccountService accountService,
+            ConsentService consentService,
+            GitProviderRegistry gitProviderRegistry,
+            PasskeyAssurancePolicy passkeys) {
         this.accountService = accountService;
+        this.consentService = consentService;
         this.passkeys = passkeys;
         this.gitProviderRegistry = gitProviderRegistry;
     }
@@ -67,7 +74,13 @@ public class AccountWebController {
             // before it
             // lapses, rather than waiting for a 401 (BFF pattern; see
             // CurrentAccount.accessTokenExpiresAt).
-            @Nullable Long accessTokenExpiresAt) {}
+            @Nullable Long accessTokenExpiresAt,
+
+            @Schema(
+                    description =
+                            "The account's consent, so that a client decides the consent gate before it sends a read the gate refuses",
+                    requiredMode = Schema.RequiredMode.REQUIRED)
+            ConsentService.ConsentStatusDTO consent) {}
 
     /** A provider instance the current user is linked to: its type + server-url origin. */
     public record LinkedProviderDTO(String type, @Nullable String serverUrl) {}
@@ -110,7 +123,8 @@ public class AccountWebController {
                 primary != null ? primary.getProviderUserKey() : null,
                 linkedProviders,
                 CurrentAccount.roles(),
-                CurrentAccount.accessTokenExpiresAt()));
+                CurrentAccount.accessTokenExpiresAt(),
+                consentService.status(Objects.requireNonNull(account.getId()))));
     }
 
     @GetMapping("/identities")

@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { noop, QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { deferred } from "@/test/async";
 
 // `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
 vi.setConfig({ testTimeout: 15_000 });
@@ -138,5 +139,62 @@ describe("workspace route gate", () => {
 
 		const location = await land("/w/brand-new", queryClient);
 		expect(location.href).toBe("/w/brand-new/activity");
+	});
+
+	it("reads no notice, and starts membership beside the onboarding gate", async () => {
+		listWorkspaces("acme");
+		const onboarding = deferred();
+		server.use(
+			http.get("*/workspaces/acme/onboarding/me", async () => {
+				await onboarding.promise;
+				return HttpResponse.json(workspaceOnboarding());
+			}),
+			http.get("*/workspaces/acme/members/me", () => new HttpResponse(null, { status: 404 })),
+		);
+		const started: string[] = [];
+		const record = ({ request }: { request: Request }) => {
+			started.push(new URL(request.url).pathname);
+		};
+		server.events.on("request:start", record);
+		const landing = land(WORKSPACE_HOME);
+		try {
+			// The onboarding gate has not answered, so membership started beside it, not after the page.
+			await vi.waitFor(
+				() =>
+					expect(started).toStrictEqual(
+						expect.arrayContaining([
+							"/workspaces/acme/members/me",
+							"/workspaces/acme/onboarding/me",
+						]),
+					),
+				{ timeout: 10_000 },
+			);
+		} finally {
+			onboarding.resolve();
+			await landing.catch(noop);
+			server.events.removeListener("request:start", record);
+		}
+		const location = await landing;
+		expect(location.pathname).toBe(WORKSPACE_HOME);
+		// The identity carries the consent answer.
+		expect(started).not.toContain("/user/consent");
+	});
+
+	it("reads nothing of a workspace that the reader's list does not name", async () => {
+		listWorkspaces("acme");
+		const scoped: string[] = [];
+		server.use(
+			http.get("*/workspaces/foreign/*", ({ request }) => {
+				scoped.push(new URL(request.url).pathname);
+				return new HttpResponse(null, { status: 401 });
+			}),
+			http.get("*/workspaces/foreign/*/*", ({ request }) => {
+				scoped.push(new URL(request.url).pathname);
+				return new HttpResponse(null, { status: 401 });
+			}),
+		);
+		const location = await land(DEEP_LINK);
+		expect(location.href).toBe(WORKSPACE_HOME);
+		expect(scoped).toStrictEqual([]);
 	});
 });

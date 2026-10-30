@@ -12,6 +12,7 @@ import type {
 	IdentityView,
 	SessionView,
 } from "@/api/types.gen";
+import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { Wire } from "@/lib/dates";
 
 export const currentUser: CurrentUserView = {
@@ -31,6 +32,7 @@ export const currentUser: CurrentUserView = {
 		{ type: "GITHUB", serverUrl: "https://github.com" },
 		{ type: "GITLAB", serverUrl: "https://gitlab.lrz.de" },
 	],
+	consent: { completed: true, noticeVersion: WORDING_VERSION, participateInResearch: false },
 };
 
 export const identityProviders: IdentityProviderView[] = [

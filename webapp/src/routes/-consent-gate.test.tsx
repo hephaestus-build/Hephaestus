@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
-import { unauthenticatedUser } from "@/mocks/handlers";
+import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { consentIsPending } from "@/runtime/auth/guard";
@@ -17,10 +17,6 @@ const DEEP_LINK = "/w/acme/conversation?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bb
 
 function newClient() {
 	return new QueryClient({ defaultOptions: { queries: { retry: false } } });
-}
-
-function noticeAnswered(completed: boolean) {
-	server.use(http.get("*/user/consent", () => HttpResponse.json({ completed })));
 }
 
 async function land(url: string) {
@@ -37,13 +33,27 @@ async function land(url: string) {
 
 describe("consent gate", () => {
 	it("lets the application load once the notice has been answered", async () => {
-		noticeAnswered(true);
 		await expect(consentIsPending(newClient())).resolves.toBe(false);
 	});
 
 	it("holds the application back while the notice is outstanding", async () => {
-		noticeAnswered(false);
+		server.use(...consentOutstanding);
 		await expect(consentIsPending(newClient())).resolves.toBe(true);
+	});
+
+	it("decides from the identity, so no read leaves before the answer is known", async () => {
+		const requested: string[] = [];
+		const record = ({ request }: { request: Request }) => {
+			requested.push(new URL(request.url).pathname);
+		};
+		server.use(...consentOutstanding);
+		server.events.on("request:start", record);
+		try {
+			await expect(consentIsPending(newClient())).resolves.toBe(true);
+		} finally {
+			server.events.removeListener("request:start", record);
+		}
+		expect(requested).toStrictEqual(["/user"]);
 	});
 
 	it("never asks on behalf of a signed-out visitor", async () => {
@@ -59,17 +69,11 @@ describe("consent gate", () => {
 		await expect(consentIsPending(newClient())).resolves.toBe(false);
 		expect(asked).toBe(false);
 	});
-
-	it("holds protected loaders back when the notice cannot be verified", async () => {
-		server.use(http.get("*/user/consent", () => HttpResponse.error()));
-
-		await expect(consentIsPending(newClient())).resolves.toBe(true);
-	});
 });
 
 describe("authenticated route gate", () => {
 	it("masks the outstanding notice with the requested destination", async () => {
-		server.use(http.get("*/user/consent", () => HttpResponse.json({ completed: false })));
+		server.use(...consentOutstanding);
 
 		const location = await land(DEEP_LINK);
 
@@ -79,7 +83,10 @@ describe("authenticated route gate", () => {
 	});
 
 	it("keeps the recoverable notice and destination when it cannot be loaded", async () => {
-		server.use(http.get("*/user/consent", () => HttpResponse.error()));
+		server.use(
+			http.get("*/user/consent", () => HttpResponse.error()),
+			...consentOutstanding,
+		);
 
 		const location = await land(DEEP_LINK);
 		expect(location.pathname).toBe("/consent");
