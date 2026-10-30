@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.OutlineSubscription;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
+import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
@@ -17,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -105,7 +107,7 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
 
     private Delivery parse(byte[] body) {
         if (body == null || body.length == 0) {
-            return new Delivery("", "", "", null);
+            throw new PayloadParsingException("Outline webhook payload is empty");
         }
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -115,8 +117,8 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
                     event,
                     root.path("payload").path("id").asString(""),
                     parseModel(event, root.path("payload").path("model")));
-        } catch (RuntimeException e) {
-            return new Delivery("", "", "", null);
+        } catch (JacksonException e) {
+            throw new PayloadParsingException("Outline webhook payload cannot be parsed", e);
         }
     }
 

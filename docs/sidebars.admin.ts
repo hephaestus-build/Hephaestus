@@ -66,6 +66,7 @@ const sidebars: SidebarsConfig = {
 				"instance-admin",
 				"practice-review-operations",
 				"webhook-ingestion-operations",
+				"webhook-replay",
 				"activity-history-repair",
 			],
 		},

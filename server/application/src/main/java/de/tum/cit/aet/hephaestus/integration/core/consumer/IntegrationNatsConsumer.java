@@ -17,6 +17,7 @@ import io.nats.client.Message;
 import io.nats.client.Nats;
 import io.nats.client.Options;
 import io.nats.client.StreamContext;
+import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
 import jakarta.annotation.PreDestroy;
@@ -747,7 +748,12 @@ public class IntegrationNatsConsumer {
                 // until something rewrites it, so reconcile it here rather than only on create.
                 boolean thresholdMatches = Objects.equals(
                         Objects.requireNonNullElse(config.getInactiveThreshold(), Duration.ZERO), desiredThreshold);
-                if (existingSubjects.equals(desiredSubjects) && thresholdMatches) {
+                if (existingSubjects.equals(desiredSubjects)
+                        && thresholdMatches
+                        && config.getMaxDeliver() == -1
+                        && config.getMaxAckPending() == 1
+                        && config.getAckPolicy() == AckPolicy.Explicit
+                        && config.getBackoff().equals(retryTimeouts(consumerProperties))) {
                     return existing;
                 }
                 log.info(
@@ -758,6 +764,10 @@ public class IntegrationNatsConsumer {
                         desiredThreshold);
                 return streamContext.createOrUpdateConsumer(ConsumerConfiguration.builder(config)
                         .filterSubjects(subjects)
+                        .ackPolicy(AckPolicy.Explicit)
+                        .maxAckPending(1)
+                        .maxDeliver(-1)
+                        .backoff(retryTimeouts(consumerProperties).toArray(Duration[]::new))
                         .inactiveThreshold(desiredThreshold)
                         .build());
             } catch (JetStreamApiException e) {
@@ -788,13 +798,10 @@ public class IntegrationNatsConsumer {
                 .filterSubjects(subjects)
                 .deliverPolicy(DeliverPolicy.New)
                 .ackWait(consumerProperties.ackWait())
-                .maxAckPending(consumerProperties.maxAckPending())
-                // Server-side cap on redeliveries. Without this, MaxDeliver=∞ would let a
-                // permanently-failing message NAK forever; the bound is enforced today only
-                // by IntegrationPoisonHandler counting deliveredCount on our side, which
-                // means a JetStream-side observability tool (`nats stream info`) cannot see
-                // the policy. Mirrors the value the poison handler uses to ACK-terminate.
-                .maxDeliver(consumerProperties.poison().maxRedeliver());
+                .ackPolicy(AckPolicy.Explicit)
+                .maxAckPending(1)
+                .maxDeliver(-1)
+                .backoff(retryTimeouts(consumerProperties).toArray(Duration[]::new));
         if (!isBlank(durableName)) {
             // Only a durable is worth reaping: JetStream already deletes an ephemeral seconds after
             // its last pull, so a threshold here would lengthen that rather than bound it.
@@ -802,6 +809,15 @@ public class IntegrationNatsConsumer {
                     .inactiveThreshold(consumerProperties.inactiveThreshold());
         }
         return builder.build();
+    }
+
+    static List<Duration> retryTimeouts(NatsConsumerProperties properties) {
+        // BackOff replaces AckWait. Keep the first timeout long enough for a normal handler.
+        Duration first = properties.ackWait();
+        Duration last = first.compareTo(properties.poison().maxDelay()) >= 0
+                ? first
+                : properties.poison().maxDelay();
+        return List.of(first, last.multipliedBy(2), last.multipliedBy(4));
     }
 
     private String durableBaseName() {
@@ -818,17 +834,7 @@ public class IntegrationNatsConsumer {
 
     // Message dispatch
 
-    /**
-     * Single entry point for every queued message across every scope. The dispatcher is
-     * the only resolution path; empty resolutions ACK as no-op (unknown events are not
-     * errors). Exceptions land in {@link IntegrationPoisonHandler#nakWithBackoff} which
-     * NAKs with exponential backoff and ACKs once the redelivery budget is exhausted.
-     *
-     * @param scopeId the workspace scope that owns the {@link ScopeConsumer} which delivered this
-     *                message, or {@code null} for the installation-wide consumer (org-level GitHub
-     *                events aren't tied to a single workspace). Used only to record webhook-liveness
-     *                via {@link ConnectionActivityRecorder} — never affects dispatch/ACK/NAK.
-     */
+    /** ACK only after handler and liveness writes succeed. Unknown failures always retry. */
     void handleMessage(@Nullable Long scopeId, Message msg) {
         if (shuttingDown.get()) {
             safeNak(msg);
@@ -836,29 +842,8 @@ public class IntegrationNatsConsumer {
         }
         String subject = msg.getSubject();
         try {
-            Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(subject);
-            if (handler.isEmpty()) {
-                log.debug("No handler for subject, ACK-as-no-op: route={}", ConsumerSubjectMath.routeLabel(subject));
-                msg.ack();
-                return;
-            }
-            IntegrationMessageHandler resolvedHandler = handler.get();
-            Optional<RouteAdmission> admission = routeAdmissions.stream()
-                    .filter(candidate -> candidate.owns(subject))
-                    .findFirst();
-            if (admission.isEmpty()) {
-                resolvedHandler.onMessage(msg);
-            } else if (!admission.get().admit(scopeId, msg, () -> resolvedHandler.onMessage(msg))) {
-                log.info(
-                        "Skipped message: reason=routeNotAdmitted, route={}, scopeId={}",
-                        ConsumerSubjectMath.routeLabel(subject),
-                        scopeId);
-                msg.ack();
-                return;
-            }
-            msg.ack();
-            stats.recordDispatch(Instant.now());
-            if (scopeId != null) {
+            IntegrationMessageHandler resolvedHandler = dispatch(scopeId, msg);
+            if (scopeId != null && resolvedHandler != null) {
                 // Liveness watermark = "last event received and dispatched", NOT "content was ingested". A handler
                 // may legitimately no-op (dedup, a Slack message dropped by the per-channel consent gate, a filtered
                 // event) and still return normally; that event genuinely arrived, so stamping it is correct. Health
@@ -869,10 +854,11 @@ public class IntegrationNatsConsumer {
                 }
                 activityRecorder.recordEventProcessed(scopeId, key.kind(), key.eventType());
             }
+            msg.ack();
+            stats.recordDispatch(Instant.now());
         } catch (Exception e) {
             if (!shuttingDown.get()) {
-                // The subject names the owner and repository, and the message can quote provider or row text. The
-                // stack is attached on the first delivery only, so a failure that repeats does not repeat it.
+                // Exception messages can contain raw provider payloads. Log only the failure type.
                 long delivery = IntegrationPoisonHandler.readDeliveredCount(msg);
                 var failure = log.atError()
                         .addKeyValue("event.name", "integration.message.failed")
@@ -880,12 +866,25 @@ public class IntegrationNatsConsumer {
                         .addKeyValue("integration.delivery", delivery)
                         .addKeyValue("error.type", e.getClass().getName());
                 if (scopeId != null) failure = failure.addKeyValue("integration.scope.id", scopeId);
-                if (delivery <= 1) failure = failure.setCause(e);
+
                 failure.log("Handler failed");
             }
             stats.recordNak(Instant.now());
-            poisonHandler.nakWithBackoff(msg);
+            poisonHandler.handleFailure(scopeId, msg, e);
         }
+    }
+
+    @Nullable
+    IntegrationMessageHandler dispatch(@Nullable Long scopeId, Message msg) {
+        Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(msg.getSubject());
+        if (handler.isEmpty()) return null;
+        IntegrationMessageHandler resolved = handler.get();
+        Optional<RouteAdmission> admission = routeAdmissions.stream()
+                .filter(candidate -> candidate.owns(msg.getSubject()))
+                .findFirst();
+        if (admission.isEmpty()) resolved.onMessage(msg);
+        else if (!admission.get().admit(scopeId, msg, () -> resolved.onMessage(msg))) return null;
+        return resolved;
     }
 
     // Connection management

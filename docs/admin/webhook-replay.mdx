@@ -1,0 +1,60 @@
+---
+title: Replay a failed webhook event
+description: Inspect and replay events that could not be parsed.
+page_type: how-to
+---
+
+Webhook events wait in NATS while PostgreSQL or a provider API is unavailable.
+A temporary failure does not use a poison-message budget.
+
+Each workspace and stream processes one event at a time.
+Later events wait until the first event succeeds or has a durable dead-letter record.
+Different provider streams have independent orders.
+The stream's configured retention still bounds events that wait in NATS.
+Restore service before that retention expires.
+
+An event that cannot be parsed has a dead-letter record in PostgreSQL before NATS stops delivering it.
+The `integration.consumer.poison` counter counts these terminations.
+A database outage also delays this capture and termination.
+
+## Inspect the records
+
+Use an authenticated API client with a workspace administrator's access token.
+Request `GET /workspaces/{workspaceSlug}/integrations/dead-letters`.
+The response contains up to 100 records in ID order.
+Pass `?after={lastId}` for the next page.
+Each record contains its ID, stream sequence, error class, failure time and replay time.
+The API does not return payloads or routing credentials.
+
+Installation lifecycle events can arrive before a workspace exists.
+Only an instance administrator can list these records, with `GET /admin/integration/dead-letters`.
+This endpoint excludes every workspace-owned record.
+An instance administrator uses the workspace endpoint for workspace-owned records.
+
+## Replay a record
+
+1. Fix the parser or restore the required connection.
+2. Request `POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays`.
+   For an unassigned installation event, use `POST /admin/integration/dead-letters/{id}/replays` instead.
+3. Check `replayedAt` in the response.
+   A successful replay records this time.
+   Repeating the request returns that record without dispatching it again.
+
+## Check that it worked
+
+Request the list again and find the record by its ID.
+Confirm that `replayedAt` contains a time.
+
+A failed replay returns HTTP 409 and leaves the record pending.
+A record from another workspace returns HTTP 404.
+
+Replay uses the stored event bytes, routing headers and arrival time.
+It does not publish the event to other workspaces.
+A replay is an explicit late event.
+It does not rewind later events.
+The handler's idempotency and freshness checks still apply.
+
+Dead-letter records survive NATS stream retention.
+They remain until their workspace is deleted.
+Unassigned installation records remain until the instance is removed.
+Include PostgreSQL in the backup procedure and restrict database access to operators who can read provider data.

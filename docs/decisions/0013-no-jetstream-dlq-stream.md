@@ -1,8 +1,15 @@
 # ADR 0013: No dedicated JetStream DLQ stream — poison handler ACKs after N redeliveries
 
-**Status:** Accepted
+**Status:** Superseded for retry limits and poison-message storage (2026-10-30)
 **Date:** 2026-05-25
 **Authors:** Integration framework polish (#1198), Wave 9 revert
+
+## Update, 2026-10-30
+
+Temporary outages must not exhaust a retry budget.
+The consumer now retries unclassified failures indefinitely and stores parsing failures in PostgreSQL before termination.
+The decision to avoid a second JetStream stream remains.
+[Webhook delivery and retry order](../contributor/ingest-durability.md) owns the current contract.
 
 ## Context
 

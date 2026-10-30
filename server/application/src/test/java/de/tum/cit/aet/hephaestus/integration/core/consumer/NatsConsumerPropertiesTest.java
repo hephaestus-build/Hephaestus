@@ -26,14 +26,12 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
             NatsConsumerProperties props = NatsConsumerProperties.class
                     .getDeclaredConstructor(
                             Duration.class,
-                            int.class,
                             Duration.class,
                             Duration.class,
                             NatsConsumerProperties.PoisonProperties.class)
-                    .newInstance(Duration.ofMinutes(5), 500, Duration.ofSeconds(2), Duration.ofDays(30), null);
+                    .newInstance(Duration.ofMinutes(5), Duration.ofSeconds(2), Duration.ofDays(30), null);
 
             assertThat(props.poison()).isNotNull();
-            assertThat(props.poison().maxRedeliver()).isEqualTo(10);
             assertThat(props.poison().baseDelay()).isEqualTo(Duration.ofSeconds(2));
             assertThat(props.poison().maxDelay()).isEqualTo(Duration.ofMinutes(5));
         }
@@ -41,9 +39,9 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
         @Test
         void explicitPoisonBlockKept() {
             NatsConsumerProperties.PoisonProperties custom =
-                    new NatsConsumerProperties.PoisonProperties(3, Duration.ofSeconds(5), Duration.ofMinutes(1));
+                    new NatsConsumerProperties.PoisonProperties(Duration.ofSeconds(5), Duration.ofMinutes(1));
             NatsConsumerProperties props = new NatsConsumerProperties(
-                    Duration.ofMinutes(5), 500, Duration.ofSeconds(2), Duration.ofDays(30), custom);
+                    Duration.ofMinutes(5), Duration.ofSeconds(2), Duration.ofDays(30), custom);
 
             assertThat(props.poison()).isSameAs(custom);
         }
@@ -68,10 +66,8 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
                 NatsConsumerProperties props = context.getBean(NatsConsumerProperties.class);
 
                 assertThat(props.ackWait()).isEqualTo(Duration.ofMinutes(5));
-                assertThat(props.maxAckPending()).isEqualTo(500);
                 assertThat(props.reconnectDelay()).isEqualTo(Duration.ofSeconds(2));
                 assertThat(props.poison()).isNotNull();
-                assertThat(props.poison().maxRedeliver()).isEqualTo(10);
                 assertThat(props.poison().baseDelay()).isEqualTo(Duration.ofSeconds(2));
                 assertThat(props.poison().maxDelay()).isEqualTo(Duration.ofMinutes(5));
             });
@@ -81,15 +77,11 @@ class NatsConsumerPropertiesTest extends BaseUnitTest {
         void explicitOverridesBound() {
             runner().withPropertyValues(
                             "hephaestus.integration.consumer.ack-wait=10m",
-                            "hephaestus.integration.consumer.max-ack-pending=1000",
-                            "hephaestus.integration.consumer.poison.max-redeliver=5",
                             "hephaestus.integration.consumer.poison.base-delay=4s",
                             "hephaestus.integration.consumer.poison.max-delay=1m")
                     .run(context -> {
                         NatsConsumerProperties props = context.getBean(NatsConsumerProperties.class);
                         assertThat(props.ackWait()).isEqualTo(Duration.ofMinutes(10));
-                        assertThat(props.maxAckPending()).isEqualTo(1000);
-                        assertThat(props.poison().maxRedeliver()).isEqualTo(5);
                         assertThat(props.poison().baseDelay()).isEqualTo(Duration.ofSeconds(4));
                         assertThat(props.poison().maxDelay()).isEqualTo(Duration.ofMinutes(1));
                     });

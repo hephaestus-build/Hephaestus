@@ -490,6 +490,50 @@ paths:
       summary: Send a test email
       tags:
       - Instance Email
+  /admin/integration/dead-letters:
+    get:
+      operationId: listInstallationDeadLetters
+      parameters:
+      - in: query
+        name: after
+        required: false
+        schema:
+          type: integer
+          format: int64
+          default: 0
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: List unassigned installation dead letters
+      tags:
+      - installation-dead-letter
+  /admin/integration/dead-letters/{id}/replays:
+    post:
+      operationId: replayInstallationDeadLetter
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: Replay an unassigned installation dead letter
+      tags:
+      - installation-dead-letter
   /admin/llm/call-pools:
     get:
       operationId: adminListLlmCallPools
@@ -5098,6 +5142,68 @@ paths:
       summary: Update workspace feature flags
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/integrations/dead-letters:
+    get:
+      operationId: listConsumerDeadLetters
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: query
+        name: after
+        required: false
+        schema:
+          type: integer
+          format: int64
+          default: 0
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: List this workspace's dead letters
+      tags:
+      - consumer-dead-letter
+  /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays:
+    post:
+      operationId: replayConsumerDeadLetter
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: Replay a dead letter in this workspace
+      tags:
+      - consumer-dead-letter
   /workspaces/{workspaceSlug}/llm/available-models:
     get:
       operationId: workspaceListAvailableLlmModels
@@ -13734,6 +13840,31 @@ components:
       - completed
       - noticeVersion
       - participateInResearch
+    ConsumerDeadLetter:
+      type: object
+      properties:
+        errorClass:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
+        id:
+          type: integer
+          format: int64
+        replayedAt:
+          type: string
+          format: date-time
+        sequence:
+          type: integer
+          format: int64
+        stream:
+          type: string
+      required:
+      - errorClass
+      - failedAt
+      - id
+      - sequence
+      - stream
     Contributor:
       type: object
       description: Information about a contributor to the Hephaestus project

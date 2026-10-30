@@ -937,6 +937,15 @@ export type ConsentStatus = {
     researchOrganization?: string;
 };
 
+export type ConsumerDeadLetter = {
+    errorClass: string;
+    failedAt: string;
+    id: number;
+    replayedAt?: string;
+    sequence: number;
+    stream: string;
+};
+
 /**
  * Information about a contributor to the Hephaestus project
  */
@@ -7534,6 +7543,42 @@ export type AdminSendTestEmailResponses = {
 
 export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
 
+export type ListInstallationDeadLettersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        after?: number;
+    };
+    url: '/admin/integration/dead-letters';
+};
+
+export type ListInstallationDeadLettersResponses = {
+    /**
+     * OK
+     */
+    200: Array<ConsumerDeadLetter>;
+};
+
+export type ListInstallationDeadLettersResponse = ListInstallationDeadLettersResponses[keyof ListInstallationDeadLettersResponses];
+
+export type ReplayInstallationDeadLetterData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/integration/dead-letters/{id}/replays';
+};
+
+export type ReplayInstallationDeadLetterResponses = {
+    /**
+     * OK
+     */
+    200: ConsumerDeadLetter;
+};
+
+export type ReplayInstallationDeadLetterResponse = ReplayInstallationDeadLetterResponses[keyof ReplayInstallationDeadLetterResponses];
+
 export type AdminListLlmCallPoolsData = {
     body?: never;
     path?: never;
@@ -11246,6 +11291,51 @@ export type UpdateFeaturesResponses = {
 };
 
 export type UpdateFeaturesResponse = UpdateFeaturesResponses[keyof UpdateFeaturesResponses];
+
+export type ListConsumerDeadLettersData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: {
+        after?: number;
+    };
+    url: '/workspaces/{workspaceSlug}/integrations/dead-letters';
+};
+
+export type ListConsumerDeadLettersResponses = {
+    /**
+     * OK
+     */
+    200: Array<ConsumerDeadLetter>;
+};
+
+export type ListConsumerDeadLettersResponse = ListConsumerDeadLettersResponses[keyof ListConsumerDeadLettersResponses];
+
+export type ReplayConsumerDeadLetterData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        id: number;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays';
+};
+
+export type ReplayConsumerDeadLetterResponses = {
+    /**
+     * OK
+     */
+    200: ConsumerDeadLetter;
+};
+
+export type ReplayConsumerDeadLetterResponse = ReplayConsumerDeadLetterResponses[keyof ReplayConsumerDeadLetterResponses];
 
 export type WorkspaceListAvailableLlmModelsData = {
     body?: never;
