@@ -110,7 +110,7 @@ A queued privileged write is exactly what an attacker would want confirmation to
 
 ## Read-only user views
 
-**Instance admin → Workspaces → View users → View as user** opens the normal workspace app as a selected account member.
+**Instance admin → Workspaces → View as user**, then **View as user** on an account, opens the normal workspace app as that account member.
 The instance administrator remains authenticated as themselves.
 The selected identity is an account, including an unclaimed roster account.
 Its provider mirrors remain source attribution rather than sign-in principals.

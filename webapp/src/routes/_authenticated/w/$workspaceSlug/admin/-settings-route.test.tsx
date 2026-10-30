@@ -826,6 +826,35 @@ describe("instance administrator workspace settings", () => {
 		]);
 	});
 
+	it("opens a nonmember workspace's administration from Workspaces on its settings", async () => {
+		serveTarget();
+		server.use(
+			http.get("*/admin/settings", () =>
+				HttpResponse.json({ etag: "1", silentModeEngaged: false }),
+			),
+			http.get("*/admin/workspaces", () =>
+				HttpResponse.json([
+					{
+						id: 2,
+						workspaceSlug: "tutors",
+						displayName: "Tutors",
+						status: "ACTIVE",
+						accountLogin: "tutors",
+						providerType: "GITHUB",
+						memberCount: 3,
+						createdAt: "2026-01-15T00:00:00Z",
+					},
+				]),
+			),
+		);
+		const { router } = renderRouteAtWithRouter("/admin/workspaces");
+		await userEvent.click(
+			await screen.findByRole("link", { name: "Open administration of Tutors" }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
+		expect(router.state.location.pathname).toBe("/w/tutors/admin/settings");
+	});
+
 	it.each([
 		{ status: "ARCHIVED", allowed: true },
 		{ status: "ACTIVE", allowed: false },

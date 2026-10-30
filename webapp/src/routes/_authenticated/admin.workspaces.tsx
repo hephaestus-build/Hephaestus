@@ -93,7 +93,7 @@ function AdminWorkspacesPage() {
 				loadFailure={failed ? failure : undefined}
 				refreshFailure={retained ? failure : undefined}
 				hasSearch={term.length > 0}
-				onViewUsers={(workspace) => {
+				onViewAsUser={(workspace) => {
 					void navigate({
 						to: "/admin/workspaces/$workspaceSlug/users",
 						params: { workspaceSlug: workspace.workspaceSlug },

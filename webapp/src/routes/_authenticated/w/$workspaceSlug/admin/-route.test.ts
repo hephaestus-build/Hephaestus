@@ -117,6 +117,17 @@ describe("workspace-admin route gate", () => {
 		await expect(land("/w/tutors/admin/settings")).resolves.toBe("/w/tutors/admin/settings");
 	});
 
+	it("opens a nonmember workspace's administration address on its settings", async () => {
+		server.use(
+			http.get("*/user", () => HttpResponse.json(currentUser)),
+			http.get("*/workspaces/tutors", () =>
+				HttpResponse.json({ workspaceSlug: "tutors", displayName: "Tutors" }),
+			),
+		);
+		mockMembership(null);
+		await expect(land("/w/tutors/admin")).resolves.toBe("/w/tutors/admin/settings");
+	});
+
 	it("freshly verifies the same nonmember administration target on navigation during a member-list outage", async () => {
 		let targetReads = 0;
 		server.use(
@@ -239,6 +250,11 @@ describe("workspace-admin route gate", () => {
 	it("admits an ADMIN", async () => {
 		mockMembership("ADMIN");
 		await expect(land("/w/acme/admin/settings")).resolves.toBe("/w/acme/admin/settings");
+	});
+
+	it.each(["/w/acme/admin", "/w/acme/admin/"])("opens %s on the settings", async (url) => {
+		mockMembership("ADMIN");
+		await expect(land(url)).resolves.toBe("/w/acme/admin/settings");
 	});
 
 	// Member onboarding is the one admin page that needs OWNER: the route's own `beforeLoad` sends
