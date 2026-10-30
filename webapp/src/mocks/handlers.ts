@@ -16,7 +16,6 @@ import type { Wire } from "@/lib/dates";
 
 import { workspaceOnboarding } from "./fixtures/onboarding";
 
-import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import {
 	adminUsers,
 	currentUser,
@@ -92,13 +91,7 @@ export const handlers = [
 			etag: '"0-0-0"',
 		}),
 	),
-	http.get("*/user/consent", () =>
-		HttpResponse.json({
-			completed: true,
-			noticeVersion: WORDING_VERSION,
-			participateInResearch: false,
-		}),
-	),
+	http.get("*/user/consent", () => HttpResponse.json(currentUser.consent)),
 	// Mirror the server contract: the confirmation header MUST equal the caller's
 	// account id, else 400. A `"true"`-style placeholder must NOT pass — that mismatch
 	// is exactly the regression a unconditional-204 mock would hide.
@@ -162,3 +155,10 @@ export const unauthenticatedUser = http.get(
 	"*/user",
 	() => new HttpResponse(null, { status: 401 }),
 );
+
+/** A signed-in account that has not answered the first-login notice yet, as its identity and the notice say. */
+const outstanding = { ...currentUser.consent, completed: false };
+export const consentOutstanding = [
+	http.get("*/user", () => HttpResponse.json({ ...currentUser, consent: outstanding })),
+	http.get("*/user/consent", () => HttpResponse.json(outstanding)),
+];

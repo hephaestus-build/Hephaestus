@@ -2,11 +2,11 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { currentTenantSlug } from "@/runtime/workspace-address";
 
 import { PageSkeleton } from "@/components/layout/PageSkeleton";
-import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
+import { consentIsPending, resolveCurrentUser, startGateReads } from "@/runtime/auth/guard";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated")({
-	beforeLoad: async ({ context, location }) => {
+	beforeLoad: async ({ context, location, matches }) => {
 		const user = await resolveCurrentUser(context.queryClient);
 		if (!user) {
 			throw redirect({
@@ -40,6 +40,15 @@ export const Route = createFileRoute("/_authenticated")({
 				});
 			}
 		}
+		const workspaceSlug = matches.find(
+			(match) => match.routeId === "/_authenticated/w/$workspaceSlug",
+		)?.params.workspaceSlug;
+		startGateReads(
+			context.queryClient,
+			workspaceSlug === undefined
+				? undefined
+				: { slug: workspaceSlug, pathname: location.pathname },
+		);
 	},
 	pendingComponent: PageSkeleton,
 	component: Outlet,

@@ -1317,6 +1317,10 @@ export type CurrentUserView = {
     accessTokenExpiresAt?: number;
     appRole?: string;
     avatarUrl?: string;
+    /**
+     * The account's consent, so that a client decides the consent gate before it sends a read the gate refuses
+     */
+    consent: ConsentStatus;
     displayName?: string;
     gitProviderId?: string;
     id?: number;

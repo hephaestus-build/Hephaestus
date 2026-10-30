@@ -73,6 +73,7 @@ import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
+import { rememberConsent } from "@/runtime/auth/guard";
 import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
 import { refreshPublicActivity } from "@/runtime/tanstack-query/refresh-public-activity";
 
@@ -268,7 +269,7 @@ function RouteComponent() {
 	const researchConsentMutation = useMutation({
 		...updateResearchConsentMutation(),
 		onSuccess: (status) => {
-			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
+			rememberConsent(queryClient, status);
 			// Research surveys are offered on the strength of this answer, so the menu must follow it.
 			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 		},

@@ -7,10 +7,8 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 
 import { safeReturnTo } from "@/runtime/auth/return-to";
-import { getContext } from "@/runtime/tanstack-query/root-provider";
 
 import {
-	consentIsPending,
 	currentUserQueryOptions,
 	isAppAdmin,
 	IDENTITY_READ_TIMEOUT_MS,
@@ -277,26 +275,6 @@ describe("resolveWorkspaceMembership", () => {
 			]);
 		} finally {
 			vi.useRealTimers();
-		}
-	});
-});
-
-describe("consentIsPending with the application's client", () => {
-	it("holds the route back at the first failed consent read, without retrying it", async () => {
-		const { queryClient } = getContext();
-		serve(asAppRole("APP_USER"));
-		const consent = { asked: 0 };
-		server.use(
-			http.get("*/user/consent", () => {
-				consent.asked += 1;
-				return HttpResponse.json({ status: 503 }, { status: 503 });
-			}),
-		);
-		try {
-			await expect(consentIsPending(queryClient)).resolves.toBe(true);
-			expect(consent.asked).toBe(1);
-		} finally {
-			queryClient.clear();
 		}
 	});
 });
