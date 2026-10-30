@@ -303,6 +303,14 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 "SELECT state FROM feedback WHERE id=?", String.class, Objects.requireNonNull(shownFeedback))));
     }
 
+    /** A snapshot of a running turn that runs a tool, with the stage the host names for it. */
+    private static ObjectNode staged(String stage) {
+        ObjectNode snapshot =
+                NODES.objectNode().put("activity", "tool").put("tool", "read").put("stage", stage);
+        snapshot.putArray("messages");
+        return snapshot;
+    }
+
     private static ObjectNode partial(String text) {
         ObjectNode snapshot = NODES.objectNode().put("activity", "writing");
         snapshot.putArray("messages")
@@ -562,6 +570,56 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         verify(slack, never())
                 .postMessage(anyLong(), anyString(), any(), anyList(), eq(SlackMentorProjector.WAITING_NOTICE), any());
+    }
+
+    @Test
+    void shouldSayWhatHephaestusDoesOnARunningTopLevelQuestionAndRemoveItWhenTheReplyPosts() {
+        when(slack.postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq("Reading your pull requests…"),
+                        any()))
+                .thenReturn(new SlackMessageService.Posted(CHANNEL, "500.1"));
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+
+        clock.advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+        wakeUps.forEach(Runnable::run);
+        verify(slack)
+                .postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq("Reading your pull requests…"),
+                        any());
+
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        clock.advance(SlackMentorProjector.PROGRESS_INTERVAL);
+        wakeUps.forEach(Runnable::run);
+        verify(slack)
+                .updateMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        eq("500.1"),
+                        eq(List.of()),
+                        eq("Loading the repository…"),
+                        any());
+
+        postsAt("200.1");
+        end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
+        changed(running);
+        changed(running);
+
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+        assertThat(postedTopLevel())
+                .singleElement()
+                .satisfies(text -> assertThat(text).startsWith("Here is what I saw."));
     }
 
     @Test

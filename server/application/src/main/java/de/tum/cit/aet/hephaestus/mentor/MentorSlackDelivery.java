@@ -209,6 +209,12 @@ public class MentorSlackDelivery {
         return partial == null ? "" : MentorPiEntries.partialText(partial, true);
     }
 
+    /** What Hephaestus does in a running turn, in the developer's words, or {@code null} before its first snapshot. */
+    public static @Nullable String stage(MentorTurn turn) {
+        JsonNode partial = turn.getPartial();
+        return partial == null ? null : MentorTurnPartialDTO.from(partial).stage();
+    }
+
     /** Takes the intent to post an entry. Only the first caller gets {@code true}. */
     @Transactional
     public boolean claim(long workspaceId, UUID entryId) {

@@ -82,6 +82,15 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     static final String WAITING_NOTICE =
             "Hephaestus has not started on this question yet. It answers as soon as it can.";
 
+    /**
+     * How long a running turn asked at the top level of the DM shows only the reaction before it also says what
+     * Hephaestus does. Slack streams no reply there, so without it the developer sees nothing until the answer.
+     */
+    static final Duration PROGRESS_NOTICE_AFTER = Duration.ofSeconds(5);
+
+    /** How often a running top-level turn is read again to keep its progress notice on the current stage. */
+    static final Duration PROGRESS_INTERVAL = Duration.ofSeconds(2);
+
     /** The notice while the question waits for a free Hephaestus ({@link MentorTurn.WaitingFor#FREE_HEPH}). */
     static final String WAITING_FOR_HEPH_NOTICE =
             "Hephaestus is answering other questions. Yours starts when one finishes.";
@@ -314,6 +323,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             stream = projection.stream;
             if (stream != null) {
                 stream(projection, stream, turn);
+            } else {
+                showProgress(projection, turn, now);
             }
             return;
         }
@@ -370,6 +381,60 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         });
     }
 
+    /**
+     * Tells the developer what Hephaestus does on a running top-level question: after {@link #PROGRESS_NOTICE_AFTER},
+     * one notice with the turn's stage ("Reading your pull requests…"), changed when the stage changes. The reply's end
+     * deletes it ({@link #finished}). A question in a Slack thread has the stream and Slack's own working state.
+     */
+    private void showProgress(Projection projection, MentorTurn turn, Instant now) {
+        Instant running = projection.runningSince;
+        if (running == null) {
+            running = now;
+            projection.runningSince = now;
+        }
+        Instant due = running.plus(PROGRESS_NOTICE_AFTER);
+        if (now.isBefore(due)) {
+            later(projection, Duration.between(now, due));
+            return;
+        }
+        later(projection, PROGRESS_INTERVAL);
+        String stage = MentorSlackDelivery.stage(turn);
+        if (stage == null || stage.equals(projection.noticeText)) {
+            return;
+        }
+        SlackMessageService.Posted notice = projection.notice;
+        try {
+            if (notice == null) {
+                Optional<SlackTurn> asked = delivery.slackTurn(projection.workspaceId, projection.turnId);
+                if (asked.isEmpty()) {
+                    return;
+                }
+                projection.notice = slack.postMessage(
+                        projection.workspaceId,
+                        asked.get().channelId(),
+                        null,
+                        List.of(),
+                        stage,
+                        SlackMentorPosts.noticeMetadata());
+            } else {
+                slack.updateMessage(
+                        projection.workspaceId,
+                        notice.channelId(),
+                        notice.ts(),
+                        List.of(),
+                        stage,
+                        SlackMentorPosts.noticeMetadata());
+            }
+            projection.noticeText = stage;
+        } catch (SlackSendException e) {
+            log.debug(
+                    "Slack could not show what Hephaestus does: workspaceId={}, turnId={}, error={}",
+                    projection.workspaceId,
+                    projection.turnId,
+                    e.slackError());
+        }
+    }
+
     /** Deletes the notice that the question waited, once the turn runs or ends. */
     private void clearNotice(Projection projection) {
         SlackMessageService.Posted notice = projection.notice;
@@ -377,6 +442,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             return;
         }
         projection.notice = null;
+        projection.noticeText = null;
         try {
             slack.deleteMessage(projection.workspaceId, notice.channelId(), notice.ts());
         } catch (SlackSendException e) {
@@ -1107,8 +1173,14 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         /** The developer was told that the question waits. */
         boolean waitingNoticed;
 
-        /** The notice that the question waits, until the turn runs or ends. */
+        /** The notice that the question waits, or what Hephaestus does on it, until the turn runs or ends. */
         volatile SlackMessageService.@Nullable Posted notice;
+
+        /** The text of a progress notice that Slack shows, so an unchanged stage changes nothing. */
+        volatile @Nullable String noticeText;
+
+        /** When this server first saw the turn run, by its clock: a progress notice counts from it. */
+        volatile @Nullable Instant runningSince;
 
         volatile Owner owner = Owner.UNKNOWN;
         volatile MentorTurn.@Nullable Status status;
