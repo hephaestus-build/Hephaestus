@@ -1309,7 +1309,7 @@ async function gatewayRequests(
 		},
 		{ url: `${origin}/`, passes: (answer: { code: number }) => answer.code === 200 },
 		{
-			url: `${origin}/api/auth/client/configuration`,
+			url: `${origin}/api/auth/client/configuration?clientId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
 			passes: (answer: { code: number }) => answer.code === 200,
 		},
 		// The webhook role answers a GET without a delivery; a status of 500 or more is the Gateway's.
