@@ -302,12 +302,7 @@ export function httpTurnApi(
 					...(body === undefined ? {} : { "content-type": "application/json" }),
 				},
 				body: body === undefined ? undefined : JSON.stringify(body),
-				signal:
-					timeout === undefined
-						? signal
-						: signal === undefined
-							? timeout
-							: AbortSignal.any([signal, timeout]),
+				signal: AbortSignal.any([signal, timeout].filter((part) => part !== undefined)),
 			});
 		} catch (error) {
 			throw signal?.aborted === true ? error : transient(errorText(error));

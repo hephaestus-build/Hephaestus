@@ -104,8 +104,8 @@ const LOAD_ANSWER = {
 };
 
 void test("a tools quota wait ends when its turn is stopped", async () => {
-	const received = Promise.withResolvers<void>();
-	const server = createServer(() => received.resolve());
+	const received = Promise.withResolvers<undefined>();
+	const server = createServer(() => received.resolve(undefined));
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
 	const address = server.address();

@@ -1691,7 +1691,7 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			(cpu, role) => cpu + podRequests(podSpec(role)).cpu * Number(get(role, "spec", "replicas")),
 			0,
 		);
-		const quotaCpu = ["reviews", "conversations"].reduce(
+		const quotaCpu = (["reviews", "conversations"] as const).reduce(
 			(cpu, tier) => cpu + amount(get(tierQuota(resources, tier), "spec", "hard", "requests.cpu")),
 			0,
 		);
