@@ -31,7 +31,7 @@ import { IntegrationCardHeading } from "./IntegrationCardHeading";
 export type SlackScopeCheck =
 	| { state: "checking" }
 	| { state: "failed"; onRetry: () => void; isRetrying: boolean }
-	| { state: "checked"; missingScopes: string[] };
+	| { state: "checked"; missingScopes: readonly string[] };
 
 export type WorkspaceSlackConnectionSettingsProps =
 	| {
@@ -132,7 +132,7 @@ const TOKEN_DESCRIPTION = {
 	connected: "Hephaestus is installed and can post in Slack.",
 } as const satisfies Record<Exclude<TokenStatus, "scopes-missing">, string>;
 
-function MissingScopes({ scopes }: { scopes: string[] }) {
+function MissingScopes({ scopes }: { scopes: readonly string[] }) {
 	return (
 		<>
 			Slack has not granted Hephaestus every permission it needs, so some of its work in Slack

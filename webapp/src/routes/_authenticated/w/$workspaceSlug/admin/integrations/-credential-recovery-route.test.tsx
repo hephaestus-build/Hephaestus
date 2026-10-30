@@ -1482,16 +1482,25 @@ describe("Slack credential recovery", () => {
 	it("says the scopes are unknown when Slack cannot be asked, and asks again", async () => {
 		mockSlackConnection();
 		let reads = 0;
+		// A later handler comes first: the first read fails once, and the next one answers.
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/slack/scopes", () => {
 				reads += 1;
-				return reads === 1
-					? HttpResponse.json(
-							{ status: 502, title: "Slack did not complete the request" },
-							{ status: 502 },
-						)
-					: HttpResponse.json({ missingScopes: ["reactions:write"] });
+				return HttpResponse.json({ missingScopes: ["reactions:write"] });
 			}),
+		);
+		server.use(
+			http.get(
+				"*/workspaces/:workspaceSlug/slack/scopes",
+				() => {
+					reads += 1;
+					return HttpResponse.json(
+						{ status: 502, title: "Slack did not complete the request" },
+						{ status: 502 },
+					);
+				},
+				{ once: true },
+			),
 		);
 		renderRouteAt("/w/acme/admin/integrations/slack");
 
