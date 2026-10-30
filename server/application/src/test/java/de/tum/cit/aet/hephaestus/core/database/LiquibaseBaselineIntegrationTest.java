@@ -139,8 +139,7 @@ class LiquibaseBaselineIntegrationTest {
         Throwable refusal = catchThrowable(() -> update(database, "db/master.xml", context));
         assertThat(refusal)
                 .isInstanceOf(LiquibaseException.class)
-                .hasStackTraceContaining(
-                        "Existing databases must first run v0.95.0");
+                .hasStackTraceContaining("Existing databases must first run v0.95.0");
         // Logs drop exception messages, so the startup failure analysis is where an operator reads the refusal.
         assertThat(new LiquibaseRefusalFailureAnalyzer().analyze(refusal))
                 .extracting(FailureAnalysis::getDescription)
@@ -150,8 +149,7 @@ class LiquibaseBaselineIntegrationTest {
             assertThatThrownBy(() ->
                             liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression()))
                     .isInstanceOf(LiquibaseException.class)
-                    .hasStackTraceContaining(
-                            "Existing databases must first run v0.95.0");
+                    .hasStackTraceContaining("Existing databases must first run v0.95.0");
         }
 
         assertThat(query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
@@ -225,7 +223,9 @@ class LiquibaseBaselineIntegrationTest {
                     break;
                 }
             }
-            assertThat(cutPoint).as("the final v0.95.0 changeset remains in the released chain").isNotNegative();
+            assertThat(cutPoint)
+                    .as("the final v0.95.0 changeset remains in the released chain")
+                    .isNotNegative();
             changes.subList(cutPoint + 1, changes.size()).clear();
             liquibase.update(new Contexts(context));
         }
