@@ -7,6 +7,56 @@ description: The memory, CPU, process, and database budget of the self-hosted Co
 This page owns the resource budget of the self-hosted Compose stack.
 The [Install guide](./install#requirements) gives the host requirements.
 
+## Measured conversation baseline
+
+The web conversation target is first answer text within 10 seconds for at least 95% of turns.
+Time starts when the client sends the question and includes queue, startup, provider and tool time.
+A stream snapshot or heartbeat is not answer text.
+
+The table gives a controlled Kubernetes measurement on release 0.95.0, with 4 vCPUs and 15.61 GiB of memory.
+Each case had 40 synthetic users, three turns each and 30 seconds between turns.
+The users arrived over one second.
+All 120 turns completed in each case, with no missing first-text samples.
+
+The deterministic provider used assumed timings: first token at 3 seconds, 500 declared output tokens and 13 seconds per call.
+Each turn made one call, with no tools, reviews or provider throttles.
+These conditions do not represent the full course workload.
+
+| Turn admission | First text p50 / p95 | Turn duration p50 / p95 | First text within 10 s | Cohort drain, turns/h |
+| -------------- | -------------------- | ----------------------- | ---------------------- | --------------------- |
+| 8              | 25.78 / 55.97 s      | 35.56 / 65.76 s         | 8/120 (6.67%)          | 2,164                 |
+| 16             | 3.46 / 31.27 s       | 13.24 / 41.05 s         | 96/120 (80.00%)        | 3,332                 |
+| 32             | 3.57 / 17.88 s       | 13.37 / 27.66 s         | 112/120 (93.33%)       | 3,721                 |
+
+Each case misses the 95% target, which requires at least 114 of 120 turns within 10 seconds.
+The drain rate divides completed turns by the whole case duration.
+It is not a sustained arrival rate or a review-throughput measurement.
+Admission 32 is a tested point, not a qualified default.
+The [CSV results](/data/capacity-s3-0950.csv) include the measured commit, cohort and provider assumptions.
+The [capacity procedure](/contributor/capacity-benchmark) describes the fixture and required evidence.
+
+The following effects still need measurement with the same workload:
+
+| Condition                   | Required comparison                                                                                               | Current result |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------- |
+| PostgreSQL and NATS backups | Throughput, first text, completion latency and resource pressure during a backup versus an idle control           | Unmeasured     |
+| Cold starts and image pulls | Startup delay, first text and memory peak with an empty image cache versus a warm cache                           | Unmeasured     |
+| Server deployments          | Failed or slow authenticated reads, user-visible outage and error-budget use during Recreate                      | Unmeasured     |
+| Provider throttles          | First text, call-grant waits and review throughput with deterministic 429 responses versus an unthrottled control | Unmeasured     |
+
+### Deployment availability budget
+
+The app target is 99.5% of eligible authenticated reads succeeding within 2 seconds.
+Deployments consume this error budget.
+For a window with `N` eligible reads, the budget permits at most `floor(N / 200)` failed or slow reads.
+Measure deployment failures with an authenticated probe outside the server Pod that is replaced.
+Pod readiness alone does not measure the outage that a user sees.
+
+At a constant probe rate of one request per second, a 30-day window permits 12,960 bad probe results, equivalent to 216 minutes.
+This time conversion applies to that probe schedule.
+The app's request-based budget uses its actual eligible request count.
+No deploy-outage measurement or error-budget qualification is available from the conversation cases above.
+
 ## Initial budget
 
 **4 vCPUs, 24 GB RAM, 40 GB SSD** is a conservative initial budget for one concurrent review sandbox.
