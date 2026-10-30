@@ -2157,6 +2157,26 @@ export const zLoginProviderView = z.object({
 });
 
 /**
+ * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.
+ */
+export const zMemberReviewReadiness = z.object({
+    approvalBeforePosting: z.boolean(),
+    blocker: z.enum([
+        'WORKSPACE_INACTIVE',
+        'REVIEWS_OFF',
+        'PERSON_ERASED',
+        'NO_AI',
+        'OUTSIDE_REVIEW_SCOPE',
+        'NOT_ELIGIBLE',
+        'CHOICE_REQUIRED',
+        'NO_MODEL',
+        'NO_PRACTICE',
+        'ON_REQUEST_ONLY'
+    ]).nullable(),
+    events: z.array(z.string())
+});
+
+/**
  * A practice result, problem or prepared feedback Hephaestus showed in a message
  */
 export const zMentorLink = z.object({
@@ -2847,8 +2867,10 @@ export const zProfileReviewRef = z.object({
 });
 
 export const zPracticeProfileOverview = z.object({
+    activeReview: zProfileReviewRef.nullable(),
     changes: z.array(zProfileChange),
     latestReview: zProfileReviewRef.nullable(),
+    reviewReadiness: zMemberReviewReadiness.nullable(),
     reviewedItems: z.array(zItemRef),
     window: zOverviewWindow
 });

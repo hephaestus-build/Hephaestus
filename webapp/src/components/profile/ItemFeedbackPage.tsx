@@ -1,5 +1,7 @@
 import { MessageSquareTextIcon } from "lucide-react";
 
+import type { ReactElement } from "react";
+
 import type { ItemRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -13,6 +15,11 @@ export interface ItemFeedbackPageProps {
 	feed: ReviewFeedState;
 	/** The reader's response to each piece of feedback; absent where they may not respond. */
 	responses?: FeedbackResponseControls;
+	/**
+	 * The way to all of the reader's feedback, for a reader who arrives from a comment on the work;
+	 * absent where the workspace has no Practice profile.
+	 */
+	profileLink?: ReactElement;
 }
 
 const RESPONSE_GUIDE =
@@ -31,7 +38,7 @@ function feedbackTitle(item: ItemRef | undefined): string {
 	return numbered ? `Your feedback on ${noun} ${item.label}` : `Your feedback on this ${noun}`;
 }
 
-export function ItemFeedbackPage({ feed, responses }: ItemFeedbackPageProps) {
+export function ItemFeedbackPage({ feed, responses, profileLink }: ItemFeedbackPageProps) {
 	// Every review here is of the one item the page is for.
 	const item = feed.status === "ready" ? feed.reviews[0]?.review.item : undefined;
 	const name = item && (hasText(item.title) ? item.title : item.label);
@@ -43,6 +50,7 @@ export function ItemFeedbackPage({ feed, responses }: ItemFeedbackPageProps) {
 					title={feedbackTitle(item)}
 					// Read-only, the page offers no responses, so it does not describe them.
 					description={responses === undefined ? undefined : RESPONSE_GUIDE}
+					actions={profileLink}
 				/>
 				{item !== undefined && hasText(name) && (
 					<p className="ps-9 text-sm font-medium break-words">

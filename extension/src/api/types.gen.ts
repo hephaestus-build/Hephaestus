@@ -2593,6 +2593,24 @@ export type LoginProviderView = {
 };
 
 /**
+ * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.
+ */
+export type MemberReviewReadiness = {
+    /**
+     * Whether a workspace admin approves feedback from at least one of those practices before it is posted on the work
+     */
+    approvalBeforePosting: boolean;
+    /**
+     * The first reason, in the enum's order, why no review of the member's work runs now; null when work activity can start one. Repository coverage and a practice's state filters depend on the work and are not judged here.
+     */
+    blocker: 'WORKSPACE_INACTIVE' | 'REVIEWS_OFF' | 'PERSON_ERASED' | 'NO_AI' | 'OUTSIDE_REVIEW_SCOPE' | 'NOT_ELIGIBLE' | 'CHOICE_REQUIRED' | 'NO_MODEL' | 'NO_PRACTICE' | 'ON_REQUEST_ONLY' | null;
+    /**
+     * The sorted, distinct item events (such as scm.pull_request.opened) that can start a review of the member's work, from the practices that Hephaestus reviews about the person who did the work. A review also needs the work's repository and the practice's own conditions to match, and a null blocker.
+     */
+    events: Array<string>;
+};
+
+/**
  * The developer's Hephaestus conversation in a workspace at one moment
  */
 export type MentorConversation = {
@@ -3659,8 +3677,16 @@ export type PracticePageSupport = ({
 } & ClosedPracticePageSupport);
 
 export type PracticeProfileOverview = {
+    /**
+     * The newest queued or running review of a piece of work whose subject is the reader and that has recorded no result about the reader yet; at is when it was ordered. Null when there is none, or when the reader may not see the work
+     */
+    activeReview: ProfileReviewRef | null;
     changes: Array<ProfileChange>;
     latestReview: ProfileReviewRef | null;
+    /**
+     * Whether and how this workspace reviews the reader's work; null when the request names no account, so no member's readiness can be stated
+     */
+    reviewReadiness: MemberReviewReadiness | null;
     reviewedItems: Array<ItemRef>;
     window: OverviewWindow;
 };

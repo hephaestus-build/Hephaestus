@@ -164,19 +164,6 @@ public class ReviewIntegrationData {
                 .completedAt(recordedAt)
                 .build();
         reviews.saveAndFlush(review);
-        var slots = List.of(
-                new BoundModelSlot("chat", ModelKind.CHAT, null),
-                new BoundModelSlot("decision", ModelKind.DECISION, null),
-                new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
-                new BoundModelSlot("reranking", ModelKind.RERANKING, null),
-                new BoundModelSlot(
-                        "review",
-                        ModelKind.CHAT,
-                        new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of())));
-        String digest = jdbc.sql("SELECT review_model_digest(CAST(:models AS jsonb))")
-                .param("models", json.writeValueAsString(slots))
-                .query(String.class)
-                .single();
         assignments.saveAndFlush(ReviewPractice.builder()
                 .workspaceId(s.workspace().getId())
                 .reviewId(review.getId())
@@ -186,7 +173,7 @@ public class ReviewIntegrationData {
                 .itemsListed(1)
                 .listingComplete(true)
                 .captureDecision(json.createObjectNode())
-                .method(new ReviewMethod(1, digest, slots))
+                .method(method())
                 .build());
         var baseEvidence = json.convertValue(json.readTree("""
             {"citations":[{"sourceKind":"scm.pull-request.diff","sourcePath":"inputs/sources/scm/diff.patch","path":"src/Main.java","side":"NEW","commit":"commit-1","startLine":1,"endLine":1,"quote":"changed();","verification":{"status":"VERIFIED","itemSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","quoteSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}],"openQuestions":[]}
@@ -252,6 +239,65 @@ public class ReviewIntegrationData {
         member.setAttemptedAt(recordedAt);
         reviewItems.saveAndFlush(member);
         return result;
+    }
+
+    /**
+     * A review of the scenario's work that is queued or running and has recorded no result: selection froze
+     * {@code subject} on its listed item, and {@code requester} ordered it, or nobody when activity started it.
+     */
+    @Transactional
+    public Review activeReview(
+            Scenario s, long subject, ReviewStatus status, Instant orderedAt, @Nullable Long requester) {
+        var review = reviews.saveAndFlush(Review.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(s.workspace().getId())
+                .itemId(s.item().getId())
+                .kind(ReviewKind.ITEM)
+                .origin(requester == null ? ReviewOrigin.EVENT : ReviewOrigin.REQUEST)
+                .requestedById(requester)
+                .status(status)
+                .itemVersion("version-" + UUID.randomUUID())
+                .orderedAt(orderedAt)
+                .createdAt(orderedAt)
+                .build());
+        assignments.saveAndFlush(ReviewPractice.builder()
+                .workspaceId(s.workspace().getId())
+                .reviewId(review.getId())
+                .practiceId(s.practice().getId())
+                .practiceVersionId(s.practice().getCurrentVersion().getId())
+                .status(ReviewPracticeStatus.QUEUED)
+                .itemsListed(1)
+                .listingComplete(true)
+                .captureDecision(json.createObjectNode())
+                .method(method())
+                .build());
+        reviewItems.saveAndFlush(ReviewItem.builder()
+                .workspaceId(s.workspace().getId())
+                .reviewId(review.getId())
+                .practiceId(s.practice().getId())
+                .itemId(s.item().getId())
+                .itemVersion(review.getItemVersion())
+                .state(ReviewItemState.LISTED)
+                .detail(json.createObjectNode().put("developerId", subject))
+                .build());
+        return review;
+    }
+
+    private ReviewMethod method() {
+        var slots = List.of(
+                new BoundModelSlot("chat", ModelKind.CHAT, null),
+                new BoundModelSlot("decision", ModelKind.DECISION, null),
+                new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
+                new BoundModelSlot("reranking", ModelKind.RERANKING, null),
+                new BoundModelSlot(
+                        "review",
+                        ModelKind.CHAT,
+                        new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of())));
+        String digest = jdbc.sql("SELECT review_model_digest(CAST(:models AS jsonb))")
+                .param("models", json.writeValueAsString(slots))
+                .query(String.class)
+                .single();
+        return new ReviewMethod(1, digest, slots);
     }
 
     @Transactional

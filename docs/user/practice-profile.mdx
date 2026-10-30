@@ -47,6 +47,8 @@ Both states open [Reviews of your work](#reviews-of-your-work).
 A review appears here after it records an observation about your work.
 The chip keeps your latest recorded review even when it is older than the standing’s 90-day window or its evidence is hidden.
 Before your first recorded review, the chip reads **No review yet**.
+While that first review waits or runs, the chip reads **Review waiting** or **Review running**.
+It names the work but does not open a list, because the review has recorded nothing yet.
 
 A ring counts your practices by standing:
 
@@ -63,19 +65,25 @@ A practice that your workspace no longer reviews leaves the page, with its stand
 
 ### How to read this page
 
-The **How to read this page** panel sits under the header's introduction and is open on your first visit.
+The **How to read this page** panel sits under the header's introduction and starts closed.
 It explains:
 
 - What a practice is.
 - Each standing and each trend, with the sentence that explains it.
 - When a feedback card appears and when it resolves.
+- Who can see your feedback.
 - That group colors are not a rating.
 
-1. To close the panel, select **How to read this page**.
-2. To open it again, select **How to read this page** again.
+1. To open the panel, select **How to read this page**.
+2. To close it again, select **How to read this page** again.
 
-This browser remembers your choice.
-The panel shows again in a new browser or after you clear this browser's data.
+This browser remembers whether you left it open or closed.
+
+### Who can see your feedback
+
+Your Practice profile is yours.
+Feedback on a pull request is visible to everyone who can see that pull request.
+Workspace admins can see all practice reviews, and instance admins can open a read-only view.
 
 ## Your feedback
 
@@ -474,6 +482,29 @@ At the end of the page, **See your own standing** opens **All practice groups** 
 ## When nothing has been reviewed yet
 
 Before the first review, each practice counts as **No standing yet**.
-The chip reads **No review yet** and no feedback appears.
+The chip reads **No review yet**.
+Under **Your feedback**, the page lists what can start a review in your workspace, such as opening a pull request.
+Whether a review runs also depends on the repository and on each practice.
+**See what this workspace reviews** opens the practice groups.
+If a workspace admin approves feedback before it is posted on your work, the page says so.
+
+While your first review waits or runs, the page says so and links the work.
 The first review with a recorded observation fills the page.
 To request a review of eligible work, use **Request review** on [Activity](./activity.mdx#request-a-review).
+
+### When no review runs on your work
+
+Sometimes no review can run on your work.
+Then the page names the reason instead:
+
+| The page says | Why | What you can do |
+| --- | --- | --- |
+| **Hephaestus does not review your work here** | You chose No AI. | Select **Change your AI choice**. |
+| **Choose your AI to get reviews** | The workspace reviews your work only after you choose which AI may handle it. | Select **Choose your AI**. |
+| **Practice reviews are not set up for your AI choice yet** | The workspace has no review model that fits your choice. | Ask a workspace owner, or select **Your AI choice**. |
+| **Reviews here start only on request** | The workspace does not review work by itself. | Select **Request a review on Activity** for eligible work. |
+| **Practice reviews are off here** | The workspace turned practice reviews off. | Ask a workspace admin. |
+| **Your work is outside the review scope** | A workspace admin chose whose work the workspace reviews. | Ask a workspace admin. |
+| **Hephaestus cannot match your work to you here yet** | The workspace cannot connect your work to your membership. | Connect the account that the workspace uses in **User settings**, or ask a workspace admin. |
+| **No practice here reviews your work yet** | No practice reviews the work of the person who did it. | Ask a workspace admin. |
+| **Reviews are paused in this workspace** | The workspace is inactive. | Ask a workspace admin. |

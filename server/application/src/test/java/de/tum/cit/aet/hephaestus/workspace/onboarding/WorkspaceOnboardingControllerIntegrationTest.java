@@ -19,9 +19,9 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiRefusalReason;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
-import de.tum.cit.aet.hephaestus.workspace.spi.MentorRefusalReason;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -377,7 +377,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
 
         binding.setEnabled(false);
         bindings.saveAndFlush(binding);
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(MentorRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
 
         binding.setEnabled(true);
         bindings.saveAndFlush(binding);
@@ -386,7 +386,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
         var model = Objects.requireNonNull(binding.getInstanceModel());
         model.setEnabled(false);
         models.saveAndFlush(model);
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(MentorRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
 
         model.setEnabled(true);
         models.saveAndFlush(model);
@@ -394,7 +394,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
 
         bindings.delete(binding);
         bindings.flush();
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(MentorRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test
@@ -406,11 +406,11 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
         policy.setAiChoiceRequired(true);
         settings.saveAndFlush(policy);
 
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(MentorRefusalReason.CHOICE_REQUIRED);
+        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.CHOICE_REQUIRED);
         assertThat(choose(workspace.getWorkspaceSlug(), "NO_AI").mentorRefusal())
-                .isEqualTo(MentorRefusalReason.NO_AI);
+                .isEqualTo(AiRefusalReason.NO_AI);
         assertThat(choose(workspace.getWorkspaceSlug(), "CLOUD").mentorRefusal())
-                .isEqualTo(MentorRefusalReason.UNAVAILABLE);
+                .isEqualTo(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test
@@ -426,9 +426,9 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     void shouldReportThatHephIsUnavailableWhenTheWorkspaceHasNoHephModel() {
         var workspace = workspace("onboarding-heph-none", persistUser("testuser"));
 
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(MentorRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
         assertThat(choose(workspace.getWorkspaceSlug(), "NO_AI").mentorRefusal())
-                .isEqualTo(MentorRefusalReason.NO_AI);
+                .isEqualTo(AiRefusalReason.NO_AI);
     }
 
     @Test
@@ -437,7 +437,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
         bindHeph(workspace, DataHandlingTier.UNDECLARED);
 
         assertThat(choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY").mentorRefusal())
-                .isEqualTo(MentorRefusalReason.UNAVAILABLE);
+                .isEqualTo(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test

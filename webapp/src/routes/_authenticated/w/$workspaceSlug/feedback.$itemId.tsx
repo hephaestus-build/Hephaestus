@@ -1,12 +1,14 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 import { listOwnItemReviewsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
 import { ItemFeedbackPage } from "@/components/profile/ItemFeedbackPage";
 import { reviewFeedState } from "@/components/profile/reviews";
+import { buttonVariants } from "@/components/ui/button";
 import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 import { REVIEW_PAGE_SIZE } from "@/hooks/use-practice-group-detail";
+import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { springPageParams } from "@/runtime/tanstack-query/spring-page";
@@ -40,10 +42,22 @@ function ItemFeedbackRoute() {
 	});
 	useQueryReadRefusal(listOptions.queryKey, reviews.isError, reviews.error);
 	const responses = useFeedbackResponseWrite(workspaceSlug);
+	const { practicesEnabled } = useWorkspaceFeatures(workspaceSlug);
 	return (
 		<ItemFeedbackPage
 			feed={reviewFeedState(reviews)}
 			responses={readOnly ? undefined : responses}
+			profileLink={
+				practicesEnabled === true ? (
+					<Link
+						to="/w/$workspaceSlug/practice-profile"
+						params={{ workspaceSlug }}
+						className={buttonVariants({ variant: "outline", size: "sm" })}
+					>
+						See all your feedback
+					</Link>
+				) : undefined
+			}
 		/>
 	);
 }

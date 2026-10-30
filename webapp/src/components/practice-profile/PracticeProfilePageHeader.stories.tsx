@@ -15,7 +15,7 @@ const meta = {
 	component: PracticeProfilePageHeader,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	// Each story starts from a first visit, so none inherits a guide another story closed.
+	// Each story starts from a first visit, so none inherits a guide another story opened.
 	beforeEach: () => {
 		forgetSectionFold(GUIDE_FOLD_KEY);
 		return () => forgetSectionFold(GUIDE_FOLD_KEY);
@@ -184,15 +184,39 @@ export const Loading: Story = {
 	},
 };
 
-/** "How to read this page" opens on a first visit, and the reader can close it and open it again. */
-export const GuideClosesAndReopens: Story = {
+/**
+ * "How to read this page" starts closed, because the page says what a first visit needs. The reader
+ * can open it and close it again.
+ */
+export const GuideOpensAndCloses: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const toggle = canvas.getByRole("button", { name: "How to read this page" });
-		await expect(toggle).toHaveAttribute("aria-expanded", "true");
-		await userEvent.click(toggle);
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");
 		await userEvent.click(toggle);
 		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+		await userEvent.click(toggle);
+		await expect(toggle).toHaveAttribute("aria-expanded", "false");
+	},
+};
+
+/**
+ * A first review that has recorded nothing yet: the chip says it is under way, and is no link,
+ * because the reviews of the reader's work list a review once it records something.
+ */
+export const FirstReviewRunning: Story = {
+	args: {
+		latestReview: undefined,
+		activeReview: {
+			reviewId: "7a1e2a3b-0000-4000-8000-000000000102",
+			at: inStoryYear("09-09T14:10"),
+			item: pullRequest(12),
+			status: "RUNNING",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Review running")).toBeVisible();
+		await expect(canvas.queryByRole("link", { name: /Review running/u })).toBeNull();
+		await expect(canvas.queryByText("No review yet")).toBeNull();
 	},
 };
 

@@ -485,6 +485,17 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return item.isPresent() && source(item.orElseThrow(), purpose, audience, lookups);
     }
 
+    /**
+     * Whether {@code purpose} may use the work item's source, by the source fence of {@link #permitsAll}: for work
+     * that has no result yet, such as a review in flight, whose custody and citations nothing has recorded.
+     */
+    @Transactional(readOnly = true)
+    public boolean permitsItem(long workspaceId, long itemId, SourceUsePurpose purpose) {
+        var lookups = lookups(workspaceId);
+        var item = lookups.item(workspaceId, itemId);
+        return item.isPresent() && source(item.orElseThrow(), purpose, SourceReadAudience.PROCESSING, lookups);
+    }
+
     @Transactional(readOnly = true)
     public boolean permits(long workspaceId, UUID resultId, SourceUsePurpose purpose) {
         var lookups = lookups(workspaceId);

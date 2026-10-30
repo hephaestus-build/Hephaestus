@@ -50,6 +50,14 @@ export const Default: Story = {
 	},
 };
 
+/** A reader who arrives from a comment on the work finds the way to all their feedback. */
+export const WithProfileLink: Story = {
+	args: { profileLink: <a href="#practice-profile">See all your feedback</a> },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "See all your feedback" })).toBeVisible();
+	},
+};
+
 export const NoReadableResults: Story = {
 	args: { feed: { ...readyFeed, reviews: [] } },
 	play: async ({ canvas }) => {

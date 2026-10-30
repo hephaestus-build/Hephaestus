@@ -229,6 +229,12 @@ const reviewedPractices: Wire<ReviewedPractice>[] = groups.flatMap((group) =>
 );
 
 const overview: Wire<PracticeProfileOverview> = {
+	activeReview: null,
+	reviewReadiness: {
+		blocker: null,
+		events: ["scm.pull_request.opened", "scm.pull_request.ready"],
+		approvalBeforePosting: false,
+	},
 	changes: [
 		{
 			at: daysAgo(1),

@@ -6,12 +6,16 @@ import de.tum.cit.aet.hephaestus.practices.profile.dto.OverviewWindowDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.PracticeProfileOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewRefDTO;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.review.MemberReviewReadinessService;
+import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
 import java.util.LinkedHashMap;
@@ -19,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +39,10 @@ public class PracticeProfileOverviewService {
     private final Clock clock;
     private final ProfileChangeQuery profileChanges;
     private final ReviewRuntimeQuery runtime;
+    private final MemberReviewReadinessService readiness;
+    private final ProfileOverviewRepository overview;
+    private final ResultSourceAuthorization sources;
+    private final ProductReferenceQuery references;
 
     public PracticeProfileOverviewDTO getOverview(WorkspaceContext ws) {
         return visibility.asOneRead(ws.id(), () -> readOverview(ws));
@@ -45,7 +54,7 @@ public class PracticeProfileOverviewService {
         if (account.isEmpty()) {
             var empty = OverviewWindow.sincePreviousRun(null, now);
             return new PracticeProfileOverviewDTO(
-                    new OverviewWindowDTO(empty.since(), empty.until()), null, List.of(), List.of());
+                    new OverviewWindowDTO(empty.since(), empty.until()), null, List.of(), List.of(), null, null);
         }
         var rows = read.forDevelopersSince(ws.id(), List.of(account.get()), now.minus(OverviewWindow.LOOKBACK), false);
         var permitted = visibility.permitsHistory(ws.id(), rows, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
@@ -81,6 +90,19 @@ public class PracticeProfileOverviewService {
                                                         List.of(latest.review().getId()))
                                                 .getOrDefault(latest.review().getId(), Map.of()))),
                 changes,
-                reviewed);
+                reviewed,
+                readiness.readiness(ws.id(), account.get()),
+                activeReview(ws.id(), account.get()));
+    }
+
+    // Behind the source fence a result passes: a review in flight has no result, so its work item alone is checked.
+    private @Nullable ProfileReviewRefDTO activeReview(long ws, long account) {
+        var active = overview.activeReview(ws, account).orElse(null);
+        if (active == null || !sources.permitsItem(ws, active.getItemId(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+            return null;
+        var item = references.items(ws, List.of(active.getItemId())).get(active.getItemId());
+        if (item == null) return null;
+        return new ProfileReviewRefDTO(
+                active.getReviewId(), active.getOrderedAt(), item, ReviewStatus.valueOf(active.getStatus()));
     }
 }

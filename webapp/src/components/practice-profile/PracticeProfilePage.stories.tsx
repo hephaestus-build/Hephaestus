@@ -166,6 +166,34 @@ export const ColdStart: Story = {
 	},
 };
 
+/**
+ * Day one with the server's word: the empty feedback list says what starts a review, and the
+ * legend waits closed under the introduction.
+ */
+export const DayOne: Story = {
+	args: {
+		latestReview: undefined,
+		practices: [],
+		feedbackCards: [],
+		firstRun: {
+			workspaceName: "Intro course",
+			readiness: {
+				blocker: null,
+				events: ["scm.pull_request.opened", "scm.pull_request.ready"],
+				approvalBeforePosting: true,
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("No review of your work yet")).toBeVisible();
+		await expect(canvas.queryByText("No open feedback yet")).toBeNull();
+		await expect(canvas.getByRole("button", { name: "How to read this page" })).toHaveAttribute(
+			"aria-expanded",
+			"false",
+		);
+	},
+};
+
 /** "Resolved and closed" says what would move a card here, rather than repeating the other tabs. */
 export const NothingResolvedYet: Story = {
 	args: {
