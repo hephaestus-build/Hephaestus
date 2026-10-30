@@ -180,7 +180,9 @@ describe("AgentBindingsPage", () => {
 		fireEvent.change(timeout, { target: { value: "14400" } });
 		fireEvent.click(saveButton(inHouse));
 
-		inHouse.getByText("Reviews stop after three hours, so enter 10800 seconds or less.");
+		inHouse.getByText(
+			"One attempt of a review stops after three hours, so enter 10800 seconds or less.",
+		);
 		expect(timeout.getAttribute("aria-invalid")).toBe("true");
 		expect(onSave).not.toHaveBeenCalled();
 
