@@ -1,58 +1,18 @@
-/**
- * A setting must reach a container that can actually read it.
- *
- * Runtime roles (`hephaestus.runtime.<role>.enabled`, ADR 0005 / ADR 0008) decide which beans exist
- * in a container. A `@ConfigurationProperties` record read only by role-gated beans is, on a
- * container running with that role off, a variable nothing binds: Compose sets it, `docker inspect`
- * shows it, the documented procedure quotes it, and it configures nothing.
- *
- * Five shapes of that one defect, and this file is the only place they are named:
- *
- *   misdelivered — a service sets a variable whose owning role that same service disables.
- *   undelivered  — the deployment forwards the variable somewhere, but no container running the
- *                  owning role receives it. This is the half that stays broken after a misdelivery
- *                  is removed from the wrong service and never added to the right one.
- *   unforwarded  — `application.yml` offers the knob as `${VAR:default}` and no service forwards it
- *                  at all, so setting it in `.env` does nothing. A setting that is not meant to be
- *                  operator-tunable is written without a placeholder and is never in scope here.
- *   disagreed    — application containers spell one ungated setting differently. Every one of them
- *                  reads it, so the value one is handed is a claim about the whole deployment, and
- *                  two claims describe a stack that does not exist.
- *   omitted      — the same defect with the key left out rather than left blank. A container that
- *                  never mentions a setting makes no claim to disagree with, so `REQUIRED_SETTINGS`
- *                  names the settings whose absence is itself the failure, and the roles reading them.
- *
- * One capability is a mount rather than a variable and is checked the same way: the Docker socket
- * gives whoever holds it control of the host's daemon. No application role needs that authority.
- *
- * `ROLE_SCOPES` and `REQUIRED_SETTINGS` are the two things to extend, and they answer the same
- * question — which containers read a setting — from opposite ends: a scope says where a setting
- * must not go, a required setting where it must. Both are keyed on `application.yml`
- * paths rather than on whole property records because ownership is finer than a record:
- * `hephaestus.webhook.secret` is read on the server role (outbound registration) while
- * `hephaestus.webhook.stream.*` is read on the webhook role, out of the same `WebhookProperties`.
- * An entry naming a path `application.yml` no longer has fails too, so a rename cannot leave a dead
- * entry behind that silently checks nothing.
- *
- * Compose is read with the `yaml` library rather than through `docker compose config`, which would
- * be a stricter parse: this gate runs in `vp run check` and the pre-push hook, where a Docker daemon
- * is not a given, and `config` interpolates from the ambient environment, so its verdict would
- * depend on whose shell it ran in. What the shipped topology does with nothing set is the question,
- * so the `${VAR:-default}` defaults are what gets evaluated. A Compose file that yields no services
- * fails rather than passes.
- */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { parse, parseAllDocuments } from "yaml";
+import { parseAllDocuments } from "yaml";
 
+import {
+	applicationImage,
+	readDeployContainers,
+	renderDeployTopology,
+} from "./lib/deploy-topology.ts";
 import { isRecord } from "./lib/json.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const APPLICATION_YML = "server/application/src/main/resources/application.yml";
-/** The production topology. Both files together are one deployment, split by role. */
-const COMPOSE_FILES = ["docker/compose.app.yaml", "docker/compose.core.yaml"];
 
 /** The runtime roles a container can be given. A scope claiming any other name does not compile. */
 const ROLES = ["server", "worker", "webhook"] as const;
@@ -139,7 +99,7 @@ const ROLE_FLAGS: Record<Role, string> = {
  * application container: whichever slice of the context its roles leave out, the ungated beans — and
  * therefore every setting not listed in `ROLE_SCOPES` — are there and read on it.
  */
-const APPLICATION_IMAGE = "HEPHAESTUS_IMAGE_APPLICATION_SERVER";
+const APPLICATION_IMAGE = applicationImage;
 
 /**
  * Keys an application container is meant to spell differently from its siblings, because they are
@@ -160,7 +120,7 @@ const PER_CONTAINER = new Map<string, string>([
 
 /**
  * Declared rather than derived, and the reason is worth stating because it looks like a weakness.
- * Nothing in Compose separates a setting the receiver must have from one it is right not to have:
+ * The bean role decides which containers must receive each setting:
  * `GH_APP_PRIVATE_KEY` also reaches two of the three containers, and "deliver it to the third too"
  * would be a private key shipped to a container with no use for it. Only the role gate on the bean
  * that reads it decides, so each entry names that bean and a reader can check it against the Java.
@@ -259,22 +219,6 @@ function yamlDocuments(text: string): unknown[] {
 	});
 }
 
-const unquote = (raw: string): string => raw.trim().replaceAll(/^["']|["']$/gu, "");
-
-/**
- * `${VAR:-d}` and `${VAR-d}` fall back to `d`; a bare `${VAR}` resolves to the empty string, exactly
- * as Compose leaves it. The `-` is the only optional part of the syntax.
- */
-export function composeDefault(raw: string): string {
-	const value = unquote(raw);
-	const placeholder = /^\$\{[A-Z0-9_]+(?<dash>:?-)?(?<fallback>[^}]*)\}$/u.exec(value);
-	if (!placeholder) {
-		return value;
-	}
-	const { groups } = placeholder;
-	return groups?.dash === undefined ? "" : (groups.fallback ?? "");
-}
-
 interface ApplicationConfig {
 	readonly paths: ReadonlySet<string>;
 	/** Variable name to the path it binds. */
@@ -328,12 +272,12 @@ export function readApplicationConfig(text: string): ApplicationConfig {
  * handed different values, because `${VAR:?required}` and a valueless key both resolve to nothing.
  * `raw` is what the file writes, so those two stay distinguishable.
  */
-export interface ComposeService {
+export interface DeployService {
 	readonly name: string;
 	readonly env: Set<string>;
 	readonly flags: Map<string, string>;
 	readonly raw: Map<string, string>;
-	/** Host paths and volume names it mounts, in either Compose syntax. */
+	/** Host paths mounted by the Pod. */
 	readonly mounts: readonly string[];
 	image: string;
 }
@@ -341,91 +285,27 @@ export interface ComposeService {
 /** The host daemon is outside every application role's authority. */
 const DOCKER_SOCKET = "/var/run/docker.sock";
 
-/** The source of each `volumes:` entry: `source:target[:mode]` or a mapping with `source`. */
-function mountSources(volumes: unknown): string[] {
-	if (!Array.isArray(volumes)) {
-		return [];
-	}
-	return volumes.flatMap((entry: unknown) => {
-		if (typeof entry === "string") {
-			return [entry.split(":")[0] ?? ""];
-		}
-		return isRecord(entry) && typeof entry.source === "string" ? [entry.source] : [];
-	});
-}
-
-/**
- * Compose accepts `environment:` as a mapping or as a `KEY=value` sequence, and both forms deliver
- * the same environment; reading only the mapping would let the sequence form empty a service's
- * environment and pass. A sequence entry with no `=` inherits from the caller's shell, which this
- * gate deliberately does not read, so it delivers nothing here.
- * @yields each delivered `[key, value]` pair, in file order.
- */
-function* environmentEntries(environment: unknown): Generator<readonly [string, string]> {
-	if (isRecord(environment)) {
-		for (const [key, value] of Object.entries(environment)) {
-			if (value === null) {
-				yield [key, ""];
-			} else if (
-				typeof value === "string" ||
-				typeof value === "number" ||
-				typeof value === "boolean"
-			) {
-				yield [key, `${value}`];
-			}
-		}
-		return;
-	}
-	if (!Array.isArray(environment)) {
-		return;
-	}
-	for (const entry of environment) {
-		if (typeof entry !== "string") {
-			continue;
-		}
-		const separator = entry.indexOf("=");
-		yield separator === -1 ? [entry, ""] : [entry.slice(0, separator), entry.slice(separator + 1)];
-	}
-}
-
-/**
- * Services in one Compose file, with `<<:` merges resolved against the file's own `x-*` anchors, so
- * a shared block counts on every service that merges it.
- */
-export function readComposeServices(text: string): Map<string, ComposeService> {
-	const services = new Map<string, ComposeService>();
-	const compose = parse(text, { merge: true }) as unknown;
-	if (!isRecord(compose) || !isRecord(compose.services)) {
-		return services;
-	}
-
-	for (const [name, value] of Object.entries(compose.services)) {
-		if (!isRecord(value)) {
-			continue;
-		}
-		const service: ComposeService = {
-			name,
-			env: new Set(),
-			flags: new Map(),
-			raw: new Map(),
-			mounts: mountSources(value.volumes),
-			image: typeof value.image === "string" ? value.image : "",
-		};
-		services.set(name, service);
-		for (const [key, raw] of environmentEntries(value.environment)) {
-			service.env.add(key);
-			service.flags.set(key, composeDefault(raw));
-			service.raw.set(key, raw);
-		}
-	}
-	return services;
+export function readDeploymentServices(text: string): Map<string, DeployService> {
+	return new Map(
+		readDeployContainers(text).map((container) => [
+			container.name,
+			{
+				name: container.name,
+				image: container.image,
+				env: new Set(container.environment.keys()),
+				flags: new Map(container.environment),
+				raw: new Map(container.environment),
+				mounts: container.mounts,
+			},
+		]),
+	);
 }
 
 /**
  * A role is on unless something turns it off: the service's own environment, or a profile overlay it
  * activates. The application defaults every role on, so silence means yes.
  */
-const runsRole = (service: ComposeService, role: Role, profileRoles: ProfileRoles): boolean => {
+const runsRole = (service: DeployService, role: Role, profileRoles: ProfileRoles): boolean => {
 	if (service.flags.get(ROLE_FLAGS[role]) === "false") {
 		return false;
 	}
@@ -455,12 +335,12 @@ export function readDisabledRoles(text: string): Set<string> {
 	return disabled;
 }
 
-export type ComposeFile = readonly [label: string, text: string];
+export type DeploymentFile = readonly [label: string, text: string];
 
 /** A service that sets a role-scoped variable, named the way a failure has to name it. */
 interface Delivery {
 	readonly id: string;
-	readonly service: ComposeService;
+	readonly service: DeployService;
 }
 
 /**
@@ -492,14 +372,14 @@ function variableOwnership(placeholders: ReadonlyMap<string, string>): Map<strin
 	return ownership;
 }
 
-/** One Compose file's services, or why it could not be read; a YAML error is a failure, not a crash. */
-type ReadCompose = { services: Map<string, ComposeService> } | { error: string };
+/** One deployment file's services, or why it could not be read; a YAML error is a failure, not a crash. */
+type ReadDeployment = { services: Map<string, DeployService> } | { error: string };
 
-function readDeployment(compose: readonly ComposeFile[]): Map<string, ReadCompose> {
-	const deployment = new Map<string, ReadCompose>();
-	for (const [label, text] of compose) {
+function readDeployment(files: readonly DeploymentFile[]): Map<string, ReadDeployment> {
+	const deployment = new Map<string, ReadDeployment>();
+	for (const [label, text] of files) {
 		try {
-			deployment.set(label, { services: readComposeServices(text) });
+			deployment.set(label, { services: readDeploymentServices(text) });
 		} catch (error) {
 			deployment.set(label, { error: error instanceof Error ? error.message : String(error) });
 		}
@@ -507,15 +387,15 @@ function readDeployment(compose: readonly ComposeFile[]): Map<string, ReadCompos
 	return deployment;
 }
 
-function composeFailures(deployment: ReadonlyMap<string, ReadCompose>): string[] {
+function deploymentFailures(deployment: ReadonlyMap<string, ReadDeployment>): string[] {
 	const failures: string[] = [];
 	for (const [label, read] of deployment) {
 		if ("error" in read) {
 			failures.push(`${label} is not valid YAML: ${read.error}`);
 		} else if (read.services.size === 0) {
 			failures.push(
-				`${label} parsed to zero services, so every check below ran against nothing.\n` +
-					"  Either the file is not a Compose file or its shape has moved past what this script reads.",
+				`${label} parsed to zero containers, so every check below ran against nothing.\n` +
+					"  Render the chart before checking its workloads.",
 			);
 		}
 	}
@@ -523,7 +403,7 @@ function composeFailures(deployment: ReadonlyMap<string, ReadCompose>): string[]
 }
 
 function collectDeliveries(
-	deployment: ReadonlyMap<string, ReadCompose>,
+	deployment: ReadonlyMap<string, ReadDeployment>,
 	ownership: ReadonlyMap<string, RoleScope>,
 ): { delivered: Map<string, DeliveredVariable>; applicationContainers: Delivery[] } {
 	const delivered = new Map<string, DeliveredVariable>();
@@ -587,26 +467,6 @@ function undeliveredFailures(
 			`${variable} is forwarded by ${deliveries.map((d) => d.id).join(", ")}, but no service running the ${scope.role} role receives it.\n` +
 				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
 				"  Nothing in the deployment can read it, so it and anything documented around it are inert.",
-		);
-	}
-	return failures;
-}
-
-/** Placeholders the application offers that no service forwards. */
-function unforwardedFailures(
-	ownership: ReadonlyMap<string, RoleScope>,
-	delivered: ReadonlyMap<string, DeliveredVariable>,
-): string[] {
-	const failures: string[] = [];
-	for (const [variable, scope] of ownership) {
-		if (delivered.has(variable)) {
-			continue;
-		}
-		failures.push(
-			`${variable} is offered by ${APPLICATION_YML} but no service in the deployment forwards it.\n` +
-				`  ${variable} binds ${scope.path} — ${scope.why}.\n` +
-				"  The placeholder is what makes it an operator knob, so setting it in .env reaches nothing.\n" +
-				`  Forward it from a service that runs the ${scope.role} role, or drop the placeholder.`,
 		);
 	}
 	return failures;
@@ -701,9 +561,10 @@ function dockerSocketFailures(applicationContainers: readonly Delivery[]): strin
 
 export function analyse(
 	applicationText: string,
-	compose: readonly ComposeFile[],
+	files: readonly DeploymentFile[],
 	profileRoles: ProfileRoles = new Map(),
 ): Analysis {
+	// A Spring placeholder alone is not a Helm value. Check the variables the chart delivers.
 	const { paths, placeholders } = readApplicationConfig(applicationText);
 	const ownership = variableOwnership(placeholders);
 
@@ -717,13 +578,16 @@ export function analyse(
 		}
 	}
 
-	const deployment = readDeployment(compose);
+	const deployment = readDeployment(files);
 	const { delivered, applicationContainers } = collectDeliveries(deployment, ownership);
 	failures.push(
-		...composeFailures(deployment),
+		...deploymentFailures(deployment),
+		...(applicationContainers.length === 0
+			? ["The rendered chart has no application containers."]
+			: []),
 		...misdeliveredFailures(delivered, profileRoles),
 		...undeliveredFailures(delivered, profileRoles),
-		...unforwardedFailures(ownership, delivered),
+
 		...disagreementFailures(applicationContainers),
 		...omissionFailures(applicationContainers, paths, profileRoles),
 		...dockerSocketFailures(applicationContainers),
@@ -733,14 +597,11 @@ export function analyse(
 }
 
 if (import.meta.main) {
-	const compose: ComposeFile[] = [];
-	for (const file of COMPOSE_FILES) {
-		compose.push([file, await readFile(path.join(REPO_ROOT, file), "utf8")]);
-	}
+	const files: DeploymentFile[] = [["Helm", renderDeployTopology()]];
 	const profileRoles = await readProfileRoles();
 	const { failures, delivered, applicationContainers } = analyse(
 		await readFile(path.join(REPO_ROOT, APPLICATION_YML), "utf8"),
-		compose,
+		files,
 		profileRoles,
 	);
 	if (failures.length > 0) {

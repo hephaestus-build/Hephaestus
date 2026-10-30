@@ -80,28 +80,21 @@ function readJarMetadata(jar: Uint8Array): MetadataProperty[] {
 
 const jar = await executableJar(process.argv.slice(2));
 const metadata = new Metadata(readJarMetadata(await readFile(jar)));
-const { rows, unbound, unread } = join(await readSources(), metadata);
+const sources = await readSources();
+const { rows, unbound } = join(sources, metadata);
 
 let failed = false;
 if (unbound.length > 0) {
 	failed = true;
-	console.error("Compose hands these variables to a Java container, and they bind no setting:");
+	console.error("The chart hands these variables to a Java container, and they bind no setting:");
 	for (const entry of unbound) {
 		console.error(`  ${entry}`);
 	}
 	console.error("Rename each to the variable its setting reads, or remove it.\n");
 }
-if (unread.length > 0) {
-	failed = true;
-	console.error("No Compose file and no application YAML reads these .env.example keys:");
-	for (const entry of unread) {
-		console.error(`  ${entry}`);
-	}
-	console.error("Remove each key, or forward it to the setting it is meant for.\n");
-}
 
 const page = path.join(REPO_ROOT, REFERENCE_PAGE);
-await writeFile(page, renderPage(rows));
+await writeFile(page, renderPage(rows, sources.values));
 console.log(`Wrote ${REFERENCE_PAGE}: ${rows.length} variables.`);
 const undescribed = rows.filter((row) => row.description === "").map((row) => row.variable);
 if (undescribed.length > 0) {

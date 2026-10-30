@@ -348,7 +348,7 @@
     {
       "name": "spring.application.version",
       "type": "java.lang.String",
-      "description": "Version that the application reports in its logs, traces and release card. Compose sets it from the release."
+      "description": "Version that the application reports in its logs, traces and release card. The deployment sets it from the release."
     },
     {
       "name": "logging.structured.ecs.service.version",
@@ -359,6 +359,11 @@
       "name": "hephaestus.mentor.turn.capacity",
       "type": "java.lang.Integer",
       "description": "The conversation turns that all workers together run at once: the number of workers times the conversation turns of each. While every one of them runs a turn, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set."
+    },
+    {
+      "name": "hephaestus.sandbox.kubernetes.conversation-priority-class",
+      "type": "java.lang.String",
+      "description": "The PriorityClass for conversation host and turn sandbox Pods. An empty value assigns no PriorityClass."
     }
   ],
   "hints": [
@@ -410,7 +415,7 @@
         },
         {
           "value": "ghcr.io/hephaestus-build/agent-pi@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-          "description": "Production \u2014 digest-pinned. Imported by spring.config.import from the signed release asset."
+          "description": "Production — digest-pinned. Imported by spring.config.import from the signed release asset."
         }
       ]
     }
