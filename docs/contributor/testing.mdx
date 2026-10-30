@@ -327,6 +327,12 @@ The host reaches the test's sandbox gateway at `host.docker.internal`. The gatew
 `SANDBOX_API_PORT` names one. If a host firewall admits containers to one port only, set `SANDBOX_API_PORT` to
 that port.
 
+### Offline feedback quality evaluation
+
+The [feedback quality harness](./feedback-quality-evals.md) replays stored evidence and exact outputs without provider credentials.
+It checks selected claims and reports provisional labels, human judgments, and advisory rubric ratings separately.
+The [labelling guide](./label-feedback-quality.md) gives the independent human review procedure.
+
 ### Hephaestus voice eval
 
 `server/application/src/test/resources/agent/heph-voice.live.ts` sends nine questions to a real model through the conversation host.

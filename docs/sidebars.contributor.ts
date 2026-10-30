@@ -79,6 +79,8 @@ const sidebars: SidebarsConfig = {
 				"practice-feedback-language",
 				"practice-review-glossary",
 				"evaluation-provenance",
+				"feedback-quality-evals",
+				"label-feedback-quality",
 			],
 		},
 		{

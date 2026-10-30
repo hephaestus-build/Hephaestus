@@ -1,0 +1,508 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$defs": {
+		"quality": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["relevant", "repeated", "useful", "withholdingCorrect"],
+			"properties": {
+				"relevant": {
+					"type": ["boolean", "null"]
+				},
+				"repeated": {
+					"type": ["boolean", "null"]
+				},
+				"useful": {
+					"type": ["boolean", "null"]
+				},
+				"withholdingCorrect": {
+					"type": ["boolean", "null"]
+				}
+			}
+		},
+		"case": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"id",
+				"group",
+				"split",
+				"provider",
+				"destination",
+				"practice",
+				"claimCoverage",
+				"capture",
+				"provenance",
+				"evidence",
+				"output",
+				"claims",
+				"expectedQuality",
+				"sampling",
+				"reviewState",
+				"sampleId"
+			],
+			"properties": {
+				"id": {
+					"type": "string",
+					"minLength": 1
+				},
+				"group": {
+					"type": "string",
+					"minLength": 1
+				},
+				"split": {
+					"enum": ["development", "held-out"]
+				},
+				"provider": {
+					"enum": ["github", "gitlab", "slack", "outline"]
+				},
+				"destination": {
+					"enum": ["work", "practice-page", "conversation-app", "conversation-slack"]
+				},
+				"practice": {
+					"type": "string",
+					"minLength": 1
+				},
+				"claimCoverage": {
+					"enum": ["selected", "exhaustive"]
+				},
+				"capture": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["status", "limitations", "producerStatus"],
+					"properties": {
+						"status": {
+							"enum": ["complete", "partial", "failed"]
+						},
+						"limitations": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"minLength": 1
+							},
+							"minItems": 0
+						},
+						"producerStatus": {
+							"enum": ["complete", "partial", "failed", "unknown"]
+						}
+					}
+				},
+				"provenance": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": [
+						"source",
+						"revision",
+						"model",
+						"promptSha256",
+						"catalogRevision",
+						"costUsd",
+						"elapsedMs"
+					],
+					"properties": {
+						"source": {
+							"type": "string",
+							"minLength": 1
+						},
+						"revision": {
+							"type": ["string", "null"],
+							"minLength": 1
+						},
+						"model": {
+							"type": ["string", "null"],
+							"minLength": 1
+						},
+						"promptSha256": {
+							"anyOf": [
+								{
+									"type": "string",
+									"pattern": "^[a-f0-9]{64}$"
+								},
+								{
+									"type": "null"
+								}
+							]
+						},
+						"catalogRevision": {
+							"type": ["string", "null"],
+							"minLength": 1
+						},
+						"costUsd": {
+							"type": ["number", "null"],
+							"minimum": 0
+						},
+						"elapsedMs": {
+							"type": ["number", "null"],
+							"minimum": 0
+						}
+					}
+				},
+				"evidence": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"id",
+							"role",
+							"text",
+							"sha256",
+							"complete",
+							"revision",
+							"side",
+							"seenByProducer"
+						],
+						"properties": {
+							"id": {
+								"type": "string",
+								"minLength": 1
+							},
+							"role": {
+								"enum": ["seen", "reference", "conversation", "compaction"]
+							},
+							"text": {
+								"type": "string",
+								"minLength": 1
+							},
+							"sha256": {
+								"type": "string",
+								"pattern": "^[a-f0-9]{64}$"
+							},
+							"complete": {
+								"type": "boolean"
+							},
+							"revision": {
+								"type": ["string", "null"],
+								"minLength": 1
+							},
+							"side": {
+								"enum": ["new", "old", "none"]
+							},
+							"seenByProducer": {
+								"type": ["boolean", "null"]
+							}
+						}
+					},
+					"minItems": 1
+				},
+				"output": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["text", "sha256"],
+					"properties": {
+						"text": {
+							"type": "string",
+							"minLength": 1
+						},
+						"sha256": {
+							"type": "string",
+							"pattern": "^[a-f0-9]{64}$"
+						}
+					}
+				},
+				"claims": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"id",
+							"quote",
+							"expected",
+							"rationale",
+							"evidenceIds",
+							"checks",
+							"expectedGrounding"
+						],
+						"properties": {
+							"id": {
+								"type": "string",
+								"minLength": 1
+							},
+							"quote": {
+								"type": "string",
+								"minLength": 1
+							},
+							"expected": {
+								"enum": ["true", "false", "unsupported"]
+							},
+							"rationale": {
+								"type": "string",
+								"minLength": 1
+							},
+							"evidenceIds": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"minLength": 1
+								},
+								"minItems": 0,
+								"uniqueItems": true
+							},
+							"checks": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"additionalProperties": false,
+									"required": ["kind", "evidenceId", "region", "text"],
+									"properties": {
+										"kind": {
+											"enum": ["literal-absence", "literal-quote"]
+										},
+										"evidenceId": {
+											"type": "string",
+											"minLength": 1
+										},
+										"region": {
+											"type": "string",
+											"minLength": 1
+										},
+										"text": {
+											"type": "string",
+											"minLength": 1
+										}
+									}
+								},
+								"minItems": 0
+							},
+							"expectedGrounding": {
+								"enum": ["supported", "unsupported", "unknown"]
+							}
+						}
+					},
+					"minItems": 1
+				},
+				"expectedQuality": {
+					"$ref": "#/$defs/quality"
+				},
+				"sampling": {
+					"enum": ["regression", "random"]
+				},
+				"reviewState": {
+					"enum": ["reviewed", "withheld", "not-reviewed"]
+				},
+				"sampleId": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"corpus": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "cases"],
+			"properties": {
+				"version": {
+					"const": 1
+				},
+				"cases": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/case"
+					},
+					"minItems": 1
+				}
+			}
+		},
+		"humans": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "labels", "adjudications"],
+			"properties": {
+				"version": {
+					"const": 1
+				},
+				"labels": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["caseHash", "claims", "quality", "reviewer"],
+						"properties": {
+							"caseHash": {
+								"type": "string",
+								"pattern": "^[a-f0-9]{64}$"
+							},
+							"claims": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"additionalProperties": false,
+									"required": ["id", "verdict", "reason", "evidenceIds", "grounding"],
+									"properties": {
+										"id": {
+											"type": "string",
+											"minLength": 1
+										},
+										"verdict": {
+											"enum": ["true", "false", "unsupported"]
+										},
+										"reason": {
+											"type": "string",
+											"minLength": 1
+										},
+										"evidenceIds": {
+											"type": "array",
+											"items": {
+												"type": "string",
+												"minLength": 1
+											},
+											"minItems": 0,
+											"uniqueItems": true
+										},
+										"grounding": {
+											"enum": ["supported", "unsupported", "unknown"]
+										}
+									}
+								},
+								"minItems": 1
+							},
+							"quality": {
+								"$ref": "#/$defs/quality"
+							},
+							"reviewer": {
+								"type": "string",
+								"minLength": 1
+							}
+						}
+					},
+					"minItems": 0
+				},
+				"adjudications": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["caseHash", "claims", "quality", "reviewers"],
+						"properties": {
+							"caseHash": {
+								"type": "string",
+								"pattern": "^[a-f0-9]{64}$"
+							},
+							"claims": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"additionalProperties": false,
+									"required": ["id", "verdict", "reason", "evidenceIds", "grounding"],
+									"properties": {
+										"id": {
+											"type": "string",
+											"minLength": 1
+										},
+										"verdict": {
+											"enum": ["true", "false", "unsupported"]
+										},
+										"reason": {
+											"type": "string",
+											"minLength": 1
+										},
+										"evidenceIds": {
+											"type": "array",
+											"items": {
+												"type": "string",
+												"minLength": 1
+											},
+											"minItems": 0,
+											"uniqueItems": true
+										},
+										"grounding": {
+											"enum": ["supported", "unsupported", "unknown"]
+										}
+									}
+								},
+								"minItems": 1
+							},
+							"quality": {
+								"$ref": "#/$defs/quality"
+							},
+							"reviewers": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"minLength": 1
+								},
+								"minItems": 2,
+								"uniqueItems": true
+							}
+						}
+					}
+				}
+			}
+		},
+		"judge": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "rubricHash", "model", "run", "results"],
+			"properties": {
+				"version": {
+					"const": 1
+				},
+				"rubricHash": {
+					"type": "string",
+					"pattern": "^[a-f0-9]{64}$"
+				},
+				"model": {
+					"type": "string",
+					"minLength": 1
+				},
+				"run": {
+					"type": "string",
+					"minLength": 1
+				},
+				"results": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["caseHash", "claims", "quality"],
+						"properties": {
+							"caseHash": {
+								"type": "string",
+								"pattern": "^[a-f0-9]{64}$"
+							},
+							"claims": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"additionalProperties": false,
+									"required": ["id", "verdict", "reason", "evidenceIds", "grounding"],
+									"properties": {
+										"id": {
+											"type": "string",
+											"minLength": 1
+										},
+										"verdict": {
+											"enum": ["true", "false", "unsupported"]
+										},
+										"reason": {
+											"type": "string",
+											"minLength": 1
+										},
+										"evidenceIds": {
+											"type": "array",
+											"items": {
+												"type": "string",
+												"minLength": 1
+											},
+											"minItems": 0,
+											"uniqueItems": true
+										},
+										"grounding": {
+											"enum": ["supported", "unsupported", "unknown"]
+										}
+									}
+								},
+								"minItems": 1
+							},
+							"quality": {
+								"$ref": "#/$defs/quality"
+							}
+						}
+					},
+					"minItems": 0
+				}
+			}
+		}
+	}
+}
