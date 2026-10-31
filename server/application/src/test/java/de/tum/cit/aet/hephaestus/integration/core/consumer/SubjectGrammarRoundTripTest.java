@@ -20,15 +20,15 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * For every committed fixture, asserts the publisher-side subject built by the per-kind
- * {@code SubjectKeyDeriver} starts with the consumer-side prefix that
- * {@link ConsumerSubjectMath#buildSubjectPrefix(String, String)} subscribes to. This is the
- * producer↔consumer agreement guard documented in CLAUDE.md §8 — it catches the drift class
- * that per-side unit tests cannot see in isolation (a deriver that emits a subject no consumer
- * filter matches publishes into the stream but is never delivered).
+ * For every committed fixture, asserts the publisher-side subject built by the per-kind deriver is matched by the
+ * consumer-side filter that {@link ConsumerSubjectMath} subscribes with: {@link ConsumerSubjectMath#buildSubjectPrefix}
+ * for GitHub, {@link ConsumerSubjectMath#connectionFilter} for GitLab and
+ * {@link ConsumerSubjectMath#subscriptionFilter} for Outline. It catches the drift class that per-side unit tests
+ * cannot see in isolation: a deriver that emits a subject no consumer filter matches publishes into the stream, but no
+ * consumer receives it.
  *
- * <p>Where namespace/project can't be reliably extracted (instance-level fallback to {@code ?}),
- * the consumer prefix doesn't apply; those fixtures are skipped.
+ * <p>Where owner or repository cannot be extracted (instance-level fallback to {@code ?}), the consumer prefix does
+ * not apply; those GitHub fixtures are skipped.
  */
 class SubjectGrammarRoundTripTest extends BaseUnitTest {
 
@@ -64,49 +64,18 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
 
     @ParameterizedTest(name = "GitLab fixture {0}")
     @MethodSource("gitlabFixtures")
-    void gitlabFixtureSubjectMatchesConsumerPrefix(Path fixture) throws IOException {
+    void gitlabFixtureSubjectMatchesConnectionFilter(Path fixture) throws IOException {
         JsonNode payload = MAPPER.readTree(Files.readAllBytes(fixture));
-        // Mirror the deriver's rootGroupToken path sources that carry a namespace: a project's
-        // path_with_namespace, then a subgroup's group.full_path / full_path. The full_path fallbacks are
-        // what let subgroup.create (which has no path_with_namespace) reach the org-filter assertion instead
-        // of being skipped by the '/' guard below.
-        String pathWithNamespace =
-                payload.path("project").path("path_with_namespace").asString("");
-        if (pathWithNamespace.isEmpty()) {
-            pathWithNamespace = payload.path("path_with_namespace").asString("");
-        }
-        if (pathWithNamespace.isEmpty()) {
-            pathWithNamespace = payload.path("group").path("full_path").asString("");
-        }
-        if (pathWithNamespace.isEmpty()) {
-            pathWithNamespace = payload.path("full_path").asString("");
-        }
-        // A leaf-only segment (e.g. member.add's group_path on a subgroup) cannot yield a root group and
-        // is documented-unroutable from payload alone — legitimately skipped.
-        if (!pathWithNamespace.contains("/")) {
-            return;
-        }
-        String publisherSubject = GITLAB.deriveSubject(payload, Map.of());
-        // Group-tier lifecycle events (project/subgroup/member) are ORG-scoped: they carry the '?'
-        // placeholder in the project slot and route via the workspace's organizationFilter
-        // (gitlab.<rootGroup>.?.>), not the repo prefix. Bind the derived subject to that filter through a
-        // real NATS token match so a drift in EITHER buildSubjectPrefix/organizationFilter or the deriver's
-        // group-tier subject format fails here.
-        String[] subjectParts = publisherSubject.split("\\.", -1);
-        if (subjectParts.length >= 3 && "?".equals(subjectParts[2])) {
-            String rootGroup = pathWithNamespace.substring(0, pathWithNamespace.indexOf('/'));
-            String orgFilter = ConsumerSubjectMath.organizationFilter("gitlab", rootGroup);
-            assertThat(subjectMatchesFilter(publisherSubject, orgFilter))
-                    .as(
-                            "group-tier publisher %s (%s) should be matched by org filter '%s'",
-                            fixture.getFileName(), publisherSubject, orgFilter)
-                    .isTrue();
-            return;
-        }
-        String consumerPrefix = ConsumerSubjectMath.buildSubjectPrefix("gitlab", pathWithNamespace);
-        assertThat(publisherSubject)
-                .as("publisher %s should start with consumer prefix '%s.'", fixture.getFileName(), consumerPrefix)
-                .startsWith(consumerPrefix + ".");
+        // Only a connection's own route publishes GitLab deliveries. Whatever path the payload names, the subject
+        // must reach that connection's filter and no other connection's.
+        String publisherSubject = GITLAB.deriveConnectionSubject(7L, payload);
+        assertThat(subjectMatchesFilter(publisherSubject, ConsumerSubjectMath.connectionFilter("gitlab", 7L)))
+                .as(
+                        "publisher %s (%s) should be matched by its connection filter",
+                        fixture.getFileName(), publisherSubject)
+                .isTrue();
+        assertThat(subjectMatchesFilter(publisherSubject, ConsumerSubjectMath.connectionFilter("gitlab", 8L)))
+                .isFalse();
     }
 
     /**
@@ -149,7 +118,7 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
         String publisherSubject =
                 GITHUB.deriveSubject(payload, Map.of("X-GitHub-Event", eventTypeFromFilename(fixture)));
         // Repository-lifecycle events (repository.renamed/.transferred/…) are ORG-scoped for the same
-        // reason GitLab's group-tier events are: the repo-name token is unstable across a
+        // reason as group-tier events: the repo-name token is unstable across a
         // rename/transfer, so the subject carries the '?' placeholder in the repo slot and must route
         // via the workspace's organizationFilter (github.<owner>.?.>), not the repo prefix. Bind that
         // through a real NATS token match so a drift in EITHER organizationFilter/buildSubjectPrefix or
@@ -232,21 +201,6 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
     private static String consumerSubscriptionPrefix(String subscriptionId) {
         String filter = ConsumerSubjectMath.subscriptionFilter("outline", subscriptionId);
         return filter.substring(0, filter.length() - 1); // drop the trailing '>'
-    }
-
-    /**
-     * Explicit mixed-case guard: no committed fixture is guaranteed to carry uppercase, but GitLab
-     * paths are case-sensitive and may. If the producer ever lowercases path segments while the
-     * consumer (fed the case-preserved stored {@code nameWithOwner}) does not, this fails.
-     */
-    @Test
-    void gitlabMixedCasePathRoundTrips() throws IOException {
-        String pathWithNamespace = "MyGroup/Sub-Group/My.Project";
-        JsonNode payload = MAPPER.readTree("{\"object_kind\":\"merge_request\",\"project\":{\"path_with_namespace\":\""
-                + pathWithNamespace + "\"}}");
-        String publisherSubject = GITLAB.deriveSubject(payload, Map.of());
-        String consumerPrefix = ConsumerSubjectMath.buildSubjectPrefix("gitlab", pathWithNamespace);
-        assertThat(publisherSubject).startsWith(consumerPrefix + ".");
     }
 
     private static String eventTypeFromFilename(Path fixture) {

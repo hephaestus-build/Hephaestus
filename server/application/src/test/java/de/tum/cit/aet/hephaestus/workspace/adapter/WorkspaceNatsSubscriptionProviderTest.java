@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -88,6 +89,28 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
     }
 
     @Test
+    void gitLabConnectedWorkspaceSubscribesOnlyToItsConnectionRoute() {
+        RepositoryToMonitor repo = mock(RepositoryToMonitor.class);
+        lenient().when(repo.getNameWithOwner()).thenReturn("acme/app");
+        lenient().when(workspace.getRepositoriesToMonitor()).thenReturn(Set.of(repo));
+        lenient().when(workspaceScopeFilter.isRepositoryAllowed("acme/app")).thenReturn(true);
+        stubGitLabConnection(42L);
+        when(connectionService.findActiveOutlineConfig(WS)).thenReturn(Optional.empty());
+
+        NatsSubscriptionInfo info = provider.getSubscriptionInfo(WS).orElseThrow();
+
+        assertThat(info.streamSubscriptions()).hasSize(1);
+        assertThat(streamNamed(info, "gitlab").subjects()).containsExactly("gitlab.?connection.42.>");
+    }
+
+    private void stubGitLabConnection(long connectionId) {
+        Connection connection = mock(Connection.class);
+        when(connection.getId()).thenReturn(connectionId);
+        when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        when(connectionService.findActive(WS, IntegrationKind.GITLAB)).thenReturn(Optional.of(connection));
+    }
+
+    @Test
     void outlineOnlyWorkspaceEmitsOnlyTheOutlineStream() {
         when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.empty());
         when(connectionService.findActiveOutlineConfig(WS))
@@ -103,7 +126,7 @@ class WorkspaceNatsSubscriptionProviderTest extends BaseUnitTest {
 
     @Test
     void dualConnectionWorkspaceEmitsBothStreams() {
-        when(connectionService.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITLAB));
+        stubGitLabConnection(42L);
         when(connectionService.findActiveOutlineConfig(WS))
                 .thenReturn(
                         Optional.of(new ConnectionConfig.OutlineConfig("https://o.test", "sub-9", "secret", Set.of())));

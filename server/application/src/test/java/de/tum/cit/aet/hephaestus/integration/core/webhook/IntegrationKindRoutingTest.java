@@ -13,14 +13,21 @@ class IntegrationKindRoutingTest extends BaseUnitTest {
     @Test
     void resolvesLowercaseKnownKinds() {
         assertThat(routing.resolve("github")).contains(IntegrationKind.GITHUB);
-        assertThat(routing.resolve("gitlab")).contains(IntegrationKind.GITLAB);
         assertThat(routing.resolve("slack")).contains(IntegrationKind.SLACK);
     }
 
     @Test
     void resolvesIsCaseInsensitive() {
         assertThat(routing.resolve("GITHUB")).contains(IntegrationKind.GITHUB);
-        assertThat(routing.resolve("GitLab")).contains(IntegrationKind.GITLAB);
+        assertThat(routing.resolve("Slack")).contains(IntegrationKind.SLACK);
+    }
+
+    @Test
+    void connectionRoutedKindsHaveNoSharedEndpoint() {
+        assertThat(routing.resolve("gitlab")).isEmpty();
+        assertThat(routing.resolve("outline")).isEmpty();
+        assertThat(routing.routes(IntegrationKind.GITLAB)).isFalse();
+        assertThat(routing.routes(IntegrationKind.OUTLINE)).isFalse();
     }
 
     @Test

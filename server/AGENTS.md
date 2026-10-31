@@ -183,8 +183,8 @@ Procedure: `docs/contributor/database-migration.mdx`. What the drift gate reads 
 ## Webhook receiver
 
 `integration/core/webhook/` is the receive-side substrate.
-One `POST /webhooks/{kind}` entry point resolves the kind through `IntegrationKindRouting`.
-It hands the kind to `WebhookIngestPipeline`.
+One `POST /webhooks/{kind}` entry point serves GitHub and the Slack Events API.
+It resolves the kind through `IntegrationKindRouting` and hands it to `WebhookIngestPipeline`.
 The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver`.
 It publishes the verified envelope to JetStream.
 `@ConditionalOnWebhookRole` gates all these operations.
@@ -197,19 +197,21 @@ It must not read PostgreSQL.
 Configuration binds to
 `hephaestus.webhook.*` through `core.webhook.WebhookProperties`, shared with auto-registration in
 `integration/scm/gitlab/workspace/GitLabWebhookService`.
+GitLab and Outline each have a connection endpoint in the adapter's `webhook` package.
+That endpoint verifies a route credential and calls `WebhookIngestPipeline#publishAuthenticated`.
 
 - **Production runs it in its own `webhook-server` container** — the same image as `application-server`
   with `SPRING_PROFILES_ACTIVE=prod,webhook` — so an app-server deploy does not interrupt reception.
   GitHub never retries a failed delivery itself. `GitHubWebhookRedelivery` asks it to redeliver failed
   GitHub App deliveries of the past two hours. A GitLab webhook missed during a restart is lost. Reconciliation
   recovers its effect.
-- **Subject grammar**: `github.<owner>.<repo>.<event>`. Registered GitLab group hooks use
-  `gitlab.?connection.<connectionId>.<event>` from `GitLabSubjectKeyDeriver.deriveConnectionSubject`,
-  after the connection endpoint verifies the route credential. Operator-created GitLab hooks on
-  the shared endpoint retain `gitlab.<namespace>.<project>.<event>`.
-  `ConsumerSubjectMath#connectionFilter` matches connection subjects.
-  `ConsumerSubjectMath#buildSubjectPrefix` matches path subjects, where dots inside a path segment
-  become `~` and nested GitLab groups join with `~`. Producer and consumer must agree —
+- **Subject grammar**: `github.<owner>.<repo>.<event>`, where dots inside a path segment become `~`.
+  `ConsumerSubjectMath#buildSubjectPrefix` matches it.
+  GitLab has no shared endpoint. Each connection's group hook posts to its own route, and
+  `GitLabSubjectKeyDeriver.deriveConnectionSubject` publishes `gitlab.?connection.<connectionId>.<event>`
+  after the route credential is verified. `ConsumerSubjectMath#connectionFilter` matches it.
+  Outline publishes `outline.<subscriptionId>.<event>`. Each subject parser accepts exactly its grammar's
+  component count. Producer and consumer must agree —
   `SubjectGrammarRoundTripTest` enforces it for every committed fixture.
 - **ArchUnit guards the primitives**: `HexEncodingArchTest` (only `HexFormat.of()`),
   `LocaleSafetyArchTest` (no `Locale.getDefault()`). `application/build.gradle.kts` sets per-package JaCoCo branch floors.

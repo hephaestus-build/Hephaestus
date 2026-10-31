@@ -1002,7 +1002,10 @@ function startWebhookReceiver(name: string, image: string, database: string): nu
 	return publishedPort(name);
 }
 
-/** One delivery for each provider whose receiver needs no stored connection. */
+/**
+ * One delivery for each provider on the shared receiver path. GitLab and Outline deliver only on a route credential
+ * that the server issues for a stored connection.
+ */
 const WEBHOOK_DELIVERIES = [
 	{
 		stream: "github",
@@ -1014,19 +1017,6 @@ const WEBHOOK_DELIVERIES = [
 			"x-github-event": "issues",
 			"x-github-delivery": delivery,
 			"x-hub-signature-256": `sha256=${createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex")}`,
-		}),
-	},
-	{
-		stream: "gitlab",
-		body: JSON.stringify({
-			object_kind: "issue",
-			project: { path_with_namespace: `${WORKSPACE_SLUG}/upgrade-repository` },
-		}),
-		headers: (delivery: string): Record<string, string> => ({
-			"x-gitlab-event": "Issue Hook",
-			"x-gitlab-event-uuid": delivery,
-			"x-gitlab-token": WEBHOOK_SECRET,
-			"x-gitlab-webhook-uuid": "upgrade-test-hook",
 		}),
 	},
 ] as const;

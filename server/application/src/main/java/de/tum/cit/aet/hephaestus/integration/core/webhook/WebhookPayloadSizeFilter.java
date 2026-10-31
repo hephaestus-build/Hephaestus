@@ -11,8 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The {@link PayloadSizeFilter} over the public, unauthenticated ingest surface: {@code POST
- * /webhooks/**}, which includes GitHub/GitLab/Slack Events API callbacks and Slack interactivity
- * callbacks. Any other request falls through untouched, and each refusal is counted per provider.
+ * /webhooks/**}, which includes GitHub and Slack Events API callbacks, GitLab and Outline connection hooks, and Slack
+ * interactivity callbacks. Any other request falls through untouched, and each refusal is counted per provider.
  */
 public class WebhookPayloadSizeFilter extends PayloadSizeFilter {
 

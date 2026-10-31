@@ -12,12 +12,15 @@ import org.springframework.stereotype.Component;
  *
  * <p>Never calls {@link IntegrationKind#valueOf(String)} on user-controlled input —
  * that would reflect on attacker input. The hardcoded map is the only routing source.
+ *
+ * <p>GitLab and Outline are absent: each delivers only to its connection's own route, which verifies a credential bound
+ * to that connection.
  */
 @Component
 public class IntegrationKindRouting {
 
     private static final Map<String, IntegrationKind> ROUTES =
-            Map.of("github", IntegrationKind.GITHUB, "gitlab", IntegrationKind.GITLAB, "slack", IntegrationKind.SLACK);
+            Map.of("github", IntegrationKind.GITHUB, "slack", IntegrationKind.SLACK);
 
     /** Whether the shared {@code /webhooks/{kind}} endpoint serves {@code kind}. */
     public boolean routes(IntegrationKind kind) {

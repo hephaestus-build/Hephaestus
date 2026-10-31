@@ -540,8 +540,7 @@ so `vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `
 Production runs the receiver in its own container — [Runtime roles](../admin/runtime-roles#monolith-vs-split-pod)
 and [ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md).
 
-Set the webhook secret before the first start, so that signature checks succeed.
-Auto-registration and the receiver use the same secret.
+Set the webhook secret before the first start, so that GitHub signature checks succeed.
 In the native stack, add it to `server/.env`:
 
 ```bash
@@ -550,9 +549,8 @@ echo "WEBHOOK_SECRET=$(openssl rand -hex 32)" >> server/.env
 
 `vp run dev:kubernetes` generates it in the release Secret.
 
-The value must match the secret configured on your GitHub and GitLab webhooks (validated through
-`X-Hub-Signature-256` for GitHub. `X-Gitlab-Token`, or `webhook-signature` for a hook with a signing
-token, for GitLab — see [`WEBHOOK_SECRET`](../admin/production-setup#gitlab-rollout-bundle)).
+The value must match the secret configured on your GitHub webhooks, which `X-Hub-Signature-256` validates.
+GitLab group hooks use `WEBHOOK_ROUTING_SECRET` instead — see [`WEBHOOK_ROUTING_SECRET`](../admin/production-setup#gitlab-rollout-bundle).
 
 For Slack app setup, use the scope/event checklist in
 [`docs/admin/production-setup.mdx`](../admin/production-setup#slack-app-configuration) and the manifest template in

@@ -188,7 +188,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         when(organizationRepository.findByLoginIgnoreCaseAndProviderId("hephaestustest", PROVIDER_ID))
                 .thenReturn(Optional.of(org));
 
-        Message msg = mockMessage("gitlab.hephaestustest.demo-repository.push", pushEvent);
+        Message msg = mockMessage("gitlab.?connection.7.push", pushEvent);
         handler.onMessage(msg);
 
         verify(projectProcessor).processPushEvent(projectInfo, gitLabProvider);
@@ -478,7 +478,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
             when(projectProcessor.processPushEvent(projectInfo, gitLabProvider)).thenReturn(repo);
             when(repositoryRepository.findByIdWithOrganization(repo.getId())).thenReturn(Optional.of(repo));
 
-            Message msg = mockMessage("gitlab.myproject.push", createPushEvent(projectInfo));
+            Message msg = mockMessage("gitlab.?connection.7.push", createPushEvent(projectInfo));
             handler.onMessage(msg);
 
             verify(organizationRepository, never()).findByLoginIgnoreCaseAndProviderId(anyString(), any());

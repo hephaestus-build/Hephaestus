@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -161,7 +162,7 @@ public class WebhookIngestPipeline {
             return problem(HttpStatus.SERVICE_UNAVAILABLE, "publisher not wired");
         }
         SubjectKeyDeriver deriver = deriversByKind.get(kind);
-        if (deriver == null) {
+        if (route == null && deriver == null) {
             // Kind has a verifier but no derivation — surface as NOT_IMPLEMENTED so the
             // operator notices the gap rather than silently dropping into a default subject.
             log.warn("WebhookIngestPipeline: no SubjectKeyDeriver wired for kind={}", kind);
@@ -191,8 +192,12 @@ public class WebhookIngestPipeline {
             }
         }
 
-        String subject = route != null ? route.subject().apply(payload) : deriver.deriveSubject(payload, headers);
-        String dedupId = route != null ? route.dedupId() : deriver.deriveDedupKey(body, headers);
+        String subject = route != null
+                ? route.subject().apply(payload)
+                : Objects.requireNonNull(deriver).deriveSubject(payload, headers);
+        String dedupId = route != null
+                ? route.dedupId()
+                : Objects.requireNonNull(deriver).deriveDedupKey(body, headers);
 
         // Nats-Msg-Id also rides in JetStreamPublisher's PublishOptions; duplicating it on the
         // headers keeps the wire trace self-describing.

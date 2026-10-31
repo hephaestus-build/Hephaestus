@@ -8,8 +8,8 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Pure subject helpers for NATS consumers. Repository integrations use scoped wildcard filters such as
- * {@code github.owner.repo.>}; Slack Events API callbacks use per-workspace filters
+ * Pure subject helpers for NATS consumers. GitHub uses scoped wildcard filters such as
+ * {@code github.owner.repo.>}; GitLab uses per-connection filters {@code gitlab.?connection.<connectionId>.>}; Slack Events API callbacks use per-workspace filters
  * {@code slack.<team>.>} (Slack interactivity/button postbacks stay on the separate signed HTTP
  * endpoint); Outline change notifications use per-subscription filters {@code outline.<subscriptionId>.>}.
  *
@@ -49,13 +49,9 @@ public final class ConsumerSubjectMath {
     // Subject prefix construction (publisher-mirror)
 
     /**
-     * Builds the NATS subject prefix for a repository identifier.
-     * <ul>
-     *   <li><b>GitHub:</b> {@code owner/repo} → {@code github.owner.repo} (exactly 2 parts)</li>
-     *   <li><b>GitLab:</b> {@code group/sub/project} → {@code gitlab.group~sub.project}
-     *       (namespace parts joined with {@code ~})</li>
-     * </ul>
-     * Dots in any path segment are sanitized to {@code ~} so the NATS token grammar holds.
+     * Builds the NATS subject prefix for a GitHub repository identifier: {@code owner/repo} → {@code github.owner.repo}
+     * (exactly 2 parts). Dots in either segment are sanitized to {@code ~} so the NATS token grammar holds. GitLab
+     * subjects carry the connection, not a path: see {@link #connectionFilter}.
      */
     public static String buildSubjectPrefix(String streamName, String nameWithOwner) {
         if (streamName == null || streamName.trim().isEmpty()) {
@@ -72,16 +68,6 @@ public final class ConsumerSubjectMath {
                     "Invalid repository format: '%s'. Empty path segments are not allowed.", nameWithOwner));
         }
 
-        if ("gitlab".equals(streamName)) {
-            if (parts.length < 2) {
-                throw new IllegalArgumentException(String.format(
-                        "Invalid GitLab repository format: '%s'. Expected 'namespace/project'.", nameWithOwner));
-            }
-            String namespace = String.join("~", Arrays.copyOfRange(parts, 0, parts.length - 1));
-            String project = parts[parts.length - 1];
-            return streamName + "." + namespace + "." + project;
-        }
-
         if (parts.length != 2) {
             throw new IllegalArgumentException(String.format(
                     "Invalid repository format: '%s'. Expected format 'owner/repository'.", nameWithOwner));
@@ -95,7 +81,7 @@ public final class ConsumerSubjectMath {
      * Wildcard subject filter that matches every event for a single repository.
      *
      * @param streamName    the NATS stream name
-     * @param nameWithOwner repository identifier in {@code owner/repo} (or nested for GitLab)
+     * @param nameWithOwner repository identifier in {@code owner/repo}
      * @return a subject like {@code github.owner.repo.>}
      */
     public static String repositoryFilter(String streamName, String nameWithOwner) {

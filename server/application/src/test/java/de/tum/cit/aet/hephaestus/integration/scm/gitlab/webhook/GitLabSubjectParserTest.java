@@ -13,21 +13,11 @@ class GitLabSubjectParserTest extends BaseUnitTest {
     private final GitLabSubjectParser parser = new GitLabSubjectParser();
 
     @Test
-    void parsesSimpleMergeRequestSubject() {
-        EventTypeKey key = parser.parse("gitlab.acme.web.merge_request");
+    void parsesAConnectionSubject() {
+        EventTypeKey key = parser.parse("gitlab.?connection.7.merge_request");
 
         assertThat(key.kind()).isEqualTo(IntegrationKind.GITLAB);
         assertThat(key.eventType()).isEqualTo("merge_request");
-    }
-
-    @Test
-    void parsesTildeEscapedNestedNamespace() {
-        // The deriver joins nested groups with ~ (since / is the NATS hierarchy
-        // separator). Parser must remain agnostic about namespace shape.
-        EventTypeKey key = parser.parse("gitlab.acme~devops.frontend.push");
-
-        assertThat(key.kind()).isEqualTo(IntegrationKind.GITLAB);
-        assertThat(key.eventType()).isEqualTo("push");
     }
 
     @Test
@@ -37,25 +27,35 @@ class GitLabSubjectParserTest extends BaseUnitTest {
         for (String event : new String[] {
             "merge_request", "push", "issue", "note", "pipeline", "build", "wiki_page", "tag_push", "release",
         }) {
-            EventTypeKey key = parser.parse("gitlab.acme.web." + event);
+            EventTypeKey key = parser.parse("gitlab.?connection.7." + event);
             assertThat(key.eventType()).isEqualTo(event);
         }
     }
 
     @Test
-    void tooFewComponentsThrows() {
-        assertThatThrownBy(() -> parser.parse("gitlab.acme.web"))
+    void rejectsAPathSubject() {
+        // Only a connection's own route publishes GitLab deliveries; a namespace/project subject has no publisher.
+        assertThatThrownBy(() -> parser.parse("gitlab.acme.web.merge_request"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least 4 components");
+                .hasMessageContaining("gitlab.?connection.");
+        assertThatThrownBy(() -> parser.parse("gitlab.acme~devops.frontend.push"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 
-        assertThatThrownBy(() -> parser.parse("gitlab.acme")).isInstanceOf(IllegalArgumentException.class);
-
+    @Test
+    void rejectsAnyOtherComponentCount() {
+        assertThatThrownBy(() -> parser.parse("gitlab.?connection.7"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exactly 4 components");
+        assertThatThrownBy(() -> parser.parse("gitlab.?connection.7.merge.request"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exactly 4 components");
         assertThatThrownBy(() -> parser.parse("gitlab")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void wrongPrefixThrows() {
-        assertThatThrownBy(() -> parser.parse("github.acme.web.merge_request"))
+        assertThatThrownBy(() -> parser.parse("github.?connection.7.merge_request"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("gitlab");
     }
@@ -69,7 +69,7 @@ class GitLabSubjectParserTest extends BaseUnitTest {
 
     @Test
     void emptyEventComponentThrows() {
-        assertThatThrownBy(() -> parser.parse("gitlab.acme.web."))
+        assertThatThrownBy(() -> parser.parse("gitlab.?connection.7."))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("blank");
     }

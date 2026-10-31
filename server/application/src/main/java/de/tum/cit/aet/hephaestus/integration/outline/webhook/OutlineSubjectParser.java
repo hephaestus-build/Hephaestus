@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
-import java.util.Arrays;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -33,16 +32,15 @@ public class OutlineSubjectParser implements SubjectParser {
             throw new IllegalArgumentException("subject must not be blank");
         }
         String[] parts = fullSubject.split("\\.", -1);
-        if (parts.length < 3) {
+        if (parts.length != 3) {
             throw new IllegalArgumentException(
-                    "Outline subject must have at least 3 components (outline.<sub>.<event>), got: " + fullSubject);
+                    "Outline subject must have exactly 3 components (outline.<sub>.<event>), got: " + fullSubject);
         }
         if (!"outline".equals(parts[0])) {
             throw new IllegalArgumentException("subject must start with 'outline.', got: " + fullSubject);
         }
-        // A well-formed subject has exactly 3 components; the deriver sanitizes dots in the event
-        // to '~'. Defensively rejoin any trailing parts so a legacy/unsanitized event still parses.
-        String event = parts.length == 3 ? parts[2] : String.join(".", Arrays.copyOfRange(parts, 2, parts.length));
+        // The deriver replaces '.' in the event with '~'.
+        String event = parts[2];
         if (event.isBlank()) {
             throw new IllegalArgumentException("Outline subject event component is blank: " + fullSubject);
         }

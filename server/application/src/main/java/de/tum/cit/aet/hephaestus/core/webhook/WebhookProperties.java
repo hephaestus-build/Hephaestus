@@ -10,10 +10,8 @@ import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Shared webhook configuration bound to {@code hephaestus.webhook.*}. The same {@code secret} is
- * used by auto-registration ({@code workspace.GitLabWebhookService} → sent to provider) and
- * verification ({@code integration.webhook.*} → matched against the incoming HMAC/token). See
- * ADR 0008.
+ * Shared webhook configuration bound to {@code hephaestus.webhook.*}: the receiver's settings, the GitHub webhook
+ * secret, and the routing key and external URL that GitLab and Outline hook registration use. See ADR 0008 and ADR 0066.
  *
  * <p>Incoming request size is capped at the {@code WebhookPayloadSizeFilter} before Spring
  * buffers the body — {@code server.tomcat.max-http-post-size} only enforces on form-encoded
@@ -21,8 +19,7 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param externalUrl Set the public base URL used to register this instance's GitLab webhooks.
  *     GitLab webhook registration is skipped when it is unset.
- * @param secret Shared secret that verifies GitHub webhook signatures and legacy GitLab webhook tokens. GitLab webhook
- *     registration needs at least 32 characters. Must differ from both routing secrets.
+ * @param secret Shared secret that verifies GitHub webhook signatures. Must differ from both routing secrets.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.webhook")
@@ -63,8 +60,8 @@ public record WebhookProperties(
     }
 
     /**
-     * A routing key signs credentials bound to one connection, so it must not be {@link #secret}: that value is the
-     * token every legacy GitLab hook carries and is readable by an administrator of any instance holding one.
+     * A routing key signs credentials bound to one connection, so it must not be {@link #secret}: that value is shared
+     * with GitHub and readable by an administrator of the GitHub App or of any repository hook that holds it.
      */
     @AssertTrue(message = "hephaestus.webhook.routing secrets must differ from hephaestus.webhook.secret")
     private boolean isRoutingKeyIndependentOfSharedSecret() {
@@ -74,13 +71,9 @@ public record WebhookProperties(
         return !secret.equals(routing.secret()) && !secret.equals(routing.previousSecret());
     }
 
-    /** {@code true} iff auto-registration with the provider can be attempted. Pure predicate — no side effects. */
+    /** {@code true} iff a GitLab group hook has a URL to be registered against. Pure predicate — no side effects. */
     public boolean isConfigured() {
-        return (externalUrl != null
-                && !externalUrl.isBlank()
-                && secret != null
-                && !secret.isBlank()
-                && secret.length() >= MIN_SECRET_LENGTH);
+        return externalUrl != null && !externalUrl.isBlank();
     }
 
     /** Redacts {@code secret} so accidental {@code log.info("config: {}", props)} doesn't leak it. */

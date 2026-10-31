@@ -55,7 +55,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
     private static final String PROJECT_PATH = "gitlab-org/gitlab";
-    private static final String NATS_SUBJECT = "gitlab.gitlab-org.gitlab.merge_request";
+    private static final String NATS_SUBJECT = "gitlab.?connection.7.merge_request";
 
     @Mock
     private GitLabMergeRequestProcessor mergeRequestProcessor;

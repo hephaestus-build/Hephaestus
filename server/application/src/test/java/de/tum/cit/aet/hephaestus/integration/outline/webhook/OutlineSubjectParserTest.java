@@ -34,6 +34,15 @@ class OutlineSubjectParserTest extends BaseUnitTest {
         assertThatThrownBy(() -> parser.parse("outline.sub-1")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> parser.parse("gitlab.a.b.c")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> parser.parse("  ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> parser.parse("outline.sub-1.")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void parse_rejectsAnUnsanitizedEvent() {
+        // The deriver has always replaced '.' in the event with '~', so a fourth component has no publisher.
+        assertThatThrownBy(() -> parser.parse("outline.sub-1.documents.update"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exactly 3 components");
     }
 
     @Test

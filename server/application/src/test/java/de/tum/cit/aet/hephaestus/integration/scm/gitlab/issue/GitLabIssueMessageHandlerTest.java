@@ -34,7 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GitLabIssueMessageHandlerTest extends BaseUnitTest {
 
     private static final String PROJECT_PATH = "hephaestustest/demo-repository";
-    private static final String NATS_SUBJECT = "gitlab.hephaestustest.demo-repository.issue";
+    private static final String NATS_SUBJECT = "gitlab.?connection.7.issue";
 
     @Mock
     private GitLabIssueProcessor issueProcessor;

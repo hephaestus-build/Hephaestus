@@ -51,7 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
     private static final String PROJECT_PATH = "hephaestustest/demo-repository";
-    private static final String NATS_SUBJECT = "gitlab.hephaestustest.demo-repository.note";
+    private static final String NATS_SUBJECT = "gitlab.?connection.7.note";
 
     @Mock
     private GitLabIssueCommentProcessor issueCommentProcessor;

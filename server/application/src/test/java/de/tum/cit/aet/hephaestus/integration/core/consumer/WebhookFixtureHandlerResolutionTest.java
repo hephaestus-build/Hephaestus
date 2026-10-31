@@ -190,7 +190,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 "GitLab",
                 GITLAB_FIXTURE_DIR,
                 registeredKeys,
-                payload -> GITLAB_PARSER.parse(GITLAB_DERIVER.deriveSubject(payload, Map.of())),
+                payload -> GITLAB_PARSER.parse(GITLAB_DERIVER.deriveConnectionSubject(7L, payload)),
                 GITLAB_ACK_DROP_ALLOWLIST);
     }
 

@@ -206,7 +206,6 @@ public class SecurityConfig {
                         "/livez",
                         "/readyz",
                         "/webhooks/github",
-                        "/webhooks/gitlab",
                         "/webhooks/gitlab/connections/**",
                         "/webhooks/slack",
                         "/webhooks/slack/interactivity",

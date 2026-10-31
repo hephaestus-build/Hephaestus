@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import tools.jackson.databind.JsonNode;
 
 class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
@@ -72,18 +74,21 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
         assertThatCode(bootstrap::validate).doesNotThrowAnyException();
     }
 
-    @Test
-    void aKindWithItsOwnReceiverEndpointNeedsNoSharedPathVerifier() {
-        // Outline posts to its route endpoint, not to /webhooks/{kind}.
-        IntegrationManifestRegistry registry = new IntegrationManifestRegistry(
-                List.of(manifest(IntegrationKind.OUTLINE, Set.of(Capability.WEBHOOK_INGEST))));
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITLAB", "OUTLINE"})
+    void aKindWithItsOwnReceiverEndpointNeedsNoSharedPathVerifierOrDeriver(IntegrationKind kind) {
+        // GitLab and Outline post to their connection's route endpoint, not to /webhooks/{kind}.
+        IntegrationManifestRegistry registry =
+                new IntegrationManifestRegistry(List.of(manifest(kind, Set.of(Capability.WEBHOOK_INGEST))));
         IntegrationFrameworkBootstrap bootstrap = bootstrap(
                 registry,
-                List.of(credentialProvider(IntegrationKind.OUTLINE)),
-                List.of(lifecycleListener(IntegrationKind.OUTLINE)),
+                List.of(credentialProvider(kind)),
+                List.of(lifecycleListener(kind)),
                 List.of(),
-                List.of(subjectKeyDeriver(IntegrationKind.OUTLINE)),
-                List.of(subjectParser(IntegrationKind.OUTLINE)));
+                List.of(),
+                List.of(subjectParser(kind)));
 
         assertThatCode(bootstrap::validate).doesNotThrowAnyException();
     }

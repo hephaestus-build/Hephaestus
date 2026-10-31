@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Unified webhook ingest controller: {@code POST /webhooks/{kind}} resolves the
  * {@link IntegrationKindRouting kind} from the path and delegates to
- * {@link WebhookIngestPipeline}. GitHub, GitLab and Slack Events API all share this
- * endpoint. Slack interactivity stays on {@code /webhooks/slack/interactivity} because
+ * {@link WebhookIngestPipeline}. GitHub and the Slack Events API share this endpoint;
+ * GitLab and Outline deliver only to their connection's own route. Slack interactivity stays on {@code /webhooks/slack/interactivity} because
  * Slack configures it as a separate Request URL, and it is served by the server role, which
  * commits the consent change before the ACK; the edge routes that one path there.
  *

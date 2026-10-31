@@ -128,17 +128,15 @@ public class IntegrationFrameworkBootstrap {
         if (declared.contains(Capability.WEBHOOK_INGEST)) {
             // No WebhookSecretSource check here: Slack resolves its signing secret via
             // SlackSignatureVerifier, not this SPI, so requiring it would fail Slack's boot;
-            // GitHub/GitLab still self-validate at construction time in their
-            // WebhookSignatureVerifier (missing-bean DI failure / IllegalStateException).
-            if (webhookRoleEnabled) {
-                // A kind with its own receiver endpoint (Outline's route) verifies there.
-                if (sharedWebhookRoutes.routes(kind)) {
-                    require(
-                            kind,
-                            "WebhookSignatureVerifier",
-                            anyMatchKind(signatureVerifiers, v -> v.kind() == kind),
-                            violations);
-                }
+            // GitHub still self-validates at construction time in its WebhookSignatureVerifier.
+            // A kind with its own receiver endpoint (GitLab's and Outline's connection routes)
+            // verifies and derives there: its controller injects what it needs.
+            if (webhookRoleEnabled && sharedWebhookRoutes.routes(kind)) {
+                require(
+                        kind,
+                        "WebhookSignatureVerifier",
+                        anyMatchKind(signatureVerifiers, v -> v.kind() == kind),
+                        violations);
                 require(kind, "SubjectKeyDeriver", anyMatchKind(subjectKeyDerivers, s -> s.kind() == kind), violations);
             }
             require(kind, "SubjectParser", anyMatchKind(subjectParsers, s -> s.kind() == kind), violations);
