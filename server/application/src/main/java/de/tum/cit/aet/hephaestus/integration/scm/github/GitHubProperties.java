@@ -104,7 +104,7 @@ public record GitHubProperties(@Valid App app, @Valid Meta meta) {
      * <p>Used for authenticated requests to GitHub's API that don't require
      * App installation context (e.g., fetching public user profiles).
      *
-     * @param authToken personal access token or fine-grained token for API access
+     * @param authToken Use a personal access token or fine-grained token for GitHub API requests outside an App installation.
      */
     public record Meta(@Nullable String authToken) {}
 }
