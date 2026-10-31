@@ -390,16 +390,6 @@ export type AiChoiceRequest = {
     choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
-/**
- * One answer; exactly the field matching the question's type is set.
- */
-export type Answer = {
-    choices?: Array<string>;
-    questionId: string;
-    rating?: number;
-    text?: string;
-};
-
 export type AppliesWhen = {
     anyOf: Array<AppliesWhenClause>;
     otherwise: string;
@@ -1140,16 +1130,6 @@ export type CreateReviewBatchRequest = {
 
 export type CreateReviewRequest = {
     itemId: string;
-};
-
-export type CreateSurvey = {
-    description: string;
-    endsAt?: string;
-    purpose: 'PRODUCT' | 'RESEARCH';
-    questions: Array<Question>;
-    startsAt: string;
-    title: string;
-    workspaceId?: number;
 };
 
 /**
@@ -2935,9 +2915,6 @@ export type NotificationPreferences = {
     emailAvailable: boolean;
     etag: string;
     productFeedback: boolean;
-    productSurveys: boolean;
-    researchSurveys: boolean;
-    surveySummaries: boolean;
     /**
      * The weekly digest is on
      */
@@ -2975,11 +2952,6 @@ export type OpenWork = {
      * Open pull requests by other people that ask one of this member's teams for a review, and not this member: not asking them directly, and not yet approved or sent back by them. Drafts are excluded. GitHub only; GitLab has no team reviewers, so a GitLab workspace lists none.
      */
     teamReviewRequests: WorkItemList;
-};
-
-export type OptionCount = {
-    count: number;
-    value: string;
 };
 
 export type OutcomeVector = {
@@ -3434,25 +3406,6 @@ export type Pageable = {
 export type PagedModelFeedbackItem = {
     content?: Array<FeedbackItem>;
     page?: PageMetadata;
-};
-
-export type PagedModelSurvey = {
-    content?: Array<Survey>;
-    page?: PageMetadata;
-};
-
-export type PagedModelSurveyResponse = {
-    content?: Array<SurveyResponse>;
-    page?: PageMetadata;
-};
-
-export type ParticipationCounts = {
-    declined: number;
-    /**
-     * every account shown the invitation, including those who then responded or declined
-     */
-    invited: number;
-    responded: number;
 };
 
 export type PasskeyCredential = {
@@ -4292,35 +4245,6 @@ export type PublicActivityWorkSummary = {
 export type PublicActivityWorkspaceSettings = {
     allowSearchEngines: boolean;
     enabled: boolean;
-};
-
-export type Question = {
-    /**
-     * a choice question also takes one free-text answer; false when a stored question omits it
-     */
-    allowOther: boolean;
-    highLabel?: string;
-    id: string;
-    lowLabel?: string;
-    options: Array<string>;
-    prompt: string;
-    required: boolean;
-    type: 'TEXT' | 'SINGLE_CHOICE' | 'MULTIPLE_CHOICE' | 'RATING' | 'NPS';
-};
-
-export type QuestionSummary = {
-    answered: number;
-    average?: number;
-    counts: Array<OptionCount>;
-    /**
-     * responses whose choices include a free-text answer; present for choice questions only
-     */
-    other?: number;
-    questionId: string;
-    /**
-     * Net Promoter Score, −100…100, for an NPS question
-     */
-    score?: number;
 };
 
 /**
@@ -5691,10 +5615,6 @@ export type StateDimension = {
     values: Array<Value>;
 };
 
-export type SubmitSurvey = {
-    answers: Array<Answer>;
-};
-
 export type SubmittedResult = {
     candidate?: JsonNode;
     itemId?: string;
@@ -5714,80 +5634,6 @@ export type SupportOccurrence = {
     recordedAt: string;
     resultId: string;
     summary: string;
-};
-
-export type Survey = {
-    active: boolean;
-    createdAt: string;
-    createdBy?: FeedbackAccountRef;
-    description: string;
-    endsAt?: string;
-    id: string;
-    participation: ParticipationCounts;
-    purpose: 'PRODUCT' | 'RESEARCH';
-    questions: Array<Question>;
-    /**
-     * the organisation a research survey was published for; absent for a product survey
-     */
-    researchOrganization?: string;
-    startsAt: string;
-    title: string;
-    workspace?: FeedbackWorkspaceRef;
-};
-
-export type SurveyEdit = {
-    active: boolean;
-    description: string;
-    endsAt?: string;
-    startsAt: string;
-    title: string;
-};
-
-export type SurveyEmailInvitationRequest = {
-    sendReminder?: boolean;
-};
-
-/**
- * Counts refer to email requests, not in-app invitations or responses. Accepted means SMTP relay acceptance.
- */
-export type SurveyEmailInvitationSummary = {
-    accepted: number;
-    alreadyRequested: number;
-    deliveryConfigured: boolean;
-    eligible: number;
-    queued: number;
-    remaining: number;
-};
-
-export type SurveyInvitation = {
-    description: string;
-    endsAt?: string;
-    id: string;
-    purpose: 'PRODUCT' | 'RESEARCH';
-    questions: Array<Question>;
-    /**
-     * set for a research survey: the organisation whose study the answers join
-     */
-    researchOrganization?: string;
-    /**
-     * the account has been shown this invitation; the webapp nudges only while false
-     */
-    seen: boolean;
-    title: string;
-};
-
-export type SurveyResponse = {
-    account?: FeedbackAccountRef;
-    answers?: Array<Answer>;
-    decidedAt: string;
-    id: string;
-    status: 'INVITED' | 'RESPONDED' | 'DECLINED';
-    workspace?: FeedbackWorkspaceRef;
-};
-
-export type SurveySummary = {
-    participation: ParticipationCounts;
-    questions: Array<QuestionSummary>;
 };
 
 /**
@@ -6258,9 +6104,6 @@ export type UpdateLoginProviderRequest = {
 
 export type UpdateNotificationPreferences = {
     productFeedback: boolean;
-    productSurveys: boolean;
-    researchSurveys: boolean;
-    surveySummaries: boolean;
     /**
      * The weekly digest in your Hephaestus conversation, with one note in Slack or email that it is ready. Absent keeps the saved choice.
      */
@@ -8579,215 +8422,6 @@ export type AdminListProductFeedbackResponses = {
 };
 
 export type AdminListProductFeedbackResponse = AdminListProductFeedbackResponses[keyof AdminListProductFeedbackResponses];
-
-export type AdminListProductSurveysData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Zero-based page index (0..N)
-         */
-        page?: number;
-        /**
-         * The size of the page to be returned
-         */
-        size?: number;
-        /**
-         * Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.
-         */
-        sort?: Array<string>;
-    };
-    url: '/admin/product-feedback/surveys';
-};
-
-export type AdminListProductSurveysResponses = {
-    /**
-     * OK
-     */
-    200: PagedModelSurvey;
-};
-
-export type AdminListProductSurveysResponse = AdminListProductSurveysResponses[keyof AdminListProductSurveysResponses];
-
-export type AdminCreateProductSurveyData = {
-    body: CreateSurvey;
-    path?: never;
-    query?: never;
-    url: '/admin/product-feedback/surveys';
-};
-
-export type AdminCreateProductSurveyResponses = {
-    /**
-     * OK
-     */
-    200: Survey;
-};
-
-export type AdminCreateProductSurveyResponse = AdminCreateProductSurveyResponses[keyof AdminCreateProductSurveyResponses];
-
-export type AdminDeleteProductSurveyData = {
-    body?: never;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}';
-};
-
-export type AdminDeleteProductSurveyResponses = {
-    /**
-     * OK
-     */
-    200: unknown;
-};
-
-export type AdminGetProductSurveyData = {
-    body?: never;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}';
-};
-
-export type AdminGetProductSurveyResponses = {
-    /**
-     * OK
-     */
-    200: Survey;
-};
-
-export type AdminGetProductSurveyResponse = AdminGetProductSurveyResponses[keyof AdminGetProductSurveyResponses];
-
-export type AdminUpdateProductSurveyData = {
-    body: SurveyEdit;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}';
-};
-
-export type AdminUpdateProductSurveyResponses = {
-    /**
-     * OK
-     */
-    200: Survey;
-};
-
-export type AdminUpdateProductSurveyResponse = AdminUpdateProductSurveyResponses[keyof AdminUpdateProductSurveyResponses];
-
-export type AdminPreviewSurveyEmailInvitationsData = {
-    body?: never;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
-};
-
-export type AdminPreviewSurveyEmailInvitationsResponses = {
-    /**
-     * OK
-     */
-    200: SurveyEmailInvitationSummary;
-};
-
-export type AdminPreviewSurveyEmailInvitationsResponse = AdminPreviewSurveyEmailInvitationsResponses[keyof AdminPreviewSurveyEmailInvitationsResponses];
-
-export type AdminSendSurveyEmailInvitationsData = {
-    body?: SurveyEmailInvitationRequest;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}/email-invitations';
-};
-
-export type AdminSendSurveyEmailInvitationsErrors = {
-    /**
-     * Email delivery is not configured; no invitations were requested
-     */
-    503: ProblemDetail;
-};
-
-export type AdminSendSurveyEmailInvitationsError = AdminSendSurveyEmailInvitationsErrors[keyof AdminSendSurveyEmailInvitationsErrors];
-
-export type AdminSendSurveyEmailInvitationsResponses = {
-    /**
-     * Invitation request summary
-     */
-    200: SurveyEmailInvitationSummary;
-};
-
-export type AdminSendSurveyEmailInvitationsResponse = AdminSendSurveyEmailInvitationsResponses[keyof AdminSendSurveyEmailInvitationsResponses];
-
-export type AdminListProductSurveyResponsesData = {
-    body?: never;
-    path: {
-        surveyId: string;
-    };
-    query?: {
-        /**
-         * Zero-based page index (0..N)
-         */
-        page?: number;
-        /**
-         * The size of the page to be returned
-         */
-        size?: number;
-        /**
-         * Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.
-         */
-        sort?: Array<string>;
-    };
-    url: '/admin/product-feedback/surveys/{surveyId}/responses';
-};
-
-export type AdminListProductSurveyResponsesResponses = {
-    /**
-     * OK
-     */
-    200: PagedModelSurveyResponse;
-};
-
-export type AdminListProductSurveyResponsesResponse = AdminListProductSurveyResponsesResponses[keyof AdminListProductSurveyResponsesResponses];
-
-export type AdminExportProductSurveyResponsesData = {
-    body?: never;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}/responses/export';
-};
-
-export type AdminExportProductSurveyResponsesResponses = {
-    /**
-     * OK
-     */
-    200: string;
-};
-
-export type AdminExportProductSurveyResponsesResponse = AdminExportProductSurveyResponsesResponses[keyof AdminExportProductSurveyResponsesResponses];
-
-export type AdminGetProductSurveySummaryData = {
-    body?: never;
-    path: {
-        surveyId: string;
-    };
-    query?: never;
-    url: '/admin/product-feedback/surveys/{surveyId}/summary';
-};
-
-export type AdminGetProductSurveySummaryResponses = {
-    /**
-     * OK
-     */
-    200: SurveySummary;
-};
-
-export type AdminGetProductSurveySummaryResponse = AdminGetProductSurveySummaryResponses[keyof AdminGetProductSurveySummaryResponses];
 
 export type AdminTriageProductFeedbackData = {
     body: FeedbackTriage;
@@ -14823,107 +14457,6 @@ export type SubmitWorkspaceProductFeedbackData = {
 };
 
 export type SubmitWorkspaceProductFeedbackResponses = {
-    /**
-     * OK
-     */
-    200: unknown;
-};
-
-export type ListProductSurveyInvitationsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/product-feedback/surveys';
-};
-
-export type ListProductSurveyInvitationsResponses = {
-    /**
-     * OK
-     */
-    200: Array<SurveyInvitation>;
-};
-
-export type ListProductSurveyInvitationsResponse = ListProductSurveyInvitationsResponses[keyof ListProductSurveyInvitationsResponses];
-
-export type UndoProductSurveyDeclineData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        surveyId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline';
-};
-
-export type UndoProductSurveyDeclineResponses = {
-    /**
-     * OK
-     */
-    200: unknown;
-};
-
-export type DeclineProductSurveyData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        surveyId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline';
-};
-
-export type DeclineProductSurveyResponses = {
-    /**
-     * OK
-     */
-    200: unknown;
-};
-
-export type AcknowledgeProductSurveyInvitationData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        surveyId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/invitation';
-};
-
-export type AcknowledgeProductSurveyInvitationResponses = {
-    /**
-     * OK
-     */
-    200: unknown;
-};
-
-export type SubmitProductSurveyResponseData = {
-    body: SubmitSurvey;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        surveyId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/responses';
-};
-
-export type SubmitProductSurveyResponseResponses = {
     /**
      * OK
      */

@@ -15,12 +15,12 @@ public interface ResearchParticipationQuery {
 
     boolean participates(long accountId);
 
-    /** The question an account must have answered yes to, or empty when this instance runs no study. */
+    /** The wording currently shown for the research scope, or empty when this instance runs no study. */
     Optional<ResearchQuestion> currentQuestion();
 
     /**
      * The decision that authorises research for each given account right now, keyed by account. An
-     * account is absent unless its latest research decision is a grant to the current question and the
+     * account is absent unless its latest research decision covers the current scope and the
      * account is active. One read for the whole collection; joins the caller's transaction.
      */
     Map<Long, Long> currentGrants(Collection<Long> accountIds);
@@ -43,13 +43,13 @@ public interface ResearchParticipationQuery {
     record ResearchQuestion(String noticeVersion, String organization) {}
 
     enum GrantStanding {
-        /** The grant row is still the latest decision, for the current question, on an active account. */
+        /** The grant row is still the latest decision, covers the current scope, and belongs to an active account. */
         CURRENT,
         /** A refusal was recorded after the grant. A later grant does not undo the earlier withdrawal. */
         WITHDRAWN,
         /** A different decision is now the latest, with no refusal in between. */
         SUPERSEDED,
-        /** The grant row is still the latest, but the notice wording or organisation has changed. */
+        /** The grant row is still the latest, but its scope or organisation no longer covers the research. */
         QUESTION_CHANGED,
         /** The account is being erased or was erased. */
         ACCOUNT_ERASED,

@@ -806,7 +806,7 @@ describe("a signed-in person who is not a member", () => {
 		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
 		server.events.removeAllListeners();
 		expect(requests).toHaveLength(1);
-		// Membership, survey invitations and the Hephaestus setup are members-only reads of a workspace.
+		// Membership and the Hephaestus setup are members-only reads of a workspace.
 		expect(paths.filter((path) => /^\/workspaces\/[^/]+\//u.test(path))).toStrictEqual([]);
 	});
 

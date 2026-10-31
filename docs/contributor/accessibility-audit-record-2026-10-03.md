@@ -136,7 +136,6 @@ in `webapp/e2e/accessibility.spec.ts`.
 | Instance settings | `/admin/settings`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Instance settings` |
 | Login providers | `/admin/login-providers`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Login providers` |
 | Feedback inbox | `/admin/feedback`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Feedback inbox` |
-| Surveys | `/admin/surveys`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Surveys` |
 | Person data | `/admin/person-data`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Person data` |
 | Member role | The workspace member's pages (practice profile, activity, workspace activity, teams, mentor, settings), as `e2e-plain` | Pass (E1) | Not tested | Not tested | Not tested | A one-off scan in E1 in both schemes found nothing. We did not run the Tab walk as a member. |
 | Permission denied | A member opens an administrator route (`/w/e2e/admin/members`, `/admin`) | Pass (E1) | Not tested | Not tested | Not tested | The application redirects to the practice profile, which has a title and passes. It shows no message that access was refused. |

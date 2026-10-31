@@ -1,6 +1,6 @@
 # ADR 0044: Email is a notification transport, delivered through the event publication registry
 
-**Status:** Accepted
+**Status:** Accepted. The 1.0 cutover removes the survey invitation records and survey email requests described below. The email transport decision remains in effect.
 **Date:** 2026-09-12
 
 ## Context

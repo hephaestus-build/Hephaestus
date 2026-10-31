@@ -11,16 +11,7 @@ public record UpdateNotificationPreferencesDTO(
         Boolean productFeedback,
 
         @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
-        Boolean productSurveys,
-
-        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
-        Boolean researchSurveys,
-
-        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
         Boolean workspaceAlerts,
-
-        @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
-        Boolean surveySummaries,
 
         // Absent keeps the saved choice.
         @Nullable

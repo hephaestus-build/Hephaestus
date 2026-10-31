@@ -108,16 +108,16 @@ describe("workspace route gate", () => {
 				HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
 			),
 		);
-		const location = await land("/w/acme?survey=welcome");
+		const location = await land("/w/acme?chromeWorkspace=acme");
 		expect(location.pathname).toBe("/w/acme/practice-profile");
-		expect(location.search).toMatchObject({ survey: "welcome" });
+		expect(location.search).toMatchObject({ chromeWorkspace: "acme" });
 	});
 
 	it("opens a reachable workspace on Activity where it does not review practices, carrying the search", async () => {
 		listWorkspaces("acme");
-		const location = await land("/w/acme?survey=welcome");
+		const location = await land("/w/acme?chromeWorkspace=acme");
 		expect(location.pathname).toBe(WORKSPACE_HOME);
-		expect(location.search).toMatchObject({ survey: "welcome" });
+		expect(location.search).toMatchObject({ chromeWorkspace: "acme" });
 	});
 
 	it("opens Activity when the workspace list cannot be fetched", async () => {

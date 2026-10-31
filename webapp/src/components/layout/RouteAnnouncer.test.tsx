@@ -42,7 +42,7 @@ describe("RouteAnnouncer", () => {
 		const { router } = await mount();
 
 		document.title = "Landing, filtered · Hephaestus";
-		await act(async () => router.navigate({ to: "/", search: { survey: "pilot" } }));
+		await act(async () => router.navigate({ to: "/", search: { chromeWorkspace: "acme" } }));
 
 		expect(screen.queryByText("Landing, filtered · Hephaestus")).toBeNull();
 	});

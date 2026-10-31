@@ -82,9 +82,6 @@ export const handlers = [
 		HttpResponse.json({
 			productFeedback: false,
 			workspaceAlerts: false,
-			surveySummaries: false,
-			productSurveys: false,
-			researchSurveys: false,
 			emailAvailable: true,
 			deliveryConfigured: true,
 			weeklyDigest: false,
@@ -114,7 +111,6 @@ export const handlers = [
 	http.get("*/user/public-activity/workspaces/:slug/onboarding", () => notFound()),
 	http.get("*/user/public-activity", () => HttpResponse.json({ visible: true })),
 
-	http.get("*/workspaces/:workspaceSlug/product-feedback/surveys", () => HttpResponse.json([])),
 	http.get("*/identity-providers", () => HttpResponse.json(identityProviders)),
 	http.get("*/user/identities", () => HttpResponse.json(linkedIdentities)),
 

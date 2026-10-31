@@ -14,16 +14,12 @@ const meta = {
 	component: SettingsPage,
 	args: {
 		emailPreferencesProps: {
-			researchAvailable: true,
 			isAppAdmin: false,
 			state: {
 				status: "ready",
 				preferences: {
 					productFeedback: false,
 					workspaceAlerts: false,
-					surveySummaries: false,
-					productSurveys: false,
-					researchSurveys: false,
 					emailAvailable: true,
 					deliveryConfigured: true,
 					weeklyDigest: false,
@@ -260,7 +256,6 @@ export const PreferencesUnavailable: Story = {
 
 export const ResearchHidden: Story = {
 	args: {
-		emailPreferencesProps: { ...meta.args.emailPreferencesProps, researchAvailable: false },
 		practiceFeedbackProps: {
 			practiceFeedbackDeliveryEnabled: true,
 			onTogglePracticeFeedback: fn(),

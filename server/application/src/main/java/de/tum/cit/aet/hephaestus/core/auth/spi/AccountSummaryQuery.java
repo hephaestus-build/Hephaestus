@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Resolves account ids to the name and contact an instance administrator sees next to a record the
- * account produced. A module that stores {@code account_id} columns (feedback, survey responses)
+ * account produced. A module that stores {@code account_id} columns (product feedback)
  * batches one lookup per page instead of importing the {@code Account} entity.
  */
 public interface AccountSummaryQuery {

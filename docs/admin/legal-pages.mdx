@@ -81,7 +81,7 @@ The data it may use is:
 - The participant's work in the tools that the project connects.
 - Hephaestus results and problems and feedback about that work.
 - The participant's responses to that feedback.
-- How the participant uses Hephaestus, including conversations with Hephaestus and answers to research surveys.
+- How the participant uses Hephaestus, including conversations with Hephaestus.
 
 Sign-in credentials and access tokens are never used.
 Slack messages that a participant stops Hephaestus from using stay out of research too.
@@ -92,7 +92,7 @@ Saying no or withdrawing has no disadvantage ([Art. 7(4) GDPR](https://gdpr-info
 Research that falls outside this area is not covered by this consent.
 For such research, change the wording with a new `WORDING_VERSION` after legal review.
 
-### A change is a new question
+### When a new decision is required
 
 **A change to the organization name is a new question. Hephaestus treats it as one.**
 Every research decision records the organization that the question named in `consent_decision.research_organization`.
@@ -105,31 +105,39 @@ Setup asks the research question again.
 Earlier decisions stay in the ledger as a record of the questions and answers at that time.
 Terms acceptance stays unchanged because the terms did not change.
 
-**A change to the wording is a new question for every account.**
-A new `WORDING_VERSION` is a new notice version.
-Every account sees the setup screen once more, with the terms and, where an organization is named, the research question.
-An earlier yes is not carried over to a broader scope.
-Only a decision on the current version and the current organization authorizes anything.
+**A wording version records what the person saw. Scope determines whether a decision still applies.**
 
-Until an account answers, `participatesInResearch` reports false and research survey invitations stop.
+New consent decisions record the current `WORDING_VERSION`.
+A wording change that adds a research purpose, recipient, or use of data needs a new decision.
+A change to the kind of research also needs a new decision.
+A narrower wording can keep a decision that already covers every retained purpose.
+The configured organization must still match, and the latest answer still applies.
 
-Even a cosmetic rename gives every account one more setup screen.
-Make a change to the name or the wording deliberately.
+The `2026-10-31` wording removes survey answers from the `2026-10-04` scope.
+It adds no research purpose, recipient, or use of data.
+Existing grants and refusals therefore remain valid without another setup screen.
+The ledger keeps their original wording versions and decision IDs.
+A withdrawal still applies at once.
+The `2026-09-11` wording did not cover benchmarks and evaluation datasets, so it does not authorize the retained scope.
+
+`ConsentService` lists the wording versions that cover the current scope.
+A later version is not accepted automatically.
+[EDPB Guidelines 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf), paragraphs 57–58 and 110, relate consent to the purposes and scope originally accepted.
+This removal stays within those purposes.
 
 Both the setup screen and the settings switch return the organization that they displayed.
 If a submission names an organization that this instance no longer runs, Hephaestus refuses it with `409`.
 A tab left open across a change cannot record a decision about an organization that its reader never saw.
 
-Research-purpose surveys and their email invitations require a current grant for the configured
-organization. Withdrawal stops new research survey participation and invitation delivery. It does not
-stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
+Practice research requires a current grant for the configured organization.
+Withdrawal stops new research use. It does not stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
 links to account settings rather than maintaining a separate research decision.
 
 ### Withdrawal
 
 A participant withdraws with one switch, **Allow research use of my data**, in **User settings → Research participation**.
 This is as easy as giving consent ([Art. 7(3) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
-New research use stops, and research survey invitations stop.
+New research use stops.
 The research organization removes the participant's data from datasets that are not yet anonymized.
 Research done before the withdrawal stays lawful.
 
@@ -210,7 +218,7 @@ The broad consent is valid only if the operator meets these obligations.
 Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to them while the research runs.
 
 1. Before any research export, analysis, or benchmark run, apply the latest `RESEARCH_PARTICIPATION` decision of each account.
-   Use only a grant for the current notice version and the current organization.
+   Use only a grant whose wording covers the retained scope and names the current organization.
 2. Remove the data of withdrawn accounts from datasets that are not yet anonymized without undue delay.
    Treat an erasure request for data in such a dataset the same way.
    Treat a Slack message-use opt-out the same way for the affected messages.
@@ -229,7 +237,6 @@ Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to 
    A power imbalance can weaken the free choice of a participant.
    See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 16 to 24 and 46 to 48.
    See also [Recital 43](https://gdpr-info.eu/recitals/no-43/).
-   Instance admins can read research survey answers, so give the admin role only to people who meet this rule.
 6. Test a dataset for re-identification before you call it anonymous.
    Release it only if the test passes.
    Free text and code are hard to anonymize ([EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraph 164).
@@ -244,14 +251,18 @@ Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to 
 
 Publish the retention and recipient details of the research in your privacy notice.
 
-`ConsentService.WORDING_VERSION` identifies the text that an account accepted.
+Each ledger row’s `notice_version` identifies the text that the account saw.
+A research disclosure records the wording in force when released, while each linked grant row keeps the wording that its participant accepted.
+
+`ConsentService.WORDING_VERSION` identifies the text shown for new decisions.
 That text is the first-login screen, published in a signed release and immutable in git.
 The webapp holds the same constant beside the text.
 It submits its own constant.
 Thus, a browser tab that predates a deployment cannot record acceptance of text it never rendered.
 
-A fork that changes the text must change both constants in the same commit.
-Such a change gives every account one more setup screen.
+A fork that changes the text must change both `WORDING_VERSION` constants and review `ConsentService.ACCEPTED_NOTICE_VERSIONS` in the same commit.
+The current version must be in that set.
+Follow [When a new decision is required](#when-a-new-decision-is-required) to decide which earlier versions can stay in the set.
 Make it on purpose.
 
 ## Operator obligations
@@ -271,10 +282,10 @@ Links to the upstream notices do not describe a separately operated deployment.
 At page load, the webapp fetches the relevant Markdown file in this priority order.
 It uses the first file it finds:
 
-| Priority | Path                           | Typical source               |
-| -------: | ------------------------------ | ---------------------------- |
-|       1. | `/legal-overrides/<page>.md`   | Mounted by the operator      |
-|       2. | `/legal/_disclaimer/<page>.md` | Shipped safety-fallback      |
+| Priority | Path                           | Typical source          |
+| -------: | ------------------------------ | ----------------------- |
+|       1. | `/legal-overrides/<page>.md`   | Mounted by the operator |
+|       2. | `/legal/_disclaimer/<page>.md` | Shipped safety-fallback |
 
 `<page>` is `imprint` or `privacy`.
 A banner alerts end users whenever the webapp serves the disclaimer.
@@ -333,7 +344,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
   The mirror is erased when the last workspace stops monitoring the source repository.
   Disconnection of the workspace's integration or a workspace purge also erases it.
 - **Account settings and email notifications** — user preferences and the provider-verified primary email address for account-security and deletion email.
-  With a configured relay, this also includes optional notification subscriptions, survey invitation records, and unsubscribe capabilities.
+  With a configured relay, this also includes optional notification subscriptions and unsubscribe capabilities.
   The notice must name the relay operator as a recipient.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated practice results.
 - **Server logs** — IP address and request metadata.

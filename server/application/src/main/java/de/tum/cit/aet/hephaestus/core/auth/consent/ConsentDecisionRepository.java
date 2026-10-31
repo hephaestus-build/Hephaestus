@@ -27,7 +27,7 @@ interface ConsentDecisionRepository extends JpaRepository<ConsentDecision, Long>
             @Param("accountIds") Collection<Long> accountIds, @Param("purpose") ConsentDecision.Purpose purpose);
 
     /**
-     * Terms and the privacy notice, for this wording. The research half is decided in
+     * Terms and the privacy notice, for wording that covers the retained scope. The research half is decided in
      * {@link ConsentService} from the same latest-decision lookup that decides whether research is
      * authorised, so the two can never answer differently about the same row.
      */
@@ -37,7 +37,8 @@ interface ConsentDecisionRepository extends JpaRepository<ConsentDecision, Long>
                     AND count(*) FILTER (WHERE purpose = 'PRIVACY_NOTICE_ACKNOWLEDGEMENT' AND granted) > 0
                 )
                 FROM consent_decision
-                WHERE account_id = :accountId AND notice_version = :noticeVersion
+                WHERE account_id = :accountId AND notice_version IN (:noticeVersions)
                 """, nativeQuery = true)
-    boolean hasAcceptedNotice(@Param("accountId") Long accountId, @Param("noticeVersion") String noticeVersion);
+    boolean hasAcceptedNotice(
+            @Param("accountId") Long accountId, @Param("noticeVersions") Collection<String> noticeVersions);
 }

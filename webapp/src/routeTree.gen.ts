@@ -33,7 +33,6 @@ import { Route as AuthenticatedAdminModelsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminPersonDataRouteImport } from './routes/_authenticated/admin.person-data'
 import { Route as AuthenticatedAdminResearchRouteImport } from './routes/_authenticated/admin.research'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
-import { Route as AuthenticatedAdminSurveysRouteImport } from './routes/_authenticated/admin.surveys'
 import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin.usage'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminWorkspacesRouteImport } from './routes/_authenticated/admin.workspaces'
@@ -210,12 +209,6 @@ const AuthenticatedAdminSettingsRoute =
   AuthenticatedAdminSettingsRouteImport.update({
     id: '/settings',
     path: '/settings',
-    getParentRoute: () => AuthenticatedAdminRoute,
-  } as any)
-const AuthenticatedAdminSurveysRoute =
-  AuthenticatedAdminSurveysRouteImport.update({
-    id: '/surveys',
-    path: '/surveys',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminUsageRoute = AuthenticatedAdminUsageRouteImport.update({
@@ -533,7 +526,6 @@ export interface FileRoutesByFullPath {
   '/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
   '/admin/research': typeof AuthenticatedAdminResearchRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
-  '/admin/surveys': typeof AuthenticatedAdminSurveysRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
@@ -606,7 +598,6 @@ export interface FileRoutesByTo {
   '/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
   '/admin/research': typeof AuthenticatedAdminResearchRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
-  '/admin/surveys': typeof AuthenticatedAdminSurveysRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
@@ -677,7 +668,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
   '/_authenticated/admin/research': typeof AuthenticatedAdminResearchRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
-  '/_authenticated/admin/surveys': typeof AuthenticatedAdminSurveysRoute
   '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/admin/workspaces': typeof AuthenticatedAdminWorkspacesRoute
@@ -754,7 +744,6 @@ export interface FileRouteTypes {
     | '/admin/person-data'
     | '/admin/research'
     | '/admin/settings'
-    | '/admin/surveys'
     | '/admin/usage'
     | '/admin/users'
     | '/admin/workspaces'
@@ -827,7 +816,6 @@ export interface FileRouteTypes {
     | '/admin/person-data'
     | '/admin/research'
     | '/admin/settings'
-    | '/admin/surveys'
     | '/admin/usage'
     | '/admin/users'
     | '/admin/workspaces'
@@ -897,7 +885,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/person-data'
     | '/_authenticated/admin/research'
     | '/_authenticated/admin/settings'
-    | '/_authenticated/admin/surveys'
     | '/_authenticated/admin/usage'
     | '/_authenticated/admin/users'
     | '/_authenticated/admin/workspaces'
@@ -1133,13 +1120,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AuthenticatedAdminSettingsRouteImport
-      parentRoute: typeof AuthenticatedAdminRoute
-    }
-    '/_authenticated/admin/surveys': {
-      id: '/_authenticated/admin/surveys'
-      path: '/surveys'
-      fullPath: '/admin/surveys'
-      preLoaderRoute: typeof AuthenticatedAdminSurveysRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/usage': {
@@ -1511,7 +1491,6 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPersonDataRoute: typeof AuthenticatedAdminPersonDataRoute
   AuthenticatedAdminResearchRoute: typeof AuthenticatedAdminResearchRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
-  AuthenticatedAdminSurveysRoute: typeof AuthenticatedAdminSurveysRoute
   AuthenticatedAdminUsageRoute: typeof AuthenticatedAdminUsageRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminWorkspacesRoute: typeof AuthenticatedAdminWorkspacesRoute
@@ -1528,7 +1507,6 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminPersonDataRoute: AuthenticatedAdminPersonDataRoute,
   AuthenticatedAdminResearchRoute: AuthenticatedAdminResearchRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
-  AuthenticatedAdminSurveysRoute: AuthenticatedAdminSurveysRoute,
   AuthenticatedAdminUsageRoute: AuthenticatedAdminUsageRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminWorkspacesRoute: AuthenticatedAdminWorkspacesRoute,

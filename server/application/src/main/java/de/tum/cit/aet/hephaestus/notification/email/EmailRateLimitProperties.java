@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * Daily email capacity for the whole instance.
  *
  * @param dailyCapacity Most emails this instance sends per day. Hephaestus does not send an email above this limit.
- * @param optionalDailyCapacity Most optional emails, such as digests and survey invitations, this instance sends per
+ * @param optionalDailyCapacity Most optional emails, such as digests and product feedback notifications, this instance sends per
  *     day. Optional emails also count toward daily-capacity. Must be lower than daily-capacity.
  */
 @ConfigurationProperties(prefix = "hephaestus.email.rate-limit")

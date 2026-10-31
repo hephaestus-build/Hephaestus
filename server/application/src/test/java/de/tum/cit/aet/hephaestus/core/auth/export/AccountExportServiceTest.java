@@ -127,8 +127,7 @@ class AccountExportServiceTest extends BaseUnitTest {
                 gitProviderRegistry,
                 clock,
                 accountId -> new AccountAiChoiceExport.Choice("NO_AI", clock.instant()),
-                accountId ->
-                        new NotificationPreferencesExportQuery.Preferences(false, false, false, false, false, false),
+                accountId -> new NotificationPreferencesExportQuery.Preferences(false, false, false),
                 research,
                 passkeys,
                 passkeyJson);
