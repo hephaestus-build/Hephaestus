@@ -49,6 +49,7 @@ The incidents teach five lessons:
 
 - **Keep packages by default, and rely on scanners and pins.** Rejected. Scanners find known advisories. In the incidents above, the malicious version was new and had no advisory yet.
 - **Own every small dependency.** Rejected. Each owned module needs tests and a reviewer who watches its upstream. Too many become a second, unmaintained library.
+- **A baseline that must match exactly.** Rejected. Each pull request that changes a count must update the baseline, Renovate's included. Two such pull requests cannot merge in parallel.
 - **Few dependencies, with a measured bar (chosen).** Own a sliver when it is small, stable and has no platform replacement. Keep the foundations, but remove their unused add-ons. Make each addition visible in review.
 
 ## Decision
@@ -56,7 +57,7 @@ The incidents teach five lessons:
 1. **A platform feature comes first, a few owned lines second, a new package third.** A framework or platform feature is better than code that we write. A few owned lines are better than a new package for a sliver.
 2. **A new package answers a written bar in its pull request.** [Dependencies](../contributor/dependencies.md#the-bar-for-a-new-dependency) owns the bar.
 3. **Owned code keeps the license and the provenance of its upstream**, in its source and in the release SBOM. [Dependencies](../contributor/dependencies.md#how-owned-code-lives) owns the rules.
-4. **The package counts are a ratchet that CI checks.** Each addition changes a committed baseline in the same pull request. [Dependencies](../contributor/dependencies.md#the-dependency-baseline) describes it.
+4. **The package counts are a one-way ratchet that CI checks.** A count above the committed baseline fails, so each addition raises the baseline in the same pull request. A count below it passes. [Dependencies](../contributor/dependencies.md#the-dependency-baseline) describes it.
 5. **The install policy lives in `pnpm-workspace.yaml`**, with the reason for each setting in a comment.
 
 ## Consequences
@@ -64,7 +65,7 @@ The incidents teach five lessons:
 - A pull request that adds a package is larger, because it changes the baseline and answers the bar.
 - Owned code does not get Renovate updates or advisories. The header names the upstream so that a reviewer can compare it.
 - Owned code in a shipped tree needs its SBOM component first. Thus, a self-hoster sees the same provenance as for a package.
-- Removing a package lowers the baseline. The next addition cannot use that space silently.
+- A removal leaves room below the baseline until a later pull request lowers it. The gate names the lower value, so the room is visible.
 
 ## Revisit trigger
 

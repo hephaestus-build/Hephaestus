@@ -1,9 +1,10 @@
 /**
  * Holds the npm dependency counts of every lockfile to `security/dependency-baseline.json`.
  *
- * The counts must match exactly. Thus, a pull request that adds a package also changes the baseline,
- * and the review sees the cost of the addition beside it. A pull request that removes a package
- * lowers the baseline, so the next addition cannot reuse the space silently.
+ * A count above the baseline fails. Thus, a pull request that adds a package also raises the baseline,
+ * and the review sees the cost of the addition beside it. A count below the baseline passes with a
+ * notice, so removals, Renovate's included, merge in parallel; any later change can lower the
+ * baseline. An exact match would serialize every pull request that changes a count.
  * `docs/contributor/dependencies.md` gives the bar for an addition.
  *
  * Usage: `node scripts/check-dependency-baseline.ts [--write]`.
@@ -146,23 +147,35 @@ const flatten = (value: unknown, prefix = ""): Map<string, unknown> =>
 			: [[prefix, value]],
 	);
 
-/** Every count that differs between the baseline and the measurement, as one line each. */
-export function compare(baseline: unknown, measured: Baseline): string[] {
+const describe = (field: string, before: unknown, after: unknown): string =>
+	typeof before === "number" && typeof after === "number"
+		? `${field}: ${before} → ${after} (${after > before ? "+" : ""}${after - before})`
+		: `${field}: ${String(before)} → ${String(after)}`;
+
+/**
+ * The counts above the baseline, which fail, and the counts below it, which can lower it. A lockfile
+ * or importer that the baseline does not name is a rise; one that the lockfiles no longer have is a fall.
+ */
+export function compare(
+	baseline: unknown,
+	measured: Baseline,
+): { rises: string[]; falls: string[] } {
 	const expected = flatten(baseline);
 	const actual = flatten(measured);
-	const fields = [...new Set([...expected.keys(), ...actual.keys()])].toSorted();
-	return fields.flatMap((field) => {
+	const rises: string[] = [];
+	const falls: string[] = [];
+	for (const field of [...new Set([...expected.keys(), ...actual.keys()])].toSorted()) {
 		const before = expected.get(field);
 		const after = actual.get(field);
 		if (before === after) {
-			return [];
+			continue;
 		}
-		const change =
-			typeof before === "number" && typeof after === "number"
-				? `${before} → ${after} (${after > before ? "+" : ""}${after - before})`
-				: `${String(before)} → ${String(after)}`;
-		return [`${field}: ${change}`];
-	});
+		const fell =
+			after === undefined ||
+			(typeof before === "number" && typeof after === "number" && after < before);
+		(fell ? falls : rises).push(describe(field, before, after));
+	}
+	return { rises, falls };
 }
 
 export const render = (counts: Baseline): string => `${JSON.stringify(counts, null, "\t")}\n`;
@@ -173,18 +186,26 @@ if (import.meta.main) {
 		writeFileSync(BASELINE_FILE, render(measured));
 		console.log(`Wrote ${BASELINE_FILE}.`);
 	} else {
-		const differences = compare(parseJson(readFileSync(BASELINE_FILE, "utf8")), measured);
-		if (differences.length > 0) {
+		const { rises, falls } = compare(parseJson(readFileSync(BASELINE_FILE, "utf8")), measured);
+		if (rises.length > 0) {
 			console.error(
 				[
-					`The npm dependency counts differ from ${BASELINE_FILE}:`,
-					...differences.map((line) => `  ${line}`),
+					`The npm dependency counts rise above ${BASELINE_FILE}:`,
+					...rises.map((line) => `  ${line}`),
 					"",
 					"An addition must meet the bar in docs/contributor/dependencies.md.",
 					"Run `node scripts/check-dependency-baseline.ts --write` and commit the baseline with the change.",
 				].join("\n"),
 			);
 			process.exitCode = 1;
+		} else if (falls.length > 0) {
+			console.log(
+				[
+					`The npm dependency counts are below ${BASELINE_FILE}; the baseline can be lowered:`,
+					...falls.map((line) => `  ${line}`),
+					"Run `node scripts/check-dependency-baseline.ts --write` to lower it.",
+				].join("\n"),
+			);
 		} else {
 			console.log(`npm dependency counts match ${BASELINE_FILE}.`);
 		}

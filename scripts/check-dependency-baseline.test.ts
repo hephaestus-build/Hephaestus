@@ -123,17 +123,40 @@ await test("a reference without a snapshot or a link without an importer fails r
 	);
 });
 
-await test("names each count that moved, with its direction", () => {
+await test("a count above the baseline is a rise, below it a fall, and equal is neither", () => {
 	const measured = { "a.yaml": countLockfile(LOCKFILE, "fixture") };
-	const baseline = structuredClone(measured);
-	const { app } = baseline["a.yaml"].importers;
-	assert.ok(app);
-	app.transitive.all = 3;
-	assert.deepEqual(compare(baseline, measured), [
-		"a.yaml › importers › app › transitive › all: 3 → 6 (+3)",
-	]);
-	assert.deepEqual(compare(JSON.parse(render(measured)), measured), []);
-	assert.deepEqual(compare({}, { "a.yaml": { packages: 1, importers: {} } }), [
-		"a.yaml › packages: undefined → 1",
-	]);
+	assert.deepEqual(compare(JSON.parse(render(measured)), measured), { rises: [], falls: [] });
+
+	const lower = structuredClone(measured);
+	const { app: lowerApp } = lower["a.yaml"].importers;
+	assert.ok(lowerApp);
+	lowerApp.transitive.all = 3;
+	assert.deepEqual(compare(lower, measured), {
+		rises: ["a.yaml › importers › app › transitive › all: 3 → 6 (+3)"],
+		falls: [],
+	});
+
+	const higher = structuredClone(measured);
+	const { app: higherApp } = higher["a.yaml"].importers;
+	assert.ok(higherApp);
+	higherApp.transitive.all = 9;
+	higher["a.yaml"].packages = 10;
+	assert.deepEqual(compare(higher, measured), {
+		rises: [],
+		falls: [
+			"a.yaml › importers › app › transitive › all: 9 → 6 (-3)",
+			"a.yaml › packages: 10 → 7 (-3)",
+		],
+	});
+});
+
+await test("a lockfile the baseline does not name rises; one the lockfiles no longer have falls", () => {
+	assert.deepEqual(compare({}, { "a.yaml": { packages: 1, importers: {} } }), {
+		rises: ["a.yaml › packages: undefined → 1"],
+		falls: [],
+	});
+	assert.deepEqual(compare({ "a.yaml": { packages: 1, importers: {} } }, {}), {
+		rises: [],
+		falls: ["a.yaml › packages: 1 → undefined"],
+	});
 });

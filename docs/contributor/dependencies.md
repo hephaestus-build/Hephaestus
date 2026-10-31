@@ -95,11 +95,13 @@ Such a file needs a complete header and a component in the release SBOM.
 ## The dependency baseline
 
 `security/dependency-baseline.json` records, for each lockfile and workspace, the number of direct and transitive packages.
-`gate:dependency-baseline` compares it with the lockfiles, and the counts must be equal.
-Thus, a pull request that adds a package also changes the baseline, and the review sees the cost beside the change.
-A pull request that removes a package lowers the baseline.
+`gate:dependency-baseline` compares it with the lockfiles and fails when a count rises above the baseline.
+Thus, a pull request that adds a package also raises the baseline, and the review sees the cost beside the change.
+A count below the baseline passes, and the gate names the lower value.
+Any later pull request can lower the baseline in passing.
+Thus, removals and Renovate updates merge in parallel.
 
-To update the baseline after a dependency change, run:
+To raise the baseline with an addition, or to lower it after a removal, run:
 
 ```sh
 node scripts/check-dependency-baseline.ts --write
