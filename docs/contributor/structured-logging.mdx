@@ -6,6 +6,7 @@ title: Structured logging
 
 The [operator observability contract](/admin/observability) owns the JSON schema, event names,
 and correlation semantics. Preserve that contract when changing a log producer or its encoder.
+[Observability principles](./observability-principles.md) says why each change ships its signal and what a signal must not carry.
 Logging is an operational interface: useful severity, trustworthy context, and bounded disclosure
 matter more than a console with no warnings.
 

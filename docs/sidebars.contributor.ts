@@ -46,6 +46,7 @@ const sidebars: SidebarsConfig = {
 				"documentation-guide",
 				"check-a-docs-page",
 				"add-a-user-guide-screenshot",
+				"observability-principles",
 				"structured-logging",
 				"api-error-handling",
 				"brand-assets",
