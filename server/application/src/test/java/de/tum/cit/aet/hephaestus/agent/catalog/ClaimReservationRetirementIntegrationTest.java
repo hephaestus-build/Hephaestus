@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.DriverManager;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import liquibase.Contexts;
@@ -15,6 +14,7 @@ import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,7 +57,7 @@ class ClaimReservationRetirementIntegrationTest {
             UUID active = permit(jdbc, "ACTIVE", 2, 200);
             UUID waiting = permit(jdbc, "WAITING", 0, 0);
             UUID closed = permit(jdbc, "CLOSED", 1, 50);
-            Map<String, Object> reservation = row(jdbc, reserved);
+            Map<String, @Nullable Object> reservation = row(jdbc, reserved);
             var actualCalls = List.of(row(jdbc, active), row(jdbc, waiting), row(jdbc, closed));
 
             liquibase.update(1, contexts, labels);
@@ -94,7 +94,7 @@ class ClaimReservationRetirementIntegrationTest {
         return id;
     }
 
-    private static Map<String, Object> row(JdbcTemplate jdbc, UUID id) {
-        return Objects.requireNonNull(jdbc.queryForMap("SELECT * FROM llm_call_permit WHERE id=?", id));
+    private static Map<String, @Nullable Object> row(JdbcTemplate jdbc, UUID id) {
+        return jdbc.queryForMap("SELECT * FROM llm_call_permit WHERE id=?", id);
     }
 }
