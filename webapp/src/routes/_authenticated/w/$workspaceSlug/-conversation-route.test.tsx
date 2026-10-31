@@ -1517,3 +1517,40 @@ it("links a weekly digest's feedback to its place in the conversation, and repli
 		).toStrictEqual([{ text: "Go through it with me", parentEntryId: digest.id }]),
 	);
 });
+
+it("puts an example question into the composer of an empty conversation without sending it", async () => {
+	const fake = new ConversationFake();
+	serve(fake);
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	await userEvent.click(
+		await screen.findByRole(
+			"button",
+			{ name: "Which practices apply in this workspace?" },
+			ROUTE_RENDER_WAIT,
+		),
+	);
+
+	const composer = await screen.findByRole("textbox", { name: "Message Hephaestus" });
+	expect(composer).toHaveProperty("value", "Which practices apply in this workspace?");
+	expect(document.activeElement).toBe(composer);
+	expect(fake.submissions).toStrictEqual([]);
+});
+
+it("offers no example while the developer has unsent words, so an example never replaces them", async () => {
+	serve(new ConversationFake());
+
+	renderRouteAtWithRouter("/w/acme/conversation");
+	const composer = await screen.findByRole(
+		"textbox",
+		{ name: "Message Hephaestus" },
+		ROUTE_RENDER_WAIT,
+	);
+	await screen.findByRole("list", { name: "Example questions" });
+
+	await userEvent.type(composer, "My own question");
+	expect(screen.queryByRole("list", { name: "Example questions" })).toBeNull();
+
+	await userEvent.clear(composer);
+	await screen.findByRole("list", { name: "Example questions" });
+});
