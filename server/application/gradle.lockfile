@@ -205,7 +205,6 @@ jakarta.mail:jakarta.mail-api:2.1.5=compileClasspath,mainPmdAuxClasspath,product
 jakarta.persistence:jakarta.persistence-api:3.2.0=compileClasspath,liquibaseTools,mainPmdAuxClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 jakarta.transaction:jakarta.transaction-api:2.0.1=compileClasspath,liquibaseTools,mainPmdAuxClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 jakarta.validation:jakarta.validation-api:3.1.1=compileClasspath,mainPmdAuxClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-jakarta.ws.rs:jakarta.ws.rs-api:4.0.0=compileClasspath,mainPmdAuxClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 jakarta.xml.bind:jakarta.xml.bind-api:4.0.5=compileClasspath,liquibaseTools,mainPmdAuxClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 javax.inject:javax.inject:1=annotationProcessor,testAnnotationProcessor
 javax.xml.bind:jaxb-api:2.3.1=liquibaseTools
