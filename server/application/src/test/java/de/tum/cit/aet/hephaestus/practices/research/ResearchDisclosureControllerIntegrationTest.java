@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureController.CloseResearchDisclosureDTO;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchDisclosureController.RecordResearchRemovalsDTO;
@@ -133,8 +134,8 @@ class ResearchDisclosureControllerIntegrationTest extends RealAuthIntegrationTes
                     .expectHeader()
                     .value(HttpHeaders.CACHE_CONTROL, v -> assertThat(v).contains("no-store"))
                     .expectBody()
-                    .jsonPath("$.code")
-                    .isEqualTo("passkey_required");
+                    .jsonPath("$.type")
+                    .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         }
         assertUnchanged(before);
     }
@@ -197,8 +198,8 @@ class ResearchDisclosureControllerIntegrationTest extends RealAuthIntegrationTes
                 .expectHeader()
                 .doesNotExist(HttpHeaders.CONTENT_DISPOSITION)
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         assertUnchanged(before);
     }
 

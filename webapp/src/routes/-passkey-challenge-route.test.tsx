@@ -7,12 +7,14 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { client } from "@/api/client.gen";
 import { getIntegrationCatalog, requestReview } from "@/api/sdk.gen";
 import type { WorkspaceOnboarding } from "@/api/types.gen";
+import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { authClient } from "@/runtime/auth/auth-client";
 import { installPasskeyChallenge } from "@/runtime/auth/passkey-challenge";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { deferred, nextFrame } from "@/test/async";
 import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
@@ -43,7 +45,7 @@ function serveUnverifiedAdministrator(held?: { workspaceSlug: string; until: Pro
 				await held.until;
 			}
 			return HttpResponse.json(
-				{ status: 403, code: "passkey_required", title: "Passkey required" },
+				{ status: 403, type: problemType("passkey-required"), title: "Passkey required" },
 				{ status: 403 },
 			);
 		};
@@ -54,7 +56,7 @@ function serveUnverifiedAdministrator(held?: { workspaceSlug: string; until: Pro
 				workspaceListItem("tutors", { id: 2, practicesEnabled: true }),
 			]),
 		),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
 		),
@@ -105,14 +107,17 @@ function serveAdministrationReads(accepted: { verifications: number }) {
 		http.get("*/workspaces/acme/connections/catalog", () => {
 			if (accepted.verifications === 0) {
 				catalog.refused += 1;
-				return HttpResponse.json({ status: 403, code: "passkey_required" }, { status: 403 });
+				return HttpResponse.json(
+					{ status: 403, type: problemType("passkey-required") },
+					{ status: 403 },
+				);
 			}
 			catalog.served += 1;
 			return HttpResponse.json([]);
 		}),
 		http.get("*/workspaces/acme/practices/reviews/feedback", () =>
 			accepted.verifications === 0
-				? HttpResponse.json({ status: 403, code: "passkey_required" }, { status: 403 })
+				? HttpResponse.json({ status: 403, type: problemType("passkey-required") }, { status: 403 })
 				: HttpResponse.json({ content: [], number: 0, size: 5, totalElements: 0, totalPages: 0 }),
 		),
 	);
@@ -277,7 +282,10 @@ it("returns to the exact page, search and fragment without sending the refused c
 	server.use(
 		http.post("*/workspaces/:workspaceSlug/practices/review-requests", () => {
 			reviewRequests += 1;
-			return HttpResponse.json({ status: 403, code: "passkey_required" }, { status: 403 });
+			return HttpResponse.json(
+				{ status: 403, type: problemType("passkey-required") },
+				{ status: 403 },
+			);
 		}),
 	);
 	const { router } = await refusedOn("/w/acme/teams?view=all#members", async () =>
@@ -350,7 +358,7 @@ it("brings a recent sign-in before a first passkey back to the exact challenge, 
 		http.post("*/user/passkeys/registration-options", () => {
 			registrationOptions += 1;
 			return HttpResponse.json(
-				{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+				{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 				{ status: 403 },
 			);
 		}),
@@ -553,7 +561,7 @@ it("leaves the current workspace intact when the old page changes while its resp
 				start(controller) {
 					void finishBody.promise.then(() => {
 						controller.enqueue(
-							new TextEncoder().encode(JSON.stringify({ code: "passkey_required" })),
+							new TextEncoder().encode(JSON.stringify({ type: problemType("passkey-required") })),
 						);
 						controller.close();
 					});

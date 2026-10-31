@@ -38,8 +38,7 @@ describe("useFeatureFlags", () => {
 		expect(requests).toBe(1);
 	});
 
-	// One flag going wrong is not the flag service going down: its gate closes, the rest still answer.
-	it("reads a flag the server did not send as a boolean as off, and keeps the rest of the map", async () => {
+	it("surfaces a malformed flag answer as a failed read, not as closed gates", async () => {
 		server.use(
 			http.get("*/user/features", () =>
 				HttpResponse.json({
@@ -53,8 +52,7 @@ describe("useFeatureFlags", () => {
 			wrapper: wrapper(new QueryClient({ defaultOptions: { queries: { retry: false } } })),
 		});
 
-		await waitFor(() => expect(result.current.flags?.ADMIN).toBe(false));
-		// The well-formed flag keeps its `true`, which a blanket coercion would flatten to `false`.
-		expect(result.current.flags?.PAGE_EXPERIENCE_METRICS).toBe(true);
+		await waitFor(() => expect(result.current.isError).toBe(true));
+		expect(result.current.flags).toBeUndefined();
 	});
 });

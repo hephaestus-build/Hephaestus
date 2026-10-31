@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -44,7 +43,6 @@ import tools.jackson.databind.JsonNode;
  */
 @RestController
 @RequestMapping("/internal/llm/turn/{turnId}")
-@Hidden
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnWorkerRole
 @Profile(HephHostConfiguration.PROFILES)

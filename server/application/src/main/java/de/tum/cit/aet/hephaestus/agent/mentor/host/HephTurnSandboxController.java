@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -28,7 +27,6 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @RestController
 @RequestMapping("/internal/llm/turn/{turnId}/sandbox")
-@Hidden
 @PreAuthorize("isAuthenticated()")
 @ConditionalOnWorkerRole
 @Profile(HephHostConfiguration.PROFILES)

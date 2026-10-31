@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { adminListUsersInfiniteQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView, InstanceSettings } from "@/api/types.gen";
+import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred, type Deferred } from "@/test/async";
@@ -19,7 +20,7 @@ const stepUpRefusal = () =>
 			status: 403,
 			title: "Confirm access",
 			detail: "This action requires a recent sign-in.",
-			code: "step_up_required",
+			type: problemType("step-up-required"),
 			maxAgeSeconds: 300,
 		},
 		{ status: 403 },

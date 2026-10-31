@@ -8,6 +8,7 @@ import {
 	adminGetInstanceSettingsQueryKey,
 	getPublicActivityPolicyQueryKey,
 } from "@/api/@tanstack/react-query.gen";
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
@@ -212,7 +213,7 @@ describe("instance settings route", () => {
 			http.put("*/admin/settings/public-activity", async ({ request }) => {
 				puts.push(await request.json());
 				return HttpResponse.json(
-					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 					{ status: 403 },
 				);
 			}),

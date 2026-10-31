@@ -286,59 +286,6 @@ export type AdminWorkspaceView = {
     workspaceSlug: string;
 };
 
-export type AdmissionRequest = {
-    attempt?: number;
-    contractVersion?: number;
-    jobId?: string;
-    nonResults: Array<RuntimeNonResult>;
-    results?: Array<SubmittedResult>;
-    reviewId?: string;
-};
-
-export type AdmissionResponse = {
-    admissionDigest: string;
-    admitted: Array<AdmittedResult>;
-    attempt: number;
-    contractVersion: number;
-    conversationEligibility: ConversationEligibility | null;
-    jobId: string;
-    practicePageSupport: PracticePageSupport | null;
-    privateHistory: PrivateFeedbackHistory | null;
-    privateProgress: PrivateProgress;
-    publicReviewed: boolean;
-    reviewId: string;
-    withheld: Array<Withheld>;
-};
-
-export type AdmittedProblem = {
-    basis: DutyBasis | IntroducedBasis | StateBasis | WorsenedBasis | null;
-    citations: Array<ProjectedCitation>;
-    explanation: string | null;
-    id: string;
-    key: string | null;
-    nextStep: string | null;
-    position: number;
-    publicEligible: boolean;
-    resultId: string;
-    severity: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'TRIVIAL';
-    summary: string;
-};
-
-export type AdmittedResult = {
-    coverage: ClaimedCoverage | HostCoverage;
-    evidence: JsonNode;
-    example: JsonNode | null;
-    explanation: string | null;
-    itemId: string;
-    outcome: 'MET' | 'NOT_MET' | 'DOES_NOT_APPLY' | 'COULD_NOT_DETERMINE';
-    practiceSlug: string;
-    problems: Array<AdmittedProblem>;
-    publicEligible: boolean;
-    resultId: string;
-    summary: string | null;
-    summaryOnly: boolean;
-};
-
 /**
  * A workspace's agent binding for one purpose
  */
@@ -650,12 +597,6 @@ export type CitationCapabilities = {
 };
 
 export type CitationProof = {
-    itemSha256?: string;
-    quoteSha256?: string;
-    status?: 'VERIFIED';
-};
-
-export type CitationProofDto = {
     itemSha256: string;
     quoteSha256: string;
     status: 'VERIFIED';
@@ -698,18 +639,6 @@ export type ClientTokenRequest = {
 
 export type CloseResearchDisclosure = {
     closure: 'DESTROYED' | 'ANONYMIZED';
-};
-
-export type ClosedPracticePageSupport = {
-    readAt: Date;
-    refusal: string | null;
-    state: 'UNAVAILABLE' | 'REFUSED';
-};
-
-export type CompletePracticePageSupport = {
-    practices: Array<PracticeSupport>;
-    readAt: Date;
-    state: 'COMPLETE';
 };
 
 /**
@@ -966,24 +895,6 @@ export type Contributor = {
      * Display name of the contributor
      */
     name: string;
-};
-
-export type ConversationEligibility = {
-    readAt: Date;
-    results: Array<ResultDecision>;
-    state: 'COMPLETE' | 'UNAVAILABLE' | 'REFUSED';
-};
-
-export type Coverage = {
-    /**
-     * older matching feedback exists beyond <code>maxEntries</code>
-     */
-    hasMore?: boolean;
-    maxEntries?: number;
-    /**
-     * matching feedback left out because its support may not be copied here
-     */
-    omittedWithoutCopyAuthority?: number;
 };
 
 export type CoverageOmission = {
@@ -1272,12 +1183,6 @@ export type CreateWorkspaceRequest = {
      */
     kind: 'GITHUB' | 'GITLAB';
     /**
-     * Deprecated: ignored by the server. The authenticated user always becomes the owner.
-     *
-     * @deprecated
-     */
-    ownerUserId?: number;
-    /**
      * Personal Access Token. Required for both kinds (GitLab API or GitHub PAT). Stored encrypted at rest.
      */
     personalAccessToken?: string;
@@ -1318,17 +1223,6 @@ export type CurrentUserView = {
     roles?: Array<string>;
     status?: string;
     username?: string;
-};
-
-export type Delivered = {
-    basedOn: Array<PrivateFeedbackHistoryBasis>;
-    body: string | null;
-    bodyRole: 'PRACTICE_PAGE_CARD' | 'CONVERSATION_WORDS' | 'MENTOR_NOTES' | null;
-    deliveredAt: Date;
-    destination: 'ON_WORK' | 'PRACTICE_PAGE' | 'CONVERSATION';
-    id: string;
-    recordedClaimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-    withdrawn: boolean;
 };
 
 export type DeliveredFeedbackPractice = {
@@ -1402,7 +1296,7 @@ export type EvidenceCitation = {
     sourceKind: string;
     sourcePath: string | null;
     startLine: null | number;
-    verification: CitationProofDto | null;
+    verification: CitationProof | null;
 };
 
 /**
@@ -1436,11 +1330,11 @@ export type FeatureFlags = {
     /**
      * User has admin privileges
      */
-    ADMIN?: boolean;
+    ADMIN: boolean;
     /**
      * The browser measures and reports how page visits feel to the reader
      */
-    PAGE_EXPERIENCE_METRICS?: boolean;
+    PAGE_EXPERIENCE_METRICS: boolean;
 };
 
 /**
@@ -1640,7 +1534,9 @@ export type FirstLoginConsent = {
 export type FrozenModel = {
     modelId: string;
     options: {
-        [key: string]: JsonNode;
+        [key: string]: string | number | boolean | {
+            [key: string]: unknown;
+        } | Array<unknown> | null;
     };
     providerModelId: string;
     providerProtocol: string;
@@ -2036,36 +1932,6 @@ export type ItemTrace = {
     item: ItemRef;
     practices: Array<PracticeTraceEntry>;
     reviews: Array<ReviewRef>;
-};
-
-export type JsonNode = {
-    array?: boolean;
-    bigDecimal?: boolean;
-    bigInteger?: boolean;
-    binary?: boolean;
-    boolean?: boolean;
-    container?: boolean;
-    double?: boolean;
-    embeddedValue?: boolean;
-    empty?: boolean;
-    float?: boolean;
-    floatingPointNumber?: boolean;
-    int?: boolean;
-    integralNumber?: boolean;
-    long?: boolean;
-    missingNode?: boolean;
-    nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
-    null?: boolean;
-    number?: boolean;
-    object?: boolean;
-    pojo?: boolean;
-    short?: boolean;
-    string?: boolean;
-    /**
-     * @deprecated
-     */
-    textual?: boolean;
-    valueNode?: boolean;
 };
 
 export type JudgedScanReportItem = {
@@ -3630,12 +3496,6 @@ export type PracticePageFeedback = {
     withdrawn: boolean;
 };
 
-export type PracticePageSupport = ({
-    state: 'COMPLETE';
-} & CompletePracticePageSupport) | ({
-    state: 'REFUSED' | 'UNAVAILABLE';
-} & ClosedPracticePageSupport);
-
 export type PracticeProfileOverview = {
     /**
      * The newest queued or running review of a piece of work whose subject is the reader and that has recorded no result about the reader yet; at is when it was ordered. Null when there is none, or when the reader may not see the work
@@ -3856,13 +3716,6 @@ export type PracticeStandingResult = {
     title: string;
 };
 
-export type PracticeSupport = {
-    decision: 'ADMIT' | 'FEEDBACK_OFF' | 'GATE_REFUSED' | 'NO_EVIDENCE' | 'UNCORROBORATED' | 'BACKFILL_HELD' | 'RECENTLY_SURFACED' | 'UNATTRIBUTABLE_SUBJECT';
-    occurrences: Array<SupportOccurrence>;
-    practiceSlug: string;
-    stopReason: 'VOLUME_CAPPED' | 'COMPOSER_WITHHELD' | 'NOTHING_NEW' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISAGREE' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'DELIVERY_UNCONFIRMED' | 'ITEM_GONE' | 'ITEM_CLOSED' | 'ITEM_MERGED' | 'ITEM_STATE_INELIGIBLE' | 'ISSUE_SNAPSHOT_CHANGED' | 'PUBLIC_SUBJECT_INELIGIBLE' | 'NO_AI' | 'DELIVERY_OFF' | 'PERSON_SUPPRESSED' | 'RECIPIENT_UNAVAILABLE' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'FEEDBACK_OFF' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_SCOPE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'RESULT_MARKED_INCORRECT' | 'REVIEWED_VERSION_CHANGED' | 'REVIEW_CANCELLED' | 'EVIDENCE_NOT_PERMITTED' | 'NO_EVIDENCE' | 'UNCORROBORATED' | 'PUBLIC_HISTORY_CHANGED' | 'PUBLIC_DELIVERY_UNRESOLVED' | 'NOT_COMPOSED' | null;
-};
-
 export type PracticeTraceEntry = {
     about: 'AUTHOR' | 'REVIEWER' | 'ASSIGNEE' | 'MERGER' | null;
     feedbackMode: 'OFF' | 'APPROVE_FIRST' | 'AUTOMATIC';
@@ -3954,36 +3807,6 @@ export type PracticesAcrossWorkspaceTiles = {
 export type PreviewRequest = {
     accountId?: number;
     identities: Array<Identity>;
-};
-
-/**
- * The private feedback this developer received, and conversation feedback still queued for them, on each private
- * destination this composition may write for its practice. It is one bounded read, never the complete history:
- * <code>coverage</code> says what it leaves out. A body is present where its words may be copied. It records what was
- * said. <code>recordedClaimCurrentness</code> says separately whether the claim behind it still holds.
- */
-export type PrivateFeedbackHistory = {
-    coverage: Coverage;
-    delivered: Array<Delivered>;
-    queued: Array<Queued>;
-    readAt: Date;
-};
-
-export type PrivateFeedbackHistoryBasis = {
-    outcome: 'MET' | 'NOT_MET' | 'DOES_NOT_APPLY' | 'COULD_NOT_DETERMINE';
-    practiceSlug: string;
-    practiceVersionId: null | number;
-    resultId: string;
-};
-
-/**
- * What an earlier attempt of this review already prepared privately: the admitted results its pieces decide, and the
- * pieces composed for delivery on each private destination. It carries no words.
- */
-export type PrivateProgress = {
-    conversationDeliveries: number;
-    decidedResultIds: Array<string>;
-    practicePageDeliveries: number;
 };
 
 /**
@@ -4088,20 +3911,6 @@ export type ProfileReviewRef = {
     item: ItemRef;
     reviewId: string;
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED' | null;
-};
-
-export type ProjectedCitation = {
-    anchorable: boolean;
-    commit: string | null;
-    endLine: null | number;
-    index: number;
-    path: string | null;
-    quote: string | null;
-    side: 'OLD' | 'NEW' | null;
-    sourceKind: string;
-    sourcePath: string | null;
-    startLine: null | number;
-    verification: CitationProof | null;
 };
 
 export type ProviderIdentityRef = {
@@ -4248,21 +4057,6 @@ export type PublicActivityWorkSummary = {
 export type PublicActivityWorkspaceSettings = {
     allowSearchEngines: boolean;
     enabled: boolean;
-};
-
-/**
- * Conversation feedback not yet delivered that a new piece on <code>practiceSlug</code> may replace.
- */
-export type Queued = {
-    basedOn: Array<PrivateFeedbackHistoryBasis>;
-    body: string | null;
-    bodyRole: 'PRACTICE_PAGE_CARD' | 'CONVERSATION_WORDS' | 'MENTOR_NOTES' | null;
-    destination: 'ON_WORK' | 'PRACTICE_PAGE' | 'CONVERSATION';
-    feedbackId: string;
-    practiceSlug: string;
-    preparedAt: Date;
-    recordedClaimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-    threadKey: string;
 };
 
 /**
@@ -4526,12 +4320,6 @@ export type ResourceCounts = {
 
 export type ResultCoverage = {
     source: string;
-};
-
-export type ResultDecision = {
-    decision: 'ADMIT' | 'FEEDBACK_OFF' | 'MENTOR_UNAVAILABLE' | 'GATE_REFUSED' | 'UNATTRIBUTABLE_SUBJECT' | 'HAS_INLINE_ANCHOR' | 'ALREADY_DELIVERED_ON_WORK' | 'REVIEWER_DEFERRED' | 'BACKFILL_QUIET';
-    resultId: string;
-    stopReason: 'VOLUME_CAPPED' | 'COMPOSER_WITHHELD' | 'NOTHING_NEW' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISAGREE' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'DELIVERY_UNCONFIRMED' | 'ITEM_GONE' | 'ITEM_CLOSED' | 'ITEM_MERGED' | 'ITEM_STATE_INELIGIBLE' | 'ISSUE_SNAPSHOT_CHANGED' | 'PUBLIC_SUBJECT_INELIGIBLE' | 'NO_AI' | 'DELIVERY_OFF' | 'PERSON_SUPPRESSED' | 'RECIPIENT_UNAVAILABLE' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'FEEDBACK_OFF' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_SCOPE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'RESULT_MARKED_INCORRECT' | 'REVIEWED_VERSION_CHANGED' | 'REVIEW_CANCELLED' | 'EVIDENCE_NOT_PERMITTED' | 'NO_EVIDENCE' | 'UNCORROBORATED' | 'PUBLIC_HISTORY_CHANGED' | 'PUBLIC_DELIVERY_UNRESOLVED' | 'NOT_COMPOSED' | null;
 };
 
 export type ResultDetail = {
@@ -5245,14 +5033,6 @@ export type RunningRelease = {
 };
 
 /**
- * An assigned practice that runtime execution could not complete, without an outcome about the work.
- */
-export type RuntimeNonResult = {
-    practiceSlug: string;
-    reason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM';
-};
-
-/**
  * Create or change a pool of provider capacity
  */
 export type SaveLlmCallPoolRequest = {
@@ -5616,27 +5396,6 @@ export type StateDimension = {
     label: string;
     name: string;
     values: Array<Value>;
-};
-
-export type SubmittedResult = {
-    candidate?: JsonNode;
-    itemId?: string;
-    itemVersion?: string;
-    practiceSlug?: string;
-    readReceipts?: Array<ReadReceipt>;
-};
-
-export type SupportOccurrence = {
-    evidence: JsonNode | null;
-    explanation: string | null;
-    itemId: string;
-    itemKind: string;
-    origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
-    outcome: 'MET' | 'NOT_MET' | 'DOES_NOT_APPLY' | 'COULD_NOT_DETERMINE';
-    practiceVersionId: string | null;
-    recordedAt: Date;
-    resultId: string;
-    summary: string;
 };
 
 /**
@@ -6524,12 +6283,6 @@ export type WeeklyDigestFeedback = {
      * A workspace admin withdrew it; only the practice is shown
      */
     withdrawn: boolean;
-};
-
-export type Withheld = {
-    itemId?: string;
-    practiceSlug?: string;
-    reason?: string;
 };
 
 export type WithheldScanReportItem = {
@@ -8969,22 +8722,6 @@ export type ListIdentityProvidersResponses = {
 };
 
 export type ListIdentityProvidersResponse = ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
-
-export type AdmitResultsData = {
-    body: AdmissionRequest;
-    path?: never;
-    query?: never;
-    url: '/internal/llm/admit-results';
-};
-
-export type AdmitResultsResponses = {
-    /**
-     * OK
-     */
-    200: AdmissionResponse;
-};
-
-export type AdmitResultsResponse = AdmitResultsResponses[keyof AdmitResultsResponses];
 
 export type UnsubscribeEmailData = {
     body?: {

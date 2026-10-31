@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { usePasskeySettings } from "./use-passkey-settings";
 
@@ -191,12 +192,11 @@ describe("usePasskeySettings", () => {
 				fresh = false;
 				return HttpResponse.json(
 					{
-						type: "about:blank",
 						status: 403,
 						title: "Confirm access with a passkey",
 						detail:
 							"This action requires passkey verification. Open your passkey settings to confirm access.",
-						code: "passkey_required",
+						type: problemType("passkey-required"),
 					},
 					{ status: 403 },
 				);

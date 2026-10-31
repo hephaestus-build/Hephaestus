@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
@@ -60,8 +61,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo(StepUpRequiredException.CODE)
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString())
                 .jsonPath("$.maxAgeSeconds")
                 .isEqualTo(authProperties.stepUpMaxAge().toSeconds());
 
@@ -112,8 +113,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo(StepUpRequiredException.CODE);
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
     }
 
     @Test
@@ -175,8 +176,8 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo(StepUpRequiredException.CODE);
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.STEP_UP_REQUIRED.uri().toString());
 
         assertThat(authEventRepository.findByAccountSince(
                         persistedId(admin.getId()), Instant.now().minusSeconds(60)))

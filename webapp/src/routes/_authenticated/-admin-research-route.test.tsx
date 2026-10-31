@@ -12,6 +12,7 @@ import type {
 } from "@/api/types.gen";
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { Wire } from "@/lib/dates";
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
@@ -434,7 +435,7 @@ describe("research datasets route", () => {
 		server.use(
 			http.post("*/admin/research-disclosures/removal-checks", () =>
 				HttpResponse.json(
-					{ status: 403, code: "passkey_required", title: "Passkey required" },
+					{ status: 403, type: problemType("passkey-required"), title: "Passkey required" },
 					{ status: 403 },
 				),
 			),

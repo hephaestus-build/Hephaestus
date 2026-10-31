@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -318,7 +319,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/llm-call-pool-in-use")
+                .isEqualTo(ProblemType.LLM_CALL_POOL_IN_USE.uri().toString())
                 .jsonPath("$.detail")
                 .value(detail -> assertThat(String.valueOf(detail)).contains("rate window"));
         jdbc.update(
@@ -333,7 +334,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/llm-call-pool-in-use")
+                .isEqualTo(ProblemType.LLM_CALL_POOL_IN_USE.uri().toString())
                 .jsonPath("$.detail")
                 .value(detail -> assertThat(String.valueOf(detail)).contains("rate window"));
         jdbc.update("UPDATE llm_call_permit SET closed_at=clock_timestamp()-interval '61 seconds' WHERE id=?", call);

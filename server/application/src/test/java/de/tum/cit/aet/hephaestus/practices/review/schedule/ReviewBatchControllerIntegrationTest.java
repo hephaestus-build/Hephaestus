@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review.schedule;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
@@ -102,7 +103,7 @@ class ReviewBatchControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/review-batch-conflict")
+                .isEqualTo(ProblemType.REVIEW_BATCH_CONFLICT.uri().toString())
                 .jsonPath("$.status")
                 .isEqualTo(409);
     }

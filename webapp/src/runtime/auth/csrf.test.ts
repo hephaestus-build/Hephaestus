@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 import { workspaceAddressConfig } from "@/runtime/workspace-address";
 
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { csrfFetch, refetchCsrfToken } from "./csrf";
@@ -30,7 +31,7 @@ async function mutation() {
 }
 
 function csrfRefusal() {
-	return HttpResponse.json({ type: "urn:hephaestus:csrf" }, { status: 403 });
+	return HttpResponse.json({ type: problemType("csrf-token-rejected") }, { status: 403 });
 }
 
 function replayResponse(bodies: string[], headers: (string | null)[]) {
@@ -38,7 +39,7 @@ function replayResponse(bodies: string[], headers: (string | null)[]) {
 		bodies.push(await request.text());
 		headers.push(request.headers.get("X-XSRF-TOKEN"));
 		return request.headers.get("X-XSRF-TOKEN") === "token-1"
-			? HttpResponse.json({ type: "urn:hephaestus:csrf" }, { status: 403 })
+			? HttpResponse.json({ type: problemType("csrf-token-rejected") }, { status: 403 })
 			: new HttpResponse(null, { status: 204 });
 	};
 }
@@ -141,7 +142,7 @@ describe("apex CSRF transport", () => {
 		server.use(
 			http.post(`${api}/settings`, () => {
 				calls += 1;
-				return HttpResponse.json({ type: "urn:hephaestus:csrf" }, { status: 403 });
+				return HttpResponse.json({ type: problemType("csrf-token-rejected") }, { status: 403 });
 			}),
 		);
 		await refetchCsrfToken();

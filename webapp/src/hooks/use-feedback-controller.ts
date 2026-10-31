@@ -23,7 +23,7 @@ import {
 	withholdingReasonSentence,
 } from "@/components/practice-vocabulary/withholding-defs";
 import { isRecord } from "@/lib/is-record";
-import { problemDetailOf } from "@/lib/problem-detail";
+import { isProblemType, problemDetailOf } from "@/lib/problem-detail";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
 
 import { awaitingApprovalOptions } from "./use-feedback-awaiting-approval";
@@ -59,11 +59,13 @@ function isWithholdingReason(code: unknown): code is WithholdingReason {
  * reason. Only a refusal by the publication context carries one, so a reason is never invented.
  */
 function refusalSentence(error: unknown): string | undefined {
-	if (!isRecord(error)) {
+	if (!isRecord(error) || !isProblemType(error, "feedback-withheld")) {
 		return undefined;
 	}
-	const { code } = error;
-	return isWithholdingReason(code) ? withholdingReasonSentence(code) : undefined;
+	const { withholdingReason } = error;
+	return isWithholdingReason(withholdingReason)
+		? withholdingReasonSentence(withholdingReason)
+		: undefined;
 }
 
 interface FeedbackControllerOptions {

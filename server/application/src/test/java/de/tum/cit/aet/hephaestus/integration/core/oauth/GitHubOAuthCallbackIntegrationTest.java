@@ -115,7 +115,7 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
         ProblemDetail problem = jsonCallback(workspace, admin, 400);
 
         assertThat(problem.getDetail()).isEqualTo("Your GitHub account cannot access this installation of the app.");
-        assertThat(problem.getProperties()).containsEntry("error", "finalize_failed");
+        assertThat(problem.getProperties()).containsEntry("callbackError", "finalize_failed");
         assertThat(connectionRepository.findActive(workspace.getId(), IntegrationKind.GITHUB))
                 .isEmpty();
     }
@@ -133,7 +133,7 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(problem.getDetail())
                 .isEqualTo("This GitHub App installation is already connected to another Hephaestus"
                         + " workspace. A workspace admin there must disconnect GitHub first.");
-        assertThat(problem.getProperties()).containsEntry("error", "connected_elsewhere");
+        assertThat(problem.getProperties()).containsEntry("callbackError", "connected_elsewhere");
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.GITHUB))
                 .isEmpty();
         assertThat(connectionRepository.findById(held.getId()).orElseThrow().getState())

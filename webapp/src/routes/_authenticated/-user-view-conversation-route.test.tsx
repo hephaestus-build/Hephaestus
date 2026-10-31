@@ -5,7 +5,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 
 import { getMentorConversationOptions } from "@/api/@tanstack/react-query.gen";
 import { client } from "@/api/client.gen";
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { applyUserViewHeaders, clearUserView } from "@/runtime/user-view/session";
 import { ConversationFake } from "@/test/conversation-server";
 import { FakeEventSource } from "@/test/fake-event-source";
@@ -30,7 +32,7 @@ beforeEach(() => {
 				},
 			]),
 		),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		// The saved AI choice belongs to the signed-in account; the server refuses it in a view.
 		http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 			HttpResponse.json({ status: 403 }, { status: 403 }),
@@ -86,7 +88,10 @@ it("says that a viewed member with no conversation has no messages, and whose th
 });
 
 const stepUpRequired = () =>
-	HttpResponse.json({ status: 403, code: "step_up_required", maxAgeSeconds: 300 }, { status: 403 });
+	HttpResponse.json(
+		{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
+		{ status: 403 },
+	);
 
 it("asks for a recent sign-in when a viewed read is refused for it", async () => {
 	server.use(http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired));
@@ -112,7 +117,7 @@ it("asks again when a later read is refused after the first prompt was dismissed
 				...getMentorConversationOptions({ path: { workspaceSlug: "engineering" } }),
 				staleTime: 0,
 			}),
-		).rejects.toMatchObject({ code: "step_up_required" });
+		).rejects.toMatchObject({ type: problemType("step-up-required") });
 	});
 	await screen.findByRole("dialog", { name: "Confirm access" });
 });

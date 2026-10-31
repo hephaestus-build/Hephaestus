@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
@@ -106,7 +107,8 @@ public class FeedbackReviewController {
             // The service committed the refused check, and any withholding, before this answer.
             var refused = new ResponseStatusException(
                     HttpStatus.CONFLICT, "The publication context does not permit approval.");
-            refused.getBody().setProperty("code", refusal.name());
+            refused.getBody().setType(ProblemType.FEEDBACK_WITHHELD.uri());
+            refused.getBody().setProperty("withholdingReason", refusal.name());
             refused.getBody().setProperty("state", outcome.state().name());
             throw refused;
         }

@@ -7,6 +7,7 @@ import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { sleep } from "@/test/async";
 import { ConversationFake } from "@/test/conversation-server";
 import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
@@ -43,7 +44,7 @@ it("offers Retry, then a page load once Retry did not help, and goes when Hephae
 	};
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/:workspaceSlug/members/me", () => HttpResponse.json(ownMembership())),
 		http.get("*/workspaces/:workspaceSlug/onboarding/me", () => HttpResponse.json(ready)),
 		...new ConversationFake("acme").handlers(),

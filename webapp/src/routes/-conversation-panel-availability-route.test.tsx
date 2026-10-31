@@ -8,6 +8,7 @@ import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { detailReview } from "@/stories/practice-detail-story-mock-data";
 import { ConversationFake } from "@/test/conversation-server";
 import { FakeEventSource } from "@/test/fake-event-source";
@@ -25,7 +26,7 @@ function mockConversationPanel(preference: WorkspaceOnboarding) {
 			HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
 		),
 		// The account carries no flags: the Hephaestus panel follows the workspace and the member's AI choice.
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/:workspaceSlug/members/me", () => HttpResponse.json(ownMembership())),
 		http.get("*/workspaces/:workspaceSlug/onboarding/me", () => HttpResponse.json(preference)),
 		...conversations.acme.handlers(),

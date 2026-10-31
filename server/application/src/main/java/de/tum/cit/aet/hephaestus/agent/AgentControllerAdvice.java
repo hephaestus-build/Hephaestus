@@ -11,10 +11,10 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentBindingSlotMismatchException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
-import java.net.URI;
 import java.util.Optional;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -42,21 +42,25 @@ public class AgentControllerAdvice {
     ProblemDetail handleOptimisticLockingFailure(OptimisticLockingFailureException exception) {
         return problem(
                 HttpStatus.CONFLICT,
-                "concurrent-modification",
+                ProblemType.CONCURRENT_MODIFICATION,
                 "Concurrent modification",
                 new IllegalStateException("The record changed while the server processed this request. Try again."));
     }
 
     @ExceptionHandler(ReviewJobStateConflictException.class)
     ProblemDetail handleAgentJobStateConflict(ReviewJobStateConflictException exception) {
-        return problem(HttpStatus.CONFLICT, "agent-job-state-conflict", "Agent job state conflict", exception);
+        return problem(
+                HttpStatus.CONFLICT, ProblemType.AGENT_JOB_STATE_CONFLICT, "Agent job state conflict", exception);
     }
 
     /** {@code declaredTier} lets the client name the tier from its own label registry. */
     @ExceptionHandler(AgentBindingSlotMismatchException.class)
     ProblemDetail handleBindingSlotMismatch(AgentBindingSlotMismatchException exception) {
-        ProblemDetail problem =
-                problem(HttpStatus.CONFLICT, "agent-binding-slot-mismatch", "Model does not fill this row", exception);
+        ProblemDetail problem = problem(
+                HttpStatus.CONFLICT,
+                ProblemType.AGENT_BINDING_SLOT_MISMATCH,
+                "Model does not fill this row",
+                exception);
         DataHandlingTier declaredTier = exception.declaredTier();
         if (declaredTier != null) {
             problem.setProperty("declaredTier", declaredTier);
@@ -66,77 +70,77 @@ public class AgentControllerAdvice {
 
     @ExceptionHandler(LlmConnectionInUseException.class)
     ProblemDetail handleConnectionInUse(LlmConnectionInUseException exception) {
-        return problem(HttpStatus.CONFLICT, "llm-connection-in-use", "LLM connection is in use", exception);
+        return problem(HttpStatus.CONFLICT, ProblemType.LLM_CONNECTION_IN_USE, "LLM connection is in use", exception);
     }
 
     @ExceptionHandler(LlmModelInUseException.class)
     ProblemDetail handleModelInUse(LlmModelInUseException exception) {
-        return problem(HttpStatus.CONFLICT, "llm-model-in-use", "LLM model is in use", exception);
+        return problem(HttpStatus.CONFLICT, ProblemType.LLM_MODEL_IN_USE, "LLM model is in use", exception);
     }
 
     @ExceptionHandler(LlmConnectionSlugConflictException.class)
     ProblemDetail handleConnectionSlugConflict(LlmConnectionSlugConflictException exception) {
-        return problem(HttpStatus.CONFLICT, "llm-connection-slug-conflict", "LLM connection slug conflict", exception);
+        return problem(
+                HttpStatus.CONFLICT,
+                ProblemType.LLM_CONNECTION_SLUG_CONFLICT,
+                "LLM connection slug conflict",
+                exception);
     }
 
     @ExceptionHandler(LlmModelSlugConflictException.class)
     ProblemDetail handleModelSlugConflict(LlmModelSlugConflictException exception) {
-        return problem(HttpStatus.CONFLICT, "llm-model-slug-conflict", "LLM model slug conflict", exception);
+        return problem(HttpStatus.CONFLICT, ProblemType.LLM_MODEL_SLUG_CONFLICT, "LLM model slug conflict", exception);
     }
 
     @ExceptionHandler(LlmCallPoolInUseException.class)
     ProblemDetail handleCallPoolInUse(LlmCallPoolInUseException exception) {
-        return problem(HttpStatus.CONFLICT, "llm-call-pool-in-use", "Call pool is in use", exception);
+        return problem(HttpStatus.CONFLICT, ProblemType.LLM_CALL_POOL_IN_USE, "Call pool is in use", exception);
     }
 
     @ExceptionHandler(LlmCallPoolSlugConflictException.class)
     ProblemDetail handleCallPoolSlugConflict(LlmCallPoolSlugConflictException exception) {
-        return problem(HttpStatus.CONFLICT, "llm-call-pool-slug-conflict", "LLM call pool slug conflict", exception);
+        return problem(
+                HttpStatus.CONFLICT, ProblemType.LLM_CALL_POOL_SLUG_CONFLICT, "LLM call pool slug conflict", exception);
     }
 
     @ExceptionHandler(LlmModelUpstreamIdConflictException.class)
     ProblemDetail handleModelUpstreamIdConflict(LlmModelUpstreamIdConflictException exception) {
         return problem(
-                HttpStatus.CONFLICT, "llm-model-upstream-id-conflict", "LLM model upstream id conflict", exception);
+                HttpStatus.CONFLICT,
+                ProblemType.LLM_MODEL_UPSTREAM_ID_CONFLICT,
+                "LLM model upstream id conflict",
+                exception);
     }
 
-    /** Hephaestus declines the member; {@code reason} lets the app point at the setting that changes it. */
+    /** Hephaestus declines the member; the detail names the setting that changes it. */
     @ExceptionHandler(MentorRefusedException.class)
     ProblemDetail handleMentorRefused(MentorRefusedException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT, exception.reason().userMessage());
-        problem.setType(URI.create("/problems/mentor-refused"));
-        problem.setTitle("Hephaestus cannot reply");
-        problem.setProperty("reason", exception.reason().name());
-        return problem;
+        return ProblemType.MENTOR_REFUSED.problem(
+                HttpStatus.CONFLICT,
+                "Hephaestus cannot reply",
+                exception.reason().userMessage());
     }
 
     /** The ledger refused a write that conflicts with its state; the detail is worded for the developer. */
     @ExceptionHandler(MentorRejectedException.class)
     ProblemDetail handleMentorRejected(MentorRejectedException exception) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.CONFLICT, exception.reason().userMessage());
-        problem.setType(URI.create("/problems/mentor-rejected"));
-        problem.setTitle("Conversation conflict");
-        problem.setProperty("reason", exception.reason().name());
-        return problem;
+        return ProblemType.MENTOR_REJECTED.problem(
+                HttpStatus.CONFLICT, "Conversation conflict", exception.reason().userMessage());
     }
 
     /** A Hephaestus host wrote for a turn attempt that lost its lease. */
     @ExceptionHandler(MentorLeaseLostException.class)
     ProblemDetail handleMentorLeaseLost(MentorLeaseLostException exception) {
-        return problem(HttpStatus.CONFLICT, "mentor-lease-lost", "Turn lease lost", exception);
+        return problem(HttpStatus.CONFLICT, ProblemType.MENTOR_LEASE_LOST, "Turn lease lost", exception);
     }
 
-    /** The {@code type} slug is API surface clients match on — renaming one is a breaking change. */
-    private ProblemDetail problem(HttpStatus status, String typeSlug, String title, Exception exception) {
-        ProblemDetail problem = ProblemDetail.forStatus(status);
-        problem.setType(URI.create("/problems/" + typeSlug));
-        problem.setTitle(title);
-        problem.setDetail(Optional.ofNullable(exception.getMessage())
-                .map(LoggingUtils::sanitizeForLog)
-                .filter(s -> !s.isBlank())
-                .orElse("The server could not process this request."));
-        return problem;
+    private ProblemDetail problem(HttpStatus status, ProblemType type, String title, Exception exception) {
+        return type.problem(
+                status,
+                title,
+                Optional.ofNullable(exception.getMessage())
+                        .map(LoggingUtils::sanitizeForLog)
+                        .filter(s -> !s.isBlank())
+                        .orElse("The server could not process this request."));
     }
 }

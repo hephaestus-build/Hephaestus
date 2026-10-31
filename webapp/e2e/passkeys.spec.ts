@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { z } from "zod";
 
+import { problemType } from "@/lib/problem-detail";
+
 import { expect, loginAsDevAdmin, test } from "./fixtures";
 import { E2E_BASE_URL } from "./urls";
 
@@ -35,7 +37,7 @@ async function expectAdminAccess(context: BrowserContext, allowed: boolean) {
 	expect(response.status()).toBe(allowed ? 200 : 403);
 	if (!allowed) {
 		const body: unknown = await response.json();
-		z.object({ code: z.literal("passkey_required") }).parse(body);
+		z.object({ type: z.literal(problemType("passkey-required")) }).parse(body);
 	}
 }
 
@@ -104,7 +106,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 		);
 		expect(unverifiedProtection.status()).toBe(403);
 		const unverifiedBody: unknown = await unverifiedProtection.json();
-		z.object({ code: z.literal("passkey_required") }).parse(unverifiedBody);
+		z.object({ type: z.literal(problemType("passkey-required")) }).parse(unverifiedBody);
 
 		// Chrome signs a response whose UV bit is absent; the real server must reject it.
 		await cdp.send("WebAuthn.setResponseOverrideBits", { authenticatorId, isBadUV: true });

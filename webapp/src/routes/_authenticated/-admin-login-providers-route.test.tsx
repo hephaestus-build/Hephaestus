@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { adminListLoginProvidersQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { LoginProviderView } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
@@ -88,7 +89,7 @@ describe("instance login providers route", () => {
 			http.patch("*/admin/login-providers/gitlab", () => {
 				changes += 1;
 				return HttpResponse.json(
-					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 					{ status: 403 },
 				);
 			}),
@@ -164,7 +165,7 @@ const STEP_UP_REQUIRED = {
 	title: "Confirm access",
 	status: 403,
 	detail: "This action requires a recent sign-in. Sign in again to confirm access.",
-	code: "step_up_required",
+	type: problemType("step-up-required"),
 	maxAgeSeconds: 300,
 };
 

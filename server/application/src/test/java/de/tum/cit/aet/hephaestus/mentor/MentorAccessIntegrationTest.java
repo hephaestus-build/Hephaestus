@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -178,8 +179,8 @@ class MentorAccessIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody()
-                .jsonPath("$.reason")
-                .isEqualTo("NO_AI");
+                .jsonPath("$.detail")
+                .isEqualTo(MentorRefusal.NO_AI.userMessage());
         assertThat(conversationRepository.findMain(workspace.getId(), accountId(member)))
                 .isEmpty();
     }

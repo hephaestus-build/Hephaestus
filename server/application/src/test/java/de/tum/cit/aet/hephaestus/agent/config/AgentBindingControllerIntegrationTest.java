@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -280,7 +281,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/agent-binding-slot-mismatch")
+                .isEqualTo(ProblemType.AGENT_BINDING_SLOT_MISMATCH.uri().toString())
                 .jsonPath("$.declaredTier")
                 .isEqualTo("IN_HOUSE")
                 .jsonPath("$.detail")
@@ -308,7 +309,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/agent-binding-slot-mismatch")
+                .isEqualTo(ProblemType.AGENT_BINDING_SLOT_MISMATCH.uri().toString())
                 .jsonPath("$.declaredTier")
                 .doesNotExist()
                 .jsonPath("$.detail")

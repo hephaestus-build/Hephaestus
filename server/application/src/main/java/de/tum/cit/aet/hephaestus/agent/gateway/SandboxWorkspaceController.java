@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -21,7 +20,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/internal/llm/runtime/{id}")
-@Hidden
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 @ConditionalOnWorkerRole

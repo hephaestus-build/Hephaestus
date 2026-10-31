@@ -3,6 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { server } from "@/mocks/server";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -14,7 +15,7 @@ describe("the account AI choice on the settings page", () => {
 		const bodies: unknown[] = [];
 		server.use(
 			http.get("*/workspaces", () => HttpResponse.json([])),
-			http.get("*/user/features", () => HttpResponse.json({})),
+			http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 			http.put("*/user/ai-choice", async ({ request }) => {
 				bodies.push(await request.json());
 				return HttpResponse.json({ choice: "NO_AI", updatedAt: "2026-09-22T10:00:00Z" });

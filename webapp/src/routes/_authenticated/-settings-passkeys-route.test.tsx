@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -43,12 +44,11 @@ beforeEach(() => {
 const confirmationRequired = () =>
 	HttpResponse.json(
 		{
-			type: "about:blank",
 			status: 403,
 			title: "Confirm access with a passkey",
 			detail:
 				"This action requires passkey verification. Open your passkey settings to confirm access.",
-			code: "passkey_required",
+			type: problemType("passkey-required"),
 		},
 		{ status: 403 },
 	);

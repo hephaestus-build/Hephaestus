@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -692,7 +693,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .content(lateEnd(late)))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.type").value("/problems/mentor-lease-lost"));
+                .andExpect(jsonPath("$.type")
+                        .value(ProblemType.MENTOR_LEASE_LOST.uri().toString()));
 
         assertThat(storedFor(late)).isEmpty();
     }
