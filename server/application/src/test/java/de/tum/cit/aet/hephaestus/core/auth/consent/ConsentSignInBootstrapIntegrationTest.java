@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.consent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.auth.web.AccountWebController;
 import de.tum.cit.aet.hephaestus.core.auth.web.CsrfController;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.net.URI;
@@ -35,6 +36,9 @@ class ConsentSignInBootstrapIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private WebTestClient client;
+
+    @Autowired
+    private ConsentService consentService;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -170,6 +174,35 @@ class ConsentSignInBootstrapIntegrationTest extends RealAuthIntegrationTest {
                 .exchange()
                 .expectStatus()
                 .isNoContent();
+    }
+
+    @Test
+    void shouldReportTheAccountsConsentWithItsIdentity() {
+        String session = signIn("identity-consent-account", null);
+        var pending = currentUser(session);
+        assertThat(pending.consent().completed()).isFalse();
+        assertThat(pending.consent().noticeVersion()).isEqualTo(ConsentService.WORDING_VERSION);
+        assertProtectedContentBlocked(session);
+
+        String organization = pending.consent().researchOrganization();
+        consentService.completeFirstLogin(
+                pending.id(),
+                new ConsentService.FirstLoginConsentDTO(
+                        ConsentService.WORDING_VERSION, true, organization == null ? null : false, organization));
+
+        assertThat(currentUser(session).consent().completed()).isTrue();
+    }
+
+    private AccountWebController.CurrentUserViewDTO currentUser(String cookie) {
+        return Objects.requireNonNull(client.get()
+                .uri("/user")
+                .cookie(cookieName, cookie)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(AccountWebController.CurrentUserViewDTO.class)
+                .returnResult()
+                .getResponseBody());
     }
 
     private String signIn(String username, @Nullable String ambientCookie) {

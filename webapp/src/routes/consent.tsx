@@ -10,7 +10,7 @@ import {
 import { ConsentPage, type ConsentSubmission } from "@/components/auth/ConsentPage";
 import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { resolveCurrentUser } from "@/runtime/auth/guard";
+import { rememberConsent, resolveCurrentUser } from "@/runtime/auth/guard";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 
 interface ConsentSearch {
@@ -33,6 +33,8 @@ export const Route = createFileRoute("/consent")({
 			.query({ ...getConsentStatusOptions({}), retry: false })
 			.catch(() => undefined);
 		if (consent?.completed === true) {
+			// Answered elsewhere: the gates read the identity, so it has to know before they run.
+			rememberConsent(context.queryClient, consent);
 			throw redirect({ href: safeReturnTo(search.returnTo) });
 		}
 	},
@@ -58,15 +60,16 @@ function ConsentRoute() {
 			void queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
 		},
 		onSuccess: (status) => {
-			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
+			rememberConsent(queryClient, status);
 		},
 	});
 
 	useEffect(() => {
 		if (data?.completed === true) {
+			rememberConsent(queryClient, data);
 			void navigate({ href: safeReturnTo(returnTo), replace: true });
 		}
-	}, [data?.completed, navigate, returnTo]);
+	}, [data, navigate, queryClient, returnTo]);
 
 	if (isError) {
 		return (

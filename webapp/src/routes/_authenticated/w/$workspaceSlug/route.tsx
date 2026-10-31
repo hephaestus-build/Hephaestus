@@ -1,17 +1,19 @@
 import { createFileRoute, Outlet, redirect, useMatch } from "@tanstack/react-router";
 import { hasText } from "@/lib/text";
 
-import {
-	getMemberOnboardingOptions,
-	getWorkspaceOptions,
-	listWorkspacesOptions,
-} from "@/api/@tanstack/react-query.gen";
+import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
 import { PublicActivityOnboardingDialog } from "@/components/onboarding/PublicActivityOnboardingDialog";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { isAppAdmin, resolveCurrentUser } from "@/runtime/auth/guard";
+import {
+	isAppAdmin,
+	memberOnboardingGateOptions,
+	onboardingGateApplies,
+	resolveCurrentUser,
+	workspaceListGateOptions,
+} from "@/runtime/auth/guard";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
 /** Workspace gate: a directory layout, so every route under `w/$workspaceSlug/` inherits it. */
@@ -23,27 +25,18 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 	// Components observe live workspace facts through `useWorkspaceAccess`.
 	beforeLoad: async ({ context, params, location }) => {
 		const workspaces = await context.queryClient
-			.query({ ...listWorkspacesOptions(), retry: false })
+			.query(workspaceListGateOptions())
 			.catch(() => undefined);
 		const workspace = workspaces?.find(
 			(candidate) => candidate.workspaceSlug === params.workspaceSlug,
 		);
 		if (workspace) {
-			const base = `/w/${encodeURIComponent(params.workspaceSlug)}`;
-			// Owners must be able to repair setup; an outage must never revoke membership. A user view
-			// never completes setup: the saved choices belong to the signed-in account.
-			if (
-				getUserViewSession() !== undefined ||
-				location.pathname === `${base}/onboarding` ||
-				location.pathname.startsWith(`${base}/admin`)
-			) {
+			// An outage must never revoke membership, so an unread setup state lets the member in.
+			if (!onboardingGateApplies(params.workspaceSlug, location.pathname)) {
 				return { workspace, administrationWorkspace: undefined };
 			}
 			const onboarding = await context.queryClient
-				.query({
-					...getMemberOnboardingOptions({ path: { workspaceSlug: params.workspaceSlug } }),
-					retry: false,
-				})
+				.query(memberOnboardingGateOptions(params.workspaceSlug))
 				.catch(() => undefined);
 			if (onboarding?.needsSetup === true) {
 				throw redirect({

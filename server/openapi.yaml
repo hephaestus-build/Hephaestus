@@ -14435,6 +14435,10 @@ components:
           type: string
         avatarUrl:
           type: string
+        consent:
+          $ref: "#/components/schemas/ConsentStatus"
+          description: "The account's consent, so that a client decides the consent\
+            \ gate before it sends a read the gate refuses"
         displayName:
           type: string
         gitProviderId:
@@ -14460,6 +14464,8 @@ components:
           type: string
         username:
           type: string
+      required:
+      - consent
     Delivered:
       type: object
       properties:
