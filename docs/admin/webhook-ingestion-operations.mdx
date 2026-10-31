@@ -369,10 +369,10 @@ A wedged broker has these symptoms:
 
 Use the names below for a release named `hephaestus` in namespace `hephaestus`.
 
-1. **Confirm it is the disk.** On the broker host:
+1. **Confirm it is the disk.**
 
    ```bash
-   df -h                                    # free space on the JetStream volume
+   kubectl -n hephaestus exec hephaestus-nats-0 -c nats -- df -h /data   # free space on the JetStream volume
    kubectl -n hephaestus logs hephaestus-nats-0 --tail=100
    ```
 

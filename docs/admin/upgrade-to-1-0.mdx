@@ -18,7 +18,8 @@ The [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/M
 2. If the database has not passed the v0.95.0 cut-point, follow the [database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites) first.
 3. Read every migration guide entry between your release and 1.0.
 4. Make a database backup and verify that it restores, as [Backup & restore](./backup-restore) describes.
-5. Keep the signed joint lock, `site.yaml` and Secret of your current release with the backup.
+5. Keep the configuration of your current release with the backup.
+   A Compose installation keeps its `.env` file. After the move to the chart, keep the signed joint lock, `site.yaml` and Secret.
 
 :::caution[CAUTION: Stop every role]
 Several changes on the way to 1.0 need every runtime role stopped before the migration.

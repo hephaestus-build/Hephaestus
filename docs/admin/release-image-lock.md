@@ -11,8 +11,10 @@ This joint lock records the release, source commit, chart repository, chart vers
 It also records the provenance class, repository, multi-platform index digest and platform child digests of every application image.
 The chart uses these image digests. Tags identify releases for people.
 
-Follow [Verify the release chart](./kubernetes#verify-the-release-chart) before an install or upgrade.
-The verifier authenticates the lock and the chart, checks their release identity, and checks the packaged image pins against the lock.
+Before an install or upgrade, verify the lock as [Independent verification](#independent-verification) describes.
+Then follow [Verify the release chart](./kubernetes#verify-the-release-chart).
+That procedure authenticates the chart and checks its release version. It reads the lock only to find the chart digest.
+The installed reconciler verifies the lock signature itself before it applies the chart that the lock names.
 
 :::note[Chart-only release]
 These instructions describe the chart-only release.

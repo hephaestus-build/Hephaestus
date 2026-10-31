@@ -46,10 +46,10 @@ Split the worker out when:
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
-The Helm chart runs the server and worker in separate Pods.
+The [Helm chart](./kubernetes) runs the server, worker and webhook roles in separate Pods.
 The server disables the worker role.
-The worker launches sandbox work through the Kubernetes API.
-No application role needs a Docker socket. The environment gate rejects that mount.
+The worker creates sandbox Pods through its Kubernetes service account.
+No application role needs a Docker socket.
 
 Split the webhook receiver out when:
 

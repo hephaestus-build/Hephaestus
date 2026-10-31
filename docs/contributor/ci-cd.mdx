@@ -403,7 +403,7 @@ Close it after triage.
    A custom rule needs the record that this setting stops, so the job would fail.
 
 The reconciler applies one Helm chart.
-The chart's [migration Job](/admin/runtime-roles#database-migrations) completes before application roles become ready.
+The chart's [migration Job](/admin/runtime-roles#database-migrations) applies the schema. The server and worker roles wait until the database holds their change sets. The webhook role does not wait. Helm does not enforce a stopped cutover: [Recover a stopped cutover](/admin/pull-based-deployment#recover-a-stopped-cutover) gives that procedure.
 The [one-host platform](/admin/kubernetes#install-on-one-host-k3s) owns ports 80 and 443.
 
 ## The `preview` label

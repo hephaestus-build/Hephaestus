@@ -419,15 +419,15 @@ The application emits one JSON object per log line.
 Worker logs use correlation keys under `mdc`.
 Run the filter tools on a protected operator workstation.
 
-1. From your deployment directory, filter the logs:
+1. Filter the logs:
 
 ```bash
 # All log lines for one agent job
-kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers \
+kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers --tail=-1 \
   | jq -cR 'fromjson? | select(.mdc."job.id" == "<job-uuid>")'
 
 # All errors for one workspace
-kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers \
+kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers --tail=-1 \
   | jq -cR 'fromjson? | select(.mdc."workspace.id" == "<workspace-id>" and .level == "ERROR")'
 ```
 

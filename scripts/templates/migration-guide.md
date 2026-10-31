@@ -108,10 +108,10 @@ and review the release notes for endpoint changes.
 
 First follow the [database migration instructions](https://docs.hephaestus.build/admin/compatibility-policy#database-migrations).
 The chart's migration Job must complete before application roles start.
-Capture its first failure log before retrying:
+Save its first failure log before retrying:
 
 ```bash
-kubectl -n hephaestus logs job/<migration-job> | grep -i -m5 liquibase
+kubectl -n hephaestus logs job/<migration-job> -c migration > migration.log
 ```
 
 Liquibase normally runs each changeset in a transaction. A changeset with `runInTransaction="false"`

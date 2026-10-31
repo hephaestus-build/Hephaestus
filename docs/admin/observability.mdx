@@ -562,7 +562,7 @@ From the deployment namespace:
 2. Search the container logs:
 
    ```bash
-   kubectl -n hephaestus logs -l app.kubernetes.io/instance=hephaestus --all-containers --prefix | grep '"traceId":"<the-id>"'
+   kubectl -n hephaestus logs -l app.kubernetes.io/instance=hephaestus --all-containers --prefix --tail=-1 | grep '"traceId":"<the-id>"'
    ```
 
    That command finds records in the matching trace scope.

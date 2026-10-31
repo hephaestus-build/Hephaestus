@@ -82,7 +82,7 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 14. Keep `AGENT_ENABLED=false` on server and worker roles.
 15. Keep Slack disabled and public ingress blocked.
 16. Apply the verified chart with public routes disabled, reviews disabled and Slack disabled.
-    Follow the [restore startup sequence](./kubernetes#restore) when this is a restored database.
+    If this is a restored database, follow the [restore startup sequence](./kubernetes#restore).
 
 17. Verify migration completion.
 18. Before starting `webhook-server` or enabling reviews, read back silent mode.
@@ -125,12 +125,12 @@ The silent deployment checklist above owns startup.
 
 ## Backup, restore and PostgreSQL × JetStream
 
-[Backup & restore](./backup-restore) owns the data inventory and logical dump commands. A dump restores
+[Backup & restore](./backup-restore) owns the data inventory and the backup and restore procedures. A dump restores
 one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled backups and WAL archiving
 ([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)). Require off-host
 backup freshness alerts and a verified restore before unattended delivery.
 
-The chart backup implementation and its schedule are in [Backup & restore](./backup-restore#automated-off-host-backup).
+The chart backup implementation and its schedule are in [Backup and restore on Kubernetes](./kubernetes#backup-and-restore).
 The shared redacted backup status required by [Readiness](https://github.com/hephaestus-build/Hephaestus/issues/1547),
 [Operations](https://github.com/hephaestus-build/Hephaestus/issues/1387), and
 [System Information](https://github.com/hephaestus-build/Hephaestus/issues/1548) does not exist yet.

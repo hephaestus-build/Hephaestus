@@ -71,7 +71,7 @@ Check the [database prerequisites](./compatibility-policy#database-baseline-prer
 1. Pause [pull-based deployment](./pull-based-deployment#operating-it), if enabled, and wait for its active run to finish.
 2. Complete the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist), including a verified backup and a migration rehearsal.
 3. Read the target release's migration instructions and update your protected `site.yaml` and Secret as required.
-4. Follow [Upgrade on Kubernetes](./kubernetes#upgrades). Verify the signed joint lock and chart. Apply the verified package with your site values.
+4. Verify the target release's joint lock, as [Independent verification](./release-image-lock#independent-verification) describes. Then follow [Upgrade on Kubernetes](./kubernetes#upgrades): verify the chart and apply the verified package with your site values.
 5. Check the migration Job and each role's readiness before traffic or provider writes resume.
 6. If Helm times out or reports a pending or failed release, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).
    A failed Helm status does not prove that the migration Job has stopped.
