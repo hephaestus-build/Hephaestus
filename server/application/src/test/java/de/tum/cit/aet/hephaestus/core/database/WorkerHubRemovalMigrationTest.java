@@ -67,6 +67,7 @@ class WorkerHubRemovalMigrationTest {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
+            liquibase.getDatabaseChangeLog().getPreconditions().getNestedPreconditions().clear();
             var contexts = new Contexts("dev");
             var labels = new LabelExpression();
             liquibase.update(applied, contexts, labels);
