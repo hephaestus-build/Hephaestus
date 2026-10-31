@@ -19,8 +19,7 @@ import org.springframework.validation.annotation.Validated;
  * {@code hephaestus.contributors.github.auth-token}; the legacy key will be removed once
  * all environments have been updated.
  *
- * @param authToken personal access token or fine-grained token used for unauthenticated-ish
- *                  reads of the {@code hephaestus-build/Hephaestus} contributor graph
+ * @param authToken Use a personal access token or fine-grained token to read this application's contributor list from GitHub.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.contributors.github")
