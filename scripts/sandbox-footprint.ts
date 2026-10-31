@@ -377,6 +377,34 @@ async function completions(request: IncomingMessage, response: ServerResponse) {
 	response.end("data: [DONE]\n\n");
 }
 
+async function serveRuntime(
+	request: IncomingMessage,
+	response: ServerResponse,
+	session: string | undefined,
+	route: string,
+) {
+	if (request.method === "GET" && route === "") {
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end(JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 512 * 1024 * 1024 }));
+	} else if (request.method === "GET" && route === "/workspace") {
+		const { size } = await stat(archive);
+		response.writeHead(200, {
+			"content-type": "application/x-tar",
+			"content-length": String(size),
+		});
+		createReadStream(archive).pipe(response);
+	} else if (request.method === "POST" && route === "/result") {
+		const uploaded = await body(request);
+		recordUpload(session);
+		response.writeHead(204, {
+			etag: `"${createHash("sha256").update(uploaded).digest("hex")}"`,
+		});
+		response.end();
+	} else {
+		response.writeHead(404).end();
+	}
+}
+
 async function serve(request: IncomingMessage, response: ServerResponse) {
 	const url = new URL(request.url ?? "/", "http://gateway");
 	const runtime = /^\/internal\/llm\/runtime\/(?<session>[^/]+)(?<route>\/.*)?$/u.exec(
@@ -384,29 +412,27 @@ async function serve(request: IncomingMessage, response: ServerResponse) {
 	)?.groups;
 	try {
 		if (runtime !== undefined && sessions.has(runtime.session ?? "")) {
-			const route = runtime.route ?? "";
-			if (request.method === "GET" && route === "") {
-				response.writeHead(200, { "content-type": "application/json" });
-				response.end(
-					JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 512 * 1024 * 1024 }),
-				);
-			} else if (request.method === "GET" && route === "/workspace") {
-				const { size } = await stat(archive);
-				response.writeHead(200, {
-					"content-type": "application/x-tar",
-					"content-length": String(size),
-				});
-				createReadStream(archive).pipe(response);
-			} else if (request.method === "POST" && route === "/result") {
-				const uploaded = await body(request);
-				recordUpload(runtime.session);
-				response.writeHead(204, {
-					etag: `"${createHash("sha256").update(uploaded).digest("hex")}"`,
-				});
-				response.end();
-			} else {
-				response.writeHead(404).end();
+			await serveRuntime(request, response, runtime.session, runtime.route ?? "");
+		} else if (request.method === "POST" && url.pathname.endsWith("/stage-result")) {
+			const bytes = await body(request);
+			const parsed: unknown = JSON.parse(bytes.toString("utf8"));
+			const staged = asRecord(parsed, "staging request");
+			const { results, nonResults } = staged;
+			if (
+				!Array.isArray(results) ||
+				!Array.isArray(nonResults) ||
+				results.length + nonResults.length !== 1
+			) {
+				throw new Error("Stage one completed practice");
 			}
+			const practiceSlug = asString(
+				asRecord(results[0] ?? nonResults[0], "staged practice").practiceSlug,
+				"practice slug",
+			);
+			response.writeHead(200, { "content-type": "application/json" });
+			response.end(
+				JSON.stringify({ practiceSlug, digest: createHash("sha256").update(bytes).digest("hex") }),
+			);
 		} else if (request.method === "POST" && url.pathname.endsWith("/admit-results")) {
 			// Admission is the server's; the stand-in admits nothing and withholds nothing.
 			const digest = createHash("sha256")

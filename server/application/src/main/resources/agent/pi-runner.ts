@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
-import { admit, AdmissionUnreachableError } from "./pi-admitted-results.ts";
+import { admit, AdmissionUnreachableError, stagePractice } from "./pi-admitted-results.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
 import {
@@ -829,6 +829,59 @@ export async function runReviewJob(): Promise<void> {
 					};
 				}),
 		};
+	}
+
+	const stagedPractices = new Set<string>();
+	let stagingFailure: { error: unknown } | undefined;
+	const runtimeReasons: Partial<Record<NonNullable<ProgramOutcome["stopReason"]>, string>> = {
+		budget: "BUDGET",
+		deadline: "DEADLINE",
+		cancelled: "CANCELLED",
+		unavailable: "EXECUTION_INCOMPLETE",
+	};
+	async function stageEnded(practiceSlug: string) {
+		if (stagedPractices.has(practiceSlug)) {
+			return;
+		}
+		const request = admissionRequest();
+		const results = request.results.filter((result) => result.practiceSlug === practiceSlug);
+		const stop = executions.get(practiceSlug)?.stopReason ?? unreachedReason;
+		// An interrupted measurement stays open for another attempt. Only a completed result or a
+		// terminal runtime refusal can end its membership.
+		if (
+			results.length === 0 &&
+			(stop === "unavailable" || stop === "error" || stop === "deadline")
+		) {
+			return;
+		}
+		try {
+			await stagePractice(
+				practiceSlug,
+				{
+					...request,
+					results,
+					nonResults:
+						results.length > 0
+							? []
+							: [{ practiceSlug, reason: runtimeReasons[stop] ?? "EXECUTION_FAILED" }],
+				},
+				async (body, signal) =>
+					fetch(`${LLM_PROXY_URL}/stage-result`, {
+						method: "POST",
+						signal,
+						headers: {
+							authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+							"content-type": "application/json",
+							...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
+						},
+						body,
+					}),
+			);
+			stagedPractices.add(practiceSlug);
+		} catch (error) {
+			stagingFailure = { error };
+			throw error;
+		}
 	}
 
 	function persistUsage() {
@@ -2921,7 +2974,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					`the review session of ${slug} ended without a result`,
 				);
 			}
-			async function runProgram(slug: string, practiceHeading: string): Promise<void> {
+			async function measureProgram(slug: string, practiceHeading: string): Promise<void> {
 				const program = programOf(slug);
 				const read = await inputReader.read(slug).catch((error: unknown) => ({
 					error: `the host could not read them: ${errorText(error)}`,
@@ -3023,6 +3076,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				maybeWriteResultFile();
 				persistPracticeCoverage();
 				persistRecordedNotes();
+			}
+			async function runProgram(slug: string, practiceHeading: string): Promise<void> {
+				await measureProgram(slug, practiceHeading);
+				await stageEnded(slug);
 			}
 			try {
 				for (const [index, slug] of slugs.entries()) {
@@ -3191,12 +3248,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		const notReached = missingSlugs(allSlugs, [...reviewState.keys()]);
-		const runtimeReasons: Partial<Record<NonNullable<ProgramOutcome["stopReason"]>, string>> = {
-			budget: "BUDGET",
-			deadline: "DEADLINE",
-			cancelled: "CANCELLED",
-			unavailable: "EXECUTION_INCOMPLETE",
-		};
 		for (const practiceSlug of notReached) {
 			const stop = executions.get(practiceSlug)?.stopReason ?? unreachedReason;
 			const reason = runtimeReasons[stop] ?? "EXECUTION_FAILED";
@@ -3209,6 +3260,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			);
 		}
 
+		if (stagingFailure !== undefined) {
+			throw stagingFailure.error;
+		}
 		if (!maybeWriteResultFile()) {
 			if (providerFailures > 0 && !measurementReply.received) {
 				console.error(
@@ -3223,18 +3277,33 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			process.exit(1);
 		}
 
+		for (const practiceSlug of allSlugs) {
+			await stageEnded(practiceSlug);
+		}
+		if (allSlugs.some((slug) => !stagedPractices.has(slug))) {
+			finalizeOutput();
+			process.exit(1);
+		}
+
 		measurementClosed = true;
-		await admit(admissionRequest(), async (body, signal) =>
-			fetch(`${LLM_PROXY_URL}/admit-results`, {
-				method: "POST",
-				signal,
-				headers: {
-					authorization: `Bearer ${LLM_PROXY_TOKEN}`,
-					"content-type": "application/json",
-					...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
-				},
-				body,
-			}),
+		await admit(
+			{
+				contractVersion: 3,
+				reviewId: taskEnvelope.reviewId,
+				jobId: taskEnvelope.jobId,
+				attempt: taskEnvelope.attempt,
+			},
+			async (body, signal) =>
+				fetch(`${LLM_PROXY_URL}/admit-results`, {
+					method: "POST",
+					signal,
+					headers: {
+						authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+						"content-type": "application/json",
+						...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
+					},
+					body,
+				}),
 		);
 		console.error(`[pi-runner] SUCCESS: result.json holds ${reviewState.size} result(s)`);
 		finalizeOutput();

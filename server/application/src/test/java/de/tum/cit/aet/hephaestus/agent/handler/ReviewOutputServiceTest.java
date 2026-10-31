@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ResultsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -76,6 +77,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
     private final ClasspathSourceCatalogRegistry catalogs = mock(ClasspathSourceCatalogRegistry.class);
     private final ReviewJob job = RuntimeReviewTestData.job();
+    private List<ResultCandidate> staged = List.of();
     private final ReviewOutputService service =
             new ReviewOutputService(assignments, verifier, results, mapper, files, catalogs, membership);
 
@@ -123,6 +125,10 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 List.of());
     }
 
+    private PreparedResults prepare(ReviewJob owned, AdmissionRequestDTO request) {
+        return service.prepareStage(owned, request, (job, candidates) -> staged = List.copyOf(candidates));
+    }
+
     @Test
     void shouldWithholdAnUnverifiedPracticeThroughTheOneMembershipPort() {
         acceptReadReceipts();
@@ -130,9 +136,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         CandidateRefusal.QUOTE_UNVERIFIED, "The text was unavailable", null))
                 .when(verifier)
                 .verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any());
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
-        var prepared = service.prepare(job, submission("clear-names", "docs:one"));
+
+        var prepared = prepare(job, submission("clear-names", "docs:one"));
         verifyNoInteractions(membership, results);
         prepared.record(job);
         verify(membership)
@@ -159,13 +164,12 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .put("checked", 1)
                 .put("total", 1)
                 .put("complete", true);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, submission).record(job);
+        prepare(job, submission).record(job);
 
         verifyNoInteractions(verifier);
-        verify(results).admit(1, job.getReviewId(), job.getId(), 0, List.of());
+        assertThat(staged).isEmpty();
+        verifyNoInteractions(results);
         verify(membership)
                 .withhold(
                         eq(1L),
@@ -184,9 +188,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
              "receipts":[{"sourceKind":"docs.document.core","sourcePath":"context/body.txt",
              "path":"document/body","version":"docs:one","status":"COMPLETE"}]}
             """));
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
-        service.prepare(job, submitted).record(job);
+
+        prepare(job, submitted).record(job);
         verifyNoInteractions(verifier);
         verify(membership)
                 .withhold(
@@ -319,8 +322,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdAResultThatConsultedASourceItsPracticeDoesNotDeclare() {
         pr50Capture(SourceCompleteness.COMPLETE);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
         // The practice declares the document only; the review discussion was never its source.
         UnaryOperator<ObjectNode> discussion = candidate -> {
             ((ObjectNode) candidate.path("evidence").path("search"))
@@ -330,7 +332,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             return candidate;
         };
 
-        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
                 .record(job);
 
         assertWithheld(
@@ -401,8 +403,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .addObject()
                 .put("readFrom", "scm.pull-request.comments")
                 .put("result", "FOUND");
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
         UnaryOperator<ObjectNode> discussion = candidate -> {
             var citation = ((ObjectNode)
                             candidate.path("problems").get(0).path("citations").get(0))
@@ -438,7 +439,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             return candidate;
         };
 
-        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
                 .record(job);
 
         assertWithheld(
@@ -449,11 +450,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
         pr50Capture(SourceCompleteness.COMPLETE);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(List.of(), UnaryOperator.identity()))
-                .record(job);
+        prepare(job, pr50ErrorHandling(List.of(), UnaryOperator.identity())).record(job);
 
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
@@ -472,11 +470,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 1,
                 41,
                 null));
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity()))
-                .record(job);
+        prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity())).record(job);
 
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
@@ -485,7 +480,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     void shouldAdmitAClaimAboutTheCheckoutWhenItsSessionSearchedTheWholeCompleteCheckoutToTheEnd() {
         pr50Capture(SourceCompleteness.COMPLETE);
 
-        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
@@ -493,10 +488,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenTheCaptureLeftFilesOutOfIt() {
         pr50Capture(SourceCompleteness.PARTIAL);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
                 .record(job);
 
         assertWithheld(
@@ -507,10 +500,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenTheSearchRanOverAnotherCommit() {
         pr50Capture(SourceCompleteness.COMPLETE);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(List.of(searched("c".repeat(40))), UnaryOperator.identity()))
+        prepare(job, pr50ErrorHandling(List.of(searched("c".repeat(40))), UnaryOperator.identity()))
                 .record(job);
 
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
@@ -519,12 +510,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenTheResultLeavesTheTreeUnnamed() {
         pr50Capture(SourceCompleteness.COMPLETE);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(
-                        job,
-                        pr50ErrorHandling(List.of(), worded("The application defines no global exception handler.")))
+        prepare(job, pr50ErrorHandling(List.of(), worded("The application defines no global exception handler.")))
                 .record(job);
 
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
@@ -533,10 +520,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenOnlyAProblemBasisSaysIt() {
         pr50Capture(SourceCompleteness.COMPLETE);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+        prepare(job, pr50ErrorHandling(List.of(), candidate -> {
                     var bounded = worded("The pinned file has no @Min, clamp or other check on the path.")
                             .apply(candidate);
                     ((ObjectNode) bounded.path("problems").get(0).path("basis"))
@@ -553,10 +538,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     @Test
     void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenOnlyTheSearchBoundarySaysIt() {
         pr50Capture(SourceCompleteness.COMPLETE);
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+        prepare(job, pr50ErrorHandling(List.of(), candidate -> {
                     var bounded = worded("The pinned file has no @Min, clamp or other check on the path.")
                             .apply(candidate);
                     ((ObjectNode) bounded.path("evidence").path("search"))
@@ -572,7 +555,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     void shouldAdmitWordsAboutTheCitedLinesWithoutASearch() {
         pr50Capture(SourceCompleteness.COMPLETE);
 
-        service.prepare(
+        prepare(
                 job,
                 pr50ErrorHandling(List.of(), worded("The pinned file has no @Min, clamp or other check on the path.")));
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
@@ -586,10 +569,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         CandidateRefusal.SOURCE_UNAVAILABLE, "A warrant names a source that was not captured", null))
                 .when(verifier)
                 .verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any());
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+        prepare(job, pr50ErrorHandling(List.of(), candidate -> {
                     ((ObjectNode) candidate.path("evidence").path("search"))
                             .set("consulted", mapper.valueToTree(List.of(unknown.value())));
                     return candidate;
@@ -606,14 +587,14 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRejectAChangedItemVersionBeforeItCanProduceProof() {
-        assertThatThrownBy(() -> service.prepare(job, submission("clear-names", "docs:other")))
+        assertThatThrownBy(() -> prepare(job, submission("clear-names", "docs:other")))
                 .isInstanceOf(ResultsRefusedException.class);
         verifyNoInteractions(results, membership, verifier);
     }
 
     @Test
     void shouldRejectAnUnassignedPractice() {
-        assertThatThrownBy(() -> service.prepare(job, submission("other-practice", "docs:one")))
+        assertThatThrownBy(() -> prepare(job, submission("other-practice", "docs:one")))
                 .isInstanceOf(ResultsRefusedException.class);
         verifyNoInteractions(results, membership, verifier);
     }
@@ -623,7 +604,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         acceptReadReceipts();
         when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(3));
-        var prepared = service.prepare(job, submission("clear-names", "docs:one"));
+        var prepared = prepare(job, submission("clear-names", "docs:one"));
         job.setAttempt(1);
         assertThatThrownBy(() -> prepared.record(job)).isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
         verifyNoInteractions(results, membership);
@@ -648,17 +629,15 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         first.practice().reviewDigest(),
                         first.practice().method()));
         when(assignments.admissible(job)).thenReturn(List.of(first, second));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
         var valid = submission("clear-names", "docs:one").results().getFirst();
         var malformed = new SubmittedResultDTO("other-practice", "2", "docs:one", mapper.createObjectNode(), List.of());
-        var prepared = service.prepare(
+        var prepared = prepare(
                 job,
                 new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(valid, malformed), List.of()));
         prepared.record(job);
-        ArgumentCaptor<List<ResultCandidate>> admitted = ArgumentCaptor.captor();
-        verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), admitted.capture());
-        assertThat(admitted.getValue())
+        verifyNoInteractions(results);
+        assertThat(staged)
                 .singleElement()
                 .satisfies(result -> assertThat(result.practiceId()).isEqualTo(31));
         assertThat(Objects.requireNonNull(job.getCapture())
@@ -694,8 +673,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         first.practice().reviewDigest(),
                         first.practice().method()));
         when(assignments.admissible(job)).thenReturn(List.of(first, second));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
         var request = new AdmissionRequestDTO(
                 3,
                 job.getReviewId(),
@@ -703,21 +681,20 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 0,
                 submission("clear-names", "docs:one").results(),
                 List.of(new RuntimeNonResultDTO("other-practice", ReviewStopReason.BUDGET)));
-        var prepared = service.prepare(job, request);
+        var prepared = prepare(job, request);
         verifyNoInteractions(results, membership);
         prepared.record(job);
-        ArgumentCaptor<List<ResultCandidate>> admitted = ArgumentCaptor.captor();
-        verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), admitted.capture());
-        assertThat(admitted.getValue())
+        verifyNoInteractions(results);
+        assertThat(staged)
                 .singleElement()
                 .satisfies(result -> assertThat(result.practiceId()).isEqualTo(31));
         assertThat(Objects.requireNonNull(job.getCapture()).path("nonResults"))
                 .isEqualTo(mapper.valueToTree(request.nonResults()));
-        verifyNoInteractions(membership);
+        verify(membership).fail(eq(1L), eq(second.id()), eq(ReviewStopReason.BUDGET), any());
     }
 
     @Test
-    void shouldRefuseARunThatHasOnlyRuntimeNonResults() {
+    void shouldStageARuntimeNonResultWithoutInventingAResult() {
         var request = new AdmissionRequestDTO(
                 3,
                 job.getReviewId(),
@@ -725,10 +702,11 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 0,
                 List.of(),
                 List.of(new RuntimeNonResultDTO("clear-names", ReviewStopReason.BUDGET)));
-        assertThatThrownBy(() -> service.prepare(job, request))
-                .isInstanceOf(ResultsRefusedException.class)
-                .hasMessage("The submission contains no practice results");
-        verifyNoInteractions(results, membership, verifier);
+        prepare(job, request).record(job);
+        assertThat(staged).isEmpty();
+        verify(membership)
+                .fail(eq(1L), eq(RuntimeReviewTestData.assignment(5L, null).id()), eq(ReviewStopReason.BUDGET), any());
+        verifyNoInteractions(results, verifier);
     }
 
     @Test
@@ -741,7 +719,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     0,
                     submission("clear-names", "docs:one").results(),
                     List.of(new RuntimeNonResultDTO(slug, ReviewStopReason.BUDGET)));
-            assertThatThrownBy(() -> service.prepare(job, request)).isInstanceOf(ResultsRefusedException.class);
+            assertThatThrownBy(() -> prepare(job, request)).isInstanceOf(ResultsRefusedException.class);
         }
         verifyNoInteractions(results, membership);
     }
@@ -762,8 +740,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .set(assigned.practiceSlug(), mapper.valueToTree(check));
         when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
                 .thenReturn(new AdmissionReceipt(List.of(), List.of()));
-        service.prepare(job, new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(), List.of()))
-                .record(job);
+        service.seal(job, List.of());
         ArgumentCaptor<List<ResultCandidate>> candidates = ArgumentCaptor.captor();
         verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), candidates.capture());
         assertThat(candidates.getValue()).singleElement().satisfies(candidate -> {
@@ -796,13 +773,9 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                                 assigned.practice().practiceId(),
                                 assigned.item().itemId(),
                                 "ROLE_UNAVAILABLE"))));
-        service.prepare(job, new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(), List.of()))
-                .record(job);
-        assertThat(Objects.requireNonNull(job.getCapture())
-                        .path("withheld")
-                        .get(0)
-                        .path("reason")
-                        .asString())
-                .isEqualTo("ROLE_UNAVAILABLE");
+        var receipt = service.seal(job, List.of());
+        assertThat(receipt.withheldItems())
+                .singleElement()
+                .satisfies(item -> assertThat(item.reason()).isEqualTo("ROLE_UNAVAILABLE"));
     }
 }

@@ -19,7 +19,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         SELECT review_id AS reviewId,practice_id AS practiceId,COUNT(*) AS listed,
           COUNT(*) FILTER(WHERE state IN ('JUDGED','REUSED')) AS reviewed,
           COUNT(*) FILTER(WHERE state='REUSED') AS reused,COUNT(*) FILTER(WHERE state='WITHHELD') AS withheld,
-          COUNT(*) FILTER(WHERE state='LISTED') AS pending FROM review_item
+          COUNT(*) FILTER(WHERE state IN ('LISTED','STAGED')) AS pending FROM review_item
         WHERE workspace_id=:ws AND review_id IN (:ids) GROUP BY review_id,practice_id
         """, nativeQuery = true)
     List<ReviewPracticeCounts> practiceCounts(long ws, Collection<UUID> ids);
@@ -160,6 +160,9 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
             @Param("reviewId") UUID reviewId,
             @Param("practiceId") long practiceId,
             @Param("itemId") long itemId);
+
+    boolean existsByWorkspaceIdAndReviewIdAndJobIdAndState(
+            long workspaceId, UUID reviewId, UUID jobId, ReviewItemState state);
 
     long countByWorkspaceIdAndReviewIdAndState(long workspaceId, UUID reviewId, ReviewItemState state);
 }

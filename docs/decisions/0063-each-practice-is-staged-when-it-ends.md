@@ -99,3 +99,54 @@ That retry must seal and compose, not record a readiness refusal.
 The seal checks each staged result by the fingerprints of the sources that its session could read.
 A staged result that is stale at the seal is admitted and ended at once as `WORK_CHANGED`. It is never delivered.
 A retry at a moved item version seals the staged results, and the other practices end with `REPLACED`.
+
+## Update — 2026-10-30: durable staging under the attempt lease
+
+The current attempt ownership check and unexpired `review_job.leased_until` replace the worker-registry fence above.
+Staged records carry no worker ownership.
+[ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) owns the runtime attempt fence; its replacement must preserve staged work, the admission marker and measured usage.
+The server uses the existing candidate and evidence verifier before it stages a completed practice.
+It keeps the verified candidate, exact cited text, pinned standard, request digest and capture receipt on the existing `review_item` row.
+A separate mapping reads its large payload only for staging, sealing or erasure.
+Ordinary review reads count `STAGED` as pending and expose no candidate or problem.
+
+The runner stages a completed result or terminal runtime refusal before it starts another practice in that execution slot.
+A transient provider failure, execution error or interrupted deadline leaves the practice open for retry.
+At the retry limit, the server withholds open practices with the recorded stop cause.
+A terminal runtime refusal or a candidate refusal keeps its own withholding reason.
+An identical repeated request returns its receipt; a changed request returns `409 Conflict` under the existing attempt-conflict contract.
+A stage request makes no model call and records no second model charge.
+The existing attempt measurement and usage ledger retain spend before recovery resets the attempt counters.
+An unanswered model call stays unverifiable under that ledger's rules.
+
+The seal reads the verified candidates from membership rows under the existing item and review locks.
+It creates results and problems in one transaction and records the existing admission marker for composition.
+Each capture attempt keeps one shared composition root. It carries no admission digest before the seal.
+The seal merges the staged cited text into this root, with content digests and capture receipts.
+Cited text from an older attempt does not depend on its Pod or local folder.
+Composition remains an LLM job and uses the existing durable handoff after admission.
+
+| Failure | Recorded behavior |
+| --- | --- |
+| The Pod or worker is lost after staging. | The next attempt captures and measures only open practices. Recorded withholdings and staged candidates remain. |
+| A stage response is lost after commit. | The same request gets the retained receipt. A changed candidate cannot replace it. |
+| An expired or replaced attempt writes late. | The current worker, attempt and lease checks refuse the write. |
+| Every practice already ended. | The retry seals and composes without a capture or sandbox. It records no readiness refusal. |
+| Capture proved that a practice does not apply. | The practice is not open work. Its seal records `DOES_NOT_APPLY`, including after an interrupted attempt. |
+| The work changed before the retry. | The retry seals the staged set and ends open memberships as `REPLACED`. The existing conservative currentness check ends stale results as `WORK_CHANGED`. |
+| Measurement retries are exhausted after a lost worker. | A handoff only seals retained work and withholds open practices and feedback. It starts no sandbox or model session. |
+| Two seal requests race. | The lock and admission digest permit one result set. The second request reads that set. |
+| A candidate is read before the seal. | It has no result or problem row, so it changes no visible feedback or standing. |
+| A source copy is revoked or expires. | Its staged practice is withheld as `COPY_AUTHORITY_UNAVAILABLE`. The seal keeps sibling practices that the existing job-level custody policy permits. An invalid root cannot be composed from. |
+| A person erasure removes a membership. | The seal cannot recreate it. Erasure removes its retained composition basis. |
+| A review is cancelled before its seal. | Terminal settlement withholds staged practices with `CANCELLED` and removes their staged bytes. |
+| Retained input expires or the job ends. | The existing bounded retention pass removes staging bytes. An unsealed staged membership keeps an explicit withholding. |
+| The worker is lost after sealing. | Recovery continues composition from the admission marker and retained basis. It does not measure or admit again. |
+
+The final finishing handoff requires a staged candidate.
+If only runtime withholdings remain, the existing retry limit can end the job before the seal.
+A captured inapplicability can then remain an execution withholding.
+
+[ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns source fingerprints and later publication changes.
+Until its loop-only prerequisite ships, currentness keeps the existing conservative item version.
+This layer adds no provider writer, composition template or separate scheduling queue.

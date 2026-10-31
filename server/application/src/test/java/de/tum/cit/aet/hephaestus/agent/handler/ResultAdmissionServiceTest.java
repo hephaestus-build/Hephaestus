@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -16,14 +17,14 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.PinnedInlineAnchorQuery;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionContext;
@@ -33,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
@@ -100,7 +102,6 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(PrivateFeedbackProgress.NONE);
         service = new ResultAdmissionService(
                 jobs,
-                output,
                 proof,
                 assignments,
                 new AdmittedResultProjectionService(
@@ -109,9 +110,20 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 mock(ReviewHistoryContentSource.class),
                 mapper,
                 manager,
-                bases,
                 composition,
-                mock(ReviewWriteGuard.class));
+                mock(ReviewWriteGuard.class),
+                new PracticeResultStaging(
+                        output,
+                        mock(PracticeStagingStore.class),
+                        members,
+                        assignments,
+                        files,
+                        bases,
+                        mapper,
+                        new PracticeCatalogInjector(mapper)));
+        job.setLeasedUntil(Instant.now().plusSeconds(3600));
+        lenient().when(jobs.databaseNow()).thenAnswer(call -> Instant.now());
+        lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setWorkerId("worker");
         job.setCapture(mapper.createObjectNode());
@@ -121,6 +133,25 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
     private ResultAdmissionService.AdmissionIdentity identity() {
         return new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 0, "worker");
+    }
+
+    @Test
+    void shouldAcceptALiveDatabaseLeaseWhenTheServerClockIsAhead() {
+        var databaseNow = Instant.now().minusSeconds(7200);
+        job.setLeasedUntil(databaseNow.plusSeconds(60));
+        when(jobs.databaseNow()).thenReturn(databaseNow);
+
+        assertThat(service.ownedJob(identity())).isSameAs(job);
+    }
+
+    @Test
+    void shouldRejectALeaseAtItsDatabaseExpiryWhenTheServerClockIsBehind() {
+        var databaseNow = Instant.now().plusSeconds(7200);
+        job.setLeasedUntil(databaseNow);
+        when(jobs.databaseNow()).thenReturn(databaseNow);
+
+        assertThatThrownBy(() -> service.ownedJob(identity()))
+                .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
     }
 
     @Test
@@ -190,9 +221,12 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(assignment));
         when(proof.forAttempt(1, job.getReviewId(), job.getId(), 0)).thenReturn(List.of());
         when(publicEligibility.publicResultIds(job, List.of())).thenReturn(Set.of());
-        var request = new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(), List.of());
+        var request = new SealResultsRequestDTO(3, job.getReviewId(), job.getId(), 0);
         var writes = new AtomicInteger();
-        when(output.prepare(job, request)).thenReturn(owned -> writes.incrementAndGet());
+        when(output.seal(job, List.of())).thenAnswer(call -> {
+            writes.incrementAndGet();
+            return new AdmissionReceipt(List.of(), List.of());
+        });
         service.admit(identity(), request);
         service.admit(identity(), request);
         assertThat(writes.get()).isEqualTo(1);
@@ -227,7 +261,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
         service.admit(identity(), request);
 
-        verifyNoInteractions(bases);
+        verify(bases, never()).save(any());
     }
 
     @Test
@@ -250,7 +284,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 .isBetween(before.plus(ReviewCompositionBasis.RETENTION), after.plus(ReviewCompositionBasis.RETENTION));
     }
 
-    private AdmissionRequestDTO admissionWithRetainedInputs(@Nullable Instant deadline) {
+    private SealResultsRequestDTO admissionWithRetainedInputs(@Nullable Instant deadline) {
         var assignment = RuntimeReviewTestData.assignment(5L, null);
         var original = RuntimeReviewTestData.review(ReviewKind.ITEM, assignment);
         var review = deadline == null
@@ -270,8 +304,8 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(assignment));
         when(proof.forAttempt(1, job.getReviewId(), job.getId(), 0)).thenReturn(List.of());
         when(publicEligibility.publicResultIds(job, List.of())).thenReturn(Set.of());
-        var request = new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(), List.of());
-        when(output.prepare(job, request)).thenReturn(mock(PreparedResults.class));
+        var request = new SealResultsRequestDTO(3, job.getReviewId(), job.getId(), 0);
+        when(output.seal(job, List.of())).thenReturn(new AdmissionReceipt(List.of(), List.of()));
         return request;
     }
 

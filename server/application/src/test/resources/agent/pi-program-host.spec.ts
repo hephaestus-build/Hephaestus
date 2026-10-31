@@ -18,6 +18,7 @@ import {
 	readJsonFile,
 	runRunner,
 	stagePractices,
+	stagedRequest,
 	type RunnerExit,
 	type SessionBehaviour,
 	type StagedPractice,
@@ -92,17 +93,15 @@ const main = await run(
 	{ "d-silent": "silent" },
 );
 
-void test("the runner admits the results that passed the host's checks and exits", () => {
-	assert.equal(main.status, 0, main.stderr);
+void test("an interrupted run retains completed results and leaves unavailable work open", () => {
+	assert.equal(main.status, 1, main.stderr);
 });
 
 void test("a partial run submits completed results and explicit runtime non-results separately", () => {
-	const [admission] = capturedLines(main.cwd, "admission");
-	const body: unknown = field(admission, "body");
+	const body: unknown = stagedRequest(main.cwd);
 	assert.deepEqual(field(body, "nonResults"), [
 		{ practiceSlug: "c-invalid-meta", reason: "EXECUTION_FAILED" },
 		{ practiceSlug: "d-silent", reason: "EXECUTION_FAILED" },
-		{ practiceSlug: "e-no-inputs", reason: "EXECUTION_INCOMPLETE" },
 	]);
 	assert.deepEqual(admittedSlugs(main.cwd), ["a-direct", "b-builtin"]);
 });
@@ -110,8 +109,7 @@ void test("a partial run submits completed results and explicit runtime non-resu
 void test("a custom program that returns a result directly opens no session, and its result is admitted", () => {
 	const prompted = capturedLines(main.cwd, "prompts").map((line) => field(line, "slug"));
 	assert.equal(prompted.includes("a-direct"), false);
-	const [admission] = capturedLines(main.cwd, "admission");
-	const body: unknown = field(admission, "body");
+	const body: unknown = stagedRequest(main.cwd);
 	assert.partialDeepStrictEqual(body, {
 		results: [
 			{
@@ -228,16 +226,18 @@ void test("the execution report has one entry for each admitted practice, sorted
 	);
 });
 
-void test("the admission request is result.json and review-state.json, sorted by slug", () => {
-	const admissions = capturedLines(main.cwd, "admission");
-	assert.equal(admissions.length, 1);
-	const [admission] = admissions;
-	const body: unknown = field(admission, "body");
-	assert.deepEqual(readJsonFile(main.cwd, "out/result.json"), body);
+void test("a partial run retains diagnostics and staged results without sealing unfinished work", () => {
+	assert.deepEqual(capturedLines(main.cwd, "admission"), []);
+	const body: unknown = readJsonFile(main.cwd, "out/result.json");
 	assert.deepEqual(readJsonFile(main.cwd, "out/review-state.json"), body);
 	assert.partialDeepStrictEqual(body, {
 		contractVersion: 3,
 		results: [{ practiceSlug: "a-direct" }, { practiceSlug: "b-builtin" }],
+		nonResults: [
+			{ practiceSlug: "c-invalid-meta" },
+			{ practiceSlug: "d-silent" },
+			{ practiceSlug: "e-no-inputs", reason: "EXECUTION_INCOMPLETE" },
+		],
 	});
 	assert.deepEqual(capturedLines(main.cwd, "change-view"), [true]);
 });
@@ -249,7 +249,7 @@ void test("a practice that the run's safety line stops before it starts is repor
 		{ "b-hangs": "hang" },
 		{ AGENT_BUDGET_MS: "7000" },
 	);
-	assert.equal(stopped.status, 0, stopped.stderr);
+	assert.equal(stopped.status, 1, stopped.stderr);
 	const report = executionReport(stopped.cwd);
 	assert.partialDeepStrictEqual(entryOf(report.practices, "a-first"), { status: "ok" });
 	assert.partialDeepStrictEqual(entryOf(report.practices, "b-hangs"), {

@@ -14,6 +14,9 @@ public interface ReviewAssignmentStore {
     /** The practices of the job whose membership an earlier attempt of the job already ended. */
     Set<Long> endedPractices(long workspaceId, UUID reviewId, UUID jobId);
 
+    /** Whether an invocation retains verified practices that still need its seal. */
+    boolean hasStaged(long workspaceId, UUID reviewId, UUID jobId);
+
     void capture(long workspaceId, UUID reviewId, UUID jobId, int attempt, List<ReviewCaptureDecision> decisions);
 
     void withhold(long workspaceId, ReviewAssignmentId assignment, CandidateRefusal reason, String message);

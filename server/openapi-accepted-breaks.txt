@@ -92,3 +92,9 @@ in API PATCH /workspaces/{workspaceSlug}/slug api path removed without deprecati
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings api path removed without deprecation
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId} api path removed without deprecation
 in API POST /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId} api path removed without deprecation
+
+# LC-11 (#3475; ADR 0063): the identity-only seal requires all four identity fields.
+in API POST /internal/llm/admit-results the request property `attempt` became required
+in API POST /internal/llm/admit-results the request property `contractVersion` became required
+in API POST /internal/llm/admit-results the request property `jobId` became required
+in API POST /internal/llm/admit-results the request property `reviewId` became required

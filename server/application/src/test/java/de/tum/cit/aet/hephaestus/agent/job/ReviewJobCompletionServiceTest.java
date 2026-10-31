@@ -87,7 +87,6 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
         job.setExecutionStartedAt(Instant.now());
         var service = service(job, ReviewKind.SCAN);
         var assignment = RuntimeReviewTestData.assignment(null, null);
-        when(assignments.admissible(job)).thenReturn(List.of(assignment));
         service.tick();
         verify(members)
                 .fail(
@@ -113,7 +112,7 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
         job.setCapture(capture);
         var service = service(job, ReviewKind.ITEM);
         var assignment = RuntimeReviewTestData.assignment(null, null);
-        when(assignments.admissible(job)).thenReturn(List.of(assignment));
+        when(assignments.load(job)).thenReturn(List.of(assignment));
         service.tick();
         verify(members)
                 .fail(
@@ -137,6 +136,5 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
         verify(reviews).complete(ArgumentMatchers.eq(1L), ArgumentMatchers.eq(job.getReviewId()), completion.capture());
         assertThat(completion.getValue().status()).isEqualTo(ReviewStatus.PARTIAL);
         assertThat(completion.getValue().reason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
-        verifyNoInteractions(members);
     }
 }

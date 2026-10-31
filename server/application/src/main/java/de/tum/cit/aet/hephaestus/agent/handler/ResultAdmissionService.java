@@ -3,9 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -15,23 +12,28 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import java.io.Serial;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,6 +47,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /** Admission is fenced by workspace, review, job, worker and exact execution attempt. */
 @Service
@@ -54,7 +57,6 @@ public class ResultAdmissionService {
     public static final String INTERRUPTED_AFTER_ADMISSION =
             "The review stopped after its observations were admitted. The recorded observations are kept.";
     private final ReviewJobRepository jobs;
-    private final ReviewOutputService output;
     private final AdmittedResultQuery proof;
     private final ReviewJobAssignments assignments;
     private final AdmittedResultProjectionService projection;
@@ -63,13 +65,12 @@ public class ResultAdmissionService {
     private final ObjectMapper mapper;
     private final TransactionTemplate transactions;
     private final TransactionTemplate historySnapshot;
-    private final ReviewCompositionBasisRepository bases;
     private final FeedbackCompositionService composition;
     private final ReviewWriteGuard writeGuard;
+    private final PracticeResultStaging staging;
 
     public ResultAdmissionService(
             ReviewJobRepository jobs,
-            ReviewOutputService output,
             AdmittedResultQuery proof,
             ReviewJobAssignments assignments,
             AdmittedResultProjectionService projection,
@@ -77,11 +78,10 @@ public class ResultAdmissionService {
             ReviewHistoryContentSource history,
             ObjectMapper mapper,
             PlatformTransactionManager manager,
-            ReviewCompositionBasisRepository bases,
             FeedbackCompositionService composition,
-            ReviewWriteGuard writeGuard) {
+            ReviewWriteGuard writeGuard,
+            PracticeResultStaging staging) {
         this.jobs = jobs;
-        this.output = output;
         this.proof = proof;
         this.assignments = assignments;
         this.projection = projection;
@@ -94,63 +94,124 @@ public class ResultAdmissionService {
         this.historySnapshot.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.historySnapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         this.historySnapshot.setReadOnly(true);
-        this.bases = bases;
         this.composition = composition;
         this.writeGuard = writeGuard;
+        this.staging = staging;
     }
 
-    public AdmissionResponseDTO admit(AdmissionIdentity identity, AdmissionRequestDTO request) {
+    /** Verifies and durably stages one completed practice. A lost acknowledgement can repeat only the same body. */
+    public StageResponseDTO stage(AdmissionIdentity identity, AdmissionRequestDTO request) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            files.holdCopyAdmission();
+            var job = ownedJob(identity);
+            requireIdentity(job, request.reviewId(), request.jobId(), request.attempt());
+            var receipt = staging.stage(job, identity, request, () -> ownedJob(identity));
+            jobs.saveAndFlush(job);
+            return receipt;
+        }));
+    }
+
+    /** Seals the retained set once. Candidates are read from memberships, never resubmitted by the runner. */
+    public AdmissionResponseDTO admit(AdmissionIdentity identity, SealResultsRequestDTO request) {
+        return admittedResponse(seal(identity, request));
+    }
+
+    private ReviewJob seal(AdmissionIdentity identity, SealResultsRequestDTO request) {
         String digest = ProvenanceDigest.sha256Hex(mapper.writeValueAsBytes(request));
-        ReviewJob candidate = Objects.requireNonNull(transactions.execute(status -> ownedJob(identity)));
-        requireIdentity(candidate, request.reviewId(), request.jobId(), request.attempt());
-        if (isContinuation(candidate)) throw new StaleAttemptException();
-        PreparedResults prepared = isAdmitted(candidate) ? null : output.prepare(candidate, request);
         ReviewJob recorded = Objects.requireNonNull(transactions.execute(status -> {
+            files.holdCopyAdmission();
             ReviewJob owned = ownedJob(identity);
             requireIdentity(owned, request.reviewId(), request.jobId(), request.attempt());
             if (isAdmitted(owned)) {
-                if (!digest.equals(owned.getAdmissionDigest())) throw new AdmissionConflictException();
-            } else {
-                Objects.requireNonNull(prepared).record(owned);
-                owned.setAdmissionDigest(digest);
-                owned.setAdmissionAttempt(identity.attempt());
-                jobs.saveAndFlush(owned);
-                retainCompositionInputs(identity, owned, digest);
+                if (isContinuation(owned) || !digest.equals(owned.getAdmissionDigest()))
+                    throw new AdmissionConflictException();
+                return owned;
             }
+            if (!assignments.open(owned).isEmpty()) throw new AdmissionConflictException();
+            var staged = staging.staged(owned);
+            for (var entry : staged) {
+                if (entry.candidate() == null) continue;
+                var copy = UUID.fromString(entry.evidence().path("copyId").asString());
+                if (!files.vouchesForOriginalCopy(copy, owned.getId(), owned.getWorkspaceId(), entry.attempt())
+                        || !Instant.parse(entry.evidence().path("expiresAt").asString())
+                                .isAfter(Instant.now())) staging.refuseCopy(owned, entry);
+            }
+            staged = staging.staged(owned);
+            if (owned.getCapture() == null) owned.setCapture(mapper.createObjectNode());
+            ownedJob(identity);
+            var receipt = staging.sealResults(owned, staged);
+            var retained =
+                    (ObjectNode) Objects.requireNonNull(owned.getCapture()).deepCopy();
+            retained.set("admission", mapper.valueToTree(receipt));
+            var nonResults = new LinkedHashMap<String, JsonNode>();
+            retained.path("nonResults")
+                    .forEach(value -> nonResults.put(value.path("practiceSlug").asString(), value));
+            staged.forEach(value -> value.evidence()
+                    .path("nonResults")
+                    .forEach(nonResult ->
+                            nonResults.put(nonResult.path("practiceSlug").asString(), nonResult)));
+            retained.set("nonResults", mapper.valueToTree(nonResults.values()));
+            var slugs = assignments.load(owned).stream()
+                    .collect(Collectors.toMap(value -> value.id(), value -> value.practiceSlug()));
+            var reasons = new LinkedHashMap<ReviewAssignmentId, String>();
+            staged.stream()
+                    .filter(value -> value.reason() != null)
+                    .forEach(value -> reasons.put(value.assignment(), Objects.requireNonNull(value.reason())));
+            receipt.withheldItems()
+                    .forEach(value -> reasons.put(
+                            new ReviewAssignmentId(owned.getReviewId(), value.practiceId(), value.itemId()),
+                            value.reason()));
+            retained.set(
+                    "withheld",
+                    mapper.valueToTree(reasons.entrySet().stream()
+                            .map(value -> new AdmissionResponseDTO.Withheld(
+                                    Objects.requireNonNull(slugs.get(value.getKey())),
+                                    Long.toString(value.getKey().itemId()),
+                                    value.getValue()))
+                            .toList()));
+            owned.setCapture(retained);
+            owned.setAdmissionDigest(digest);
+            owned.setAdmissionAttempt(identity.attempt());
+            staging.retainSealBasis(identity, owned, digest, staged);
+            jobs.saveAndFlush(owned);
             return owned;
         }));
-        return admittedResponse(recorded);
+        return recorded;
     }
 
-    private void retainCompositionInputs(AdmissionIdentity identity, ReviewJob job, String digest) {
-        var review = assignments.review(job);
-        if (review.kind() != ReviewKind.ITEM) return;
-        Instant now = Instant.now();
-        Instant expiresAt = now.plus(ReviewCompositionBasis.RETENTION);
-        // A copy of an occasion's retained record is used no longer than the record itself.
-        var occasionExpiry = review.evidenceExpiresAt();
-        if (occasionExpiry != null) {
-            if (!occasionExpiry.isAfter(now)) return;
-            if (occasionExpiry.isBefore(expiresAt)) expiresAt = occasionExpiry;
-        }
-        var copy = files.completeReceipt(identity).orElse(null);
-        if (copy == null || !files.holdVouchingReceipt(identity, copy)) return;
-        var original = files.originalCompositionInputs(identity).orElse(null);
-        if (original == null) return;
-        var basis = new ReviewCompositionBasis();
-        basis.setJobId(job.getId());
-        basis.setWorkspaceId(job.getWorkspaceId());
-        basis.setAdmissionAttempt(job.getAttempt());
-        basis.setAdmissionDigest(digest);
-        basis.setBasisVersion(ReviewCompositionBasis.VERSION);
-        basis.setBasisDigest(ReviewCompositionBasis.digest(original));
-        basis.setCopyId(copy);
-        basis.setExpiresAt(expiresAt);
-        var payload = mapper.createObjectNode();
-        var staged = payload.putObject("files");
-        original.forEach((path, bytes) -> staged.put(path, Base64.getEncoder().encodeToString(bytes)));
-        basis.setPayload(payload);
-        bases.save(basis);
+    /** A retry with every practice ended seals without capturing or starting a sandbox. */
+    public boolean sealIfComplete(AdmissionIdentity identity) {
+        return Boolean.TRUE.equals(transactions.execute(status -> {
+            files.holdCopyAdmission();
+            var job = ownedJob(identity);
+            if (isAdmitted(job)) return false;
+            if (staging.workChanged(job)) {
+                staging.failOpen(job, ReviewStopReason.REPLACED);
+            } else if (!assignments.open(job).isEmpty()) return false;
+            seal(
+                    identity,
+                    new SealResultsRequestDTO(
+                            SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
+            return true;
+        }));
+    }
+
+    public boolean hasStaged(ReviewJob job) {
+        return staging.hasStaged(job);
+    }
+
+    /** At the retry limit, preserve completed practices and record why the remaining work stopped. */
+    public void finishInterrupted(AdmissionIdentity identity, ReviewStopReason reason) {
+        transactions.executeWithoutResult(status -> {
+            files.holdCopyAdmission();
+            var job = ownedJob(identity);
+            if (isAdmitted(job)) return;
+            staging.failOpen(job, reason);
+            seal(
+                    identity,
+                    new SealResultsRequestDTO(
+                            SandboxLayout.PRACTICE_CONTRACT_VERSION, job.getReviewId(), job.getId(), job.getAttempt()));
+        });
     }
 
     public AdmissionResponseDTO admittedResponse(ReviewJob job) {
@@ -303,6 +364,7 @@ public class ResultAdmissionService {
         var retained = files.indexLateRead(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {
+                    files.holdCopyAdmission();
                     var job = ownedJob(identity);
                     if (!isAdmitted(job) || assignments.review(job).kind() != ReviewKind.ITEM)
                         throw new PublicHistoryRefusedException("History requires an admitted item review");
@@ -323,7 +385,9 @@ public class ResultAdmissionService {
                 .orElseThrow(StaleAttemptException::new);
         if (job.getStatus() != ReviewJobStatus.RUNNING
                 || job.getAttempt() != identity.attempt()
-                || !identity.workerId().equals(job.getWorkerId())) throw new StaleAttemptException();
+                || !identity.workerId().equals(job.getWorkerId())
+                || job.getLeasedUntil() == null
+                || !job.getLeasedUntil().isAfter(jobs.databaseNow())) throw new StaleAttemptException();
         return job;
     }
 

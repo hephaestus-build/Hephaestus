@@ -2,10 +2,14 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
+import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
+import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
@@ -15,16 +19,21 @@ import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedExceptio
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RetainedFeedbackTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRecovery;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
@@ -33,6 +42,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
+import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -85,16 +95,20 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -103,11 +117,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -242,6 +261,18 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     private boolean silencedBefore;
 
+    @Autowired
+    private PracticeStagingStore stagingStore;
+
+    @Autowired
+    private ReviewJobRecovery attemptRecovery;
+
+    @Autowired
+    private ReviewJobCompletionService completion;
+
+    @Autowired
+    private ReviewCompositionBasisRepository compositionBases;
+
     @BeforeEach
     void deliverPublicCopies() {
         // A new instance starts silenced, and so does the test database; these tests assert what is posted.
@@ -252,6 +283,464 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @AfterEach
     void restoreSilentMode() {
         silence(silencedBefore);
+    }
+
+    @Test
+    void shouldKeepStagingPrivateAndSealAfterAnInterruptedAttemptWithoutItsFolder() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var request = request(review);
+            var receipt = admission.stage(review.identity(), request);
+            assertThat(admission.stage(review.identity(), request)).isEqualTo(receipt);
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .hasValueSatisfying(member -> {
+                        assertThat(member.getState()).isEqualTo(ReviewItemState.STAGED);
+                        assertThat(member.getResultId()).isNull();
+                    });
+            assertThatThrownBy(() -> admission.stage(review.identity(), request(review, "A changed candidate")))
+                    .isInstanceOf(AdmissionConflictException.class);
+            var before = jobs.findById(review.identity().jobId()).orElseThrow();
+            var directory = files.renderingDirectory(before);
+            review.inputs().close();
+            FileUtils.deleteDirectory(directory.toFile());
+            before.setAttempt(1);
+            before.setWorkerId("replacement-worker");
+            before.setLeasedUntil(Instant.now().plusSeconds(3600));
+            jobs.saveAndFlush(before);
+            var identity = new ResultAdmissionService.AdmissionIdentity(
+                    before.getId(), review.workspaceId(), 1, "replacement-worker");
+            assertThatThrownBy(() -> admission.stage(review.identity(), request))
+                    .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
+            assertThat(admission.sealIfComplete(identity)).isTrue();
+            assertThat(admission.sealIfComplete(identity)).isFalse();
+            var sealed = jobs.findById(before.getId()).orElseThrow();
+            assertThat(resultIds(review)).hasSize(1);
+            assertThat(sealed.getAdmissionAttempt()).isEqualTo(1);
+            assertThat(continuation.retainedInputs(sealed)).anySatisfy((path, bytes) -> {
+                assertThat(path).startsWith("context/staged/");
+                assertThat(new String(bytes, StandardCharsets.UTF_8)).contains(QUOTE);
+            });
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldKeepProvenInapplicabilityWhenSealingRetainedWork(boolean interrupted) {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var scenario = review.pending().scenario();
+            var sibling = versions.create(new PracticeVersionService.NewPractice(
+                    scenario.workspace(),
+                    "absent-sibling",
+                    scenario.item().getKind(),
+                    DefinitionTestFixtures.definition(),
+                    null,
+                    1,
+                    review.developerId()));
+            admissions.assigned(review.pending(), sibling);
+            admission.stage(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            ((ObjectNode) Objects.requireNonNull(job.getCapture()))
+                    .withObject("readiness")
+                    .withObject("applicability")
+                    .set(
+                            sibling.getSlug(),
+                            mapper.valueToTree(new AppliesWhenCheck(
+                                    true,
+                                    "The occasion does not apply",
+                                    List.of(new AppliesWhenCheck.Clause(
+                                            "An applicable occasion",
+                                            new SourceKind("scm.pull-request.core"),
+                                            AppliesWhenCheck.Result.NOT_FOUND)))));
+            jobs.saveAndFlush(job);
+
+            assertThat(assignments.readyToSeal(job)).isTrue();
+            if (interrupted) admission.finishInterrupted(review.identity(), ReviewStopReason.EXECUTION_INCOMPLETE);
+            else assertThat(admission.sealIfComplete(review.identity())).isTrue();
+
+            var member = reviewItems
+                    .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            sibling.getId(),
+                            review.item().itemId())
+                    .orElseThrow();
+            assertThat(member.getState()).isEqualTo(ReviewItemState.JUDGED);
+            assertThat(member.getReason()).isNull();
+            assertThat(results.findById(Objects.requireNonNull(member.getResultId()))
+                            .orElseThrow()
+                            .getOutcome())
+                    .isEqualTo(ResultOutcome.DOES_NOT_APPLY);
+            assertThat(resultIds(review)).hasSize(2);
+        }
+    }
+
+    @Test
+    void shouldSealTheValidPracticeWhenItsSiblingEvidenceExpired() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var scenario = review.pending().scenario();
+            var sibling = versions.create(new PracticeVersionService.NewPractice(
+                    scenario.workspace(),
+                    "retained-sibling",
+                    scenario.item().getKind(),
+                    DefinitionTestFixtures.definition(),
+                    null,
+                    1,
+                    review.developerId()));
+            admissions.assigned(review.pending(), sibling);
+            var original = request(review);
+            var sent = original.results().getFirst();
+            admission.stage(review.identity(), original);
+            var firstBasis = compositionBases
+                    .findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId())
+                    .orElseThrow();
+            assertThat(firstBasis.getAdmissionDigest()).isNull();
+            assertThatThrownBy(() -> continuation.retainedInputs(
+                            jobs.findById(review.identity().jobId()).orElseThrow()))
+                    .isInstanceOf(ReviewCompositionContinuation.InputsUnavailableException.class);
+            admission.stage(
+                    review.identity(),
+                    new AdmissionRequestDTO(
+                            3,
+                            review.reviewId(),
+                            review.identity().jobId(),
+                            0,
+                            List.of(new SubmittedResultDTO(
+                                    sibling.getSlug(),
+                                    sent.itemId(),
+                                    sent.itemVersion(),
+                                    sent.candidate(),
+                                    sent.readReceipts())),
+                            List.of()));
+            assertThat(compositionBases
+                            .findByWorkspaceIdAndJobId(
+                                    review.workspaceId(), review.identity().jobId())
+                            .orElseThrow()
+                            .getBasisDigest())
+                    .isEqualTo(firstBasis.getBasisDigest());
+            jdbc.update(
+                    "UPDATE review_item SET staged_payload=jsonb_set(staged_payload,'{evidence,expiresAt}',to_jsonb(CAST(? AS text)))"
+                            + " WHERE workspace_id=? AND review_id=? AND practice_id=?",
+                    Instant.now().minusSeconds(1).toString(),
+                    review.workspaceId(),
+                    review.reviewId(),
+                    review.practiceId());
+            var sealed = admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0));
+            assertThat(sealed.admitted())
+                    .singleElement()
+                    .satisfies(value -> assertThat(value.practiceSlug()).isEqualTo(sibling.getSlug()));
+            assertThat(sealed.withheld())
+                    .singleElement()
+                    .satisfies(value -> assertThat(value.reason()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE"));
+            assertThat(resultIds(review)).hasSize(1);
+        }
+    }
+
+    @Test
+    void shouldWithholdARevokedCopyAndNeverRestoreItsCompositionInputs() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var retained = stagingStore
+                    .staged(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.identity().jobId())
+                    .getFirst();
+            jdbc.update(
+                    "UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb WHERE workspace_id=? AND id=?",
+                    review.workspaceId(),
+                    UUID.fromString(retained.evidence().path("copyId").asString()));
+            assertThat(admission.sealIfComplete(review.identity())).isTrue();
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(stagingStore.staged(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.identity().jobId()))
+                    .singleElement()
+                    .satisfies(value -> {
+                        assertThat(value.candidate()).isNull();
+                        assertThat(value.reason()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE");
+                        assertThat(value.evidence().isEmpty()).isTrue();
+                    });
+            assertThat(compositionBases.findByWorkspaceIdAndJobId(
+                            review.workspaceId(), review.identity().jobId()))
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void shouldClearStagingWithItsCancellationCauseAtTerminalSettlement() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            jdbc.update(
+                    "UPDATE review_job SET status='CANCELLED',started_at=NULL,completed_at=now(),cancellation_reason='CANCELLED_BY_REQUESTER' WHERE id=?",
+                    review.identity().jobId());
+            await().untilAsserted(() -> {
+                completion.tick();
+                assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                                review.workspaceId(),
+                                review.reviewId(),
+                                review.practiceId(),
+                                review.item().itemId()))
+                        .hasValueSatisfying(value -> {
+                            assertThat(value.getState()).isEqualTo(ReviewItemState.WITHHELD);
+                            assertThat(value.getReason()).isEqualTo("CANCELLED");
+                            assertThat(value.getStagedAttempt()).isNull();
+                        });
+            });
+            assertThat(jdbc.queryForObject(
+                            "SELECT staged_payload IS NULL FROM review_item WHERE workspace_id=? AND review_id=? AND practice_id=? AND item_id=?",
+                            Boolean.class,
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .isTrue();
+            assertThat(resultIds(review)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldDiscardExpiredCitationsWhileRunningAndKeepItsRefusalForTheSeal() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            jdbc.update(
+                    "UPDATE review_item SET staged_payload=jsonb_set(staged_payload,'{evidence,expiresAt}',to_jsonb(CAST(? AS text)))"
+                            + " WHERE workspace_id=? AND review_id=? AND practice_id=? AND item_id=?",
+                    Instant.now().minusSeconds(1).toString(),
+                    review.workspaceId(),
+                    review.reviewId(),
+                    review.practiceId(),
+                    review.item().itemId());
+            stagingStore.discardUnusable(Instant.now(), 1000);
+            assertThat(stagingStore.staged(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.identity().jobId()))
+                    .singleElement()
+                    .satisfies(value -> {
+                        assertThat(value.candidate()).isNull();
+                        assertThat(value.evidence().isEmpty()).isTrue();
+                        assertThat(value.reason()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE");
+                    });
+            var sealed = admission.admit(
+                    review.identity(),
+                    new SealResultsRequestDTO(
+                            3, review.reviewId(), review.identity().jobId(), 0));
+            assertThat(sealed.admitted()).isEmpty();
+            assertThat(sealed.withheld())
+                    .singleElement()
+                    .satisfies(value -> assertThat(value.reason()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE"));
+        }
+    }
+
+    @Test
+    void shouldBoundTheFinalStagedHandoffAndKeepItsMeasuredUsage() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            job.setAttempt(agentProperties.maxRetries());
+            job.setExecutionStartedAt(Instant.now());
+            job.setLlmCalls(1);
+            jobs.saveAndFlush(job);
+            transactions.executeWithoutResult(
+                    status -> attemptRecovery.recover(job.getId(), WORKER, job.getAttempt(), null));
+            assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            var last = jobs.findById(job.getId()).orElseThrow();
+            last.setStatus(ReviewJobStatus.RUNNING);
+            last.setWorkerId(WORKER);
+            last.setLeasedUntil(Instant.now().plusSeconds(3600));
+            jobs.saveAndFlush(last);
+            transactions.executeWithoutResult(
+                    status -> attemptRecovery.recover(last.getId(), WORKER, last.getAttempt(), null));
+            assertThat(jobs.findById(last.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+            assertThat(jobs.findById(job.getId()).orElseThrow().getAttempt())
+                    .isEqualTo(agentProperties.maxRetries() + 1);
+            assertThat(jdbc.queryForObject(
+                            "SELECT proxy_calls FROM review_job_attempt_usage WHERE workspace_id=? AND job_id=? AND attempt=?",
+                            Integer.class,
+                            review.workspaceId(),
+                            job.getId(),
+                            agentProperties.maxRetries()))
+                    .isOne();
+            completion.tick();
+            assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .hasValueSatisfying(value -> {
+                        assertThat(value.getState()).isEqualTo(ReviewItemState.WITHHELD);
+                        assertThat(value.getReason()).isEqualTo("PREPARATION_FAILED");
+                    });
+        }
+    }
+
+    @Test
+    void shouldRecheckTheDevelopersChoiceBetweenStagingAndSealing() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            jdbc.update("UPDATE account SET ai_choice='NO_AI',ai_choice_at=now() WHERE id=?", review.developerId());
+            assertThat(admission.sealIfComplete(review.identity())).isTrue();
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .hasValueSatisfying(value -> {
+                        assertThat(value.getState()).isEqualTo(ReviewItemState.WITHHELD);
+                        assertThat(value.getReason()).isIn("ROLE_UNAVAILABLE", "COPY_AUTHORITY_UNAVAILABLE");
+                    });
+        }
+    }
+
+    @Test
+    void shouldEndAStagedObservationWhenTheWorkMovesBeforeTheSeal() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var pull = pullRequests.findById(review.pullRequestId()).orElseThrow();
+            pull.setHeadRefOid("d".repeat(40));
+            pullRequests.saveAndFlush(pull);
+            assertThat(admission.sealIfComplete(review.identity())).isTrue();
+            assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .singleElement()
+                    .satisfies(value -> {
+                        assertThat(value.getEndedAt()).isNotNull();
+                        assertThat(value.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
+                    });
+        }
+    }
+
+    @Test
+    void shouldNotRecreateAnErasedMembershipDuringTheSeal() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            jdbc.update(
+                    "DELETE FROM review_item WHERE workspace_id=? AND review_id=? AND practice_id=? AND item_id=?",
+                    review.workspaceId(),
+                    review.reviewId(),
+                    review.practiceId(),
+                    review.item().itemId());
+            assertThatThrownBy(() -> admission.sealIfComplete(review.identity()))
+                    .isInstanceOf(JobPreparationException.class);
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRefuseLateStagingAndSealingAfterTheAttemptLeaseExpires() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            job.setLeasedUntil(Instant.now().minusSeconds(1));
+            jobs.saveAndFlush(job);
+            assertThatThrownBy(() -> admission.stage(review.identity(), request(review)))
+                    .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
+            assertThatThrownBy(() -> admission.sealIfComplete(review.identity()))
+                    .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), job.getId()))
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void shouldKeepCompletedStagingAndExactMeasuredSpendWhenTheWorkerIsLost() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            job.setExecutionStartedAt(Instant.now());
+            job.setLlmCalls(3);
+            job.setLlmInputTokens(13);
+            job.setLlmOutputTokens(7);
+            job.setLlmCacheReadTokens(1200);
+            job.setLlmCacheWriteTokens(300);
+            jobs.saveAndFlush(job);
+            transactions.executeWithoutResult(status -> attemptRecovery.recover(job.getId(), WORKER, 0, null));
+            var retry = jobs.findById(job.getId()).orElseThrow();
+            assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(retry.getAttempt()).isEqualTo(1);
+            assertThat(stagingStore.staged(review.workspaceId(), review.reviewId(), job.getId()))
+                    .singleElement()
+                    .satisfies(staged -> assertThat(staged.attempt()).isZero());
+            assertThat(jdbc.queryForMap(
+                            "SELECT proxy_calls,proxy_input_tokens,proxy_output_tokens,"
+                                    + "proxy_cache_read_tokens,proxy_cache_write_tokens FROM review_job_attempt_usage"
+                                    + " WHERE workspace_id=? AND job_id=? AND attempt=0",
+                            review.workspaceId(),
+                            job.getId()))
+                    .containsEntry("proxy_calls", 3)
+                    .containsEntry("proxy_input_tokens", 13L)
+                    .containsEntry("proxy_output_tokens", 7L)
+                    .containsEntry("proxy_cache_read_tokens", 1200L)
+                    .containsEntry("proxy_cache_write_tokens", 300L);
+            assertThat(resultIds(review)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRejectASealBeforeEveryPracticeHasEndedAndRejectAnotherWorkspace() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            assertThatThrownBy(() -> admission.admit(
+                            review.identity(),
+                            new SealResultsRequestDTO(
+                                    3, review.reviewId(), review.identity().jobId(), 0)))
+                    .isInstanceOf(AdmissionConflictException.class);
+            assertThatThrownBy(() -> admission.stage(
+                            new ResultAdmissionService.AdmissionIdentity(
+                                    review.identity().jobId(), review.workspaceId() + 1000000, 0, WORKER),
+                            request(review)))
+                    .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
+            assertThat(stagingStore.staged(
+                            review.workspaceId() + 1000000,
+                            review.reviewId(),
+                            review.identity().jobId()))
+                    .isEmpty();
+            assertThat(resultIds(review)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldWriteOneResultSetWhenTwoSealRequestsRace() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var request = new SealResultsRequestDTO(
+                    3, review.reviewId(), review.identity().jobId(), 0);
+            try (var workers = Executors.newFixedThreadPool(2)) {
+                var first = workers.submit(() -> admission.admit(review.identity(), request));
+                var second = workers.submit(() -> admission.admit(review.identity(), request));
+                var left = first.get(30, TimeUnit.SECONDS);
+                var right = second.get(30, TimeUnit.SECONDS);
+                assertThat(left.admitted())
+                        .extracting(AdmittedResultDTO::resultId)
+                        .containsExactlyElementsOf(right.admitted().stream()
+                                .map(AdmittedResultDTO::resultId)
+                                .toList());
+            }
+            assertThat(resultIds(review)).hasSize(1);
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM problem WHERE workspace_id=? AND result_id IN"
+                                    + " (SELECT id FROM result WHERE workspace_id=? AND review_id=?)",
+                            Long.class,
+                            review.workspaceId(),
+                            review.workspaceId(),
+                            review.reviewId()))
+                    .isEqualTo(1L);
+        }
     }
 
     @Test
@@ -266,7 +755,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     3, review.reviewId(), review.identity().jobId(), 1, request.results(), List.of());
 
             for (var mismatched : List.of(otherReview, otherJob, otherAttempt))
-                assertThatThrownBy(() -> admission.admit(review.identity(), mismatched))
+                assertThatThrownBy(() -> admitStaged(review.identity(), mismatched))
                         .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
 
             assertThat(resultIds(review)).isEmpty();
@@ -296,7 +785,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             job.setCapture(capture);
             jobs.saveAndFlush(job);
 
-            var response = admission.admit(
+            var response = admitStaged(
                     review.identity(),
                     request(
                             review,
@@ -372,7 +861,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                     sent.readReceipts())),
                     List.of());
 
-            var response = admission.admit(review.identity(), request);
+            var response = admitStaged(review.identity(), request);
 
             assertThat(response.withheld()).singleElement().satisfies(row -> {
                 assertThat(row.practiceSlug()).isEqualTo(review.practiceSlug());
@@ -413,7 +902,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldPostTheAdmittedObservationOnThePullRequestWhenTheReviewedVersionIsStillCurrent() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
-            var response = admission.admit(review.identity(), request(review));
+            var response = admitStaged(review.identity(), request(review));
 
             var admitted = response.admitted().getFirst();
             assertThat(response.contractVersion()).isEqualTo(AdmissionResponseDTO.CONTRACT_VERSION);
@@ -473,12 +962,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(job.getAdmissionAttempt()).isZero();
             assertThat(job.getAdmissionDigest()).isEqualTo(response.admissionDigest());
 
-            var replay = admission.admit(review.identity(), request(review));
+            var replay = admitStaged(review.identity(), request(review));
             assertThat(replay.admissionDigest()).isEqualTo(response.admissionDigest());
             assertThat(replay.admitted())
                     .extracting(AdmittedResultDTO::resultId)
                     .containsExactly(result.getId());
-            assertThatThrownBy(() -> admission.admit(
+            assertThatThrownBy(() -> admitStaged(
                             review.identity(), request(review, "The handler keeps the cause but drops the id.")))
                     .isInstanceOf(AdmissionConflictException.class);
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getAdmissionDigest())
@@ -579,7 +1068,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldStoreNoFeedbackWhenTheComposedTextLinksBeyondTheCompositionInput() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
-            var response = admission.admit(review.identity(), request(review));
+            var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
 
             assertThatThrownBy(() -> admission.prepareFeedback(
@@ -607,16 +1096,17 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldWithholdTheFeedbackAsNotComposedAndStillCompleteTheReviewWhenTheComposerHasNoTimeLeft() {
+    void shouldWithholdTheFeedbackAsNotComposedWhenTheFinalComposerAttemptHasNoTimeLeft() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
-            admission.admit(review.identity(), request(review));
+            admitStaged(review.identity(), request(review));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
 
-            // The composer is a worker bean; here it runs on the application's own admission. The stale-job sweep is
-            // due, so it withholds what is open without a model call.
+            review.inputs().close();
+            job.setAttempt(agentProperties.maxRetries());
+            jobs.saveAndFlush(job);
+            // The final composition window has expired, so it withholds without a model call.
             var composer = new WorkerFeedbackComposer(
                     admission,
-                    files,
                     continuation,
                     mock(ReviewModelGateway.class),
                     assignments,
@@ -626,7 +1116,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     meters,
                     mapper,
                     new CompositionCapacity(4));
-            composer.composeAfterMeasurement(job, WORKER, Instant.now());
+            composer.composeResumed(job, WORKER, Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                             review.workspaceId(), review.reviewId()))
@@ -648,7 +1138,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldReadTheAcceptedReviewOnTheWorkBackForAnAttemptThatComposesAfterIt() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
-            var response = admission.admit(review.identity(), request(review));
+            var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
             admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
@@ -667,7 +1157,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldReplayTheAcceptedPackageButWithholdItsSendWhenAnotherReviewPostedOnThePullRequestSinceAcceptance() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
-            var response = admission.admit(review.identity(), request(review));
+            var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
             var composed = composition(review, response, SUMMARY, context);
             var prepared = admission.prepareFeedback(review.identity(), composed);
@@ -706,7 +1196,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldWithholdThePreparedObservationWithoutPostingWhenThePullRequestMovedBeforeTheSend() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
-            var response = admission.admit(review.identity(), request(review));
+            var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
             admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
@@ -739,7 +1229,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldPostTheObservationOnlyAfterTheDeveloperApprovesItWhenThePracticeAsksForApprovalFirst() {
         try (var review = claimedReview(FeedbackMode.APPROVE_FIRST)) {
-            var response = admission.admit(review.identity(), request(review));
+            var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
             admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
@@ -886,8 +1376,35 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         files.beginPersonCapture(job);
         recorder.recordIdentity(
                 new PersonCopyIdentity("GITHUB", provider.getServerUrl(), Long.toString(authorNativeId), null));
-        var inputs = files.prepare(job, new PreparedEvidence(Map.of(RECORD, record), null), null);
-        job.setCapture(capture(ProvenanceDigest.sha256Hex(record)));
+        var captured = capture(record);
+        var inputs = files.prepare(
+                job,
+                new PreparedEvidence(
+                        Map.of(RECORD, record, "INDEX.json", mapper.writeValueAsBytes(captured.path("manifest"))),
+                        null),
+                null);
+        job.setLeasedUntil(Instant.now().plusSeconds(3600));
+        job.setCapture(captured);
+        job.setConfigSnapshot(new ConfigSnapshot(
+                        ConfigSnapshot.SCHEMA_VERSION,
+                        new FrozenModel(
+                                LlmApiProtocol.OPENAI_COMPLETIONS,
+                                "https://model.example",
+                                "contract-model",
+                                null,
+                                null,
+                                null,
+                                null,
+                                DataHandlingTier.UNDECLARED,
+                                null,
+                                null,
+                                false),
+                        200_000,
+                        4_000,
+                        600,
+                        false,
+                        null)
+                .toJson(mapper));
         jobs.saveAndFlush(job);
         return new ClaimedReview(
                 new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, WORKER),
@@ -905,10 +1422,11 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     /** What the worker's capture recorded: the pull request record, staged and citable as one text. */
-    private ObjectNode capture(String sha256) {
+    private ObjectNode capture(byte[] record) {
+        String sha256 = ProvenanceDigest.sha256Hex(record);
         var capture = EvidenceSnapshotFixtures.snapshot(mapper);
         var source = EvidenceSnapshotFixtures.availableSource(capture, "scm.pull-request.core", null);
-        EvidenceSnapshotFixtures.file(capture, source, RECORD, sha256);
+        EvidenceSnapshotFixtures.file(capture, source, RECORD, sha256).put("bytes", record.length);
         capture.withObject("manifest")
                 .withArray("citableTexts")
                 .addObject()
@@ -919,6 +1437,22 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 .put("stagedPath", RECORD)
                 .put("sha256", sha256);
         return capture;
+    }
+
+    private AdmissionResponseDTO admitStaged(
+            ResultAdmissionService.AdmissionIdentity identity, AdmissionRequestDTO request) {
+        for (var result : request.results())
+            admission.stage(
+                    identity,
+                    new AdmissionRequestDTO(
+                            3, request.reviewId(), request.jobId(), request.attempt(), List.of(result), List.of()));
+        for (var nonResult : request.nonResults())
+            admission.stage(
+                    identity,
+                    new AdmissionRequestDTO(
+                            3, request.reviewId(), request.jobId(), request.attempt(), List.of(), List.of(nonResult)));
+        return admission.admit(
+                identity, new SealResultsRequestDTO(3, request.reviewId(), request.jobId(), request.attempt()));
     }
 
     private AdmissionRequestDTO request(ClaimedReview review) {

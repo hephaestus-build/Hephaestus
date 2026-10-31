@@ -334,6 +334,14 @@ if (scenario !== undefined && scenario !== "") {
 			: [];
 	};
 	mock.method(globalThis, "fetch", async (input: unknown, init?: RequestInit) => {
+		if (String(input).endsWith("/stage-result")) {
+			assert.ok(typeof init?.body === "string");
+			const staged = recordOf(JSON.parse(init.body));
+			const entry = recordOf(listOf(staged.results)[0] ?? listOf(staged.nonResults)[0]);
+			record(`stage:${String(entry.practiceSlug)}`);
+			appendFileSync(nodePath.join(cwd, "staging.jsonl"), `${init.body}\n`);
+			return Response.json({ practiceSlug: entry.practiceSlug, digest: "a".repeat(64) });
+		}
 		if (nativeSdk) {
 			assert.equal(String(input), "https://unused.invalid/admit-results");
 		}
@@ -2490,16 +2498,20 @@ if (scenario !== undefined && scenario !== "") {
 					const admissions = events.filter((event) => event === "admit").length;
 					assert.equal(admissions, existsSync(admissionPath) ? 1 : 0);
 					if (existsSync(admissionPath)) {
-						const posted = readResults(admissionPath).map((entry) => String(entry.practiceSlug));
-						assert.deepEqual(posted, posted.toSorted());
-						assert.ok(posted.length > 0);
-						for (const file of ["out/result.json", "out/review-state.json"]) {
-							assert.deepEqual(
-								JSON.parse(readFileSync(nodePath.join(cwd, file), "utf8")),
-								JSON.parse(readFileSync(admissionPath, "utf8")),
-								file,
-							);
-						}
+						const sealed = recordOf(JSON.parse(readFileSync(admissionPath, "utf8")));
+						assert.equal(sealed.results, undefined);
+						assert.equal(sealed.nonResults, undefined);
+						const staged = readFileSync(nodePath.join(cwd, "staging.jsonl"), "utf8")
+							.trim()
+							.split("\n")
+							.map((line): unknown => JSON.parse(line))
+							.map(recordOf);
+						assert.ok(
+							staged.every(
+								(request) =>
+									listOf(request.results).length + listOf(request.nonResults).length === 1,
+							),
+						);
 					}
 					const measuringSessions = events.filter(
 						(event) => event.startsWith("create:session") && event.endsWith(",submit_result"),
@@ -2527,7 +2539,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(candidates.has("test-practice"), false);
 							assert.equal(candidates.get("second-practice")?.outcome, "NOT_MET");
 							const request = recordOf(
-								JSON.parse(readFileSync(nodePath.join(cwd, "admission.json"), "utf8")),
+								JSON.parse(readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8")),
 							);
 							assert.deepEqual(request.nonResults, [
 								{ practiceSlug: "test-practice", reason: "EXECUTION_FAILED" },
@@ -2976,7 +2988,10 @@ if (scenario !== undefined && scenario !== "") {
 							reached({ "test-practice": stored ? "EVALUATED" : "NOT_REACHED" });
 							if (stored) {
 								assert.equal(readResults(nodePath.join(cwd, "out/result.json")).length, 1);
-								assert.equal(readResults(nodePath.join(cwd, "admission.json")).length, 1);
+								assert.equal(
+									recordOf(JSON.parse(readFileSync(admissionPath, "utf8"))).results,
+									undefined,
+								);
 							} else {
 								assert.equal(existsSync(nodePath.join(cwd, "out/result.json")), false);
 								assert.equal(existsSync(nodePath.join(cwd, "admission.json")), false);
@@ -3003,7 +3018,8 @@ if (scenario !== undefined && scenario !== "") {
 							break;
 						}
 						case "stall": {
-							assert.equal(child.status, 0, child.stderr);
+							assert.equal(child.status, 1, child.stderr);
+							assert.equal(existsSync(admissionPath), false);
 							const order = events.filter((event) =>
 								["prompt:1", "steer", "abort-compaction", "abort", "prompt:2"].includes(event),
 							);
@@ -3217,11 +3233,9 @@ for (const item of nullableCases) {
 							const admission = recordOf(JSON.parse(readFileSync(admissionPath, "utf8")));
 							assert.deepEqual(Object.keys(admission), [
 								"contractVersion",
-								"nonResults",
 								"reviewId",
 								"jobId",
 								"attempt",
-								"results",
 							]);
 							assert.ok(!JSON.stringify(admission).includes("revises"));
 							assert.ok(!JSON.stringify(admission).includes("Authentication call goes through"));

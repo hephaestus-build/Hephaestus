@@ -23,7 +23,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
@@ -108,6 +107,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegrationTest {
     private static final String OTHERWISE = "The change touches no Swift file.";
@@ -397,8 +397,8 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
             if (!inlineCommentPresent) {
                 var output = new ReviewOutputService(
                         assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members);
-                output.prepare(job, new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 1, List.of(), List.of()))
-                        .record(job);
+                var receipt = output.seal(job, List.of());
+                ((ObjectNode) Objects.requireNonNull(job.getCapture())).set("admission", mapper.valueToTree(receipt));
                 var resultId = Objects.requireNonNull(job.getCapture())
                         .path("admission")
                         .path("resultIds")
@@ -426,8 +426,8 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                     .isTrue();
             var output = new ReviewOutputService(
                     assignments, mock(CandidateEvidenceVerifier.class), store, mapper, files, catalogs, members);
-            output.prepare(job, new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 1, List.of(), List.of()))
-                    .record(job);
+            var receipt = output.seal(job, List.of());
+            ((ObjectNode) Objects.requireNonNull(job.getCapture())).set("admission", mapper.valueToTree(receipt));
         }
         var resultId = Objects.requireNonNull(job.getCapture())
                 .path("admission")

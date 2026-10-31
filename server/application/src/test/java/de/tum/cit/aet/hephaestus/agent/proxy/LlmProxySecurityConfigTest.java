@@ -199,7 +199,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 "/internal/llm/responses",
                 "/internal/llm/v1/messages",
                 "/internal/llm/chat/completions",
-                "/internal/llm/admit-results")) {
+                "/internal/llm/admit-results",
+                "/internal/llm/stage-result")) {
             MockHttpServletRequest request = request("POST", path, GATEWAY_PORT);
             request.setCookies(
                     new Cookie("__Host-HEPHAESTUS_AT", "current-attempt"), new Cookie("JSESSIONID", "current-attempt"));
@@ -262,6 +263,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/v1/messages",
         "POST,/internal/llm/practice-script/chat/chat/completions",
         "POST,/internal/llm/admit-results",
+        "POST,/internal/llm/stage-result",
         "GET,/internal/llm/runtime/{job}",
         "GET,/internal/llm/runtime/{job}/workspace",
         "POST,/internal/llm/runtime/{job}/result"
@@ -351,8 +353,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                     .isEqualTo(401);
             assertThat(servedAs.get()).isNull();
         }
-        for (String path :
-                List.of("/internal/llm/practice-script/chat/chat/completions", "/internal/llm/admit-results")) {
+        for (String path : List.of(
+                "/internal/llm/practice-script/chat/chat/completions",
+                "/internal/llm/admit-results",
+                "/internal/llm/stage-result")) {
             assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "turn-token")))
                     .as(path)
                     .isEqualTo(403);

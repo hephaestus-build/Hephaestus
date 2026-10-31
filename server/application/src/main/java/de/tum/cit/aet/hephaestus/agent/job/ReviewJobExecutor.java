@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -603,7 +604,7 @@ public class ReviewJobExecutor {
             return null;
         }
         try {
-            return claims.claimJob(jobId);
+            return claims.claimJob(jobId, agentProperties.maxRetries());
         } catch (CannotAcquireLockException e) {
             log.debug("Lock timeout during claim for job {}, will retry on next poll", jobId);
             return null;
@@ -744,7 +745,18 @@ public class ReviewJobExecutor {
 
             // An admitted review measures nothing again: its attempt composes what an earlier attempt left open.
             ReviewJob current = jobRepository.findById(jobId).orElse(job);
-            if (ResultAdmissionService.isContinuation(current)) {
+            boolean sealOnly = !ResultAdmissionService.isAdmitted(current)
+                    && (current.spentAttempts() > agentProperties.maxRetries() || claim.withholdOnly() != null)
+                    && handler.hasStaged(current);
+            if (sealOnly)
+                handler.finishInterrupted(
+                        current,
+                        claim.withholdOnly() == CompositionStop.BUDGET
+                                ? ReviewStopReason.BUDGET
+                                : claim.withholdOnly() == CompositionStop.MODEL_UNAVAILABLE
+                                        ? ReviewStopReason.MODEL_UNAVAILABLE
+                                        : ReviewStopReason.EXECUTION_INCOMPLETE);
+            if (sealOnly || ResultAdmissionService.isContinuation(current) || handler.completeStaged(current)) {
                 preparationStage.set(PreparationFailure.Stage.EXECUTION_FENCE);
                 if (!markExecutionStarted(jobId, current.getAttempt())) {
                     metricOutcome = "OWNERSHIP_LOST";
@@ -901,6 +913,15 @@ public class ReviewJobExecutor {
             return withoutRoom(jobId, job, e);
         }
         AgentResult agentResult = practiceAgent.parseResult(result);
+
+        var retained = jobRepository.findById(jobId).orElse(job);
+        if (!ResultAdmissionService.isAdmitted(retained)
+                && handler.hasStaged(retained)
+                && !handler.completeStaged(retained)) {
+            if (requeueForAnotherAttempt(retained, true, RequeueCause.SANDBOX)) return null;
+            handler.finishInterrupted(
+                    retained, result.timedOut() ? ReviewStopReason.DEADLINE : ReviewStopReason.EXECUTION_INCOMPLETE);
+        }
 
         // Two exits say the run could not reach something it needed, rather than anything about the
         // reviewed work: the review finished and could not admit it, because the sandbox holds an

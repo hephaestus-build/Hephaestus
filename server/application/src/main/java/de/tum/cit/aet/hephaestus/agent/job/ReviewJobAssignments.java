@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import java.util.HashSet;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Component;
 public class ReviewJobAssignments {
     private final ReviewSnapshotQuery reviews;
     private final ReviewAssignmentQuery assignments;
+    private final ReviewAssignmentStore membership;
 
     public ReviewSnapshot review(ReviewJob job) {
         return reviews.find(job.getWorkspaceId(), job.getReviewId())
@@ -84,6 +86,28 @@ public class ReviewJobAssignments {
                 ready.add(decision.path("practiceSlug").asString());
         return pinned.stream()
                 .filter(assignment -> ready.contains(assignment.practiceSlug()))
+                .toList();
+    }
+
+    public boolean hasStaged(ReviewJob job) {
+        return membership.hasStaged(job.getWorkspaceId(), job.getReviewId(), job.getId());
+    }
+
+    public boolean readyToSeal(ReviewJob job) {
+        return hasStaged(job) && open(job).isEmpty();
+    }
+
+    public List<ReviewAssignmentSnapshot> open(ReviewJob job) {
+        var ended = membership.endedPractices(job.getWorkspaceId(), job.getReviewId(), job.getId());
+        var captured = job.getCapture();
+        return load(job).stream()
+                .filter(assignment -> !ended.contains(assignment.practice().practiceId()))
+                .filter(assignment -> captured == null
+                        || !captured.path("readiness")
+                                .path("applicability")
+                                .path(assignment.practiceSlug())
+                                .path("absent")
+                                .asBoolean(false))
                 .toList();
     }
 

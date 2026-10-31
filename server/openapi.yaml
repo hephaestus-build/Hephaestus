@@ -2430,7 +2430,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AdmissionRequest"
+              $ref: "#/components/schemas/SealResultsRequest"
         required: true
       responses:
         "200":
@@ -2441,7 +2441,30 @@ paths:
           description: OK
       security:
       - workerBearer: []
-      summary: Admit results for the current review attempt
+      summary: Seal the staged results for the current review attempt
+      tags:
+      - result-admission
+  /internal/llm/stage-result:
+    post:
+      description: Verifies one candidate or records one runtime withholding under
+        the current attempt fence.
+      operationId: stagePracticeResult
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdmissionRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StageResponse"
+          description: OK
+      security:
+      - workerBearer: []
+      summary: Stage one completed practice privately
       tags:
       - result-admission
   /notifications/unsubscribe/{token}:
@@ -12167,10 +12190,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RuntimeNonResult"
+          maxItems: 1
+          minItems: 0
         results:
           type: array
           items:
             $ref: "#/components/schemas/SubmittedResult"
+          maxItems: 1
+          minItems: 0
         reviewId:
           type: string
           format: uuid
@@ -25404,6 +25431,28 @@ components:
       - startedAt
       - status
       - stopReason
+    SealResultsRequest:
+      type: object
+      description: Identity of the retained set to seal; candidates can only enter
+        through per-practice staging.
+      properties:
+        attempt:
+          type: integer
+          format: int32
+        contractVersion:
+          type: integer
+          format: int32
+        jobId:
+          type: string
+          format: uuid
+        reviewId:
+          type: string
+          format: uuid
+      required:
+      - attempt
+      - contractVersion
+      - jobId
+      - reviewId
     SearchWarrant:
       type: object
       properties:
@@ -25675,6 +25724,18 @@ components:
       - empty
       - sorted
       - unsorted
+    StageResponse:
+      type: object
+      description: A private staging receipt; staging creates no visible result or
+        feedback.
+      properties:
+        digest:
+          type: string
+        practiceSlug:
+          type: string
+      required:
+      - digest
+      - practiceSlug
     StartScanRequest:
       type: object
       properties:
