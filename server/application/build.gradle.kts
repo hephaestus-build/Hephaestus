@@ -36,7 +36,10 @@ dependencies {
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.spring.boot.restclient)
     implementation(libs.java.jwt)
-    implementation(libs.spring.boot.starter.webflux)
+    implementation(libs.spring.boot.starter.webflux) {
+        // No client enables HTTP/3; keep its optional native binaries out of the application.
+        exclude(group = "io.netty", module = "netty-codec-native-quic")
+    }
     implementation(libs.spring.boot.webclient)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
     implementation(libs.spring.boot.starter.liquibase)
@@ -72,7 +75,13 @@ dependencies {
     testImplementation(libs.archunit.junit5)
     implementation(libs.therapi.runtime.javadoc)
     implementation(libs.jnats)
-    implementation(libs.fabric8.kubernetes.client)
+    implementation(libs.fabric8.kubernetes.client) {
+        exclude(group = "io.fabric8", module = "kubernetes-httpclient-vertx-5")
+    }
+    implementation(libs.fabric8.httpclient.okhttp) {
+        because("the OkHttp transport preserves buffered exec output when the peer closes")
+    }
+    testImplementation(libs.vertx.core)
     testImplementation(libs.fabric8.kubernetes.server.mock)
     implementation(libs.bolt) {
         exclude(group = "com.squareup.okhttp3", module = "okhttp")

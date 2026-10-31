@@ -20,7 +20,7 @@ palantir-java-format = "2.102.0"
 resilience4j = "2.4.0"
 okhttp = "5.5.0"
 fabric8 = "8.0.0"
-vertx-codegen = "5.2.0"
+vertx = "5.2.0"
 archunit = "1.5.0"
 spring-modulith = "2.1.1"
 liquibase = "5.0.4"
@@ -117,9 +117,11 @@ archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref
 therapi-runtime-javadoc = { module = "com.github.therapi:therapi-runtime-javadoc", version.ref = "therapi" }
 jnats = { module = "io.nats:jnats", version.ref = "jnats" }
 fabric8-kubernetes-client = { module = "io.fabric8:kubernetes-client", version.ref = "fabric8" }
+fabric8-httpclient-okhttp = { module = "io.fabric8:kubernetes-httpclient-okhttp", version.ref = "fabric8" }
+vertx-core = { module = "io.vertx:vertx-core", version.ref = "vertx" }
 fabric8-kubernetes-server-mock = { module = "io.fabric8:kubernetes-server-mock", version.ref = "fabric8" }
-vertx-codegen-api = { module = "io.vertx:vertx-codegen-api", version.ref = "vertx-codegen" }
-vertx-codegen-json = { module = "io.vertx:vertx-codegen-json", version.ref = "vertx-codegen" }
+vertx-codegen-api = { module = "io.vertx:vertx-codegen-api", version.ref = "vertx" }
+vertx-codegen-json = { module = "io.vertx:vertx-codegen-json", version.ref = "vertx" }
 bolt = { module = "com.slack.api:bolt", version.ref = "slack-bolt" }
 okhttp-jvm = { module = "com.squareup.okhttp3:okhttp-jvm" }
 logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor" }

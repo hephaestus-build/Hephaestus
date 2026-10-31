@@ -12,10 +12,12 @@ import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.fabric8.kubernetes.client.okhttp.OkHttpClientFactory;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import java.time.Duration;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,7 +52,17 @@ public class KubernetesSandboxConfiguration {
                 .withConnectionTimeout((int) CONNECTION_TIMEOUT.toMillis())
                 .build();
         log.info("Kubernetes sandbox client configured: requestTimeout={}", REQUEST_TIMEOUT);
-        return new KubernetesClientBuilder().withConfig(config).build();
+        return clientBuilder().withConfig(config).build();
+    }
+
+    static KubernetesClientBuilder clientBuilder() {
+        return new KubernetesClientBuilder().withHttpClientFactory(new OkHttpClientFactory() {
+            @Override
+            protected void additionalConfig(OkHttpClient.Builder builder) {
+                // An exec uses a bodyless GET; connection recovery must not send it a second time.
+                builder.retryOnConnectionFailure(false);
+            }
+        });
     }
 
     @Bean

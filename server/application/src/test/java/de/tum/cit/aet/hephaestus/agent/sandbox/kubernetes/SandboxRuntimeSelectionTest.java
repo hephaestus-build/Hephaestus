@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.okhttp.OkHttpClientImpl;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -79,6 +80,7 @@ class SandboxRuntimeSelectionTest {
     void shouldWireEveryKubernetesSandboxWhenSelected() {
         runner.withPropertyValues(KUBERNETES).run(context -> {
             assertThat(context).hasNotFailed();
+            assertThat(context.getBean(KubernetesClient.class).getHttpClient()).isInstanceOf(OkHttpClientImpl.class);
             assertThat(context.getBean(SandboxBackend.class)).isInstanceOf(KubernetesSandboxBackend.class);
             assertThat(context.getBean(SandboxManager.class)).isInstanceOf(SandboxAttemptRunner.class);
             assertThat(context.getBean(HostSandbox.class)).isInstanceOf(SandboxHosts.class);
