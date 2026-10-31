@@ -2706,6 +2706,7 @@ export const zProblemDetail = z.object({
     detail: z.string().optional(),
     instance: z.url().optional(),
     properties: z.record(z.string(), z.unknown()).optional(),
+    requestId: z.string().regex(/^[0-9a-f]{32}$/).optional(),
     status: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     title: z.string().optional(),
     type: z.url().optional()

@@ -19574,6 +19574,10 @@ components:
         properties:
           type: object
           additionalProperties: {}
+        requestId:
+          type: string
+          description: "The request's trace id, the same as the X-Request-Id header"
+          pattern: "^[0-9a-f]{32}$"
         status:
           type: integer
           format: int32
