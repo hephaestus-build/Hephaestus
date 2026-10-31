@@ -6,7 +6,8 @@ import { assertSbomFormatsCover, SYFT_CONFIG } from "./check-release-sbom.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 import { releaseRepository } from "./lib/release-identities.ts";
-import { addOwnedComponents, scanOwnedCode } from "./owned-code-sbom.ts";
+import { addOwnedComponents } from "./owned-code-sbom.ts";
+import { scanOwnedSource } from "./owned-source-sbom.ts";
 
 const SOURCE_CYCLONEDX_FILE = "source.cdx.json";
 export const SOURCE_SBOM_FORMATS = [
@@ -155,7 +156,7 @@ export async function captureReleaseSourceSbom(
 		const [syft, spdx, cycloneDx] = await Promise.all(
 			SOURCE_SBOM_FORMATS.map(async ([, file]) => readJsonFile(path.join(temporary, file))),
 		);
-		const enriched = addOwnedComponents(cycloneDx, scanOwnedCode(commit));
+		const enriched = addOwnedComponents(cycloneDx, scanOwnedSource(commit));
 		validateReleaseSourceBundle(syft, spdx, enriched, commit, repository);
 		await writeFile(
 			path.join(temporary, SOURCE_CYCLONEDX_FILE),

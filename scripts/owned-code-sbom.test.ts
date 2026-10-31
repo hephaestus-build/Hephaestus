@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { asRecord, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, parseJson } from "./lib/json.ts";
 import { releaseRepository } from "./lib/release-identities.ts";
 import {
 	addOwnedComponents,
@@ -16,6 +16,7 @@ import {
 	ownedComponent,
 	scanOwnedCode,
 } from "./owned-code-sbom.ts";
+import { scanOwnedSource } from "./owned-source-sbom.ts";
 import { SOURCE_CATALOGERS } from "./release-source-sbom.ts";
 
 const file = "webapp/src/components/gitlab-icons.tsx";
@@ -158,6 +159,19 @@ await test(
 		for (const name of ["buildscript", "settings"]) {
 			await writeFile(path.join(directory, `server/${name}-gradle.lockfile`), "empty=classpath\n");
 		}
+		const asset = "webapp/public/brand/mark.svg";
+		await mkdir(path.join(directory, "webapp/public/brand"), { recursive: true });
+		await writeFile(path.join(directory, asset), "<svg />\r\n");
+		await writeFile(
+			path.join(directory, "webapp/public/brand/NOTICE.md"),
+			`Owned from: https://example.com/icons/v1.0.0
+Package: pkg:npm/example@1.0.0
+License: MIT
+Changes: Keep one unmodified mark.
+Files: ["mark.svg"]
+`,
+		);
+
 		git("init", "-q");
 		git("add", ".");
 		git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "fixture");
@@ -222,8 +236,8 @@ await test(
 			{ cwd: directory, env: childEnv },
 		);
 		const written = parseJson(await readFile(path.join(evidence, "source.cdx.json"), "utf8"));
-		const expected = scanOwnedCode(revision, directory);
-		assert.equal(expected.length, 1);
+		const expected = scanOwnedSource(revision, directory);
+		assert.equal(expected.length, 2);
 		assert.doesNotThrow(() => assertOwnedCoverage(written, expected));
 		await writeFile(
 			path.join(evidence, "manifest.json"),
@@ -231,7 +245,12 @@ await test(
 		);
 		await writeFile(
 			path.join(evidence, "source.cdx.json"),
-			JSON.stringify({ ...asRecord(written, "written BOM"), components: cdx.components }),
+			JSON.stringify({
+				...asRecord(written, "written BOM"),
+				components: asArray(asRecord(written, "written BOM").components, "components").filter(
+					(entry) => asRecord(entry, "component")["bom-ref"] !== `owned:${asset}`,
+				),
+			}),
 		);
 		const verifier = pathToFileURL(
 			path.join(import.meta.dirname, "verify-release-evidence.ts"),
@@ -248,7 +267,7 @@ await test(
 						],
 						{ cwd: directory, env: childEnv, stdio: "pipe" },
 					),
-				/owned-code entry/u,
+				/owned-code entry for webapp\/public\/brand\/mark\.svg/u,
 			);
 		}
 	},

@@ -25,7 +25,8 @@ import {
 	releaseRepository,
 } from "./lib/release-identities.ts";
 import { requiresSbomInventory } from "./lib/release-sbom-contract.ts";
-import { assertOwnedCoverage, scanOwnedCode } from "./owned-code-sbom.ts";
+import { assertOwnedCoverage } from "./owned-code-sbom.ts";
+import { scanOwnedSource } from "./owned-source-sbom.ts";
 import { isRelease } from "./release-image-lock.ts";
 import { SOURCE_SBOM_FORMATS, validateReleaseSourceBundle } from "./release-source-sbom.ts";
 
@@ -366,7 +367,7 @@ function requireChecksumCoverage(
 
 function verifyOwnedCapture(cycloneDx: unknown, commit: unknown, capture: boolean): void {
 	if (capture) {
-		assertOwnedCoverage(cycloneDx, scanOwnedCode(asString(commit, "release commit")));
+		assertOwnedCoverage(cycloneDx, scanOwnedSource(asString(commit, "release commit")));
 	}
 }
 

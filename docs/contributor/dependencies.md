@@ -103,6 +103,36 @@ Run `vp run gate:owned-code` to check these headers before merge.
 The gate checks the header structure and npm coordinates.
 Reviewers verify the SPDX expression and the fixed upstream tag or commit.
 
+## Owned static assets
+
+Static assets under `webapp/public/` and `extension/public/` use a directory notice.
+A directory enters this inventory when its notice contains an `Owned from:` line.
+Keep the asset bytes unchanged.
+Put the four fields from [the owned-code header](#the-owned-code-header) in a directory notice named NOTICE.md.
+For example, `webapp/public/brand/ai/NOTICE.md` can declare the brand marks.
+
+Each upstream has its own block.
+Add a fifth field, `Files:`, after `Changes:`.
+Its value is a JSON array of explicit sibling basenames on one line:
+
+```text
+Owned from: https://github.com/<owner>/<repository>/tree/<tag>
+Package: pkg:npm/<name>@<version>
+License: MIT
+Changes: Keep unmodified marks.
+Files: ["first.svg", "second.svg"]
+```
+
+A non-npm upstream can use a versioned package URL such as `pkg:github/ls1intum/edutelligence@<full-commit>`.
+Keep directories with ownership blocks flat.
+Use no paths or globs in `Files:`.
+Each asset must exist and belong to exactly one block.
+The gate rejects missing files, undeclared assets, duplicate declarations and symbolic links.
+Only the notice itself and license filenames that match `^LICENSE(?:-[A-Z0-9-]+)?$` are excluded from asset coverage.
+
+The release records each declared file's raw SHA-256 and the same license and pedigree fields as owned code.
+Run `vp run gate:owned-code` to check both formats.
+
 ## The dependency baseline
 
 `security/dependency-baseline.json` records, for each lockfile and workspace, the number of direct and transitive packages.

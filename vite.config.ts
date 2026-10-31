@@ -338,7 +338,7 @@ export default defineConfig({
 			"gate:agents-lint": run(`vp exec oxlint ${oxlintFormat}${oxlintTargets}`),
 			"gate:agents-typecheck": cached("tsc -p tsconfig.node.json --noEmit"),
 			"gate:scripts-typecheck": cached("tsc -p scripts/tsconfig.json --noEmit"),
-			"gate:owned-code": run("node scripts/owned-code-sbom.ts"),
+			"gate:owned-code": run("node scripts/owned-source-sbom.ts"),
 			"gate:release-image-inventory": run("node scripts/check-release-image-inventory.ts"),
 			"gate:tooling-tests": group(["test:tooling"]),
 			"gate:agents": group([

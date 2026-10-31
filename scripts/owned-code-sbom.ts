@@ -12,7 +12,7 @@ import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES, exitStatus } from "./lib/process.ts";
 
 const roots = ["webapp/src", "extension/src", "docker", "server/application/src/main"];
-const fields = ["Owned from", "Package", "License", "Changes"];
+export const OWNED_FIELDS = ["Owned from", "Package", "License", "Changes"];
 
 export function isShippedFile(file: string): boolean {
 	return (
@@ -79,18 +79,30 @@ export function ownedComponent(file: string, input: string | Uint8Array) {
 	if (comment === undefined) {
 		throw new Error(`${file}: owned code must start with its header comment`);
 	}
+	return ownedFileComponent(file, bytes, ownedHeaderValues(file, comment, OWNED_FIELDS));
+}
+
+export function ownedHeaderValues(file: string, comment: string, names: readonly string[]) {
 	const entries = [
 		...comment.matchAll(
-			/^[\t ]*\*?[\t ]*(?<field>Owned from|Package|License|Changes):[\t ]*(?<value>.*)$/gmu,
+			new RegExp(`^[\\t ]*\\*?[\\t ]*(?<field>${names.join("|")}):[\\t ]*(?<value>.*)$`, "gmu"),
 		),
 	];
 	if (
-		entries.length !== fields.length ||
-		entries.some((entry, index) => entry.groups?.field !== fields[index])
+		entries.length !== names.length ||
+		entries.some((entry, index) => entry.groups?.field !== names[index])
 	) {
-		throw new Error(`${file}: owned header needs each field once, in order: ${fields.join(", ")}`);
+		throw new Error(`${file}: owned header needs each field once, in order: ${names.join(", ")}`);
 	}
-	const [source, purl, license, changes] = entries.map((entry) => entry.groups?.value?.trim());
+	return entries.map((entry) => entry.groups?.value?.trim());
+}
+
+export function ownedFileComponent(
+	file: string,
+	bytes: Uint8Array,
+	values: readonly (string | undefined)[],
+) {
+	const [source, purl, license, changes] = values;
 	if (!isSet(source) || !isSet(purl) || !isSet(license) || !isSet(changes)) {
 		throw new Error(`${file}: owned header fields must be nonempty; Owned from must use HTTPS`);
 	}
@@ -120,10 +132,14 @@ export function ownedComponent(file: string, input: string | Uint8Array) {
 	}
 }
 
-export type OwnedComponent = NonNullable<ReturnType<typeof ownedComponent>>;
+export type OwnedComponent = ReturnType<typeof ownedFileComponent>;
 
 /** Read the committed release or the working tree, including files that have not been staged yet. */
-export function scanOwnedCode(commit?: string, directory = process.cwd()): OwnedComponent[] {
+export function ownedCandidates(
+	paths: readonly string[],
+	commit: string | undefined,
+	directory: string,
+): string[] {
 	const result = spawnSync(
 		"git",
 		[
@@ -138,7 +154,7 @@ export function scanOwnedCode(commit?: string, directory = process.cwd()): Owned
 			"owned[[:space:]]*from:",
 			...(commit === undefined ? [] : [commit]),
 			"--",
-			...roots,
+			...paths,
 		],
 		{
 			cwd: directory,
@@ -155,26 +171,40 @@ export function scanOwnedCode(commit?: string, directory = process.cwd()): Owned
 			`owned-code file discovery failed: ${exitStatus(result.status, result.signal)}`,
 		);
 	}
+	return result.stdout
+		.split("\0")
+		.filter(Boolean)
+		.toSorted()
+		.map((entry) => (commit === undefined ? entry : entry.slice(commit.length + 1)));
+}
+
+export function readOwnedFile(
+	file: string,
+	commit: string | undefined,
+	directory: string,
+): Uint8Array {
+	if (commit === undefined) {
+		return readFileSync(path.join(directory, file));
+	}
+	const captured = spawnSync("git", ["show", `${commit}:${file}`], {
+		cwd: directory,
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+		env: environmentWithoutGitRepository(),
+	});
+	if (captured.error || captured.status !== 0) {
+		throw new Error(`cannot read owned source ${file} at ${commit}`, { cause: captured.error });
+	}
+	return captured.stdout;
+}
+
+export function scanOwnedCode(commit?: string, directory = process.cwd()): OwnedComponent[] {
+	const files = ownedCandidates(roots, commit, directory);
 	const components: OwnedComponent[] = [];
-	for (const entry of result.stdout.split("\0").filter(Boolean).toSorted()) {
-		const file = commit === undefined ? entry : entry.slice(commit.length + 1);
+	for (const file of files) {
 		if (!isShippedFile(file)) {
 			continue;
 		}
-		let content: Uint8Array;
-		if (commit === undefined) {
-			content = readFileSync(path.join(directory, file));
-		} else {
-			const captured = spawnSync("git", ["show", `${commit}:${file}`], {
-				cwd: directory,
-				maxBuffer: CAPTURE_LIMIT_BYTES,
-				env: environmentWithoutGitRepository(),
-			});
-			if (captured.error || captured.status !== 0) {
-				throw new Error(`cannot read owned source ${file} at ${commit}`, { cause: captured.error });
-			}
-			content = captured.stdout;
-		}
+		const content = readOwnedFile(file, commit, directory);
 		const component = ownedComponent(file, content);
 		if (component !== undefined) {
 			components.push(component);
