@@ -251,9 +251,6 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                 newAccount("Retained", "retained-submissions@example.com").getId());
         UUID erasedFeedback = seedProductFeedback(erasedId);
         UUID retainedFeedback = seedProductFeedback(retainedId);
-        UUID erasedResponse = seedSurveyParticipation(erasedId, "RESPONDED");
-        UUID erasedDecline = seedSurveyParticipation(erasedId, "DECLINED");
-        UUID retainedResponse = seedSurveyParticipation(retainedId, "RESPONDED");
         markDeleting(
                 erasedId, clock.instant().minus(authProperties.deleteCooldown()).minus(Duration.ofHours(1)));
 
@@ -266,14 +263,6 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                         retainedFeedback))
                 .as("the erased account's feedback is gone and another account's is untouched")
                 .containsExactly(retainedFeedback);
-        assertThat(jdbcTemplate.queryForList(
-                        "SELECT id FROM product_survey_participation WHERE id IN (?, ?, ?)",
-                        UUID.class,
-                        erasedResponse,
-                        erasedDecline,
-                        retainedResponse))
-                .as("both a response and a decline are erased; another account's response is" + " untouched")
-                .containsExactly(retainedResponse);
         assertThat(accountRepository.findById(erasedId).orElseThrow().getStatus())
                 .isEqualTo(Account.Status.DELETED);
     }
@@ -286,26 +275,6 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
                         + " submission', 'test', now(), now())",
                 id,
                 accountId);
-        return id;
-    }
-
-    private UUID seedSurveyParticipation(Long accountId, String status) {
-        UUID id = UUID.randomUUID();
-        UUID surveyId = UUID.randomUUID();
-        jdbcTemplate.update(
-                "INSERT INTO product_survey (id, title, description, questions_json, starts_at,"
-                        + " active, created_at) VALUES (?, 'Survey', 'Description', CAST('[]' AS"
-                        + " jsonb), now(), true, now())",
-                surveyId);
-        jdbcTemplate.update(
-                "INSERT INTO product_survey_participation (id, survey_id, account_id, status,"
-                        + " answers_json, invited_at, decided_at) VALUES (?, ?, ?, ?, CAST(? AS jsonb),"
-                        + " now(), now())",
-                id,
-                surveyId,
-                accountId,
-                status,
-                status.equals("RESPONDED") ? "[{\"questionId\":\"q\",\"text\":\"Personal response\"}]" : null);
         return id;
     }
 

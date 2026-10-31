@@ -105,8 +105,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.AccountSecurityEmailListener", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailDeliveryAdapter", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeController",
                     RuntimeRole.SERVER_PROPERTY),
@@ -122,7 +120,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailListener", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.notification.SurveyEndedSummaryListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailListener", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
@@ -140,12 +137,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService",
                     RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailInvitationService",
-                    RuntimeRole.SERVER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.productfeedback.SurveyEmailSchedulingJob", RuntimeRole.SERVER_PROPERTY),
-
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
             // registers its gauges — permanent zeros in agent.queue.* / mentor.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.
@@ -185,16 +176,13 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService",
                     RuntimeRole.SERVER_PROPERTY),
-            // Product feedback is a member- and admin-facing web surface, and SurveyService reads research
-            // consent through a port only the server role implements.
+            // Product feedback is a member- and admin-facing web surface.
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackController", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.productfeedback.InstanceFeedbackController",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackAdminController", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyAdminController", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.productfeedback.FeedbackService", RuntimeRole.SERVER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.productfeedback.SurveyService", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnQueueSampler", RuntimeRole.SERVER_PROPERTY),

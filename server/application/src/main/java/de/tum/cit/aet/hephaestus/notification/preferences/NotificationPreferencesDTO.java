@@ -6,8 +6,6 @@ import org.jspecify.annotations.NonNull;
 
 public record NotificationPreferencesDTO(
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean productFeedback,
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean productSurveys,
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean researchSurveys,
 
         @Schema(requiredMode = RequiredMode.REQUIRED, description = "The account has an active verified email address")
         boolean emailAvailable,
@@ -17,7 +15,6 @@ public record NotificationPreferencesDTO(
                 description = "This instance has an email transport and sender configured")
         boolean deliveryConfigured,
 
-        @Schema(requiredMode = RequiredMode.REQUIRED) boolean surveySummaries,
         @Schema(requiredMode = RequiredMode.REQUIRED) boolean workspaceAlerts,
 
         @Schema(requiredMode = RequiredMode.REQUIRED, description = "The weekly digest is on")

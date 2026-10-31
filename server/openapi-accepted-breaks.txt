@@ -92,3 +92,26 @@ in API PATCH /workspaces/{workspaceSlug}/slug api path removed without deprecati
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings api path removed without deprecation
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId} api path removed without deprecation
 in API POST /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId} api path removed without deprecation
+
+# Remove surveys at the 1.0 cutover; export results before upgrading.
+in API GET /admin/product-feedback/surveys api path removed without deprecation
+in API POST /admin/product-feedback/surveys api path removed without deprecation
+in API DELETE /admin/product-feedback/surveys/{surveyId} api path removed without deprecation
+in API GET /admin/product-feedback/surveys/{surveyId} api path removed without deprecation
+in API PUT /admin/product-feedback/surveys/{surveyId} api path removed without deprecation
+in API GET /admin/product-feedback/surveys/{surveyId}/email-invitations api path removed without deprecation
+in API POST /admin/product-feedback/surveys/{surveyId}/email-invitations api path removed without deprecation
+in API GET /admin/product-feedback/surveys/{surveyId}/responses api path removed without deprecation
+in API GET /admin/product-feedback/surveys/{surveyId}/responses/export api path removed without deprecation
+in API GET /admin/product-feedback/surveys/{surveyId}/summary api path removed without deprecation
+in API GET /user/notification-preferences removed the required property `productSurveys` from the response with the `200` status
+in API GET /user/notification-preferences removed the required property `researchSurveys` from the response with the `200` status
+in API GET /user/notification-preferences removed the required property `surveySummaries` from the response with the `200` status
+in API PUT /user/notification-preferences removed the required property `productSurveys` from the response with the `200` status
+in API PUT /user/notification-preferences removed the required property `researchSurveys` from the response with the `200` status
+in API PUT /user/notification-preferences removed the required property `surveySummaries` from the response with the `200` status
+in API GET /workspaces/{workspaceSlug}/product-feedback/surveys api path removed without deprecation
+in API DELETE /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline api path removed without deprecation
+in API PUT /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/decline api path removed without deprecation
+in API PUT /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/invitation api path removed without deprecation
+in API POST /workspaces/{workspaceSlug}/product-feedback/surveys/{surveyId}/responses api path removed without deprecation

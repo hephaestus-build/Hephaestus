@@ -106,7 +106,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.review.feedbackmode.FeedbackModeReviewIntegrationTest", "review-feedbackmodereview"),
             assignment("practices.scan.ScanReportIntegrationTest", "review-scanreport"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
-            assignment("productfeedback.SurveyEmailInvitationIntegrationTest", "email-capture"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
@@ -290,7 +289,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "practices.research.ResearchDisclosureControllerIntegrationTest",
             "practices.review.DisabledIntegrationHistoryIntegrationTest",
             "productfeedback.ProductFeedbackEmailIntegrationTest",
-            "productfeedback.SurveyEmailInvitationIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793442579487-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="product_survey"/>
+            <tableExists tableName="product_survey_participation"/>
+            <tableExists tableName="product_survey_email_invitation"/>
+            <columnExists tableName="notification_subscription" columnName="kind"/>
+            <columnExists tableName="event_publication" columnName="event_type"/>
+        </preConditions>
+        <comment>Remove surveys and their durable delivery requests. Stop every role and export survey results before this upgrade.</comment>
+        <delete tableName="notification_subscription">
+            <where>kind IN ('PRODUCT_SURVEYS', 'RESEARCH_SURVEYS', 'SURVEY_SUMMARIES')</where>
+        </delete>
+        <delete tableName="event_publication">
+            <where>event_type IN ('de.tum.cit.aet.hephaestus.notification.SurveyEmailRequested', 'de.tum.cit.aet.hephaestus.notification.SurveyEndedSummaryRequested')</where>
+        </delete>
+        <dropTable tableName="product_survey_email_invitation"/>
+        <dropTable tableName="product_survey_participation"/>
+        <dropTable tableName="product_survey"/>
+        <rollback>
+            <stop>Restore the verified pre-upgrade database backup and start the previous release. Survey results cannot be reconstructed.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

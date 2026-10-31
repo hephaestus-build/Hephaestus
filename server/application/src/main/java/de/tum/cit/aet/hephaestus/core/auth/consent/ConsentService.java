@@ -36,7 +36,7 @@ public class ConsentService implements ResearchParticipationQuery {
      * anyone could edit afterwards. The webapp holds the same constant beside the words and refuses to
      * render the form when the two disagree; bump both in the commit that changes any of them.
      */
-    static final String WORDING_VERSION = "2026-10-04";
+    static final String WORDING_VERSION = "2026-10-31";
 
     private final ConsentDecisionRepository decisionRepository;
     private final AccountRepository accountRepository;

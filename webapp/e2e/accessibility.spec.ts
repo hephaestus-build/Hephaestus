@@ -76,7 +76,6 @@ const SIGNED_IN: Surface[] = [
 	{ name: "Instance settings", path: "/admin/settings" },
 	{ name: "Login providers", path: "/admin/login-providers" },
 	{ name: "Product feedback", path: "/admin/feedback" },
-	{ name: "Surveys", path: "/admin/surveys" },
 	{ name: "Person data", path: "/admin/person-data" },
 ];
 

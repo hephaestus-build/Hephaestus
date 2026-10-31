@@ -53,12 +53,12 @@ export const SendsFeedbackWithoutContext: Story = {
 		).not.toBeChecked();
 		await userEvent.type(
 			dialog.getByRole("textbox", { name: "Your feedback" }),
-			"The survey flow is clear.",
+			"The product feedback form is clear.",
 		);
 		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
 		await expect(args.onSubmit).toHaveBeenCalledWith({
 			kind: "FEEDBACK",
-			message: "The survey flow is clear.",
+			message: "The product feedback form is clear.",
 			pagePath: undefined,
 			userAgent: undefined,
 		});

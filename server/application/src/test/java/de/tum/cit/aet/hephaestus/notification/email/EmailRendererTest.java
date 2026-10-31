@@ -68,17 +68,6 @@ class EmailRendererTest extends BaseUnitTest {
                     case ACCOUNT_DELETION_SCHEDULED -> Map.of("purgeAfter", "14 September 2026 at 10:00 UTC");
                     case ACCOUNT_SECURITY_CHANGED ->
                         Map.of("change", "A sign-in identity is now linked to your account.");
-                    case SURVEY_ENDED_SUMMARY -> Map.of("invited", 37L, "responded", 23L, "declined", 11L);
-                    case SURVEY_INVITATION ->
-                        Map.of(
-                                "workspaceSlug",
-                                "survey-team",
-                                "surveyId",
-                                "7bc509de-ce47-498f-bec3-2a5ea141c241",
-                                "research",
-                                false,
-                                "reminder",
-                                false);
                     case WORKSPACE_ALERT ->
                         Map.of(
                                 "integration",
@@ -107,8 +96,6 @@ class EmailRendererTest extends BaseUnitTest {
             case TEST_MESSAGE, ACCOUNT_DELETION_SCHEDULED -> "";
             case ACCOUNT_SECURITY_CHANGED -> "/settings";
             case PRODUCT_FEEDBACK -> "/admin/feedback";
-            case SURVEY_ENDED_SUMMARY -> "/admin/surveys";
-            case SURVEY_INVITATION -> "/w/survey-team?survey=7bc509de-ce47-498f-bec3-2a5ea141c241";
             case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
             case MENTOR_DIGEST -> "/w/delivery-team/conversation?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
         };

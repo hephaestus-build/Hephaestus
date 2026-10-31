@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
-import { surveyInvitation } from "@/components/product-feedback/fixtures";
 import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { expectSettledVisible } from "@/stories/overlay";
@@ -25,13 +24,7 @@ const meta = {
 		username: "johnDoe",
 		workspaceSlug: "demo-workspace",
 		sidebarTrigger: <SidebarTrigger />,
-		feedbackDialog: (
-			<ProductFeedbackMenu
-				invitations={[surveyInvitation]}
-				onSendFeedback={fn()}
-				onOpenSurvey={fn()}
-			/>
-		),
+		feedbackDialog: <ProductFeedbackMenu onSendFeedback={fn()} />,
 		onLogin: fn(),
 		onLogout: fn(),
 		onRetrySession: fn(),
@@ -159,9 +152,7 @@ export const AccountMenu: Story = {
 		session: "signed-in",
 	},
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("button", { name: "Product feedback, 1 survey waiting" }),
-		).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Product feedback" })).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
 		const menu = within(await screen.findByRole("menu"));
 		const settings = menu.getByRole("menuitem", { name: "User settings" });

@@ -18,7 +18,7 @@ Fill in the recipient record below for each recipient before you enable it.
 | SMTP relay | Recipient addresses, notification type and links | Record the relay operator, hosting, retention terms and role before you enable email. |
 | Log store, trace collector | Container logs and traces | See [Optional log collection and monitoring](#optional-log-collection-and-monitoring). |
 
-First-party product feedback and survey responses remain inside the instance PostgreSQL database.
+First-party product feedback submissions remain inside the instance PostgreSQL database.
 The webapp and the server include no error-reporting service.
 
 ## Evidence required before engagement

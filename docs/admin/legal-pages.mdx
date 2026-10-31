@@ -81,7 +81,7 @@ The data it may use is:
 - The participant's work in the tools that the project connects.
 - Hephaestus results and problems and feedback about that work.
 - The participant's responses to that feedback.
-- How the participant uses Hephaestus, including conversations with Hephaestus and answers to research surveys.
+- How the participant uses Hephaestus, including conversations with Hephaestus.
 
 Sign-in credentials and access tokens are never used.
 Slack messages that a participant stops Hephaestus from using stay out of research too.
@@ -111,7 +111,7 @@ Every account sees the setup screen once more, with the terms and, where an orga
 An earlier yes is not carried over to a broader scope.
 Only a decision on the current version and the current organization authorizes anything.
 
-Until an account answers, `participatesInResearch` reports false and research survey invitations stop.
+Until an account answers, `participatesInResearch` reports false.
 
 Even a cosmetic rename gives every account one more setup screen.
 Make a change to the name or the wording deliberately.
@@ -120,16 +120,15 @@ Both the setup screen and the settings switch return the organization that they 
 If a submission names an organization that this instance no longer runs, Hephaestus refuses it with `409`.
 A tab left open across a change cannot record a decision about an organization that its reader never saw.
 
-Research-purpose surveys and their email invitations require a current grant for the configured
-organization. Withdrawal stops new research survey participation and invitation delivery. It does not
-stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
+Practice research requires a current grant for the configured organization.
+Withdrawal stops new research use. It does not stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
 links to account settings rather than maintaining a separate research decision.
 
 ### Withdrawal
 
 A participant withdraws with one switch, **Allow research use of my data**, in **User settings → Research participation**.
 This is as easy as giving consent ([Art. 7(3) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
-New research use stops, and research survey invitations stop.
+New research use stops.
 The research organization removes the participant's data from datasets that are not yet anonymized.
 Research done before the withdrawal stays lawful.
 
@@ -229,7 +228,6 @@ Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to 
    A power imbalance can weaken the free choice of a participant.
    See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 16 to 24 and 46 to 48.
    See also [Recital 43](https://gdpr-info.eu/recitals/no-43/).
-   Instance admins can read research survey answers, so give the admin role only to people who meet this rule.
 6. Test a dataset for re-identification before you call it anonymous.
    Release it only if the test passes.
    Free text and code are hard to anonymize ([EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraph 164).
@@ -333,7 +331,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
   The mirror is erased when the last workspace stops monitoring the source repository.
   Disconnection of the workspace's integration or a workspace purge also erases it.
 - **Account settings and email notifications** — user preferences and the provider-verified primary email address for account-security and deletion email.
-  With a configured relay, this also includes optional notification subscriptions, survey invitation records, and unsubscribe capabilities.
+  With a configured relay, this also includes optional notification subscriptions and unsubscribe capabilities.
   The notice must name the relay operator as a recipient.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated practice results.
 - **Server logs** — IP address and request metadata.

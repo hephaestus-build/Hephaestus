@@ -86,8 +86,7 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 		// these pages answers for it, as it does for every other address of the workspace.
 		if (workspaces === undefined || member !== undefined) {
 			// The Practice profile where the workspace reviews practices, and Activity everywhere else.
-			// The search travels with the redirect, since the app chrome reads its own params (a survey
-			// link) from whatever page the home lands on.
+			// Preserve the search parameters used by the app chrome.
 			throw redirect({
 				to:
 					member?.practicesEnabled === true
