@@ -130,10 +130,6 @@ tasks.processResources {
     from(rootProject.file("../docs/contributor/practice-feedback-language.md")) { into("agent") }
 }
 
-tasks.processTestResources {
-    from(rootProject.file("../docs/db/archive/v0.77.4")) { into("db") }
-}
-
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(
         // Spring, JPA and JUnit annotations are runtime metadata, not processor inputs. Javac's

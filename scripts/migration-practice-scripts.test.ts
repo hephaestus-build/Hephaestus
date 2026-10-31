@@ -89,3 +89,22 @@ void test("a one-byte resource edit loses its migration ownership", async () => 
 		assert.deepEqual(await migrationOwnedPracticeScripts(root, new Set([resource])), new Set());
 	});
 });
+
+void test("flat XML includeAll owns its verified script and allows an empty future directory", async () => {
+	await fixture(async (root) => {
+		await writeFile(
+			path.join(root, "db/master.xml"),
+			'<databaseChangeLog><includeAll path="changelog/next" relativeToChangelogFile="true" maxDepth="1" endsWithFilter=".xml" errorIfMissingOrEmpty="false"/></databaseChangeLog>',
+		);
+		assert.deepEqual(await migrationOwnedPracticeScripts(root, new Set([resource])), new Set());
+		await mkdir(path.join(root, "db/changelog/next"));
+		await writeFile(
+			path.join(root, "db/changelog/next/20261031003000-programs.xml"),
+			change(row()),
+		);
+		assert.deepEqual(
+			await migrationOwnedPracticeScripts(root, new Set([resource])),
+			new Set([resource]),
+		);
+	});
+});

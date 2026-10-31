@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <preConditions onFail="HALT" onError="HALT" onFailMessage="Database prerequisites failed. PostgreSQL 18 is required. Existing databases must first run v0.95.0. Follow the upgrade guide: https://docs.hephaestus.build/admin/upgrade.">
+        <dbms type="postgresql"/>
+        <sqlCheck expectedResult="18">SELECT current_setting('server_version_num')::integer / 10000</sqlCheck>
+        <!-- Global preconditions also run before changeLogSyncToTag; changeset preconditions do not. -->
+        <or>
+            <not>
+                <tableExists tableName="databasechangelog"/>
+            </not>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM databasechangelog</sqlCheck>
+            <changeSetExecuted id="1793208610071-3" author="hephaestus"
+                               changeLogFile="db/changelog/1793208610071_changelog.xml"/>
+        </or>
+    </preConditions>
+    <include file="./changelog/0000000000000_baseline_v0_77_4.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1788884380638_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789067582535_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789123473151_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789117764980_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789135709162_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790187943939_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790187096652_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790186862162_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789140289208_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789190761030_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1789038452155_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790499575075_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790457231249_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790510734717_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790509990788_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790548011929_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790556139181_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790515665996_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790615595363_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790520303182_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790610365032_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790734604482_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790799789105_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790834705516_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790834567188_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790424890516_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790892486246_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790954438557_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790837066126_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791246816770_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791375013814_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791485172690_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791591521831_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791582577201_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791582260680_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791603152317_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791714969989_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791488096611_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791557968341_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791888649698_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791931753089_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791941746633_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1791486276211_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792284494860_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792301912171_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792318767974_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792351858396_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792515903984_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792515719688_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792397538973_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792533036123_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792627112728_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792928799325_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1792959479253_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793066137273_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793067858401_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793127106794_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793129327729_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793149918875_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793137687696_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793046470075_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793196763354_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793149793934_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793052936577_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793224049100_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793266450525_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793208610071_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793168406889_changelog.xml" relativeToChangelogFile="true"/>
+</databaseChangeLog>

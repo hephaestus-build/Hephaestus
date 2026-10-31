@@ -221,10 +221,12 @@ Issues follow `CONTRIBUTING.md` § Issues.
 
 Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/api/**`, `routeTree.gen.ts`, the ERD, the configuration reference, or the user-guide screenshots.
 `generate:api:client` empties both `src/api/` directories first.
+
 A branch has one changelog, written by `db:draft-changelog`.
 Never edit, rename, or delete a file under `db/changelog/` that reached `main`.
-`master.xml` is append-only.
-Bring an older local database to the baseline (`docs/admin/liquibase-baseline-runbook.md`) or wipe it with `vp run dev:reset`.
+`master.xml` keeps its released include prefix fixed.
+New migrations use timestamped XML files in `db/changelog/next/`, discovered by its one `includeAll`.
+Wipe an older local database with `vp run dev:reset`.
 
 ## Command caveats
 

@@ -24,8 +24,8 @@ Running the target release's [migrate run mode](./runtime-roles#database-migrati
 The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
 
 1. Apply [pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) **before** restoring secrets or starting application code.
-2. When crossing the v0.77.4 baseline, complete the [baseline synchronization prerequisites](./liquibase-baseline-runbook#before-deployment) before candidate startup.
-3. When crossing that baseline, rehearse synchronization on this same isolated copy.
+2. Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before candidate startup.
+3. If an intermediate release is required, rehearse that upgrade on the same isolated copy.
 4. Run Liquibase **update**, not just `validate` or SQL generation.
 5. Keep ingress, workers, and sandbox execution disabled.
 6. Keep external destinations denied.
@@ -66,12 +66,12 @@ The server refuses plaintext secrets after the conversion.
 
 ## Upgrade the host
 
-The commands below do not prepare existing databases for the PostgreSQL 18/Liquibase baseline transition.
+Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before you use the commands below.
 
 1. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), pause reconciliation before manual changes.
 2. Wait for any active service run to finish.
 3. Before starting target images, read that release's migration instructions.
-4. If the database crosses the baseline transition, first complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
+4. If an intermediate release is required, first complete its [intermediate upgrade procedure](./liquibase-baseline-runbook.md).
 5. Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) through backup and staging validation.
 6. Acquire the tested release:
 
@@ -187,6 +187,6 @@ Each worker and webhook server reports its own identity in `/actuator/info` only
 Some releases need a procedure of their own before the new runtime roles start.
 The [database migration instructions](./compatibility-policy#database-migrations) say when one applies.
 
-- [Baseline synchronization runbook](./liquibase-baseline-runbook.md): the PostgreSQL 18/Liquibase v0.77.4 cut-point.
+- [Prepare an older database](./liquibase-baseline-runbook.md): intermediate upgrades for older databases.
 - [Native Hibernate JSON cutover](./native-hibernate-json-cutover): the stopped-writer accounting cutover.
 - [Practice model cutover checks](./practice-model-cutover): the pilot rehearsal and a refused practice model upgrade.

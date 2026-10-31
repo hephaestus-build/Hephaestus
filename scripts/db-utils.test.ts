@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { appendInclude, parseCommand, promote, promoteDraft, validateDraft } from "./db-utils.ts";
+import { parseCommand, promote, promoteDraft, validateDraft } from "./db-utils.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 
 const generated = `<?xml version="1.1" encoding="UTF-8" standalone="no"?>
@@ -46,23 +46,6 @@ void test("a draft appends to the changelog this branch already added, continuin
 
 void test("an empty draft is rejected rather than promoted to an empty changelog", () => {
 	assert.throws(() => promoteDraft("<databaseChangeLog/>", 1_700_000_000_000), /no change sets/u);
-});
-
-void test("master.xml gains the include at the end and never twice", () => {
-	const master = `<databaseChangeLog>
-    <include file="./changelog/1_changelog.xml" relativeToChangelogFile="true"/>
-</databaseChangeLog>
-`;
-	const once = appendInclude(master, "2_changelog.xml");
-	assert.equal(
-		once,
-		`<databaseChangeLog>
-    <include file="./changelog/1_changelog.xml" relativeToChangelogFile="true"/>
-    <include file="./changelog/2_changelog.xml" relativeToChangelogFile="true"/>
-</databaseChangeLog>
-`,
-	);
-	assert.equal(appendInclude(once, "2_changelog.xml"), once);
 });
 
 const nativeSet = `<changeSet id="draft-1" author="draft">
@@ -146,7 +129,10 @@ for (const second of ["untracked", "staged"] as const) {
 		const env = environmentForGitFixture();
 		const git = (...args: string[]) =>
 			execFileSync("git", args, { cwd: repository, env, stdio: ["ignore", "pipe", "pipe"] });
-		const changelogs = path.join(repository, "server/application/src/main/resources/db/changelog");
+		const changelogs = path.join(
+			repository,
+			"server/application/src/main/resources/db/changelog/next",
+		);
 		const master = path.join(repository, "server/application/src/main/resources/db/master.xml");
 		const masterXml = "<databaseChangeLog>\n</databaseChangeLog>\n";
 		try {
@@ -155,14 +141,14 @@ for (const second of ["untracked", "staged"] as const) {
 			git("config", "user.email", "test@example.invalid");
 			await mkdir(changelogs, { recursive: true });
 			await writeFile(master, masterXml);
-			await writeFile(path.join(changelogs, "1_changelog.xml"), native);
+			await writeFile(path.join(changelogs, "20261030000000-released.xml"), native);
 			git("add", ".");
 			git("commit", "--quiet", "-m", "released");
 			git("checkout", "--quiet", "-b", "feature");
-			await writeFile(path.join(changelogs, "2_changelog.xml"), native);
+			await writeFile(path.join(changelogs, "20261030000100-feature.xml"), native);
 			git("add", ".");
 			git("commit", "--quiet", "-m", "branch changelog");
-			await writeFile(path.join(changelogs, "3_changelog.xml"), native);
+			await writeFile(path.join(changelogs, "20261030000200-second.xml"), native);
 			if (second === "staged") {
 				git("add", ".");
 			}
@@ -170,9 +156,9 @@ for (const second of ["untracked", "staged"] as const) {
 			await assert.rejects(promote(native, repository), /several changelogs/u);
 			const listing = await readdir(changelogs);
 			assert.deepEqual(listing.toSorted(), [
-				"1_changelog.xml",
-				"2_changelog.xml",
-				"3_changelog.xml",
+				"20261030000000-released.xml",
+				"20261030000100-feature.xml",
+				"20261030000200-second.xml",
 			]);
 			assert.equal(await readFile(master, "utf8"), masterXml);
 		} finally {
@@ -195,7 +181,10 @@ void test("a stacked layer writes its own changelog and leaves its parent's migr
 	const env = environmentForGitFixture();
 	const git = (...args: string[]) =>
 		execFileSync("git", args, { cwd: repository, env, stdio: ["ignore", "pipe", "pipe"] });
-	const directory = path.join(repository, "server/application/src/main/resources/db/changelog");
+	const directory = path.join(
+		repository,
+		"server/application/src/main/resources/db/changelog/next",
+	);
 	const master = path.join(repository, "server/application/src/main/resources/db/master.xml");
 	try {
 		git("init", "--quiet", "--initial-branch=main");
@@ -212,13 +201,17 @@ void test("a stacked layer writes its own changelog and leaves its parent's migr
 		git("commit", "--quiet", "-m", "parent migration");
 		git("update-ref", "refs/remotes/origin/parent", "main");
 		git("checkout", "--quiet", "-b", "child");
+		await writeFile(path.join(directory, ".DS_Store"), "local metadata");
 		const child = await promote(native, repository, "parent");
 		assert.notEqual(child, parent);
 		assert.equal(await readFile(parent, "utf8"), original);
 		assert.equal(await promote(native, repository, "parent"), child);
 		assert.equal(await readFile(parent, "utf8"), original);
 		const files = await readdir(directory);
-		assert.equal(files.length, 2);
+		assert.equal(files.filter((file) => file.endsWith(".xml")).length, 2);
+		assert.match(path.basename(child), /^\d{14}-child\.xml$/u);
+		assert.ok(path.basename(child) > path.basename(parent));
+		assert.equal(await readFile(master, "utf8"), "<databaseChangeLog>\n</databaseChangeLog>\n");
 	} finally {
 		await rm(repository, { recursive: true, force: true });
 	}

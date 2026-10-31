@@ -109,9 +109,16 @@ class SlackResearchOptOutMigrationTest {
 
     private static Liquibase liquibase(TestDatabase database) throws Exception {
         var connection = DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
-        return new Liquibase(
+        var liquibase = new Liquibase(
                 "db/master.xml",
                 new ClassLoaderResourceAccessor(),
                 DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection)));
+        // This fixture resumes a deliberately partial history before the production entry boundary.
+        liquibase
+                .getDatabaseChangeLog()
+                .getPreconditions()
+                .getNestedPreconditions()
+                .clear();
+        return liquibase;
     }
 }

@@ -47,7 +47,7 @@ Do not mark the migration as complete manually.
 1. Keep all runtime roles and other database writers stopped.
 2. Use the verified target image's bundled Liquibase CLI to run `update` with the `prod` context.
    Use the protected defaults file, runtime-user permissions, database network, and read-only `status` check
-   from the [baseline runbook](liquibase-baseline-runbook#synchronize-without-executing-ddl).
+   from the [baseline runbook](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/liquibase-baseline-runbook.md#synchronize-without-executing-ddl).
    Run `update`, not baseline synchronization:
 
    ```bash

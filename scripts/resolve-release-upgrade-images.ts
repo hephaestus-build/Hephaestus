@@ -70,17 +70,6 @@ function previousApplicationReference(version: string): {
 	};
 }
 
-const upgradePath = process.env.UPGRADE_PATH ?? "latest";
-// v0.77.3 already contains the cut-point; v0.76.0 is the last release before it.
-let pinnedVersion: string | undefined;
-if (upgradePath === "baseline") {
-	pinnedVersion = "0.77.4";
-} else if (upgradePath === "refusal") {
-	pinnedVersion = "0.76.0";
-} else if (upgradePath !== "latest") {
-	throw new Error(`Unknown upgrade path: ${upgradePath}`);
-}
-
 const supplied = [
 	process.env.INPUT_PREVIOUS_VERSION,
 	process.env.INPUT_CANDIDATE_APP,
@@ -104,10 +93,9 @@ if (
 	if (parseVersion(suppliedPreviousVersion) === undefined) {
 		throw new Error("Previous version must be X.Y.Z or X.Y.Z-rc.N");
 	}
-	previousApplication = previousApplicationReference(pinnedVersion ?? suppliedPreviousVersion);
+	previousApplication = previousApplicationReference(suppliedPreviousVersion);
 } else {
-	const requestedPrevious =
-		pinnedVersion === undefined ? nonEmpty(process.env.REQUESTED_PREVIOUS) : `v${pinnedVersion}`;
+	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
 	// The changelog compatibility guard judges the same baseline.
 	const previous = requestedPrevious ?? previousReleaseOf("HEAD") ?? "";
 	if (!previous.startsWith("v") || parseVersion(previous.slice(1)) === undefined) {

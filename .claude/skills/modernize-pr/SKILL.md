@@ -79,7 +79,7 @@ Effort already spent is not a reason to keep a pull request.
 2. Resolve each conflict for the pull request's intent and `main`'s newer rules.
    If a conflict shows a product or architecture disagreement, stop and choose the disposition again.
 3. Do not resolve a conflict in a generated file. Take `main`'s version, then run its generator again.
-4. `db/changelog/**` that reached `main` never changes, and `master.xml` is append-only.
+4. `db/changelog/**` that reached `main` never changes. Keep the released include prefix fixed and follow the migration guide for new timestamped files.
    Keep the branch's one changelog last.
    If it conflicts, run `vp run db:draft-changelog` again, which also refreshes the ERD.
 5. Keep the pull request's `.changeset/*.md` and `.migration/*.md` files.

@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
-import { asArray, asRecord, asString } from "./json.ts";
+import { asArray, asRecord, asString, isRecord } from "./json.ts";
 
 const parser = new XMLParser({
 	ignoreAttributes: false,
-	isArray: (name) => name === "include" || name === "changeSet" || name === "sql",
+	isArray: (name) =>
+		name === "include" || name === "includeAll" || name === "changeSet" || name === "sql",
 });
 const literal =
 	/^[\t ]*INSERT INTO _cutover_program VALUES\('(?<sourceSha>[a-f0-9]{64})',convert_from\(decode\('(?<source>[A-Za-z0-9+/=]+)','base64'\),'UTF8'\),'(?<targetSha>[a-f0-9]{64})',convert_from\(decode\('(?<target>[A-Za-z0-9+/=]+)','base64'\),'UTF8'\)\);[\t ]*$/u;
@@ -95,15 +96,39 @@ export async function migrationOwnedPracticeScripts(
 			return;
 		}
 		const changelog = asRecord(raw, `${file} databaseChangeLog`);
-		if (changelog.includeAll !== undefined) {
-			throw new Error("Use explicit changelog includes, not includeAll");
-		}
 		for (const value of asArray(changelog.include ?? [], "changelog includes")) {
 			const include = asRecord(value, "changelog include");
 			const base =
 				include["@_relativeToChangelogFile"] === "true" ? path.dirname(file) : resourcesRoot;
 			await visit(path.resolve(base, asString(include["@_file"], "changelog include file")));
 		}
+		for (const value of asArray(changelog.includeAll ?? [], "automatic changelog includes")) {
+			const include = asRecord(value, "automatic changelog include");
+			if (include["@_maxDepth"] !== "1" || include["@_endsWithFilter"] !== ".xml") {
+				throw new Error("Migration ownership supports the repository's flat XML includeAll");
+			}
+			const base =
+				include["@_relativeToChangelogFile"] === "true" ? path.dirname(file) : resourcesRoot;
+			const directory = path.resolve(base, asString(include["@_path"], "includeAll path"));
+			const entries = await readdir(directory, { withFileTypes: true }).catch((error: unknown) => {
+				if (
+					isRecord(error) &&
+					error.code === "ENOENT" &&
+					include["@_errorIfMissingOrEmpty"] === "false"
+				) {
+					return [];
+				}
+				throw error;
+			});
+			const files = entries
+				.filter((entry) => entry.isFile() && entry.name.endsWith(".xml"))
+				.map((entry) => entry.name)
+				.toSorted();
+			for (const fileName of files) {
+				await visit(path.join(directory, fileName));
+			}
+		}
+
 		for (const value of asArray(changelog.changeSet ?? [], "changelog changesets")) {
 			const changeSet = asRecord(value, "changelog changeset");
 			for (const sql of asArray(changeSet.sql ?? [], "changeset SQL")) {

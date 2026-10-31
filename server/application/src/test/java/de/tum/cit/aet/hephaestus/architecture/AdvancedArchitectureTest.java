@@ -350,17 +350,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
     @Nested
     class TestArchitectureTests {
 
-        /**
-         * Tests that drive Liquibase themselves and therefore must NOT have a Spring context: the context
-         * would build the schema before the test could seed the pre-migration rows it exists to migrate.
-         */
-        private static final Set<String> SCHEMA_OWNING_TESTS = Set.of("LegacyAgentConfigMigrationIntegrationTest");
-
-        @Test
-        void shouldNameOnlyExistingClassesInSchemaOwningTests() {
-            AllowlistEntries.assertEachNamesAClass("SCHEMA_OWNING_TESTS", SCHEMA_OWNING_TESTS, classesWithTests);
-        }
-
         @Test
         void integrationTestsExtendBaseClasses() {
             Set<String> validBaseClasses = Set.of(
@@ -373,9 +362,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                     new ArchCondition<>("declare its integration harness explicitly") {
                         @Override
                         public void check(JavaClass javaClass, ConditionEvents events) {
-                            if (SCHEMA_OWNING_TESTS.contains(javaClass.getSimpleName())) {
-                                return;
-                            }
                             boolean hasSpringBootTest = javaClass.isAnnotatedWith(SpringBootTest.class);
                             boolean hasFocusedHarness = javaClass.isAnnotatedWith(DataJpaTest.class)
                                     || (javaClass.isAnnotatedWith(Tag.class)

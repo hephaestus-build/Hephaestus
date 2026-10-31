@@ -52,6 +52,12 @@ class SurveyParticipationMigrationTest {
             var database =
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (var liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
+                // This fixture resumes a deliberately partial history before the production entry boundary.
+                liquibase
+                        .getDatabaseChangeLog()
+                        .getPreconditions()
+                        .getNestedPreconditions()
+                        .clear();
                 var pending = liquibase.listUnrunChangeSets(contexts, labels);
                 int before = (int) pending.stream()
                         .takeWhile(changeSet -> !changeSet.getFilePath().endsWith(CHANGELOG))

@@ -93,11 +93,7 @@ await test("no shipped surface drifts back to ls1intum/Hephaestus", () => {
 		const files = tracked.stdout.split("\0").filter(Boolean);
 		for (const file of files.toSorted()) {
 			const relative = file.split(path.sep).join("/");
-			if (
-				relative.startsWith("docs/db/archive/") ||
-				SAMPLE_DATA.test(relative) ||
-				HISTORICAL_ALLOWLIST.has(relative)
-			) {
+			if (SAMPLE_DATA.test(relative) || HISTORICAL_ALLOWLIST.has(relative)) {
 				continue;
 			}
 			if (SKIPPED_EXTENSIONS.has(path.extname(relative))) {

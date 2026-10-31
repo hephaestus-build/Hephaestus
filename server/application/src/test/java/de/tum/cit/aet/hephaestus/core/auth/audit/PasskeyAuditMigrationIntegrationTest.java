@@ -63,6 +63,12 @@ class PasskeyAuditMigrationIntegrationTest {
             Database database =
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
+                // This fixture resumes a deliberately partial history before the production entry boundary.
+                liquibase
+                        .getDatabaseChangeLog()
+                        .getPreconditions()
+                        .getNestedPreconditions()
+                        .clear();
                 var contexts = new Contexts("dev");
                 var labels = new LabelExpression();
                 if (complete) {

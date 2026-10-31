@@ -170,7 +170,14 @@ class ReadIndexesMigrationTest {
 
     private static Liquibase liquibase(Connection connection) throws Exception {
         var database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
-        return new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database);
+        var liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database);
+        // This fixture resumes a deliberately partial history before the production entry boundary.
+        liquibase
+                .getDatabaseChangeLog()
+                .getPreconditions()
+                .getNestedPreconditions()
+                .clear();
+        return liquibase;
     }
 
     private static Connection connect(TestDatabase database) throws SQLException {

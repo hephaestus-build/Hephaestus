@@ -310,12 +310,19 @@ class ResearchDisclosureDatabaseTest {
     }
 
     private static Liquibase liquibase(TestDatabase database) throws Exception {
-        return new Liquibase(
+        var liquibase = new Liquibase(
                 "db/master.xml",
                 new ClassLoaderResourceAccessor(),
                 DatabaseFactory.getInstance()
                         .findCorrectDatabaseImplementation(new JdbcConnection(DriverManager.getConnection(
                                 database.jdbcUrl(), database.username(), database.password()))));
+        // This fixture resumes a deliberately partial history before the production entry boundary.
+        liquibase
+                .getDatabaseChangeLog()
+                .getPreconditions()
+                .getNestedPreconditions()
+                .clear();
+        return liquibase;
     }
 
     private static void assertForeignKey(TestDatabase database, String table, String name, String definition) {
