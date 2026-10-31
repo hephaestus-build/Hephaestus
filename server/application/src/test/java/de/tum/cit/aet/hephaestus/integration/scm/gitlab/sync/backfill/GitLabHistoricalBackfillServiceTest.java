@@ -113,9 +113,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
                         "0 0 3 * * *",
                         15,
                         new BackfillProperties(true, 50, 100, 60),
-                        new FilterProperties(Set.of(), Set.of(), Set.of()),
-                        null,
-                        null),
+                        new FilterProperties(Set.of(), Set.of())),
                 ledger,
                 pullRequests,
                 projectAdmission);

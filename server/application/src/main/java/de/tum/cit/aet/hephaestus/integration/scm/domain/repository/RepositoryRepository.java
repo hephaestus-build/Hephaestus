@@ -241,11 +241,11 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
     @Query(value = """
         INSERT INTO repository (native_id, provider_id, name_with_owner, name, is_private, html_url,
                                 visibility, default_branch, pushed_at, is_archived, is_disabled,
-                                has_discussions_enabled, organization_id)
+                                organization_id)
         VALUES (:nativeId, :providerId, :nameWithOwner, :name, :isPrivate,
                 'https://github.com/' || :nameWithOwner,
                 CASE WHEN :isPrivate THEN 'PRIVATE' ELSE 'PUBLIC' END,
-                'main', NOW(), false, false, false, :organizationId)
+                'main', NOW(), false, false, :organizationId)
         ON CONFLICT DO NOTHING
         """, nativeQuery = true)
     int insertFromSnapshot(

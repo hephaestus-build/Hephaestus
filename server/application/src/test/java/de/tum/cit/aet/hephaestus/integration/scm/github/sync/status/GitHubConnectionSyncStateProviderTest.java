@@ -109,9 +109,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new BackfillProperties(backfillEnabled, 50, 100, 60),
-                new FilterProperties(Set.of(), Set.of(), Set.of()),
-                null,
-                null);
+                new FilterProperties(Set.of(), Set.of()));
     }
 
     private Connection githubAppConnection() {
@@ -221,9 +219,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
                     "not a cron",
                     15,
                     new BackfillProperties(false, 50, 100, 60),
-                    new FilterProperties(Set.of(), Set.of(), Set.of()),
-                    null,
-                    null);
+                    new FilterProperties(Set.of(), Set.of()));
 
             assertThat(provider(broken).describe(ref, CONNECTION_ID).nextScheduledSyncAt())
                     .isNull();

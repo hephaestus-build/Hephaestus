@@ -159,7 +159,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                                         new ClassPathResource("graphql/github/fragments/")),
                                 List.of(".graphql", ".gql"),
                                 List.of(
-                                        new ClassPathResource(GitHubGraphQlFragments.PROJECT_FRAGMENTS_RESOURCE),
+                                        new ClassPathResource(GitHubGraphQlFragments.ACTOR_FRAGMENTS_RESOURCE),
                                         new ClassPathResource(
                                                 GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE))))
                         .build());

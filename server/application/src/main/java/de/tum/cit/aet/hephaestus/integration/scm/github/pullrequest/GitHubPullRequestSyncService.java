@@ -35,11 +35,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPageInfo
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequestConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedCommentsDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.EmbeddedProjectItemsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectItemSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewThreadsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.EmbeddedReviewsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
@@ -108,7 +106,6 @@ public class GitHubPullRequestSyncService {
     private final GitHubPullRequestReviewCommentSyncService reviewCommentSyncService;
     private final GitHubIssueCommentProcessor issueCommentProcessor;
     private final GitHubIssueCommentSyncService issueCommentSyncService;
-    private final GitHubProjectItemSyncService projectItemSyncService;
     private final BackfillStateProvider backfillStateProvider;
     private final TransactionTemplate transactionTemplate;
     private final GitHubSyncProperties syncProperties;
@@ -136,16 +133,6 @@ public class GitHubPullRequestSyncService {
      */
     private record PullRequestWithCommentCursor(Long pullRequestId, String commentCursor) {}
 
-    /**
-     * PRs needing additional project item pagination. Stores PR ID rather than an entity
-     * reference to survive transaction rollbacks.
-     *
-     * @param pullRequestId the database ID of the PR
-     * @param nodeId the GitHub GraphQL node ID (needed for pagination query)
-     * @param projectItemCursor the pagination cursor to start from
-     */
-    private record PullRequestWithProjectItemCursor(Long pullRequestId, String nodeId, String projectItemCursor) {}
-
     public GitHubPullRequestSyncService(
             RepositoryRepository repositoryRepository,
             PullRequestRepository pullRequestRepository,
@@ -155,7 +142,6 @@ public class GitHubPullRequestSyncService {
             GitHubPullRequestReviewCommentSyncService reviewCommentSyncService,
             GitHubIssueCommentProcessor issueCommentProcessor,
             GitHubIssueCommentSyncService issueCommentSyncService,
-            GitHubProjectItemSyncService projectItemSyncService,
             BackfillStateProvider backfillStateProvider,
             TransactionTemplate transactionTemplate,
             GitHubSyncProperties syncProperties,
@@ -170,7 +156,6 @@ public class GitHubPullRequestSyncService {
         this.reviewCommentSyncService = reviewCommentSyncService;
         this.issueCommentProcessor = issueCommentProcessor;
         this.issueCommentSyncService = issueCommentSyncService;
-        this.projectItemSyncService = projectItemSyncService;
         this.backfillStateProvider = backfillStateProvider;
         this.transactionTemplate = transactionTemplate;
         this.syncProperties = syncProperties;
@@ -334,12 +319,10 @@ public class GitHubPullRequestSyncService {
         int totalReviewsSynced = 0;
         int totalReviewCommentsSynced = 0;
         int totalCommentsSynced = 0;
-        int totalProjectItemsSynced = 0;
         int reportedTotalCount = -1;
         List<PullRequestWithReviewCursor> prsNeedingReviewPagination = new ArrayList<>();
         List<PullRequestWithThreadCursor> prsNeedingThreadPagination = new ArrayList<>();
         List<PullRequestWithCommentCursor> prsNeedingCommentPagination = new ArrayList<>();
-        List<PullRequestWithProjectItemCursor> prsNeedingProjectItemPagination = new ArrayList<>();
         String cursor = initialCursor;
         boolean hasMore = true;
         int pageCount = 0;
@@ -452,7 +435,7 @@ public class GitHubPullRequestSyncService {
                     // Re-fetch repository within transaction to ensure it's attached to session
                     Repository repo = repositoryRepository.findById(repoId).orElse(null);
                     if (repo == null) {
-                        return new PageSyncResult(0, 0, 0, 0, 0);
+                        return new PageSyncResult(0, 0, 0, 0);
                     }
                     // Eagerly initialize the lazy provider proxy to prevent
                     // LazyInitializationException when EventContext.from() accesses provider.getType()
@@ -465,8 +448,7 @@ public class GitHubPullRequestSyncService {
                             scopeId,
                             prsNeedingReviewPagination,
                             prsNeedingThreadPagination,
-                            prsNeedingCommentPagination,
-                            prsNeedingProjectItemPagination);
+                            prsNeedingCommentPagination);
                 });
 
                 if (pageResult != null) {
@@ -474,7 +456,6 @@ public class GitHubPullRequestSyncService {
                     totalReviewsSynced += pageResult.reviewsSynced();
                     totalReviewCommentsSynced += pageResult.reviewCommentsSynced();
                     totalCommentsSynced += pageResult.commentsSynced();
-                    totalProjectItemsSynced += pageResult.projectItemsSynced();
                 }
 
                 GHPageInfo pageInfo = connection.getPageInfo();
@@ -745,34 +726,6 @@ public class GitHubPullRequestSyncService {
             }
         }
 
-        if (!prsNeedingProjectItemPagination.isEmpty()) {
-            log.debug(
-                    "Starting additional project item fetch for PRs with pagination: repoName={}, prCount={}",
-                    safeNameWithOwner,
-                    prsNeedingProjectItemPagination.size());
-            for (PullRequestWithProjectItemCursor prWithCursor : prsNeedingProjectItemPagination) {
-                // Re-fetch with repository eagerly loaded to avoid LazyInitializationException in
-                // the new transaction; skip if the creating transaction was rolled back.
-                PullRequest pr = pullRequestRepository
-                        .findByIdWithRepository(prWithCursor.pullRequestId())
-                        .orElse(null);
-                if (pr == null) {
-                    log.debug(
-                            "Skipped project item pagination: reason=prNotFound (likely transaction rollback), prId={}",
-                            prWithCursor.pullRequestId());
-                    continue;
-                }
-                int additionalItems = projectItemSyncService.syncRemainingProjectItems(
-                        scopeId,
-                        prWithCursor.nodeId(),
-                        true, // This is a pull request
-                        pr.requireRepository(),
-                        prWithCursor.projectItemCursor(),
-                        pr.getId());
-                totalProjectItemsSynced += additionalItems;
-            }
-        }
-
         if (syncTargetId != null && !hasMore && abortReason == null) {
             clearCursorCheckpoint(syncTargetId);
         }
@@ -780,17 +733,15 @@ public class GitHubPullRequestSyncService {
         SyncResult.Status finalStatus = abortReason != null ? abortReason : SyncResult.Status.COMPLETED;
 
         log.info(
-                "Completed pull request sync: repoName={}, prCount={}, reviewCount={}, reviewCommentCount={}, commentCount={}, projectItemCount={}, prsWithReviewPagination={}, prsWithThreadPagination={}, prsWithCommentPagination={}, prsWithProjectItemPagination={}, resumed={}, incremental={}, stoppedByIncremental={}, status={}",
+                "Completed pull request sync: repoName={}, prCount={}, reviewCount={}, reviewCommentCount={}, commentCount={}, prsWithReviewPagination={}, prsWithThreadPagination={}, prsWithCommentPagination={}, resumed={}, incremental={}, stoppedByIncremental={}, status={}",
                 safeNameWithOwner,
                 totalPRsSynced,
                 totalReviewsSynced,
                 totalReviewCommentsSynced,
                 totalCommentsSynced,
-                totalProjectItemsSynced,
                 prsNeedingReviewPagination.size(),
                 prsNeedingThreadPagination.size(),
                 prsNeedingCommentPagination.size(),
-                prsNeedingProjectItemPagination.size(),
                 resuming,
                 incrementalSync,
                 stoppedByIncrementalSync,
@@ -798,8 +749,7 @@ public class GitHubPullRequestSyncService {
         return new SyncResult(finalStatus, totalPRsSynced);
     }
 
-    private record PageSyncResult(
-            int prsSynced, int reviewsSynced, int reviewCommentsSynced, int commentsSynced, int projectItemsSynced) {}
+    private record PageSyncResult(int prsSynced, int reviewsSynced, int reviewCommentsSynced, int commentsSynced) {}
 
     private static final String SINGLE_PR_DOCUMENT = "GetPullRequestByNumber";
 
@@ -871,7 +821,7 @@ public class GitHubPullRequestSyncService {
 
     /**
      * Processes a page of pull requests with their embedded conversation comments, reviews,
-     * review threads, and project items.
+     * and review threads.
      */
     private PageSyncResult processPullRequestPage(
             GHPullRequestConnection connection,
@@ -879,13 +829,11 @@ public class GitHubPullRequestSyncService {
             Long scopeId,
             List<PullRequestWithReviewCursor> prsNeedingReviewPagination,
             List<PullRequestWithThreadCursor> prsNeedingThreadPagination,
-            List<PullRequestWithCommentCursor> prsNeedingCommentPagination,
-            List<PullRequestWithProjectItemCursor> prsNeedingProjectItemPagination) {
+            List<PullRequestWithCommentCursor> prsNeedingCommentPagination) {
         int prsSynced = 0;
         int reviewsSynced = 0;
         int reviewCommentsSynced = 0;
         int commentsSynced = 0;
-        int projectItemsSynced = 0;
 
         for (var graphQlPullRequest : connection.getNodes()) {
             PullRequestWithReviewThreads prWithReviews =
@@ -939,20 +887,9 @@ public class GitHubPullRequestSyncService {
                 prsNeedingThreadPagination.add(new PullRequestWithThreadCursor(
                         entity.getId(), Objects.requireNonNull(embeddedThreads.endCursor())));
             }
-
-            EmbeddedProjectItemsDTO embeddedProjectItems = prWithReviews.embeddedProjectItems();
-            projectItemsSynced +=
-                    projectItemSyncService.processEmbeddedItems(embeddedProjectItems, context, entity.getId());
-
-            if (embeddedProjectItems.needsPagination()) {
-                prsNeedingProjectItemPagination.add(new PullRequestWithProjectItemCursor(
-                        entity.getId(),
-                        prWithReviews.pullRequest().nodeId(),
-                        Objects.requireNonNull(embeddedProjectItems.endCursor())));
-            }
         }
 
-        return new PageSyncResult(prsSynced, reviewsSynced, reviewCommentsSynced, commentsSynced, projectItemsSynced);
+        return new PageSyncResult(prsSynced, reviewsSynced, reviewCommentsSynced, commentsSynced);
     }
 
     /**

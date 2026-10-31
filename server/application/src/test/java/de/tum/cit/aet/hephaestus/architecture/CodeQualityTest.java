@@ -134,17 +134,10 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "PullRequestRepository.upsertCore",
                     "MilestoneRepository.insertIfAbsent",
                     "LabelRepository.insertIfAbsent",
-                    "ProjectRepository.upsertCore",
-                    "ProjectFieldRepository.upsertCore",
-                    "ProjectItemRepository.upsertCore",
-                    "ProjectFieldValueRepository.upsertCore",
-                    "ProjectStatusUpdateRepository.upsertCore",
                     "UserRepository.upsertUser",
                     "OrganizationRepository.upsert",
                     "CommitRepository.upsertCommit",
                     "CommitRepository.updateEnrichmentMetadata",
-                    "DiscussionCategoryRepository.upsertCategory",
-                    "DiscussionRepository.upsertCore",
                     // Native INSERT ... ON CONFLICT DO NOTHING for an ingested Slack message; each column
                     // (workspace/team/channel/ts/thread_ts/author/member/text) is a distinct @Param.
                     "SlackMessageRepository.insertIfAbsent",

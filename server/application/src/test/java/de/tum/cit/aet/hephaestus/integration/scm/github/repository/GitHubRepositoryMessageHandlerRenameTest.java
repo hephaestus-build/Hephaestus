@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.ProjectIntegrityService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -45,9 +44,6 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
-    private ProjectIntegrityService projectIntegrityService;
-
-    @Mock
     private IdentityProviderRepository gitProviderRepository;
 
     @Mock
@@ -66,7 +62,6 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
         handler = new GitHubRepositoryMessageHandler(
                 provisioningListener,
                 repositoryRepository,
-                projectIntegrityService,
                 gitProviderRepository,
                 syncTargetProvider,
                 deserializer,

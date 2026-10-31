@@ -183,7 +183,7 @@ class SyncSchedulerPropertiesTest {
 
         @Test
         void emptyOrgFilter_allowsAll() {
-            var filters = new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of());
+            var filters = new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of());
 
             assertThat(filters.isOrganizationAllowed("any-org")).isTrue();
             assertThat(filters.isOrganizationAllowed("another-org")).isTrue();
@@ -191,8 +191,7 @@ class SyncSchedulerPropertiesTest {
 
         @Test
         void orgFilter_onlyAllowsListed() {
-            var filters = new SyncSchedulerProperties.FilterProperties(
-                    Set.of("ls1intum", "HephaestusTest"), Set.of(), Set.of());
+            var filters = new SyncSchedulerProperties.FilterProperties(Set.of("ls1intum", "HephaestusTest"), Set.of());
 
             assertThat(filters.isOrganizationAllowed("ls1intum")).isTrue();
             assertThat(filters.isOrganizationAllowed("HephaestusTest")).isTrue();
@@ -201,7 +200,7 @@ class SyncSchedulerPropertiesTest {
 
         @Test
         void emptyRepoFilter_allowsAll() {
-            var filters = new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of());
+            var filters = new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of());
 
             assertThat(filters.isRepositoryAllowed("any/repo")).isTrue();
         }
@@ -209,7 +208,7 @@ class SyncSchedulerPropertiesTest {
         @Test
         void repoFilter_onlyAllowsListed() {
             var filters = new SyncSchedulerProperties.FilterProperties(
-                    Set.of(), Set.of("ls1intum/Hephaestus", "ls1intum/Artemis"), Set.of());
+                    Set.of(), Set.of("ls1intum/Hephaestus", "ls1intum/Artemis"));
 
             assertThat(filters.isRepositoryAllowed("ls1intum/Hephaestus")).isTrue();
             assertThat(filters.isRepositoryAllowed("ls1intum/Artemis")).isTrue();

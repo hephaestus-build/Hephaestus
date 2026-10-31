@@ -76,11 +76,6 @@ public final class ScmEventIdentity {
                         edited.comment().id(),
                         edited.comment().updatedAt(),
                         edited.comment().body());
-            case ScmDomainEvent.DiscussionCommentEdited edited ->
-                edit(
-                        edited.comment().id(),
-                        edited.comment().updatedAt(),
-                        edited.comment().body());
             // A dismissal is the moment the review stores for it. GitLab reuses one review per approver, so a second
             // withdrawal of a renewed approval is a second dismissal.
             case ScmDomainEvent.ReviewDismissed dismissed ->

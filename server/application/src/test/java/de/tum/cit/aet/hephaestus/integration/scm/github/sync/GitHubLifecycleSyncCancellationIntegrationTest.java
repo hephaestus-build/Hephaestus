@@ -26,7 +26,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncStatusService;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
@@ -35,7 +34,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitMetadataEnr
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.github.discussion.GitHubDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -43,7 +41,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTyp
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
@@ -78,9 +75,6 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private RepositoryRepository repositoryRepository;
-
-    @Autowired
-    private OrganizationRepository organizationRepository;
 
     @Autowired
     private RepositoryToMonitorRepository monitorRepository;
@@ -319,16 +313,13 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 "0 0 3 * * *",
                 15,
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                new SyncSchedulerProperties.DiscussionsProperties(false),
-                new SyncSchedulerProperties.ProjectsProperties(false));
+                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
         GitHubDataSyncService service = new GitHubDataSyncService(
                 properties,
                 gitProviderRepository,
                 syncTargets,
                 mock(OrganizationMembershipListener.class),
                 repositoryRepository,
-                organizationRepository,
                 mock(GitHubLabelSyncService.class),
                 mock(GitHubMilestoneSyncService.class),
                 issues,
@@ -336,9 +327,7 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 mock(GitHubIssueTypeSyncService.class),
                 mock(GitHubSubIssueSyncService.class),
                 pullRequests,
-                mock(GitHubDiscussionSyncService.class),
                 teams,
-                mock(GitHubProjectSyncService.class),
                 mock(GitHubOrganizationSyncService.class),
                 metadata,
                 mock(GitHubCollaboratorSyncService.class),
@@ -498,8 +487,7 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                         RepositoryToMonitor::getPullRequestsSyncedAt,
                         RepositoryToMonitor::getCollaboratorsSyncedAt,
                         RepositoryToMonitor::getLabelsSyncedAt,
-                        RepositoryToMonitor::getMilestonesSyncedAt,
-                        RepositoryToMonitor::getDiscussionsSyncedAt)
+                        RepositoryToMonitor::getMilestonesSyncedAt)
                 .containsExactly(
                         previous.getRepositorySyncedAt(),
                         previous.getRepositoryVisibilityConfirmedAt(),
@@ -507,8 +495,7 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                         previous.getPullRequestsSyncedAt(),
                         previous.getCollaboratorsSyncedAt(),
                         previous.getLabelsSyncedAt(),
-                        previous.getMilestonesSyncedAt(),
-                        previous.getDiscussionsSyncedAt());
+                        previous.getMilestonesSyncedAt());
         assertThat(monitor.getSyncErrorSummary()).isNull();
     }
 

@@ -16,9 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
-import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.DiscussionsProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
-import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.ProjectsProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
@@ -33,13 +31,10 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRunsReread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -81,16 +76,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
     private GitHubIssueDependencySyncService issueDependencySyncService;
 
     @Mock
-    private GitHubProjectSyncService projectSyncService;
-
-    @Mock
-    private GitHubOrganizationSyncService organizationSyncService;
-
-    @Mock
     private GitHubTeamSyncService teamSyncService;
-
-    @Mock
-    private OrganizationRepository organizationRepository;
 
     @Mock
     private RateLimitTracker rateLimitTracker;
@@ -116,9 +102,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new BackfillProperties(false, 50, 100, 60),
-                new FilterProperties(Set.of(), Set.of(), Set.of()),
-                new DiscussionsProperties(false),
-                new ProjectsProperties(false));
+                new FilterProperties(Set.of(), Set.of()));
 
         scheduler = new GitHubDataSyncScheduler(
                 syncTargetProvider,
@@ -128,10 +112,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 subIssueSyncService,
                 issueTypeSyncService,
                 issueDependencySyncService,
-                projectSyncService,
-                organizationSyncService,
                 teamSyncService,
-                organizationRepository,
                 properties,
                 rateLimitTracker,
                 Runnable::run, // synchronous executor — deterministic assertions, no timing flakiness

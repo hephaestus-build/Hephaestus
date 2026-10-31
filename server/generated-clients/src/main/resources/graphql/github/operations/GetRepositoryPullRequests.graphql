@@ -301,39 +301,6 @@ query GetRepositoryPullRequests(
 
                 # Project items (embedded, first 5) - pagination for PRs in more projects
                 # Syncs project membership from the PR side for proper historical backfill
-                projectItems(first: 5, includeArchived: true) {
-                    totalCount
-                    pageInfo {
-                        hasNextPage
-                        endCursor
-                    }
-                    nodes {
-                        id
-                        fullDatabaseId
-                        type
-                        isArchived
-                        createdAt
-                        updatedAt
-
-                        # Project reference - needed to link item to correct project
-                        project {
-                            ...ProjectV2RefFields
-                        }
-
-                        # Field values (embedded, first 20) - pagination for items with more
-                        # Uses shared FieldValueFieldsCostOptimized fragment (all 11 field value types)
-                        fieldValues(first: 20) {
-                            totalCount
-                            pageInfo {
-                                hasNextPage
-                                endCursor
-                            }
-                            nodes {
-                                ...FieldValueFieldsCostOptimized
-                            }
-                        }
-                    }
-                }
             }
         }
     }

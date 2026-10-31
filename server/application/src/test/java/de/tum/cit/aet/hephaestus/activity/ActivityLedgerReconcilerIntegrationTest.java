@@ -113,8 +113,8 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
                 .saveAndFlush(new IdentityProvider(type, "https://" + unique + ".example.com"))
                 .getId());
         repositoryId = Objects.requireNonNull(jdbc.queryForObject("""
-            INSERT INTO repository(native_id,provider_id,name,name_with_owner,has_discussions_enabled,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
-            VALUES (1,?,'repo',?,false,false,false,false,'https://example.com/repo',now(),'PUBLIC') RETURNING id
+            INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
+            VALUES (1,?,'repo',?,false,false,false,'https://example.com/repo',now(),'PUBLIC') RETURNING id
             """, Long.class, providerId, "repair/" + unique));
         monitorId = Objects.requireNonNull(jdbc.queryForObject("""
             INSERT INTO repository_to_monitor(workspace_id,name_with_owner,native_id,generated_paths)

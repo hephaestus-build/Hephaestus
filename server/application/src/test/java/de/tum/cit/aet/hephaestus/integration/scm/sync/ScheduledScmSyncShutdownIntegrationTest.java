@@ -31,8 +31,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRun
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService;
@@ -442,10 +440,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 mock(GitHubSubIssueSyncService.class),
                 issueTypes,
                 mock(GitHubIssueDependencySyncService.class),
-                mock(GitHubProjectSyncService.class),
-                mock(GitHubOrganizationSyncService.class),
                 mock(GitHubTeamSyncService.class),
-                mock(OrganizationRepository.class),
                 properties(),
                 mock(RateLimitTracker.class),
                 executor,
@@ -608,8 +603,6 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 "0 0 3 * * *",
                 15,
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                new SyncSchedulerProperties.DiscussionsProperties(false),
-                new SyncSchedulerProperties.ProjectsProperties(false));
+                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
     }
 }

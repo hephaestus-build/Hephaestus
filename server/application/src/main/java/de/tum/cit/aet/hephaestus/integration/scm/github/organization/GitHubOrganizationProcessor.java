@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.dto.GitHubOrganizationEventDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.ProjectIntegrityService;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -34,15 +33,11 @@ public class GitHubOrganizationProcessor {
 
     private final OrganizationRepository organizationRepository;
     private final IdentityProviderRepository gitProviderRepository;
-    private final ProjectIntegrityService projectIntegrityService;
 
     public GitHubOrganizationProcessor(
-            OrganizationRepository organizationRepository,
-            IdentityProviderRepository gitProviderRepository,
-            ProjectIntegrityService projectIntegrityService) {
+            OrganizationRepository organizationRepository, IdentityProviderRepository gitProviderRepository) {
         this.organizationRepository = organizationRepository;
         this.gitProviderRepository = gitProviderRepository;
-        this.projectIntegrityService = projectIntegrityService;
     }
 
     /**
@@ -137,15 +132,6 @@ public class GitHubOrganizationProcessor {
     /**
      * Delete an organization by its native ID and provider.
      * <p>
-     * This method cascades the deletion to related entities:
-     * <ul>
-     *   <li>Projects owned by this organization (via ProjectIntegrityService)</li>
-     * </ul>
-     * <p>
-     * <b>Design Note:</b> Projects use polymorphic ownership (ownerType + ownerId),
-     * which prevents database-level FK constraints. Cascade deletion is handled
-     * at the application level through ProjectIntegrityService.
-     *
      * @param nativeId   the provider's native numeric ID of the organization
      * @param providerId the FK ID of the IdentityProvider entity
      */
@@ -157,21 +143,8 @@ public class GitHubOrganizationProcessor {
         }
 
         organizationRepository.findByNativeIdAndProviderId(nativeId, providerId).ifPresent(org -> {
-            Long orgId = org.getId();
             String orgLogin = org.getLogin();
 
-            // Cascade delete projects owned by this organization
-            // This must be done BEFORE deleting the organization to maintain referential integrity
-            int deletedProjects = projectIntegrityService.cascadeDeleteProjectsForOrganization(orgId);
-            if (deletedProjects > 0) {
-                log.info(
-                        "Cascade deleted projects for organization: orgId={}, orgLogin={}, projectCount={}",
-                        orgId,
-                        sanitizeForLog(orgLogin),
-                        deletedProjects);
-            }
-
-            // Now delete the organization
             organizationRepository.delete(org);
             log.info("Deleted organization: nativeId={}, orgLogin={}", nativeId, sanitizeForLog(orgLogin));
         });

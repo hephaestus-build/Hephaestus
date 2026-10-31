@@ -3,7 +3,7 @@
 #
 # Selects `number` and nothing else: this is deliberately the cheapest possible complete enumeration
 # (~1 rate-limit point per page of 100, vs ~59 for one page of GetRepositoryIssues, which drags in
-# comments/projectItems/assignees/labels). The sweep needs the key set, never the content.
+# comments/assignees/labels). The sweep needs the key set, never the content.
 #
 # `totalCount` guards the sweep: it is compared against the number of nodes actually received, and
 # nothing is deleted unless the two agree. Without it, a listing that silently stopped short would be

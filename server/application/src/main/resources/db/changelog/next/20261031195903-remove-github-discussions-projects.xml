@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793476743341-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="discussion"/>
+            <tableExists tableName="discussion_category"/>
+            <tableExists tableName="discussion_comment"/>
+            <tableExists tableName="discussion_label"/>
+            <tableExists tableName="project"/>
+            <tableExists tableName="project_field"/>
+            <tableExists tableName="project_field_value"/>
+            <tableExists tableName="project_item"/>
+            <tableExists tableName="project_status_update"/>
+            <columnExists tableName="repository" columnName="has_discussions_enabled"/>
+            <columnExists tableName="repository_to_monitor" columnName="discussions_synced_at"/>
+            <columnExists tableName="repository_to_monitor" columnName="discussion_sync_cursor"/>
+            <columnExists tableName="activity_event" columnName="event_type"/>
+            <columnExists tableName="event_publication" columnName="event_type"/>
+        </preConditions>
+        <comment>Remove GitHub Discussions and Projects V2 with their activity entries and pending events. Stop every role and back up the database before this upgrade.</comment>
+        <delete tableName="activity_event">
+            <where>event_type LIKE 'PROJECT\_%' OR event_type LIKE 'DISCUSSION\_%' OR target_type IN ('project', 'project_item', 'project_status_update', 'discussion', 'discussion_comment')</where>
+        </delete>
+        <delete tableName="event_publication">
+            <where>event_type LIKE 'de.tum.cit.aet.hephaestus.integration.scm.github.events.GitHubProjectEvent$%' OR event_type LIKE 'de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent$Discussion%'</where>
+        </delete>
+        <dropTable tableName="discussion_comment" cascadeConstraints="true"/>
+        <dropTable tableName="discussion_label" cascadeConstraints="true"/>
+        <dropTable tableName="discussion" cascadeConstraints="true"/>
+        <dropTable tableName="discussion_category" cascadeConstraints="true"/>
+        <dropTable tableName="project_field_value" cascadeConstraints="true"/>
+        <dropTable tableName="project_item" cascadeConstraints="true"/>
+        <dropTable tableName="project_field" cascadeConstraints="true"/>
+        <dropTable tableName="project_status_update" cascadeConstraints="true"/>
+        <dropTable tableName="project" cascadeConstraints="true"/>
+        <dropColumn tableName="repository" columnName="has_discussions_enabled"/>
+        <dropColumn tableName="repository_to_monitor" columnName="discussions_synced_at"/>
+        <dropColumn tableName="repository_to_monitor" columnName="discussion_sync_cursor"/>
+        <rollback>
+            <stop>Restore the verified pre-upgrade database backup and start the previous release. Removed Discussions and Projects V2 content cannot be reconstructed.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

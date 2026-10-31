@@ -250,7 +250,6 @@ public class GitHubRepositorySyncService {
             repository.setPrivate(repoData.getIsPrivate());
             repository.setArchived(repoData.getIsArchived());
             repository.setDisabled(repoData.getIsDisabled());
-            repository.setHasDiscussionsEnabled(repoData.getHasDiscussionsEnabled());
 
             if (repoData.getCreatedAt() != null) {
                 repository.setCreatedAt(repoData.getCreatedAt().toInstant());

@@ -1,0 +1,76 @@
+# Reusable actor and reviewer fragments for GitHub GraphQL queries. Use ...FragmentName to include.
+
+# Full Actor union with all fields needed for user upsert (timestamps on User).
+# Used for author/mergedBy/creator on PRs, issues, reviews, comments, milestones, etc.
+fragment ActorFields on Actor {
+    __typename
+    login
+    ... on User {
+        id
+        databaseId
+        avatarUrl
+        name
+        email
+        createdAt
+        updatedAt
+    }
+    ... on Bot {
+        id
+        databaseId
+        avatarUrl
+    }
+    ... on Mannequin {
+        id
+        databaseId
+        avatarUrl
+    }
+    ... on Organization {
+        id
+        databaseId
+        avatarUrl
+    }
+}
+
+# Direct User fields (not Actor union). Used for resolvedBy, assignees, members, collaborators.
+fragment UserFields on User {
+    id
+    databaseId
+    login
+    avatarUrl
+    name
+    email
+    createdAt
+    updatedAt
+}
+
+fragment RequestedReviewerFields on RequestedReviewer {
+    __typename
+    ... on User {
+        id
+        databaseId
+        login
+        avatarUrl
+        name
+        email
+        createdAt
+        updatedAt
+    }
+    ... on Team {
+        id
+        databaseId
+        name
+        slug
+    }
+    ... on Bot {
+        id
+        databaseId
+        login
+        avatarUrl
+    }
+    ... on Mannequin {
+        id
+        databaseId
+        login
+        avatarUrl
+    }
+}

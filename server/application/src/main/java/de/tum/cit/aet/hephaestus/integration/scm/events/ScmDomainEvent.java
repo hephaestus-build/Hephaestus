@@ -17,9 +17,7 @@ public final class ScmDomainEvent {
                     ReviewCommentEvent,
                     ReviewThreadEvent,
                     TeamEvent,
-                    CommitEvent,
-                    DiscussionEvent,
-                    DiscussionCommentEvent {}
+                    CommitEvent {}
 
     public interface ContextualEvent {
         EventContext context();
@@ -239,59 +237,4 @@ public final class ScmDomainEvent {
             return null;
         }
     }
-
-    public sealed interface DiscussionEvent extends Event, ContextualEvent
-            permits DiscussionCreated,
-                    DiscussionUpdated,
-                    DiscussionClosed,
-                    DiscussionReopened,
-                    DiscussionAnswered,
-                    DiscussionDeleted {
-        ScmEventPayload.@Nullable DiscussionData discussion();
-    }
-
-    public record DiscussionCreated(ScmEventPayload.DiscussionData discussion, EventContext context)
-            implements DiscussionEvent {}
-
-    public record DiscussionUpdated(
-            ScmEventPayload.DiscussionData discussion, Set<String> changedFields, EventContext context)
-            implements DiscussionEvent {}
-
-    public record DiscussionClosed(
-            ScmEventPayload.DiscussionData discussion,
-            @Nullable String stateReason,
-            EventContext context) implements DiscussionEvent {}
-
-    public record DiscussionReopened(ScmEventPayload.DiscussionData discussion, EventContext context)
-            implements DiscussionEvent {}
-
-    public record DiscussionAnswered(
-            ScmEventPayload.DiscussionData discussion, Long answerCommentId, EventContext context)
-            implements DiscussionEvent {}
-
-    public record DiscussionDeleted(Long discussionId, EventContext context) implements DiscussionEvent {
-        @Override
-        public ScmEventPayload.@Nullable DiscussionData discussion() {
-            return null;
-        }
-    }
-
-    public sealed interface DiscussionCommentEvent extends Event, ContextualEvent
-            permits DiscussionCommentCreated, DiscussionCommentEdited, DiscussionCommentDeleted {
-        Long discussionId();
-    }
-
-    public record DiscussionCommentCreated(
-            ScmEventPayload.DiscussionCommentData comment, Long discussionId, EventContext context)
-            implements DiscussionCommentEvent {}
-
-    public record DiscussionCommentEdited(
-            ScmEventPayload.DiscussionCommentData comment,
-            Long discussionId,
-            Set<String> changedFields,
-            EventContext context)
-            implements DiscussionCommentEvent {}
-
-    public record DiscussionCommentDeleted(
-            Long commentId, @Nullable Long discussionId, EventContext context) implements DiscussionCommentEvent {}
 }

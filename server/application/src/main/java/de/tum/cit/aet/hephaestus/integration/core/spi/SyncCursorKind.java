@@ -12,5 +12,4 @@ public enum SyncCursorKind {
     ISSUE,
     /** Pull request / merge request. */
     PULL_REQUEST,
-    DISCUSSION,
 }

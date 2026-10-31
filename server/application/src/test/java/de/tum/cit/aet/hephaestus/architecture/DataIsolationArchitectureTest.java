@@ -69,17 +69,10 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Through Workspace.organizationId (ID-based relationship via JOIN)
             "OrganizationMembership", // organizationId -> Workspace.organizationId
             // Through project owner (ID-based: ownerId -> Organization/Repository/User)
-            "Project", // ownerId -> Organization/Repository -> Workspace.organizationId
-            "ProjectItem", // through Project.ownerId OR issue -> Repository
-            "ProjectField", // through Project.ownerId
-            "ProjectFieldValue", // through ProjectItem.project OR ProjectField.project
             // Through repository (commit -> Repository -> Organization <- Workspace)
             "Commit", // through Repository -> Organization <- Workspace
             "CommitFileChange", // through Commit -> Repository -> Organization <- Workspace
             // Through repository (discussion -> Repository -> Organization <- Workspace)
-            "Discussion", // through Repository -> Organization <- Workspace
-            "DiscussionCategory", // through Repository -> Organization <- Workspace
-            "DiscussionComment", // through Discussion -> Repository -> Organization <- Workspace
             // Unified integration framework
             "Connection", // has direct Workspace field
             "ConsumerDeadLetter", // workspace-owned records; installation records have no workspace yet

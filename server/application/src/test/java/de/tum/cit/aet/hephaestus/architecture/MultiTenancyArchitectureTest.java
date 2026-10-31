@@ -470,11 +470,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "ScmDomainEvent", // Our domain events carry repository which has workspace
                                         "PullRequest", // Through repository.organization.workspaceId
                                         "Issue", // Through repository.organization.workspaceId
-                                        "Discussion", // Through repository.organization.workspaceId
                                         "Review", // Through PR
                                         "Comment", // Through PR -> repository.organization.workspaceId
                                         "Commit", // Through repository.organization.workspaceId
-                                        "Project", // Through organization.workspaceId
                                         "ApprovedFeedbackReadyEvent", // carries workspaceId directly
                                         "BotCommand", // BotCommandReceivedEvent carries workspaceId directly
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
@@ -561,10 +559,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
          */
         static final Set<String> ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT = Set.of(
                 // ActivityEventListener handles CommentCreated, ReviewSubmitted events which carry full entity graphs
-                "ActivityEventListener",
-                // GitHubProjectActivityListener handles GitHubProjectEvent payloads whose EventContext
-                // carries scopeId (the originating workspace) — same payload-carries-context contract
-                "GitHubProjectActivityListener");
+                "ActivityEventListener");
 
         @Test
         void shouldNameOnlyExistingClassesInAsyncListenersWithPayloadContext() {

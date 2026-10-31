@@ -9,20 +9,12 @@ import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumen
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHActor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssue;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2FieldConfiguration;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2ItemContent;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2ItemFieldValue;
-import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2Owner;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepositoryOwner;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRequestedReviewer;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusCheckRollupContext;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubActorMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubIssueMixin;
-import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubProjectV2FieldConfigurationMixin;
-import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubProjectV2ItemContentMixin;
-import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubProjectV2ItemFieldValueMixin;
-import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubProjectV2OwnerMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubPullRequestMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubRepositoryOwnerMixin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.jackson.GitHubRequestedReviewerMixin;
@@ -123,10 +115,6 @@ public class GitHubGraphQlConfig {
                 .addMixIn(GHActor.class, GitHubActorMixin.class)
                 .addMixIn(GHRequestedReviewer.class, GitHubRequestedReviewerMixin.class)
                 .addMixIn(GHRepositoryOwner.class, GitHubRepositoryOwnerMixin.class)
-                .addMixIn(GHProjectV2Owner.class, GitHubProjectV2OwnerMixin.class)
-                .addMixIn(GHProjectV2FieldConfiguration.class, GitHubProjectV2FieldConfigurationMixin.class)
-                .addMixIn(GHProjectV2ItemContent.class, GitHubProjectV2ItemContentMixin.class)
-                .addMixIn(GHProjectV2ItemFieldValue.class, GitHubProjectV2ItemFieldValueMixin.class)
                 .addMixIn(GHIssue.class, GitHubIssueMixin.class)
                 .addMixIn(GHPullRequest.class, GitHubPullRequestMixin.class)
                 .addMixIn(GHStatusCheckRollupContext.class, GitHubStatusCheckRollupContextMixin.class)
@@ -191,7 +179,7 @@ public class GitHubGraphQlConfig {
         // ...FragmentName spreads) are included, which is what satisfies GraphQL spec §5.5.1.4
         // (fragments must be used) while keeping the definitions in documents the validators can see.
         List<Resource> fragmentFiles = List.of(
-                new ClassPathResource(GitHubGraphQlFragments.PROJECT_FRAGMENTS_RESOURCE),
+                new ClassPathResource(GitHubGraphQlFragments.ACTOR_FRAGMENTS_RESOURCE),
                 new ClassPathResource(GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE));
         FragmentMergingDocumentSource documentSource = new FragmentMergingDocumentSource(
                 List.of(

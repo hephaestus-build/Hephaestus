@@ -15,7 +15,7 @@ class WorkspaceScopeFilterTest {
     private static WorkspaceScopeFilter filter(Set<String> organizations, Set<String> repositories) {
         SyncSchedulerProperties properties = mock(SyncSchedulerProperties.class);
         when(properties.filters())
-                .thenReturn(new SyncSchedulerProperties.FilterProperties(organizations, repositories, Set.of()));
+                .thenReturn(new SyncSchedulerProperties.FilterProperties(organizations, repositories));
         return new WorkspaceScopeFilter(properties);
     }
 

@@ -113,8 +113,8 @@ class GitLabDetachedSyncIntegrationTest extends BaseIntegrationTest {
         long providerId = Objects.requireNonNull(provider.getId());
         long repositoryId =
                 Objects.requireNonNull(jdbc.queryForObject("""
-                    INSERT INTO repository(native_id,provider_id,name,name_with_owner,has_discussions_enabled,is_private,is_archived,is_disabled,html_url,pushed_at,visibility,default_branch)
-                    VALUES (1,?,'repo',?,false,false,false,false,'https://example.com/repo',now(),'PUBLIC','main') RETURNING id
+                    INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility,default_branch)
+                    VALUES (1,?,'repo',?,false,false,false,'https://example.com/repo',now(),'PUBLIC','main') RETURNING id
                     """, Long.class, provider.getId(), "detached/" + unique));
         long authorId = Objects.requireNonNull(jdbc.queryForObject(
                 "INSERT INTO \"user\"(native_id,provider_id,login,type) VALUES" + " (2,?,?,'USER') RETURNING id",

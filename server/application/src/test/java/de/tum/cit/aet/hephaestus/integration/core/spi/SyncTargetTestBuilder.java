@@ -16,7 +16,6 @@ public final class SyncTargetTestBuilder {
     private @Nullable Instant lastMilestonesSyncedAt;
     private @Nullable Instant lastIssuesSyncedAt;
     private @Nullable Instant lastPullRequestsSyncedAt;
-    private @Nullable Instant lastDiscussionsSyncedAt;
     private @Nullable Instant lastCollaboratorsSyncedAt;
     private @Nullable Instant lastFullSyncAt;
     private @Nullable Integer issueBackfillHighWaterMark;
@@ -26,7 +25,6 @@ public final class SyncTargetTestBuilder {
     private @Nullable Instant backfillLastRunAt;
     private @Nullable String issueSyncCursor;
     private @Nullable String pullRequestSyncCursor;
-    private @Nullable String discussionSyncCursor;
     private @Nullable Long nativeId;
 
     private SyncTargetTestBuilder() {}
@@ -85,11 +83,6 @@ public final class SyncTargetTestBuilder {
         return this;
     }
 
-    public SyncTargetTestBuilder lastDiscussionsSyncedAt(@Nullable Instant value) {
-        this.lastDiscussionsSyncedAt = value;
-        return this;
-    }
-
     public SyncTargetTestBuilder lastCollaboratorsSyncedAt(@Nullable Instant value) {
         this.lastCollaboratorsSyncedAt = value;
         return this;
@@ -135,11 +128,6 @@ public final class SyncTargetTestBuilder {
         return this;
     }
 
-    public SyncTargetTestBuilder discussionSyncCursor(@Nullable String value) {
-        this.discussionSyncCursor = value;
-        return this;
-    }
-
     public SyncTargetTestBuilder nativeId(@Nullable Long value) {
         this.nativeId = value;
         return this;
@@ -157,7 +145,6 @@ public final class SyncTargetTestBuilder {
                 lastMilestonesSyncedAt,
                 lastIssuesSyncedAt,
                 lastPullRequestsSyncedAt,
-                lastDiscussionsSyncedAt,
                 lastCollaboratorsSyncedAt,
                 lastFullSyncAt,
                 issueBackfillHighWaterMark,
@@ -167,7 +154,6 @@ public final class SyncTargetTestBuilder {
                 backfillLastRunAt,
                 issueSyncCursor,
                 pullRequestSyncCursor,
-                discussionSyncCursor,
                 nativeId);
     }
 }

@@ -101,8 +101,6 @@ public class Repository extends BaseGitServiceEntity {
 
     private @Nullable String defaultBranch;
 
-    private boolean hasDiscussionsEnabled;
-
     /**
      * Timestamp of the last successful sync for this repository from the Git provider.
      * <p>
@@ -151,7 +149,6 @@ public class Repository extends BaseGitServiceEntity {
      * Supported fields synced from GitHub GraphQL API:
      * - id/databaseId, name, nameWithOwner, url, description
      * - pushedAt, defaultBranchRef, visibility, isArchived, isDisabled, isPrivate
-     * - hasDiscussionsEnabled
      * - owner (Organization or User) → linked via organization relation
      *
      * Fields available in GraphQL but intentionally NOT synced:
