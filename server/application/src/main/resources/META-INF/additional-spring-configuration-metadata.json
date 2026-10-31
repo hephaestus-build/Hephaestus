@@ -250,6 +250,12 @@
       "sourceType": "com.zaxxer.hikari.HikariDataSource"
     },
     {
+      "name": "spring.datasource.hikari.minimum-idle",
+      "type": "java.lang.Integer",
+      "description": "The minimum number of idle database connections that this process tries to keep in its pool.",
+      "sourceType": "com.zaxxer.hikari.HikariDataSource"
+    },
+    {
       "name": "hephaestus.auth.login-providers.github.client-id",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",

@@ -116,6 +116,14 @@ const PER_CONTAINER = new Map<string, string>([
 		"SPRING_LIQUIBASE_ENABLED",
 		"only the migrate run mode migrates; a role that sets it says it does not",
 	],
+	[
+		"SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
+		"each role sizes its own pool against the chart PostgreSQL connection budget",
+	],
+	[
+		"SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
+		"each process reserves its own idle database connections",
+	],
 	["THC_PATH", "the receiver reports NATS through readiness; the others answer liveness"],
 ]);
 
