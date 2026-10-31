@@ -159,7 +159,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     }
 
     private void endTurn() {
-        jdbc.update("UPDATE mentor_turn SET status='DONE',leased_until=NULL,finished_at=now() WHERE id=?", turnId);
+        jdbc.update(
+                "UPDATE mentor_turn SET status='DONE',lease_id=NULL,leased_until=NULL,finished_at=now() WHERE id=?",
+                turnId);
     }
 
     private Optional<CopyWriteFence> claim(int attempt) {
@@ -256,7 +258,8 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException(e);
                     }
-                    jdbc.update("UPDATE mentor_turn SET status='DONE',leased_until=NULL WHERE id=?", turnId);
+                    jdbc.update(
+                            "UPDATE mentor_turn SET status='DONE',lease_id=NULL,leased_until=NULL WHERE id=?", turnId);
                 }));
         assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
         var claiming = CompletableFuture.supplyAsync(() -> claim(1));
