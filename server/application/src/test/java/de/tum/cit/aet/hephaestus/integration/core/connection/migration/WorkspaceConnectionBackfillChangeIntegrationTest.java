@@ -76,6 +76,9 @@ class WorkspaceConnectionBackfillChangeIntegrationTest extends BaseIntegrationTe
         savedSystemProperty = System.getProperty(SYSTEM_PROPERTY);
         System.setProperty(SYSTEM_PROPERTY, ENCRYPTION_KEY);
 
+        // Recreate the historical schema: the released backfill predates required key metadata.
+        executeDdl("ALTER TABLE connection DROP CONSTRAINT ck_connection_encrypted_requires_key_version");
+
         // Re-add legacy columns that section 9 of the unified-framework changelog
         // drops. Required so we can drive the backfill path that production v1 saw.
         // NOTE: account_login is a live current column — do NOT add/drop it here.
@@ -100,7 +103,13 @@ class WorkspaceConnectionBackfillChangeIntegrationTest extends BaseIntegrationTe
                     + "DROP COLUMN IF EXISTS gitlab_group_id, "
                     + "DROP COLUMN IF EXISTS gitlab_webhook_id");
         } finally {
-            restoreSystemProperty();
+            try {
+                databaseTestUtils.cleanDatabase();
+                executeDdl("ALTER TABLE connection ADD CONSTRAINT ck_connection_encrypted_requires_key_version "
+                        + "CHECK (credentials_encrypted IS NULL OR credentials_key_version IS NOT NULL)");
+            } finally {
+                restoreSystemProperty();
+            }
         }
     }
 

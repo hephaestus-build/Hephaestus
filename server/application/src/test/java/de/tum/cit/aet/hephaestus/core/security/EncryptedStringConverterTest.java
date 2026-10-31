@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Unit-level guarantees for the AES-256-GCM at-rest converter with shared system-key configuration:
- * round-trip, IV uniqueness, prod fail-fast, legacy-plaintext passthrough, and tamper detection.
+ * round-trip, IV uniqueness, missing-key refusal, plaintext refusal, and tamper detection.
  */
 class EncryptedStringConverterTest extends BaseUnitTest {
 
@@ -35,8 +35,10 @@ class EncryptedStringConverterTest extends BaseUnitTest {
     }
 
     @Test
-    void returnsLegacyUnprefixedValueUnchanged() {
-        assertThat(converter().convertToEntityAttribute("plain-legacy-value")).isEqualTo("plain-legacy-value");
+    void shouldRefuseLegacyPlaintext() {
+        assertThatThrownBy(() -> converter().convertToEntityAttribute("plain-legacy-value"))
+                .isInstanceOf(EncryptionException.class)
+                .hasMessageContaining("migration");
     }
 
     @Test
@@ -60,8 +62,10 @@ class EncryptedStringConverterTest extends BaseUnitTest {
 
     @Test
     void disabledWhenKeyMissingOutsideProd() {
-        // No key + non-prod ⇒ encryption disabled, values pass through untouched.
+        // Missing keys must never produce plaintext writes.
         EncryptedStringConverter disabled = new EncryptedStringConverter(systemKey("", "test"));
-        assertThat(disabled.convertToDatabaseColumn("x")).isEqualTo("x");
+        assertThatThrownBy(() -> disabled.convertToDatabaseColumn("x")).isInstanceOf(EncryptionException.class);
+        assertThatThrownBy(() -> disabled.convertToEntityAttribute("ENC:invalid"))
+                .isInstanceOf(EncryptionException.class);
     }
 }

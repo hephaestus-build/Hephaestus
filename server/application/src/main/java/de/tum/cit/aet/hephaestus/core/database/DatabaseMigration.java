@@ -22,8 +22,8 @@ import org.springframework.modulith.NamedInterface;
 /**
  * The migrate run mode: the application image with the {@value #PROFILE} profile applies the Liquibase changelog
  * and exits, with a non-zero status when the migration fails. It starts a context of only the data source and
- * Liquibase, so it needs the database settings and no runtime role. The roles wait for it at start
- * ({@link MigratedSchemaWait}). {@link MigrationLock} keeps a second migration out.
+ * Liquibase, so it needs the database settings and stored-secret encryption keys, but no runtime role.
+ * The roles wait for it at start ({@link MigratedSchemaWait}). {@link MigrationLock} keeps a second migration out.
  *
  * <p>Not a {@code @Configuration}: the application's component scan would otherwise import this context into
  * every role.
@@ -45,8 +45,8 @@ public class DatabaseMigration {
     }
 
     /** Migrates and returns the exit status. A failed migration throws. */
-    public static int run(String[] args) {
-        var application = new SpringApplication(DatabaseMigration.class);
+    public static int run(String[] args, Class<?> migrationConfiguration) {
+        var application = new SpringApplication(DatabaseMigration.class, migrationConfiguration);
         application.setWebApplicationType(WebApplicationType.NONE);
         // Highest precedence: the role profiles turn Liquibase off, and their order must not decide this.
         String[] arguments = Stream.concat(Arrays.stream(args), Stream.of("--spring.liquibase.enabled=true"))

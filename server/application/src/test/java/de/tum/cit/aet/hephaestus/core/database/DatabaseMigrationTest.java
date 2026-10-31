@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import de.tum.cit.aet.hephaestus.SecretMigrationConfiguration;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import java.sql.Connection;
@@ -33,22 +34,26 @@ class DatabaseMigrationTest {
     void shouldApplyTheChangelogAndExitWhenTheMigrateProfileRuns() throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_fresh");
 
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
 
         // A process that does not migrate now starts without waiting.
         CompletableFuture.runAsync(() -> awaitSchema(database, Duration.ofSeconds(1)))
                 .get(1, TimeUnit.MINUTES);
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
     }
 
     @Test
     void shouldReleaseTheLiquibaseLockWhenAKilledMigrationLeftIt() {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_stale_lock");
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
         var jdbc = jdbc(database);
         jdbc.update("UPDATE databasechangeloglock SET locked = TRUE, lockgranted = now(), lockedby = 'killed job'");
 
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
 
         assertThat(jdbc.queryForObject("SELECT locked FROM databasechangeloglock WHERE id = 1", Boolean.class))
                 .isFalse();
@@ -59,7 +64,8 @@ class DatabaseMigrationTest {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_awaited");
         var start = CompletableFuture.runAsync(() -> awaitSchema(database, Duration.ofMinutes(5)));
 
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
 
         start.get(1, TimeUnit.MINUTES);
     }
@@ -77,14 +83,16 @@ class DatabaseMigrationTest {
                         .queryForObject(
                                 "SELECT count(*) FROM pg_tables WHERE schemaname = current_schema()", Integer.class))
                 .isZero();
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
         awaitSchema(database, Duration.ofSeconds(1));
     }
 
     @Test
     void shouldNameTheChangeSetThatAPartlyMigratedHistoryLacks() {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_partial");
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
         var jdbc = jdbc(database);
         String id = jdbc.queryForObject(
                 "SELECT id FROM databasechangelog ORDER BY orderexecuted DESC LIMIT 1", String.class);
@@ -98,7 +106,8 @@ class DatabaseMigrationTest {
     @Test
     void shouldStartWhenTheSchemaIsAheadOfThisRelease() {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_ahead");
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
         // A change set of a later release, which this release's changelog does not hold.
         jdbc(database).update("""
                         INSERT INTO databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype)
@@ -113,7 +122,8 @@ class DatabaseMigrationTest {
     @Test
     void shouldKeepAnotherRunsLiquibaseLockWhileThatRunHoldsTheMigrationLock(CapturedOutput output) throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_live_lock");
-        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        assertThat(DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class))
+                .isZero();
         var jdbc = jdbc(database);
         CompletableFuture<Integer> waiting;
         try (Connection holder = dataSource(database).getConnection();
@@ -122,7 +132,8 @@ class DatabaseMigrationTest {
             statement.execute("SELECT pg_advisory_lock(hashtext('hephaestus'), hashtext('database-migration'))");
             jdbc.update("UPDATE databasechangeloglock SET locked = TRUE, lockgranted = now(), lockedby = 'live run'");
 
-            waiting = CompletableFuture.supplyAsync(() -> DatabaseMigration.run(arguments(database)));
+            waiting = CompletableFuture.supplyAsync(
+                    () -> DatabaseMigration.run(arguments(database), SecretMigrationConfiguration.class));
             await().atMost(Duration.ofMinutes(1))
                     .until(() -> output.getOut().contains("for another database migration to end"));
 
@@ -164,13 +175,15 @@ class DatabaseMigrationTest {
 
     @Test
     void shouldRefusePlaintextToARemoteDatabaseBeforeMigrating() {
-        assertThatThrownBy(() -> DatabaseMigration.run(new String[] {
-                    "--spring.profiles.active=prod," + DatabaseMigration.PROFILE,
-                    "--spring.datasource.url=jdbc:postgresql://db.example.org:5432/hephaestus?sslmode=disable",
-                    "--spring.datasource.username=hephaestus",
-                    "--spring.datasource.password=unused",
-                    "--spring.main.banner-mode=off"
-                }))
+        assertThatThrownBy(() -> DatabaseMigration.run(
+                        new String[] {
+                            "--spring.profiles.active=prod," + DatabaseMigration.PROFILE,
+                            "--spring.datasource.url=jdbc:postgresql://db.example.org:5432/hephaestus?sslmode=disable",
+                            "--spring.datasource.username=hephaestus",
+                            "--spring.datasource.password=unused",
+                            "--spring.main.banner-mode=off"
+                        },
+                        SecretMigrationConfiguration.class))
                 .rootCause()
                 .hasMessageContaining("must use TLS");
     }

@@ -234,6 +234,15 @@ class CredentialBundleConverterTest extends BaseUnitTest {
         }
 
         @Test
+        void missingColumnKeyVersionFailsClosed() {
+            CredentialBundleConverter c = enabled();
+            byte[] blob = c.encrypt(new BearerToken("secret", null), CTX_A);
+            assertThatThrownBy(() -> c.decrypt(blob, CTX_A, null))
+                    .isInstanceOf(EncryptionException.class)
+                    .hasMessageContaining("key version is missing");
+        }
+
+        @Test
         void unknownColumnKeyVersionFailsClosed() {
             CredentialBundleConverter c = enabled();
             byte[] blob = c.encrypt(new BearerToken("secret", null), CTX_A);

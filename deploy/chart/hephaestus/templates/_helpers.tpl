@@ -210,6 +210,17 @@ Service or the Gateway.
   value: {{ .Values.config.tracing.otlpEndpoint | quote }}
 {{- end -}}
 
+{{/* The migration and application roles use the same stored-secret keys. */}}
+{{- define "hephaestus.env.encryptionKeys" -}}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_ENCRYPTION_KEY") }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY") }}
+- name: HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION
+  value: {{ .Values.config.credentialKey.version | int | quote }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY" "optional" true) }}
+- name: HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION
+  value: {{ .Values.config.credentialKey.priorVersion | quote }}
+{{- end -}}
+
 {{/* Settings every application role reads. */}}
 {{- define "hephaestus.env.shared" -}}
 - name: APPLICATION_HOST_URL
@@ -220,13 +231,7 @@ Service or the Gateway.
   value: {{ include "hephaestus.databaseUrl" . | quote }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_ENCRYPTION_KEY") }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY") }}
-- name: HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION
-  value: {{ .Values.config.credentialKey.version | int | quote }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY" "optional" true) }}
-- name: HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION
-  value: {{ .Values.config.credentialKey.priorVersion | quote }}
+{{ include "hephaestus.env.encryptionKeys" . }}
 - name: HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED
   value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
 {{- /* Both agent image guards load in every role (ADR 0031): a reference the workers cannot run

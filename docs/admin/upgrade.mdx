@@ -44,6 +44,26 @@ The update must use that exact release's changelog, contexts, PostgreSQL image/e
 [CI migration checks](/contributor/database-migration#ci-validation) cover empty and seeded databases,
 not your production data. They do not replace this staging update.
 
+## Convert stored secrets for 1.0
+
+Before the 1.0 migration, back up the database and encryption keys.
+Stop all database writers.
+For chart hosts, use [Stopped schema upgrades](./kubernetes#stopped-schema-upgrades).
+Run the [migrate run mode](./runtime-roles#database-migrations) with the existing system encryption key and the active credential key and version.
+Configure any missing keys before the migration.
+Keep the prior credential key and its version configured if stored credentials still use them.
+
+The migration encrypts plaintext login-provider and LLM connection secrets and seals active and inactive JWT signing keys.
+It preserves the JWT signing identities.
+For integration credentials with no key version, it tries the configured active, prior and legacy system keys.
+Only a successful authenticated decryption permits conversion to the active credential key.
+It records that key's version without changing the connection state.
+
+A missing or incorrect key stops the conversion and rolls back its writes.
+Keep writers stopped, correct the key configuration, then retry.
+Start the server after the migration succeeds.
+The server refuses plaintext secrets after the conversion.
+
 ## Upgrade the host
 
 The commands below do not prepare existing databases for the PostgreSQL 18/Liquibase baseline transition.

@@ -60,6 +60,7 @@ spec:
               value: {{ include "hephaestus.databaseUrl" . | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") | nindent 12 }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") | nindent 12 }}
+            {{- include "hephaestus.env.encryptionKeys" . | nindent 12 }}
           resources:
             {{- toYaml .Values.migration.resources | nindent 12 }}
           securityContext:

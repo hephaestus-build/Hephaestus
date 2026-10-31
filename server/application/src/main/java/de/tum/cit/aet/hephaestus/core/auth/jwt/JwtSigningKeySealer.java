@@ -33,8 +33,8 @@ import org.springframework.stereotype.Component;
  * <h2>Enablement / fail-fast</h2>
  * Enabled iff a valid 32-byte system key is present.
  * In the {@code prod} profile a missing key throws (prod requires it); in dev/CI/test an
- * absent key disables sealing so a local boot still works (writing raw {@code v0-unsealed}
- * rows). A key that is not 32 UTF-8 bytes is always rejected.
+ * absent key disables sealing for artifact generation. Runtime never stores or loads raw
+ * private keys. A key that is not 32 UTF-8 bytes is always rejected.
  */
 @ConditionalOnServerRole
 @Component

@@ -2414,8 +2414,23 @@ await test("every revision migrates the database once, in a Job that only reache
 			"DATABASE_URL",
 			"DATABASE_USERNAME",
 			"DATABASE_PASSWORD",
+			"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
+			"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
+			"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION",
+			"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY",
+			"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION",
 		],
 	);
+	for (const name of [
+		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
+		"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
+		"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION",
+		"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY",
+		"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION",
+	]) {
+		assert.notEqual(env(migration, name), undefined, `${name} reaches the migration`);
+		assert.deepEqual(env(migration, name), env(workload(first, "server"), name));
+	}
 	// It starts once PostgreSQL accepts connections: on a first install, both start together.
 	const [wait] = list(get(podSpec(migration), "initContainers"));
 	const waitEnv = (name: string) =>

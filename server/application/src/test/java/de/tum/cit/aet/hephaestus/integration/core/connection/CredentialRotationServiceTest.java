@@ -82,20 +82,6 @@ class CredentialRotationServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldDecryptThroughThePriorKeyWhenARowPredatesKeyVersionStamping() {
-        Connection legacy = connection(56L);
-        legacy.setCredentials(TOKEN, oldConverter);
-        setKeyVersion(legacy, null); // Rows written before the credentials_key_version column exist as NULL.
-        when(connectionRepository.lockCredentialRotationBatch(2, 25)).thenReturn(List.of(56L));
-        when(connectionRepository.findAllById(List.of(56L))).thenReturn(List.of(legacy));
-
-        service.rotateBatch();
-
-        assertThat(legacy.getCredentialsKeyVersion()).isEqualTo(2);
-        assertThat(legacy.credentials(rotatingConverter)).contains(TOKEN);
-    }
-
-    @Test
     void shouldNotLoadAnyRowWhenEveryCredentialAlreadyUsesTheActiveKey() {
         when(connectionRepository.lockCredentialRotationBatch(2, 25)).thenReturn(List.of());
 
