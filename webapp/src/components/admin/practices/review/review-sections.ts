@@ -10,7 +10,7 @@ export const REVIEW_SECTIONS = [
 		id: "feedback-mode",
 		label: "Feedback mode",
 		description:
-			"Choose how feedback reaches developers for the whole workspace. Set a different mode for a group or a single practice only where it needs one.",
+			"Choose how and when feedback reaches developers in the whole workspace. Set a different mode for a group or a single practice only where it needs one.",
 	},
 	{
 		id: "automated-review",

@@ -18,6 +18,7 @@ const meta = {
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
 	args: {
+		workspaceSlug: "acme",
 		members,
 		rowCount: members.length,
 		teams: mockTeams,
@@ -34,6 +35,17 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
+
+/** The Review scope column only mirrors the setting, so the page points to where it changes. */
+export const ReviewScopeChangesInReviewSettings: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("columnheader", { name: "Review scope" })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "Change in review settings" })).toHaveAttribute(
+			"href",
+			"/w/acme/admin/practices/review?section=automated-review#review-scope-heading",
+		);
+	},
+};
 
 export const Loading: Story = {
 	args: {

@@ -2,6 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, waitFor, within } from "storybook/test";
 
 import type { AgentBinding } from "@/api/types.gen";
+import {
+	FeedbackModeSkeleton,
+	ReviewSettingsSkeleton,
+} from "@/components/admin/practices/PracticeSkeletons";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 import type { ReviewSectionId } from "./review-sections";
@@ -87,6 +92,67 @@ export const PastWork: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Section body: past-work")).toBeVisible();
 		await expectNoPageOverflow();
+	},
+};
+
+/** The bodies below are the ones the route renders while a tab's data loads or fails. */
+export const FeedbackModeLoading: Story = {
+	args: { sections: { ...sections, "feedback-mode": <FeedbackModeSkeleton /> } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("tabpanel")).toHaveTextContent("Loading feedback settings…");
+	},
+};
+
+/**
+ * Only a failed settings read replaces the whole tab: without it no control can show the workspace
+ * default or whether sending is paused. A failed practice list keeps both.
+ */
+export const FeedbackModeSettingsLoadFailed: Story = {
+	args: {
+		sections: {
+			...sections,
+			"feedback-mode": (
+				<QueryErrorAlert
+					error={{ status: 503 }}
+					title="We could not load the review settings"
+					onRetry={fn()}
+				/>
+			),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("We could not load the review settings")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
+	},
+};
+
+export const AutomatedReviewLoading: Story = {
+	args: {
+		section: "automated-review",
+		sections: { ...sections, "automated-review": <ReviewSettingsSkeleton /> },
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("tabpanel")).toHaveTextContent("Loading review settings…");
+	},
+};
+
+export const AutomatedReviewLoadFailed: Story = {
+	args: {
+		section: "automated-review",
+		sections: {
+			...sections,
+			"automated-review": (
+				<QueryErrorAlert
+					error={{ status: 503 }}
+					title="We could not load the review settings"
+					onRetry={fn()}
+				/>
+			),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("We could not load the review settings")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
 	},
 };
 

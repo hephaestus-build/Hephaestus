@@ -8,8 +8,14 @@ import type {
 	PracticeReviewSettings,
 } from "@/api/types.gen";
 import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
+import {
+	FeedbackSendingSettings,
+	type FeedbackSendingUpdate,
+} from "@/components/admin/practices/FeedbackSendingSettings";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
+import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { FEEDBACK_MODE_DEFS } from "@/components/practice-vocabulary/feedback-mode-defs";
 import { WorkTypeLabel } from "@/components/practice-vocabulary/WorkTypeLabel";
@@ -96,17 +102,31 @@ export interface PracticeFeedbackModePendingState {
 	bulk: { done: number; total: number } | null;
 }
 
+/**
+ * The practice list loads apart from the workspace settings above it, so a failed or slow list
+ * never takes the workspace default or pause and resume with it.
+ */
+export type FeedbackModeTreeState =
+	| { status: "loading" }
+	| { status: "error"; error: unknown; onRetry: () => void }
+	| {
+			status: "ready";
+			rollup: FeedbackModeRollup;
+			groups: PracticeGroup[];
+			practices: Practice[];
+	  };
+
 export interface PracticeFeedbackModePageProps {
 	workspaceSlug: string;
 	settings: PracticeReviewSettings;
-	rollup: FeedbackModeRollup;
-	groups: PracticeGroup[];
-	practices: Practice[];
+	tree: FeedbackModeTreeState;
 	pending: PracticeFeedbackModePendingState;
 	overridesOnly: boolean;
 	onOverridesOnlyChange: (next: boolean) => void;
 	onSetWorkspaceDefault: (feedbackMode: FeedbackMode) => void;
 	onClearWorkspaceDefault: () => void;
+	onSetSending: (update: FeedbackSendingUpdate) => void;
+	onClearDeliverToMerged: () => void;
 	onSetGroupFeedbackMode: (groupSlug: string, feedbackMode: FeedbackMode) => void;
 	onClearGroupFeedbackMode: (groupSlug: string) => void;
 	onSetPracticeFeedbackMode: (practiceSlug: string, feedbackMode: FeedbackMode) => void;
@@ -118,14 +138,14 @@ export interface PracticeFeedbackModePageProps {
 export function PracticeFeedbackModePage({
 	workspaceSlug,
 	settings,
-	rollup,
-	groups,
-	practices,
+	tree,
 	pending,
 	overridesOnly,
 	onOverridesOnlyChange,
 	onSetWorkspaceDefault,
 	onClearWorkspaceDefault,
+	onSetSending,
+	onClearDeliverToMerged,
 	onSetGroupFeedbackMode,
 	onClearGroupFeedbackMode,
 	onSetPracticeFeedbackMode,
@@ -136,8 +156,10 @@ export function PracticeFeedbackModePage({
 	const [openGroups, setOpenGroups] = useState<string[]>([]);
 	const [automaticPromotion, setAutomaticPromotion] = useState<AutomaticPromotion | null>(null);
 
-	const buckets = groupPracticesByGroup(groups, practices, { overridesOnly });
-	const overrides = countOverrides(groups, practices);
+	const buckets =
+		tree.status === "ready"
+			? groupPracticesByGroup(tree.groups, tree.practices, { overridesOnly })
+			: [];
 	const openValue = overridesOnly ? buckets.map((bucket) => bucket.key) : openGroups;
 
 	const shownSlugs = new Set(
@@ -210,76 +232,97 @@ export function PracticeFeedbackModePage({
 				}}
 				onClearWorkspaceDefault={onClearWorkspaceDefault}
 			/>
-			<div className="sticky top-0 z-20 space-y-3 border-b bg-background/95 py-3 backdrop-blur supports-backdrop-filter:bg-background/80">
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<FeedbackModeSummary counts={feedbackModeCounts(rollup)} overrides={overrides} />
-					<ScopeFilter value={overridesOnly} onChange={onOverridesOnlyChange} />
-				</div>
-				<BulkActionBar
-					count={actionable.length}
-					bulk={pending.bulk}
-					onSet={(feedbackMode) => {
-						if (feedbackMode === "AUTOMATIC") {
-							setAutomaticPromotion({ scope: "bulk", slugs: actionable });
-							return;
-						}
-						onBulkSetFeedbackMode(actionable, feedbackMode);
-					}}
-					onClear={() => setSelected(new Set())}
+			<FeedbackSendingSettings
+				settings={settings}
+				saving={pending.workspace}
+				onSet={onSetSending}
+				onClearDeliverToMerged={onClearDeliverToMerged}
+			/>
+			{tree.status === "loading" && <PracticeTreeSkeleton groups={3} practicesPerGroup={3} />}
+			{tree.status === "error" && (
+				<QueryErrorAlert
+					error={tree.error}
+					title="We could not load the practices"
+					onRetry={tree.onRetry}
 				/>
-			</div>
-
-			{buckets.length === 0 ? (
-				<Empty variant="outlined">
-					<EmptyHeader>
-						<EmptyTitle>
-							{overridesOnly ? "Nothing was set by hand" : "No practices yet"}
-						</EmptyTitle>
-						<EmptyDescription>
-							{overridesOnly
-								? "Every group and practice follows the workspace default above. Turn off the filter to see them."
-								: "Add practices in Practice setup, then choose how their feedback is sent."}
-						</EmptyDescription>
-					</EmptyHeader>
-				</Empty>
-			) : (
-				<Accordion
-					value={openValue}
-					onValueChange={(next) => setOpenGroups(next as string[])}
-					className="space-y-2"
-				>
-					{buckets.map((bucket) => (
-						<GroupSection
-							key={bucket.key}
-							workspaceSlug={workspaceSlug}
-							bucket={bucket}
-							pending={pending}
-							selected={selected}
-							onSelect={select}
-							onSetGroupFeedbackMode={(groupSlug, feedbackMode) => {
+			)}
+			{tree.status === "ready" && (
+				<>
+					<div className="sticky top-0 z-20 space-y-3 border-b bg-background/95 py-3 backdrop-blur supports-backdrop-filter:bg-background/80">
+						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<FeedbackModeSummary
+								counts={feedbackModeCounts(tree.rollup)}
+								overrides={countOverrides(tree.groups, tree.practices)}
+							/>
+							<ScopeFilter value={overridesOnly} onChange={onOverridesOnlyChange} />
+						</div>
+						<BulkActionBar
+							count={actionable.length}
+							bulk={pending.bulk}
+							onSet={(feedbackMode) => {
 								if (feedbackMode === "AUTOMATIC") {
-									setAutomaticPromotion({ scope: "group", slug: groupSlug, name: bucket.name });
+									setAutomaticPromotion({ scope: "bulk", slugs: actionable });
 									return;
 								}
-								onSetGroupFeedbackMode(groupSlug, feedbackMode);
+								onBulkSetFeedbackMode(actionable, feedbackMode);
 							}}
-							onClearGroupFeedbackMode={onClearGroupFeedbackMode}
-							onSetPracticeFeedbackMode={(practice, feedbackMode) => {
-								if (feedbackMode === "AUTOMATIC") {
-									setAutomaticPromotion({
-										scope: "practice",
-										slug: practice.slug,
-										name: practiceName(practice),
-									});
-									return;
-								}
-								onSetPracticeFeedbackMode(practice.slug, feedbackMode);
-							}}
-							onClearPracticeFeedbackMode={onClearPracticeFeedbackMode}
-							onResetPractices={(slugs) => onBulkSetFeedbackMode(slugs, null)}
+							onClear={() => setSelected(new Set())}
 						/>
-					))}
-				</Accordion>
+					</div>
+
+					{buckets.length === 0 ? (
+						<Empty variant="outlined">
+							<EmptyHeader>
+								<EmptyTitle>
+									{overridesOnly ? "Nothing was set by hand" : "No practices yet"}
+								</EmptyTitle>
+								<EmptyDescription>
+									{overridesOnly
+										? "Every group and practice follows the workspace default above. Turn off the filter to see them."
+										: "Add practices in Practice setup, then choose how their feedback is sent."}
+								</EmptyDescription>
+							</EmptyHeader>
+						</Empty>
+					) : (
+						<Accordion
+							value={openValue}
+							onValueChange={(next) => setOpenGroups(next as string[])}
+							className="space-y-2"
+						>
+							{buckets.map((bucket) => (
+								<GroupSection
+									key={bucket.key}
+									workspaceSlug={workspaceSlug}
+									bucket={bucket}
+									pending={pending}
+									selected={selected}
+									onSelect={select}
+									onSetGroupFeedbackMode={(groupSlug, feedbackMode) => {
+										if (feedbackMode === "AUTOMATIC") {
+											setAutomaticPromotion({ scope: "group", slug: groupSlug, name: bucket.name });
+											return;
+										}
+										onSetGroupFeedbackMode(groupSlug, feedbackMode);
+									}}
+									onClearGroupFeedbackMode={onClearGroupFeedbackMode}
+									onSetPracticeFeedbackMode={(practice, feedbackMode) => {
+										if (feedbackMode === "AUTOMATIC") {
+											setAutomaticPromotion({
+												scope: "practice",
+												slug: practice.slug,
+												name: practiceName(practice),
+											});
+											return;
+										}
+										onSetPracticeFeedbackMode(practice.slug, feedbackMode);
+									}}
+									onClearPracticeFeedbackMode={onClearPracticeFeedbackMode}
+									onResetPractices={(slugs) => onBulkSetFeedbackMode(slugs, null)}
+								/>
+							))}
+						</Accordion>
+					)}
+				</>
 			)}
 		</div>
 	);
