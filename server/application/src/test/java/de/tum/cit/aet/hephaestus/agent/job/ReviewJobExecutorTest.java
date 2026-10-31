@@ -744,38 +744,10 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldClaimNoMoreReviewsThanTheSandboxRuntimeHasRoomFor() {
-        when(sandbox.roomFor(any())).thenReturn(1);
-        assertThat(executor(mock(AsyncTaskExecutor.class)).computeCapacity()).isEqualTo(1);
-
-        when(sandbox.roomFor(any())).thenReturn(0);
-        assertThat(executor(mock(AsyncTaskExecutor.class)).computeCapacity())
-                .as("a review the sandbox quota cannot hold stays queued and spends no attempt")
-                .isZero();
-    }
-
-    @Test
-    void shouldCountAClaimThatStillPreparesItsSandboxAgainstTheRoom() {
-        var job = configuredJob();
-        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
-        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(policy.permitsReview(job)).thenReturn(true);
-        var binding = mock(WorkspaceAgentBinding.class);
-        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
-        when(binding.getMaxConcurrentJobs()).thenReturn(1);
-        when(policy.binding(job)).thenReturn(Optional.of(binding));
-        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
-        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
-        when(sandbox.roomFor(any())).thenReturn(1);
-        // The pool never runs the attempt, so its sandbox stays unlaunched, as while it prepares its evidence.
-        var executor = executor(mock(AsyncTaskExecutor.class));
-        assertThat(executor.computeCapacity()).isEqualTo(1);
-
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-
-        assertThat(executor.computeCapacity())
-                .as("the runtime does not count the claimed review yet, so the one room left is taken")
-                .isZero();
+    void shouldLeaveTheReviewQuotaToTheClaimSoCompositionsStayEligible() {
+        // The claim checks the quota for a review Pod; a composition creates none. Its claim test covers the room.
+        assertThat(executor(mock(AsyncTaskExecutor.class)).computeCapacity()).isPositive();
+        verify(sandbox, never()).roomFor(any());
     }
 
     @Test
