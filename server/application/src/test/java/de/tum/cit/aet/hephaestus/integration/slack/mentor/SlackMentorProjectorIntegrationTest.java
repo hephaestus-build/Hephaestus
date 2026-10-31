@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -742,13 +743,18 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
 
         postsAt("200.1");
-        when(slack.findWorkspaceMessages(anyLong(), eq(CHANNEL), anyString(), anyInt(), any()))
-                .thenReturn(List.of("500.9"));
+        when(slack.fetchHistoryPage(anyLong(), eq(CHANNEL), anyString(), anyString(), isNull(), anyInt()))
+                .thenReturn(new HistoryPage(
+                        List.of(
+                                botMessage("500.8", null),
+                                botMessage("500.9", SlackMentorPosts.progressMetadata(running.getId()))),
+                        null));
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
         changed(running);
         changed(running);
 
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.9");
+        verify(slack, never()).deleteMessage(workspace.getId(), CHANNEL, "500.8");
     }
 
     @Test
@@ -803,8 +809,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         // A new process: it holds no receipt of the notice that the first attempt's server posted.
         projector = timedProjector();
         changed(retried);
-        when(slack.findWorkspaceMessages(anyLong(), eq(CHANNEL), anyString(), anyInt(), any()))
-                .thenReturn(List.of("500.9"));
+        // Slack may end a page before the history ends: the notice is on the second page.
+        when(slack.fetchHistoryPage(anyLong(), eq(CHANNEL), anyString(), anyString(), isNull(), anyInt()))
+                .thenReturn(new HistoryPage(List.of(botMessage("500.8", null)), "page-2"));
+        when(slack.fetchHistoryPage(anyLong(), eq(CHANNEL), anyString(), anyString(), eq("page-2"), anyInt()))
+                .thenReturn(new HistoryPage(
+                        List.of(botMessage("500.9", SlackMentorPosts.progressMetadata(retried.getId()))), null));
         postsAt("200.1");
 
         end(retried, MentorTurn.Status.DONE, linkingAnswer(retried, "What do you make of the gap?"), "");
@@ -812,6 +822,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(turns.require(workspace.getId(), asked.getId()));
 
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.9");
+        verify(slack, never()).deleteMessage(workspace.getId(), CHANNEL, "500.8");
     }
 
     @Test

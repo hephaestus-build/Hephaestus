@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.slack.mentor;
 
+import com.slack.api.model.Message;
 import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.metrics.SlackMetrics;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
@@ -91,8 +93,13 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     /** How often a running top-level turn is read again to keep its progress notice on the current stage. */
     static final Duration PROGRESS_INTERVAL = Duration.ofSeconds(2);
 
-    /** History pages that the end of a reply reads to find a progress notice whose receipt this server lost. */
-    private static final int PROGRESS_HISTORY_PAGES = 10;
+    /**
+     * The DM history since the question that the end of a reply pages through to find a progress notice it lost: Slack
+     * may answer a page with fewer messages than asked for before the history ends.
+     */
+    private static final int PROGRESS_HISTORY_PAGES = 5;
+
+    private static final int PROGRESS_HISTORY_PAGE_SIZE = 100;
 
     /** The notice while the question waits for a free Hephaestus ({@link MentorTurn.WaitingFor#FREE_HEPH}). */
     static final String WAITING_FOR_HEPH_NOTICE =
@@ -477,14 +484,21 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             return;
         }
         long workspaceId = projection.workspaceId;
+        String latest = SlackTs.ofInstant(clock.instant().plus(START_SKEW));
         try {
-            for (String ts : slack.findWorkspaceMessages(
-                    workspaceId,
-                    turn.channelId(),
-                    oldest(turn),
-                    PROGRESS_HISTORY_PAGES,
-                    message -> SlackMentorPosts.isProgressOf(message, projection.turnId))) {
-                slack.deleteMessage(workspaceId, turn.channelId(), ts);
+            String cursor = null;
+            for (int page = 0; page < PROGRESS_HISTORY_PAGES; page++) {
+                HistoryPage history = slack.fetchHistoryPage(
+                        workspaceId, turn.channelId(), oldest(turn), latest, cursor, PROGRESS_HISTORY_PAGE_SIZE);
+                for (Message message : history.messages()) {
+                    if (SlackMentorPosts.isProgressOf(message, projection.turnId) && message.getTs() != null) {
+                        slack.deleteMessage(workspaceId, turn.channelId(), message.getTs());
+                    }
+                }
+                cursor = history.nextCursor();
+                if (cursor == null) {
+                    break;
+                }
             }
         } catch (SlackSendException e) {
             log.debug(
