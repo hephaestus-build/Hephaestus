@@ -4,11 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.config.MeterFilter;
+import io.micrometer.core.instrument.distribution.CountAtBucket;
+import io.micrometer.core.instrument.distribution.HistogramSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -86,11 +91,26 @@ class HttpRequestMetricsIntegrationTest extends BaseIntegrationTest {
                 .expectStatus()
                 .is4xxClientError()
                 .expectBody(Void.class);
-
         // The API read objective (hephaestus-alerts.yml, group hephaestus-slos) reads the bucket at 2 s.
         assertThat(meterRegistry.find("http.server.requests").timers())
                 .isNotEmpty()
-                .allSatisfy(timer -> assertThat(timer.takeSnapshot().histogramCounts())
-                        .anySatisfy(bucket -> assertThat(bucket.bucket(TimeUnit.SECONDS)).isEqualTo(2.0)));
+                .allSatisfy(timer -> assertThat(within(timer.takeSnapshot())).isNotNull());
+
+        Timer probe = meterRegistry.timer("http.server.requests", "uri", "/slo-probe/" + UUID.randomUUID());
+        probe.record(Duration.ofMillis(100));
+        probe.record(Duration.ofSeconds(3));
+
+        HistogramSnapshot snapshot = probe.takeSnapshot();
+        assertThat(snapshot.count()).isEqualTo(2);
+        CountAtBucket bucket = within(snapshot);
+        assertThat(bucket).isNotNull();
+        assertThat(bucket.count()).isEqualTo(1.0);
+    }
+
+    private static @Nullable CountAtBucket within(HistogramSnapshot snapshot) {
+        for (CountAtBucket bucket : snapshot.histogramCounts()) {
+            if (bucket.bucket(TimeUnit.SECONDS) == 2.0) return bucket;
+        }
+        return null;
     }
 }

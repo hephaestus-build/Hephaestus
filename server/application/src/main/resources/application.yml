@@ -188,7 +188,7 @@ management:
     metrics:
         distribution:
             # One histogram bound for the API read objective (hephaestus-alerts.yml, group hephaestus-slos):
-            # a bucket at 2 s and +Inf, not a full histogram, so each route adds two series.
+            # a bucket at 2 s and +Inf, not a full histogram: two series for each label set of the meter.
             slo:
                 "[http.server.requests]": 2s
         web:
