@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import type { SlackChannelCandidate } from "@/api/types.gen";
 import { pending } from "@/test/async";
@@ -168,7 +168,7 @@ export const CandidatesRefused: Story = {
 /** While an Add is pending, the dialog cannot be dismissed, so its draft and answer stay together. */
 export const SubmitPending: Story = {
 	args: { candidates: [], onSubmit: fn(async (): Promise<void> => pending()) },
-	play: async () => {
+	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/iu), "C0974LJBPBK");
 		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/iu }));
@@ -176,24 +176,34 @@ export const SubmitPending: Story = {
 		await expect(dialog.getByRole("button", { name: "Adding…" })).toBeDisabled();
 		await expect(dialog.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
 		await userEvent.keyboard("{Escape}");
-		await expect(await screen.findByRole("dialog")).toBeVisible();
+		// The story holds the dialog open, so what stays open is the dialog's own choice: it asks no one
+		// to close it. Its open animation is no part of that.
+		await expect(args.onOpenChange).not.toHaveBeenCalled();
 		await expect(dialog.getByLabelText(/paste a channel link or id/iu)).toHaveValue("C0974LJBPBK");
 	},
 };
 
+const rejectedSubmit = fn(async () => {
+	throw new Error("slack rejected the channel");
+});
+
 /** A rejected registration keeps the dialog open so the admin can fix and retry. */
 export const SubmitRejected: Story = {
-	args: {
-		candidates: [],
-		onSubmit: fn(async () => {
-			throw new Error("slack rejected the channel");
-		}),
-	},
-	play: async () => {
+	args: { candidates: [], onSubmit: rejectedSubmit },
+	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(dialog.getByLabelText(/paste a channel link or id/iu), "C0974LJBPBK");
 		await userEvent.click(dialog.getByRole("button", { name: /^add channel$/iu }));
 
-		await expect(await screen.findByRole("dialog")).toBeVisible();
+		await waitFor(async () => {
+			await expect(rejectedSubmit.mock.settledResults).toStrictEqual([
+				expect.objectContaining({ type: "rejected" }),
+			]);
+		});
+		// Once the rejection lands, Add is offered again, the draft is still there to fix, and the
+		// dialog asked no one to close it.
+		await expect(await dialog.findByRole("button", { name: /^add channel$/iu })).toBeEnabled();
+		await expect(args.onOpenChange).not.toHaveBeenCalled();
+		await expect(dialog.getByLabelText(/paste a channel link or id/iu)).toHaveValue("C0974LJBPBK");
 	},
 };
