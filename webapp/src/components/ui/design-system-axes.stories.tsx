@@ -319,3 +319,43 @@ export const OutlineMenuButtonRingsOnFocus: Story = {
 		await expect(paintedLayers(focused)).toHaveLength(1);
 	},
 };
+
+const BUTTON_VARIANTS = [
+	"default",
+	"outline",
+	"secondary",
+	"ghost",
+	"quiet",
+	"destructive",
+	"destructive-outline",
+	"warning-outline",
+	"link",
+	"highlight",
+] as const;
+
+/** Only colour and shadow animate: a transition on `all` would also delay `visibility` and `opacity`. */
+export const ButtonTransitionsOnlyColourAndShadow: Story = {
+	render: () => (
+		<div className="flex flex-wrap items-center gap-2">
+			{BUTTON_VARIANTS.map((variant) => (
+				<Button key={variant} variant={variant}>
+					{variant}
+				</Button>
+			))}
+		</div>
+	),
+	play: async ({ canvas }) => {
+		for (const variant of BUTTON_VARIANTS) {
+			const properties = style(canvas.getByRole("button", { name: variant }))
+				.transitionProperty.split(",")
+				.map((property) => property.trim());
+			await expect(properties).toStrictEqual([
+				"color",
+				"background-color",
+				"border-color",
+				"text-decoration-color",
+				"box-shadow",
+			]);
+		}
+	},
+};
