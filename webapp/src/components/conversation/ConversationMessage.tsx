@@ -83,7 +83,7 @@ function authorOf(message: ShownMessage, developer: MessageAuthor) {
 					{message.kind === "DIGEST" ? (
 						<CalendarDays aria-hidden className="size-5" />
 					) : (
-						<HephaestusMark size={24} pad={2} animated={false} />
+						<HephaestusMark size={24} pad={2} />
 					)}
 				</AvatarFallback>
 			</Avatar>

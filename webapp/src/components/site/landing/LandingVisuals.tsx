@@ -209,7 +209,7 @@ export function LandingFeedbackCard({
 				{children}
 			</div>
 			<span className="absolute right-2 bottom-1.5 text-highlight opacity-35" aria-hidden="true">
-				<HephaestusMark size={13} pad={3} animated={false} />
+				<HephaestusMark size={13} pad={3} />
 			</span>
 		</div>
 	);
@@ -225,7 +225,7 @@ export function LandingSpeechFigure({ className, lead, body }: LandingSpeechFigu
 	return (
 		<div className={cn(styles.speechFigure, className)}>
 			<span className={styles.speechAvatar} aria-hidden="true">
-				<HephaestusMark pad={2} animated />
+				<HephaestusMark pad={2} />
 			</span>
 			<div className={cn(styles.speechBubble, "text-left text-sm")}>
 				<p className="sr-only">Hephaestus says:</p>

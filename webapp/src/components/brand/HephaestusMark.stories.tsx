@@ -7,7 +7,7 @@ const meta = {
 	component: HephaestusMark,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { size: 32, animated: true },
+	args: { size: 32 },
 	argTypes: { size: { control: { type: "range", min: 12, max: 80, step: 2 } } },
 } satisfies Meta<typeof HephaestusMark>;
 
@@ -15,24 +15,22 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async ({ canvas }) => {
+	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.queryByRole("img")).not.toBeInTheDocument();
+		// The mark stays still in every place it appears, with or without reduced motion.
+		await expect(canvasElement.querySelector("svg")?.getAnimations({ subtree: true })).toEqual([]);
 	},
 };
-
-export const Streaming: Story = { args: { streaming: true } };
-
-export const Static: Story = { args: { animated: false } };
 
 export const LightAndDark: Story = {
 	render: () => (
 		<div className="grid overflow-hidden rounded-2xl border sm:grid-cols-2">
 			<div className="flex size-48 items-center justify-center bg-background text-muted-foreground">
-				<HephaestusMark size={112} pad={4} animated={false} />
+				<HephaestusMark size={112} pad={4} />
 			</div>
 			{/* The palette comes from a wrapper, not the theme global, so one page shows both. */}
 			<div className="dark flex size-48 items-center justify-center bg-background text-muted-foreground">
-				<HephaestusMark size={112} pad={4} animated={false} />
+				<HephaestusMark size={112} pad={4} />
 			</div>
 		</div>
 	),

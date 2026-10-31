@@ -113,7 +113,7 @@ export function ConversationTurnStatus({ turn, stop }: ConversationTurnStatusPro
 			)}
 			<Marker>
 				<MarkerIcon>
-					<HephaestusMark size={16} pad={1} animated={false} />
+					<HephaestusMark size={16} pad={1} />
 				</MarkerIcon>
 				<MarkerContent aria-hidden>
 					<span key={label} className="shimmer shimmer-once">

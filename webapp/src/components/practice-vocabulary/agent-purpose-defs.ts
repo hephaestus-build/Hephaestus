@@ -11,7 +11,7 @@ export type AgentPurpose = AgentBinding["purpose"];
 type ModelKindIcon = ComponentType<{ size: number; className?: string }>;
 
 function ConversationKindIcon({ size, className }: { size: number; className?: string }) {
-	return createElement(HephaestusMark, { size, className, animated: false });
+	return createElement(HephaestusMark, { size, className });
 }
 
 interface AgentPurposeDef {
