@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
@@ -24,6 +24,9 @@ const githubBaseRef = process.env.GITHUB_BASE_REF;
 const baseRef =
 	process.env.CONTRACT_BASE_REF ??
 	(isSet(githubBaseRef) ? `origin/${githubBaseRef}` : "origin/main");
+
+// Numeric collation orders "1.10.0" after "1.9.0", as semantic versions do.
+const compareVersions = new Intl.Collator("en", { numeric: true }).compare;
 
 const git = (...args: string[]): string =>
 	execFileSync("git", args, {
@@ -57,7 +60,15 @@ if (publishedVersions.length === 0) {
 	process.exit(0);
 }
 
+// The server loads only the newest version, so an older version may leave the tree whole; git keeps it.
+// The newest version, and any version that is still present, must keep every published byte.
+const newest = publishedVersions.toSorted(compareVersions).at(-1);
+const retired: string[] = [];
 for (const version of publishedVersions) {
+	if (version !== newest && !existsSync(path.join(repoRoot, root, version))) {
+		retired.push(version);
+		continue;
+	}
 	const publishedFiles = git("ls-tree", "-r", "--name-only", `${base}:${root}/${version}`)
 		.trim()
 		.split("\n")
@@ -74,6 +85,26 @@ for (const version of publishedVersions) {
 	}
 }
 
+// A version string names one set of bytes forever. A directory that the base does not publish is a new version only
+// when it is above every published one, so a retired version cannot return with other bytes.
+const presentVersions = existsSync(path.join(repoRoot, root))
+	? readdirSync(path.join(repoRoot, root), { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+	: [];
+for (const version of presentVersions) {
+	if (
+		!publishedVersions.includes(version) &&
+		newest !== undefined &&
+		compareVersions(version, newest) <= 0
+	) {
+		throw new Error(
+			`Source-use contract ${version} is not above the newest published version ${newest}; add a new version.`,
+		);
+	}
+}
+
+const kept = publishedVersions.filter((version) => !retired.includes(version));
 console.log(
-	`Source-use contract immutability: ${publishedVersions.length} published version(s) unchanged since ${base.slice(0, 8)} (${publishedVersions.join(", ")}).`,
+	`Source-use contract immutability: ${kept.length} published version(s) unchanged since ${base.slice(0, 8)} (${kept.join(", ")})${retired.length > 0 ? `; retired whole: ${retired.join(", ")}` : ""}.`,
 );

@@ -317,6 +317,9 @@ Currentness is derived:
 - source resources are immutable within a published contract version. Any semantic change creates a new
   version. The item record schemas under `contracts/items/` are not source resources.
   An optional field added to a record keeps the contract version.
+- the server ships and loads only the current version. An older version leaves the tree as a whole directory once no
+  practice pins it. Git keeps its bytes. `check-source-use-contract-immutability.ts` refuses a partial removal and the
+  removal of the newest version. A new version must be above every published one, so a retired version never returns.
 - an [explicit practice upgrade](#cut-a-contract-version) controls when a practice moves to another source-contract version.
 - changing a practice's review configuration or automated-review policy stales that practice's claims.
 - adding a source cannot silently alter existing requirements because each practice names its sources explicitly.

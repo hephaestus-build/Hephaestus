@@ -114,98 +114,6 @@ const expectRejection = (id: string, value: unknown, label: string): void => {
 	}
 };
 
-const validatePublishedPolicySchema = (version: string): void => {
-	const id = schemaId(version, "practice-automated-review-policy.schema.json");
-	const reviewed = {
-		sourceContractVersion: version,
-		automatedReview: {
-			mode: "LANGUAGE_MODEL",
-			evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
-		},
-		whenEvidenceIsInsufficient: "SKIP_AUTOMATED_REVIEW",
-		knownLimitations: [
-			{
-				code: "RUNTIME_BEHAVIOR_NOT_OBSERVED",
-				description: "Repository evidence does not establish runtime behaviour.",
-			},
-		],
-	};
-	const reason = {
-		code: "NEEDS_A_PERSON",
-		description: "Judging this needs context no source carries.",
-	};
-	validate(id, reviewed, `${version} reviewed-practice policy`);
-	validate(
-		id,
-		{
-			...reviewed,
-			automatedReview: {
-				...reviewed.automatedReview,
-				evidenceSufficiency: "DECLARED_EVIDENCE_INSUFFICIENT",
-			},
-			insufficiencyReason: reason,
-		},
-		`${version} declared-insufficient policy`,
-	);
-	validate(
-		id,
-		{
-			...reviewed,
-			automatedReview: { mode: "NONE", evidenceSufficiency: "NONE" },
-			knownLimitations: [],
-		},
-		`${version} human-only policy`,
-	);
-	const invalid: readonly (readonly [string, unknown])[] = [
-		[
-			"a review mode with no sufficiency verdict",
-			{ ...reviewed, automatedReview: { mode: "LANGUAGE_MODEL", evidenceSufficiency: "NONE" } },
-		],
-		[
-			"a practice it does not review claiming sufficient evidence",
-			{
-				...reviewed,
-				automatedReview: { mode: "NONE", evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET" },
-				knownLimitations: [],
-			},
-		],
-		[
-			"limitations on a practice it does not review",
-			{ ...reviewed, automatedReview: { mode: "NONE", evidenceSufficiency: "NONE" } },
-		],
-		// The reason a person is needed is its own field. Folded back into the limitation list it stops
-		// being answerable, which is the question an operator actually asks of this record.
-		[
-			"insufficient evidence with no reason a person is needed",
-			{
-				...reviewed,
-				automatedReview: {
-					...reviewed.automatedReview,
-					evidenceSufficiency: "DECLARED_EVIDENCE_INSUFFICIENT",
-				},
-			},
-		],
-		[
-			"a reason a person is needed on a practice it does review",
-			{ ...reviewed, insufficiencyReason: reason },
-		],
-		["a retired evidence profile", { ...reviewed, evidenceProfile: "pull-request-review" }],
-		// The sources a review reads live on the bindings, because they depend on what occasioned it.
-		[
-			"evidence needs on the policy",
-			{ ...reviewed, needs: [{ sourceKind: "scm.pull-request.core", stance: "REQUIRED" }] },
-		],
-		["a limitation with no code", { ...reviewed, knownLimitations: [{ description: "…" }] }],
-	];
-	for (const [label, value] of invalid) {
-		expectRejection(
-			id,
-			value,
-			`${version}/practice-automated-review-policy.schema.json accepted ${label}`,
-		);
-	}
-};
-
 const validateReviewedBySchema = (version: string): void => {
 	const id = schemaId(version, "practice-automated-review-policy.schema.json");
 	const reason = {
@@ -272,11 +180,7 @@ for (const version of contractVersions) {
 	if (digest !== createHash("sha256").update(bytes).digest("hex")) {
 		throw new Error(`${version} readiness schema has a stale catalog digest`);
 	}
-	if (version === "2.0.0" || version === "3.0.0") {
-		validateReviewedBySchema(version);
-	} else {
-		validatePublishedPolicySchema(version);
-	}
+	validateReviewedBySchema(version);
 }
 
 const PRACTICE_CATALOG = "practices/default-catalog.json";
