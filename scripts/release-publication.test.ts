@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
@@ -23,7 +24,6 @@ import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 import { lockFromEvidence } from "./release-image-lock.ts";
 import { SOURCE_CATALOGERS } from "./release-source-sbom.ts";
-import { verifyReleaseEvidence } from "./verify-release-evidence.ts";
 
 const release = "v0.93.0";
 const commit = "c".repeat(40);
@@ -589,7 +589,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 			),
 		);
 	};
-	return { archive, smoke, json, run, assets, manifest };
+	return { archive, smoke, json, run, assets, manifest, environment };
 }
 
 const authorityRefusal = /Only the current stable release/u;
@@ -1339,17 +1339,28 @@ void test(
 	async (t) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "release-bundle-coverage-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
-		const { archive, json } = await fixture(directory);
+		const { archive, json, environment } = await fixture(directory);
+		// A child process, so the owned-code scan reaches the fixture's git instead of this checkout's.
+		const verify = (pattern: RegExp) => {
+			const result = spawnSync(
+				process.execPath,
+				[
+					"--input-type=module",
+					"-e",
+					`import {verifyReleaseEvidence} from ${JSON.stringify(pathToFileURL(path.join(root, "scripts/verify-release-evidence.ts")).href)}; verifyReleaseEvidence(${JSON.stringify(archive)}, "write-validation");`,
+				],
+				{ env: environment, encoding: "utf8" },
+			);
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, pattern);
+		};
 		const scanFile = "webapp-linux-amd64.trivy.json";
 		const scan = asRecord(
 			parseJson(await readFile(path.join(archive, scanFile), "utf8")),
 			"Trivy report",
 		);
 		await json(scanFile, { ...scan, Results: [] });
-		assert.throws(
-			() => verifyReleaseEvidence(archive, "write-validation"),
-			/Trivy omitted bundled npm/u,
-		);
+		verify(/Trivy omitted bundled npm/u);
 		await json(scanFile, scan);
 
 		const file = "webapp-linux-amd64.syft.json";
@@ -1358,7 +1369,7 @@ void test(
 			"Syft inventory",
 		);
 		await json(file, { ...native, files: [] });
-		assert.throws(() => verifyReleaseEvidence(archive, "write-validation"), /no bundled npm/u);
+		verify(/no bundled npm/u);
 	},
 );
 

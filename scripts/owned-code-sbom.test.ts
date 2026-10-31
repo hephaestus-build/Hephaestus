@@ -253,7 +253,13 @@ Files: ["@earendil-works__pi-ai@1.0.0.patch"]
 		assert.doesNotThrow(() => assertOwnedCoverage(written, expected));
 		await writeFile(
 			path.join(evidence, "manifest.json"),
-			JSON.stringify({ schemaVersion: 1, release: "v0.95.2", commit: revision, sourceSbom: 1 }),
+			JSON.stringify({
+				schemaVersion: 1,
+				release: "v0.95.2",
+				commit: revision,
+				bundledNpmSbom: 1,
+				sourceSbom: 1,
+			}),
 		);
 		const verifier = pathToFileURL(
 			path.join(import.meta.dirname, "verify-release-evidence.ts"),
