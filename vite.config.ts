@@ -245,7 +245,7 @@ export default defineConfig({
 			"gate:agent-runtime-pins": cached("node scripts/check-agent-runtime-pins.ts"),
 			"gate:dependency-baseline": cached("node scripts/check-dependency-baseline.ts"),
 			"gate:env": run(
-				"node scripts/check-env-defaults.ts && node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts scripts/self-host-setup.test.ts",
+				"node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts",
 			),
 			"gate:configuration-reference": run(
 				"node scripts/check-configuration-reference.ts && node --test scripts/check-configuration-reference.test.ts",
@@ -288,7 +288,6 @@ export default defineConfig({
 			// Gradle reads the CI shard from the environment; locally the whole tier runs.
 			"test:server:integration": run(`${gradlew} :application:integrationTest`),
 			"test:server:mutation": run("node scripts/run-security-mutations.ts"),
-			"test:workspace-subdomains": run("node scripts/workspace-subdomains-smoke.ts"),
 			"test:postgres-restore": run("node scripts/postgres-backup-restore-test.ts"),
 			"test:postgres-pitr": run("node scripts/postgres-pitr-test.ts"),
 

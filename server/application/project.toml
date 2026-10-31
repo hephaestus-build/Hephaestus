@@ -9,7 +9,7 @@ builder = "paketobuildpacks/builder-noble-java-tiny@sha256:ff218b8c7e2e6e2e85e6e
 
 # Naming a group replaces the builder's order, so the java composite is listed before the
 # health-checker buildpack the builder does not bundle; it contributes the shell-free `thc` probe the
-# distroless run image needs for a real HEALTHCHECK (docker/compose.app.yaml).
+# distroless run image needs for a real HEALTHCHECK in the image and the release upgrade drills.
 [[io.buildpacks.group]]
 id = "paketo-buildpacks/java"
 

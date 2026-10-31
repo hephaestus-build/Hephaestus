@@ -110,15 +110,12 @@ const PATHS = [
 	"server/application/src/test/java/de/tum/cit/aet/hephaestus/ExampleTest.java",
 	"docker/agents/pi/Dockerfile",
 	"docker/postgres/Dockerfile",
-	"docker/compose.app.yaml",
 	"docker/docker-bake.hcl",
 	"webapp/src/main.tsx",
 	"webapp/src/main.test.tsx",
 	".changeset/example.md",
 	"docs/user/index.mdx",
 	".github/workflows/cicd.yml",
-	// Selects the host boot smoke and no image filter.
-	".github/workflows/ci-build.yml",
 ];
 
 const VERSION_FILES = ["package.json", "CHANGELOG.md", ".changeset/example.md"];

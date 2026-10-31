@@ -17,7 +17,7 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.templateresolver.ITemplateResolver;
 
 /**
- * Boot treats an empty mail host as configured. Gate its auto-configuration so Compose's empty
+ * Boot treats an empty mail host as configured. Gate its auto-configuration so empty environment
  * placeholders do not enable SMTP, while Boot still owns sender construction and SSL bundles.
  */
 @Configuration

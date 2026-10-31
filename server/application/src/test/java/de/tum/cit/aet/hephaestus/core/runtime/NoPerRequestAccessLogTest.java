@@ -24,8 +24,8 @@ import org.springframework.core.io.FileSystemResource;
  * once, only one of which is Java — so it is asserted here over the shipped configuration of each
  * rather than trusted per file.
  *
- * <p>The URL is the personal datum, not the address: neither nginx image loads {@code real_ip}, so the
- * peer they would log is the proxy's container address. But an SPA deep link names a person
+ * <p>The URL is the personal datum, not the address: the webapp image does not load {@code real_ip}, so the
+ * peer it would log is the proxy's address. But an SPA deep link names a person
  * ({@code /w/<slug>/user/<username>}), so one combined-format line per request is a per-request
  * personal-data record regardless.
  *
@@ -38,12 +38,10 @@ class NoPerRequestAccessLogTest extends BaseUnitTest {
     /** The webapp image ships every nginx config it runs from this directory. */
     private static final Path WEBAPP_NGINX_DIRECTORY = Path.of("..", "..", "webapp", "docker");
 
-    /** The webapp's server block, and the maintenance page's server mode of the same image. */
+    /** The webapp's server block. */
     private static final Path WEBAPP_SERVER_CONF = WEBAPP_NGINX_DIRECTORY.resolve("nginx.conf");
 
-    private static final Path MAINTENANCE_CONF = WEBAPP_NGINX_DIRECTORY.resolve("nginx-maintenance.conf");
-
-    /** Files the two server modes include. None may turn the access log back on for every server. */
+    /** Files the server includes. None may turn the access log back on for every server. */
     private static final List<Path> SHARED_CONFS = List.of(
             WEBAPP_NGINX_DIRECTORY.resolve("nginx-main.conf"),
             WEBAPP_NGINX_DIRECTORY.resolve("nginx-globals.conf"),
@@ -67,18 +65,10 @@ class NoPerRequestAccessLogTest extends BaseUnitTest {
                 .contains("access_log off");
     }
 
-    @Test
-    void maintenancePageNginxDisablesTheAccessLogForTheWholeServerBlock() throws Exception {
-        assertThat(directivesAtServerLevel(read(MAINTENANCE_CONF)))
-                .as("the maintenance page answers on a catch-all Host rule whenever the webapp router is "
-                        + "down, so the URL it would log is the deep link the contributor was reaching for")
-                .contains("access_log off");
-    }
-
     /**
      * A location, a shared include or a new config that sets {@code access_log} to a destination would
      * opt requests back in underneath the server-level {@code off}, which is the failure the
-     * server-level directive exists to prevent — and it would not show up in the two tests above.
+     * server-level directive exists to prevent — and it would not show up in the server-level test above.
      * Every {@code .conf} the image ships is read, so a new file cannot slip past this list.
      */
     @Test
@@ -91,7 +81,7 @@ class NoPerRequestAccessLogTest extends BaseUnitTest {
         }
         assertThat(shipped)
                 .as("the server modes and the files they include are all shipped from webapp/docker")
-                .contains(WEBAPP_SERVER_CONF, MAINTENANCE_CONF)
+                .contains(WEBAPP_SERVER_CONF)
                 .containsAll(SHARED_CONFS);
 
         List<String> reEnabling = new ArrayList<>();

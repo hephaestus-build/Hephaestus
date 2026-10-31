@@ -166,7 +166,7 @@ jobs:
           if grep -rEnI "$NEEDLE" \
                 --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git \
                 . \
-              | grep -vE '^\./(MIGRATION\.md|docs/admin/release-image-lock\.md):' ; then
+              | grep -vE '^\./(MIGRATION\.md):' ; then
             echo "::error::Legacy agent image is removed in issue #1076; relocate any new references to MIGRATION.md."
             exit 1
           fi
@@ -180,7 +180,7 @@ jobs:
           if grep -rEnI "$NEEDLE" \
                 --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git \
                 . \
-              | grep -vE '^\./(MIGRATION\.md|docs/admin/release-image-lock\.md|docs/decisions/0031-.*\.md|server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/sandbox/AgentImageReferenceGuardTest\.java):' ; then
+              | grep -vE '^\./(MIGRATION\.md|docs/decisions/0031-.*\.md|server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/sandbox/AgentImageReferenceGuardTest\.java):' ; then
             echo "::error::A release-channel agent image tag resolves to another release's image (ADR 0031). Leave the reference unset so it follows this deployment's image tag, or pin a digest."
             exit 1
           fi
@@ -194,7 +194,7 @@ jobs:
           if grep -rEnI 'docker/agent-image-pin(\.local)?\.env' \
                 --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git \
                 . \
-              | grep -vE '^\./(MIGRATION\.md|docs/admin/release-image-lock\.md):' \
+              | grep -vE '^\./(MIGRATION\.md):' \
               | grep -vE '^\./scripts/check-agent-instructions\.ts:[0-9]+:[[:space:]]*value: "docker/agent-image-pin(\.local)?\.env",$' ; then
             echo "::error::Legacy pin-file names are allowed only in migration history, the digest guide, and exact instruction-checker exceptions."
             exit 1

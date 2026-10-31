@@ -74,7 +74,7 @@ class WebhookProducerBeans {
             NatsConnectionProperties natsProperties,
             MeterRegistry meterRegistry) {
         // The webhook and server containers must be given the same name, or the monitor counts none of
-        // the server's durables: docker/compose.core.yaml forwards it to both for that reason.
+        // the server's durables: the chart gives both roles the same configuration.
         String durableBase = natsProperties.durableConsumerName();
         return new WebhookStreamMonitor(
                 jsm,

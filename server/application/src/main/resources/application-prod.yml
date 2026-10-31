@@ -22,8 +22,8 @@ spring:
     # See ADR 0017 and docs/admin/instance-admin.mdx § Bootstrap and recovery.
 
     # Belt-and-suspenders: the spring-boot-docker-compose jar ships in the image (it powers the
-    # local profile), and Boot's default is enabled=true. Prod brings infra up via docker/compose.*
-    # on the host, never from inside the app container, so explicitly disable Boot's auto-start
+    # local profile), and Boot's default is enabled=true. The chart starts infrastructure,
+    # never the app container, so explicitly disable Boot's auto-start
     # instead of relying on "no compose.yaml happens to be in the workdir".
     docker:
         compose:
@@ -49,8 +49,8 @@ server:
         redirect-context-root: false
         # No Tomcat file access log. Writing one to a host volume added nothing but a boot dependency
         # on a writable /var/log/hephaestus (a fresh named volume is root:root, which aborted startup).
-        # Deliberately, NO layer writes a per-request IP/URL record: the Traefik ingress
-        # (docker/compose.proxy.yaml) runs without --accesslog too, which is Traefik's default. Client
+        # Deliberately, NO layer writes a per-request IP/URL record: the one-host Gateway
+        # runs without access logs too. Client
         # IPs are recorded only against auth_event rows, under that table's partitioned retention
         # window. This is a documented GDPR posture (docs/admin/dsms/): enabling either access log is a
         # material change that needs the record of processing updated with it.
@@ -132,7 +132,7 @@ hephaestus:
         # ${...} placeholder. The server always sets the env var, so it gets the real issuer.
         issuer: ${HEPHAESTUS_AUTH_ISSUER:http://localhost:${SERVER_PORT:8080}}
         state-cookie-key: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY}
-        # Traefik strips /api before the request reaches the app (see docker/compose.app.yaml), and
+        # The Gateway strips /api before the request reaches the app (see deploy/chart/hephaestus), and
         # native forward-headers can't restore the prefix — re-add it to the browser-facing OAuth URLs.
         api-base-path: /api
         passkeys:
@@ -150,7 +150,7 @@ hephaestus:
     # AGENT SANDBOX & PRACTICE REVIEW (Production)
     # ═══════════════════════════════════════════════════════════════════════════
     # Sandbox, the agent job queue (PostgreSQL-backed), git checkout, and LLM proxy are
-    # configured via env vars in compose.app.yaml. Defaults come from base application.yml.
+    # configured by the Helm chart. Defaults come from base application.yml.
 
     agent:
         image:
