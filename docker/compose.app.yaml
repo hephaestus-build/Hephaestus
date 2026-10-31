@@ -383,7 +383,6 @@ services:
       # Only the server role asks GitHub for newer releases; set false on an air-gapped host.
       HEPHAESTUS_RELEASE_CHECK_ENABLED: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:-true}
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
-      PAGE_EXPERIENCE_METRICS: ${PAGE_EXPERIENCE_METRICS:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
       # thc probes liveness on the application listener, independently of management.

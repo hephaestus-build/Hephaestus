@@ -21,7 +21,7 @@ vi.mock("web-vitals/attribution", () => ({
 	onTTFB: (report: Report) => reports.set("TTFB", report),
 }));
 
-/** A router whose first navigation resolves to the given matches when the test says so. */
+/** A router whose navigations resolve to the given matches when the test says so. */
 function routerAt(...routeIds: string[]) {
 	let resolved: () => void = noop;
 	const router = {
@@ -35,7 +35,27 @@ function routerAt(...routeIds: string[]) {
 		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- A stand-in for the two router members the reporter reads.
 		router: router as unknown as AnyRouter,
 		resolve: () => resolved(),
+		/** Moves to `path`, as a route change does, and resolves its matches. */
+		navigate: (path: string, ...next: string[]) => {
+			history.pushState(null, "", path);
+			router.state.matches = next.map((routeId) => ({ routeId }));
+			resolved();
+		},
 	};
+}
+
+/** A measurement as `web-vitals` reports it: one metric instance, named by its id. */
+function measured(
+	name: string,
+	value: number,
+	{
+		id = `${name}-load`,
+		attribution = {},
+		navigationType = "navigate",
+		navigationURL = location.href,
+	}: { id?: string; attribution?: object; navigationType?: string; navigationURL?: string } = {},
+) {
+	return { name, value, id, attribution, navigationType, navigationURL };
 }
 
 const USER_VIEW = {
@@ -72,11 +92,12 @@ function receive({ switchedOn = true } = {}) {
 
 /** Starts the reporter, as `main.tsx` does, and resolves the landing page. */
 async function land(...routeIds: string[]) {
-	const { router, resolve } = routerAt(...routeIds);
+	const stub = routerAt(...routeIds);
 	const queryClient = new QueryClient();
-	reportVisitVitals(router, queryClient);
-	resolve();
+	reportVisitVitals(stub.router, queryClient);
+	stub.resolve();
 	await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0));
+	return stub;
 }
 
 async function hide() {
@@ -86,6 +107,7 @@ async function hide() {
 }
 
 afterEach(() => {
+	history.replaceState(null, "", "/");
 	reports.clear();
 	sessionStorage.clear();
 	Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
@@ -134,43 +156,111 @@ describe("landmarkOf", () => {
 });
 
 describe("reportVisitVitals", () => {
-	it("sends a signed-in visit's measurements once, when the reader first leaves", async () => {
+	it("sends each measurement once, with the first value that web-vitals reports for it", async () => {
 		const sent = receive();
 		await land(...PROFILE);
-		reports.get("TTFB")?.({ name: "TTFB", value: 180, attribution: {} });
-		reports.get("LCP")?.({ name: "LCP", value: 1250, attribution: { target: "PAGE" } });
-		reports.get("CLS")?.({ name: "CLS", value: 0.01, attribution: { largestShiftTarget: "PAGE" } });
-		reports.get("CLS")?.({
-			name: "CLS",
-			value: 0.04,
-			attribution: { largestShiftTarget: "SIDEBAR" },
-		});
+		reports.get("TTFB")?.(measured("TTFB", 180));
+		reports.get("LCP")?.(measured("LCP", 1250, { attribution: { target: "PAGE" } }));
+		reports.get("CLS")?.(measured("CLS", 0.04, { attribution: { largestShiftTarget: "SIDEBAR" } }));
 
 		await hide();
-		reports.get("CLS")?.({ name: "CLS", value: 0.09, attribution: { largestShiftTarget: "PAGE" } });
+		reports.get("CLS")?.(measured("CLS", 0.09, { attribution: { largestShiftTarget: "PAGE" } }));
 		await hide();
 
 		await vi.waitFor(() => expect(sent).toHaveLength(1));
 		expect(sent[0]?.vitals).toStrictEqual([
-			{ vital: "TTFB", page: "PRACTICE_PROFILE", region: "OTHER", value: 180 },
-			{ vital: "LCP", page: "PRACTICE_PROFILE", region: "PAGE", value: 1250 },
-			{ vital: "CLS", page: "PRACTICE_PROFILE", region: "SIDEBAR", value: 0.04 },
+			{ vital: "TTFB", navigation: "LOAD", page: "PRACTICE_PROFILE", region: "OTHER", value: 180 },
+			{ vital: "LCP", navigation: "LOAD", page: "PRACTICE_PROFILE", region: "PAGE", value: 1250 },
+			{
+				vital: "CLS",
+				navigation: "LOAD",
+				page: "PRACTICE_PROFILE",
+				region: "SIDEBAR",
+				value: 0.04,
+			},
+		]);
+	});
+
+	it("names a route view by the page it showed, without a time to first byte, and sends it at the next hide", async () => {
+		const sent = receive();
+		const { navigate } = await land(...PROFILE);
+		reports.get("LCP")?.(measured("LCP", 1250, { attribution: { target: "PAGE" } }));
+		await hide();
+		await vi.waitFor(() => expect(sent).toHaveLength(1));
+
+		Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+		navigate(
+			"/w/acme/activity#latest",
+			"__root__",
+			"/_authenticated",
+			"/_authenticated/w/$workspaceSlug/activity",
+		);
+		const view = {
+			navigationType: "soft-navigation",
+			navigationURL: `${location.origin}/w/acme/activity`,
+		};
+		reports.get("TTFB")?.(measured("TTFB", 0, { ...view, id: "TTFB-view" }));
+		reports.get("INP")?.(
+			measured("INP", 320, {
+				...view,
+				id: "INP-view",
+				attribution: { interactionTarget: "HEADER" },
+			}),
+		);
+		reports.get("INP")?.(
+			measured("INP", 90, {
+				navigationType: "soft-navigation",
+				navigationURL: `${location.origin}/w/acme/gone`,
+				id: "INP-gone",
+			}),
+		);
+		await hide();
+
+		await vi.waitFor(() => expect(sent).toHaveLength(2));
+		expect(sent[1]?.vitals).toStrictEqual([
+			{ vital: "INP", navigation: "ROUTE", page: "ACTIVITY", region: "HEADER", value: 320 },
+			{ vital: "INP", navigation: "ROUTE", page: "OTHER", region: "OTHER", value: 90 },
 		]);
 	});
 
 	it("sends nothing more once the page comes back from the back-forward cache", async () => {
 		const sent = receive();
 		await land(...PROFILE);
-		reports.get("LCP")?.({ name: "LCP", value: 1250, attribution: { target: "PAGE" } });
+		reports.get("LCP")?.(measured("LCP", 1250, { attribution: { target: "PAGE" } }));
 		await hide();
 		await vi.waitFor(() => expect(sent).toHaveLength(1));
 
+		// `web-vitals` reports the restored page from a capture-phase listener, during the dispatch.
+		const restoredTiming = () =>
+			reports.get("TTFB")?.(
+				measured("TTFB", 0, { id: "TTFB-restored", navigationType: "back-forward-cache" }),
+			);
+		addEventListener("pageshow", restoredTiming, { capture: true });
 		dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
-		reports.get("TTFB")?.({ name: "TTFB", value: 180, attribution: {} });
-		reports.get("INP")?.({ name: "INP", value: 120, attribution: { interactionTarget: "HEADER" } });
+		removeEventListener("pageshow", restoredTiming, { capture: true });
+		reports.get("INP")?.(
+			measured("INP", 120, { id: "INP-restored", attribution: { interactionTarget: "HEADER" } }),
+		);
 		await hide();
 
 		expect(sent).toHaveLength(1);
+	});
+
+	it("sends a full batch at once, so a long visit loses no measurement", async () => {
+		const sent = receive();
+		await land(...PROFILE);
+		for (const view of Array.from({ length: 45 }, (_, index) => index)) {
+			reports.get("INP")?.(
+				measured("INP", 100 + view, { id: `INP-${view}`, navigationType: "soft-navigation" }),
+			);
+		}
+		await hide();
+
+		await vi.waitFor(() => expect(sent).toHaveLength(2));
+		expect(sent.map(({ vitals }) => vitals.length)).toStrictEqual([40, 5]);
+		expect(sent.flatMap(({ vitals }) => vitals.map(({ value }) => value))).toStrictEqual(
+			Array.from({ length: 45 }, (_, view) => 100 + view),
+		);
 	});
 
 	it("measures nothing and sends nothing until the operator turns page experience metrics on", async () => {
@@ -202,12 +292,12 @@ describe("reportVisitVitals", () => {
 		await hide();
 		resolve();
 		await vi.waitFor(() => expect(reports.size).toBe(4));
-		reports.get("TTFB")?.({ name: "TTFB", value: 180, attribution: {} });
+		reports.get("TTFB")?.(measured("TTFB", 180));
 		await hide();
 
 		await vi.waitFor(() => expect(sent).toHaveLength(1));
 		expect(sent[0]?.vitals).toStrictEqual([
-			{ vital: "TTFB", page: "PRACTICE_PROFILE", region: "OTHER", value: 180 },
+			{ vital: "TTFB", navigation: "LOAD", page: "PRACTICE_PROFILE", region: "OTHER", value: 180 },
 		]);
 	});
 

@@ -14,8 +14,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.stereotype.Component;
 
 /**
- * Records page measurements as `web_vital_duration_seconds{vital,page,region}` and
- * `web_vital_layout_shift_thousandths{page,region}`. Every tag is an enum, so the series stay few. The buckets
+ * Records page measurements as `web_vital_duration_seconds{vital,navigation,page,region}` and
+ * `web_vital_layout_shift_thousandths{navigation,page,region}`. Every tag is an enum, so the series stay few. The buckets
  * include the Core Web Vitals thresholds, so an operator can read the share of good and poor visits.
  */
 @ConditionalOnServerRole
@@ -30,7 +30,7 @@ public class WebVitalsMetrics {
     static final String ENABLED = "hephaestus.features.flags.page-experience-metrics";
 
     /**
-     * The only bucket bounds. A percentile histogram would add about 70 buckets to each of the up to 54
+     * The only bucket bounds. A percentile histogram would add about 70 buckets to each of the up to 102
      * tag combinations, for a measurement that needs the thresholds and a few steps between them.
      */
     private static final Duration[] DURATION_BUCKETS = {
@@ -59,6 +59,7 @@ public class WebVitalsMetrics {
     }
 
     public void record(WebVitalDTO vital) {
+        String navigation = tag(vital.navigation());
         String page = tag(vital.page());
         // TTFB measures the document, not an element, so it has no region.
         String region = tag(vital.vital() == Vital.TTFB ? Region.OTHER : vital.region());
@@ -66,7 +67,7 @@ public class WebVitalsMetrics {
             DistributionSummary.builder(CoreMetrics.WEB_VITAL_LAYOUT_SHIFT)
                     .description("Cumulative layout shift of a page visit")
                     .baseUnit("thousandths")
-                    .tags("page", page, "region", region)
+                    .tags("navigation", navigation, "page", page, "region", region)
                     .serviceLevelObjectives(SHIFT_THRESHOLDS)
                     .register(registry)
                     .record(vital.value() * 1000);
@@ -74,7 +75,7 @@ public class WebVitalsMetrics {
         }
         Timer.builder(CoreMetrics.WEB_VITAL_DURATION)
                 .description("Largest contentful paint, interaction to next paint and time to first byte")
-                .tags("vital", tag(vital.vital()), "page", page, "region", region)
+                .tags("vital", tag(vital.vital()), "navigation", navigation, "page", page, "region", region)
                 .serviceLevelObjectives(DURATION_BUCKETS)
                 .register(registry)
                 .record(Duration.ofNanos(Math.round(vital.value() * 1_000_000)));

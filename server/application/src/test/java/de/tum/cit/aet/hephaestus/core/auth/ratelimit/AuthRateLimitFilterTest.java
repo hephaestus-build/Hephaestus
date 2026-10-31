@@ -104,7 +104,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 defaults.mentorTurns(),
                 defaults.reviewRequest(),
                 defaults.syncTrigger(),
-                new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)));
+                new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
+                defaults.browserReports());
         var limited = filter(configured);
         limited.doFilter(
                 new MockHttpServletRequest("GET", "/public/workspaces/alpha/activity"),
@@ -158,7 +159,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(10)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(10, Duration.ofHours(1)),
-                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)));
+                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(2, Duration.ofMinutes(1)));
     }
 
     @AfterEach
@@ -202,7 +204,8 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
-                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)));
+                new AuthRateLimitProperties.Limit(60, Duration.ofMinutes(1)),
+                new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1)));
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/refresh");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
@@ -212,6 +215,34 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
 
         verify(chain, times(2)).doFilter(request, response);
         assertThat(store).isEmpty();
+    }
+
+    @Test
+    void shouldCapPageReportsPerReaderAndLetThemPassWhenTheBackendFails() throws Exception {
+        FilterChain chain = mock(FilterChain.class);
+        authenticateAs("reader");
+        for (int i = 0; i < 2; i++) {
+            filter(props())
+                    .doFilter(new MockHttpServletRequest("POST", "/web-vitals"), new MockHttpServletResponse(), chain);
+        }
+        MockHttpServletResponse blocked = new MockHttpServletResponse();
+        filter(props()).doFilter(new MockHttpServletRequest("POST", "/web-vitals"), blocked, chain);
+
+        assertThat(blocked.getStatus()).isEqualTo(429);
+        assertThat(store).containsOnlyKeys("browser-reports:acct:reader");
+        assertThat(blockedCount("browser-reports")).isEqualTo(1);
+
+        MockHttpServletResponse unavailable = new MockHttpServletResponse();
+        new AuthRateLimitFilter(
+                        props(),
+                        (key, config) -> {
+                            throw new IllegalStateException("store unreachable");
+                        },
+                        objectMapper,
+                        metrics)
+                .doFilter(new MockHttpServletRequest("POST", "/web-vitals"), unavailable, chain);
+        assertThat(unavailable.getStatus()).isEqualTo(200);
+        verify(chain, times(3)).doFilter(any(), any());
     }
 
     @Test

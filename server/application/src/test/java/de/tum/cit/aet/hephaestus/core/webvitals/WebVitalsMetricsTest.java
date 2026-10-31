@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.webvitals;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Navigation;
 import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Page;
 import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Region;
 import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Vital;
@@ -17,11 +18,11 @@ class WebVitalsMetricsTest extends BaseUnitTest {
     private final WebVitalsMetrics metrics = new WebVitalsMetrics(registry);
 
     @Test
-    void shouldRecordATimingInSecondsUnderItsVitalPageAndRegion() {
-        metrics.record(new WebVitalDTO(Vital.LCP, Page.PRACTICE_PROFILE, Region.PAGE, 1250.0));
+    void shouldRecordATimingInSecondsUnderItsVitalNavigationPageAndRegion() {
+        metrics.record(new WebVitalDTO(Vital.LCP, Navigation.ROUTE, Page.PRACTICE_PROFILE, Region.PAGE, 1250.0));
 
         var timer = registry.get("web.vital.duration")
-                .tags("vital", "lcp", "page", "practice_profile", "region", "page")
+                .tags("vital", "lcp", "navigation", "route", "page", "practice_profile", "region", "page")
                 .timer();
         assertThat(timer.count()).isEqualTo(1);
         assertThat(timer.totalTime(TimeUnit.MILLISECONDS)).isEqualTo(1250);
@@ -29,7 +30,7 @@ class WebVitalsMetricsTest extends BaseUnitTest {
 
     @Test
     void shouldKeepATimingToItsNineBucketsSoTheSeriesStayFew() {
-        metrics.record(new WebVitalDTO(Vital.INP, Page.ASK_HEPHAESTUS, Region.HEADER, 150.0));
+        metrics.record(new WebVitalDTO(Vital.INP, Navigation.LOAD, Page.ASK_HEPHAESTUS, Region.HEADER, 150.0));
 
         var buckets = registry.get("web.vital.duration").timer().takeSnapshot().histogramCounts();
         assertThat(buckets)
@@ -42,7 +43,7 @@ class WebVitalsMetricsTest extends BaseUnitTest {
 
     @Test
     void shouldRecordALayoutShiftInThousandthsWithoutAVitalTag() {
-        metrics.record(new WebVitalDTO(Vital.CLS, Page.FEEDBACK_APPROVAL, Region.SIDEBAR, 0.07));
+        metrics.record(new WebVitalDTO(Vital.CLS, Navigation.LOAD, Page.FEEDBACK_APPROVAL, Region.SIDEBAR, 0.07));
 
         var shift = registry.get("web.vital.layout_shift")
                 .tags("page", "feedback_approval", "region", "sidebar")
@@ -55,7 +56,7 @@ class WebVitalsMetricsTest extends BaseUnitTest {
     @Test
     void shouldCountALayoutShiftAsGoodOrPoorAtTheCoreWebVitalsThresholds() {
         for (double score : new double[] {0.01, 0.1, 0.1001, 0.25, 0.2501, 0.3}) {
-            metrics.record(new WebVitalDTO(Vital.CLS, Page.OTHER, Region.PAGE, score));
+            metrics.record(new WebVitalDTO(Vital.CLS, Navigation.LOAD, Page.OTHER, Region.PAGE, score));
         }
 
         var buckets =
@@ -66,7 +67,7 @@ class WebVitalsMetricsTest extends BaseUnitTest {
 
     @Test
     void shouldRecordTimeToFirstByteWithoutARegion() {
-        metrics.record(new WebVitalDTO(Vital.TTFB, Page.ACTIVITY, Region.SIDEBAR, 300.0));
+        metrics.record(new WebVitalDTO(Vital.TTFB, Navigation.LOAD, Page.ACTIVITY, Region.SIDEBAR, 300.0));
 
         assertThat(registry.get("web.vital.duration")
                         .tags("vital", "ttfb", "page", "activity", "region", "other")

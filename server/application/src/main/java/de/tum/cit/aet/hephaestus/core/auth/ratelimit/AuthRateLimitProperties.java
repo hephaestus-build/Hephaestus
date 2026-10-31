@@ -19,6 +19,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *   <li>User-view selection and normal-app reads — 120/min, keyed by admin account</li>
  *   <li>{@code DELETE /user} — 3/hour, keyed by account</li>
  *   <li>{@code POST /user/exports} — 10/hour, keyed by account</li>
+ *   <li>{@code POST /web-vitals} — 30/minute, keyed by account</li>
  * </ul>
  *
  * <p>Set {@code enabled=false} to bypass the filter entirely (e.g. load tests). The limits are
@@ -45,7 +46,8 @@ public record AuthRateLimitProperties(
         @DefaultValue Limit mentorTurns,
         @DefaultValue Limit reviewRequest,
         @DefaultValue Limit syncTrigger,
-        @DefaultValue Limit publicActivity) {
+        @DefaultValue Limit publicActivity,
+        @DefaultValue Limit browserReports) {
     public AuthRateLimitProperties {
         // Bind nulls (a partially-specified YAML block) to the spec defaults so a misconfigured
         // sub-key never silently disables a limit.
@@ -61,6 +63,8 @@ public record AuthRateLimitProperties(
         reviewRequest = reviewRequest != null ? reviewRequest : Limit.of(10, Duration.ofHours(1));
         syncTrigger = syncTrigger != null ? syncTrigger : Limit.of(10, Duration.ofHours(1));
         publicActivity = publicActivity != null ? publicActivity : Limit.of(60, Duration.ofMinutes(1));
+        // A page reports when it hides, so a reader who switches tabs often still stays far below this.
+        browserReports = browserReports != null ? browserReports : Limit.of(30, Duration.ofMinutes(1));
     }
 
     /**

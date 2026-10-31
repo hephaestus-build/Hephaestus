@@ -391,8 +391,8 @@ also leave every total on the page.
 ### Page experience
 
 **`PAGE_EXPERIENCE_METRICS`** is off by default.
-When it is on, the browser of each signed-in reader measures how fast each visit loaded and responded.
-It sends the measurements to your server at most once for each page load.
+When it is on, the browser of each signed-in reader measures how fast each page loaded and responded.
+It sends new measurements to your server when the reader leaves the page, and it sends each measurement once.
 The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./observability.mdx#page-experience-metrics)).
 It keeps no record of the report.
 The report is a request, so it carries the same request metadata as every other request.
@@ -418,8 +418,8 @@ Before you turn it on:
 ```md
 ### Page experience
 
-Your browser measures how fast each page loads and responds, and how much the layout moves. At most
-once for each page load, it sends these timings to [example.org]. They are counted without your name,
+Your browser measures how fast each page loads and responds, and how much the layout moves. When you
+leave the page, it sends the new timings to [example.org]. They are counted without your name,
 workspace or page address, and no copy of the report is kept. Like every request, the report reaches
 the server with your IP address and browser information, which the server logs keep for
 [retention]. Purpose: [purpose]. Legal basis: [legal basis].

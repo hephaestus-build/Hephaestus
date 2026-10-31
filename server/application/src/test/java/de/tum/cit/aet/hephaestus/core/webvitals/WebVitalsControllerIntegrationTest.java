@@ -25,8 +25,9 @@ class WebVitalsControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     @Autowired
     private MeterRegistry registry;
 
-    private static Map<String, Object> vital(String vital, String page, String region, double value) {
-        return Map.of("vital", vital, "page", page, "region", region, "value", value);
+    private static Map<String, Object> vital(
+            String vital, String navigation, String page, String region, double value) {
+        return Map.of("vital", vital, "navigation", navigation, "page", page, "region", region, "value", value);
     }
 
     private WebTestClient.ResponseSpec report(List<Map<String, Object>> vitals) {
@@ -41,24 +42,31 @@ class WebVitalsControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithUser
-    void shouldRecordEachVitalOfAVisit() {
-        double before = timerCount("inp", "ask_hephaestus", "header");
-        double shiftsBefore = shiftCount("ask_hephaestus", "page");
+    void shouldRecordThePageLoadAndEachRouteViewApart() {
+        double loads = timerCount("inp", "load", "ask_hephaestus", "header");
+        double views = timerCount("inp", "route", "ask_hephaestus", "header");
+        double shiftsBefore = shiftCount("route", "ask_hephaestus", "page");
 
-        report(List.of(vital("INP", "ASK_HEPHAESTUS", "HEADER", 180), vital("CLS", "ASK_HEPHAESTUS", "PAGE", 0.02)))
+        report(List.of(
+                        vital("INP", "LOAD", "ASK_HEPHAESTUS", "HEADER", 180),
+                        vital("INP", "ROUTE", "ASK_HEPHAESTUS", "HEADER", 90),
+                        vital("INP", "ROUTE", "ASK_HEPHAESTUS", "HEADER", 120),
+                        vital("CLS", "ROUTE", "ASK_HEPHAESTUS", "PAGE", 0.02)))
                 .expectStatus()
                 .isNoContent()
                 .expectBody(Void.class);
 
-        assertThat(timerCount("inp", "ask_hephaestus", "header")).isEqualTo(before + 1);
-        assertThat(shiftCount("ask_hephaestus", "page")).isEqualTo(shiftsBefore + 1);
+        assertThat(timerCount("inp", "load", "ask_hephaestus", "header")).isEqualTo(loads + 1);
+        assertThat(timerCount("inp", "route", "ask_hephaestus", "header")).isEqualTo(views + 2);
+        assertThat(shiftCount("route", "ask_hephaestus", "page")).isEqualTo(shiftsBefore + 1);
     }
 
     @Test
     @WithUser
     void shouldRefuseAMeasurementWithoutAValue() {
-        double before = timerCount("lcp", "feedback", "page");
-        var withoutValue = Map.<String, Object>of("vital", "LCP", "page", "FEEDBACK", "region", "PAGE");
+        double before = timerCount("lcp", "load", "feedback", "page");
+        var withoutValue =
+                Map.<String, Object>of("vital", "LCP", "navigation", "LOAD", "page", "FEEDBACK", "region", "PAGE");
         var withNullValue = new HashMap<String, Object>(withoutValue);
         withNullValue.put("value", null);
 
@@ -66,13 +74,17 @@ class WebVitalsControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
             report(List.of(measurement)).expectStatus().isBadRequest().expectBody(Void.class);
         }
 
-        assertThat(timerCount("lcp", "feedback", "page")).isEqualTo(before);
+        assertThat(timerCount("lcp", "load", "feedback", "page")).isEqualTo(before);
     }
 
     @Test
     @WithUser
-    void shouldRefuseAPageOutsideTheKnownSet() {
-        report(List.of(vital("LCP", "/w/acme/secret-page", "PAGE", 900)))
+    void shouldRefuseAPageOrNavigationOutsideTheKnownSet() {
+        report(List.of(vital("LCP", "LOAD", "/w/acme/secret-page", "PAGE", 900)))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        report(List.of(vital("LCP", "/w/acme/secret-page", "OTHER", "PAGE", 900)))
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
@@ -80,40 +92,42 @@ class WebVitalsControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     @WithUser
-    void shouldRefuseAReportWithMoreThanOneValueOfAVital() {
-        double before = timerCount("ttfb", "other", "other");
+    void shouldRefuseTheFirstByteOfARouteViewAndAReportOfMoreThanFortyMeasurements() {
+        double views = timerCount("ttfb", "route", "other", "other");
+        double loads = timerCount("ttfb", "load", "other", "other");
 
-        report(List.of(vital("TTFB", "OTHER", "OTHER", 120), vital("TTFB", "OTHER", "OTHER", 130)))
+        report(List.of(vital("TTFB", "LOAD", "OTHER", "OTHER", 120), vital("TTFB", "ROUTE", "OTHER", "OTHER", 0)))
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
-        report(Collections.nCopies(5, vital("TTFB", "OTHER", "OTHER", 120)))
+        report(Collections.nCopies(41, vital("TTFB", "LOAD", "OTHER", "OTHER", 120)))
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
 
-        assertThat(timerCount("ttfb", "other", "other")).isEqualTo(before);
+        assertThat(timerCount("ttfb", "route", "other", "other")).isEqualTo(views);
+        assertThat(timerCount("ttfb", "load", "other", "other")).isEqualTo(loads);
     }
 
     @Test
     @WithUser
     void shouldRefuseAValueOutOfRange() {
-        double before = timerCount("lcp", "activity", "page");
-        double shiftsBefore = shiftCount("activity", "page");
+        double before = timerCount("lcp", "load", "activity", "page");
+        double shiftsBefore = shiftCount("load", "activity", "page");
 
         for (double value : new double[] {-1, 600_001}) {
-            report(List.of(vital("LCP", "ACTIVITY", "PAGE", value)))
+            report(List.of(vital("LCP", "LOAD", "ACTIVITY", "PAGE", value)))
                     .expectStatus()
                     .isBadRequest()
                     .expectBody(Void.class);
         }
-        report(List.of(vital("CLS", "ACTIVITY", "PAGE", 101)))
+        report(List.of(vital("CLS", "LOAD", "ACTIVITY", "PAGE", 101)))
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
 
-        assertThat(timerCount("lcp", "activity", "page")).isEqualTo(before);
-        assertThat(shiftCount("activity", "page")).isEqualTo(shiftsBefore);
+        assertThat(timerCount("lcp", "load", "activity", "page")).isEqualTo(before);
+        assertThat(shiftCount("load", "activity", "page")).isEqualTo(shiftsBefore);
     }
 
     @Test
@@ -124,23 +138,23 @@ class WebVitalsControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 .uri("/web-vitals")
                 .headers(TestAuthUtils.withCsrf(csrf))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("vitals", List.of(vital("LCP", "OTHER", "PAGE", 900))))
+                .bodyValue(Map.of("vitals", List.of(vital("LCP", "LOAD", "OTHER", "PAGE", 900))))
                 .exchange()
                 .expectStatus()
                 .isUnauthorized()
                 .expectBody(Void.class);
     }
 
-    private double shiftCount(String page, String region) {
+    private double shiftCount(String navigation, String page, String region) {
         var shift = registry.find("web.vital.layout_shift")
-                .tags("page", page, "region", region)
+                .tags("navigation", navigation, "page", page, "region", region)
                 .summary();
         return shift == null ? 0 : shift.count();
     }
 
-    private double timerCount(String vital, String page, String region) {
+    private double timerCount(String vital, String navigation, String page, String region) {
         var timer = registry.find("web.vital.duration")
-                .tags("vital", vital, "page", page, "region", region)
+                .tags("vital", vital, "navigation", navigation, "page", page, "region", region)
                 .timer();
         return timer == null ? 0 : timer.count();
     }
