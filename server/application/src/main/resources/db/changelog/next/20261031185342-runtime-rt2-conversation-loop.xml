@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793472822102-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="mentor_turn" columnName="worker_id"/>
+            <not><columnExists tableName="mentor_turn" columnName="lease_id"/></not>
+        </preConditions>
+        <addColumn tableName="mentor_turn"><column name="lease_id" type="UUID"/></addColumn>
+        <dropColumn tableName="mentor_turn" columnName="worker_id"/>
+        <sql>ALTER TABLE mentor_turn ADD CONSTRAINT ck_mentor_turn_lease_id CHECK (lease_id IS NULL OR (leased_until IS NOT NULL AND status IN ('RUNNING', 'STOPPED')))</sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup before starting the previous release.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

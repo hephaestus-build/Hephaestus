@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +29,8 @@ import tools.jackson.databind.ObjectMapper;
 /** The registration of an attempt's first model calls, through the production service on real PostgreSQL. */
 @Tag("integration")
 class ReviewAttemptUsageRegistrationIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    private static final UUID LEASE = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int JOBS = 40;
@@ -71,7 +74,7 @@ class ReviewAttemptUsageRegistrationIntegrationTest extends AbstractWorkspaceInt
                         try {
                             together.await(30, TimeUnit.SECONDS);
                             if (!attemptUsage.registerCall(
-                                    job.getId(), job.getWorkspaceId(), 0, "worker-1", ModelKind.CHAT, CHAT)) {
+                                    job.getId(), job.getWorkspaceId(), 0, LEASE, ModelKind.CHAT, CHAT)) {
                                 refused.add(job);
                             }
                         } catch (InterruptedException e) {
@@ -111,7 +114,8 @@ class ReviewAttemptUsageRegistrationIntegrationTest extends AbstractWorkspaceInt
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker-1");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plusSeconds(3600));
         job.setExecutionStartedAt(Instant.now());
         job.setConfigSnapshot(MAPPER.createObjectNode());
         job.prePersist();

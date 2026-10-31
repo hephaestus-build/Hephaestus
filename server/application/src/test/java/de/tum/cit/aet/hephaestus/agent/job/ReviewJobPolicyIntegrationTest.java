@@ -36,7 +36,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -172,7 +171,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(PracticeScriptRunRecorder.class),
                 admission,
                 Optional.empty(),
-                WorkerPropertiesFixtures.minimal("1", "1"),
                 new ReviewJobClaimService(
                         jobs,
                         policy,
@@ -184,7 +182,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         budgets,
                         admission,
                         new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                        Optional.empty(),
                         unpooledCalls()),
                 new ReviewJobRecovery(
                         jobs,
@@ -242,7 +239,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                             .isEqualTo(ReviewJobStatus.RUNNING));
             var stillQueued = jobs.findById(blockedJob.getId()).orElseThrow();
             assertThat(stillQueued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-            assertThat(stillQueued.getWorkerId()).isNull();
+            assertThat(stillQueued.getLeaseId()).isNull();
             assertThat(stillQueued.getExecutionStartedAt()).isNull();
             assertThat(blockedPool).isNotEqualTo(openPool);
         } finally {
@@ -533,7 +530,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
         assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.CANCELLED_BY_REQUESTER);
         assertThat(cancelled.getStartedAt()).isNull();
-        assertThat(cancelled.getWorkerId()).isNull();
+        assertThat(cancelled.getLeaseId()).isNull();
         assertThat(cancelled.getLeasedUntil()).isNull();
         assertThat(parentStatus(job)).isEqualTo("CANCELLED");
         assertThat(jobs.findQueuedIdsStartedFirst(10)).doesNotContain(job.getId());
@@ -586,7 +583,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.of(WorkerPropertiesFixtures.minimal("1", "1")),
                 unpooledCalls());
     }
 
@@ -594,7 +590,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var queued = jobs.findById(job.getId()).orElseThrow();
         assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(queued.getAttempt()).isEqualTo(job.getAttempt());
-        assertThat(queued.getWorkerId()).isNull();
+        assertThat(queued.getLeaseId()).isNull();
         assertThat(queued.getStartedAt()).isNull();
         assertThat(queued.getExecutionStartedAt()).isNull();
         assertThat(queued.getLeasedUntil()).isNull();
@@ -613,7 +609,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var metrics = new SimpleMeterRegistry();
         var assignments = mock(ReviewJobAssignments.class);
         when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
-        var worker = WorkerPropertiesFixtures.minimal("1", "1");
         var usage = new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class));
         return new ReviewJobExecutor(
                 settings,
@@ -632,7 +627,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(PracticeScriptRunRecorder.class),
                 admission,
                 Optional.empty(),
-                worker,
                 new ReviewJobClaimService(
                         jobs,
                         policy,
@@ -644,7 +638,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         budgets,
                         admission,
                         new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                        Optional.of(worker),
                         capacity),
                 new ReviewJobRecovery(jobs, settings, mapper, usage, Optional.empty()));
     }
@@ -666,7 +659,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var runningReview = new ReviewJob();
         RuntimeJobTestData.initialize(runningReview, busyWorkspace.getId());
         runningReview.setStatus(ReviewJobStatus.RUNNING);
-        runningReview.setWorkerId("test-worker");
+        runningReview.setLeaseId(UUID.randomUUID());
         runningReview.setConfigSnapshot(job.getConfigSnapshot());
         runningReview.setStartedAt(Instant.now());
         runningReview.setLeasedUntil(Instant.now().plusSeconds(60));
@@ -695,7 +688,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.of(WorkerPropertiesFixtures.minimal("2", "1")),
                 capacity);
         try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
             var repeated = requests.submit(() -> capacity.acquire(
@@ -715,7 +707,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 assertThat(claims.claimJob(job.getId(), () -> true))
                         .isNotInstanceOf(ReviewJobClaimService.ClaimResult.class);
                 assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-                assertThat(jobs.findById(job.getId()).orElseThrow().getWorkerId())
+                assertThat(jobs.findById(job.getId()).orElseThrow().getLeaseId())
                         .isNull();
                 busy.close();
                 var granted = Objects.requireNonNull(repeated.get(12, TimeUnit.SECONDS));
@@ -785,7 +777,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty(),
                 unpooledCalls());
 
         var claim = claims.claimJob(job.getId(), () -> true);
@@ -822,7 +813,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty(),
                 capacity);
 
         var claim = claims.claimJob(job.getId(), () -> true);
@@ -831,7 +821,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var queued = jobs.findById(job.getId()).orElseThrow();
         assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(queued.getAttempt()).isEqualTo(job.getAttempt());
-        assertThat(queued.getWorkerId()).isNull();
+        assertThat(queued.getLeaseId()).isNull();
         assertThat(queued.getExecutionStartedAt()).isNull();
     }
 
@@ -933,7 +923,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty(),
                 unpooledCalls());
 
         assertThat(claims.claimJob(job.getId(), () -> true))
@@ -966,7 +955,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(LlmBudgetService.class),
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty(),
                 unpooledCalls());
 
         assertThat(claims.claimJob(job.getId(), () -> true))

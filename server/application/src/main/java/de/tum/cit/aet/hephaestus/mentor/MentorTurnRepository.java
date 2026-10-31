@@ -76,6 +76,20 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<MentorTurn> findActiveByWorkspaceIdAndSurface(
             @Param("workspaceId") Long workspaceId, @Param("surface") MentorTurn.Surface surface);
 
+    /** One database-clock read of the token's complete live attempt fence. */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM mentor_turn
+                WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt
+                  AND lease_id = :leaseId AND status = 'RUNNING' AND leased_until > clock_timestamp()
+            )
+            """, nativeQuery = true)
+    boolean hasLiveLease(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("leaseId") UUID leaseId);
+
     /** Locks the row, so a state change reads the proxy's latest totals and the proxy waits for it. */
     @WorkspaceAgnostic("Locks by primary key; callers hold the id from a workspace-scoped read or a lease")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -249,19 +263,20 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
      * before it, and the row's own lock is held only while it runs.
      *
      * @param partial the snapshot as JSON text
-     * @return the attempt, or empty when it no longer runs on {@code workerId}
+     * @return the attempt, or empty when the attempt no longer holds its live lease
      */
     @WorkspaceAgnostic("The worker holds the attempt's lease; the statement returns the turn's workspace")
     @Query(value = """
             UPDATE mentor_turn SET partial = CAST(:partial AS jsonb)
-             WHERE id = :id AND attempt = :attempt AND worker_id = :workerId
-               AND status = 'RUNNING' AND leased_until IS NOT NULL
+             WHERE workspace_id = :workspaceId AND id = :id AND attempt = :attempt AND lease_id = :leaseId
+               AND status = 'RUNNING' AND leased_until > clock_timestamp()
             RETURNING workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
             """, nativeQuery = true)
     Optional<RunningAttempt> writePartial(
+            @Param("workspaceId") long workspaceId,
             @Param("id") UUID id,
             @Param("attempt") int attempt,
-            @Param("workerId") String workerId,
+            @Param("leaseId") UUID leaseId,
             @Param("partial") String partial);
 
     /**
@@ -280,7 +295,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                    t.reasoningTokens = t.reasoningTokens + :#{#call.reasoningTokens()},
                    t.cachedTokens = t.cachedTokens + :#{#call.cacheReadTokens()},
                    t.cacheWriteTokens = t.cacheWriteTokens + :#{#call.cacheWriteTokens()}
-             WHERE t.id = :id AND t.attempt = :attempt AND t.leasedUntil IS NOT NULL
+             WHERE t.id = :id AND t.attempt = :attempt AND t.leasedUntil > CURRENT_TIMESTAMP
                AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
                                 de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED)
             """)

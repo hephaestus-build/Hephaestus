@@ -82,7 +82,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private EntityManager entityManager;
 
     /** The worker id of {@link WorkerPropertiesFixtures#minimal}. */
-    private static final String WORKER = "test-worker";
+    private static final UUID BILLED_LEASE = UUID.fromString("5c0a6f2e-7d1b-4e8a-9f3c-2b6d8e1a4c70");
 
     private static final Duration LEASE = Duration.ofMinutes(1);
 
@@ -224,17 +224,12 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         meters = new SimpleMeterRegistry();
         // Its own listener, so the dispatcher stops hearing the ledger when this test ends.
         notifications = new MentorLedgerNotifications(turnRepository, dataSource, mapper);
-        dispatcher = newDispatcher(host, WORKER, 4);
-        controller = new HephTurnController(
-                HephTurnFixtures.contexts(beans),
-                completion,
-                dispatcher,
-                callsInFlight,
-                WorkerPropertiesFixtures.minimal("1", "4"));
+        dispatcher = newDispatcher(host, 4);
+        controller = new HephTurnController(HephTurnFixtures.contexts(beans), completion, dispatcher, callsInFlight);
         dispatcher.start();
     }
 
-    private HephTurnDispatcher newDispatcher(FakeHost target, String workerId, int capacity) {
+    private HephTurnDispatcher newDispatcher(FakeHost target, int capacity) {
         return new HephTurnDispatcher(
                 MentorTurnStarts.admitting(turns, metrics),
                 turns,
@@ -247,7 +242,6 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 mapper,
                 clock,
                 meters,
-                workerId,
                 capacity,
                 LEASE,
                 HephTurnDispatcher.STOP_GRACE,
@@ -288,7 +282,12 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(token.id().toString()).isEqualTo(start.path("turnId").asString());
         assertThat(token.workDeadline()).isNull();
         return new TurnAttempt(
-                token.id(), token.workspaceId(), conversation.getAccountId(), conversation.getId(), token.attempt());
+                token.id(),
+                token.workspaceId(),
+                conversation.getAccountId(),
+                conversation.getId(),
+                token.attempt(),
+                token.leaseId());
     }
 
     private MentorTurn row(MentorTurn turn) {
@@ -464,7 +463,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         MentorTurn asked = ask("Is the deployment ready?");
         TurnAttempt turn = credential(host.next("start"));
         ProxyCallsInFlight.Call lastCall = callsInFlight.begin(new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, asked.getId(), turn.attempt(), BigDecimal.ZERO, WORKER));
+                UsageSourceType.MENTOR_TURN, asked.getId(), turn.attempt(), BigDecimal.ZERO, BILLED_LEASE));
 
         // The host read the end of the answer from the stream; the proxy has not written the call's usage yet.
         CompletableFuture<Void> ended = CompletableFuture.runAsync(() -> controller.end(
@@ -491,7 +490,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         TurnAttempt turn = credential(host.next("start"));
         // A call to a provider that sends nothing: it ends only when the attempt's end cancels it.
         ProxyCallsInFlight.Call silent = callsInFlight.begin(new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, asked.getId(), turn.attempt(), BigDecimal.ZERO, WORKER));
+                UsageSourceType.MENTOR_TURN, asked.getId(), turn.attempt(), BigDecimal.ZERO, BILLED_LEASE));
         silent.cancelled().subscribe(null, null, silent::close);
         turns.stop(workspace.getId(), asked.getId());
         host.next("stop");
@@ -623,13 +622,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldLeaveAFreshQuestionForTheReadyWorkerAfterReplacementWarmupKeepsFailing() throws Exception {
         dispatcher.stop();
-        dispatcher = newDispatcher(host, WORKER, 1);
-        controller = new HephTurnController(
-                HephTurnFixtures.contexts(beans),
-                completion,
-                dispatcher,
-                callsInFlight,
-                WorkerPropertiesFixtures.minimal("1", "1"));
+        dispatcher = newDispatcher(host, 1);
+        controller = new HephTurnController(HephTurnFixtures.contexts(beans), completion, dispatcher, callsInFlight);
         dispatcher.start();
         MentorTurn busy = ask("Keep the ready worker busy");
         var busyAttempt = credential(host.next("start"));
@@ -638,7 +632,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 turns.question(workspace.getId(), busy.getId()).getId());
         FakeHost replacementHost = new FakeHost();
         replacementHost.starts = false;
-        HephTurnDispatcher replacement = newDispatcher(replacementHost, "replacement-worker", 1);
+        HephTurnDispatcher replacement = newDispatcher(replacementHost, 1);
         replacement.start();
         try {
             await().atMost(NOTIFIED).until(() -> replacementHost.readyAttempts.get() > 0);
@@ -658,7 +652,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     HephTurnFixtures.authenticated(busyAttempt));
             assertThat(host.next("start").path("turnId").asString())
                     .isEqualTo(fresh.getId().toString());
-            assertThat(row(fresh).getWorkerId()).isEqualTo(WORKER);
+            assertThat(row(fresh).getLeaseId()).isNotNull();
         } finally {
             replacementHost.lose();
             replacement.stop();
@@ -750,7 +744,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo(1.0);
         assertThat(callsInFlight
                         .begin(new ProxyRouting.BilledAttempt(
-                                UsageSourceType.MENTOR_TURN, broken.getId(), 1, BigDecimal.ZERO, WORKER))
+                                UsageSourceType.MENTOR_TURN, broken.getId(), 1, BigDecimal.ZERO, BILLED_LEASE))
                         .isCancelled())
                 .as("a call of the failed attempt is refused")
                 .isTrue();
@@ -789,8 +783,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         holdASandbox(asked, 1);
         Instant claimedUntil = Objects.requireNonNull(row(asked).getLeasedUntil());
         // A model call of the attempt.
-        ProxyCallsInFlight.Call program = callsInFlight.begin(
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, asked.getId(), 1, BigDecimal.ZERO, WORKER));
+        ProxyCallsInFlight.Call program = callsInFlight.begin(new ProxyRouting.BilledAttempt(
+                UsageSourceType.MENTOR_TURN, asked.getId(), 1, BigDecimal.ZERO, BILLED_LEASE));
 
         host.lose();
         clock.advance(LEASE.dividedBy(2));
@@ -811,11 +805,16 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         JsonNode first = host.next("start");
         assertThat(first.path("attempt").asInt()).isOne();
         holdASandbox(asked, 1);
-        ProxyCallsInFlight.Call program = callsInFlight.begin(
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, asked.getId(), 1, BigDecimal.ZERO, WORKER));
+        ProxyCallsInFlight.Call program = callsInFlight.begin(new ProxyRouting.BilledAttempt(
+                UsageSourceType.MENTOR_TURN, asked.getId(), 1, BigDecimal.ZERO, BILLED_LEASE));
 
         // What the lease reaper does once the lease expired.
-        turns.renewLease(asked.getId(), 1, WORKER, Duration.ofSeconds(-1));
+        turns.renewLease(
+                workspace.getId(),
+                asked.getId(),
+                1,
+                Objects.requireNonNull(row(asked).getLeaseId()),
+                Duration.ofSeconds(-1));
         transactions.executeWithoutResult(status ->
                 completion.billLostAttempt(turns.expireLease(asked.getId()).orElseThrow()));
 
@@ -848,10 +847,10 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         MentorTurn asked = ask("Are you still on it?");
         host.next("start");
         holdASandbox(asked, 1);
-        ProxyCallsInFlight.Call program = callsInFlight.begin(
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, asked.getId(), 1, BigDecimal.ZERO, WORKER));
+        ProxyCallsInFlight.Call program = callsInFlight.begin(new ProxyRouting.BilledAttempt(
+                UsageSourceType.MENTOR_TURN, asked.getId(), 1, BigDecimal.ZERO, BILLED_LEASE));
         // Another worker holds the lease now, and nothing told this one.
-        jdbc.update("UPDATE mentor_turn SET worker_id = 'another-worker' WHERE id = ?", asked.getId());
+        jdbc.update("UPDATE mentor_turn SET lease_id = ? WHERE id = ?", UUID.randomUUID(), asked.getId());
 
         clock.advance(LEASE.dividedBy(2));
         dispatcher.tick();
@@ -918,7 +917,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
      */
     private ProxyCallsInFlight.Call silentCall(MentorTurn asked, int attempt) {
         ProxyCallsInFlight.Call call = callsInFlight.begin(new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, asked.getId(), attempt, BigDecimal.ZERO, WORKER));
+                UsageSourceType.MENTOR_TURN, asked.getId(), attempt, BigDecimal.ZERO, BILLED_LEASE));
         call.cancelled().subscribe(null, null, () -> {
             transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(asked.getId(), attempt, RECEIVED));
             call.close();
@@ -934,7 +933,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(billed.getInputTokens()).isEqualTo(900);
         assertThat(callsInFlight
                         .begin(new ProxyRouting.BilledAttempt(
-                                UsageSourceType.MENTOR_TURN, asked.getId(), attempt, BigDecimal.ZERO, WORKER))
+                                UsageSourceType.MENTOR_TURN, asked.getId(), attempt, BigDecimal.ZERO, BILLED_LEASE))
                         .isCancelled())
                 .as("a later call of the attempt is refused")
                 .isTrue();

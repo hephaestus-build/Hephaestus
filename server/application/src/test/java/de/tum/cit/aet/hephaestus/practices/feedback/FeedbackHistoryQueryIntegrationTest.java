@@ -447,32 +447,34 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                         null));
         MentorTurn running = running(asked.turn().getId());
         turns.end(
+                running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                "worker-history",
-                MentorTurn.Status.DONE,
-                List.of(
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-problem",
-                                "link_problem",
-                                JsonNodeFactory.instance
-                                        .objectNode()
-                                        .put("problemId", problemId.toString())
-                                        .put("text", "The failure case has no test.")),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-problem", "link_problem", "Linked", false),
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-feedback",
-                                "show_feedback",
-                                JsonNodeFactory.instance
-                                        .objectNode()
-                                        .put("feedbackId", shown.getId().toString())
-                                        .put("text", "Say why.")),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-feedback", "show_feedback", "Shown", false)),
-                null);
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
+                        MentorTurn.Status.DONE,
+                        List.of(
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-problem",
+                                        "link_problem",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("problemId", problemId.toString())
+                                                .put("text", "The failure case has no test.")),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-problem", "link_problem", "Linked", false),
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-feedback",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("feedbackId", shown.getId().toString())
+                                                .put("text", "Say why.")),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-feedback", "show_feedback", "Shown", false)),
+                        null));
 
         List<MentorLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).entries().stream()
                 .flatMap(entry -> entry.links().stream())
@@ -488,8 +490,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     /** Claims turns until this one starts. A turn of another test that starts first is taken along. */
     private MentorTurn running(UUID turnId) {
         while (true) {
-            MentorTurn claimed =
-                    turns.claimNext("worker-history", Duration.ofMinutes(5)).orElseThrow();
+            MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

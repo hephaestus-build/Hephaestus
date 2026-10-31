@@ -125,7 +125,7 @@ export function modelFailure(message: unknown): ModelFailure {
  * worker. No provider sends it, so it tells that refusal apart from a provider's own `401` or `409`. It is the text of
  * `JobTokenAuthenticationFilter.ATTEMPT_ENDED`.
  */
-export const ATTEMPT_ENDED = "This attempt no longer runs on this worker.";
+export const ATTEMPT_ENDED = "This attempt no longer holds its lease.";
 
 /** Whether the gateway refused this call because the attempt no longer runs, so nothing it does can be admitted. */
 export function refusesAttempt(message: unknown): boolean {

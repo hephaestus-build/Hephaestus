@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
+
+    private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+    private static final UUID OTHER = UUID.fromString("00000000-0000-0000-0000-0000000000b2");
+
     @Autowired
     private ReviewJobRepository jobs;
 
@@ -128,7 +133,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setConfigSnapshot(new JsonMapper().createObjectNode());
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("owner");
+        job.setLeaseId(OWNER);
         job.setStartedAt(Instant.now());
         job.prePersist();
         return jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
@@ -139,7 +144,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         var job = running("runtime-terminal-owner");
         var input = job.getInput();
         assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, "owner", job.getAttempt())))
+                        job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, OWNER, job.getAttempt())))
                 .isEqualTo(1);
         var stored =
                 jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId()).orElseThrow();
@@ -153,7 +158,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseATerminalWriteFromAnotherWorker() {
         var job = running("runtime-terminal-foreign");
         assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", "other", job.getAttempt())))
+                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", OTHER, job.getAttempt())))
                 .isZero();
         assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
     }
@@ -166,14 +171,14 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         jdbc.update("UPDATE review_job SET attempt = attempt + 1 WHERE id = ?", job.getId());
 
         assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", "owner", stale)))
+                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", OWNER, stale)))
                 .isZero();
         assertThat(transactions.<Integer>execute(status -> jobs.transitionToCancelledOwnedBy(
                         job.getId(),
                         Instant.now(),
                         "cancelled",
                         ReviewJobCancellationReason.DRAIN_IMMEDIATE,
-                        "owner",
+                        OWNER,
                         stale)))
                 .isZero();
         var stored = jobs.findById(job.getId()).orElseThrow();
@@ -189,12 +194,12 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
                 "UPDATE review_job SET attempt = attempt + 1, execution_started_at = NULL WHERE id = ?", job.getId());
 
         assertThat(transactions.<Integer>execute(
-                        status -> jobs.markExecutionStarted(job.getId(), "owner", job.getAttempt(), Instant.now())))
+                        status -> jobs.markExecutionStarted(job.getId(), OWNER, job.getAttempt(), Instant.now())))
                 .isZero();
         assertThat(executionStartedAt(job)).isNull();
 
         assertThat(transactions.<Integer>execute(
-                        status -> jobs.markExecutionStarted(job.getId(), "owner", job.getAttempt() + 1, Instant.now())))
+                        status -> jobs.markExecutionStarted(job.getId(), OWNER, job.getAttempt() + 1, Instant.now())))
                 .isEqualTo(1);
         assertThat(executionStartedAt(job)).isNotNull();
     }
@@ -211,7 +216,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         job.setAdmissionDigest("a".repeat(64));
         jobs.saveAndFlush(job);
         assertThat(transactions.<Integer>execute(
-                        status -> jobs.completeAdmittedOwnedBy(job.getId(), "owner", 0, Instant.now())))
+                        status -> jobs.completeAdmittedOwnedBy(job.getId(), OWNER, 0, Instant.now())))
                 .isEqualTo(1);
         var stored = jobs.findById(job.getId()).orElseThrow();
         assertThat(stored.getAdmissionAttempt()).isZero();

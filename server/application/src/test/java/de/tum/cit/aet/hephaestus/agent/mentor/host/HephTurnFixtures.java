@@ -102,6 +102,7 @@ final class HephTurnFixtures {
                 turn.turnId(),
                 turn.workspaceId(),
                 turn.attempt(),
+                turn.leaseId(),
                 Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE),
                 "jti",
                 now,

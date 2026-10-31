@@ -161,7 +161,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
     private ReviewJob orphanedJob(UUID id, Long workspaceId, int attempt) {
         ReviewJob job = runningJob(id, Instant.now().minusSeconds(180), 600);
         RuntimeJobTestData.initialize(job, workspace(workspaceId).getId());
-        job.setWorkerId(DEAD_WORKER_ID);
+        job.setLeaseId(EXPIRED_LEASE);
         job.setExecutionStartedAt(Instant.now());
         job.setAttempt(attempt);
         return job;
@@ -203,13 +203,13 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         return sample.getValue();
     }
 
-    private static final String DEAD_WORKER_ID = "dead-replica";
+    private static final UUID EXPIRED_LEASE = UUID.fromString("00000000-0000-0000-0000-00000000dead");
 
     private static OrphanedJobRef orphan(UUID jobId, Long workspaceId, int attempt) {
-        return orphan(jobId, workspaceId, attempt, DEAD_WORKER_ID);
+        return orphan(jobId, workspaceId, attempt, EXPIRED_LEASE);
     }
 
-    private static OrphanedJobRef orphan(UUID jobId, Long workspaceId, int attempt, String workerId) {
+    private static OrphanedJobRef orphan(UUID jobId, Long workspaceId, int attempt, UUID leaseId) {
         return new OrphanedJobRef() {
             @Override
             public UUID getJobId() {
@@ -227,8 +227,8 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             }
 
             @Override
-            public String getWorkerId() {
-                return workerId;
+            public UUID getLeaseId() {
+                return leaseId;
             }
         };
     }
@@ -326,14 +326,14 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         void shouldRequeueWithoutUsageWhenTheOrphanMadeNoModelCalls() {
             UUID jobId = UUID.randomUUID();
             when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
-            when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any()))
+            when(jobRepository.requeueOrphan(eq(jobId), eq(EXPIRED_LEASE), eq(AGENT_PROPS.maxRetries()), any()))
                     .thenReturn(1);
             ReviewJob persistedJob = orphanedJob(jobId, 7L, 0);
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(persistedJob));
 
             sweeper.recoverOrphanedJobs();
 
-            verify(jobRepository).requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any());
+            verify(jobRepository).requeueOrphan(eq(jobId), eq(EXPIRED_LEASE), eq(AGENT_PROPS.maxRetries()), any());
             assertThat(meterRegistry.counter("agent.job.orphan.requeued").count())
                     .isEqualTo(1d);
             verify(usageRecorder, never()).record(any(), any());
@@ -345,7 +345,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         void recoversJobWithoutPriceSnapshot() {
             UUID jobId = UUID.randomUUID();
             when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
-            when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), anyInt(), any()))
+            when(jobRepository.requeueOrphan(eq(jobId), eq(EXPIRED_LEASE), anyInt(), any()))
                     .thenReturn(1);
             ReviewJob legacyJob = orphanedJob(jobId, 7L, 0);
             ConfigSnapshot snapshot = ConfigSnapshot.fromJson(legacyJob.getConfigSnapshot(), objectMapper);
@@ -388,13 +388,13 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
         void skipsWhenRequeueRaced() {
             UUID jobId = UUID.randomUUID();
             when(jobRepository.findExpiredLeases(any())).thenReturn(List.of(orphan(jobId, 7L, 0)));
-            when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any()))
+            when(jobRepository.requeueOrphan(eq(jobId), eq(EXPIRED_LEASE), eq(AGENT_PROPS.maxRetries()), any()))
                     .thenReturn(0);
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(orphanedJob(jobId, 7L, 0)));
 
             sweeper.recoverOrphanedJobs();
 
-            verify(jobRepository).requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any());
+            verify(jobRepository).requeueOrphan(eq(jobId), eq(EXPIRED_LEASE), eq(AGENT_PROPS.maxRetries()), any());
             verify(jobRepository, never()).transitionStatus(any(), any(), any(), any(), any());
             verify(usageRecorder, never())
                     .project(
@@ -413,7 +413,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             ReviewJob persistedJob = orphanedJob(jobId, 7L, 5);
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(persistedJob));
             when(jobRepository.transitionStatusOwnedBy(
-                            eq(jobId), eq(ReviewJobStatus.FAILED), any(), any(), eq(DEAD_WORKER_ID), eq(5)))
+                            eq(jobId), eq(ReviewJobStatus.FAILED), any(), any(), eq(EXPIRED_LEASE), eq(5)))
                     .thenReturn(1);
 
             sweeper.recoverOrphanedJobs();
@@ -421,7 +421,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             verify(jobRepository, never()).requeueOrphan(any(), any(), anyInt(), any());
             verify(jobRepository)
                     .transitionStatusOwnedBy(
-                            eq(jobId), eq(ReviewJobStatus.FAILED), any(), any(), eq(DEAD_WORKER_ID), eq(5));
+                            eq(jobId), eq(ReviewJobStatus.FAILED), any(), any(), eq(EXPIRED_LEASE), eq(5));
             verify(usageRecorder, never()).record(any(), any());
             verify(usageRecorder, never()).project(any(), any());
         }

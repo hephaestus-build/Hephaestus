@@ -28,12 +28,17 @@ public final class MentorTurnStarts {
     public static MentorTurnStarter admitting(MentorTurnService turns, MeterRegistry metrics) {
         MentorAttemptUsageService admissionOnly = mock(MentorAttemptUsageService.class);
         doAnswer(call -> {
-                    MentorTurnAdmission admitted = call.getArgument(3);
-                    turns.admit(call.getArgument(0), call.getArgument(1), call.getArgument(2), admitted.toJson());
+                    MentorTurnAdmission admitted = call.getArgument(4);
+                    turns.admit(
+                            call.getArgument(0),
+                            call.getArgument(1),
+                            call.getArgument(2),
+                            call.getArgument(3),
+                            admitted.toJson());
                     return true;
                 })
                 .when(admissionOnly)
-                .admit(any(), anyInt(), any(), any());
+                .admit(anyLong(), any(), anyInt(), any(), any());
         return admitting(turns, admissionOnly, metrics);
     }
 
@@ -45,21 +50,16 @@ public final class MentorTurnStarts {
                 turns, admission, attemptUsage, metrics, new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()));
     }
 
-    /** Asks {@code question} in the app and starts its turn as {@code worker}, with a five-minute lease. */
+    /** Asks a question in the app and claims its turn with a five-minute lease. */
     public static MentorTurn askAndStart(
-            MentorTurnService turns,
-            MeterRegistry metrics,
-            long workspaceId,
-            UUID conversationId,
-            String question,
-            String worker) {
+            MentorTurnService turns, MeterRegistry metrics, long workspaceId, UUID conversationId, String question) {
         String requestId = UUID.randomUUID().toString();
         turns.submit(
                 workspaceId,
                 conversationId,
                 new MentorTurnService.Question(MentorTurn.Surface.APP, question, requestId, null, null));
         MentorTurn started = admitting(turns, metrics)
-                .startNext(worker, Duration.ofMinutes(5))
+                .startNext(Duration.ofMinutes(5))
                 .orElseThrow()
                 .turn();
         if (!started.getRequestId().equals(requestId)) {

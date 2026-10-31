@@ -22,7 +22,7 @@ class HephToolCallsTest extends BaseUnitTest {
         lines.start();
         logger.addAppender(lines);
         UUID turnId = UUID.randomUUID();
-        TurnAttempt turn = new TurnAttempt(turnId, 7L, 11L, UUID.randomUUID(), 2);
+        TurnAttempt turn = new TurnAttempt(turnId, 7L, 11L, UUID.randomUUID(), 2, UUID.randomUUID());
         try {
             HephToolCalls.logged(turn, "search_conversation", () -> "the developer's private words", found -> "ok");
         } finally {

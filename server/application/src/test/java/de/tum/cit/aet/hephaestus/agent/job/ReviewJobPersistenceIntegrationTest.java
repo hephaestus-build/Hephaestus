@@ -164,14 +164,14 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
         var stamp = objectMapper.createObjectNode().put("inputsDigest", "a".repeat(64));
         var other = workspaceRepository.save(TestEntities.activeWorkspace("other-capture-ws"));
         transactionTemplate.executeWithoutResult(status -> {
-            assertThat(jobRepository.updateCapture(id, other.getId(), job.getWorkerId(), job.getAttempt(), stamp))
+            assertThat(jobRepository.updateCapture(id, other.getId(), job.getLeaseId(), job.getAttempt(), stamp))
                     .isZero();
-            assertThat(jobRepository.updateCapture(id, workspace.getId(), "another-worker", job.getAttempt(), stamp))
+            assertThat(jobRepository.updateCapture(id, workspace.getId(), UUID.randomUUID(), job.getAttempt(), stamp))
                     .isZero();
             assertThat(jobRepository.updateCapture(
-                            id, workspace.getId(), job.getWorkerId(), job.getAttempt() + 1, stamp))
+                            id, workspace.getId(), job.getLeaseId(), job.getAttempt() + 1, stamp))
                     .isZero();
-            assertThat(jobRepository.updateCapture(id, workspace.getId(), job.getWorkerId(), job.getAttempt(), stamp))
+            assertThat(jobRepository.updateCapture(id, workspace.getId(), job.getLeaseId(), job.getAttempt(), stamp))
                     .isEqualTo(1);
         });
         assertThat(jobRepository.findById(id).orElseThrow().getCapture()).isEqualTo(stamp);
@@ -263,7 +263,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
             queued.setStatus(ReviewJobStatus.QUEUED);
             queued.setStartedAt(null);
             queued.setExecutionStartedAt(null);
-            queued.setWorkerId(null);
+            queued.setLeaseId(null);
             jobRepository.saveAndFlush(queued);
         });
         lifecycleService.cancel(workspace.getId(), queuedId);
@@ -479,7 +479,7 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
 
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(configSnapshot);
-        job.setWorkerId("dead-replica");
+        job.setLeaseId(UUID.randomUUID());
         job.setStartedAt(Instant.now().minus(Duration.ofMinutes(30)));
         // Non-null executionStartedAt is what makes this attempt billable: it got past preparation and
         // actually ran, so its spend has to be accounted for.

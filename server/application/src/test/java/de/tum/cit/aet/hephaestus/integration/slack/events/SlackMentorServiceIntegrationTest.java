@@ -77,7 +77,6 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     private static final String OTHER_TEAM = "T2";
     private static final String CHANNEL = "D9";
     private static final String SLACK_USER = "U1";
-    private static final String WORKER = "worker-slack-ingress";
     private static final Duration LEASE = Duration.ofMinutes(5);
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -200,9 +199,14 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     /** Runs the main conversation's turn to an answer that Slack shows at {@code ts}. */
     private MentorEntry answerPostedAt(String ts) {
-        MentorTurn running = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn running = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         ObjectNode pi = MentorLedgerFixtures.answer("a1b2c3d4", "Your reviews are quick.");
-        turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(pi), null);
+        turns.end(
+                running.getWorkspaceId(),
+                running.getId(),
+                running.getAttempt(),
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(pi), null));
         UUID answerId = Objects.requireNonNull(
                 turns.answer(workspace.getId(), running.getId()).answerEntryId());
         delivery.delivered(
@@ -232,7 +236,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         answerPostedAt("100.2");
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Tell me more", "100.5", "100.1");
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "And the tests?", "100.6", "100.1");
-        MentorTurn claimed = turns.claimNext(WORKER, lease).orElseThrow();
+        MentorTurn claimed = turns.claimNext(lease).orElseThrow();
         assertThat(claimed.getId()).isEqualTo(question("100.5").getTurnId());
         MentorTurn running = turnOf(question("100.5"));
         assertThat(running.getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
@@ -410,7 +414,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         answerPostedAt("100.2");
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Tell me more", "100.5", "100.1");
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "And the tests?", "100.6", "100.1");
-        MentorTurn claimed = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         MentorTurn running = turnOf(question("100.5"));
         MentorTurn followUp = turnOf(question("100.6"));
         assertThat(claimed.getId()).isEqualTo(running.getId());
@@ -525,7 +529,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldKeepTheMainTurnRunningWhenTheSessionStopNamesItsTopLevelQuestion() {
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
-        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn running = turns.claimNext(LEASE).orElseThrow();
         assertThat(running.getId()).isEqualTo(question("100.1").getTurnId());
 
         deliver(ownThreadStopped(afterStartOf(turnOf(question("100.1"))), "[]"));
@@ -588,8 +592,13 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         deliver(stopFirst);
         assertOnlyTheRunningReplyStopped();
         assertThat(statusOf("100.8")).isEqualTo(MentorTurn.Status.QUEUED);
-        turns.end(first.getId(), first.getAttempt(), WORKER, MentorTurn.Status.STOPPED, List.of(), null);
-        MentorTurn next = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.end(
+                first.getWorkspaceId(),
+                first.getId(),
+                first.getAttempt(),
+                Objects.requireNonNull(first.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.STOPPED, List.of(), null));
+        MentorTurn next = turns.claimNext(LEASE).orElseThrow();
         assertThat(next.getId()).isEqualTo(question("100.6").getTurnId());
         assertThat(Objects.requireNonNull(turnOf(question("100.6")).getStartedAt()))
                 .isAfter(clicked);
@@ -627,7 +636,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         Instant duringFirst = turnRepository.databaseClock();
         assertThat(duringFirst).isAfter(Objects.requireNonNull(first.getStartedAt()));
         assertThat(turns.expireLease(first.getId())).isPresent();
-        MentorTurn retried = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn retried = turns.claimNext(LEASE).orElseThrow();
         assertThat(retried.getId()).isEqualTo(first.getId());
         assertThat(retried.getAttempt()).isEqualTo(2);
         assertThat(question("100.5").getSlackStreamTs()).isEqualTo("300.1");

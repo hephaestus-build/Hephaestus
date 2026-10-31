@@ -172,15 +172,15 @@ public class WorkerFeedbackComposer {
      * @param notAfter when the stale-job sweep would end the attempt; composition ends a minute before it at the latest
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
-    public void composeAfterMeasurement(ReviewJob job, String workerId, Instant notAfter) {
+    public void composeAfterMeasurement(ReviewJob job, UUID leaseId, Instant notAfter) {
         var slot = capacity.acquire(deadline(notAfter));
         try {
 
             var identity = new ResultAdmissionService.AdmissionIdentity(
-                    job.getId(), job.getWorkspaceId(), job.getAttempt(), workerId);
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), leaseId);
             var inputs = files.originalCompositionInputs(identity).orElse(null);
-            if (inputs == null) withholdOpen(job, workerId, CompositionStop.INPUTS_GONE);
-            else compose(job, workerId, inputs, deadline(notAfter));
+            if (inputs == null) withholdOpen(job, leaseId, CompositionStop.INPUTS_GONE);
+            else compose(job, leaseId, inputs, deadline(notAfter));
 
         } finally {
             slot.close();
@@ -194,9 +194,9 @@ public class WorkerFeedbackComposer {
      *
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
-    public void composeResumed(ReviewJob job, String workerId, Instant notAfter) {
+    public void composeResumed(ReviewJob job, UUID leaseId, Instant notAfter) {
         if (job.spentAttempts() > agentProperties.maxRetries()) {
-            withholdWithoutInputs(job, workerId, CompositionStop.RETRIES_EXHAUSTED);
+            withholdWithoutInputs(job, leaseId, CompositionStop.RETRIES_EXHAUSTED);
             return;
         }
         var slot = capacity.acquire(deadline(notAfter));
@@ -211,12 +211,12 @@ public class WorkerFeedbackComposer {
                         unavailable.erased());
                 withholdWithoutInputs(
                         job,
-                        workerId,
+                        leaseId,
                         unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE);
                 return;
             }
             try (restored) {
-                compose(job, workerId, restored.files(), deadline(notAfter));
+                compose(job, leaseId, restored.files(), deadline(notAfter));
             }
 
         } finally {
@@ -225,15 +225,15 @@ public class WorkerFeedbackComposer {
     }
 
     /** Withholds what an earlier attempt left open, with a cause the claim met, without composing or staging inputs. */
-    public void withholdResumed(ReviewJob job, String workerId, CompositionStop stop) {
-        withholdWithoutInputs(job, workerId, stop);
+    public void withholdResumed(ReviewJob job, UUID leaseId, CompositionStop stop) {
+        withholdWithoutInputs(job, leaseId, stop);
     }
 
     /** Withholds what is open from an empty folder, whose person-copy receipt indexes what the withholdings read. */
-    private void withholdWithoutInputs(ReviewJob job, String workerId, CompositionStop stop) {
+    private void withholdWithoutInputs(ReviewJob job, UUID leaseId, CompositionStop stop) {
         var empty = continuation.stageWithoutInputs(job);
         try {
-            withholdOpen(job, workerId, stop);
+            withholdOpen(job, leaseId, stop);
         } finally {
             empty.close();
         }
@@ -255,7 +255,7 @@ public class WorkerFeedbackComposer {
             Admission state) {}
 
     /** The attempt's plan, or null when the review has no destination to compose or no admitted result. */
-    private @Nullable Plan plan(ReviewJob job, String workerId) {
+    private @Nullable Plan plan(ReviewJob job, UUID leaseId) {
         var review = assignments.review(job);
         var capabilities = items.descriptorFor(review.item().kind())
                 .map(ItemDescriptor::copyCapabilities)
@@ -270,7 +270,7 @@ public class WorkerFeedbackComposer {
         if (state.results().isEmpty()) return null;
         return new Plan(
                 new ResultAdmissionService.AdmissionIdentity(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt(), workerId),
+                        job.getId(), job.getWorkspaceId(), job.getAttempt(), leaseId),
                 new CompositionPackages.Attempt(job.getReviewId(), job.getId(), job.getAttempt()),
                 requestBytes,
                 request,
@@ -286,13 +286,13 @@ public class WorkerFeedbackComposer {
      * @throws ResultAdmissionService.StaleAttemptException when the attempt no longer runs on this worker
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
-    void compose(ReviewJob job, String workerId, Map<String, byte[]> inputs, Instant deadline) {
-        var plan = plan(job, workerId);
+    void compose(ReviewJob job, UUID leaseId, Map<String, byte[]> inputs, Instant deadline) {
+        var plan = plan(job, leaseId);
         if (plan == null) return;
         var stops = new EnumMap<FeedbackDestination, Stop>(FeedbackDestination.class);
         RuntimeException failure = null;
         try {
-            new Run(job, workerId, plan, deadline, stops).compose(inputs);
+            new Run(job, leaseId, plan, deadline, stops).compose(inputs);
         } catch (ResultAdmissionService.StaleAttemptException lost) {
             throw lost;
         } catch (RuntimeException failed) {
@@ -305,8 +305,8 @@ public class WorkerFeedbackComposer {
     }
 
     /** Closes every open destination of the attempt with one cause, without composing. */
-    private void withholdOpen(ReviewJob job, String workerId, CompositionStop stop) {
-        var plan = plan(job, workerId);
+    private void withholdOpen(ReviewJob job, UUID leaseId, CompositionStop stop) {
+        var plan = plan(job, leaseId);
         if (plan != null) close(job, plan, destination -> Stop.of(stop), null);
     }
 
@@ -445,7 +445,7 @@ public class WorkerFeedbackComposer {
         /** Why the current session ended without deciding everything it was given. */
         private @Nullable Stop stop;
 
-        Run(ReviewJob job, String workerId, Plan plan, Instant deadline, Map<FeedbackDestination, Stop> stops) {
+        Run(ReviewJob job, UUID leaseId, Plan plan, Instant deadline, Map<FeedbackDestination, Stop> stops) {
             this.job = job;
             this.identity = plan.identity();
             this.attempt = plan.attempt();
@@ -463,7 +463,7 @@ public class WorkerFeedbackComposer {
                     properties.samplingTemperature());
             this.contextWindow = Objects.requireNonNullElse(snapshot.contextWindow(), DEFAULT_CONTEXT_WINDOW);
             var model = new ReviewModelGateway.Attempt(
-                    job.getId(), job.getWorkspaceId(), job.getAttempt(), workerId, deadline);
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), leaseId, deadline);
             this.transport = body -> {
                 var answer = gateway.call(model, body);
                 return new ModelSession.Answer(answer.status(), answer.body(), answer.owned(), answer.refusal());

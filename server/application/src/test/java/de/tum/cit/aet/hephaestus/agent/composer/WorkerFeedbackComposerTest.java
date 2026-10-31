@@ -83,6 +83,8 @@ import tools.jackson.databind.node.ObjectNode;
 /** The worker's composition loop over the golden pull-request scenario, with scripted model replies. */
 @Tag("unit")
 class WorkerFeedbackComposerTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
+
     private static final String ERRORS = "30000000-0000-4000-8000-000000000001";
     private static final String DESCRIBE = "30000000-0000-4000-8000-000000000002";
     private static final String ERRORS_PROBLEM = "40000000-0000-4000-8000-000000000001";
@@ -115,7 +117,8 @@ class WorkerFeedbackComposerTest {
         job.setAttempt(0);
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("a".repeat(64));
-        job.setWorkerId("worker-1");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setConfigSnapshot(new ConfigSnapshot(
                         ConfigSnapshot.SCHEMA_VERSION,
                         new FrozenModel(
@@ -196,7 +199,7 @@ class WorkerFeedbackComposerTest {
         replies.add(call("report_feedback", privatePieces()));
         replies.add(text("Done."));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         // Each session offers only its report tool: everything it may use is in its turn.
         assertThat(tools(requests.getFirst())).containsExactly("report_review");
@@ -228,7 +231,7 @@ class WorkerFeedbackComposerTest {
         replies.add(new ReviewModelGateway.Answer(503, new byte[0], true, null));
         replies.add(call("report_review", validReview()));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         assertThat(requests.get(1).path("messages"))
                 .isEqualTo(requests.getFirst().path("messages"));
@@ -244,7 +247,7 @@ class WorkerFeedbackComposerTest {
         replies.add(call("report_review", incomplete));
         replies.add(call("report_review", validReview()));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         var correction = requests.get(1).path("messages");
         assertThat(correction.get(correction.size() - 1).path("content").asString())
@@ -264,7 +267,7 @@ class WorkerFeedbackComposerTest {
         replies.add(call("report_review", validReview()));
         replies.add(call("report_review", validReview()));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         var correction = requests.get(1).path("messages");
         assertThat(correction.get(correction.size() - 1).path("content").asString())
@@ -290,7 +293,7 @@ class WorkerFeedbackComposerTest {
                 .when(admission)
                 .prepareFeedback(any(), any());
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         var answer = requests.get(2).path("messages");
         assertThat(answer.get(answer.size() - 1).path("content").asString())
@@ -307,7 +310,7 @@ class WorkerFeedbackComposerTest {
         replies.add(call("report_review", validReview()));
         replies.add(call("report_review", validReview()));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         verify(admission, times(2)).publicFeedbackHistory(any());
         assertThat(requests.get(1).path("messages").size())
@@ -339,7 +342,7 @@ class WorkerFeedbackComposerTest {
                 .when(admission)
                 .prepareFeedback(any(), any());
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         var answer = requests.get(2).path("messages");
         assertThat(answer.get(answer.size() - 1).path("content").asString())
@@ -357,7 +360,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldWithholdEachOpenDestinationWhenTheModelNeverDecides() {
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         // Each session was asked once more, then each routed destination got a recorded withholding.
         assertThat(requests).hasSize(4);
@@ -377,7 +380,7 @@ class WorkerFeedbackComposerTest {
     void shouldWithholdWithoutCallingTheModelWhenTheInputsAreGone() {
         when(evidence.originalCompositionInputs(any())).thenReturn(Optional.empty());
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         verify(gateway, never()).call(any(), any());
         assertThat(prepared)
@@ -388,7 +391,7 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldHandTheAttemptOnWithoutCallingTheModelAfterTheDeadline() {
-        assertThatThrownBy(() -> composer().composeAfterMeasurement(job, "worker-1", Instant.now()))
+        assertThatThrownBy(() -> composer().composeAfterMeasurement(job, LEASE, Instant.now()))
                 .isInstanceOfSatisfying(
                         CompositionHandedOnException.class,
                         handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.DEADLINE));
@@ -403,7 +406,7 @@ class WorkerFeedbackComposerTest {
     void shouldWithholdWhatTheDeadlineLeftOpenOnTheAttemptAtTheRetryLimit() {
         job.setAttempt(MAX_RETRIES);
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now());
+        composer().composeAfterMeasurement(job, LEASE, Instant.now());
 
         verify(gateway, never()).call(any(), any());
         assertThat(prepared)
@@ -418,7 +421,7 @@ class WorkerFeedbackComposerTest {
         answerEveryCall(new ReviewModelGateway.Answer(403, new byte[0], true, ReviewModelGateway.Refusal.WORK_TIME));
 
         assertThatThrownBy(() -> composer()
-                        .composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1))))
+                        .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
                 .isInstanceOfSatisfying(
                         CompositionHandedOnException.class,
                         handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.DEADLINE));
@@ -431,7 +434,7 @@ class WorkerFeedbackComposerTest {
             ReviewModelGateway.Refusal refusal, FeedbackStopReason reason, String cause) {
         answerEveryCall(new ReviewModelGateway.Answer(403, new byte[0], true, refusal));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         // Each session stops at its first refused call; another attempt would be refused again.
         assertThat(requests).hasSize(2);
@@ -452,7 +455,7 @@ class WorkerFeedbackComposerTest {
                   {"type":"tool_use","id":"refused","name":"report_review","input":{}}]}
                 """.getBytes(StandardCharsets.UTF_8), true, null));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         assertThat(requests).hasSize(2);
         assertThat(prepared)
@@ -467,7 +470,7 @@ class WorkerFeedbackComposerTest {
         answerEveryCall(new ReviewModelGateway.Answer(503, new byte[0], true, null));
 
         assertThatThrownBy(() -> composer()
-                        .composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1))))
+                        .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
                 .isInstanceOfSatisfying(
                         CompositionHandedOnException.class,
                         handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.PROVIDER));
@@ -482,7 +485,7 @@ class WorkerFeedbackComposerTest {
         job.setAttempt(MAX_RETRIES);
         answerEveryCall(new ReviewModelGateway.Answer(503, new byte[0], true, null));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         assertThat(prepared)
                 .extracting(request -> request.composition().getFirst().withheldReason())
@@ -496,7 +499,7 @@ class WorkerFeedbackComposerTest {
         when(admission.publicFeedbackHistory(any())).thenThrow(new IllegalStateException("defect"));
 
         assertThatThrownBy(() -> composer()
-                        .composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1))))
+                        .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
                 .isInstanceOfSatisfying(CompositionHandedOnException.class, handedOn -> {
                     assertThat(handedOn.stop()).isEqualTo(CompositionStop.UNEXPECTED);
                     assertThat(handedOn).hasRootCauseInstanceOf(IllegalStateException.class);
@@ -511,7 +514,7 @@ class WorkerFeedbackComposerTest {
                 .prepareFeedback(any(), any());
 
         assertThatThrownBy(() -> composer()
-                        .composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1))))
+                        .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("database unavailable");
     }
@@ -523,7 +526,7 @@ class WorkerFeedbackComposerTest {
                 .thenThrow(new ReviewCompositionContinuation.InputsUnavailableException("erased", true));
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
 
-        composer().composeResumed(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeResumed(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         verify(gateway, never()).call(any(), any());
         assertThat(prepared)
@@ -537,7 +540,7 @@ class WorkerFeedbackComposerTest {
         job.setAttempt(1);
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
 
-        composer().withholdResumed(job, "worker-1", CompositionStop.NO_AI);
+        composer().withholdResumed(job, LEASE, CompositionStop.NO_AI);
 
         verify(gateway, never()).call(any(), any());
         verify(continuation, never()).restore(any());
@@ -554,7 +557,7 @@ class WorkerFeedbackComposerTest {
         var capacity = new CompositionCapacity(1);
         var occupied = capacity.acquire(Instant.now().plusSeconds(5));
         try {
-            composer(capacity).composeResumed(job, "worker-1", Instant.now());
+            composer(capacity).composeResumed(job, LEASE, Instant.now());
         } finally {
             occupied.close();
         }
@@ -572,7 +575,7 @@ class WorkerFeedbackComposerTest {
         job.setAttempt(MAX_RETRIES + 1);
         when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
 
-        composer().composeResumed(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeResumed(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         verify(gateway, never()).call(any(), any());
         verify(continuation, never()).restore(any());
@@ -588,7 +591,7 @@ class WorkerFeedbackComposerTest {
         replies.add(new ReviewModelGateway.Answer(401, new byte[0], false, null));
 
         assertThatThrownBy(() -> composer()
-                        .composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1))))
+                        .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
         verify(admission, never()).prepareFeedback(any(), any());
     }
@@ -600,7 +603,7 @@ class WorkerFeedbackComposerTest {
         replies.add(call("report_feedback", privatePieces()));
         replies.add(text("Done."));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         // The review on the work is accepted and the page decided: the session may write only conversation pieces.
         assertThat(tools(requests.getFirst())).containsExactly("report_feedback");
@@ -639,7 +642,7 @@ class WorkerFeedbackComposerTest {
         replies.add(call("report_feedback", privatePieces()));
         replies.add(text("Done."));
 
-        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+        composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         var messages = requests.getFirst().path("messages");
         assertThat(messages.get(messages.size() - 1).path("content").asString())

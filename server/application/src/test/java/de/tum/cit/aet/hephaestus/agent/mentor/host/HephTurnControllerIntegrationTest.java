@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -18,7 +19,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
@@ -107,8 +107,6 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private EntityManager entityManager;
 
     /** The worker id of {@link WorkerPropertiesFixtures#minimal}. */
-    private static final String WORKER = "test-worker";
-
     private static final String QUESTION = "How should I pin the deployment image?";
 
     private static final String TURN_PATH = "/internal/llm/turn/{turnId}/";
@@ -165,9 +163,14 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 createWorkspace("heph-turn-" + suffix, "Hephaestus Turn", "heph-turn-org", AccountType.ORG, developer);
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
-        turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), QUESTION, WORKER);
+        turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), QUESTION);
         attempt = new TurnAttempt(
-                turn.getId(), workspace.getId(), developerAccount, conversation.getId(), turn.getAttempt());
+                turn.getId(),
+                workspace.getId(),
+                developerAccount,
+                conversation.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()));
         authentication = HephTurnFixtures.authenticated(attempt);
         dispatcher = mock(HephTurnDispatcher.class);
         when(dispatcher.running(turn.getId(), turn.getAttempt())).thenReturn(Optional.of(attempt));
@@ -200,8 +203,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     private HephTurnController controller(HephTurnContexts contexts) {
-        return new HephTurnController(
-                contexts, completion, dispatcher, callsInFlight, WorkerPropertiesFixtures.minimal("1", "4"));
+        return new HephTurnController(contexts, completion, dispatcher, callsInFlight);
     }
 
     /** The controller behind the gateway's own credential filter. */
@@ -213,8 +215,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .setControllerAdvice(new AgentControllerAdvice(), problemDetails(), new GlobalControllerAdvice())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(mapper))
                 .addFilters(
-                        SandboxGatewayFixtures.credentialFilter(jobRepository, turnRepository, verifier, WORKER),
-                        servletApi)
+                        SandboxGatewayFixtures.credentialFilter(jobRepository, turnRepository, verifier), servletApi)
                 .build();
     }
 
@@ -233,12 +234,11 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     /** The signed credential the worker issues for this attempt of the turn. */
     private String credential(int attempt) {
-        return issuer.issueForAttempt(
-                AttemptJwt.Kind.TURN,
+        return issuer.issueForTurn(
                 turn.getId(),
                 workspace.getId(),
                 attempt,
-                null,
+                Objects.requireNonNull(turn.getLeaseId()),
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 
@@ -306,7 +306,12 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     /** Takes the lease back from this attempt as the lease reaper does once it expires; the turn is queued again. */
     private void loseTheLease() {
-        turns.renewLease(turn.getId(), turn.getAttempt(), WORKER, Duration.ofSeconds(-1));
+        turns.renewLease(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                Duration.ofSeconds(-1));
         assertThat(turns.expireLease(turn.getId())).isPresent();
     }
 
@@ -487,12 +492,11 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Test
     void shouldRefuseATokenOfAnotherWorkspaceAndReadOrWriteNothingOfTheTurn() throws Exception {
-        String foreign = issuer.issueForAttempt(
-                AttemptJwt.Kind.TURN,
+        String foreign = issuer.issueForTurn(
                 turn.getId(),
                 workspace.getId() + 1,
                 turn.getAttempt(),
-                null,
+                Objects.requireNonNull(turn.getLeaseId()),
                 Instant.now().plus(Duration.ofMinutes(5)));
         int entries = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .size();
@@ -549,7 +553,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldRecordTheLastFailedModelCallOnTheTurnWhenTheHostEndsItFailed() throws Exception {
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
         try (var call = callsInFlight.begin(attempt)) {
             call.failed(new MentorTurn.FailedCall("WebClientRequestException", null));
         }
@@ -573,7 +577,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Test
     void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
         try (var call = callsInFlight.begin(attempt)) {
             call.failed(new MentorTurn.FailedCall("upstream_status", 503));
         }
@@ -581,13 +585,9 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         doThrow(new DataAccessResourceFailureException("the database went away"))
                 .doAnswer(AdditionalAnswers.delegatesTo(completion))
                 .when(failingOnce)
-                .end(any(), anyInt(), any(), any());
-        gateway = gateway(new HephTurnController(
-                HephTurnFixtures.contexts(beans),
-                failingOnce,
-                dispatcher,
-                callsInFlight,
-                WorkerPropertiesFixtures.minimal("1", "4")));
+                .end(anyLong(), any(), anyInt(), any(), any());
+        gateway = gateway(
+                new HephTurnController(HephTurnFixtures.contexts(beans), failingOnce, dispatcher, callsInFlight));
         String end = """
                 {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""";
 

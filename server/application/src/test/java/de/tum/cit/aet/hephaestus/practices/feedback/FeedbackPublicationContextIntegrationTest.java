@@ -102,6 +102,8 @@ import org.springframework.web.server.ResponseStatusException;
  * same person, is unchanged and no other review's write has an unknown outcome.
  */
 class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     @Autowired
     WebTestClient client;
 
@@ -638,7 +640,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         var job = ownedAdmittedJob();
         var service = admissionService(job, pausing);
         var read = CompletableFuture.supplyAsync(() -> service.publicFeedbackHistory(
-                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, "worker")));
+                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, LEASE)));
         try {
             await(issued);
             new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
@@ -1038,13 +1040,14 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 workspace);
     }
 
-    /** A running attempt of the fixture review that admission accepted, owned by worker "worker". */
+    /** A running attempt of the fixture review that admission accepted, under its live lease. */
     private ReviewJob ownedAdmittedJob() {
         var job = RuntimeReviewTestData.job();
         job.setWorkspaceId(workspace.getId());
         job.setReviewId(reviewId);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
         return job;
@@ -1056,6 +1059,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         when(jobs.findByIdAndWorkspaceId(job.getId(), workspace.getId())).thenReturn(Optional.of(job));
         when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), workspace.getId()))
                 .thenReturn(Optional.of(job));
+        when(jobs.databaseClock()).thenReturn(Instant.now());
         var base = RuntimeReviewTestData.assignment(developerId, null);
         var item = new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null);
         var assignment = new ReviewAssignmentSnapshot(

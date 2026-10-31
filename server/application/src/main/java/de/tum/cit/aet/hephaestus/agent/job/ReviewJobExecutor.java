@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
@@ -23,7 +22,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
@@ -204,8 +202,8 @@ public class ReviewJobExecutor {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private volatile @Nullable Thread pollThread;
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
-    // The attempt each locally running job runs, so a later attempt of the same job is never mistaken for it.
-    private final Map<UUID, Integer> localRunningJobs = new ConcurrentHashMap<>();
+    // The attempt and lease each locally running job runs, so a later attempt of the same job is never mistaken for it.
+    private final Map<UUID, LocalAttempt> localRunningJobs = new ConcurrentHashMap<>();
     // The locally running jobs whose sandbox has ended, or that never start one: they compose and hold no sandbox slot.
     private final Set<UUID> composingJobs = ConcurrentHashMap.newKeySet();
 
@@ -220,8 +218,6 @@ public class ReviewJobExecutor {
     private final int sandboxSlots;
 
     private final Optional<WorkerCapacityState> capacityState;
-    // Worker identity fences terminal writes.
-    private final String workerId;
 
     private @Nullable ReviewCompositionContinuation compositionContinuation;
     private @Nullable WorkerFeedbackComposer feedbackComposer;
@@ -254,7 +250,6 @@ public class ReviewJobExecutor {
             PracticeScriptRunRecorder practiceScriptRuns,
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
-            WorkerProperties workerProperties,
             ReviewJobClaimService claims,
             ReviewJobRecovery recovery) {
         this.agentProperties = agentProperties;
@@ -276,7 +271,6 @@ public class ReviewJobExecutor {
         this.practiceScriptRuns = practiceScriptRuns;
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
-        this.workerId = workerProperties.resolvedWorkerId();
 
         this.drainedRequeued = Counter.builder(AgentMetrics.AGENT_JOB_DRAINED)
                 .description("Reviews that a worker's drain stopped, by outcome")
@@ -319,8 +313,7 @@ public class ReviewJobExecutor {
         pollThread = Thread.ofPlatform().name("agent-job-poll").daemon(true).start(this::pollLoop);
 
         log.info(
-                "Agent job executor started: workerId={}, pollInterval={}, claimBatchSize={}",
-                workerId,
+                "Agent job executor started: pollInterval={}, claimBatchSize={}",
                 agentProperties.pollInterval(),
                 agentProperties.claimBatchSize());
     }
@@ -412,9 +405,9 @@ public class ReviewJobExecutor {
     }
 
     private boolean settleForDrain(UUID jobId, ReviewJobCancellationReason reason) {
-        ReviewJob job = jobRepository.findById(jobId).orElse(null);
-        if (job == null) return false;
-        ReviewJobRecovery.Outcome outcome = recovery.recover(jobId, workerId, job.getAttempt(), reason);
+        LocalAttempt local = localRunningJobs.get(jobId);
+        if (local == null) return false;
+        ReviewJobRecovery.Outcome outcome = recovery.recover(jobId, local.leaseId(), local.attempt(), reason);
         if (outcome == ReviewJobRecovery.Outcome.REQUEUED) drainedRequeued.increment();
         if (outcome == ReviewJobRecovery.Outcome.CANCELLED) drainedCancelled.increment();
         return outcome != ReviewJobRecovery.Outcome.NONE;
@@ -454,20 +447,66 @@ public class ReviewJobExecutor {
     }
 
     /**
-     * Stops each local attempt whose row this worker no longer runs: a cancel, a requeue or a reap ended it on the row
-     * alone.
+     * Renews the lease of each local attempt, in the caller's transaction, and returns the attempts whose lease is gone:
+     * a cancel, a requeue or a reap ended them on the row alone, or the lease expired before this renewal.
      */
-    public void stopEndedAttempts() {
-        Map<UUID, Integer> local = Map.copyOf(localRunningJobs);
-        if (local.isEmpty()) return;
-        Set<UUID> running = Set.copyOf(jobRepository.findRunningIdsOwnedBy(workerId, local.keySet()));
-        local.forEach((jobId, attempt) -> {
-            // A later attempt of the job that this worker claimed since the read is not the one that ended, and an
-            // attempt that composes has no sandbox left: its own end writes the row.
-            if (!running.contains(jobId)
-                    && attempt.equals(localRunningJobs.get(jobId))
-                    && !composingJobs.contains(jobId)) cancelLocalJob(jobId, "its row no longer runs on this worker");
+    public Map<UUID, LocalAttempt> renewLeases() {
+        Map<UUID, LocalAttempt> ended = new HashMap<>();
+        Map.copyOf(localRunningJobs).forEach((jobId, local) -> {
+            if (jobRepository.renewLease(
+                            jobId,
+                            local.workspaceId(),
+                            local.attempt(),
+                            local.leaseId(),
+                            AgentProperties.WORKER_LEASE_TTL.toSeconds())
+                    == 0) ended.put(jobId, local);
         });
+        return ended;
+    }
+
+    /** Stops the sandbox of each attempt that lost its lease and still runs here; see {@link #renewLeases()}. */
+    public void stopEndedAttempts(Map<UUID, LocalAttempt> ended) {
+        ended.forEach((jobId, local) -> {
+            // A later attempt of the job that this worker claimed since the renewal is not the one that ended, and an
+            // attempt that composes has no sandbox left: its own end writes the row.
+            if (local.equals(localRunningJobs.get(jobId)) && !composingJobs.contains(jobId))
+                cancelLocalJob(jobId, "its attempt no longer holds its lease");
+        });
+    }
+
+    /** The lease of a locally running attempt; every fenced write of the attempt names it. */
+    public record LocalAttempt(long workspaceId, int attempt, UUID leaseId) {}
+
+    /**
+     * The row of the attempt that runs here, reloaded, while it still carries this attempt's lease and number. A row that
+     * a later claim took is never handed on: whatever reads its lease from it would act for that claim.
+     *
+     * @throws ResultAdmissionService.StaleAttemptException when the attempt no longer holds the row
+     */
+    private ReviewJob ownRow(UUID jobId) {
+        LocalAttempt local = localRunningJobs.get(jobId);
+        ReviewJob row = jobRepository.findById(jobId).orElse(null);
+        if (local == null
+                || row == null
+                || row.getAttempt() != local.attempt()
+                || !local.leaseId().equals(row.getLeaseId())) throw new ResultAdmissionService.StaleAttemptException();
+        return row;
+    }
+
+    /** Records an attempt that this worker claimed, so that each of its writes is fenced on its own lease. */
+    void track(ReviewJob claimed) {
+        localRunningJobs.put(
+                claimed.getId(),
+                new LocalAttempt(
+                        claimed.getWorkspaceId(),
+                        claimed.getAttempt(),
+                        Objects.requireNonNull(claimed.getLeaseId(), "A claimed attempt has a lease")));
+    }
+
+    /** The lease of the attempt that runs here: the fence of each of its writes, never the row's current lease. */
+    private UUID ownLease(UUID jobId) {
+        return Objects.requireNonNull(localRunningJobs.get(jobId), "The attempt does not run here")
+                .leaseId();
     }
 
     /**
@@ -622,7 +661,7 @@ public class ReviewJobExecutor {
         // Counted after the claim commits, never inside its transaction: a failed commit rolls the row
         // back to QUEUED and no execution then runs to release the count. Since the count is the hard
         // claim bound, one leaked entry would retire a slot for this worker's lifetime.
-        localRunningJobs.put(jobId, claim.job().getAttempt());
+        track(claim.job());
         preparingJobs.add(jobId);
         capacityState.ifPresent(WorkerCapacityState::claimReview);
         return startExecution(jobId, claim);
@@ -655,7 +694,8 @@ public class ReviewJobExecutor {
     private void requeueRejectedClaim(UUID jobId) {
         try {
             requeueRetries.execute(named("Requeue of rejected claim " + jobId, () -> {
-                transactionTemplate.executeWithoutResult(status -> jobRepository.requeueRejectedClaim(jobId, workerId));
+                transactionTemplate.executeWithoutResult(
+                        status -> jobRepository.requeueRejectedClaim(jobId, ownLease(jobId)));
                 return null;
             }));
         } catch (RetryException e) {
@@ -786,7 +826,7 @@ public class ReviewJobExecutor {
                     RefusalReason.WORKSPACE_BUDGET_EXCEEDED,
                     e.getBody().getProperties()));
             Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
-                    jobId, workerId, job.getAttempt(), Instant.now(), output));
+                    jobId, ownLease(jobId), job.getAttempt(), Instant.now(), output));
             metricOutcome = updated != null && updated == 1 ? "WORKSPACE_BUDGET_EXCEEDED" : "OWNERSHIP_LOST";
             if (updated != null && updated == 1) {
                 recordPracticeReviewRefusal("workspace_budget_exceeded");
@@ -815,7 +855,8 @@ public class ReviewJobExecutor {
                 recordAttemptOutcome(job, claim.itemKind(), metricOutcome, recordedTerminal, startTime, stagedInputs);
             } finally {
                 if (!composingJobs.remove(jobId)) releaseCapacity();
-                localRunningJobs.remove(jobId, job.getAttempt());
+                localRunningJobs.computeIfPresent(
+                        jobId, (id, local) -> local.attempt() == job.getAttempt() ? null : local);
                 preparingJobs.remove(jobId);
                 MDC.remove(MDC_JOB_ID);
                 MDC.remove(StructuredLogKeys.WORKSPACE_ID);
@@ -854,7 +895,7 @@ public class ReviewJobExecutor {
             JsonNode output =
                     objectMapper.valueToTree(new RefusedExecution(RefusalOutcome.INSUFFICIENT_EVIDENCE, null, null));
             Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
-                    jobId, workerId, job.getAttempt(), Instant.now(), output));
+                    jobId, ownLease(jobId), job.getAttempt(), Instant.now(), output));
             if (updated != null && updated == 1) {
                 recordPracticeReviewRefusal("insufficient_evidence");
                 return new ExecutionOutcome("INSUFFICIENT_EVIDENCE", ReviewJobStatus.FAILED);
@@ -949,11 +990,13 @@ public class ReviewJobExecutor {
             @Nullable CompositionStop withholdOnly) {
         if (composingJobs.add(jobId)) releaseCapacity();
         WorkerFeedbackComposer composer = feedbackComposer;
-        if (composer == null || workerId == null) return true;
+        LocalAttempt local = localRunningJobs.get(jobId);
+        if (composer == null || local == null) return true;
+        UUID lease = local.leaseId();
         ReviewJob current = jobRepository.findById(jobId).orElse(null);
         if (current == null
                 || current.getStatus() != ReviewJobStatus.RUNNING
-                || !workerId.equals(current.getWorkerId())
+                || !lease.equals(current.getLeaseId())
                 || !ResultAdmissionService.isAdmitted(current)) return true;
         Instant anchor =
                 current.getExecutionStartedAt() != null ? current.getExecutionStartedAt() : current.getStartedAt();
@@ -961,11 +1004,11 @@ public class ReviewJobExecutor {
                 .plusSeconds(snapshot.timeoutSeconds())
                 .plus(ReviewJobZombieSweeper.RUNNING_BUFFER);
         try {
-            if (withholdOnly != null) composer.withholdResumed(current, workerId, withholdOnly);
-            else if (resumed) composer.composeResumed(current, workerId, notAfter);
-            else composer.composeAfterMeasurement(current, workerId, notAfter);
+            if (withholdOnly != null) composer.withholdResumed(current, lease, withholdOnly);
+            else if (resumed) composer.composeResumed(current, lease, notAfter);
+            else composer.composeAfterMeasurement(current, lease, notAfter);
         } catch (ResultAdmissionService.StaleAttemptException lost) {
-            log.info("Feedback composition stopped: the attempt no longer runs on this worker: jobId={}", jobId);
+            log.info("Feedback composition stopped: the attempt no longer holds its lease: jobId={}", jobId);
         } catch (CompositionHandedOnException handedOn) {
             log.warn(
                     "Feedback composition is handed on to another attempt: jobId={}, cause={}",
@@ -990,7 +1033,7 @@ public class ReviewJobExecutor {
             transactionTemplate.execute(status -> {
                 if (scriptReport != null)
                     practiceScriptRuns.record(job, scriptReport, snapshot.practiceScriptModels(), Instant.now());
-                return recovery.recover(job.getId(), workerId, job.getAttempt(), null);
+                return recovery.recover(job.getId(), ownLease(job.getId()), job.getAttempt(), null);
             });
         } catch (RuntimeException failed) {
             log.error("Could not hand the attempt on; it stays for the sweepers: jobId={}", job.getId(), failed);
@@ -1038,7 +1081,7 @@ public class ReviewJobExecutor {
     private boolean markExecutionStarted(UUID jobId, int attempt) {
         preparingJobs.remove(jobId);
         Integer updated = transactionTemplate.execute(
-                status -> jobRepository.markExecutionStarted(jobId, workerId, attempt, Instant.now()));
+                status -> jobRepository.markExecutionStarted(jobId, ownLease(jobId), attempt, Instant.now()));
         return updated != null && updated == 1;
     }
 
@@ -1058,15 +1101,14 @@ public class ReviewJobExecutor {
             UUID jobId, ReviewJob job, ConfigSnapshot snapshot, AtomicReference<PreparationFailure.Stage> stage) {
         stage.set(PreparationFailure.Stage.INPUTS);
 
-        ReviewJob preparedJob = jobRepository.findById(jobId).orElse(job);
-        PreparedJobInputs preparedInputs = handler.prepareInputs(preparedJob);
+        PreparedJobInputs preparedInputs = handler.prepareInputs(ownRow(jobId));
 
         try {
             var report = preparedInputs.automatedReviewReadinessReport();
             if (report != null && report.decisions().stream().noneMatch(report::runs)) {
                 stage.set(PreparationFailure.Stage.PROVENANCE);
                 persistPreparedEvidence(jobId, job.getWorkspaceId(), job.getAttempt(), preparedInputs);
-                handler.completeWithoutExecution(jobRepository.findById(jobId).orElseThrow());
+                handler.completeWithoutExecution(ownRow(jobId));
                 return new PreparedSandbox(null, preparedInputs);
             }
             stage.set(PreparationFailure.Stage.CREDENTIAL);
@@ -1074,8 +1116,8 @@ public class ReviewJobExecutor {
             Instant workDeadline =
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
-            String jobToken = attemptTokenIssuer.issueForAttempt(
-                    AttemptJwt.Kind.REVIEW, jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
+            String jobToken = attemptTokenIssuer.issueForReview(
+                    jobId, job.getWorkspaceId(), job.getAttempt(), ownLease(jobId), workDeadline, tokenExpiry);
             stage.set(PreparationFailure.Stage.SPEC);
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.model().apiProtocol().wire(),
@@ -1151,7 +1193,7 @@ public class ReviewJobExecutor {
                 objectMapper.valueToTree(
                         inputDirectories.stream().map(EvidenceDirectory::target).toList()));
         Integer updated = transactionTemplate.execute(
-                status -> jobRepository.updateCapture(jobId, workspaceId, workerId, attempt, stamp));
+                status -> jobRepository.updateCapture(jobId, workspaceId, ownLease(jobId), attempt, stamp));
         if (updated == null || updated != 1) {
             throw new IllegalStateException("Provenance digest write matched no job row: jobId=" + jobId);
         }
@@ -1331,7 +1373,7 @@ public class ReviewJobExecutor {
                         jobId,
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        workerId,
+                        ownLease(jobId),
                         objectMapper.writeValueAsString(diagnosis));
             }
             if (updated > 0 && e instanceof SandboxInitializationException initialization) {
@@ -1339,7 +1381,7 @@ public class ReviewJobExecutor {
                         jobId,
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        workerId,
+                        ownLease(jobId),
                         initializationDiagnosis(objectMapper, job.getAttempt(), initialization));
             }
             if (updated > 0 && sandboxExecutionStarted) billTerminatedJob(job, "execution failure");
@@ -1420,7 +1462,8 @@ public class ReviewJobExecutor {
 
     // Bill within the requeue transaction before it clears usage counters.
     private boolean requeueForAnotherAttempt(ReviewJob job, boolean bill, RequeueCause cause) {
-        Boolean updated = transactionTemplate.execute(status -> recovery.retryUnadmitted(job, workerId, bill));
+        Boolean updated =
+                transactionTemplate.execute(status -> recovery.retryUnadmitted(job, ownLease(job.getId()), bill));
         if (!Boolean.TRUE.equals(updated)) return false;
         Objects.requireNonNull(infraRetryRequeued.get(cause)).increment();
         return true;
@@ -1450,13 +1493,13 @@ public class ReviewJobExecutor {
         Objects.requireNonNull(sandboxStartFailures.get(reason)).increment();
         if (neverFits) {
             log.error("No sandbox room can hold the review, so it is cancelled: reason={}", reason.tag());
-            Integer cancelled = transactionTemplate.execute(
-                    status -> jobRepository.cancelForRoomOwnedBy(jobId, now, CANNOT_FIT, workerId, job.getAttempt()));
+            Integer cancelled = transactionTemplate.execute(status ->
+                    jobRepository.cancelForRoomOwnedBy(jobId, now, CANNOT_FIT, ownLease(jobId), job.getAttempt()));
             return cancelled != null && cancelled > 0 ? ReviewJobStatus.CANCELLED : null;
         }
         Instant retryAt = now.plus(roomWait(job.getRoomRefusals()));
         transactionTemplate.executeWithoutResult(
-                status -> jobRepository.holdForSandboxRoom(jobId, workerId, job.getAttempt(), retryAt));
+                status -> jobRepository.holdForSandboxRoom(jobId, ownLease(jobId), job.getAttempt(), retryAt));
         log.warn(
                 "No room for the review's sandbox, so the job waits in the queue: reason={}, retryAt={}",
                 reason.tag(),
@@ -1523,10 +1566,10 @@ public class ReviewJobExecutor {
         return wait.compareTo(MAX_ROOM_WAIT) > 0 ? MAX_ROOM_WAIT : wait;
     }
 
-    // Fence late terminal writes on worker and attempt so they cannot end an attempt that was requeued since.
+    // Fence late terminal writes on lease and attempt so they cannot end an attempt that was requeued since.
     private int transitionTerminal(
             UUID jobId, int attempt, ReviewJobStatus status, Instant now, @Nullable String error) {
-        return jobRepository.transitionStatusOwnedBy(jobId, status, now, error, workerId, attempt);
+        return jobRepository.transitionStatusOwnedBy(jobId, status, now, error, ownLease(jobId), attempt);
     }
 
     // A failed runner's draft can reach delivery only through results the server already admitted.

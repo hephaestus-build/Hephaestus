@@ -55,9 +55,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +70,8 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class ReviewOutputServiceTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
     private final CandidateEvidenceVerifier verifier = mock(CandidateEvidenceVerifier.class);
@@ -100,7 +104,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         var capture = mapper.createObjectNode();
         capture.set("manifest", mapper.valueToTree(manifest));
         job.setCapture(capture);
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
     }
 
     private void acceptReadReceipts() {

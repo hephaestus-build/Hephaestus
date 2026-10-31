@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -59,6 +60,8 @@ public class KubernetesIsolationProbe {
 
     /** Scheduling, the pull of the agent image and the script. */
     static final Duration PROBE_TIME = Duration.ofMinutes(5);
+    /** How long a worker that starts waits before it tries again a probe whose Pods could not run. */
+    static final Duration START_RETRY = Duration.ofSeconds(15);
 
     /** A node without user namespaces can leave the Pod without host users waiting, so it gets less time. */
     static final Duration USER_NAMESPACE_TIME = Duration.ofSeconds(90);
@@ -213,6 +216,15 @@ public class KubernetesIsolationProbe {
      * creates none, so such a run waits up to {@link KubernetesSandboxJobs#CHILD_START} for it.
      */
     public Proof run() {
+        return Objects.requireNonNull(probe(false));
+    }
+
+    /**
+     * One run of the probe. At the worker's start, a run whose Pods could not run proves nothing either way and returns
+     * null: the worker has no proof yet, so it stays not ready and starts no sandbox.
+     */
+    @Nullable
+    Proof probe(boolean firstStart) {
         List<String> failures = new ArrayList<>();
         refusesUnrestrictedPods().ifPresent(failures::add);
         Target gateway = new Target("gateway", worker.properties().podIp(), worker.gatewayPort(), true);
@@ -235,12 +247,21 @@ public class KubernetesIsolationProbe {
                 > (reviewed.ran() ? 0 : reviewed.failures().size())
                         + (closedOutcome.ran() ? 0 : closedOutcome.failures().size());
         Proof last = worker.proof();
-        if (last != null && last.passed() && !gateFailed && !failures.isEmpty()) {
+        boolean inconclusive = !gateFailed && !failures.isEmpty();
+        if (inconclusive && last != null && last.passed()) {
             log.warn(
                     "The sandbox isolation probe could not run its Pods, so the proof of {} stands: {}",
                     last.at(),
                     String.join("; ", failures));
             return last;
+        }
+        if (inconclusive && firstStart) {
+            log.warn(
+                    "The sandbox isolation probe could not run its Pods yet, so this worker is not ready and tries"
+                            + " again in {}: {}",
+                    START_RETRY,
+                    String.join("; ", failures));
+            return null;
         }
         Proof proof = new Proof(
                 Instant.now(),
@@ -262,12 +283,21 @@ public class KubernetesIsolationProbe {
     }
 
     /**
-     * Runs the probe at the worker's start.
+     * Runs the probe at the worker's start, until its Pods run. During a rolling update the sandbox quota holds the probe
+     * of the worker that drains, and this worker's probe Pods wait for that room; exiting would only restart it.
      *
      * @throws IllegalStateException naming each gate that did not hold
      */
     public Proof prove() {
-        Proof proof = run();
+        Proof proof;
+        while ((proof = probe(true)) == null) {
+            try {
+                Thread.sleep(START_RETRY);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("The worker stopped before its sandbox isolation probe ran", e);
+            }
+        }
         if (!proof.passed()) {
             throw new IllegalStateException(failureMessage(proof));
         }

@@ -20,7 +20,7 @@ public class ReviewAttemptGuardService implements ReviewAttemptGuard {
     public void requireOwner(long workspaceId, UUID jobId, int attempt) {
         var job = jobs.findByIdAndWorkspaceIdForUpdate(jobId, workspaceId)
                 .orElseThrow(ResultAdmissionService.StaleAttemptException::new);
-        if (job.getStatus() != ReviewJobStatus.RUNNING || job.getAttempt() != attempt || job.getWorkerId() == null)
+        if (job.getStatus() != ReviewJobStatus.RUNNING || job.getAttempt() != attempt || job.getLeaseId() == null)
             throw new ResultAdmissionService.StaleAttemptException();
     }
 }

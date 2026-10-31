@@ -26,6 +26,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 
 class ProxyRequestPolicyTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
+
     @Mock
     private EgressPolicy egress;
 
@@ -60,7 +62,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 1L,
-                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO, "worker-1"),
+                new ProxyRouting.BilledAttempt(source, id, 0, BigDecimal.ZERO, LEASE),
                 null,
                 null,
                 source == UsageSourceType.MENTOR_TURN ? null : Instant.now().plusSeconds(60));
@@ -113,7 +115,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
                 7L,
                 8L,
                 null,
-                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, BigDecimal.ZERO, "worker-1"),
+                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, id, 0, BigDecimal.ZERO, LEASE),
                 null,
                 null,
                 null);

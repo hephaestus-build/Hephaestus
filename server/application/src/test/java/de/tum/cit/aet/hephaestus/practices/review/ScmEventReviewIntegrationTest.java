@@ -914,7 +914,12 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         try (var input =
                 Objects.requireNonNull(getClass().getResourceAsStream("/db/changelog/source-contract-3.sql"))) {
             String migration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-            transactions.executeWithoutResult(ignored -> jdbc.execute(migration));
+            // The released changelog ran while review_job still had the worker column that a later changelog drops.
+            transactions.executeWithoutResult(ignored -> {
+                jdbc.execute("ALTER TABLE review_job ADD COLUMN worker_id varchar(255)");
+                jdbc.execute(migration);
+                jdbc.execute("ALTER TABLE review_job DROP COLUMN worker_id");
+            });
         }
         var current = practices
                 .findByWorkspaceIdAndSlug(workspace, "event-test")

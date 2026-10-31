@@ -47,7 +47,6 @@ import tools.jackson.databind.JsonNode;
  */
 class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    private static final String WORKER = "worker-billing";
     /** $10 per million input tokens; nothing else is priced. */
     private static final MentorLlmConfig ADMITTED = LlmCatalogTestFixtures.admittedMentorConfig();
 
@@ -118,9 +117,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     private void end(MentorTurn turn, MentorTurn.Status outcome, List<JsonNode> entries) {
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(
                         outcome, entries, outcome == MentorTurn.Status.FAILED ? "x" : null, null, null));
     }
@@ -274,7 +274,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         reaper.reap();
 
         assertThat(settled(called)).isEqualTo("UNCONFIRMED/WRITE_STARTED/true/-");
-        MentorTurn second = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn second = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         assertThat(second.getAttempt()).isEqualTo(2);
         assertThat(feedback.claimConversationCopy(workspace.getId(), called, second.getId(), second.getAttempt()))
                 .isEmpty();
@@ -291,17 +291,28 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 main.getId(),
                 new MentorTurnService.Question(
                         MentorTurn.Surface.APP, "Question", UUID.randomUUID().toString(), null, null));
-        MentorTurn turn = turns.claimNext(WORKER, lease).orElseThrow();
+        MentorTurn turn = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         admit(turn);
+        if (lease.isNegative()) expire(turn);
         return turn;
+    }
+
+    private void expire(MentorTurn turn) {
+        turns.renewLease(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                Duration.ofSeconds(-1));
     }
 
     /** Admits the attempt as the worker does, which also creates its usage measurement. */
     private void admit(MentorTurn turn) {
         assertThat(attemptUsage.admit(
+                        turn.getWorkspaceId(),
                         turn.getId(),
                         turn.getAttempt(),
-                        WORKER,
+                        Objects.requireNonNull(turn.getLeaseId()),
                         MentorTurnAdmission.of(ADMITTED, Objects.requireNonNull(ADMITTED.priceSnapshot()))))
                 .isTrue();
     }
@@ -336,7 +347,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 transactionTemplate.execute(status -> turns.requeueRunning(workspace.getId(), first.getConversationId())
                         .orElseThrow()));
         ConversationReceipts.awaitSettled(jdbc);
-        MentorTurn second = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn second = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         admit(second);
         proxyCall(second, 70_000);
         end(second, MentorTurn.Status.DONE, List.of());
@@ -367,9 +378,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         proxyCall(turn, 50_000);
 
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
 
         assertThat(ledger(turn)).singleElement().satisfies(row -> {
@@ -391,9 +403,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
 
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(MentorTurn.Status.FAILED, List.of(), "broken", null, null));
 
         assertThat(ledger(turn)).isEmpty();
@@ -405,9 +418,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         proxyCall(turn, 50_000);
 
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(
                         MentorTurn.Status.FAILED,
                         List.of(),
@@ -430,9 +444,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
 
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(
                         MentorTurn.Status.FAILED,
                         List.of(),
@@ -451,9 +466,10 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
 
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(
                         MentorTurn.Status.DONE,
                         List.of(),
@@ -486,8 +502,9 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(requeued.getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
         assertThat(requeued.getInputTokens()).isZero();
         assertThat(requeued.getQueuedAt()).isAfter(queuedBeforeLoss);
-        MentorTurn second = turns.claimNext(WORKER, Duration.ofSeconds(-1)).orElseThrow();
+        MentorTurn second = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         admit(second);
+        expire(second);
         proxyCall(second, 70_000);
 
         reaper.reap();

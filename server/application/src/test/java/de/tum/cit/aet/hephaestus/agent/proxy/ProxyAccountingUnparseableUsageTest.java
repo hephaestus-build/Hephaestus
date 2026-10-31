@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
     private final ProxyBudgetGate budgetGate = mock(ProxyBudgetGate.class);
     private final ProxyUsageAccumulator usageAccumulator = mock(ProxyUsageAccumulator.class);
@@ -37,7 +38,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @DisplayName("an unreadable 2xx body is counted, not silently dropped")
     void shouldCountUnparseableUpstreamBody() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
         byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
 
         assertThatCode(() -> accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, notJson))
@@ -58,7 +59,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     void shouldCountAServedBodyThatReportsNoUsageAsMissingNotUnparseable() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
         byte[] body = "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}".getBytes(StandardCharsets.UTF_8);
 
         accounting.recordUsage(attempt, null, LlmApiProtocol.OPENAI_COMPLETIONS, body);
@@ -74,7 +75,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     void shouldLogTheParseFailureTypeWithoutTheModelAnswer() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
         // An unquoted token is what a parser quotes back in its message.
         byte[] answer = "{\"choices\":[{\"text\":privateanswercanary}]}".getBytes(StandardCharsets.UTF_8);
         Logger logger = (Logger) LoggerFactory.getLogger(ProxyAccounting.class);
@@ -108,7 +109,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @DisplayName("a readable body still bills and leaves the counter alone")
     void shouldNotCountAParseableBody() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
         byte[] body = """
             {"usage":{"prompt_tokens":10,"completion_tokens":5,\
             "prompt_tokens_details":{"cached_tokens":4},\
@@ -129,7 +130,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     void shouldCountInvalidTokenTotals() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
         byte[] body = """
             {"usage":{"prompt_tokens":3,"prompt_tokens_details":{"cached_tokens":4}}}
             """.getBytes(StandardCharsets.UTF_8);
@@ -146,7 +147,7 @@ class ProxyAccountingUnparseableUsageTest extends BaseUnitTest {
     @Test
     void shouldStillCountThePracticeScriptCallWhenItsBodyIsUnreadable() {
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.PRACTICE_SCRIPT_EMBEDDING, UUID.randomUUID(), 0, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.PRACTICE_SCRIPT_EMBEDDING, UUID.randomUUID(), 0, BigDecimal.ZERO, LEASE);
         byte[] notJson = "<html>502 upstream</html>".getBytes(StandardCharsets.UTF_8);
 
         PracticeScriptCall call = new PracticeScriptCall(ModelKind.EMBEDDING, null, "comment-quality");

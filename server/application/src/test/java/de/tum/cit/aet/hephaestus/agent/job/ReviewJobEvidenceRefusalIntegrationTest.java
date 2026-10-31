@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,6 +16,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class ReviewJobEvidenceRefusalIntegrationTest extends BaseIntegrationTest {
+
+    private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
+
     @Autowired
     private ReviewJobRepository jobs;
 
@@ -41,18 +45,18 @@ class ReviewJobEvidenceRefusalIntegrationTest extends BaseIntegrationTest {
                         .getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("owner");
+        job.setLeaseId(OWNER);
         job.setConfigSnapshot(mapper.createObjectNode());
         var id = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job)).getId();
         var output = mapper.createObjectNode().put("outcome", "INSUFFICIENT_EVIDENCE");
-        Integer refused =
-                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, "other", 0, Instant.now(), output));
+        Integer refused = transactions.execute(
+                status -> jobs.transitionToEvidenceRefused(id, UUID.randomUUID(), 0, Instant.now(), output));
         assertThat(refused).isZero();
         Integer stale =
-                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, "owner", 1, Instant.now(), output));
+                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, OWNER, 1, Instant.now(), output));
         assertThat(stale).isZero();
         Integer settled =
-                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, "owner", 0, Instant.now(), output));
+                transactions.execute(status -> jobs.transitionToEvidenceRefused(id, OWNER, 0, Instant.now(), output));
         assertThat(settled).isEqualTo(1);
         var saved = jobs.findById(id).orElseThrow();
         assertThat(saved.getStatus()).isEqualTo(ReviewJobStatus.FAILED);

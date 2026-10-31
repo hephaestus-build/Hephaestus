@@ -74,6 +74,8 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.json.JsonMapper;
 
 class JobEvidenceFilesTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private static EvidenceFolderPersonDataCatalog personCopies() {
         AutoCloseable released = () -> {};
         return Mockito.mock(
@@ -123,7 +125,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var identity = new AdmissionIdentity(job.getId(), 1L, 0, "worker");
+        var identity = new AdmissionIdentity(job.getId(), 1L, 0, LEASE);
         try (var prepared = PreparedJobInputsFixtures.prepare(
                 files, job, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)))) {
             assertThat(PreparedJobInputsFixtures.files(prepared)).containsKey("context/quote");
@@ -132,7 +134,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
             job.setAdmissionAttempt(job.getAttempt());
             job.setAdmissionDigest("a".repeat(64));
-            files.discardAdmittedAttempt(new AdmissionIdentity(job.getId(), 1L, 1, "worker"));
+            files.discardAdmittedAttempt(new AdmissionIdentity(job.getId(), 1L, 1, LEASE));
             assertThat(read(files, job, "context/quote", sha)).contains(bytes);
             files.discardAdmittedAttempt(identity);
             assertThat(read(files, job, "context/quote", sha)).isEmpty();
@@ -334,7 +336,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
             verify(jobs)
                     .expireCaptureInventory(
-                            job.getId(), 1L, job.getAttempt(), Objects.requireNonNull(job.getWorkerId()));
+                            job.getId(), 1L, job.getAttempt(), Objects.requireNonNull(job.getLeaseId()));
         } finally {
             prepared.close();
         }
@@ -372,7 +374,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = job();
         Path parent = layout.jobsRoot().resolve("1").resolve(job.getId().toString());
         Files.createDirectories(parent);
-        String identity = "0-" + ProvenanceDigest.sha256Hex("worker".getBytes(StandardCharsets.UTF_8));
+        String identity = "0-" + ProvenanceDigest.sha256Hex(LEASE.toString().getBytes(StandardCharsets.UTF_8));
         Path staging = Files.createTempDirectory(parent, "." + identity + ".preparing-");
         Files.writeString(staging.resolve("partial"), "not published");
         files.cleanEndedAttempts();
@@ -572,11 +574,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             later.cleanAfterRestart();
             later.cleanEndedAttempts();
             assertThat(read(files, ended, "context/quote", sha)).contains(bytes);
-            verify(jobs, never()).expireCaptureInventory(ended.getId(), 1L, 0, "worker");
+            verify(jobs, never()).expireCaptureInventory(ended.getId(), 1L, 0, LEASE);
         }
         later.cleanEndedAttempts();
         assertThat(read(files, ended, "context/quote", sha)).isEmpty();
-        verify(jobs).expireCaptureInventory(ended.getId(), 1L, 0, "worker");
+        verify(jobs).expireCaptureInventory(ended.getId(), 1L, 0, LEASE);
     }
 
     @Test
@@ -606,13 +608,13 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
             periodic.cleanEndedAttempts();
             assertThat(read(files, ended, "context/quote", sha)).contains(bytes);
-            verify(jobs, never()).expireCaptureInventory(ended.getId(), 1L, 0, "worker");
+            verify(jobs, never()).expireCaptureInventory(ended.getId(), 1L, 0, LEASE);
             proceed.countDown();
             startup.get(10, TimeUnit.SECONDS);
         }
         assertThat(read(files, ended, "context/quote", sha)).isEmpty();
         periodic.cleanEndedAttempts();
-        verify(jobs, times(1)).expireCaptureInventory(ended.getId(), 1L, 0, "worker");
+        verify(jobs, times(1)).expireCaptureInventory(ended.getId(), 1L, 0, LEASE);
     }
 
     @Test
@@ -626,7 +628,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var identity = new AdmissionIdentity(job.getId(), 1L, 0, "worker");
+        var identity = new AdmissionIdentity(job.getId(), 1L, 0, LEASE);
         var later = new JobEvidenceFiles(layout, jobs, Clock.offset(clock, Duration.ofHours(1)), personCopies());
         var prepared = PreparedJobInputsFixtures.prepare(
                 files, job, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)));
@@ -653,7 +655,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         later.cleanEndedAttempts();
         files.discardAdmittedAttempt(identity);
         assertThat(read(files, job, "context/quote", sha)).isEmpty();
-        verify(jobs, never()).expireCaptureInventory(job.getId(), 1L, 0, "worker");
+        verify(jobs, never()).expireCaptureInventory(job.getId(), 1L, 0, LEASE);
     }
 
     @Test
@@ -687,7 +689,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             var retiring = new Thread(prepared::close);
             retiring.start();
             assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
-            var identity = new AdmissionIdentity(job.getId(), 1L, 0, "worker");
+            var identity = new AdmissionIdentity(job.getId(), 1L, 0, LEASE);
             var admitting = new Thread(() -> files.discardAdmittedAttempt(identity));
             admitting.start();
             await().atMost(Duration.ofSeconds(5)).until(() -> admitting.getState() == Thread.State.BLOCKED);
@@ -744,8 +746,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         return layout.jobsRoot()
                 .resolve("1")
                 .resolve(job.getId().toString())
-                .resolve(attempt + "-" + ProvenanceDigest.sha256Hex("worker".getBytes(StandardCharsets.UTF_8))
-                        + ".trace");
+                .resolve(attempt + "-"
+                        + ProvenanceDigest.sha256Hex(LEASE.toString().getBytes(StandardCharsets.UTF_8)) + ".trace");
     }
 
     /** A job as the executor launches it: RUNNING as attempt 0 of this worker; later changes show in both reads. */
@@ -1059,7 +1061,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         return job;
     }
 }

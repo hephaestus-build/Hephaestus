@@ -100,7 +100,7 @@ class HephSituationTest extends BaseUnitTest {
     }
 
     private static TurnAttempt turn() {
-        return new TurnAttempt(UUID.randomUUID(), 1L, 5L, UUID.randomUUID(), 1);
+        return new TurnAttempt(UUID.randomUUID(), 1L, 5L, UUID.randomUUID(), 1, UUID.randomUUID());
     }
 
     private static IdentityProvider provider(long id, IdentityProviderType type) {

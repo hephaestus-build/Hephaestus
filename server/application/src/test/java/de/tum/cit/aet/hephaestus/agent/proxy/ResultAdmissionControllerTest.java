@@ -23,6 +23,8 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 
 class ResultAdmissionControllerTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     @Test
     void shouldRejectCredentialsThatDoNotIdentifyAReviewWorker() {
         var controller = new ResultAdmissionController(mock(ResultAdmissionService.class));
@@ -46,14 +48,15 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 id,
                 1L,
                 0,
+                LEASE,
                 Set.of("llm_proxy"),
                 "test",
                 now,
                 now.plusSeconds(60),
                 now.plusSeconds(30));
-        var identity = ProxyIdentity.of(jwt, "worker");
+        var identity = ProxyIdentity.of(jwt);
         var authentication = new JobTokenAuthentication(identity, jwt.scopes(), null);
-        when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, "worker"), request))
+        when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(conflict);
         assertThatThrownBy(() -> new ResultAdmissionController(admission).admitResults(request, authentication))
                 .isInstanceOfSatisfying(

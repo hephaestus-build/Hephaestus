@@ -32,7 +32,6 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
@@ -106,6 +105,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -473,7 +473,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
         ReviewJob requeued = jobRepository.findById(jobId).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
-        assertThat(requeued.getWorkerId()).isNull();
+        assertThat(requeued.getLeaseId()).isNull();
         assertThat(requeued.getAttempt()).isEqualTo(1);
 
         fastForwardAvailableAt(jobId);
@@ -560,21 +560,21 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @DisplayName(
-            "requeueOrphan is fenced on worker_id — a stale caller cannot steal a job a live sibling has re-claimed")
+            "requeueOrphan is fenced on the lease — a stale caller cannot steal a job a live sibling has re-claimed")
     void requeueOrphanDoesNotStealAJobReclaimedBySomeoneElse() {
         UUID jobId = runningJobOwnedBy("live-sibling", Instant.now(), 0);
 
         // @Modifying queries need an active transaction (the sweeper normally provides one via
         // TransactionTemplate); wrap here too.
-        int updated =
-                transactionTemplate.execute(s -> jobRepository.requeueOrphan(jobId, "dead-replica", 5, Instant.now()));
+        int updated = transactionTemplate.execute(
+                s -> jobRepository.requeueOrphan(jobId, lease("dead-replica"), 5, Instant.now()));
 
         assertThat(updated)
-                .as("the CAS must not match — the row's worker_id does not match the stale caller's")
+                .as("the CAS must not match — the row's lease does not match the stale caller's")
                 .isZero();
         ReviewJob untouched = jobRepository.findById(jobId).orElseThrow();
         assertThat(untouched.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-        assertThat(untouched.getWorkerId()).isEqualTo("live-sibling");
+        assertThat(untouched.getLeaseId()).isEqualTo(lease("live-sibling"));
         assertThat(untouched.getAttempt()).isZero();
     }
 
@@ -584,7 +584,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         UUID jobId = runningJobOwnedBy("dead-replica-3", Instant.now(), 5);
 
         int updated = transactionTemplate.execute(
-                s -> jobRepository.requeueOrphan(jobId, "dead-replica-3", 5, Instant.now()));
+                s -> jobRepository.requeueOrphan(jobId, lease("dead-replica-3"), 5, Instant.now()));
 
         assertThat(updated).isZero();
         ReviewJob unchanged = jobRepository.findById(jobId).orElseThrow();
@@ -641,14 +641,14 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         admitWithResult(admitted);
         UUID unadmitted = runningJobOwnedBy("owner", Instant.now(), 0);
 
-        int requeued =
-                transactionTemplate.execute(s -> jobRepository.requeueOrphan(admitted, "owner", 5, Instant.now()));
+        int requeued = transactionTemplate.execute(
+                s -> jobRepository.requeueOrphan(admitted, lease("owner"), 5, Instant.now()));
         int byStranger = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(admitted, "stranger", 0, Instant.now()));
+                s -> jobRepository.completeAdmittedOwnedBy(admitted, lease("stranger"), 0, Instant.now()));
         int byLaterAttempt = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(admitted, "owner", 1, Instant.now()));
+                s -> jobRepository.completeAdmittedOwnedBy(admitted, lease("owner"), 1, Instant.now()));
         int notAdmitted = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(unadmitted, "owner", 0, Instant.now()));
+                s -> jobRepository.completeAdmittedOwnedBy(unadmitted, lease("owner"), 0, Instant.now()));
 
         assertThat(requeued).isZero();
         assertThat(byStranger).isZero();
@@ -693,11 +693,13 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         Integer staleRequeue = transactionTemplate.execute(s -> {
             continuation.holdRecoveryCustody();
             return continuation.requeue(
-                    continuing, "dead-replica-9", new ReviewJobRepository.CompositionRequeue(0, 5, Instant.now()));
+                    continuing,
+                    lease("dead-replica-9"),
+                    new ReviewJobRepository.CompositionRequeue(0, 5, Instant.now()));
         });
         assertThat(staleRequeue).isZero();
         Integer staleCompletion = transactionTemplate.execute(
-                s -> jobRepository.completeAdmittedOwnedBy(jobId, "dead-replica-9", 0, Instant.now()));
+                s -> jobRepository.completeAdmittedOwnedBy(jobId, lease("dead-replica-9"), 0, Instant.now()));
         assertThat(staleCompletion).isZero();
         fastForwardAvailableAt(jobId);
         assertThat(eligibleForClaim(jobId)).isTrue();
@@ -1120,7 +1122,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         spentBeforeItWasLost(jobId, 2);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
-        assertThat(executorOwnedBy("live-owner").executePrepared(jobId, running, mock(SandboxSpec.class)))
+        assertThat(tracking(executor(), running).executePrepared(jobId, running, mock(SandboxSpec.class)))
                 .isEqualTo(ReviewJobStatus.TIMED_OUT);
 
         ReviewJob ended = jobRepository.findById(jobId).orElseThrow();
@@ -1141,13 +1143,15 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
         spentBeforeItWasLost(jobId, 2);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        // The stranger's executor claimed this attempt once, under a lease that a recovery has since replaced.
+        running.setLeaseId(lease("stranger"));
 
-        assertThat(executorOwnedBy("stranger").executePrepared(jobId, running, mock(SandboxSpec.class)))
+        assertThat(tracking(executor(), running).executePrepared(jobId, running, mock(SandboxSpec.class)))
                 .isNull();
 
         ReviewJob kept = jobRepository.findById(jobId).orElseThrow();
         assertThat(kept.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-        assertThat(kept.getWorkerId()).isEqualTo("live-owner");
+        assertThat(kept.getLeaseId()).isEqualTo(lease("live-owner"));
         assertThat(kept.getAttempt()).isZero();
         assertThat(compositionBasisRepository.findByWorkspaceIdAndJobId(workspace.getId(), jobId))
                 .isPresent();
@@ -1163,7 +1167,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 2);
 
         ReviewJobRecovery.Outcome outcome =
-                transactionTemplate.execute(status -> recovery.recover(jobId, "live-owner", 2, drain));
+                transactionTemplate.execute(status -> recovery.recover(jobId, lease("live-owner"), 2, drain));
         assertThat(outcome).isEqualTo(ReviewJobRecovery.Outcome.REQUEUED);
 
         ReviewJob requeued = jobRepository.findById(jobId).orElseThrow();
@@ -1172,7 +1176,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 .as("the drained attempt ran, so the next one has its own number")
                 .isEqualTo(3);
         assertThat(requeued.getDrainCount()).isEqualTo(1);
-        assertThat(requeued.getWorkerId()).isNull();
+        assertThat(requeued.getLeaseId()).isNull();
     }
 
     @Test
@@ -1184,7 +1188,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         claimAgain(jobId, "live-owner");
 
         ReviewJobRecovery.Outcome lost =
-                transactionTemplate.execute(status -> recovery.recover(jobId, "live-owner", 6, null));
+                transactionTemplate.execute(status -> recovery.recover(jobId, lease("live-owner"), 6, null));
         assertThat(lost)
                 .as("the worker was lost: 5 retries spent of 5, so the review fails")
                 .isEqualTo(ReviewJobRecovery.Outcome.FAILED);
@@ -1199,14 +1203,14 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 4);
 
         // An eviction before the sandbox ran: no model call to bill, as for a workspace that overfills its volume.
-        Boolean retried = transactionTemplate.execute(
-                status -> recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), "live-owner", false));
+        Boolean retried = transactionTemplate.execute(status ->
+                recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), lease("live-owner"), false));
         assertThat(retried).isTrue();
         assertThat(jobRepository.findById(jobId).orElseThrow().getAttempt()).isEqualTo(5);
         claimAgain(jobId, "live-owner");
 
-        Boolean again = transactionTemplate.execute(
-                status -> recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), "live-owner", false));
+        Boolean again = transactionTemplate.execute(status ->
+                recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), lease("live-owner"), false));
         assertThat(again)
                 .as("5 retries spent of 5: the next eviction fails the review")
                 .isFalse();
@@ -1255,7 +1259,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
         double counted = sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_EXCEEDED);
 
-        assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
+        assertThat(tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED)), running)
                         .executePrepared(jobId, running, mock(SandboxSpec.class)))
                 .isNull();
 
@@ -1267,7 +1271,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(held.getRoomRefusals())
                 .as("the refusal is counted instead of a retry")
                 .isEqualTo(1);
-        assertThat(held.getWorkerId()).isNull();
+        assertThat(held.getLeaseId()).isNull();
         assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_SANDBOX_ROOM);
         assertThat(held.getAvailableAt()).isAfter(Instant.now());
         assertThat(eligibleForClaim(jobId)).as("it waits before the next claim").isFalse();
@@ -1282,7 +1286,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         withCounts(jobId, 0, 40);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
-        assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
+        assertThat(tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED)), running)
                         .executePrepared(jobId, running, mock(SandboxSpec.class)))
                 .isNull();
 
@@ -1299,7 +1303,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
         double counted = sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
 
-        assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
+        assertThat(tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT)), running)
                         .executePrepared(jobId, running, mock(SandboxSpec.class)))
                 .isEqualTo(ReviewJobStatus.CANCELLED);
 
@@ -1336,7 +1340,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
             job.setStatus(ReviewJobStatus.QUEUED);
-            job.setWorkerId(null);
+            job.setLeaseId(null);
             job.setHoldReason(holdReason);
             job.setAvailableAt(Instant.now().plus(Duration.ofMinutes(5)));
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
@@ -1356,7 +1360,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         var sandbox = mock(SandboxManager.class);
         when(sandbox.neverFits(any())).thenReturn(true);
 
-        executorOwnedBy("live-owner", sandbox).endReviewsWithoutRoom(Instant.now());
+        executor(sandbox).endReviewsWithoutRoom(Instant.now());
 
         ReviewJob cancelled = jobRepository.findById(waiting).orElseThrow();
         assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
@@ -1378,7 +1382,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         UUID backlog = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
         var busy = mock(SandboxManager.class);
         when(busy.reviewsRunning()).thenReturn(true);
-        var behindRunningReviews = executorOwnedBy("live-owner", busy);
+        var behindRunningReviews = executor(busy);
         Instant start = Instant.now();
         behindRunningReviews.endReviewsWithoutRoom(start);
         behindRunningReviews.endReviewsWithoutRoom(start.plus(Duration.ofHours(2)));
@@ -1386,7 +1390,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 .as("waiting behind running reviews is backlog")
                 .isEqualTo(ReviewJobStatus.QUEUED);
 
-        var starved = executorOwnedBy("live-owner", mock(SandboxManager.class));
+        var starved = executor(mock(SandboxManager.class));
         starved.endReviewsWithoutRoom(start);
         assertThat(jobRepository.findById(backlog).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         starved.endReviewsWithoutRoom(start.plus(Duration.ofMinutes(61)));
@@ -1402,12 +1406,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     void shouldRecordNoSandboxRoomOnTheReviewWhenSettled() {
         UUID claimed = withoutAssignments(runningJobOwnedBy("live-owner", Instant.now(), 1));
         ReviewJob running = jobRepository.findById(claimed).orElseThrow();
-        executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
+        tracking(executor(refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT)), running)
                 .executePrepared(claimed, running, mock(SandboxSpec.class));
         UUID queued = queuedAndDue(withoutAssignments(runningJobOwnedBy("live-owner", Instant.now(), 0)));
         var tooSmall = mock(SandboxManager.class);
         when(tooSmall.neverFits(any())).thenReturn(true);
-        executorOwnedBy("live-owner", tooSmall).endReviewsWithoutRoom(Instant.now());
+        executor(tooSmall).endReviewsWithoutRoom(Instant.now());
 
         // A tick settles the 100 earliest ended jobs, and earlier tests leave theirs unsettled.
         jdbc.update(
@@ -1448,7 +1452,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
             job.setStatus(ReviewJobStatus.QUEUED);
-            job.setWorkerId(null);
+            job.setLeaseId(null);
             job.setAvailableAt(Instant.now().minus(Duration.ofMinutes(1)));
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
         });
@@ -1456,8 +1460,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     private ReviewJobRecovery.Outcome recoverAfterDrain(UUID jobId, int attempt) {
-        return transactionTemplate.execute(
-                status -> recovery.recover(jobId, "live-owner", attempt, ReviewJobCancellationReason.DRAIN_GRACEFUL));
+        return transactionTemplate.execute(status ->
+                recovery.recover(jobId, lease("live-owner"), attempt, ReviewJobCancellationReason.DRAIN_GRACEFUL));
     }
 
     /** The next claim of the requeued job by the worker. */
@@ -1465,7 +1469,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
             job.setStatus(ReviewJobStatus.RUNNING);
-            job.setWorkerId(workerId);
+            job.setLeaseId(lease(workerId));
             job.setStartedAt(Instant.now());
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
         });
@@ -1501,19 +1505,28 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
      * the sandbox, which reports a hard timeout without any runner output, and collaborators executePrepared does not
      * reach are stand-ins.
      */
-    private ReviewJobExecutor executorOwnedBy(String workerId) {
+    /** The executor runs the attempt as the worker that claimed it, so its writes are fenced on the attempt's lease. */
+    private static ReviewJobExecutor tracking(ReviewJobExecutor executor, ReviewJob running) {
+        executor.track(running);
+        return executor;
+    }
+
+    /** The lease that a test names after the worker that holds it, so that each name is one lease. */
+    private static UUID lease(String holder) {
+        return UUID.nameUUIDFromBytes(holder.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private ReviewJobExecutor executor() {
         var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
         var sandbox = mock(SandboxManager.class);
         when(sandbox.execute(any())).thenReturn(timedOut);
-        return executorOwnedBy(workerId, sandbox);
+        return executor(sandbox);
     }
 
-    private ReviewJobExecutor executorOwnedBy(String workerId, SandboxManager sandbox) {
+    private ReviewJobExecutor executor(SandboxManager sandbox) {
         var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
         var agent = mock(PracticePiAdapter.class);
         when(agent.parseResult(timedOut)).thenReturn(new AgentResult(false, Map.of()));
-        var worker = mock(WorkerProperties.class);
-        when(worker.resolvedWorkerId()).thenReturn(workerId);
         var executor = new ReviewJobExecutor(
                 properties,
                 jobRepository,
@@ -1531,7 +1544,6 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
                 null,
                 Optional.empty(),
-                worker,
                 mock(ReviewJobClaimService.class),
                 recovery);
         executor.setCompositionContinuation(continuation);
@@ -1570,13 +1582,13 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         expireLeasesOf("dead-replica-8");
 
         whileRecoveryWaits(jobId, true, job -> {
-            job.setWorkerId("live-sibling");
+            job.setLeaseId(lease("live-sibling"));
             job.setAttempt(6);
         });
 
         ReviewJob after = jobRepository.findById(jobId).orElseThrow();
         assertThat(after.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
-        assertThat(after.getWorkerId()).isEqualTo("live-sibling");
+        assertThat(after.getLeaseId()).isEqualTo(lease("live-sibling"));
         assertThat(after.getAttempt()).isEqualTo(6);
         assertThat(after.getErrorMessage()).isNull();
     }
@@ -1794,7 +1806,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         UsageFundingSource.INSTANCE, UsagePricingState.NO_CHARGE, null, null, null, null, null, null))
                 .toJson(objectMapper));
-        job.setWorkerId(workerId);
+        job.setLeaseId(lease(workerId));
         job.setStartedAt(startedAt);
         job.setAttempt(attempt);
         long itemId;
@@ -1843,9 +1855,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private void expireLeasesOf(String workerId) {
         // The lease check judges each lease on the database clock.
         jdbc.update(
-                "UPDATE review_job SET leased_until = now() - make_interval(secs => ?) WHERE worker_id = ?",
+                "UPDATE review_job SET leased_until = now() - make_interval(secs => ?) WHERE lease_id = ?",
                 AgentProperties.WORKER_LEASE_TTL.plusMinutes(1).toSeconds(),
-                workerId);
+                lease(workerId));
     }
 
     private boolean eligibleForClaim(UUID jobId) {

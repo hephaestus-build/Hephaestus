@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,8 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
 class ProxyRoutingServiceTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final JsonMapper mapper = new JsonMapper();
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
@@ -68,7 +71,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         RuntimeJobTestData.initialize(job, 7L);
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setAttempt(2);
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setLlmInputTokens(100);
         var snapshot = new ConfigSnapshot(
                 ConfigSnapshot.SCHEMA_VERSION,
@@ -79,19 +83,25 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 Map.of(ModelKind.EMBEDDING, model(LlmApiProtocol.OPENAI_EMBEDDINGS, UsageFundingSource.WORKSPACE)));
         job.setConfigSnapshot(snapshot.toJson(mapper));
         var now = Instant.now();
-        identity = ProxyIdentity.of(
-                new AttemptJwt(
-                        AttemptJwt.Kind.REVIEW,
+        identity = ProxyIdentity.of(new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                job.getId(),
+                7L,
+                2,
+                UUID.randomUUID(),
+                Set.of("llm_proxy"),
+                "id",
+                now,
+                now.plusSeconds(60),
+                workDeadline));
+        lenient().when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        lenient()
+                .when(jobs.hasLiveLease(
                         job.getId(),
                         7L,
                         2,
-                        Set.of("llm_proxy"),
-                        "id",
-                        now,
-                        now.plusSeconds(60),
-                        workDeadline),
-                "worker");
-        lenient().when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+                        Objects.requireNonNull(identity.job()).leaseId()))
+                .thenReturn(true);
     }
 
     @Test
@@ -112,6 +122,12 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.sourceId()).isEqualTo(job.getId());
         assertThat(route.inFlightSpendUsd()).isEqualByComparingTo("0.000100");
         verify(jobs).findById(job.getId());
+        verify(jobs)
+                .hasLiveLease(
+                        job.getId(),
+                        7L,
+                        2,
+                        Objects.requireNonNull(identity.job()).leaseId());
         verifyNoMoreInteractions(jobs);
     }
 
@@ -131,8 +147,13 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void refusesAnAttemptReplacedSinceAuthentication() {
-        job.setAttempt(3);
+    void refusesAnAttemptThatLostItsLeaseSinceAuthentication() {
+        when(jobs.hasLiveLease(
+                        job.getId(),
+                        7L,
+                        2,
+                        Objects.requireNonNull(identity.job()).leaseId()))
+                .thenReturn(false);
         assertThatThrownBy(() -> routing.resolve(identity, request("/internal/llm/responses")))
                 .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
                     assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -158,12 +179,18 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                         ResponseStatusException.class,
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         verify(jobs).findById(job.getId());
+        verify(jobs)
+                .hasLiveLease(
+                        job.getId(),
+                        7L,
+                        2,
+                        Objects.requireNonNull(identity.job()).leaseId());
         verifyNoMoreInteractions(jobs);
     }
 
     @Test
     void turnCredentialsCannotAcquireScriptModelRouting() {
-        var turn = ProxyIdentity.of(turnJwt(3), "worker");
+        var turn = ProxyIdentity.of(turnJwt(3));
         assertThatThrownBy(() -> routing.resolve(turn, request("/internal/llm/practice-script/chat/responses")))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
@@ -174,10 +201,10 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     @Test
     void turnRoutingBillsTheLeasedAttemptAtTheRatesItWasAdmittedWith() {
         var jwt = turnJwt(3);
-        var row = leasedTurn(jwt, 3, "worker");
+        var row = leasedTurn(jwt, true);
         when(row.getInputTokens()).thenReturn(2_000_000L);
 
-        var route = routing.resolve(ProxyIdentity.of(jwt, "worker"), request("/internal/llm/responses"));
+        var route = routing.resolve(ProxyIdentity.of(jwt), request("/internal/llm/responses"));
 
         assertThat(route.principalDescription()).isEqualTo("mentor-turn:" + jwt.id());
         assertThat(route.baseUrl()).isEqualTo("https://models.example/v1");
@@ -185,7 +212,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         assertThat(route.attempt().sourceType()).isEqualTo(UsageSourceType.MENTOR_TURN);
         assertThat(route.attempt().sourceId()).isEqualTo(jwt.id());
         assertThat(route.attempt().number()).isEqualTo(3);
-        assertThat(route.attempt().workerId()).isEqualTo("worker");
+        assertThat(route.attempt().leaseId()).isEqualTo(jwt.leaseId());
         assertThat(route.attempt().spentUsd()).isEqualByComparingTo("2");
         verifyNoInteractions(jobs, attemptUsage);
     }
@@ -193,8 +220,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     @Test
     void turnRoutingOfAnAttemptThatNoLongerHoldsItsLeaseIsAConflict() {
         var jwt = turnJwt(3);
-        leasedTurn(jwt, 4, "worker");
-        assertThatThrownBy(() -> routing.resolve(ProxyIdentity.of(jwt, "worker"), request("/internal/llm/responses")))
+        leasedTurn(jwt, false);
+        assertThatThrownBy(() -> routing.resolve(ProxyIdentity.of(jwt), request("/internal/llm/responses")))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
@@ -207,6 +234,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 UUID.randomUUID(),
                 7L,
                 attempt,
+                UUID.randomUUID(),
                 Set.of("llm_proxy"),
                 "id",
                 now,
@@ -214,14 +242,15 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 null);
     }
 
-    private MentorTurn leasedTurn(AttemptJwt jwt, int attempt, String worker) {
+    private MentorTurn leasedTurn(AttemptJwt jwt, boolean live) {
         var row = mock(MentorTurn.class);
         // A turn that lost its lease is refused before its rates are read.
         lenient().when(row.getId()).thenReturn(jwt.id());
         lenient().when(row.getWorkspaceId()).thenReturn(jwt.workspaceId());
-        lenient().when(row.isLeased()).thenReturn(true);
-        lenient().when(row.getAttempt()).thenReturn(attempt);
-        lenient().when(row.getWorkerId()).thenReturn(worker);
+        lenient().when(row.getAttempt()).thenReturn(jwt.attempt());
+        lenient()
+                .when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+                .thenReturn(live);
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.WORKSPACE,
                 UsagePricingState.PRICED,

@@ -278,13 +278,14 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         when(turn.getId()).thenReturn(turnId);
         when(turn.getWorkspaceId()).thenReturn(7L);
         when(turn.getAttempt()).thenReturn(1);
+        when(turn.getLeaseId()).thenReturn(UUID.randomUUID());
         when(turn.getConversationId()).thenReturn(UUID.randomUUID());
         when(turn.getStatus()).thenReturn(MentorTurn.Status.RUNNING);
         MentorTurnService turns = mock(MentorTurnService.class);
         when(turns.require(7L, turnId)).thenReturn(turn);
         AtomicBoolean claimed = new AtomicBoolean();
         MentorTurnStarter starter = mock(MentorTurnStarter.class);
-        when(starter.startNext(any(), any()))
+        when(starter.startNext(any()))
                 .thenAnswer(invocation -> claimed.compareAndSet(false, true)
                         ? Optional.of(new MentorTurnStarter.StartedTurn(
                                 turn, 11L, LlmCatalogTestFixtures.admittedMentorConfig()))
@@ -316,6 +317,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         when(turn.getId()).thenReturn(turnId);
         when(turn.getWorkspaceId()).thenReturn(7L);
         when(turn.getAttempt()).thenReturn(1);
+        when(turn.getLeaseId()).thenReturn(UUID.randomUUID());
         when(turn.getStatus()).thenReturn(MentorTurn.Status.RUNNING);
         MentorTurnService turns = mock(MentorTurnService.class);
         when(turns.require(7L, turnId)).thenReturn(turn);
@@ -323,7 +325,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         CountDownLatch releaseClaim = new CountDownLatch(1);
         MentorTurnStarter starter = mock(MentorTurnStarter.class);
         // The claim committed and its turn was admitted; it returns only when the test lets it.
-        when(starter.startNext(any(), any())).thenAnswer(invocation -> {
+        when(starter.startNext(any())).thenAnswer(invocation -> {
             claimEntered.countDown();
             if (!releaseClaim.await(10, TimeUnit.SECONDS)) {
                 return Optional.empty();
@@ -376,7 +378,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
     @Test
     void shouldClaimNoTurnUntilTheSandboxRuntimeProvedItsIsolationAndThenClaim() {
         MentorTurnStarter starter = mock(MentorTurnStarter.class);
-        when(starter.startNext(any(), any())).thenReturn(Optional.empty());
+        when(starter.startNext(any())).thenReturn(Optional.empty());
         HeldHost host = new HeldHost();
         host.sandboxReady = false;
         HephTurnDispatcher dispatcher =
@@ -386,12 +388,12 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
             dispatcher.resync();
             await().during(Duration.ofSeconds(1))
                     .atMost(Duration.ofSeconds(3))
-                    .untilAsserted(() -> verify(starter, never()).startNext(any(), any()));
+                    .untilAsserted(() -> verify(starter, never()).startNext(any()));
 
             host.sandboxReady = true;
             dispatcher.resync();
             await().atMost(Duration.ofSeconds(10))
-                    .untilAsserted(() -> verify(starter, atLeastOnce()).startNext(any(), any()));
+                    .untilAsserted(() -> verify(starter, atLeastOnce()).startNext(any()));
         } finally {
             release.countDown();
             dispatcher.stop();
@@ -431,7 +433,6 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                 new JsonMapper(),
                 Clock.systemUTC(),
                 new SimpleMeterRegistry(),
-                "worker",
                 1,
                 Duration.ofMinutes(1),
                 HephTurnDispatcher.STOP_GRACE,

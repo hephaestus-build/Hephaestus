@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import java.math.BigDecimal;
@@ -65,9 +64,8 @@ public class ScanCallGuard {
         }
         try {
             job = jobs.findByIdAndWorkspaceId(job.getId(), workspace).orElseThrow(ScanCallGuard::refused);
-            if (job.getStatus() != ReviewJobStatus.RUNNING
-                    || job.getAttempt() != attempt.number()
-                    || !Objects.equals(job.getWorkerId(), attempt.workerId())) throw refused();
+            if (attempt.leaseId() == null
+                    || !jobs.hasLiveLease(job.getId(), workspace, attempt.number(), attempt.leaseId())) throw refused();
             var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), mapper);
             var model = route.practiceScriptSlot() == null || route.practiceScriptSlot() == ModelKind.CHAT
                     ? snapshot.model()
