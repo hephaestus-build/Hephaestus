@@ -79,6 +79,12 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public void checkPackage(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
+        prepared.checkPackage(workspaceId, reviewId, drafts);
+    }
+
+    @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<CopyWriteFence> claimConversationCopy(
             long workspaceId, UUID feedbackId, UUID mentorTurnId, int attempt) {

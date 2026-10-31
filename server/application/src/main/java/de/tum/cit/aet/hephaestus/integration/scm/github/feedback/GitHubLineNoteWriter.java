@@ -16,15 +16,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
-import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
@@ -32,35 +29,27 @@ import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter.F
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.GitHubSummaryWriter.PrCoordinates;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Component;
 
 /**
- * One review mutation posts all threads atomically. A lost response leaves every thread unconfirmed.
- * Verify copies at {@link FeedbackTarget#version}; resolved or outdated threads still count.
+ * Stages a package as one pending review with its threads, then submits it once, the only notifying write.
+ * A lost response permits readback only. Verify copies at {@link FeedbackTarget#version}; resolved or
+ * outdated threads still count.
  */
 @Component
 @ConditionalOnServerRole
 @OutboundEgressGateway
 public class GitHubLineNoteWriter implements LineNoteWriter {
-
-    private static final Logger log = LoggerFactory.getLogger(GitHubLineNoteWriter.class);
 
     private static final int THREADS_PAGE_SIZE = 100;
 
@@ -71,7 +60,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     private final GitHubPrNodeIdResolver prNodeIdResolver;
     private final OutboundEgressGuard egressGuard;
     private final ScmFeedbackTargetResolver targets;
-    private final GitHubSummaryWriter summaries;
     private final ScmFeedbackFormatter formatter;
 
     public GitHubLineNoteWriter(
@@ -79,13 +67,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             GitHubPrNodeIdResolver prNodeIdResolver,
             OutboundEgressGuard egressGuard,
             ScmFeedbackTargetResolver targets,
-            GitHubSummaryWriter summaries,
             ScmFeedbackFormatter formatter) {
         this.gitHubProvider = gitHubProvider;
         this.prNodeIdResolver = prNodeIdResolver;
         this.egressGuard = egressGuard;
         this.targets = targets;
-        this.summaries = summaries;
         this.formatter = formatter;
     }
 
@@ -95,320 +81,237 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     @Override
-    public CopyWriteResult postImmutablePackage(
-            FeedbackTarget target, List<LineNote> feedbackItems, CopyWriteFence fence) {
-        if (feedbackItems.isEmpty()) {
-            return CopyWriteResult.of(List.of());
-        }
-        Footer footer;
-        try {
-            footer = formatter.footer(target.item());
-        } catch (RuntimeException unavailable) {
-            return CopyWriteResult.of(notSent(feedbackItems));
-        }
-        long scopeId = target.integration().workspaceId();
-        if (gitHubProvider.isRateLimitCritical(scopeId)) {
-            log.warn(
-                    "GitHub rate limit critical — not requesting {} pieces of inline feedback: workspaceId={}",
-                    feedbackItems.size(),
-                    scopeId);
-            return CopyWriteResult.of(notSent(feedbackItems));
-        }
-        PrCoordinates pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITHUB));
-        String commitOid = commitOid(target);
-        if (commitOid == null) {
-            return CopyWriteResult.of(notSent(feedbackItems));
-        }
-        var lines = feedbackItems.stream()
-                .filter(note -> note.anchor().endLine() != null)
-                .toList();
-        Map<String, Copy> copies = lines.isEmpty() ? Map.of() : indexCopies(footer, pr, lines, commitOid);
-        Map<UUID, SummaryLookup> fileCopies = new HashMap<>();
-        for (LineNote note : feedbackItems)
-            if (note.anchor().endLine() == null)
-                fileCopies.put(
-                        note.copyId(), summaries.findExistingSummary(target, fileContent(target, note, commitOid)));
-
-        List<CopyReceipt> receipts = new ArrayList<>(feedbackItems.size());
-        List<LineNote> candidates = new ArrayList<>(feedbackItems.size());
-        Set<String> processedKeys = new HashSet<>();
-        for (LineNote item : feedbackItems) {
-            String key = item.writeKey();
-            if (key != null && !processedKeys.add(key)) {
-                continue;
-            }
-            FeedbackAnchor diff = item.anchor();
-            if (item.body().isBlank() || (diff.endLine() != null && diff.side() == null)) {
-                receipts.add(CopyReceipt.notSent(item.copyId()));
-                continue;
-            }
-            var fileCopy = fileCopies.get(item.copyId());
-            if (fileCopy != null && fileCopy.presence() != LookupPresence.ABSENT) {
-                var handle = fileCopy.handle();
-                receipts.add(
-                        fileCopy.presence() == LookupPresence.FOUND && handle != null
-                                ? new CopyReceipt(
-                                        item.copyId(),
-                                        CopyDisposition.PRESERVED_EXISTING,
-                                        handle.externalRef(),
-                                        handle.url(),
-                                        null,
-                                        CopyForm.FILE_NOTE)
-                                : CopyReceipt.notSent(item.copyId()));
-                continue;
-            }
-            Copy copy = copies.get(key);
-            if (copy != null) {
-                // A copy that does not verify is not proof of absence either: nothing is created
-                // next to it.
-                receipts.add(copy.verified() ? copy.preserved(item) : CopyReceipt.notSent(item.copyId()));
-                continue;
-            }
-            candidates.add(item);
-        }
-        if (candidates.isEmpty()) {
-            return CopyWriteResult.of(receipts);
-        }
-
-        if (candidates.stream().anyMatch(note -> note.anchor().endLine() == null))
-            return postMixed(target, footer, pr, commitOid, candidates, fence, receipts);
-        String prNodeId = prNodeIdResolver.resolve(scopeId, pr.owner(), pr.name(), pr.number());
-        try {
-            egressGuard.requireDeliveryAllowed("github.post-inline-feedback");
-        } catch (OutboundEgressSuppressedException e) {
-            receipts.addAll(notSent(candidates));
-            return CopyWriteResult.withheld(receipts, deliveryKeys(candidates));
-        }
-        if (!fence.beforeCreate(candidates.stream().map(LineNote::copyId).toList(), List.copyOf(receipts))) {
-            receipts.addAll(notSent(candidates));
-            return CopyWriteResult.of(receipts);
-        }
-        receipts.addAll(postBatch(footer, prNodeId, commitOid, candidates));
-        return CopyWriteResult.of(receipts);
-    }
-
-    private SummaryContent fileContent(FeedbackTarget target, LineNote note, String commit) {
-        var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
-        String origin = targets.serverUrl(target, kind());
-        String anchoredCommit = note.anchor().side() == CitationSide.OLD
-                ? Objects.requireNonNull(target.version().baseVersion())
-                : commit;
-        String encodedPath = Arrays.stream(note.anchor().path().split("/", -1))
-                .map(part -> URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"))
-                .collect(Collectors.joining("/"));
-        // The link is built from known repository data, so it is the bot's own header; the note's text is escaped.
-        String header = "**[View file]("
-                + origin.replaceAll("/+$", "")
-                + "/"
-                + pr.owner()
-                + "/"
-                + pr.name()
-                + "/blob/"
-                + anchoredCommit
-                + "/"
-                + encodedPath
-                + ")**";
-        return new SummaryContent(
-                note.copyId(),
-                note.body(),
-                note.writeKey(),
-                note.writeMarker() + "\n\n" + ScmFeedbackFormatter.deliveryTag(note.writeKey()),
-                header);
-    }
-
-    private CopyWriteResult postMixed(
-            FeedbackTarget target,
-            Footer footer,
-            PrCoordinates pr,
-            String commit,
-            List<LineNote> notes,
-            CopyWriteFence fence,
-            List<CopyReceipt> completed) {
+    public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
+        if (publication.copyIds().isEmpty()) return CopyWriteResult.of(List.of());
         long workspace = target.item().workspaceId();
-        for (int index = 0; index < notes.size(); index++) {
-            var note = notes.get(index);
-            SummaryContent content;
-            String nodeId;
-            try {
-                content = note.anchor().endLine() == null ? fileContent(target, note, commit) : null;
-                nodeId = content == null
-                        ? prNodeIdResolver.resolve(workspace, pr.owner(), pr.name(), pr.number())
-                        : null;
-            } catch (RuntimeException beforeWrite) {
-                completed.add(CopyReceipt.notSent(note.copyId()));
-                continue;
+        if (gitHubProvider.isRateLimitCritical(workspace) || commitOid(target) == null) return publication.notSent();
+        boolean fenced = false;
+        try {
+            var footer = formatter.footer(target.item());
+            var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
+            var copies = indexCopies(footer, pr, publication.notes(), commitOid(target));
+            String body = publication.summary() == null
+                    ? publication.notes().getFirst().writeMarker()
+                    : footer.summary(publication.summary());
+            var reviews = reviewLookup(
+                    workspace,
+                    pr,
+                    body,
+                    Objects.requireNonNull(commitOid(target)),
+                    publication.notes().stream()
+                            .map(note -> postedBody(footer, note))
+                            .collect(Collectors.toSet()));
+            if (reviews.conflict()) return publication.notSent();
+            if (reviews.submitted() != null) {
+                // A receipt is recorded only on a fenced copy.
+                if (!fence.beforeCreate(publication.copyIds(), List.of())) return publication.notSent();
+                return CopyWriteResult.of(receipts(publication, reviews.submitted(), copies));
             }
-            try {
-                egressGuard.requireDeliveryAllowed("github.post-feedback-copy");
-            } catch (OutboundEgressSuppressedException e) {
-                var rest = notes.subList(index, notes.size());
-                completed.addAll(notSent(rest));
-                return CopyWriteResult.withheld(completed, deliveryKeys(rest));
+            if (publication.notes().stream().anyMatch(note -> copies.containsKey(note.writeKey()))
+                    && reviews.pending() == null) return publication.notSent();
+            egressGuard.requireDeliveryAllowed("github.publish-feedback-package");
+            // A refused fence started nothing: the copies stay as they were.
+            if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
+            fenced = true;
+            String pending = reviews.pending();
+            if (pending == null) {
+                var response = execute(
+                        workspace,
+                        "AddPullRequestReviewWithThreads",
+                        Map.of(
+                                "pullRequestId",
+                                prNodeIdResolver.resolve(workspace, pr.owner(), pr.name(), pr.number()),
+                                "body",
+                                body,
+                                "commitOID",
+                                Objects.requireNonNull(commitOid(target)),
+                                "threads",
+                                List.of()));
+                pending = response.field("addPullRequestReview.pullRequestReview.id")
+                        .getValue();
+                if (pending == null
+                        || !"PENDING"
+                                .equals(response.field("addPullRequestReview.pullRequestReview.state")
+                                        .getValue())) return publication.attempted();
             }
-            if (!fence.beforeCreate(List.of(note.copyId()), List.copyOf(completed))) {
-                completed.addAll(notSent(notes.subList(index, notes.size())));
-                break;
-            }
-            CopyReceipt receipt;
-            try {
-                if (content != null) {
-                    var handle = summaries.postSummary(target, content);
-                    receipt = new CopyReceipt(
-                            note.copyId(),
-                            CopyDisposition.POSTED,
-                            handle.externalRef(),
-                            handle.url(),
-                            true,
-                            CopyForm.FILE_NOTE);
-                } else {
-                    receipt = postBatch(footer, Objects.requireNonNull(nodeId), commit, List.of(note))
-                            .getFirst();
+            for (var note : publication.notes()) {
+                var copy = copies.get(note.writeKey());
+                if (copy != null) {
+                    if (!copy.verified()) return publication.attempted();
+                    continue;
                 }
-            } catch (FeedbackNotSentException beforeWrite) {
-                receipt = CopyReceipt.notSent(note.copyId());
-            } catch (RuntimeException uncertain) {
-                receipt = CopyReceipt.attempted(note.copyId());
+                if (gitHubProvider.isRateLimitCritical(workspace)) return publication.attempted();
+                if (!fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+                var input = buildThread(note.anchor(), postedBody(footer, note));
+                input.put("pullRequestReviewId", pending);
+                var created = execute(workspace, "AddFeedbackReviewThread", Map.of("input", input));
+                String id =
+                        created.field("addPullRequestReviewThread.thread.id").getValue();
+                if (id == null) return publication.attempted();
             }
-            completed.add(receipt);
-            if (receipt.unconfirmed()) {
-                completed.addAll(notSent(notes.subList(index + 1, notes.size())));
-                break;
-            }
+            // Re-read the entire pending review before the single notifying write. Never submit a foreign draft.
+            var beforeSubmit = reviewLookup(
+                    workspace,
+                    pr,
+                    body,
+                    Objects.requireNonNull(commitOid(target)),
+                    publication.notes().stream()
+                            .map(note -> postedBody(footer, note))
+                            .collect(Collectors.toSet()));
+            var complete = indexCopies(footer, pr, publication.notes(), commitOid(target));
+            if (beforeSubmit.conflict()
+                    || !pending.equals(beforeSubmit.pending())
+                    || beforeSubmit.pendingComments() != publication.notes().size()
+                    || publication.notes().stream().anyMatch(note -> {
+                        var copy = complete.get(note.writeKey());
+                        return copy == null || !copy.verified();
+                    })
+                    || !fence.beforeCreate(List.of(), List.of())) return publication.attempted();
+            egressGuard.requireDeliveryAllowed("github.submit-feedback-package");
+            execute(workspace, "SubmitFeedbackReview", Map.of("reviewId", pending));
+            var found = findPosted(target, publication);
+            return found == null ? publication.attempted() : CopyWriteResult.of(found);
+        } catch (OutboundEgressSuppressedException suppressed) {
+            throw suppressed;
+        } catch (RuntimeException unknown) {
+            // A timeout can follow submission; only readback may establish success on the next attempt.
+            return fenced ? publication.attempted() : publication.notSent();
         }
-        return CopyWriteResult.of(completed);
     }
 
     @Override
-    public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, List<LineNote> feedbackItems) {
-        if (feedbackItems.isEmpty()) {
-            return List.of();
-        }
-        long scopeId = target.integration().workspaceId();
-        if (commitOid(target) == null
-                || gitHubProvider.isRateLimitCritical(scopeId)
-                || feedbackItems.stream().anyMatch(item -> item.writeKey() == null)) {
-            return null;
-        }
+    public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
+        long workspace = target.item().workspaceId();
+        if (gitHubProvider.isRateLimitCritical(workspace) || commitOid(target) == null) return null;
         try {
-            Footer footer = formatter.footer(target.item());
-            PrCoordinates pr =
-                    GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITHUB));
-            List<CopyReceipt> files = new ArrayList<>();
-            var lines = feedbackItems.stream()
-                    .filter(note -> note.anchor().endLine() != null)
-                    .toList();
-            for (LineNote note : feedbackItems)
-                if (note.anchor().endLine() == null) {
-                    var lookup = summaries.findExistingSummary(
-                            target, fileContent(target, note, Objects.requireNonNull(commitOid(target))));
-                    if (lookup.presence() == LookupPresence.UNKNOWN) return null;
-                    var handle = lookup.handle();
-                    if (lookup.presence() == LookupPresence.FOUND && handle != null)
-                        files.add(new CopyReceipt(
-                                note.copyId(),
-                                CopyDisposition.PRESERVED_EXISTING,
-                                handle.externalRef(),
-                                handle.url(),
-                                null,
-                                CopyForm.FILE_NOTE));
-                }
-            Map<String, Copy> copies = lines.isEmpty() ? Map.of() : indexCopies(footer, pr, lines, commitOid(target));
-            List<CopyReceipt> found = new ArrayList<>(files);
-            for (LineNote item : feedbackItems) {
-                Copy copy = copies.get(item.writeKey());
-                if (copy != null && copy.verified()) {
-                    found.add(copy.preserved(item));
-                }
-            }
-            return found;
-        } catch (RuntimeException e) {
+            var footer = formatter.footer(target.item());
+            var pr = GitHubSummaryWriter.parseSubjectExternalId(targets.subject(target, kind()));
+            String body = publication.summary() == null
+                    ? publication.notes().getFirst().writeMarker()
+                    : footer.summary(publication.summary());
+            var review = reviewLookup(
+                    workspace,
+                    pr,
+                    body,
+                    Objects.requireNonNull(commitOid(target)),
+                    publication.notes().stream()
+                            .map(note -> postedBody(footer, note))
+                            .collect(Collectors.toSet()));
+            if (review.conflict()) return null;
+            if (review.submitted() == null) return List.of();
+            return receipts(
+                    publication, review.submitted(), indexCopies(footer, pr, publication.notes(), commitOid(target)));
+        } catch (RuntimeException unknown) {
             return null;
         }
     }
 
-    // Only a returned comment id acknowledges creation; errors or missing ids can follow a provider write.
-    private List<CopyReceipt> postBatch(
-            Footer footer, String prNodeId, @Nullable String commitOid, List<LineNote> candidates) {
-        long scopeId = footer.workspaceId();
-        List<Map<String, Object>> threads = new ArrayList<>(candidates.size());
-        for (LineNote item : candidates) {
-            threads.add(buildThread(item.anchor(), postedBody(footer, item)));
-        }
-        try {
-            ClientGraphQlResponse response = gitHubProvider
-                    .forScope(scopeId)
-                    .documentName("AddPullRequestReviewWithThreads")
-                    .variable("pullRequestId", prNodeId)
-                    .variable("event", "COMMENT")
-                    .variable("commitOID", commitOid)
-                    .variable("threads", threads)
-                    .execute()
-                    .block(GRAPHQL_TIMEOUT);
-            if (response == null) {
-                log.warn("GitHub review mutation returned no response: workspaceId={}", scopeId);
-                return attempted(candidates);
-            }
-            gitHubProvider.trackRateLimit(scopeId, response);
-            if (response.getErrors() != null && !response.getErrors().isEmpty()) {
-                log.warn(
-                        "GitHub review mutation returned errors: workspaceId={}, errors={}, threadCount={}",
-                        scopeId,
-                        response.getErrors(),
-                        threads.size());
-                return attempted(candidates);
-            }
-            List<Map<String, Object>> comments = response.field("addPullRequestReview.pullRequestReview.comments.nodes")
-                    .getValue();
-            log.info(
-                    "Posted {} GitHub inline threads as single review: workspaceId={}, prNodeId={}",
-                    threads.size(),
-                    scopeId,
-                    prNodeId);
-            return postedReceipts(comments, candidates);
-        } catch (Exception e) {
-            log.warn(
-                    "GitHub review mutation outcome unknown: workspaceId={}, threadCount={}",
-                    scopeId,
-                    threads.size(),
-                    e);
-            return attempted(candidates);
-        }
+    private ClientGraphQlResponse execute(long workspace, String document, Map<String, Object> variables) {
+        var request = gitHubProvider.forScope(workspace).documentName(document);
+        variables.forEach(request::variable);
+        var response = request.execute().block(GRAPHQL_TIMEOUT);
+        if (response == null || !response.getErrors().isEmpty())
+            throw new FeedbackDeliveryException("GitHub did not confirm the review operation");
+        gitHubProvider.trackRateLimit(workspace, response);
+        return response;
     }
 
-    // Match receipts by correlation tag; multiple feedback copies can share coordinates.
-    private static List<CopyReceipt> postedReceipts(
-            @Nullable List<Map<String, Object>> comments, List<LineNote> candidates) {
-        Map<String, SummaryHandle> commentByCk = new HashMap<>();
-        if (comments != null) {
-            for (Map<String, Object> comment : comments) {
-                String id = (String) comment.get("id");
-                String body = (String) comment.get("body");
-                String ck = body == null ? null : ScmFeedbackFormatter.lastDeliveryKey(body);
-                if (id != null && !id.isBlank() && ck != null) {
-                    commentByCk.putIfAbsent(ck, new SummaryHandle(id, (String) comment.get("url")));
-                }
+    private ReviewLookup reviewLookup(
+            long workspace, PrCoordinates pr, String expectedBody, String commit, Set<String> expectedNotes) {
+        int markerStart = expectedBody.lastIndexOf("<!--");
+        String marker = markerStart < 0 ? expectedBody : expectedBody.substring(markerStart);
+        String after = null;
+        String pending = null;
+        int pendingComments = 0;
+        SummaryHandle submitted = null;
+        for (int page = 0; page < MAX_THREAD_PAGES; page++) {
+            var variables = new HashMap<String, Object>();
+            variables.put("owner", pr.owner());
+            variables.put("name", pr.name());
+            variables.put("number", pr.number());
+            variables.put("first", THREADS_PAGE_SIZE);
+            if (after != null) variables.put("after", after);
+            var response = execute(workspace, "GetFeedbackReviews", variables);
+            Map<String, Object> connection =
+                    response.field("repository.pullRequest.reviews").getValue();
+            if (connection == null
+                    || !(connection.get("nodes") instanceof List<?> nodes)
+                    || !(connection.get("pageInfo") instanceof Map<?, ?> info))
+                throw new FeedbackDeliveryException("GitHub reviews were not read completely");
+            for (var value : nodes) {
+                if (!(value instanceof Map<?, ?> review)
+                        || !(review.get("body") instanceof String body)
+                        || !(review.get("id") instanceof String id)
+                        || !(review.get("state") instanceof String state))
+                    throw new FeedbackDeliveryException("GitHub review identity is incomplete");
+                if (!Boolean.TRUE.equals(review.get("viewerDidAuthor"))) continue;
+                boolean same = body.equals(expectedBody)
+                        && review.get("commit") instanceof Map<?, ?> revision
+                        && commit.equals(revision.get("oid"));
+                if (state.equals("PENDING")) {
+                    if (!same
+                            || pending != null
+                            || !(review.get("comments") instanceof Map<?, ?> comments)
+                            || !(comments.get("nodes") instanceof List<?> entries)
+                            || !(comments.get("pageInfo") instanceof Map<?, ?> pageInfo)
+                            || !Boolean.FALSE.equals(pageInfo.get("hasNextPage"))
+                            || entries.size() > expectedNotes.size()
+                            || entries.stream()
+                                    .anyMatch(entry -> !(entry instanceof Map<?, ?> comment)
+                                            || !Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
+                                            || !expectedNotes.contains(comment.get("body")))
+                            || entries.stream()
+                                            .map(entry -> ((Map<?, ?>) entry).get("body"))
+                                            .distinct()
+                                            .count()
+                                    != entries.size()) return new ReviewLookup(null, 0, null, true);
+                    pending = id;
+                    pendingComments = entries.size();
+                } else if (same) {
+                    if (submitted != null) return new ReviewLookup(null, 0, null, true);
+                    submitted = new SummaryHandle(id, review.get("url") instanceof String url ? url : null);
+                } else if (body.contains(marker)) return new ReviewLookup(null, 0, null, true);
             }
+            if (Boolean.FALSE.equals(info.get("hasNextPage")))
+                return new ReviewLookup(pending, pendingComments, submitted, false);
+            if (!Boolean.TRUE.equals(info.get("hasNextPage"))
+                    || !(info.get("endCursor") instanceof String next)
+                    || next.isBlank()
+                    || next.equals(after)) break;
+            after = next;
         }
-        List<CopyReceipt> receipts = new ArrayList<>(candidates.size());
-        for (LineNote item : candidates) {
-            SummaryHandle comment = item.writeKey() == null ? null : commentByCk.get(item.writeKey());
-            receipts.add(
-                    comment == null
-                            ? CopyReceipt.attempted(item.copyId())
-                            : new CopyReceipt(
-                                    item.copyId(),
-                                    CopyDisposition.POSTED,
-                                    comment.externalRef(),
-                                    comment.url(),
-                                    true,
-                                    CopyForm.LINE_NOTE));
-        }
-        return receipts;
+        throw new FeedbackDeliveryException("GitHub review pagination did not reach its end");
     }
+
+    private static List<CopyReceipt> receipts(
+            OnWorkPackage publication, SummaryHandle review, Map<String, Copy> copies) {
+        var receipts = new ArrayList<CopyReceipt>();
+        if (publication.summary() != null)
+            receipts.add(new CopyReceipt(
+                    publication.summary().copyId(),
+                    CopyDisposition.PRESERVED_EXISTING,
+                    review.externalRef(),
+                    review.url(),
+                    true,
+                    null));
+        for (var note : publication.notes()) {
+            var copy = copies.get(note.writeKey());
+            receipts.add(copy != null && copy.verified() ? copy.preserved(note) : CopyReceipt.attempted(note.copyId()));
+        }
+        return List.copyOf(receipts);
+    }
+
+    /** {@code pendingComments} counts the pending review's own comments, each a distinct expected note. */
+    private record ReviewLookup(
+            @Nullable String pending,
+            int pendingComments,
+            @Nullable SummaryHandle submitted,
+            boolean conflict) {}
 
     // Partial pagination cannot prove absence; retain mismatched copies as conflicts.
     private Map<String, Copy> indexCopies(
             Footer footer, PrCoordinates pr, List<LineNote> items, @Nullable String commitOid) {
+        if (items.isEmpty()) return Map.of();
         long scopeId = footer.workspaceId();
         Map<String, LineNote> expected = new HashMap<>();
         for (LineNote item : items) {
@@ -509,7 +412,14 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             LineNote item,
             @Nullable String commitOid) {
         FeedbackAnchor diff = item.anchor();
-        if (diff.endLine() == null || diff.side() == null) return false;
+        if (diff.endLine() == null)
+            return Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
+                    && "FILE".equals(thread.get("subjectType"))
+                    && body.equals(postedBody(footer, item))
+                    && diff.path().equals(comment.get("path"))
+                    && comment.get("originalCommit") instanceof Map<?, ?> revision
+                    && Objects.equals(commitOid, revision.get("oid"));
+        if (diff.side() == null) return false;
         Integer startLine = diff.startLine();
         Integer expectedStart = startLine != null && startLine < diff.endLine() ? startLine : null;
         String expectedSide = diff.side() == CitationSide.OLD ? "LEFT" : "RIGHT";
@@ -538,18 +448,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         }
     }
 
-    private static List<CopyReceipt> notSent(List<LineNote> items) {
-        return items.stream().map(item -> CopyReceipt.notSent(item.copyId())).toList();
-    }
-
-    private static List<CopyReceipt> attempted(List<LineNote> items) {
-        return items.stream().map(item -> CopyReceipt.attempted(item.copyId())).toList();
-    }
-
-    private static List<UUID> deliveryKeys(List<LineNote> items) {
-        return items.stream().map(LineNote::copyId).toList();
-    }
-
     private String postedBody(Footer footer, LineNote item) {
         String body = footer.appendLineNotePrompt(PostedText.of(item.body())) + "\n" + item.writeMarker();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(item.writeKey());
@@ -562,7 +460,12 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             @Nullable String url) {
         CopyReceipt preserved(LineNote item) {
             return new CopyReceipt(
-                    item.copyId(), CopyDisposition.PRESERVED_EXISTING, commentId, url, null, CopyForm.LINE_NOTE);
+                    item.copyId(),
+                    CopyDisposition.PRESERVED_EXISTING,
+                    commentId,
+                    url,
+                    true,
+                    item.anchor().endLine() == null ? CopyForm.FILE_NOTE : CopyForm.LINE_NOTE);
         }
     }
 
@@ -571,6 +474,11 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         thread.put("path", diff.path());
         thread.put("body", body);
 
+        if (diff.endLine() == null) {
+            thread.put("subjectType", "FILE");
+            return thread;
+        }
+        thread.put("subjectType", "LINE");
         Integer startLine = diff.startLine();
         int endLine = Objects.requireNonNull(diff.endLine(), "A line note requires an end line");
         boolean isMultiLine = startLine != null && startLine < endLine;

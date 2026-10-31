@@ -19,7 +19,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorSituation;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import java.time.Clock;
@@ -75,7 +75,7 @@ public class HephTurnContexts {
     private final MentorConversationService conversations;
     private final WorkspaceContextBuilder contextBuilder;
     private final ResultHistoryQuery results;
-    private final FeedbackStore feedback;
+    private final ConversationClaims feedback;
     private final AccountDirectory accounts;
     private final ObjectMapper mapper;
     private final Clock clock;
@@ -98,7 +98,7 @@ public class HephTurnContexts {
             MentorConversationService conversations,
             WorkspaceContextBuilder contextBuilder,
             ResultHistoryQuery results,
-            FeedbackStore feedback,
+            ConversationClaims feedback,
             AccountDirectory accounts,
             ObjectMapper mapper,
             Clock clock,

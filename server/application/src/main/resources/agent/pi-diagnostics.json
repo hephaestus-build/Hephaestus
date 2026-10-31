@@ -183,8 +183,6 @@
 			"read",
 			"read_problem",
 			"remove_problem",
-			"report_feedback",
-			"report_review",
 			"submit_result",
 			"upsert_problem",
 			"other"

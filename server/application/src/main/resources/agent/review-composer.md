@@ -88,10 +88,7 @@ Decide each NOT_MET result: speak about it or its problems, or withhold it with 
 A witness shows where the advice was given; whether it made the same point, and whether what changed since matters, is
 your judgement.
 
-Send `report_review` with the complete decisions first, then the whole review in the same call. An accepted
-`report_review` is final and ends the composition. A refused one names every reason and stores nothing; correct it and
-send it again. When you withhold every NOT_MET result, write nothing for the work: it is still one final
-`report_review` call, with its withholding decisions, a `null` summary and no notes.
+Use `check_package` to check the complete draft without publishing it. It returns a `draftId` for the exact checked words and support. Correct a refused package and check again. Then call `publish_package` with that `draftId` only. Publication repeats the checks under the attempt fence and accepts the complete package once. A changed package needs a new check. A quiet review still contains its withholding decisions, a `null` summary and no notes. Approval and provider delivery keep their own recorded states; acceptance does not claim that delivery finished.
 
 The check reads which results and problems each text rests on. It refuses a text that rests on anything other
 than a `NOT_MET` result or its problems. It cannot check what the words say: keep every sentence within the
@@ -121,7 +118,7 @@ The support fields and anchors identify the exact evidence; the delivered words 
 
 ## What you send
 
-`report_review` holds the whole review as one object; its parameter schema is the exact shape:
+`check_package` checks the whole draft as one object; its parameter schema is the exact shape:
 
 - `decisions` — one decision per NOT_MET result: its `resultId` and `disposition`, either `RAISE` or one
   of the withholding reasons above. A prior-advice reason also names its `witnessIds`. These decisions are internal.

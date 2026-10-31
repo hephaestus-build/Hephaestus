@@ -15,12 +15,14 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
@@ -32,11 +34,8 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ConversationEligibilityDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticePageSupportDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
@@ -46,6 +45,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
@@ -95,9 +96,9 @@ class WorkerFeedbackComposerTest {
     private final ReviewModelGateway gateway = mock(ReviewModelGateway.class);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
     private final ItemDescriptorRegistry items = mock(ItemDescriptorRegistry.class);
-    private final List<PrepareFeedbackRequestDTO> prepared = new ArrayList<>();
+    private final List<FeedbackPackage> prepared = new ArrayList<>();
     /** The packages the server accepted: they decide destinations as prepared rows would. */
-    private final List<PrepareFeedbackRequestDTO> accepted = new ArrayList<>();
+    private final List<FeedbackPackage> accepted = new ArrayList<>();
 
     private final Map<FeedbackDestination, Set<UUID>> earlierDecisions = new EnumMap<>(FeedbackDestination.class);
     private boolean reviewedEarlier;
@@ -149,16 +150,29 @@ class WorkerFeedbackComposerTest {
         when(admission.privateProgress(job)).thenAnswer(invocation -> progress());
         when(admission.admittedResponse(job))
                 .thenAnswer(invocation -> admissionResponse(
-                        reviewedEarlier || accepted.stream().anyMatch(PrepareFeedbackRequestDTO::publicComposition)));
+                        reviewedEarlier || accepted.stream().anyMatch(FeedbackPackage::publicComposition)));
         when(admission.publicFeedbackHistory(any()))
                 .thenReturn(mapper.readValue(
-                        Files.readAllBytes(scenario.resolve("public-history.json")), PublicFeedbackHistoryDTO.class));
-        when(admission.prepareFeedback(any(), any())).thenAnswer(invocation -> accept(invocation.getArgument(1)));
+                        Files.readAllBytes(scenario.resolve("public-history.json")), PublicFeedbackSnapshot.class));
+        when(admission.publishPackage(any(), any())).thenAnswer(invocation -> accept(invocation.getArgument(1)));
         var inputs = workspace(scenario.resolve("workspace"));
         inputs.remove(SandboxLayout.FEEDBACK_COMPOSITION_PATH);
         when(continuation.retainedInputs(job)).thenReturn(inputs);
         when(gateway.call(any(), any())).thenAnswer(invocation -> {
             requests.add(mapper.readTree((byte[]) invocation.getArgument(1)));
+            var request = requests.getLast();
+            var messages = request.path("messages");
+            var last = messages.get(messages.size() - 1);
+            if (last != null
+                    && "tool".equals(last.path("role").asString())
+                    && last.path("content").asString("").contains("\"draftId\"")) {
+                var receipt = mapper.readTree(last.path("content").asString());
+                if (receipt.hasNonNull("draftId"))
+                    return call(
+                            "publish_package",
+                            mapper.createObjectNode()
+                                    .put("draftId", receipt.path("draftId").asString()));
+            }
             return replies.isEmpty() ? text("Nothing more.") : replies.removeFirst();
         });
     }
@@ -192,41 +206,35 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldComposeTheReviewOnTheWorkThenPrivateFeedbackAndPrepareEachPackage() {
-        replies.add(call("report_review", validReview()));
-        replies.add(call("report_feedback", privatePieces()));
-        replies.add(text("Done."));
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", pagePieces()));
+        replies.add(call("check_package", conversationPieces()));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        // Each session offers only its report tool: everything it may use is in its turn.
-        assertThat(tools(requests.getFirst())).containsExactly("report_review");
-        assertThat(tools(requests.get(1))).containsExactly("report_feedback");
+        // Each session offers the same two tools: everything it may use is in its turn.
+        assertThat(requests)
+                .allSatisfy(request -> assertThat(tools(request)).containsExactly("check_package", "publish_package"));
         assertThat(requests.getFirst().path("max_completion_tokens").asInt()).isEqualTo(4_000);
         var review = prepared.getFirst();
         assertThat(review.publicComposition()).isTrue();
         assertThat(review.publicationContext()).isEqualTo("v1:7:" + "d".repeat(64));
         assertThat(review.composition().getFirst().destination()).isEqualTo(FeedbackDestination.ON_WORK);
         assertThat(review.composition().getFirst().notes()).hasSize(1);
-        assertThat(prepared.subList(1, prepared.size()))
-                .extracting(
-                        request -> request.composition().getFirst().destination(),
-                        request -> request.composition().getFirst().withheldReason())
+        // One accepted package per destination, each deciding every practice it may carry.
+        assertThat(prepared).hasSize(3);
+        assertThat(prepared.subList(1, prepared.size()).stream().flatMap(request -> request.composition().stream()))
+                .extracting(piece -> piece.destination(), piece -> piece.withheldReason())
                 .containsExactly(
                         tuple(FeedbackDestination.PRACTICE_PAGE, null),
                         tuple(FeedbackDestination.CONVERSATION, FeedbackStopReason.COMPOSER_WITHHELD),
-                        // The page card decides its practice on the page only. Asked once more, the session leaves
-                        // the conversation open, so it is recorded as not composed, as a resumed attempt would read it.
-                        tuple(FeedbackDestination.CONVERSATION, FeedbackStopReason.NOT_COMPOSED));
-        var finish = requests.getLast().path("messages");
-        assertThat(finish.get(finish.size() - 1).path("content").asString())
-                .startsWith("## Undecided")
-                .contains(" on CONVERSATION.");
+                        tuple(FeedbackDestination.CONVERSATION, FeedbackStopReason.COMPOSER_WITHHELD));
     }
 
     @Test
     void shouldSendTheSameRequestAgainAfterAProviderFailure() {
         replies.add(new ReviewModelGateway.Answer(503, new byte[0], true, null));
-        replies.add(call("report_review", validReview()));
+        replies.add(call("check_package", validReview()));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
@@ -241,8 +249,8 @@ class WorkerFeedbackComposerTest {
     void shouldSendARefusedReviewBackAndStoreItsCorrection() {
         var incomplete = validReview();
         ((ArrayNode) incomplete.path("decisions")).remove(1);
-        replies.add(call("report_review", incomplete));
-        replies.add(call("report_review", validReview()));
+        replies.add(call("check_package", incomplete));
+        replies.add(call("check_package", validReview()));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
@@ -258,11 +266,11 @@ class WorkerFeedbackComposerTest {
     @Test
     void shouldNameTheRuleAndFieldOfARefusedTextAndStoreTheRewrittenReview() {
         doThrow(new FeedbackTextRefusedException(FeedbackDestination.ON_WORK, "LINK", "notes[1]"))
-                .doAnswer(invocation -> accept(invocation.getArgument(1)))
+                .doNothing()
                 .when(admission)
-                .prepareFeedback(any(), any());
-        replies.add(call("report_review", validReview()));
-        replies.add(call("report_review", validReview()));
+                .checkPackage(any(), any());
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", validReview()));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
@@ -276,36 +284,37 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldNameTheRefusedFieldOfAPrivatePieceForItsRewrite() {
-        replies.add(call("report_review", validReview()));
-        replies.add(call("report_feedback", privatePieces()));
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", pagePieces()));
         replies.add(text("Done."));
         doAnswer(invocation -> {
-                    PrepareFeedbackRequestDTO request = invocation.getArgument(1);
+                    FeedbackPackage request = invocation.getArgument(1);
                     var piece = request.composition().getFirst();
                     if (piece.destination() != FeedbackDestination.PRACTICE_PAGE || piece.withheldReason() != null)
-                        return accept(request);
+                        return null;
                     throw new FeedbackTextRefusedException(
                             FeedbackDestination.PRACTICE_PAGE, "MENTION", "page.nextStep");
                 })
                 .when(admission)
-                .prepareFeedback(any(), any());
+                .checkPackage(any(), any());
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        var answer = requests.get(2).path("messages");
+        // The review's check and publication come first; the page's refused check is answered after them.
+        var answer = requests.get(3).path("messages");
         assertThat(answer.get(answer.size() - 1).path("content").asString())
-                .contains("#1: the server refused this piece, nothing was stored: The card's next step has an"
+                .contains("Package check refused; nothing was accepted: The card's next step has an"
                         + " @-mention or Slack mention.");
     }
 
     @Test
     void shouldComposeTheReviewAgainFromAFreshHistoryReadWhenItsHistoryChanged() {
         doThrow(new PublicationContextRefusedException(FeedbackStopReason.PUBLIC_HISTORY_CHANGED))
-                .doAnswer(invocation -> accept(invocation.getArgument(1)))
+                .doNothing()
                 .when(admission)
-                .prepareFeedback(any(), any());
-        replies.add(call("report_review", validReview()));
-        replies.add(call("report_review", validReview()));
+                .checkPackage(any(), any());
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", validReview()));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
@@ -320,37 +329,30 @@ class WorkerFeedbackComposerTest {
 
     @Test
     void shouldSendAServerRefusedPrivatePieceBackForCorrection() {
-        replies.add(call("report_review", validReview()));
-        replies.add(call("report_feedback", privatePieces()));
-        replies.add(call("report_feedback", privatePieces()));
-        replies.add(text("Done."));
+        replies.add(call("check_package", validReview()));
+        replies.add(call("check_package", pagePieces()));
+        replies.add(call("check_package", pagePieces()));
+        replies.add(call("check_package", conversationPieces()));
+        var refused = new boolean[1];
         doAnswer(invocation -> {
-                    PrepareFeedbackRequestDTO request = invocation.getArgument(1);
-                    boolean firstCard = request.composition().getFirst().destination()
-                                    == FeedbackDestination.PRACTICE_PAGE
-                            && prepared.stream()
-                                    .noneMatch(earlier ->
-                                            earlier.composition().getFirst().destination()
-                                                    == FeedbackDestination.PRACTICE_PAGE);
-                    if (!firstCard) return accept(request);
-                    prepared.add(request);
+                    FeedbackPackage request = invocation.getArgument(1);
+                    if (request.composition().getFirst().destination() != FeedbackDestination.PRACTICE_PAGE
+                            || refused[0]) return null;
+                    refused[0] = true;
                     throw new AdmissionConflictException();
                 })
                 .when(admission)
-                .prepareFeedback(any(), any());
+                .checkPackage(any(), any());
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        var answer = requests.get(2).path("messages");
+        var answer = requests.get(3).path("messages");
         assertThat(answer.get(answer.size() - 1).path("content").asString())
-                .contains("#1: the server refused this piece, nothing was stored")
-                .contains("#2: stored a CONVERSATION piece");
+                .startsWith("Package check refused; nothing was accepted. Every piece must rest on its basedOn");
         assertThat(prepared)
                 .extracting(request -> request.composition().getFirst().destination())
                 .containsExactly(
                         FeedbackDestination.ON_WORK,
-                        FeedbackDestination.PRACTICE_PAGE,
-                        FeedbackDestination.CONVERSATION,
                         FeedbackDestination.PRACTICE_PAGE,
                         FeedbackDestination.CONVERSATION);
     }
@@ -359,8 +361,8 @@ class WorkerFeedbackComposerTest {
     void shouldWithholdEachOpenDestinationWhenTheModelNeverDecides() {
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        // Each session was asked once more, then each routed destination got a recorded withholding.
-        assertThat(requests).hasSize(4);
+        // Each of the three sessions was asked once more, then each routed destination got a recorded withholding.
+        assertThat(requests).hasSize(6);
         assertThat(prepared)
                 .allSatisfy(
                         request -> assertThat(request.composition().getFirst().withheldReason())
@@ -434,8 +436,8 @@ class WorkerFeedbackComposerTest {
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        // Each session stops at its first refused call; another attempt would be refused again.
-        assertThat(requests).hasSize(2);
+        // Each of the three sessions stops at its first refused call; another attempt would be refused again.
+        assertThat(requests).hasSize(3);
         assertThat(prepared)
                 .extracting(request -> request.composition().getFirst().withheldReason())
                 .containsOnly(reason)
@@ -450,12 +452,12 @@ class WorkerFeedbackComposerTest {
         job.setConfigSnapshot(config);
         answerEveryCall(new ReviewModelGateway.Answer(200, """
                 {"stop_reason":"refusal","content":[{"type":"text","text":"I cannot compose this feedback."},
-                  {"type":"tool_use","id":"refused","name":"report_review","input":{}}]}
+                  {"type":"tool_use","id":"refused","name":"check_package","input":{}}]}
                 """.getBytes(StandardCharsets.UTF_8), true, null));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
-        assertThat(requests).hasSize(2);
+        assertThat(requests).hasSize(3);
         assertThat(prepared)
                 .extracting(request -> request.composition().getFirst().withheldReason())
                 .containsOnly(FeedbackStopReason.NOT_COMPOSED)
@@ -473,7 +475,8 @@ class WorkerFeedbackComposerTest {
                         CompositionHandedOnException.class,
                         handedOn -> assertThat(handedOn.stop()).isEqualTo(CompositionStop.PROVIDER));
         // The private feedback waits for the review it follows, and nothing open is withheld.
-        assertThat(requests).allSatisfy(request -> assertThat(tools(request)).containsExactly("report_review"));
+        assertThat(requests)
+                .allSatisfy(request -> assertThat(tools(request)).containsExactly("check_package", "publish_package"));
         assertThat(prepared).isEmpty();
         assertThat(stops("provider", "handed_on")).isEqualTo(1);
     }
@@ -509,7 +512,7 @@ class WorkerFeedbackComposerTest {
     void shouldLeaveAFailedWithholdingToTheExecutorToHandOn() {
         doThrow(new IllegalStateException("database unavailable"))
                 .when(admission)
-                .prepareFeedback(any(), any());
+                .publishPackage(any(), any());
 
         assertThatThrownBy(() -> composer()
                         .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
@@ -591,20 +594,20 @@ class WorkerFeedbackComposerTest {
         assertThatThrownBy(() -> composer()
                         .composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1))))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
-        verify(admission, never()).prepareFeedback(any(), any());
+        verify(admission, never()).publishPackage(any(), any());
     }
 
     @Test
     void shouldComposeOnlyThePrivateDestinationsAnEarlierAttemptLeftOpen() {
         reviewedEarlier = true;
         earlierDecisions.put(FeedbackDestination.PRACTICE_PAGE, Set.of(UUID.fromString(ERRORS)));
-        replies.add(call("report_feedback", privatePieces()));
+        replies.add(call("check_package", conversationPieces()));
         replies.add(text("Done."));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
 
         // The review on the work is accepted and the page decided: the session may write only conversation pieces.
-        assertThat(tools(requests.getFirst())).containsExactly("report_feedback");
+        assertThat(tools(requests.getFirst())).containsExactly("check_package", "publish_package");
         JsonNode schema =
                 requests.getFirst().path("tools").get(0).path("function").path("parameters");
         assertThat(schema.path("properties")
@@ -637,7 +640,7 @@ class WorkerFeedbackComposerTest {
                                         UUID.fromString(ERRORS), UUID.fromString(ERRORS_PROBLEM))),
                                 new ComposedFeedback.Anchor(UUID.fromString(ERRORS_PROBLEM), 0))),
                         List.of())));
-        replies.add(call("report_feedback", privatePieces()));
+        replies.add(call("check_package", pagePieces()));
         replies.add(text("Done."));
 
         composer().composeAfterMeasurement(job, LEASE, Instant.now().plus(Duration.ofHours(1)));
@@ -670,10 +673,11 @@ class WorkerFeedbackComposerTest {
         return new ReviewCompositionContinuation.Restored(mock(PreparedJobInputs.class), Map.of());
     }
 
-    private PrepareFeedbackResponseDTO accept(PrepareFeedbackRequestDTO request) {
+    private PreparedPackage accept(FeedbackPackage request) {
         prepared.add(request);
         accepted.add(request);
-        return new PrepareFeedbackResponseDTO(List.of(UUID.randomUUID()), "digest", Instant.now());
+        return new PreparedPackage(
+                "digest", Instant.now(), List.of(new PreparedFeedback(UUID.randomUUID(), "digest", Instant.now())));
     }
 
     /** What the prepared rows decide, as the server reads its progress. */
@@ -701,13 +705,23 @@ class WorkerFeedbackComposerTest {
                 """.formatted(ERRORS, DESCRIBE, ERRORS_PROBLEM));
     }
 
-    private ObjectNode privatePieces() {
+    /** The practice page's package: only handles-errors may carry a card there. */
+    private ObjectNode pagePieces() {
         return (ObjectNode) mapper.readTree("""
                 {"feedback":[
                   {"destination":"PRACTICE_PAGE","practiceSlug":"handles-errors","basedOn":["%1$s"],"action":"NEW",
                    "title":"Record each caught failure","body":"Two changes return a default value from a catch and record nothing.",
-                   "nextStep":"Before you return from a catch, record or rethrow the failure."},
+                   "nextStep":"Before you return from a catch, record or rethrow the failure."}]}
+                """.formatted(ERRORS));
+    }
+
+    /** The conversation's package: a decision for each of its practices. */
+    private ObjectNode conversationPieces() {
+        return (ObjectNode) mapper.readTree("""
+                {"feedback":[
                   {"destination":"CONVERSATION","practiceSlug":"describes-changes","basedOn":["%2$s"],"action":"WITHHOLD",
+                   "withholdReason":"BELOW_BAR","witnessIds":[]},
+                  {"destination":"CONVERSATION","practiceSlug":"handles-errors","basedOn":["%1$s"],"action":"WITHHOLD",
                    "withholdReason":"BELOW_BAR","witnessIds":[]}]}
                 """.formatted(ERRORS, DESCRIBE));
     }

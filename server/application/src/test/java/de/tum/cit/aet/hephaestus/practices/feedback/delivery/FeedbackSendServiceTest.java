@@ -9,14 +9,22 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.evidence.CitationSide;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyWriteResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
@@ -26,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -49,12 +58,15 @@ class FeedbackSendServiceTest {
             .developerId(2)
             .body("Add a focused test.")
             .build();
+    final ItemRef item = mock(ItemRef.class);
     FeedbackTarget target;
     FeedbackSendService sender;
 
     @BeforeEach
     void setup() {
         target = mock(FeedbackTarget.class);
+        when(item.kind()).thenReturn(new ItemKind("scm.issue"));
+        when(target.item()).thenReturn(item);
         var integration = mock(IntegrationRef.class);
         when(integration.kind()).thenReturn(IntegrationKind.GITHUB);
         when(target.integration()).thenReturn(integration);
@@ -159,5 +171,87 @@ class FeedbackSendServiceTest {
         sender.send(1, id);
         verify(transactions).error(eq(1L), eq(id), anyString());
         verify(transactions).finish(eq(1L), eq(id), anyString(), eq(false));
+    }
+
+    final LineNoteWriter notes = mock(LineNoteWriter.class);
+    final UUID noteId = UUID.randomUUID();
+
+    FeedbackCopy note(FeedbackCopyState state) {
+        return FeedbackCopy.builder()
+                .id(noteId)
+                .workspaceId(1)
+                .feedbackId(id)
+                .kind(FeedbackCopyKind.LINE_NOTE)
+                .position(1)
+                .body("Name the failure you catch.")
+                .path("src/App.java")
+                .startLine(8)
+                .endLine(8)
+                .side(CitationSide.NEW)
+                .state(state)
+                .writeStartedAt(state == FeedbackCopyState.PLANNED ? null : Instant.EPOCH)
+                .writeKey(noteId.toString())
+                .writeMarker(FeedbackIds.writeMarker(noteId))
+                .build();
+    }
+
+    FeedbackSendService pullRequest(List<LineNoteWriter> writers, FeedbackCopyState summary, FeedbackCopyState line) {
+        when(item.kind()).thenReturn(new ItemKind("scm.pull_request"));
+        when(notes.kind()).thenReturn(IntegrationKind.GITHUB);
+        when(transactions.claim(eq(1L), eq(id), anyString()))
+                .thenReturn(new FeedbackSendTransactions.Attempt(
+                        feedback, FeedbackSendAction.POST, List.of(copy(summary), note(line)), 1));
+        return new FeedbackSendService(
+                transactions, targets, List.of(writer), writers, mock(PostedCopyCorrector.class));
+    }
+
+    @Test
+    void shouldSendTheSummaryAndNotesOfAPullRequestAsOnePackage() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.PLANNED, FeedbackCopyState.PLANNED);
+        var posted = List.of(
+                new CopyReceipt(copyId, CopyDisposition.POSTED, "PRR_1", null, true, null),
+                new CopyReceipt(noteId, CopyDisposition.POSTED, "PRRC_1", null, true, null));
+        when(notes.postPackage(eq(target), any(), any())).thenReturn(CopyWriteResult.of(posted));
+        sender.send(1, id);
+        ArgumentCaptor<OnWorkPackage> sent = ArgumentCaptor.captor();
+        verify(notes, times(1)).postPackage(eq(target), sent.capture(), any());
+        assertThat(sent.getValue().copyIds()).containsExactly(copyId, noteId);
+        assertThat(sent.getValue().summary()).isNotNull();
+        verify(writer, never()).postSummary(any(), any());
+        verify(transactions).receipt(eq(1L), eq(id), anyString(), eq(posted));
+    }
+
+    @Test
+    void shouldOnlyReadBackAPackageWhoseSubmissionMayHaveHappened() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.POSTED, FeedbackCopyState.WRITE_STARTED);
+        when(notes.findPosted(eq(target), any())).thenReturn(List.of());
+        sender.send(1, id);
+        verify(notes, never()).postPackage(any(), any(), any());
+        verify(transactions).absent(eq(1L), eq(id), anyString(), eq(noteId));
+        verify(transactions, never()).absent(eq(1L), eq(id), anyString(), eq(copyId));
+    }
+
+    @Test
+    void shouldKeepTheOutcomeUnknownWhenReadbackIsInconclusive() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.WRITE_STARTED, FeedbackCopyState.WRITE_STARTED);
+        when(notes.findPosted(eq(target), any())).thenReturn(null);
+        sender.send(1, id);
+        verify(notes, never()).postPackage(any(), any(), any());
+        verify(transactions, never()).receipt(anyLong(), any(), anyString(), anyList());
+        verify(transactions, never()).absent(anyLong(), any(), anyString(), any());
+    }
+
+    @Test
+    void shouldWithholdThePackageWhenNoWriterServesTheProvider() {
+        var sender = pullRequest(List.of(), FeedbackCopyState.PLANNED, FeedbackCopyState.PLANNED);
+        sender.send(1, id);
+        verify(transactions)
+                .withholdCopies(
+                        eq(1L),
+                        eq(id),
+                        anyString(),
+                        eq(List.of(copyId, noteId)),
+                        eq(FeedbackStopReason.RECIPIENT_UNAVAILABLE));
+        verify(writer, never()).postSummary(any(), any());
     }
 }

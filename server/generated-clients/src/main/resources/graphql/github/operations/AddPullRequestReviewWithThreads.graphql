@@ -1,17 +1,10 @@
-# Posts a pull request review with inline thread comments.
-# Used by agent feedback delivery to post diff-level practice findings.
-# Uses COMMENT event for a neutral review (no approval/rejection).
-#
-# Readback ceiling: comments(first: 100) caps the created-comment ids returned in this single
-# response. A review that posts more than 100 inline threads will not get a comment id (durable
-# external_ref) for the overflow, so buildPostedSignals records those placements with a null
-# commentId. This is an accepted boundary, not a silent bug — a single practice review is not
-# expected to exceed 100 inline threads after policy capping.
+# Starts the pending review that holds one feedback package.
+# Without an event the review stays PENDING and notifies no one; SubmitFeedbackReview publishes it.
 
 mutation AddPullRequestReviewWithThreads(
     $pullRequestId: ID!,
     $body: String,
-    $event: PullRequestReviewEvent!,
+    $event: PullRequestReviewEvent,
     $commitOID: GitObjectID,
     $threads: [DraftPullRequestReviewThread!]
 ) {
@@ -24,6 +17,7 @@ mutation AddPullRequestReviewWithThreads(
     }) {
         pullRequestReview {
             id
+            state
             comments(first: 100) {
                 nodes {
                     id

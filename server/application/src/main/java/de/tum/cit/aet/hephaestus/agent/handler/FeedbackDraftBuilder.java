@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
@@ -34,7 +34,7 @@ public final class FeedbackDraftBuilder {
 
     public static List<FeedbackDraft> build(
             ReviewJob job,
-            PrepareFeedbackRequestDTO request,
+            FeedbackPackage request,
             List<AdmittedResultSnapshot> admitted,
             List<ResultHistoryEntry> historical,
             Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors) {

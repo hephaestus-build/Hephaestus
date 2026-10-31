@@ -830,3 +830,37 @@ New reason values beside the table in § New reason values:
 | Kind | Values |
 | --- | --- |
 | Item event, waiting | `QUIET_WINDOW`, `REVIEW_IN_PROGRESS` |
+
+## Update — 2026-10-31: checked publication ships
+
+The composer checks a complete draft and receives its content-bound ID.
+Then it publishes that exact draft.
+The attempt identity supplies the owner.
+The model arguments contain no job, attempt or worker identity.
+Checking writes no feedback, copies, preparation receipt or send request.
+
+Publication repeats the admission, privacy, currentness and text checks before the existing atomic preparation transaction.
+Its receipt records acceptance, not provider delivery.
+Each private destination has its own package and transaction.
+The complete composition run has a 12-call bound, including provider retries.
+
+GitHub stages one pending review with its body and threads, then submits it once.
+GitLab stages private notes and uses one bulk publication, including the summary.
+The adapters refuse unrelated drafts instead of publishing them.
+They adopt only exact owned drafts after interruption, and do not fall back to separate public comments.
+The provider APIs are [GitHub review mutations](https://docs.github.com/en/graphql/reference/mutations#submitpullrequestreview)
+and [GitLab draft notes](https://docs.gitlab.com/api/draft_notes/).
+
+Failure cases:
+
+- A fabricated or changed draft ID cannot publish unchecked words.
+- A stale attempt or changed public history refuses publication even after the draft passed checking.
+- A bad private piece rejects the entire destination package, with no partial saved feedback.
+- A private draft failure or rate limit leaves the review unpublished. A retry adopts exact owned drafts.
+- A pending review or draft note outside the package blocks submission and is left untouched.
+- An unknown submission outcome permits readback only. Partial readback never starts another notification.
+- Correction and withdrawal use the recorded provider references and preserve the markers.
+
+The composer still decides content and placement. The tools enforce trust and provider constraints.
+Provider read-back correction tools are the next lifecycle layer.
+Acceptance must not be described as delivery.

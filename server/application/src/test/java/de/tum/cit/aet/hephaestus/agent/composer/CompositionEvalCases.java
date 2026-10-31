@@ -33,7 +33,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The labelled composition cases of {@code scripts/feedback-eval/compositions.json}, each rendered by main's review
- * composer: the opening turn and the report_review tool that {@link WorkerFeedbackComposer#reviewTurn} renders, and
+ * composer: the opening turn and the check_package tool that {@link WorkerFeedbackComposer#reviewTurn} renders, and
  * the acceptance check of {@link ReviewOnWork#read}. Each case becomes a scenario in the layout of the golden
  * pull-request scenario. {@code docs/contributor/feedback-quality-evals.md} owns the use.
  */
@@ -65,13 +65,13 @@ final class CompositionEvalCases {
         return WorkerFeedbackComposer.sharedStyle() + "\n\n" + WorkerFeedbackComposer.prompt("review-composer.md");
     }
 
-    /** One model request: the case's opening turn and its report_review tool. */
+    /** One model request: the case's opening turn and its check_package tool. */
     static ObjectNode request(Scenario scenario) {
         var request = JSON.objectNode();
         request.put("id", scenario.id());
         request.put("turn", scenario.turn().text());
         var tool = request.putObject("tool");
-        tool.put("name", "report_review");
+        tool.put("name", "check_package");
         tool.put("description", ReviewOnWork.TOOL_DESCRIPTION);
         tool.set("parameters", scenario.turn().toolParameters());
         return request;
@@ -79,11 +79,7 @@ final class CompositionEvalCases {
 
     /** One case as main's composer reads it, with the case's short ids mapped to the ids the model sees. */
     record Scenario(
-            String id,
-            JsonNode item,
-            WorkerFeedbackComposer.ReviewTurn turn,
-            Map<String, String> ids,
-            Map<String, String> back) {
+            String id, JsonNode item, ReviewCompositionTurn turn, Map<String, String> ids, Map<String, String> back) {
         JsonNode toModel(JsonNode review) {
             return rename(review, ids);
         }
@@ -162,7 +158,7 @@ final class CompositionEvalCases {
             JsonNode arguments = output.path("arguments");
             if (!arguments.isObject()) {
                 entry.put("accepted", false);
-                entry.set("errors", strings(List.of("no report_review call")));
+                entry.set("errors", strings(List.of("no check_package call")));
                 entry.putNull("review");
                 continue;
             }
@@ -481,8 +477,8 @@ final class CompositionEvalCases {
     }
 
     /** The path the golden test drives, which is the path the composer drives from its inputs. */
-    private static WorkerFeedbackComposer.ReviewTurn render(
-            Map<String, byte[]> inputs, JsonNode response, JsonNode history) throws IOException {
+    private static ReviewCompositionTurn render(Map<String, byte[]> inputs, JsonNode response, JsonNode history)
+            throws IOException {
         var decided = new HashSet<String>();
         var state = Admission.of(response, Map.of("PRACTICE_PAGE", decided, "CONVERSATION", decided));
         byte[] requestBytes = Objects.requireNonNull(inputs.get(SandboxLayout.FEEDBACK_COMPOSITION_PATH));

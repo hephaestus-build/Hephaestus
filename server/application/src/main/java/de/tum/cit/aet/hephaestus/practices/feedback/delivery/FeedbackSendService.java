@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -48,24 +50,12 @@ public class FeedbackSendService {
                 corrector.correct(attempt, target, owner);
                 return;
             }
-            boolean readbackOnly =
-                    attempt.copies().stream().anyMatch(copy -> copy.getState() == FeedbackCopyState.WRITE_STARTED);
-            if (readbackOnly)
-                transactions.withholdCopies(
-                        workspaceId,
-                        feedbackId,
-                        owner,
-                        attempt.copies().stream()
-                                .filter(copy -> copy.getState() == FeedbackCopyState.PLANNED)
-                                .map(FeedbackCopy::getId)
-                                .toList(),
-                        FeedbackStopReason.DELIVERY_UNCONFIRMED);
-            for (var copy : attempt.copies()) {
-                if (copy.getKind() == FeedbackCopyKind.SUMMARY
-                        && (!readbackOnly || copy.getState() == FeedbackCopyState.WRITE_STARTED))
-                    summary(attempt, target, owner, copy);
+            if (target.item().kind().value().equals("scm.pull_request")) {
+                packageOnWork(attempt, target, owner);
+            } else {
+                for (var copy : attempt.copies())
+                    if (copy.getKind() == FeedbackCopyKind.SUMMARY) summary(attempt, target, owner, copy);
             }
-            anchored(attempt, target, owner, readbackOnly);
         } catch (FeedbackTargetResolver.TargetUnavailable refusal) {
             transactions.refuseTarget(workspaceId, feedbackId, owner, refusal.reason());
         } catch (FeedbackSendTransactions.RecipientWriteRefused refusal) {
@@ -132,66 +122,93 @@ public class FeedbackSendService {
                         copy.getId(), CopyDisposition.POSTED, handle.externalRef(), handle.url(), true, null)));
     }
 
-    private void anchored(
-            FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, String owner, boolean readbackOnly) {
-        var eligible = attempt.copies().stream()
-                .filter(c -> c.getKind() == FeedbackCopyKind.LINE_NOTE || c.getKind() == FeedbackCopyKind.FILE_NOTE)
-                .filter(c ->
-                        c.getState() == FeedbackCopyState.PLANNED || c.getState() == FeedbackCopyState.WRITE_STARTED)
-                .toList();
-        if (eligible.isEmpty()) return;
+    private void packageOnWork(FeedbackSendTransactions.Attempt attempt, FeedbackTarget target, String owner) {
+        long workspaceId = attempt.feedback().getWorkspaceId();
+        UUID feedbackId = attempt.feedback().getId();
+        var unresolved = copies(attempt, FeedbackCopyState.WRITE_STARTED);
+        var planned = copies(attempt, FeedbackCopyState.PLANNED);
+        // While a write may have reached the provider, only readback may settle it: a planned sibling is not sent.
+        if (!unresolved.isEmpty() && !planned.isEmpty()) {
+            transactions.withholdCopies(
+                    workspaceId,
+                    feedbackId,
+                    owner,
+                    planned.stream().map(FeedbackCopy::getId).toList(),
+                    FeedbackStopReason.DELIVERY_UNCONFIRMED);
+            planned = List.of();
+        }
+        if (unresolved.isEmpty() && planned.isEmpty()) return;
         var matching = notes.stream()
                 .filter(writer -> writer.kind() == target.integration().kind())
                 .toList();
         if (matching.size() != 1) {
             transactions.withholdCopies(
-                    attempt.feedback().getWorkspaceId(),
-                    attempt.feedback().getId(),
+                    workspaceId,
+                    feedbackId,
                     owner,
-                    eligible.stream().map(FeedbackCopy::getId).toList(),
+                    (unresolved.isEmpty() ? planned : unresolved)
+                            .stream().map(FeedbackCopy::getId).toList(),
                     FeedbackStopReason.RECIPIENT_UNAVAILABLE);
             return;
         }
         var writer = matching.getFirst();
-        var unresolved = eligible.stream()
-                .filter(c -> c.getState() == FeedbackCopyState.WRITE_STARTED)
-                .toList();
         if (!unresolved.isEmpty()) {
-            var found = writer.findPosted(
-                    target, unresolved.stream().map(FeedbackSendService::line).toList());
+            // The submission that may have happened holds every copy written with it, posted ones included.
+            var written = new ArrayList<>(copies(attempt, FeedbackCopyState.POSTED));
+            written.addAll(unresolved);
+            var found = writer.findPosted(target, publication(attempt, written));
             if (found == null) return;
+            var ids = unresolved.stream().map(FeedbackCopy::getId).toList();
             transactions.receipt(
-                    attempt.feedback().getWorkspaceId(), attempt.feedback().getId(), owner, found);
-            var known = found.stream().map(CopyReceipt::copyId).toList();
-            unresolved.stream()
-                    .filter(c -> !known.contains(c.getId()))
-                    .forEach(c -> transactions.absent(c.getWorkspaceId(), c.getFeedbackId(), owner, c.getId()));
+                    workspaceId,
+                    feedbackId,
+                    owner,
+                    found.stream()
+                            .filter(receipt -> ids.contains(receipt.copyId()))
+                            .toList());
+            for (var copy : unresolved)
+                if (found.stream().noneMatch(receipt -> receipt.copyId().equals(copy.getId())))
+                    transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId());
+            return;
         }
-        if (readbackOnly) return;
-        var planned = eligible.stream()
-                .filter(c -> c.getState() == FeedbackCopyState.PLANNED)
-                .map(FeedbackSendService::line)
-                .toList();
-        if (planned.isEmpty()) return;
+        var publication = publication(attempt, planned);
         var result = transactions.recipientWrite(
                 attempt.feedback().getDeveloperId(),
-                () -> writer.postImmutablePackage(
+                () -> writer.postPackage(
                         target,
-                        planned,
-                        (attempting, completed) -> transactions.fence(
-                                attempt.feedback().getWorkspaceId(),
-                                attempt.feedback().getId(),
-                                owner,
-                                attempting,
-                                completed)));
-        transactions.receipt(
-                attempt.feedback().getWorkspaceId(), attempt.feedback().getId(), owner, result.receipts());
+                        publication,
+                        (attempting, completed) ->
+                                transactions.fence(workspaceId, feedbackId, owner, attempting, completed)));
+        transactions.receipt(workspaceId, feedbackId, owner, result.receipts());
         transactions.withholdCopies(
-                attempt.feedback().getWorkspaceId(),
-                attempt.feedback().getId(),
-                owner,
-                result.withheldCopyIds(),
-                FeedbackStopReason.VOLUME_CAPPED);
+                workspaceId, feedbackId, owner, result.withheldCopyIds(), FeedbackStopReason.VOLUME_CAPPED);
+    }
+
+    private static List<FeedbackCopy> copies(FeedbackSendTransactions.Attempt attempt, FeedbackCopyState state) {
+        return attempt.copies().stream()
+                .filter(copy -> copy.getState() == state
+                        && (copy.getKind() == FeedbackCopyKind.SUMMARY
+                                || copy.getKind() == FeedbackCopyKind.LINE_NOTE
+                                || copy.getKind() == FeedbackCopyKind.FILE_NOTE))
+                .toList();
+    }
+
+    private static OnWorkPackage publication(FeedbackSendTransactions.Attempt attempt, List<FeedbackCopy> copies) {
+        var summary = copies.stream()
+                .filter(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY)
+                .findFirst()
+                .map(copy -> new SummaryContent(
+                        copy.getId(),
+                        Objects.requireNonNull(attempt.feedback().getBody()),
+                        Objects.requireNonNull(copy.getWriteKey()),
+                        Objects.requireNonNull(copy.getWriteMarker())))
+                .orElse(null);
+        return new OnWorkPackage(
+                summary,
+                copies.stream()
+                        .filter(copy -> copy.getKind() != FeedbackCopyKind.SUMMARY)
+                        .map(FeedbackSendService::line)
+                        .toList());
     }
 
     static LineNote line(FeedbackCopy copy) {

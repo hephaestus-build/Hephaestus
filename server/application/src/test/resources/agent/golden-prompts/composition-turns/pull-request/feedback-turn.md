@@ -396,4 +396,4 @@ A pattern claim needs at least 2 distinct pieces of work.
 
 This review did not settle one of its practices: names-things. Say nothing about them, for or against, and do not describe this review as complete.
 
-Persist the feedback with report_feedback — every piece you have in one call. Writing nothing on a destination is a correct and common outcome; say in one line why, and stop.
+Check the complete package with check_package, then publish_package using its draftId — every piece you have in one call. Writing nothing on a destination is a correct and common outcome; say in one line why, and stop.

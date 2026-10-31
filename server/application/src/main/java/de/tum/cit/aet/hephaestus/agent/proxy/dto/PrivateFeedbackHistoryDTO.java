@@ -69,7 +69,7 @@ public record PrivateFeedbackHistoryDTO(
         }
     }
 
-    // Its own schema name: PublicFeedbackHistoryDTO.Basis carries a string version id, this one a number.
+    // Its own schema name: PublicFeedbackSnapshot.Basis carries a string version id, this one a number.
     @Schema(name = "PrivateFeedbackHistoryBasis")
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Basis(

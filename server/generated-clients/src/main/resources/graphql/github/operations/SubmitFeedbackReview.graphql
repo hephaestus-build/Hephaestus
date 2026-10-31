@@ -1,0 +1,3 @@
+mutation SubmitFeedbackReview($reviewId:ID!) {
+    submitPullRequestReview(input:{pullRequestReviewId:$reviewId,event:COMMENT}) { pullRequestReview { id state } }
+}

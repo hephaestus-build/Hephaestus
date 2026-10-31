@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.proxy.dto;
+package de.tum.cit.aet.hephaestus.agent.context;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
@@ -19,8 +19,8 @@ import org.jspecify.annotations.Nullable;
  * composed from it must send it back unchanged.
  */
 @JsonInclude(JsonInclude.Include.ALWAYS)
-public record PublicFeedbackHistoryDTO(
-        int contractVersion, Instant readAt, @Nullable String publicationContext, History history) {
+public record PublicFeedbackSnapshot(
+        Instant readAt, @Nullable String publicationContext, History history) {
     public record History(ItemRefDTO item, List<Entry> feedback) {
         public History {
             feedback = List.copyOf(feedback);
