@@ -66,6 +66,7 @@ Thus, own only a part that has no security history and that changes rarely.
 - **The license notice.** MIT, ISC and BSD licenses require that the copyright line and the notice stay with the code. Put them in the header.
 - **Tests.** Port the upstream tests for the part that we keep. Add tests for our callers. A module without tests does not replace a package.
 - **The SBOM entry.** Each owned module in shipped code needs a component in the release SBOM. Its upstream package is the pedigree ancestor of that component. Thus, the license and the provenance stay true. Do not merge owned code into a shipped tree before the release SBOM lists it. [Release management](./release-management.mdx#supply-chain-evidence) describes the SBOM.
+- **A patch is an owned fork.** A `patchedDependencies` patch changes a package that we install, so it is owned code. A directory notice named NOTICE.md beside the patch records its source, its changes and their reasons, and its tests. It also names who makes the patch again for a new version. [`docker/agents/pi/patches/NOTICE.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/agents/pi/patches/NOTICE.md) is the example.
 
 ## The owned-code header
 
