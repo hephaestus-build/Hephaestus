@@ -83,7 +83,6 @@ dependencies {
     implementation(libs.okhttp.jvm)
     implementation(libs.logging.interceptor)
     testImplementation(libs.mockwebserver3)
-    implementation(libs.jakarta.ws.rs.api)
     implementation(libs.jakarta.annotation.api)
     implementation(libs.hibernate.validator)
     implementation(libs.spring.boot.starter.graphql)
