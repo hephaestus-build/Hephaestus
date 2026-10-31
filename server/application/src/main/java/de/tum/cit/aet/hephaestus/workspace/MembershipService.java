@@ -8,12 +8,14 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermissionsException;
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import java.time.Clock;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -44,6 +46,7 @@ public class MembershipService {
     private final GitProviderRegistry providers;
     private final MembershipSearch memberSearch;
     private final WorkspaceActorSelector actors;
+    private final PublicActivityPolicy publicActivityPolicy;
 
     public long accountIdForUser(long scmUserId) {
         var actor = providers
@@ -243,6 +246,33 @@ public class MembershipService {
                 query == null || query.isBlank() ? null : query.strip(),
                 teamId,
                 page);
+    }
+
+    /**
+     * Whether each current member answered the public activity question here, by account, for a
+     * workspace admin where the workspace publishes public activity. It never says which way: an
+     * admin learns who is pending, not who hid. Anyone else reads nothing, and a former member is no
+     * longer asked here.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Boolean> publicActivityAnswered(long workspaceId, Collection<Membership> members) {
+        var current =
+                members.stream().filter(member -> member.getLeftAt() == null).toList();
+        if (current.isEmpty() || !access.isAdmin() || !publishesPublicActivity(workspaceId)) return Map.of();
+        Map<Long, Boolean> answered = new HashMap<>();
+        for (var member : current) {
+            answered.put(Objects.requireNonNull(member.getAccountId()), member.isPublicActivitySeen());
+        }
+        return answered;
+    }
+
+    private boolean publishesPublicActivity(long workspaceId) {
+        return publicActivityPolicy.allowed()
+                && workspaces
+                        .findById(workspaceId)
+                        .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE
+                                && Boolean.TRUE.equals(workspace.getPublicActivityEnabled()))
+                        .isPresent();
     }
 
     private Workspace lockForMembershipChange(Long workspaceId) {

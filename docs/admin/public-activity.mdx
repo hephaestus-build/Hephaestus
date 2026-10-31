@@ -40,10 +40,12 @@ The switch shows the stored choice, not the configured default.
 **Publish the page** asks first.
 The confirmation states what becomes public:
 
-- everyone who contributed to the public repositories, members and outside contributors, by name, picture and profile link
+- the outside contributors to the public repositories, and the members who chose to show, by name, picture and profile link
 - the pull requests (merge requests on GitLab) each person opened and reviewed, the issues they opened, their public work timeline, and weekly counts of their activity
 
 It also states that the page shows nothing from private repositories, practices, feedback, AI content, Slack, Outline or automation accounts.
+It states that members and people who signed in are hidden until they choose to show.
+It also states that anyone on the page can hide in User settings.
 Turning the page off needs no confirmation.
 
 **Publish the page** shows the saved choice of the workspace.
@@ -61,7 +63,7 @@ The webapp sets the meta tag with JavaScript, so a crawler that does not run Jav
 This is a request to search engines, not access control.
 
 **People left out of the page** shows how many people the page leaves out and does not count.
-It includes people who hid themselves and people an administrator hid.
+It includes people who hid themselves, people who have not answered yet, and people an administrator hid.
 It never shows who hid themselves.
 
 To leave out a person who has no membership, and so no setting of their own, open the person on **Workspace activity** and select **Hide from activity**.
@@ -75,13 +77,34 @@ Show a member again under **Members**, and a team or repository under **Team set
 
 ### Members
 
-The first time a signed-in person opens a workspace that publishes a page, a step says that the page is public and what it shows of them.
+A member is on public pages only after they choose to show, in any workspace or in User settings.
+Until then, the member is not on any public page.
+This includes members from the provider roster who have not signed in yet.
+Their work does not count in the totals of the page.
+An answer to the question of a workspace that a member gave before this rule stays as it is.
+A choice to show that a member saved only in User settings before this rule counts as no answer.
+
+In a workspace that publishes a page, each page of a member starts with a notice until the member answers.
+The notice says that the page is public and what it shows of them.
+It is part of the page and does not take focus.
+
 **Show me** and **Hide me** have the same weight.
-Either answer records that the person saw the step for this workspace.
-**Decide later** and Escape leave the step for that visit without an answer, so a person who has not answered sees it again.
-A save that fails or takes more than 15 seconds shows an error, and the person can answer again or decide later.
-The AI setup of the workspace comes first, and the step waits until it ends.
-A person who is not a member sees the same step on the public page after signing in.
+Either answer records that the person answered for this workspace.
+**Decide later** hides the notice for that visit without an answer, so a member who has not answered sees it again on the next visit.
+A save that fails or takes more than 15 seconds shows an error, and the member can answer again or decide later.
+The AI setup of the workspace comes first, and the notice waits until it ends.
+A person who is not a member sees no notice on the public page, because only a member can answer.
+
+**Members** in the workspace administration has a **Public activity** column.
+It marks each member who has not answered the question of this workspace with **Not answered yet**.
+Workspace admins see the column, and so do instance admins who administer the workspace.
+The column is there only while the workspace publishes a page.
+The Members page does not show which way anyone chose.
+The public page itself shows who chose to show.
+
+The column shows the answer to the question of this workspace, not the account-wide choice.
+A member who chose in User settings or in another workspace is still marked until they answer here.
+Public pages follow the account-wide choice: such a member can already be on the page.
 
 **User settings** has the same choice as **Show me on public activity pages**.
 It applies to every public page, in every workspace, at once.
@@ -116,7 +139,7 @@ See [Google's robots header contract](https://developers.google.com/search/docs/
 
 ## Personal choice and objections
 
-Each account defaults to visible on public activity pages.
+Each account is hidden on public activity pages until its person chooses to show.
 A signed-in person can read and change `GET` and `PUT /user/public-activity` with `{"visible": false}`
 or `{"visible": true}`.
 The choice applies to all linked provider identities in every workspace.

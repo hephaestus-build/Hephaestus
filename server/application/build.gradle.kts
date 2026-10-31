@@ -587,7 +587,7 @@ for ((taskName, command) in
                 // index. Partial successor uniqueness is also native;
                 // ClientSessionMigratedSchemaTest
                 // verifies it.
-                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor",
+                "--exclude-objects=table:shedlock,table:account_public_activity_hidden_by_default,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering,index:uq_issued_jwt_live_successor",
             )
         }
     }

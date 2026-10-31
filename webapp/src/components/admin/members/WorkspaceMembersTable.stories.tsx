@@ -11,6 +11,7 @@ import {
 	multiProviderMember,
 	unclaimedMember,
 } from "./fixtures";
+
 import { workspaceMemberRows } from "./workspace-members";
 import { WorkspaceMembersTable } from "./WorkspaceMembersTable";
 
@@ -96,6 +97,51 @@ export const MemberWhoLeft: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(within(rowOf(canvas, "Erin Former")).getByText(/^Left /u)).toBeVisible();
+	},
+};
+
+/** A workspace that does not publish public activity has no answers to show, so it has no column. */
+export const NoPublicActivityPage: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("columnheader", { name: "Public activity" })).toBeNull();
+	},
+};
+
+function grace(publicActivityAnswered: boolean) {
+	return workspaceMemberRows([
+		membership(
+			memberAccount("31", {
+				displayName: "Grace Hopper",
+				identities: [{ provider: "GITHUB", login: "grace", displayName: null, avatarUrl: null }],
+			}),
+			{ publicActivityAnswered },
+		),
+	]);
+}
+
+/** Where the workspace publishes, an admin sees who has not answered yet, and may follow up. */
+export const PublicActivityNotAnswered: Story = {
+	args: { members: grace(false), rowCount: 1 },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("columnheader", { name: "Public activity" })).toBeVisible();
+		const badge = within(rowOf(canvas, "Grace Hopper")).getByRole("button", {
+			name: "Not answered yet: Grace Hopper",
+		});
+		await expect(badge).toHaveTextContent("Not answered yet");
+		await expect(badge).toHaveAccessibleDescription(
+			"They have not answered this workspace’s question.",
+		);
+	},
+};
+
+/** A member who answered draws nothing: the column does not show which way anyone chose. */
+export const PublicActivityAnswered: Story = {
+	args: { members: grace(true), rowCount: 1 },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("columnheader", { name: "Public activity" })).toBeVisible();
+		const row = within(rowOf(canvas, "Grace Hopper"));
+		await expect(row.queryByRole("button", { name: /^Not answered yet/u })).toBeNull();
+		await expect(row.queryByText(/Shown|Hidden/u)).toBeNull();
 	},
 };
 

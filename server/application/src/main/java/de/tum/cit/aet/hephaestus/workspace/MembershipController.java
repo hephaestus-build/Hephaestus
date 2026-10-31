@@ -23,6 +23,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -80,11 +81,13 @@ public class MembershipController {
                 .toList();
         var references = accounts.references(context.id(), accountIds);
         var eligible = selections.eligibleAccountIds(context.id(), accountIds);
+        var answered = workspaceMembershipService.publicActivityAnswered(context.id(), page.getContent());
         return ResponseEntity.ok(PageResponseDTO.from(page.map(member -> toDTO(
                 member,
                 member.getRole(),
                 Objects.requireNonNull(references.get(member.getAccountId())),
-                eligible.contains(member.getAccountId())))));
+                eligible.contains(member.getAccountId()),
+                answered.get(Objects.requireNonNull(member.getAccountId()))))));
     }
 
     @PostMapping("/assign")
@@ -131,11 +134,18 @@ public class MembershipController {
                 member,
                 role,
                 accounts.reference(workspaceId, accountId),
-                selections.eligibleAccountIds(workspaceId, Set.of(accountId)).contains(accountId));
+                selections.eligibleAccountIds(workspaceId, Set.of(accountId)).contains(accountId),
+                workspaceMembershipService
+                        .publicActivityAnswered(workspaceId, List.of(member))
+                        .get(accountId));
     }
 
     private WorkspaceMembershipDTO toDTO(
-            Membership member, WorkspaceRole role, AccountRefDTO account, boolean eligible) {
+            Membership member,
+            WorkspaceRole role,
+            AccountRefDTO account,
+            boolean eligible,
+            @Nullable Boolean publicActivityAnswered) {
         return new WorkspaceMembershipDTO(
                 account,
                 role,
@@ -143,6 +153,7 @@ public class MembershipController {
                 member.getLeftAt(),
                 member.isHidden(),
                 member.isReviewSelected(),
-                eligible);
+                eligible,
+                publicActivityAnswered);
     }
 }

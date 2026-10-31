@@ -8,7 +8,7 @@ import {
 	getPublicActivityOnboardingOptions,
 	getPublicActivityOnboardingQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import type { PublicActivityAnswer } from "@/components/onboarding/PublicActivityOnboardingDialog";
+import type { PublicActivityAnswer } from "@/components/onboarding/PublicActivityNotice";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { announcePublicActivityChoice } from "@/lib/public-activity-choice";
 import { refreshPublicActivity } from "@/runtime/tanstack-query/refresh-public-activity";
@@ -17,9 +17,10 @@ import { refreshPublicActivity } from "@/runtime/tanstack-query/refresh-public-a
 const SAVE_TIMEOUT_MS = 15_000;
 
 /**
- * A signed-in person's step for a workspace that publishes its activity: whether they have answered,
- * and the answer. `enabled` is off where the workspace does not publish, or where the reader is not
- * the account itself, such as a user view; the server answers 404 there.
+ * A member's notice for a workspace that publishes its activity: whether they have answered, and the
+ * answer. `enabled` is off where the workspace does not publish, or where the reader is not the
+ * account itself, such as a user view; the server answers 404 there. `notice` stays undefined until
+ * the server has answered, so nothing is assumed about what public pages show.
  */
 export function usePublicActivityOnboarding({
 	workspaceSlug,
@@ -32,7 +33,7 @@ export function usePublicActivityOnboarding({
 	const router = useRouter();
 	const path = { slug: workspaceSlug };
 	const onboarding = useQuery({ ...getPublicActivityOnboardingOptions({ path }), enabled });
-	// Leaving the step is for this visit only: the next load asks again.
+	// Decide later is for this visit only: the next load asks again.
 	const [deferredFor, setDeferredFor] = useState<string>();
 	const answer = useMutation({
 		...answerPublicActivityOnboardingMutation(),
@@ -58,9 +59,12 @@ export function usePublicActivityOnboarding({
 			message: problemDetailOf(answer.error, "We could not save your choice. Try again."),
 		};
 	}
+	const data = enabled ? onboarding.data : undefined;
 	return {
-		open: enabled && onboarding.data?.seen === false && deferredFor !== workspaceSlug,
-		currentlyVisible: onboarding.data?.visible ?? true,
+		notice:
+			data === undefined
+				? undefined
+				: { open: !data.seen && deferredFor !== workspaceSlug, currentlyVisible: data.visible },
 		answer: state,
 		onAnswer: (visible: boolean) =>
 			answer.mutate({ path, body: { visible }, signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) }),

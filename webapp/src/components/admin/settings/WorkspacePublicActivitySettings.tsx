@@ -265,8 +265,8 @@ function PublishDialog({
 							</p>
 							<ul className="list-disc space-y-1 pl-5">
 								<li>
-									everyone who contributed, members and outside contributors, by name, picture and a
-									link to their profile
+									outside contributors, and members who chose to show, by name, picture and a link
+									to their profile
 								</li>
 								<li>
 									counts of the {pullRequests} each person opened and reviewed and the issues they
@@ -278,9 +278,10 @@ function PublishDialog({
 							</ul>
 							<p>
 								The page shows nothing from private {repositories}, practices, feedback, AI content,
-								Slack, Outline or automation accounts. People on it can hide themselves by signing
-								in. Search engines are asked not to list it until you allow that. Turning the page
-								off takes that choice back.
+								Slack, Outline or automation accounts. Members and people who signed in are hidden
+								until they choose to show. Anyone on it can hide in User settings. Search engines
+								are asked not to list it until you allow that. Turning the page off takes that
+								choice back.
 							</p>
 						</div>
 					</AlertDialogDescription>

@@ -16,4 +16,11 @@ public record WorkspaceMembershipDTO(
         @Nullable Instant leftAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean hidden,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean reviewSelected,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean eligibleForPracticeReview) {}
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean eligibleForPracticeReview,
+
+        @Schema(
+                description = "Whether the member answered the public activity question in this workspace, without"
+                        + " the answer. Null unless the reader is a workspace admin, the workspace publishes"
+                        + " public activity, and the member has not left.")
+        @Nullable
+        Boolean publicActivityAnswered) {}

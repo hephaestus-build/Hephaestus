@@ -121,8 +121,11 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
         var target = accounts.findById(targetId).orElseThrow();
         target.setAiChoice(AiChoice.CLOUD);
         target.setAiChoiceAt(Instant.parse("2026-01-01T00:00:00Z"));
+        // The claimed developer answered Show; the roster account never answered, so it is hidden.
+        target.setPublicActivityVisible(true);
         accounts.saveAndFlush(target);
         var source = accounts.findById(sourceId).orElseThrow();
+        assertThat(source.isPublicActivityVisible()).isFalse();
         source.setAiChoice(AiChoice.NO_AI);
         source.setAiChoiceAt(Instant.parse("2026-02-01T00:00:00Z"));
         source.setFeedbackDeliveryEnabled(false);
@@ -162,6 +165,7 @@ class PeopleRegistryIntegrationTest extends BaseIntegrationTest {
         var mergedAccount = accounts.findById(targetId).orElseThrow();
         assertThat(mergedAccount.getAiChoice()).isEqualTo(AiChoice.NO_AI);
         assertThat(mergedAccount.isFeedbackDeliveryEnabled()).isFalse();
+        assertThat(mergedAccount.isPublicActivityVisible()).isTrue();
         assertThat(identities.findByAccount_Id(targetId)).hasSize(2);
         assertThat(people.ensureHuman(sourceIdentity, "Developer")).isEqualTo(targetId);
     }

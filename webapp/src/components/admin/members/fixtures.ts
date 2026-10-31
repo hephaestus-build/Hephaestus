@@ -43,6 +43,7 @@ export function membership(
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		publicActivityAnswered: null,
 		...overrides,
 	};
 }

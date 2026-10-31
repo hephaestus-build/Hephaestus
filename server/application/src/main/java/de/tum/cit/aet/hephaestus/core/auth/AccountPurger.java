@@ -61,6 +61,7 @@ public class AccountPurger {
         // Children carry ON DELETE CASCADE on account_id, but we keep the account tombstone, so the
         // cascade is not triggered — delete the personal/auth child rows explicitly.
         erasureRepository.deleteFeatures(accountId);
+        erasureRepository.deletePublicActivityHiddenByDefault(accountId);
         anonymizeAuditRows(accountId); // reads identity, so before it is deleted
         accountRepository.retainPublicActivityObjections(accountId);
         erasureRepository.deleteSignInHandoffs(accountId);

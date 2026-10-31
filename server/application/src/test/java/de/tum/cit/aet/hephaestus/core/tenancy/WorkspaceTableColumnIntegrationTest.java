@@ -23,7 +23,8 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
      * Tables that belong to no workspace and that no entity maps, so {@link WorkspaceScopedTables#GLOBAL_TABLES},
      * which must match the global entities, cannot list them.
      */
-    private static final Set<String> GLOBAL_WITHOUT_ENTITY = Set.of("auth_rate_limit_bucket", "shedlock");
+    private static final Set<String> GLOBAL_WITHOUT_ENTITY =
+            Set.of("account_public_activity_hidden_by_default", "auth_rate_limit_bucket", "shedlock");
 
     private static final String MIRROR =
             "a provider mirror that reaches its workspace through its repository or" + " organization";

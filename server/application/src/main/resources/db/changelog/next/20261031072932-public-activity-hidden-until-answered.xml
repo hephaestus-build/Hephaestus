@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793401900663-1" author="hephaestus">
+        <addDefaultValue columnDataType="boolean" columnName="public_activity_visible" defaultValueBoolean="false" tableName="account"/>
+        <rollback>
+            <addDefaultValue columnDataType="boolean" columnName="public_activity_visible" defaultValueBoolean="true" tableName="account"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793401900663-2" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="account_public_activity_hidden_by_default already exists; this changeset creates it">
+            <not>
+                <tableExists tableName="account_public_activity_hidden_by_default"/>
+            </not>
+        </preConditions>
+        <comment>The accounts that the next change set hides only because they never answered, so that its rollback restores exactly those accounts.</comment>
+        <createTable tableName="account_public_activity_hidden_by_default">
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="account_public_activity_hidden_by_defaultPK"
+                             foreignKeyName="sfk_account_public_activity_hidden_by_default_account"
+                             references="account(id)" deleteCascade="true"/>
+            </column>
+        </createTable>
+        <rollback>
+            <dropTable tableName="account_public_activity_hidden_by_default"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793401900663-3" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="account" columnName="public_activity_visible"/>
+            <columnExists tableName="membership" columnName="public_activity_seen"/>
+            <columnExists tableName="membership" columnName="account_id"/>
+            <tableExists tableName="account_public_activity_hidden_by_default"/>
+        </preConditions>
+        <comment>Public activity pages hide a person until they answer. An account that is still visible and has no workspace answer is visible only by the old default, so it becomes hidden. A Show saved only in User settings counts as no answer. Workspace answers stay as they are, and nothing writes these rows again. One statement hides and records each account, so no write can land between the two.</comment>
+        <sql>WITH hidden AS (
+  UPDATE account a SET public_activity_visible = false
+  WHERE a.public_activity_visible
+    AND NOT EXISTS (SELECT 1 FROM membership m WHERE m.account_id = a.id AND m.public_activity_seen)
+  RETURNING a.id
+)
+INSERT INTO account_public_activity_hidden_by_default (account_id) SELECT id FROM hidden</sql>
+        <rollback>
+            <sql>UPDATE account SET public_activity_visible = true
+WHERE id IN (SELECT account_id FROM account_public_activity_hidden_by_default);
+DELETE FROM account_public_activity_hidden_by_default</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

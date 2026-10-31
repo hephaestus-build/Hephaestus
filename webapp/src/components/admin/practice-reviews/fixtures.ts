@@ -143,6 +143,7 @@ export const workspaceMembers: WorkspaceMembership[] = Object.entries(reviewAcco
 		hidden: false,
 		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		publicActivityAnswered: null,
 	}),
 );
 
