@@ -1,16 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.proxy.dto;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 
 /** Identity of the retained set to seal; candidates can only enter through per-practice staging. */
 public record SealResultsRequestDTO(
-        int contractVersion,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int contractVersion,
         @NonNull UUID reviewId,
         @NonNull UUID jobId,
-        int attempt) {
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int attempt) {
     public SealResultsRequestDTO {
         Objects.requireNonNull(reviewId, "reviewId");
         Objects.requireNonNull(jobId, "jobId");
