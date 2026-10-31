@@ -219,16 +219,6 @@
 			"currentValueTemplate": "latest"
 		},
 		{
-			"description": "Track the OpenAPI Generator CLI distribution",
-			"customType": "regex",
-			"managerFilePatterns": ["/^openapitools\\.json$/"],
-			"matchStrings": ["\"version\": \"(?<currentValue>[^\"]+)\""],
-			"datasourceTemplate": "github-releases",
-			"depNameTemplate": "OpenAPITools/openapi-generator",
-			"extractVersionTemplate": "^v(?<version>.*)$",
-			"versioningTemplate": "semver"
-		},
-		{
 			"description": "Track the Node.js pin in devEngines",
 			"customType": "regex",
 			"managerFilePatterns": ["/^package\\.json$/"],

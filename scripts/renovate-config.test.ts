@@ -213,7 +213,6 @@ void test("every custom manager reads every file it claims to read", async () =>
 			"Track the builder and buildpack images in the project descriptor",
 			["server/application/project.toml"],
 		],
-		["Track the OpenAPI Generator CLI distribution", ["openapitools.json"]],
 		["Track the Node.js pin in devEngines", ["package.json"]],
 		["Track the pnpm pin in devEngines", ["package.json"]],
 		["Track release image tags and digests", ["security/release-images.json"]],

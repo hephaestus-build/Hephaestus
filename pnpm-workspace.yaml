@@ -35,8 +35,6 @@ minimumReleaseAgeExclude:
 
 allowBuilds:
   "@google/genai": false
-  "@nestjs/core": false
-  "@openapitools/openapi-generator-cli": false
   "@swc/core": true
   core-js: false
   esbuild: true
@@ -79,7 +77,6 @@ overrides:
   "follow-redirects@>=1.16.0 <1.16.2": 1.16.2
   # CVE-2026-118772.
   "joi@>=17.1.1 <17.13.9": 17.13.9
-  "get-uri>basic-ftp": 6.2.1
   "@docusaurus/core>tinypool": 2.1.2
   mermaid: 11.17.2
   vitest: "catalog:"
