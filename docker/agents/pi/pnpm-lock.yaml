@@ -5,6 +5,13 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@earendil-works/chord': 1.0.0
+  '@earendil-works/pi-agent-core': 1.0.0
+  '@earendil-works/pi-ai': 1.0.0
+  '@earendil-works/pi-codemode': 1.0.0
+  '@earendil-works/pi-mcp': 1.0.0
+  '@earendil-works/pi-telemetry': 1.0.0
+  '@earendil-works/pi-tui': 1.0.0
   undici@>=8.0.0 <8.12.2: 8.12.2
 
 patchedDependencies:
@@ -369,10 +376,12 @@ packages:
   '@smithy/core@3.33.3':
     resolution: {integrity: sha512-CsOeKq/9kA3y6VJHt+/+VTCtBaxJ4OTFpgrjIUhPpDIKxBci1k2bJaQASF2h/ELWrulGp+t97DZ0mevfAD8idg==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/core@3.35.0':
     resolution: {integrity: sha512-zRMhfkByhT2snNdr1si24vJitU6Cr9ix2MikUfWmkAgp4jrNP0GcKSP5YvwQ+TlI8AZXER5QOGJn3JsVtSD9/A==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}

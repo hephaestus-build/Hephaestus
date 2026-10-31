@@ -122,7 +122,8 @@
 			"groupName": "pnpm toolchain"
 		},
 		{
-			"matchDepNames": ["@earendil-works/pi-coding-agent"],
+			"description": "The SDK and the overrides that hold its own packages at its version move together",
+			"matchPackageNames": ["@earendil-works/**"],
 			"groupName": "Pi SDK"
 		},
 		{

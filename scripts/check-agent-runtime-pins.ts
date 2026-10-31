@@ -75,6 +75,22 @@ if (
 	);
 }
 
+// The SDK accepts any 1.x of its own packages, so each workspace holds them at the SDK version.
+const family = Object.keys(isRecord(imageLock.packages) ? imageLock.packages : {}).flatMap(
+	(key) => {
+		const name = /^(?<name>@earendil-works\/[^@]+)@/u.exec(key)?.groups?.name;
+		return name === undefined || name === "@earendil-works/pi-coding-agent" ? [] : [name];
+	},
+);
+for (const file of ["pnpm-workspace.yaml", "docker/agents/pi/pnpm-workspace.yaml"]) {
+	const workspaceOverrides = asRecord(parse(readFileSync(file, "utf8")), file).overrides;
+	for (const name of new Set(family)) {
+		if (!isRecord(workspaceOverrides) || workspaceOverrides[name] !== piVersion) {
+			problems.push(`${file}: overrides must hold ${name} at the Pi version ${piVersion}.`);
+		}
+	}
+}
+
 const nodeBase =
 	/^FROM node:\$\{NODE_VERSION\}-trixie-slim@sha256:[a-f0-9]{64}(?: AS [\w-]+)?$/mu.exec(
 		dockerfile,

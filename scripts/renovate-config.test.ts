@@ -134,7 +134,6 @@ void test("every pin of one toolchain version moves in a single pull request", (
 		["node", "Node.js toolchain"],
 		["pnpm", "pnpm toolchain"],
 		["ghcr.io/pnpm/pnpm", "pnpm toolchain"],
-		["@earendil-works/pi-coding-agent", "Pi SDK"],
 	] as const) {
 		const index = rules.findLastIndex(
 			(rule) => Array.isArray(rule.matchDepNames) && rule.matchDepNames.includes(depName),
@@ -143,6 +142,11 @@ void test("every pin of one toolchain version moves in a single pull request", (
 		assert.equal(rules[index].matchUpdateTypes, undefined, `${depName} groups every update type`);
 		assert.ok(index > lastUngroupedRule, `${depName} must follow the high-risk update rules`);
 	}
+	// The Pi SDK and the overrides that hold its own packages at its version are one update.
+	const pi = rules.findLastIndex((rule) => rule.groupName === "Pi SDK");
+	assert.deepEqual(rules[pi]?.matchPackageNames, ["@earendil-works/**"]);
+	assert.equal(rules[pi].matchUpdateTypes, undefined, "the Pi SDK groups every update type");
+	assert.ok(pi > lastUngroupedRule, "the Pi SDK must follow the high-risk update rules");
 });
 
 void test("routine update groups preserve repository boundaries", () => {
