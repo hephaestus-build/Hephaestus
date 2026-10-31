@@ -2,6 +2,65 @@
 
 Hephaestus should feel like a calm, precise view of engineering work. Developers come here to understand feedback, inspect its evidence, and choose what to do next. Quiet surfaces make the work easier to read. Emphasis belongs to an actual action, state, or useful distinction.
 
+## Design principles
+
+People come to Hephaestus to read feedback about their own work.
+These principles decide a case that no specific rule below covers.
+Where a specific rule exists, that rule wins.
+Other documents link to this section and do not restate it.
+
+Each principle rests on a page of the [Apple Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/design-principles) (HIG).
+We apply the reasons, not Apple's visual style.
+Words follow the [writing standard](../docs/contributor/simplified-technical-english.md) and the [product vocabulary](../docs/contributor/practice-feedback-language.md).
+
+**1. The work comes first.**
+Feedback, its evidence, and the next step get the space and the attention.
+Chrome, brand, and decoration step back. § Practice surfaces palette owns the accent.
+
+- Do: the Ask Hephaestus button stays off admin, settings, and legal pages.
+- Do not: animate the Hephaestus mark beside a settings row.
+- Rests on: [Design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles), [Branding](https://developer.apple.com/design/human-interface-guidelines/branding).
+
+**2. Say only what is true.**
+A label, a status, or a progress line states what the record shows, and nothing more.
+`AGENTS.md` § What we will not compromise on, item 1, owns what feedback may claim.
+
+- Do: while an answer waits, its status line counts the wait and shows no invented progress.
+- Do not: show "No users" while later pages still load. `AdminUsersTable` shows "Searching all users…" instead.
+- Rests on: [Feedback](https://developer.apple.com/design/human-interface-guidelines/feedback), [Progress indicators](https://developer.apple.com/design/human-interface-guidelines/progress-indicators).
+
+**3. Spend attention in proportion to the consequence.**
+A routine action that the person can reverse runs at once and offers Undo.
+A dialog holds a focused task, such as a form.
+A dialog also confirms a consequence that is hard to take back, or that changes who has access.
+
+Motion shows where something came from, or that work is in progress.
+Attention motion plays once. Progress motion runs only while the work runs.
+ADR 0027 owns where the outcome of a write appears, and § Motion owns timings and reduced motion.
+
+- Do: `WorkspaceChangeRoleDialog` confirms a role change before it grants access.
+- Do not: ask "Hide this person?" in a dialog and then also offer Undo.
+- Do: `ArrivalHighlight` sweeps once over the card that a link opened.
+- Do not: play the Hephaestus mark's idle float and wobble each time the Ask Hephaestus panel opens.
+- Rests on: [Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts), [Modality](https://developer.apple.com/design/human-interface-guidelines/modality), [Motion](https://developer.apple.com/design/human-interface-guidelines/motion), [Undo and redo](https://developer.apple.com/design/human-interface-guidelines/undo-and-redo).
+
+**4. The person stays in control of their feedback.**
+A developer can see why feedback was raised, disagree with it, and choose a response.
+Nothing makes them agree before they continue, and nothing they must read leaves on a timer.
+`AGENTS.md` § Hit every surface owns reverse states.
+
+- Do: `PracticeFeedbackCard` shows "Why this was raised" and offers Disagree beside its other answers.
+- Do not: put the only notice of a scheduled account deletion in a toast that disappears.
+- Rests on: [Design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles), [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility), [Undo and redo](https://developer.apple.com/design/human-interface-guidelines/undo-and-redo).
+
+**5. Say who can see it.**
+A surface that shows or collects information about a person says who can see it.
+It says so before the person writes, shares, or publishes.
+
+- Do: the disagreement band says "Workspace admins read your sentence, not the card".
+- Do not: show the Practice profile without a sentence on who else can see it.
+- Rests on: [Privacy](https://developer.apple.com/design/human-interface-guidelines/privacy), [Design principles](https://developer.apple.com/design/human-interface-guidelines/design-principles).
+
 ## Foundations
 
 The existing system is the starting point:
