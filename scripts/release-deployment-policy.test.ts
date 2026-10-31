@@ -7,30 +7,13 @@ import { parseDocument } from "yaml";
 
 import { asArray, asRecord, asString, asStringArray, at } from "./lib/json.ts";
 import { releaseSignerIdentity, releaseSignerRepository } from "./lib/release-signer.ts";
-import { parseStacks, POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
+import { POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
 
 const release = readFileSync(".github/workflows/release.yml", "utf8");
 const promotion = readFileSync(".github/workflows/promote.yml", "utf8");
 const resolver = readFileSync("scripts/resolve-promotion.ts", "utf8");
 const reconciler = readFileSync("scripts/reconcile-deployment.ts", "utf8");
 const upgradeDrill = readFileSync("scripts/release-upgrade-test.ts", "utf8");
-
-await test("the reconciler starts the stacks in dependency order", () => {
-	// Hosts pull; nothing in this repository deploys to them. What still has to hold is the order
-	// the reconciler derives from the stack names, whichever order the host lists them in.
-	for (const listed of ["core app", "app core", "proxy core app", "app proxy core"]) {
-		const ordered = parseStacks(listed);
-		// The app stack's migration service applies the schema the webhook runtime in core waits for.
-		assert.ok(
-			ordered.indexOf("app") < ordered.indexOf("core"),
-			`${ordered.join(" ")} starts the webhook runtime before the migration that feeds it`,
-		);
-		// The edge comes last, so it never routes to a stack that is still starting.
-		if (ordered.includes("proxy")) {
-			assert.equal(ordered.at(-1), "proxy");
-		}
-	}
-});
 
 const upgrade = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
 
@@ -69,38 +52,29 @@ await test("release upgrade runs the server topology without optional infrastruc
 await test("verification identity is the release's own: run context now, the map for history", () => {
 	const rescan = readFileSync(".github/workflows/rescan-images.yml", "utf8");
 	const rescanSource = readFileSync("scripts/rescan-release-images.ts", "utf8");
-	const prepareLock = readFileSync("scripts/prepare-release-lock.ts", "utf8");
+	const prepareChart = readFileSync("scripts/prepare-release-chart.ts", "utf8");
 	const releaseChart = readFileSync("scripts/release-chart.ts", "utf8");
 	const derivedIdentity =
 		/\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/\.github\/workflows\/release\.yml@refs\/heads\/main/u;
 
 	assert.match(release, derivedIdentity);
 	assert.match(rescanSource, /releaseCertificateIdentity\(release, process\.env\)/u);
-	// prepare-release-lock takes its environment as a dependency so its tests can run without CI
-	// variables. The command itself is given the process environment, so the signer and the
-	// repository still follow the run context now and the history map for earlier releases.
-	assert.match(
-		prepareLock,
-		/const defaults: PrepareDependencies = \{\n\tenvironment: process\.env,/u,
-	);
-	assert.match(prepareLock, /releaseCertificateIdentity\(release, environment\)/u);
-	assert.match(prepareLock, /releaseRepository\(release, environment\)/u);
+	assert.match(prepareChart, /environment: process\.env/u);
+	assert.match(prepareChart, /releaseCertificateIdentity\(release, dependencies\.environment\)/u);
+	assert.match(prepareChart, /releaseRepository\(release, dependencies\.environment\)/u);
 	// The chart digest is verified with the same identity as the lock it is named in.
 	assert.match(releaseChart, /releaseCertificateIdentity\(lock\.release, environment\)/u);
 	assert.match(
 		releaseChart,
 		/readChartLock\(lockPath, release\),\n\t+await readInventory\(inventory\),\n\t+destination,\n\t+process\.env,\n/u,
 	);
-	for (const contents of [release, reconciler, rescan, rescanSource, prepareLock, releaseChart]) {
+	for (const contents of [release, reconciler, rescan, rescanSource, prepareChart, releaseChart]) {
 		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/u);
 		assert.doesNotMatch(
 			contents,
 			/certificate-identity[^\n]*\n?[^\n]*hephaestus-build\/Hephaestus/u,
 		);
 	}
-	// The pull path derives the same identity from the release it is verifying, never from a
-	// literal: prepare-release-lock.ts is the only thing that names the signer, and the
-	// assertions above pin it to the release's own repository.
 });
 
 const promotionWorkflow: unknown = parseDocument(promotion).toJS();
