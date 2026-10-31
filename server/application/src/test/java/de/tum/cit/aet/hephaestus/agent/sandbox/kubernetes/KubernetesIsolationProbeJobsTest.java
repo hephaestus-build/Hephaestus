@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
+import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
 import io.fabric8.kubernetes.api.model.Event;
 import io.fabric8.kubernetes.api.model.EventBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
@@ -23,10 +24,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The isolation probe's Pods as Jobs, against the client's CRUD mock API server. The mock runs no Job controller, so
- * each test plays it: it creates each Job's Pod already failed, or records the quota's refusal of the Pod.
+ * each test plays it: it creates a Pod whose runtime refuses user namespaces, or records the quota's refusal.
  */
 @Tag("unit")
 @EnableKubernetesMockClient(crud = true)
@@ -40,6 +43,17 @@ class KubernetesIsolationProbeJobsTest {
     @Test
     void shouldRunEachProbePodAsABoundedJobAndLeaveNoJobWhenTheRunEnds() throws InterruptedException {
         KubernetesClient api = Objects.requireNonNull(client);
+        Objects.requireNonNull(server)
+                .expect()
+                .post()
+                .withPath("/api/v1/namespaces/" + SANDBOXES + "/pods?dryRun=All")
+                .andReturn(
+                        403,
+                        new StatusBuilder()
+                                .withCode(403)
+                                .withMessage("violates PodSecurity \"restricted:latest\"")
+                                .build())
+                .once();
         var worker = KubernetesFixtures.worker(SANDBOXES);
         var probe = new KubernetesIsolationProbe(
                 api,
@@ -48,6 +62,7 @@ class KubernetesIsolationProbeJobsTest {
                 worker,
                 "agent",
                 9090);
+        worker.proved(new KubernetesIsolationProbe.Proof(Instant.EPOCH, List.of(), true, "", 248));
         Map<String, Job> created = new ConcurrentHashMap<>();
         AtomicBoolean running = new AtomicBoolean(true);
         Thread controller = Thread.ofPlatform().start(() -> {
@@ -57,7 +72,7 @@ class KubernetesIsolationProbeJobsTest {
                     if (created.putIfAbsent(job.getMetadata().getName(), job) == null) {
                         api.pods()
                                 .inNamespace(SANDBOXES)
-                                .resource(failedPod(job))
+                                .resource(unstartablePod(job))
                                 .create();
                     }
                 }
@@ -69,14 +84,20 @@ class KubernetesIsolationProbeJobsTest {
             }
         });
 
+        KubernetesIsolationProbe.Proof proof;
         try {
-            probe.run();
+            proof = probe.run();
         } finally {
             running.set(false);
             controller.join();
         }
 
-        assertThat(created).hasSize(3);
+        assertThat(proof.passed()).isFalse();
+        assertThat(worker.isolated()).isFalse();
+        assertThat(proof.failures())
+                .hasSize(2)
+                .allSatisfy(failure -> assertThat(failure).contains("did not start: CreateContainerError"));
+        assertThat(created).hasSize(2);
         assertThat(created.values()).allSatisfy(job -> {
             assertThat(job.getSpec().getBackoffLimit()).isZero();
             assertThat(job.getSpec().getTtlSecondsAfterFinished())
@@ -87,15 +108,16 @@ class KubernetesIsolationProbeJobsTest {
         assertThat(created.values().stream().map(KubernetesIsolationProbeJobsTest::memory))
                 .containsExactlyInAnyOrder(
                         quantity(KubernetesIsolationProbe.TRIAL_MEMORY),
-                        quantity(KubernetesIsolationProbe.PROBE_MEMORY),
                         quantity(KubernetesIsolationProbe.PROBE_MEMORY));
         assertThat(api.batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
                 .as("the probe deletes each of its Jobs, also when its Pod did not run")
                 .isEmpty();
     }
 
-    @Test
-    void shouldKeepTheLastProofWhenTheQuotaRefusesThePodsOfTheProbeJobs() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldKeepOnlyAnExistingProofWhenTheQuotaRefusesThePodsOfTheProbeJobs(boolean previousProof)
+            throws InterruptedException {
         KubernetesClient api = Objects.requireNonNull(client);
         // The admission gate holds, so only the Pods that did not run can end the probe's run.
         Objects.requireNonNull(server)
@@ -120,7 +142,9 @@ class KubernetesIsolationProbeJobsTest {
                 9090,
                 Duration.ofSeconds(1));
         var passed = new KubernetesIsolationProbe.Proof(Instant.EPOCH, List.of(), true, "", 248);
-        worker.proved(passed);
+        if (previousProof) {
+            worker.proved(passed);
+        }
         Map<String, Job> refused = new ConcurrentHashMap<>();
         AtomicBoolean running = new AtomicBoolean(true);
         // The Job controller under a full quota: a FailedCreate event for each Job, and no Pod. The probe's wait ends
@@ -153,11 +177,17 @@ class KubernetesIsolationProbeJobsTest {
             controller.join();
         }
 
-        assertThat(refused).hasSize(3);
-        assertThat(proof)
-                .as("a quota without room proves nothing about isolation")
-                .isSameAs(passed);
-        assertThat(worker.isolated()).as("the worker keeps starting sandboxes").isTrue();
+        assertThat(refused).hasSize(2);
+        if (previousProof) {
+            assertThat(proof)
+                    .as("a quota without room proves nothing about isolation")
+                    .isSameAs(passed);
+        } else {
+            assertThat(proof.passed()).isFalse();
+            assertThat(proof.failures())
+                    .allSatisfy(failure -> assertThat(failure).contains("probe Pod"));
+        }
+        assertThat(worker.isolated()).isEqualTo(previousProof);
         assertThat(api.pods().inNamespace(SANDBOXES).list().getItems()).isEmpty();
         assertThat(api.batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
                 .as("the probe deletes each Job that created no Pod")
@@ -184,8 +214,8 @@ class KubernetesIsolationProbeJobsTest {
                 .build();
     }
 
-    /** The Pod that the Job controller would create, already ended without a container that ran. */
-    private static Pod failedPod(Job job) {
+    /** A scheduled Pod whose runtime cannot create the required user namespace. */
+    private static Pod unstartablePod(Job job) {
         String name = job.getMetadata().getName();
         return new PodBuilder()
                 .withNewMetadata()
@@ -193,8 +223,20 @@ class KubernetesIsolationProbeJobsTest {
                 .withLabels(Map.of(KubernetesSandboxJobs.JOB_NAME, name))
                 .endMetadata()
                 .withSpec(job.getSpec().getTemplate().getSpec())
+                .editSpec()
+                .withNodeName("sandbox-node")
+                .endSpec()
                 .withNewStatus()
-                .withPhase("Failed")
+                .withPhase("Pending")
+                .withContainerStatuses(new ContainerStatusBuilder()
+                        .withName(KubernetesPods.RUNTIME)
+                        .withNewState()
+                        .withNewWaiting()
+                        .withReason("CreateContainerError")
+                        .withMessage("cannot create the required user namespace")
+                        .endWaiting()
+                        .endState()
+                        .build())
                 .endStatus()
                 .build();
     }

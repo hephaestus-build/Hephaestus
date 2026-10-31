@@ -115,7 +115,7 @@ public class KubernetesWorker {
         return latest != null && latest.passed();
     }
 
-    /** Whether the latest probe showed that user namespaces take effect: sandbox Pods then run without host users. */
+    /** Whether the latest probe showed that user namespaces take effect. */
     public boolean userNamespaces() {
         KubernetesIsolationProbe.Proof latest = proof;
         return latest != null && latest.userNamespaces();
