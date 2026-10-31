@@ -1,315 +1,366 @@
 ---
 id: configuration-reference
 title: Configuration reference
-description: Every variable an operator can set, with its setting, default, required flag, and description.
+description: Helm values and application settings for a Kubernetes deployment.
 ---
 
-This page lists every variable of the supported self-hosted Compose stack in `docker/self-host`.
-It is generated from the application's configuration files, its configuration metadata, the Compose files of that stack, and its `.env.example`.
+The Helm chart owns the deployment configuration.
+This page comes from the chart schema, chart defaults, rendered workloads, application YAML, and Spring configuration metadata.
 
-A **Required** variable stops Compose or the application when it is unset.
-[Configuration readiness](./configuration-readiness) reports the settings that a running instance still needs.
+Set chart values in your Helm values file.
+The Required column reports the schema at each object. Conditional requirements also apply.
+See [Kubernetes deployment](./kubernetes) for those requirements, Secret keys, profiles, and operator procedures.
+The chart [values](https://github.com/hephaestus-build/Hephaestus/blob/main/deploy/chart/hephaestus/values.yaml) describe each group.
+Helm validates the complete schema, including conditions on parent objects.
 
-## Application settings in `.env`
+## Helm values
 
-Compose forwards these variables to the Java containers, where Spring binds them to the setting in the second column. The description comes from the application's configuration metadata.
-
-| Variable | Setting | Default | Required | Services | Description |
-| --- | --- | --- | --- | --- | --- |
-| `AGENT_ENABLED` | `hephaestus.agent.enabled` | `false` |  | `application-server`, `application-worker` | Turns on agent jobs, which run practice reviews. The server role submits jobs and the worker role runs them, so set it on both. |
-| `AGENT_MAX_CONCURRENT_COMPOSITIONS` | `hephaestus.agent.max-concurrent-compositions` | `16` |  | `application-worker` | The most review attempts one worker runs at once. An attempt composes its feedback after its sandbox ends, and then it holds no sandbox slot. Thus this setting bounds the concurrent compositions. The sandbox slots still bound the attempts that hold a sandbox. A value below the sandbox slots also lowers the sandboxes in use. |
-| `DEPLOYMENT_ENVIRONMENT` | `hephaestus.release.environment` | `local` |  | `application-server`, `application-worker`, `webapp`, `webhook-server` | The name of this deployment, such as `production`. The webapp, log lines and traces use the same name. |
-| `GH_APP_CLIENT_ID` | `hephaestus.integration.github.app.client-id` |  |  | `application-server` | The App's client ID, which exchanges the code GitHub returns when an installation requests user authorization. |
-| `GH_APP_CLIENT_SECRET` | `hephaestus.integration.github.app.client-secret` |  |  | `application-server` | The client secret of the GitHub App. Set it together with the client ID. |
-| `GH_APP_ID` | `hephaestus.integration.github.app.id` | `0` |  | `application-server`, `application-worker` | ID of the GitHub App. The value 0 turns GitHub App mode off. Must not be negative. |
-| `GH_APP_INSTALLATION_URL` | `hephaestus.integration.github.app.installation-url` |  |  | `application-server` | URL where users install the GitHub App, such as https://github.com/apps/my-app/installations/new. |
-| `GH_APP_PRIVATE_KEY` | `hephaestus.integration.github.app.private-key` |  |  | `application-server`, `application-worker` | PEM-encoded private key of the GitHub App, as an inline value. |
-| `GH_APP_PRIVATE_KEY_LOCATION` | `hephaestus.integration.github.app.private-key-location` |  |  | `application-server`, `application-worker` | Resource location of the private key file of the GitHub App. It takes precedence over the inline key. |
-| `GH_AUTH_TOKEN` | `hephaestus.contributors.github.auth-token`<br />`hephaestus.integration.github.meta.auth-token` |  |  | `application-server`, `application-worker` | Personal access token or fine-grained token used for unauthenticated-ish reads of the `hephaestus-build/Hephaestus` contributor graph. personal access token or fine-grained token for API access. |
-| `GH_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.github.client-id` |  |  | `application-server` | Client ID of the GitHub OAuth App for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GH_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.github.client-secret` |  |  | `application-server` | Client secret of the GitHub OAuth App for sign-in. Set it with its client ID. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GIT_CHECKOUT_ENABLED` | `hephaestus.git.enabled` | `false` |  | `application-server`, `application-worker` | Keeps local Git mirrors of monitored repositories, which practice reviews read code from. Turn it on wherever agent jobs run. Without it, the practice review health check reports out of service. |
-| `GIT_MAX_CONCURRENT_INGESTIONS` | `hephaestus.git.max-concurrent-ingestions` | `2` |  | `application-server`, `application-worker` | How many captured commits are written to PostgreSQL at once. |
-| `GIT_MAX_SNAPSHOT_BYTES` | `hephaestus.git.max-snapshot-bytes` | `8589934592` |  | `application-server`, `application-worker` | The most disk that the checkout and reachable history of one review may use. Hephaestus refuses a larger repository whole and does not capture part of it. |
-| `GITLAB_DEFAULT_SERVER_URL` | `hephaestus.integration.gitlab.default-server-url` | `${GITLAB_OAUTH_BASE_URL}` |  | `application-server`, `application-worker` | The GitLab server URL for a workspace that names no server of its own. |
-| `GITLAB_ENABLED` | `hephaestus.integration.gitlab.enabled` | `false` |  | `application-server`, `application-worker` | Turns on the GitLab integration, which syncs GitLab groups and projects and delivers feedback on merge requests. |
-| `GITLAB_OAUTH_BASE_URL` | `hephaestus.auth.login-providers.gitlab.base-url`<br />`hephaestus.integration.gitlab.default-server-url` | `https://gitlab.com` |  | `application-server`, `application-worker` | Origin of the GitLab instance for sign-in, such as https://gitlab.example.com. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. The GitLab server URL for a workspace that names no server of its own. |
-| `GITLAB_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.gitlab.client-id` |  |  | `application-server` | Client ID of the GitLab OAuth application for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GITLAB_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.gitlab.client-secret` |  |  | `application-server` | Client secret of the GitLab OAuth application for sign-in. Set it with its client ID. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GITLAB_OAUTH_DISPLAY_NAME` | `hephaestus.auth.login-providers.gitlab.display-name` | `GitLab` |  | `application-server` | Label of the GitLab button on the sign-in or account-linking page. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GITLAB_WORKSPACE_CREATION` | `hephaestus.features.flags.gitlab-workspace-creation` | `false` |  | `application-server` | Lets admins create GitLab workspaces in the UI and the API. |
-| `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` | `true` |  | `application-server`, `application-worker`, `webhook-server` | Refuses startup unless the agent image reference is pinned by digest. |
-| `HEPHAESTUS_AUTH_ASSURANCE_ENFORCED` | `hephaestus.auth.assurance-enforced` | `true` |  | `application-server` | Requires passkey verification and a recent sign-in for protected admin actions. Turn it off only on an isolated test instance. |
-| `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | `hephaestus.auth.bootstrap-admins` |  |  | `application-server` | Identities that become instance admins when they sign in, as `provider:@username` or `provider:subject`. Use the subject where a username can be claimed again. Email addresses are never matched. |
-| `HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN` | `hephaestus.auth.bootstrap-token` |  |  | `application-server` | Optional token, controlled by the deployment, that recovers an instance without an active admin. A blank value turns off the recovery endpoint. |
-| `HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS` | `hephaestus.auth.browser-extension-ids` |  |  | `application-server` | Chrome extension IDs that may sign in as installed clients. Each ID gets exactly one callback and one CORS origin. |
-| `HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS` | `hephaestus.auth.passkeys.allowed-origins` |  |  | `application-server` | Browser origins that may register and use passkeys, as a comma-separated list. Each must be an HTTPS origin on the RP ID or one of its subdomains. When it is empty, the origin of the auth issuer is used. |
-| `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED` | `hephaestus.auth.passkeys.instance-admin-required` | `true` |  | `application-server` | Requires a verified passkey sign-in from every instance admin. Workspace and account settings cannot turn this off. |
-| `HEPHAESTUS_AUTH_PASSKEYS_RP_ID` | `hephaestus.auth.passkeys.rp-id` |  |  | `application-server` | WebAuthn relying party ID, the domain that passkeys are bound to. When it is empty, the host of the auth issuer is used. Passkeys registered under one RP ID do not work under another. |
-| `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `hephaestus.auth.passkeys.workspace-admin-required` | `false` |  | `application-server` | Requires a verified passkey sign-in for workspace administration in every workspace. A workspace cannot turn this off. |
-| `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` | `hephaestus.auth.state-cookie-key` |  | yes | `application-server` | Base64-encoded 32-byte AES key that seals the OAuth state and sign-in intent cookies. Required outside development. |
-| `HEPHAESTUS_EMAIL_FROM` | `hephaestus.email.from` |  |  | `application-server` | The sender address in the envelope and the header. Required when `spring.mail.host` is set. The relay must be allowed to send for its domain through SPF and DKIM. |
-| `HEPHAESTUS_EMAIL_FROM_NAME` | `hephaestus.email.from-name` | `Hephaestus` |  | `application-server` | The display name shown next to `from`. |
-| `HEPHAESTUS_EMAIL_RATE_LIMIT_DAILY_CAPACITY` | `hephaestus.email.rate-limit.daily-capacity` | `250` |  | `application-server` | Most emails this instance sends per day. Hephaestus does not send an email above this limit. |
-| `HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY` | `hephaestus.email.rate-limit.optional-daily-capacity` | `200` |  | `application-server` | Most optional emails, such as digests and product feedback notifications, this instance sends per day. Optional emails also count toward daily-capacity. Must be lower than daily-capacity. |
-| `HEPHAESTUS_EMAIL_REPLY_TO` | `hephaestus.email.reply-to` |  |  | `application-server` | The address that receives human replies. When it is blank, replies go to the sender address. |
-| `HEPHAESTUS_IMAGE_AGENT_PI` | `hephaestus.agent.image.reference` |  | yes | `application-server`, `application-worker`, `webhook-server` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
-| `HEPHAESTUS_IMAGE_APPLICATION_SERVER` | `hephaestus.release.image` |  | yes | `application-server`, `application-worker`, `database-migration`, `webhook-server` | The digest reference of the image that this container started from. It is empty outside a deployment from a release lock. |
-| `HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` | `hephaestus.integration.consumer.inactive-threshold` | `30d` |  | `application-server` | How long JetStream keeps a durable consumer that no running process is bound to before it deletes it. Set 0s to disable deletion, otherwise use at least 1h. A recreated consumer skips the messages that arrived while it was gone. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | `hephaestus.integration.outline.allowed-origins` |  |  | `application-server`, `application-worker`, `webhook-server` | Outline origins that workspace connections and Outline sign-in may use, as a comma-separated list such as https://wiki.example.com. Each must be an HTTPS origin without a path. Hephaestus refuses every Outline address that is not listed. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` | `hephaestus.integration.outline.enabled` | `false` |  | `application-server`, `application-worker`, `webhook-server` | Turns on the Outline integration, which lets workspaces connect Outline and syncs its documents. Each workspace admin still connects their workspace separately. |
-| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID` | `hephaestus.auth.login-providers.slack.client-id`<br />`hephaestus.integration.slack.client-id` |  |  | `application-server` | Client ID of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. Slack OAuth client id used by SlackOAuthClient during oauth.v2.access. |
-| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET` | `hephaestus.auth.login-providers.slack.client-secret`<br />`hephaestus.integration.slack.client-secret` |  |  | `application-server` | Client secret of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client ID. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. Slack OAuth client secret used by SlackOAuthClient during oauth.v2.access. |
-| `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` | `hephaestus.integration.slack.enabled` | `false` |  | `application-server`, `application-worker`, `webhook-server` | Master toggle for the Slack integration (OAuth install, lifecycle listeners, outbound messaging). |
-| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI` | `hephaestus.integration.slack.redirect-uri` |  |  | `application-server` | Redirect URI registered on the Slack app. It must match the authorization URL that Hephaestus builds for the Slack connection. |
-| `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` | `hephaestus.integration.slack.signing-secret` |  |  | `application-server`, `webhook-server` | Signing secret of the Slack app, which verifies inbound Events API and interactivity requests. Required when the Slack integration is on, or the server and webhook roles do not start. |
-| `HEPHAESTUS_LLM_DISPLAY_CURRENCY` | `hephaestus.llm.display-currency` |  |  | `application-server` | Code of the second currency in which spend in USD is also shown. Empty shows USD only. |
-| `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `hephaestus.llm.egress.allow-loopback` | `false` |  | `application-server`, `application-worker` | Accepts provider base URLs on `http://localhost`. Use it only in local development, because it lets a workspace admin send provider requests to services on the host. The private, link-local and CGNAT checks still apply. |
-| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` | `hephaestus.llm.egress.private-hosts` |  |  | `application-server`, `application-worker` | Model endpoints on private networks that provider base URLs may use, as host names, IP addresses or CIDR ranges. A host name entry lets that name resolve to a private address. A range admits every host name that resolves into it. Only private addresses qualify: loopback, link-local and the known cloud metadata ranges stay blocked. A range wider than /16 (IPv4) or /48 (IPv6), outside the private ranges, or covering this server's own address stops startup. Empty allows public hosts only. |
-| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP` | `hephaestus.llm.egress.private-hosts-allow-http` | `false` |  | `application-server`, `application-worker` | Accepts `http://` base URLs whose host is in `private-hosts`. Every other host still needs HTTPS. |
-| `HEPHAESTUS_LLM_FX_DAILY_URL` | `hephaestus.llm.fx.daily-url` | `https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml` |  | `application-server` | Overridable so an air-gapped instance can point at a local ECB mirror. |
-| `HEPHAESTUS_LLM_USAGE_RETENTION` | `hephaestus.llm.usage.retention` | `P400D` |  | `application-server` | Age from `occurred_at` at which a ledger row is deleted. Operator-tunable because the ledger is accounting data: a commercial or tax retention obligation can run years beyond the default, and the deletion is irreversible. |
-| `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED` | `hephaestus.public-activity.enabled` | `false` |  | `application-server` | Allows public activity pages on this instance until an instance admin changes the switch in the admin console. Each workspace must also opt in. |
-| `HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` | `hephaestus.public-activity.repository-visibility-max-age` | `48h` |  | `application-server` | How recently a sync must have confirmed that a repository is public for its work to appear on public activity pages. Must be positive. Accepts 48h, 2d, PT48H. |
-| `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_CAPACITY` | `hephaestus.auth.rate-limit.public-activity.capacity` | `60` |  | `application-server` | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_RATE_LIMIT_PUBLIC_ACTIVITY_PERIOD` | `hephaestus.auth.rate-limit.public-activity.period` | `1m` |  | `application-server` | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_RELEASE_CHECK_ENABLED` | `hephaestus.release.check-enabled` | `true` |  | `application-server` | Whether the server role may ask GitHub for the newest published release. |
-| `HEPHAESTUS_RELEASE_COMMIT` | `hephaestus.release.commit` |  |  | `application-server`, `application-worker`, `webhook-server` | The source commit that the release lock names. It is empty outside a deployment from a release lock. |
-| `HEPHAESTUS_RESEARCH_ORGANIZATION` | `hephaestus.consent.research-organization` |  |  | `application-server` | Name of the organization that runs a research study on this instance. When it is set, first-login setup and account settings ask users for research consent. At most 255 characters. |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | `hephaestus.security.credential-encryption-key` |  | yes | `application-server`, `application-worker`, `database-migration` | Active key that encrypts the stored credentials of integration connections. Exactly 32 bytes, so 32 ASCII characters. Required in production. |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION` | `hephaestus.security.credential-encryption-key-version` | `1` |  | `application-server`, `application-worker`, `database-migration` | Positive version number stored with each credential that the active credential key encrypts. Must differ from prior-credential-encryption-key-version. |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED` | `hephaestus.security.credential-rotation-enabled` | `false` |  | `application-server`, `application-worker` | Re-encrypts stored credentials with the active credential key in batches on the server role. Requires both the active and the prior credential key. |
-| `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` | `hephaestus.security.encryption-key` |  | yes | `application-server`, `application-worker`, `database-migration` | Key that encrypts sensitive values at rest, such as login provider secrets, LLM connection keys and JWT signing keys. Exactly 32 bytes, so 32 ASCII characters. Required in production. |
-| `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY` | `hephaestus.security.prior-credential-encryption-key` |  |  | `application-server`, `application-worker`, `database-migration` | Previous credential key, still used to decrypt credentials stored under its version during a key rotation. Exactly 32 bytes. Set it together with prior-credential-encryption-key-version. |
-| `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION` | `hephaestus.security.prior-credential-encryption-key-version` |  |  | `application-server`, `application-worker`, `database-migration` | Version number of the previous credential key. Set it together with prior-credential-encryption-key. |
-| `HEPHAESTUS_TRUSTED_PROXIES` | `server.tomcat.remoteip.internal-proxies` | `172\.29\.47\.2` |  | `application-server`, `application-worker`, `webhook-server` | Internal proxies that are to be trusted. Can be set as a comma separate list of CIDR or as a regular expression. |
-| `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES` | `hephaestus.webhook.stream.allow-destructive-limit-updates` | `false` |  | `webhook-server` | Lets startup apply a limit change that deletes messages that the stream already holds. A smaller bound deletes the excess at once, so the operator must turn this on deliberately. |
-| `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` | `hephaestus.webhook.stream.limit-update-timeout` | `5m` |  | `webhook-server` | How long startup waits for one stream limit update. A smaller bound deletes the excess before the broker answers, so a large stream can take long. It is separate from the consumer request timeout, so a slow update does not delay readiness. |
-| `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` | `hephaestus.webhook.stream.max-age` | `7d` |  | `webhook-server` | Longest time a webhook stream keeps a message, for each stream without an entry in max-age-by-stream. Must be at least duplicate-window. |
-| `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` | `hephaestus.webhook.stream.max-bytes` | `1GB` |  | `webhook-server` | Storage bound of each webhook stream without an entry in max-bytes-by-stream. At the bound, JetStream deletes the oldest messages to admit new ones. Must be at least 4 times http.max-payload-bytes. |
-| `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` | `hephaestus.webhook.stream.max-bytes-by-stream.github` | `10GB` |  | `webhook-server` | Storage bounds keyed by stream name that override max-bytes for that stream. The github stream carries most of the traffic. Each entry must be at least 4 times http.max-payload-bytes. |
-| `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `hephaestus.worker.drain.timeout` | `5m` |  | `application-worker` | How long a stopping worker waits for running practice reviews to finish before it cancels them. Set 0s to cancel them at once. |
-| `HEPHAESTUS_WORKER_MENTOR_MAX` | `hephaestus.worker.capacity.mentor-max` | `auto` |  | `application-worker` | Number of conversation turns this worker runs at once. Accepts an integer or auto, which means 8. |
-| `HEPHAESTUS_WORKER_REVIEW_MAX` | `hephaestus.worker.capacity.review-max` | `auto` |  | `application-worker` | Number of practice reviews this worker runs at once. Accepts an integer or auto, which means one less than the processor count and at least 1. |
-| `HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN` | `hephaestus.workspace.subdomains.base-domain` |  |  | `application-server`, `reverse-proxy`, `webapp` | Domain under which each workspace gets its subdomain, such as hephaestus.build. Lowercase ASCII without a scheme, port or path, at most 189 characters. Required when subdomains are enabled. |
-| `HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED` | `hephaestus.workspace.subdomains.enabled` | `false` |  | `application-server`, `reverse-proxy`, `webapp` | Gives each workspace its own subdomain address on the base domain. Authentication and the API stay on the apex domain. Prepare DNS, TLS and OAuth callbacks before you turn it on. |
-| `HIKARI_MAXIMUM_POOL_SIZE` | `spring.datasource.hikari.maximum-pool-size` | `20; worker: 32` |  | `application-worker` | Most PostgreSQL connections that one process holds in its pool. A worker can hold two connections per running review. Keep the sum over all processes below the PostgreSQL connection limit. |
-| `IMAGE_TAG` | `spring.application.version`<br />`logging.structured.ecs.service.version` |  |  | `application-server`, `application-worker`, `webapp`, `webhook-server` | Version that the application reports in its logs, traces and release card. Compose sets it from the release. Each log record names this version as its service version. |
-| `ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER` | `hephaestus.item-event-ledger.pending-lapse-after` | `7d` |  | `application-server`, `application-worker` | Age at which an item event that is still recorded or waiting expires with the reason PENDING_DEADLINE_EXCEEDED. The age counts from when the event occurred. |
-| `ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER` | `hephaestus.item-event-ledger.pending-retry-after` | `1h` |  | `application-server`, `application-worker` | How long the ledger waits before it offers a recorded or waiting item event for review again. |
-| `ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE` | `hephaestus.item-event-ledger.sweep-batch-size` | `200` |  | `application-server`, `application-worker` | Most item events that each step of the ledger sweep handles. The sweep runs every 15 minutes. |
-| `MONITORING_BACKFILL_BATCH_SIZE` | `hephaestus.sync.backfill.batch-size` | `50` |  | `application-server` | Maximum pages to process per repository per cycle. |
-| `MONITORING_BACKFILL_ENABLED` | `hephaestus.sync.backfill.enabled` | `true` |  | `application-server` | Whether backfill processing is enabled. |
-| `MONITORING_BACKFILL_INTERVAL_SECONDS` | `hephaestus.sync.backfill.interval-seconds` | `60` |  | `application-server` | Seconds between backfill cycles. A cycle holds its replica lock for at least 30 seconds, so a shorter interval runs at most every 30 seconds. |
-| `MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD` | `hephaestus.sync.backfill.rate-limit-threshold` | `500` |  | `application-server` | Remaining API rate limit below which backfill pauses. |
-| `MONITORING_RUN_ON_STARTUP` | `hephaestus.sync.run-on-startup` | `true` |  | `application-server` | Whether to trigger a sync run immediately when the application starts. |
-| `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `hephaestus.sync.cooldown-minutes` | `60` |  | `application-server` | Minimum minutes between consecutive sync operations. |
-| `MONITORING_SYNC_CRON` | `hephaestus.sync.cron` | `0 0 * * * *` |  | `application-server` | Cron expression for scheduled sync execution. |
-| `MONITORING_TIMEFRAME` | `hephaestus.sync.timeframe-days` | `7` |  | `application-server` | Number of days to look back when synchronizing pull requests. |
-| `NATS_DURABLE_CONSUMER_NAME` | `hephaestus.sync.nats.durable-consumer-name` | `hephaestus` |  | `application-server`, `webhook-server` | Durable consumer name for JetStream subscriptions (empty for ephemeral). |
-| `NATS_ENABLED` | `hephaestus.sync.nats.enabled` | `true` |  | `application-server` | Whether NATS JetStream integration is enabled. |
-| `NATS_JS_MAX_FILE_BYTES` | `hephaestus.webhook.stream.storage-budget` | `17179869184` |  | `configs.nats-server.conf`, `webhook-server` | What the broker may hold for all webhook streams together. Keep it at or below the free space on the broker volume. The per-stream bounds must stay inside it, so a full stream refuses messages instead of stopping the broker. |
-| `NATS_PASSWORD` | `hephaestus.sync.nats.password` |  | yes | `application-server`, `nats-server`, `webhook-server` | Password that the NATS connection authenticates with. Set it together with the user name, or leave both empty. |
-| `NATS_USERNAME` | `hephaestus.sync.nats.username` |  | yes | `application-server`, `nats-server`, `webhook-server` | User name that the NATS connection authenticates with. Set it together with the password, or leave both empty. |
-| `OUTLINE_OAUTH_BASE_URL` | `hephaestus.auth.login-providers.outline.base-url` |  |  | `application-server` | Origin of the Outline instance for account linking, such as https://wiki.example.com. Required when the client ID is set. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `OUTLINE_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.outline.client-id` |  |  | `application-server` | Client ID of the Outline OAuth application for linking an Outline account. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `OUTLINE_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.outline.client-secret` |  |  | `application-server` | Client secret of the Outline OAuth application for linking an Outline account. Set it with its client ID. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `OUTLINE_OAUTH_DISPLAY_NAME` | `hephaestus.auth.login-providers.outline.display-name` | `Outline` |  | `application-server` | Label of the Outline button on the sign-in or account-linking page. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `POSTGRES_PASSWORD` | `spring.datasource.password` |  | yes | `application-server`, `application-worker`, `database-migration`, `postgres` | Login password of the database. |
-| `PRACTICE_REVIEW_BACKFILL_BATCH_SIZE` | `hephaestus.practice-review.backfill.batch-size` | `25` |  | `application-server`, `application-worker` | How many items one driver tick offers to the review path. Kept small because the usage ledger only learns a job's cost once it ends, and a budget cap is only checked between batches. |
-| `PRACTICE_REVIEW_BACKFILL_COST_HISTORY_WINDOW` | `hephaestus.practice-review.backfill.cost-history-window` | `90d` |  | `application-server`, `application-worker` | How far back the estimator looks for completed reviews to derive a per-review cost from. Long enough to survive a quiet fortnight, short enough that a model change moves it. |
-| `PRACTICE_REVIEW_BACKFILL_MAX_ITEMS` | `hephaestus.practice-review.backfill.max-items` | `5000` |  | `application-server`, `application-worker` | The largest number of items that one batch can be confirmed for. A larger batch is refused at preflight. |
-| `PRACTICE_REVIEW_BACKFILL_MAX_WINDOW` | `hephaestus.practice-review.backfill.max-window` | `400d` |  | `application-server`, `application-worker` | The longest window a single batch may cover. |
-| `PRACTICE_REVIEW_COMPOSITION_TIMEOUT` | `hephaestus.practice-review.composition-timeout` | `10m` |  | `application-worker` | The longest the worker composes the feedback of one review attempt after its sandbox ends. A destination still open then is withheld as not composed. |
-| `PRACTICE_REVIEW_COOLDOWN_MINUTES` | `hephaestus.practice-review.cooldown-minutes` | `15` |  | `application-server`, `application-worker` | Minimum minutes between reviews for the same PR. 0 disables cooldown. |
-| `PRACTICE_REVIEW_DELIVER_TO_MERGED` | `hephaestus.practice-review.deliver-to-merged` | `false` |  | `application-server`, `application-worker` | Posts feedback on pull requests that are already merged. Other destinations do not change. |
-| `PRACTICE_REVIEW_DIRECT_MODEL_SEARCH_UNITS_PER_ATTEMPT` | `hephaestus.practice-review.direct-model-search-units-per-attempt` | `1000` |  | `application-server`, `application-worker` | The search units that the direct reranking calls of one review attempt may bill, for providers such as Cohere that bill search units. The proxy counts them and refuses further direct calls. |
-| `PRACTICE_REVIEW_DIRECT_MODEL_TOKENS_PER_ATTEMPT` | `hephaestus.practice-review.direct-model-tokens-per-attempt` | `200000` |  | `application-server`, `application-worker` | The input and output tokens that the direct model calls of the practice programs of one review attempt may spend together. The calls of the review session itself do not count. The runner holds the programs to it, and the proxy refuses further direct calls. |
-| `PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR` | `hephaestus.practice-review.max-requests-per-requester-per-hour` | `5` |  | `application-server`, `application-worker` | Manual review requests per person, workspace and hour. 0 disables the limit. |
-| `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` | `hephaestus.practice-review.practice-concurrency` | `3` |  | `application-server`, `application-worker` | Maximum concurrent practice sessions in an item review. Scans remain serial. |
-| `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` | `hephaestus.practice-review.practice-model-calls` | `12` |  | `application-server`, `application-worker` | The model calls that one practice gets in a review turn. A turn gets this number for each practice, and at least the number for three practices. |
-| `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` | `hephaestus.practice-review.practice-output-tokens` | `16000` |  | `application-server`, `application-worker` | The output tokens one practice is owed in a review turn, counted the same way. |
-| `PRACTICE_REVIEW_SAMPLING_TEMPERATURE` | `hephaestus.practice-review.sampling-temperature` |  |  | `application-server`, `application-worker` | Requested model sampling temperature, or null for the provider default. |
-| `SANDBOX_API_MAX_REQUEST_BYTES` | `hephaestus.sandbox.gateway.max-request-bytes` | `4194304` |  | `application-worker` | Largest request body in bytes that the sandbox gateway accepts. A larger request gets HTTP 413. |
-| `SANDBOX_API_PORT` | `hephaestus.sandbox.gateway.port` | `8081` |  | `application-worker` | Port of the extra worker connector that serves the sandbox gateway. The gateway API answers only on this port. The value 0 binds a free port at start. |
-| `SANDBOX_API_REQUESTS_PER_MINUTE` | `hephaestus.sandbox.gateway.requests-per-minute` | `120` |  | `application-worker` | Most requests per minute that each sandbox caller can send to the gateway. Further requests get HTTP 429 with a Retry-After header. |
-| `SANDBOX_CPUS` | `hephaestus.sandbox.default-resource-limits.cpus` | `1.0` |  | `application-worker` | The CPU limit in cores of each review sandbox. |
-| `SANDBOX_MAX_CONCURRENT` | `hephaestus.sandbox.max-concurrent-containers` | `1` |  | `application-worker` | The most review sandboxes this worker runs at once. |
-| `SPRING_MAIL_HOST` | `spring.mail.host` |  |  | `application-server` | SMTP server host. For instance, 'smtp.example.com'. |
-| `SPRING_MAIL_PASSWORD` | `spring.mail.password` |  |  | `application-server` | Login password of the SMTP server. |
-| `SPRING_MAIL_PORT` | `spring.mail.port` | `587` |  | `application-server` | SMTP server port. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | `spring.mail.properties[mail.smtp.auth]` | `true` |  | `application-server` | Additional JavaMail Session properties. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE` | `spring.mail.properties[mail.smtp.ssl.enable]` | `false` |  | `application-server` | Additional JavaMail Session properties. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` | `spring.mail.properties[mail.smtp.starttls.enable]` | `true` |  | `application-server` | Additional JavaMail Session properties. |
-| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED` | `spring.mail.properties[mail.smtp.starttls.required]` | `true` |  | `application-server` | Additional JavaMail Session properties. |
-| `SPRING_MAIL_PROTOCOL` | `spring.mail.protocol` | `smtp` |  | `application-server` | Protocol used by the SMTP server. |
-| `SPRING_MAIL_USERNAME` | `spring.mail.username` |  |  | `application-server` | Login user of the SMTP server. |
-| `TRACING_OTLP_ENABLED` | `management.tracing.export.otlp.enabled` | `false` |  | `application-server`, `application-worker`, `webhook-server` | Whether auto-configuration of tracing is enabled to export OTLP traces. |
-| `TRACING_OTLP_ENDPOINT` | `management.opentelemetry.tracing.export.otlp.endpoint` | `http://localhost:4318/v1/traces` |  | `application-server`, `application-worker`, `webhook-server` | URL to the OTel collector's HTTP API. |
-| `TRACING_SAMPLING_PROBABILITY` | `management.tracing.sampling.probability` | `0.0` |  | `application-server`, `application-worker`, `webhook-server` | Probability in the range from 0.0 to 1.0 that a trace will be sampled. |
-| `WEBHOOK_ROUTING_PREVIOUS_SECRET` | `hephaestus.webhook.routing.previous-secret` |  |  | `application-server`, `webhook-server` | Previous routing key that the receiver still accepts during a rotation. Keep it until every hook signed with it is replaced. Requires routing.secret and must differ from it. |
-| `WEBHOOK_ROUTING_SECRET` | `hephaestus.webhook.routing.secret` |  | yes | `application-server`, `webhook-server` | Key that signs the webhook token of each GitLab connection and derives the signing secret of each Outline subscription. At least 32 characters, and must differ from the webhook secret. GitLab and Outline webhook registration is skipped when it is unset. |
-| `WEBHOOK_SECRET` | `hephaestus.webhook.secret` |  | yes | `application-server`, `webhook-server` | Shared secret that verifies GitHub webhook signatures and legacy GitLab webhook tokens. GitLab webhook registration needs at least 32 characters. Must differ from both routing secrets. |
-
-## Compose settings in `.env`
-
-Compose itself reads these variables, or passes them to a container that is not a Java runtime role. The second column names the service field that each one feeds. The description comes from `.env.example`.
-
-| Variable | Feeds | Default | Required | Services | Description |
-| --- | --- | --- | --- | --- | --- |
-| `ACME_CHALLENGE` | `command`<br />`environment.ACME_CHALLENGE` | `httpchallenge.entrypoint` |  | `reverse-proxy` | The ACME challenge that Traefik uses for the certificate. Keep these values for HTTP-01. For DNS-01, set dnschallenge.provider and the name of your lego DNS provider. |
-| `ACME_CHALLENGE_VALUE` | `command`<br />`environment.ACME_CHALLENGE_VALUE` | `http` |  | `reverse-proxy` | The ACME challenge that Traefik uses for the certificate. Keep these values for HTTP-01. For DNS-01, set dnschallenge.provider and the name of your lego DNS provider. |
-| `ACME_EMAIL` | `command` |  | yes | `reverse-proxy` | Email address for certificate-expiry notices from `Let's Encrypt`. |
-| `APP_HOST_MATCH` | `labels` | `` Host(`${APP_HOSTNAME}`) `` |  | `application-server`, `maintenance`, `webapp`, `webhook-server` | Additional hostnames this instance answers on, written whole as a Traefik host matcher (Compose cannot build one conditionally). Name APP_HOSTNAME here too — it is not added for you. Unset, APP_HOSTNAME alone is matched. What each name costs and what it gets: docs/admin/install.mdx, "Serving more than one hostname". Example: APP_HOST_MATCH=Host(`hephaestus.example.com`) \|\| Host(`old.example.com`). |
-| `APP_HOSTNAME` | `environment.APP_HOSTNAME`<br />`environment.APPLICATION_CLIENT_URL`<br />`environment.APPLICATION_HOST_URL`<br />`environment.APPLICATION_SERVER_URL`<br />`environment.HEPHAESTUS_AUTH_ISSUER`<br />`labels` |  | yes | `application-server`, `application-worker`, `maintenance`, `reverse-proxy`, `webapp`, `webhook-server` | Public hostname the instance is served on (DNS A record -\> this host). No scheme, no trailing slash. Example: hephaestus.example.com. |
-| `APP_MAX_DIRECT_MEMORY` | `environment.JAVA_TOOL_OPTIONS` | `128M` |  | `application-server`, `application-worker` | Ceiling of the direct (off-heap) buffer memory of the server and worker JVMs. It counts against the memory limit of the container. |
-| `APPLICATION_SERVER_CPUS` | `cpus` | `4.0` |  | `application-server` | CPU and process limits for the three JVM containers. Keep the worker's process limit: it is the container with Docker access. |
-| `APPLICATION_SERVER_MEM_LIMIT` | `mem_limit` | `5g` |  | `application-server` | Container memory limits for the three JVMs. Each sizes its heap from its own limit, so lowering a limit lowers the heap with it. Size the host as https://docs.hephaestus.build/admin/sizing describes. |
-| `APPLICATION_SERVER_PIDS_LIMIT` | `pids_limit` | `512` |  | `application-server` | CPU and process limits for the three JVM containers. Keep the worker's process limit: it is the container with Docker access. |
-| `APPLICATION_WORKER_CPUS` | `cpus` | `4.0` |  | `application-worker` | CPU and process limits for the three JVM containers. Keep the worker's process limit: it is the container with Docker access. |
-| `APPLICATION_WORKER_MEM_LIMIT` | `mem_limit` | `3g` |  | `application-worker` | Container memory limits for the three JVMs. Each sizes its heap from its own limit, so lowering a limit lowers the heap with it. Size the host as https://docs.hephaestus.build/admin/sizing describes. |
-| `APPLICATION_WORKER_PIDS_LIMIT` | `pids_limit` | `512` |  | `application-worker` | CPU and process limits for the three JVM containers. Keep the worker's process limit: it is the container with Docker access. |
-| `BACKUP_CIPHER_PASS` | `environment.PGBACKREST_REPO1_CIPHER_PASS` |  | yes | `pgbackrest`, `pgbackrest-restore`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BACKUP_RESTORE_S3_KEY` | `environment.PGBACKREST_REPO1_S3_KEY` |  | yes | `pgbackrest-restore`, `postgres` | Read-only bucket identity used only on an isolated restore host. Do not copy the backup writer's key. |
-| `BACKUP_RESTORE_S3_KEY_SECRET` | `environment.PGBACKREST_REPO1_S3_KEY_SECRET` |  | yes | `pgbackrest-restore`, `postgres` | Read-only bucket identity used only on an isolated restore host. Do not copy the backup writer's key. |
-| `BACKUP_S3_BUCKET` | `environment.PGBACKREST_REPO1_S3_BUCKET` |  | yes | `pgbackrest`, `pgbackrest-restore`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BACKUP_S3_ENDPOINT` | `environment.PGBACKREST_REPO1_S3_ENDPOINT` |  | yes | `pgbackrest`, `pgbackrest-restore`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BACKUP_S3_KEY` | `environment.PGBACKREST_REPO1_S3_KEY` |  | yes | `pgbackrest`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BACKUP_S3_KEY_SECRET` | `environment.PGBACKREST_REPO1_S3_KEY_SECRET` |  | yes | `pgbackrest`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BACKUP_S3_REGION` | `environment.PGBACKREST_REPO1_S3_REGION` |  | yes | `pgbackrest`, `pgbackrest-restore`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BACKUP_S3_URI_STYLE` | `environment.PGBACKREST_REPO1_S3_URI_STYLE` | `path` |  | `pgbackrest`, `pgbackrest-restore`, `postgres` | Optional pgBackRest off-host backup overlay (compose.backup.yaml). Set all values before you enable that overlay. Use a dedicated bucket identity with the least privilege, and a separate encryption passphrase. Never reuse a database or application encryption key for BACKUP_CIPHER_PASS. |
-| `BPL_JVM_HEAD_ROOM` | `environment.BPL_JVM_HEAD_ROOM` |  |  | `application-worker` | Share of the worker's container memory limit, in percent, that the buildpack keeps out of the Java memory it calculates. Applies when the JVM starts. Unset keeps the buildpack's default. https://docs.hephaestus.build/admin/sizing#memory-headroom. |
-| `DATABASE_MIGRATION_MEM_LIMIT` | `mem_limit` | `1g` |  | `database-migration` | The one-shot database migration, which runs beside the previous roles during an upgrade. |
-| `HEPHAESTUS_IMAGE_ALPINE` | `image` |  | yes | `volume-init` | The digest-pinned image reference of each service. The install and upgrade steps write them into release-lock.env from the verified, signed release lock. Compose refuses to start without them. https://docs.hephaestus.build/admin/release-image-lock. |
-| `HEPHAESTUS_IMAGE_NATS` | `image` |  | yes | `nats-server` | The digest-pinned image reference of each service. The install and upgrade steps write them into release-lock.env from the verified, signed release lock. Compose refuses to start without them. https://docs.hephaestus.build/admin/release-image-lock. |
-| `HEPHAESTUS_IMAGE_POSTGRES` | `image` |  | yes | `pgbackrest`, `pgbackrest-restore`, `postgres` | The digest-pinned image reference of each service. The install and upgrade steps write them into release-lock.env from the verified, signed release lock. Compose refuses to start without them. https://docs.hephaestus.build/admin/release-image-lock. |
-| `HEPHAESTUS_IMAGE_TRAEFIK` | `image` |  | yes | `reverse-proxy` | The digest-pinned image reference of each service. The install and upgrade steps write them into release-lock.env from the verified, signed release lock. Compose refuses to start without them. https://docs.hephaestus.build/admin/release-image-lock. |
-| `HEPHAESTUS_IMAGE_WEBAPP` | `image` |  | yes | `maintenance`, `webapp` | The digest-pinned image reference of each service. The install and upgrade steps write them into release-lock.env from the verified, signed release lock. Compose refuses to start without them. https://docs.hephaestus.build/admin/release-image-lock. |
-| `LEGO_EXPERIMENTAL_DNS_TCP_ONLY` | `environment.LEGO_EXPERIMENTAL_DNS_TCP_ONLY` | `false` |  | `reverse-proxy` | Optional TCP-only DNS queries when authoritative servers cannot be reached over UDP. |
-| `NATS_JS_MAX_MEM` | `content` | `4G` |  | `configs.nats-server.conf` | NATS JetStream limits, sized for a single host. NATS_JS_MAX_MEM caps the memory store of the broker. NATS_JS_MAX_FILE_BYTES is what the broker may hold for all webhook streams together, in bytes. The receiver refuses to start if the per-stream bounds sum above it. Keep it below the free space on the nats-data volume. https://docs.hephaestus.build/admin/webhook-ingestion-operations. |
-| `NATS_MAX_PAYLOAD_BYTES` | `content` | `26214400` |  | `configs.nats-server.conf` | Largest single message that the broker carries, in bytes. It must be at least what the webhook receiver accepts, 25 MiB. |
-| `POSTGRES_MEM_LIMIT` | `mem_limit` | `4g` |  | `postgres` | PostgreSQL sizes shared_buffers and its other memory settings from its own limit. |
-| `SECURITY_CONTACT` | `environment.SECURITY_CONTACT` |  |  | `webapp` | Security contact of this deployment for /.well-known/security.txt: one mailto:, https:// or tel: URI, for example mailto:security@example.com. Empty serves no file. |
-| `TANSTACK_DEVTOOLS_ENABLED` | `environment.TANSTACK_DEVTOOLS_ENABLED` | `false` |  | `webapp` | Turns on the TanStack developer tools in the webapp. Keep it false in production. |
-| `TRAEFIK_DNS_CREDENTIAL_VARIABLE` | `environment.TRAEFIK_DNS_CREDENTIAL_VARIABLE` | `CF_DNS_API_TOKEN_FILE` |  | `reverse-proxy` | Proxy-only credentials. Store the raw token in \<directory\>/token (mode 0600). Keep this directory outside release trees. lego reads it through the _FILE variable. |
-| `TRAEFIK_DNS_CREDENTIALS_DIRECTORY` | `volumes` | `/etc/hephaestus/dns` |  | `reverse-proxy` | Proxy-only credentials. Store the raw token in \<directory\>/token (mode 0600). Keep this directory outside release trees. lego reads it through the _FILE variable. |
-| `WEBHOOK_SERVER_CPUS` | `cpus` | `2.0` |  | `webhook-server` | CPU and process limits for the three JVM containers. Keep the worker's process limit: it is the container with Docker access. |
-| `WEBHOOK_SERVER_MEM_LIMIT` | `mem_limit` | `2g` |  | `webhook-server` | Container memory limits for the three JVMs. Each sizes its heap from its own limit, so lowering a limit lowers the heap with it. Size the host as https://docs.hephaestus.build/admin/sizing describes. |
-| `WEBHOOK_SERVER_PIDS_LIMIT` | `pids_limit` | `256` |  | `webhook-server` | CPU and process limits for the three JVM containers. Keep the worker's process limit: it is the container with Docker access. |
-
-## Application settings that the supported stack fixes
-
-The application reads these variables, but the supported stack does not take them from `.env`. Compose sets some of them to a fixed value or from other variables, as the Default column shows. The others keep the application default. In the supported stack, these values are fixed.
-
-| Variable | Setting | Default | Required | Description |
+| Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
-| `AGENT_CLAIM_BATCH_SIZE` | `hephaestus.agent.claim-batch-size` | `5` |  | Maximum candidate batch. A blocked endpoint does not consume a local execution slot. |
-| `AGENT_MAX_ACTIVE_COMPOSITIONS` | `hephaestus.agent.max-active-compositions` | `4` |  | Most compositions whose inputs one worker loads at once. Additional attempts wait without loading composition inputs. This does not reduce review sandbox capacity. |
-| `AGENT_MAX_RETRIES` | `hephaestus.agent.max-retries` | `5` |  | How many times a job whose worker was lost goes back to the queue before it fails. The counter is the attempt number less the attempts that a worker's drain stopped or that found no sandbox room: those spend no retry. |
-| `AGENT_PAYLOAD_RETENTION` | `hephaestus.agent.payload-retention` | `P14D` |  | Age from `completed_at` at which a TERMINAL job's `capture` and `output` are stripped to NULL. |
-| `AGENT_POLL_INTERVAL` | `hephaestus.agent.poll-interval` | `1s` |  | How long the poll loop sleeps when a poll claimed nothing. |
-| `AGENT_ROW_RETENTION` | `hephaestus.agent.row-retention` | `P90D` |  | Age, counted from the end of a job, at which an ended job row that waits for no delivery is deleted. Must be at least the payload retention. |
-| `APP_VERSION` | `spring.application.version`<br />`logging.structured.ecs.service.version` | Compose sets `${IMAGE_TAG}` |  | Version that the application reports in its logs, traces and release card. Compose sets it from the release. Each log record names this version as its service version. |
-| `APPLICATION_HOST_URL` | `hephaestus.host-url`<br />`hephaestus.cors.allowed-origins[0]`<br />`hephaestus.webapp.url`<br />`hephaestus.webhook.external-url` | Compose sets `https://${APP_HOSTNAME}` |  | The public URL of this Hephaestus instance (used for links in notifications). list of origins allowed to make cross-origin requests. Base URL of the webapp for generating links. Public base URL of this instance that GitLab webhooks are registered against. GitLab webhook registration is skipped when it is unset. |
-| `DATABASE_PASSWORD` | `spring.datasource.password` | Compose sets `${POSTGRES_PASSWORD}` |  | Login password of the database. |
-| `DATABASE_URL` | `spring.datasource.url` | Compose sets `postgresql://postgres:5432/hephaestus?sslmode=disable` |  | JDBC URL of the database. |
-| `DATABASE_USERNAME` | `spring.datasource.username` | Compose sets `root` |  | Login username of the database. |
-| `DB_PASSWORD` | `spring.datasource.password` | `root` |  | Login password of the database. |
-| `DB_USERNAME` | `spring.datasource.username` | `root` |  | Login username of the database. |
-| `GITHUB_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.github.client-id` | Compose sets `${GH_OAUTH_CLIENT_ID}` |  | Client ID of the GitHub OAuth App for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GITHUB_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.github.client-secret` | Compose sets `${GH_OAUTH_CLIENT_SECRET}` |  | Client secret of the GitHub OAuth App for sign-in. Set it with its client ID. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GITHUB_OAUTH_DISPLAY_NAME` | `hephaestus.auth.login-providers.github.display-name` | `GitHub` |  | Label of the GitHub button on the sign-in or account-linking page. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `GITHUB_PAT` | `hephaestus.workspace.default.token` |  |  | GitHub personal access token for the startup PAT workspace. Required when hephaestus.workspace.init-default turns on the startup workspace. |
-| `GITHUB_PAT_LOGIN` | `hephaestus.workspace.default.login` | `hephaestus-build` |  | GitHub organization or user login that the startup PAT workspace syncs. Required when hephaestus.workspace.init-default turns on the startup workspace. |
-| `GITLAB_EXTENDED_GRAPHQL_TIMEOUT` | `hephaestus.integration.gitlab.extended-graphql-timeout` | `60s` |  | Timeout for complex GraphQL operations. |
-| `GITLAB_GRAPHQL_TIMEOUT` | `hephaestus.integration.gitlab.graphql-timeout` | `30s` |  | Timeout for GraphQL operations. |
-| `GITLAB_GROUP_PATH` | `hephaestus.workspace.gitlab-default.login` |  |  | The GitLab group full path (e.g., `my-org/my-team`). |
-| `GITLAB_PAGINATION_THROTTLE` | `hephaestus.integration.gitlab.pagination-throttle` | `200ms` |  | Delay between pagination requests, to stay below the rate limits of GitLab. |
-| `GITLAB_PAT` | `hephaestus.workspace.gitlab-default.token` |  |  | The GitLab Group or Personal Access Token. |
-| `GITLAB_SERVER_URL` | `hephaestus.workspace.gitlab-default.server-url` |  |  | Optional custom server URL for self-hosted GitLab instances. |
-| `GITLAB_TOKEN_CACHE_DURATION` | `hephaestus.integration.gitlab.token-validation-cache-duration` | `5m` |  | How long a token validation result is kept before Hephaestus checks the token against `/api/v4/user` again. |
-| `GITLAB_WORKSPACE_INIT_DEFAULT` | `hephaestus.workspace.init-gitlab-default` | `false` |  | Creates a default GitLab workspace with a personal access token at startup. |
-| `HEPHAESTUS_AUTH_ACCESS_TTL` | `hephaestus.auth.access-ttl` | `24h` |  | Access-token lifetime, bounded by the absolute session deadline. |
-| `HEPHAESTUS_AUTH_AUDIENCE` | `hephaestus.auth.audience` | `hephaestus-spa` |  | Expected `aud` claim. |
-| `HEPHAESTUS_AUTH_COOKIE_NAME` | `hephaestus.auth.cookie-name` | `__Host-HEPHAESTUS_AT` |  | Name of the access-token cookie. A name that starts with `__Host-` requires Secure, Path=/ and no Domain. |
-| `HEPHAESTUS_AUTH_DEV_LOGIN_ENABLED` | `hephaestus.auth.dev-login-enabled` | `false` |  | Turns on sign-in without a password for local development. The production profile refuses it, and it is unsafe on a deployment that the internet can reach. |
-| `HEPHAESTUS_AUTH_ISSUER` | `hephaestus.auth.issuer` | Compose sets `https://${APP_HOSTNAME}` |  | Canonical `iss` claim. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_CAPACITY` | `hephaestus.auth.rate-limit.client-session.capacity` | `30` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_PERIOD` | `hephaestus.auth.rate-limit.client-session.period` | `1m` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_DELETE_USER_CAPACITY` | `hephaestus.auth.rate-limit.delete-user.capacity` | `3` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_DELETE_USER_PERIOD` | `hephaestus.auth.rate-limit.delete-user.period` | `1h` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_ENABLED` | `hephaestus.auth.rate-limit.enabled` | `true` |  | Turns on rate limits for sign-in, session and other sensitive endpoints. Turn it off only for load tests. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_EXPORT_CAPACITY` | `hephaestus.auth.rate-limit.export.capacity` | `10` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_EXPORT_PERIOD` | `hephaestus.auth.rate-limit.export.period` | `1h` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_OAUTH_CAPACITY` | `hephaestus.auth.rate-limit.oauth-authorization.capacity` | `20` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_OAUTH_PERIOD` | `hephaestus.auth.rate-limit.oauth-authorization.period` | `1m` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_POSTGRES_BACKED` | `hephaestus.auth.rate-limit.postgres-backed` | `true` |  | Stores rate-limit buckets in PostgreSQL, so all replicas share the limits. When it is false, each replica keeps its own limits in memory. Production must keep it on. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_CAPACITY` | `hephaestus.auth.rate-limit.refresh.capacity` | `60` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_REFRESH_PERIOD` | `hephaestus.auth.rate-limit.refresh.period` | `1m` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_CAPACITY` | `hephaestus.auth.rate-limit.user-view.capacity` | `120` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_AUTH_RATE_LIMIT_USER_VIEW_PERIOD` | `hephaestus.auth.rate-limit.user-view.period` | `1m` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_AUTH_STEP_UP_MAX_AGE` | `hephaestus.auth.step-up-max-age` | `5m` |  | Maximum age of a sign-in for sensitive actions. A token refresh does not reset the sign-in time. |
-| `HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE` | `hephaestus.database.allow-insecure-remote` | `false` |  | Lets the prod profile connect to a remote PostgreSQL host without TLS. Without it, startup fails unless the JDBC URL sets sslmode to require, verify-ca or verify-full. Hosts other than localhost, 127.0.0.1, ::1 and postgres count as remote. |
-| `HEPHAESTUS_DATABASE_MIGRATION_WAIT` | `hephaestus.database.migration-wait` | `10m` |  | How long a role waits at start for the database migration of its release, and how long a migration waits while another migration runs. After it, the process stops and names the reason. |
-| `HEPHAESTUS_DEV_SEED_ENABLED` | `hephaestus.dev.seed-enabled` | `false` |  | Exposes the development endpoint that local seed scripts use to read the practice versions that a review would pin. Use it only in local development, never in production. |
-| `HEPHAESTUS_DEV_TRIGGER_ENABLED` | `hephaestus.dev.trigger-enabled` | `false` |  | Lets requests to paths under /api/dev/ pass the security filter without sign-in. Use it only in local development, never in production. |
-| `HEPHAESTUS_FABRIC_ROOT` | `hephaestus.fabric.root` | Compose sets `/data/git-repos` |  | Local directory for the bare Git mirrors and the evidence folders of running reviews. The process must be able to write to it. Its contents are not durable application state. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_CACHE_MAX_SIZE_MB` | `hephaestus.integration.outline.cache.max-size-mb` | `200` |  | Cap, for each workspace, on the total size of mirrored document bodies. Above it, the bodies that were materialized longest ago are evicted, and their rows stay. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_STALENESS` | `hephaestus.integration.outline.staleness` | `30d` |  | How long a document that was deleted in Outline stays as a tombstone before its row is dropped. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_SYNC_CATCH_UP_DELAY` | `hephaestus.integration.outline.sync.catch-up-delay` | `PT5M` |  | Pause between the catch-up passes that resume Outline collections still awaiting a complete sync. A pass without pending collections makes no API calls. Accepts an ISO-8601 duration such as PT5M. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_SYNC_CRON` | `hephaestus.integration.outline.sync.cron` | `0 0 */6 * * *` |  | Cron expression for the full reconcile of each workspace's Outline document mirror. Uses six fields: second, minute, hour, day of month, month and day of week. |
-| `HEPHAESTUS_INTEGRATION_OUTLINE_SYNC_EXPORT_BUDGET` | `hephaestus.integration.outline.sync.export-budget` | `500` |  | Most document exports that one pass over a workspace may use. A collection that runs out of budget stays pending, and the next catch-up pass continues it. |
-| `HEPHAESTUS_INTEGRATION_SLACK_API_BASE` | `hephaestus.integration.slack.api-base` | `https://slack.com` |  | Base URL of the Slack API. Override it only to point at a mock server in tests. |
-| `HEPHAESTUS_INTEGRATION_SLACK_CONVERSATION_INGEST_ENABLED` | `hephaestus.integration.slack.conversation-ingest.enabled` | `true` |  | Lets workspaces ingest Slack channel messages for conversation reviews. Nothing is read until a workspace admin activates a channel. Set it to false to turn off channel ingestion for the whole instance. |
-| `HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN` | `hephaestus.llm.call-pools.max-cooldown` | `PT5M` |  | Longest shared provider pause accepted from an instance-funded HTTP 429 response. |
-| `HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE` | `hephaestus.llm.call-pools.permit-lease` | `PT1M` |  | Permit renewal window. A live worker cancels calls after three quarters of this window without renewal. Admission and administration reclaim expired grants. Only unused reservations are refunded. |
-| `HEPHAESTUS_MENTOR_TURN_CAPACITY` | `hephaestus.mentor.turn.capacity` |  |  | The conversation turns that all workers together run at once: the number of workers times the conversation turns of each. While every one of them runs a turn, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set. |
-| `HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_CAPACITY` | `hephaestus.auth.rate-limit.browser-reports.capacity` | `30` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_PERIOD` | `hephaestus.auth.rate-limit.browser-reports.period` | `1m` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` | `hephaestus.auth.rate-limit.mentor-turns.capacity` | `20` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD` | `hephaestus.auth.rate-limit.mentor-turns.period` | `10m` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_CAPACITY` | `hephaestus.auth.rate-limit.review-request.capacity` | `10` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_RATE_LIMIT_REVIEW_REQUEST_PERIOD` | `hephaestus.auth.rate-limit.review-request.period` | `1h` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_CAPACITY` | `hephaestus.auth.rate-limit.sync-trigger.capacity` | `10` |  | Most requests that one key may send within one period. Must be at least 1. |
-| `HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD` | `hephaestus.auth.rate-limit.sync-trigger.period` | `1h` |  | Refill window of the limit. Must be positive. |
-| `HEPHAESTUS_RUNTIME_SERVER_ENABLED` | `hephaestus.runtime.server.enabled` | Compose sets `false` |  | Runs the server role, which serves the API, syncs provider work and delivers feedback. Turn it off in a worker-only or webhook-only container. |
-| `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` | `hephaestus.runtime.webhook.enabled` | Compose sets `true; false` |  | Runs the webhook role, which receives provider webhooks and publishes them to NATS JetStream. Under the prod profile, this role needs NATS. |
-| `HEPHAESTUS_RUNTIME_WORKER_ENABLED` | `hephaestus.runtime.worker.enabled` | Compose sets `false` |  | Runs the worker role, which runs sandboxed practice reviews and conversation turns. Only a container with this role may mount the Docker socket. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE` | `hephaestus.sandbox.kubernetes.namespace` |  |  | The namespace of every sandbox Pod and Job. The installation owns it alone, so everything in it of the sandbox kinds is this installation's. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR` | `hephaestus.sandbox.kubernetes.node-selector` |  |  | The node labels of sandbox Pods, as a JSON object. Empty allows any node. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP` | `hephaestus.sandbox.kubernetes.pod-ip` |  |  | The address where sandboxes reach this worker: its Pod IP, or the k3d host address during development. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME` | `hephaestus.sandbox.kubernetes.pod-name` |  |  | This worker's Pod name, or its worktree identity during host development. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL` | `hephaestus.sandbox.kubernetes.probe-interval` | `15m` |  | How often the isolation probe runs again after the worker's start. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME` | `hephaestus.sandbox.kubernetes.runtime-class-name` |  |  | The RuntimeClass of every sandbox Pod, gVisor's for example. Blank selects the cluster's default. A named class that the cluster does not have fails the isolation probe. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE` | `hephaestus.sandbox.kubernetes.seccomp-profile` |  |  | The shipped `sandbox/agent-seccomp-profile.json` as a Localhost profile, relative to the kubelet's seccomp directory. Blank selects `RuntimeDefault`. |
-| `HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS` | `hephaestus.sandbox.kubernetes.tolerations` |  |  | The tolerations of sandbox Pods, as a JSON array of Kubernetes tolerations. Empty tolerates no taint. |
-| `HEPHAESTUS_SYNC_BACKFILL_PR_PAGE_SIZE` | `hephaestus.integration.github.sync.backfill-pr-page-size` | `10` |  | Page size of pull request backfill queries. It is smaller than in regular sync, because backfill responses include reviews, threads and comments. |
-| `HEPHAESTUS_SYNC_BACKFILL_TIMEOUT` | `hephaestus.integration.github.sync.backfill-graphql-timeout` | `120s` |  | Timeout for backfill operations, which fetch pull requests with their reviews, threads and comments. Large repositories need a longer timeout than regular sync. |
-| `HEPHAESTUS_SYNC_DISCUSSIONS_ENABLED` | `hephaestus.sync.discussions.enabled` | `false` |  | Whether discussion sync runs. |
-| `HEPHAESTUS_SYNC_EXTENDED_GRAPHQL_TIMEOUT` | `hephaestus.integration.github.sync.extended-graphql-timeout` | `120s` |  | Extended timeout for complex GraphQL operations, such as review comments. Accepts duration format: 60s, 1m, PT60S. |
-| `HEPHAESTUS_SYNC_GRAPHQL_TIMEOUT` | `hephaestus.integration.github.sync.graphql-timeout` | `60s` |  | Timeout for standard GraphQL operations. Accepts duration format: 30s, 1m, PT30S. |
-| `HEPHAESTUS_SYNC_INCREMENTAL_BUFFER` | `hephaestus.integration.github.sync.incremental-sync-buffer` | `5m` |  | Time subtracted from the last sync time, so that items updated shortly before it are still fetched despite clock differences with GitHub. |
-| `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` | `hephaestus.integration.github.sync.incremental-sync-enabled` | `true` |  | Whether to use incremental sync based on last sync timestamp. |
-| `HEPHAESTUS_SYNC_PAGINATION_THROTTLE` | `hephaestus.integration.github.sync.pagination-throttle` | `200ms` |  | Delay between pagination requests that keeps the load on the GitHub API low. Accepts duration format: 200ms, PT0.2S. |
-| `HEPHAESTUS_SYNC_PROJECTS_ENABLED` | `hephaestus.sync.projects.enabled` | `false` |  | Whether project sync runs. |
-| `HEPHAESTUS_TENANCY_ENFORCEMENT` | `hephaestus.tenancy.enforcement` | `throw` |  | How the SQL inspector reacts to a query on a workspace-scoped table that has no workspace guard. The value throw fails the query, log logs a warning and counts it, and off turns inspection off. Use log or off only for diagnostics. |
-| `HEPHAESTUS_WEBAPP_URL` | `hephaestus.webapp.url` | `${APPLICATION_HOST_URL}` |  | Base URL of the webapp for generating links. |
-| `HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET` | `hephaestus.webhook.stream.storage-budget` | Compose sets `${NATS_JS_MAX_FILE_BYTES}` |  | What the broker may hold for all webhook streams together. Keep it at or below the free space on the broker volume. The per-stream bounds must stay inside it, so a full stream refuses messages instead of stopping the broker. |
-| `HOSTNAME` | `logging.structured.ecs.service.node-name` |  |  | Structured ECS service node name. |
-| `MANAGEMENT_PORT` | `management.server.port` | `9090` |  | Management endpoint HTTP port (uses the same port as the application by default). Configure a different port to use management-specific SSL. |
-| `NATS_SERVER` | `hephaestus.sync.nats.server` | Compose sets `nats://nats-server:4222` |  | NATS server URL (e.g., nats://localhost:4222). |
-| `PAGE_EXPERIENCE_METRICS` | `hephaestus.features.flags.page-experience-metrics` | `false` |  | Lets the browser of a signed-in reader measure how fast each visit loads and responds and report it to the page experience metrics. In the EU, turning it on can require consent or a documented legal basis. |
-| `POSTGRES_PORT` | `spring.datasource.url` | `5432` |  | JDBC URL of the database. |
-| `SANDBOX_RECONCILIATION_INTERVAL` | `hephaestus.sandbox.reconciliation-interval-seconds` | `60` |  | The interval between abandoned sandbox sweeps. |
-| `SANDBOX_STOP_TIMEOUT` | `hephaestus.sandbox.container-stop-timeout-seconds` | `10` |  | The grace period before a stopped sandbox is killed. |
-| `SERVER_PORT` | `server.port`<br />`hephaestus.auth.issuer` | `8080` |  | Server HTTP port. canonical `iss` claim. |
-| `SHUTDOWN_TIMEOUT` | `spring.lifecycle.timeout-per-shutdown-phase`<br />`spring.task.scheduling.shutdown.await-termination-period` | `20s` |  | Timeout for the shutdown of any phase (group of SmartLifecycle beans with the same 'phase' value). Maximum time the executor should wait for remaining tasks to complete. |
-| `SLACK_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.slack.client-id` | `${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID}` |  | Client ID of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `SLACK_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.slack.client-secret` | `${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET}` |  | Client secret of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client ID. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `SLACK_OAUTH_DISPLAY_NAME` | `hephaestus.auth.login-providers.slack.display-name` | `Slack` |  | Label of the Slack button on the sign-in or account-linking page. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
-| `SPRINGDOC_API_DOCS_ENABLED` | `springdoc.api-docs.enabled` | `false` |  | Whether to generate and serve an OpenAPI document. |
-| `SPRINGDOC_SWAGGER_UI_ENABLED` | `springdoc.swagger-ui.enabled` | `false` |  | Whether to generate and serve an OpenAPI document. |
-| `WEBAPP_PORT` | `hephaestus.auth.passkeys.allowed-origins` | `4200` |  | Browser origins that may register and use passkeys, as a comma-separated list. Each must be an HTTPS origin on the RP ID or one of its subdomains. When it is empty, the origin of the auth issuer is used. |
-| `WEBHOOK_EXTERNAL_URL` | `hephaestus.webhook.external-url` | `${APPLICATION_HOST_URL}` |  | Public base URL of this instance that GitLab webhooks are registered against. GitLab webhook registration is skipped when it is unset. |
-| `WEBHOOK_TOKEN_ROTATION_THRESHOLD_DAYS` | `hephaestus.webhook.token-rotation.threshold-days` | `7` |  | Days before a GitLab connection token expires at which Hephaestus rotates it. Set 0 to only report the expiring token without rotating it. |
-| `WEBHOOK_TOKEN_ROTATION_VALIDITY_DAYS` | `hephaestus.webhook.token-rotation.validity-days` | `90` |  | Lifetime in days of the new token that a GitLab token rotation requests. Must be at least 1. |
+| `config.auth.assuranceEnforced` | boolean | `true` | yes | — |
+| `config.auth.bootstrapAdmins` | string | `""` | yes | — |
+| `config.auth.browserExtensionIds` | string | `""` | yes | — |
+| `config.auth.passkeys.allowedOrigins` | string | `""` | yes | — |
+| `config.auth.passkeys.instanceAdminRequired` | boolean | `true` | yes | — |
+| `config.auth.passkeys.rpId` | string | `""` | yes | — |
+| `config.auth.passkeys.workspaceAdminRequired` | boolean | `false` | yes | — |
+| `config.consumerInactiveThreshold` | string | `"30d"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `config.credentialKey.priorVersion` | string | `""` | yes | `pattern: "^(?:[1-9][0-9]*)?$"` |
+| `config.credentialKey.rotationEnabled` | boolean | `false` | yes | — |
+| `config.credentialKey.version` | integer | `1` | yes | `minimum: 1` |
+| `config.durableConsumerName` | string | `"hephaestus"` | yes | `pattern: "^[A-Za-z0-9_-]{1,64}$"` |
+| `config.email.from` | string | `""` | yes | — |
+| `config.email.fromName` | string | `"Hephaestus"` | yes | — |
+| `config.email.host` | string | `""` | yes | — |
+| `config.email.port` | integer | `587` | yes | `minimum: 1. maximum: 65535` |
+| `config.email.replyTo` | string | `""` | yes | — |
+| `config.email.tls` | string | `"starttls"` | yes | `enum: ["starttls","implicit"]` |
+| `config.email.username` | string | `""` | yes | — |
+| `config.gitCheckoutEnabled` | boolean | `true` | yes | — |
+| `config.github.appClientId` | string | `""` | yes | — |
+| `config.github.appId` | integer | `0` | yes | `minimum: 0` |
+| `config.github.appInstallationUrl` | string | `""` | yes | — |
+| `config.github.oauthClientId` | string | `""` | yes | — |
+| `config.gitlab.enabled` | boolean | `false` | yes | — |
+| `config.gitlab.oauthBaseUrl` | string | `"https://gitlab.com"` | yes | `pattern: "^https://"` |
+| `config.gitlab.oauthClientId` | string | `""` | yes | — |
+| `config.gitlab.oauthDisplayName` | string | `"GitLab"` | yes | — |
+| `config.gitlab.workspaceCreation` | boolean | `false` | yes | — |
+| `config.llmDisplayCurrency` | string | `""` | yes | `enum: ["","EUR"]` |
+| `config.llmPrivateHosts` | array | `[]` | yes | `maxItems: 32` |
+| `config.llmPrivateHostsAllowHttp` | boolean | `false` | yes | — |
+| `config.llmUsageRetention` | string | `"P400D"` | yes | `pattern: "^P[0-9]+D$"` |
+| `config.monitoring.cooldownMinutes` | integer | `60` | yes | `minimum: 0. maximum: 10080` |
+| `config.monitoring.runOnStartup` | boolean | `true` | yes | — |
+| `config.monitoring.syncCron` | string | `"0 0 * * * *"` | yes | A Spring cron expression with six fields, seconds first. |
+| `config.monitoring.timeframeDays` | integer | `7` | yes | `minimum: 1. maximum: 3650` |
+| `config.outline.allowedOrigins` | string | `""` | yes | — |
+| `config.outline.enabled` | boolean | `false` | yes | — |
+| `config.outline.oauthBaseUrl` | string | `""` | yes | — |
+| `config.outline.oauthClientId` | string | `""` | yes | — |
+| `config.outline.oauthDisplayName` | string | `"Outline"` | yes | — |
+| `config.pageExperienceMetrics` | boolean | `false` | yes | — |
+| `config.publicActivity.enabled` | boolean | `false` | yes | — |
+| `config.publicActivity.repositoryVisibilityMaxAge` | string | `"48h"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `config.releaseCheckEnabled` | boolean | `true` | yes | — |
+| `config.researchOrganization` | string | `""` | yes | — |
+| `config.slack.clientId` | string | `""` | yes | — |
+| `config.slack.enabled` | boolean | `false` | yes | — |
+| `config.slack.redirectUri` | string | `""` | yes | — |
+| `config.tracing.otlpEnabled` | boolean | `false` | yes | — |
+| `config.tracing.otlpEndpoint` | string | `"http://localhost:4318/v1/traces"` | yes | — |
+| `config.tracing.samplingProbability` | string | `"0.0"` | yes | `pattern: "^(?:0(?:\\.[0-9]+)?\|1(?:\\.0+)?)$"` |
+| `deploymentEnvironment` | string | `"local"` |  | `pattern: "^[a-z0-9._-]{1,64}$"` |
+| `global` | object | `supplied by release or operator` |  | — |
+| `host` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"` |
+| `images.agent-pi` | string | `supplied by release or operator` | yes | An index digest from the verified release lock. Tags are refused. |
+| `images.application-server` | string | `supplied by release or operator` | yes | An index digest from the verified release lock. Tags are refused. |
+| `images.nats` | string | `supplied by release or operator` | yes | An index digest from the verified release lock. Tags are refused. |
+| `images.postgres` | string | `supplied by release or operator` | yes | An index digest from the verified release lock. Tags are refused. |
+| `images.webapp` | string | `supplied by release or operator` | yes | An index digest from the verified release lock. Tags are refused. |
+| `migration.databasePool.maximumPoolSize` | integer | `2` | yes | `minimum: 1. maximum: 400` |
+| `migration.databasePool.minimumIdle` | integer | `1` | yes | `minimum: 0. maximum: 400` |
+| `migration.enabled` | boolean | `true` | yes | — |
+| `migration.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `migration.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `migration.resources.limits.memory` | string | `"1536Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `migration.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `migration.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `migration.resources.requests.memory` | string | `"1536Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.bundled` | boolean | `true` | yes | — |
+| `nats.external.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
+| `nats.external.port` | integer | `4222` | yes | `minimum: 1. maximum: 65535` |
+| `nats.external.url` | string | `""` | yes | `pattern: "^(?:\|(?:nats\|tls)://[A-Za-z0-9.-]+(?::[0-9]{1,5})?)$"` |
+| `nats.jetstream.maxFileBytes` | integer | `17179869184` | yes | `minimum: 1073741824. maximum: 1099511627776` |
+| `nats.jetstream.maxMemory` | string | `"1G"` | yes | `pattern: "^[0-9]+[KMGT]?$"` |
+| `nats.maxPayloadBytes` | integer | `26214400` | yes | `minimum: 1048576. maximum: 67108864` |
+| `nats.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `nats.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.limits.memory` | string | `"3Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `nats.resources.requests.memory` | string | `"1536Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `networkPolicy.dns.namespace` | string | `"kube-system"` | yes | `pattern: "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"` |
+| `networkPolicy.dns.podLabels` | object | `{"k8s-app":"kube-dns"}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `networkPolicy.externalEgress.cidr` | string | `"0.0.0.0/0"` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
+| `networkPolicy.externalEgress.except` | array | `["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","169.254.0.0/16","100.64.0.0/10"]` | yes | `maxItems: 16` |
+| `networkPolicy.gateway.namespace` | string | `""` | yes | `pattern: "^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"` |
+| `networkPolicy.gateway.podLabels` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `networkPolicy.kubernetesApi.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
+| `networkPolicy.kubernetesApi.port` | integer | `0` | yes | `minimum: 0. maximum: 65535` |
+| `networkPolicy.metrics.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `networkPolicy.metrics.podLabels` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `networkPolicy.modelEndpoints` | array | `[]` |  | `maxItems: 16` |
+| `networkPolicy.traceCollector.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `networkPolicy.traceCollector.podLabels` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `networkPolicy.workerGatewayPorts` | array | `[]` |  | `maxItems: 4` |
+| `postgresql.backup.clientTlsSecret` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `postgresql.backup.enabled` | boolean | `false` | yes | — |
+| `postgresql.backup.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.resources.limits.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.resources.requests.cpu` | string | `"100m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.resources.requests.memory` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.backup.restore.enabled` | boolean | `false` | yes | — |
+| `postgresql.backup.restore.time` | string | `""` | yes | `pattern: "^(?:[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?[+-][0-9]{2}(?::?[0-9]{2})?)?$"` |
+| `postgresql.backup.retentionFull` | integer | `2` | yes | `minimum: 1. maximum: 52` |
+| `postgresql.backup.s3.bucket` | string | `""` | yes | `pattern: "^(?:[a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$"` |
+| `postgresql.backup.s3.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
+| `postgresql.backup.s3.endpoint` | string | `""` | yes | `pattern: "^[A-Za-z0-9.-]{0,253}(?::[0-9]{1,5})?$"` |
+| `postgresql.backup.s3.port` | integer | `443` | yes | `minimum: 1. maximum: 65535` |
+| `postgresql.backup.s3.privateCa` | boolean | `false` | yes | — |
+| `postgresql.backup.s3.region` | string | `""` | yes | `pattern: "^[A-Za-z0-9-]{0,64}$"` |
+| `postgresql.backup.s3.uriStyle` | string | `"path"` | yes | `enum: ["path","host"]` |
+| `postgresql.backup.schedule.differential` | string | `"15 2 * * 1-6"` | yes | — |
+| `postgresql.backup.schedule.full` | string | `"15 2 * * 0"` | yes | — |
+| `postgresql.bundled` | boolean | `true` | yes | — |
+| `postgresql.database` | string | `"hephaestus"` | yes | `pattern: "^[a-z_][a-z0-9_]{0,62}$"` |
+| `postgresql.external.cidr` | string | `""` | yes | `pattern: "^(?:\|[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}\|[0-9a-fA-F:]+/[0-9]{1,3})$"` |
+| `postgresql.external.host` | string | `""` | yes | `pattern: "^[A-Za-z0-9.-]{0,253}$"` |
+| `postgresql.external.port` | integer | `5432` | yes | `minimum: 1. maximum: 65535` |
+| `postgresql.parameters.autovacuum_max_workers` | integer | `supplied by release or operator` |  | `minimum: 1. maximum: 16` |
+| `postgresql.parameters.autovacuum_work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.effective_cache_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.hash_mem_multiplier` | number | `supplied by release or operator` |  | `minimum: 1. maximum: 10` |
+| `postgresql.parameters.maintenance_work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.max_connections` | integer | `supplied by release or operator` |  | `minimum: 4. maximum: 400` |
+| `postgresql.parameters.max_parallel_workers_per_gather` | integer | `supplied by release or operator` |  | `minimum: 0. maximum: 16` |
+| `postgresql.parameters.max_wal_size` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.shared_buffers` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.parameters.work_mem` | string | `supplied by release or operator` |  | `pattern: "^[1-9][0-9]*(?:kB\|MB\|GB)$"` |
+| `postgresql.persistence.size` | string | `"20Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `postgresql.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.resources.limits.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.resources.requests.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `postgresql.tls.existingSecret` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |
+| `priorityClasses` | object | `{"create":true,"roles":"","conversations":"","reviews":""}` |  | Create the three PriorityClasses, or name three that exist: the roles' above the conversations' above the reviews'. |
+| `priorityClasses.conversations` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `priorityClasses.create` | boolean | `true` | yes | — |
+| `priorityClasses.reviews` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `priorityClasses.roles` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `release.commit` | string | `""` | yes | `pattern: "^[a-f0-9]{40}$"` |
+| `release.version` | string | `""` | yes | `pattern: "^(?:v(?:0\|[1-9][0-9]*)\\.(?:0\|[1-9][0-9]*)\\.(?:0\|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?\|[a-f0-9]{40})$"` |
+| `route.parentRefs` | array | `[]` | yes | `minItems: 1. maxItems: 4` |
+| `secret.name` | string | `""` | yes | `pattern: "^[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?$"` |
+| `server.databasePool.maximumPoolSize` | integer | `20` | yes | `minimum: 1. maximum: 400` |
+| `server.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
+| `server.gitCache.sizeLimit` | string | `"20Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.replicas` | integer | `1` | yes | `minimum: 0. maximum: 1` |
+| `server.resources.limits.cpu` | string | `"4"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.limits.ephemeral-storage` | string | `"22Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.limits.memory` | string | `"2560Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.requests.memory` | string | `"2560Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `trustedProxies` | string | `""` | yes | — |
+| `webapp.legalOverrides` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |
+| `webapp.replicas` | integer | `1` | yes | `minimum: 1. maximum: 5` |
+| `webapp.resources.limits.cpu` | string | `"500m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webapp.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webapp.resources.limits.memory` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webapp.resources.requests.cpu` | string | `"50m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webapp.resources.requests.ephemeral-storage` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webapp.resources.requests.memory` | string | `"64Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webapp.securityContact` | string | `""` | yes | `pattern: "^(?:(?:mailto:\|https://\|tel:)\\S+)?$"` |
+| `webhook.replicas` | integer | `1` | yes | `minimum: 0. maximum: 3` |
+| `webhook.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.limits.memory` | string | `"1280Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.requests.memory` | string | `"1280Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.stream.allowDestructiveLimitUpdates` | boolean | `false` | yes | — |
+| `webhook.stream.limitUpdateTimeout` | string | `"5m"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `webhook.stream.maxAge` | string | `"7d"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `webhook.stream.maxAgeByStream` | object | `{}` |  | `additionalProperties: {"$ref":"#/definitions/duration"}` |
+| `webhook.stream.maxBytes` | string | `"1GB"` | yes | `pattern: "^[0-9]+(?:B\|KB\|MB\|GB\|TB)$"` |
+| `webhook.stream.maxBytesGithub` | string | `"10GB"` | yes | `pattern: "^[0-9]+(?:B\|KB\|MB\|GB\|TB)$"` |
+| `worker.conversationTurns` | string or integer | `8` | yes | HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this. |
+| `worker.databasePool.maximumPoolSize` | integer | `32` | yes | `minimum: 1. maximum: 400` |
+| `worker.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
+| `worker.drainTimeoutSeconds` | integer | `1800` | yes | `minimum: 0. maximum: 86400` |
+| `worker.enabled` | boolean | `false` | yes | — |
+| `worker.gitCache.sizeLimit` | string | `"50Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.replicas` | integer | `2` | yes | `minimum: 0. maximum: 16` |
+| `worker.resources.limits.cpu` | string | `"4"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.limits.ephemeral-storage` | string | `"52Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.limits.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.requests.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.reviews` | integer | `5` | yes | `minimum: 1. maximum: 32` |
+| `worker.rolloutStrategy` | string | `"RollingUpdate"` | yes | `enum: ["RollingUpdate","Recreate"]` |
+| `worker.runtime.nodeSelector` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `worker.runtime.podOverhead.cpuMillis` | integer | `0` | yes | `minimum: 0` |
+| `worker.runtime.podOverhead.memoryMi` | integer | `0` | yes | `minimum: 0` |
+| `worker.runtime.probeInterval` | string | `"15m"` | yes | `pattern: "^[1-9][0-9]*(?:m\|h)$"` |
+| `worker.runtime.runtimeClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |
+| `worker.runtime.seccompProfile` | string | `""` | yes | `pattern: "^(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)?$"` |
+| `worker.runtime.tolerations` | array | `[]` | yes | — |
+| `worker.sandbox.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `worker.sandbox.quota.enabled` | boolean | `true` | yes | — |
+| `workspaceSubdomains.enabled` | boolean | `false` | yes | — |
+
+## Application environment
+
+The chart sets these variables on the listed workload containers.
+Use Helm values and Secret keys for configurable inputs.
+The chart fixes role flags, profiles, and runtime connections internally.
+A host `.env` file does not configure a Pod.
+
+Defaults below come from the application YAML. They are not the deployed values.
+[Configuration readiness](./configuration-readiness) reports incomplete instance configuration.
+
+| Variable | Setting | Application default | Containers | Description |
+| --- | --- | --- | --- | --- |
+| `AGENT_ENABLED` | `hephaestus.agent.enabled` | `default: false` | `server`, `worker` | Turns on agent jobs, which run practice reviews. The server role submits jobs and the worker role runs them, so set it on both. |
+| `APPLICATION_HOST_URL` | `hephaestus.host-url`<br />`hephaestus.cors.allowed-origins[0]`<br />`hephaestus.webapp.url`<br />`hephaestus.webhook.external-url` | `default: http://localhost:4200; default: (empty); prod: (empty)` | `server`, `webhook`, `worker` | Set the public URL of this Hephaestus instance for links in notifications. Browsers at these origins can make cross-origin requests to this instance. Set the webapp's base URL for generated links. Set the public base URL used to register this instance's GitLab webhooks. GitLab webhook registration is skipped when it is unset. |
+| `APP_VERSION` | `spring.application.version`<br />`logging.structured.ecs.service.version` | `default: 0.0.0-development; default: ${spring.application.version}` | `server`, `webhook`, `worker` | Version that the application reports in its logs, traces and release card. The deployment sets it from the release. Each log record names this version as its service version. |
+| `DATABASE_PASSWORD` | `spring.datasource.password` | `prod: (empty)` | `server`, `webhook`, `worker`, `migration` | Login password of the database. |
+| `DATABASE_URL` | `spring.datasource.url` | `prod: (empty)` | `server`, `webhook`, `worker`, `migration` | JDBC URL of the database. |
+| `DATABASE_USERNAME` | `spring.datasource.username` | `prod: (empty)` | `server`, `webhook`, `worker`, `migration` | Login username of the database. |
+| `DEPLOYMENT_ENVIRONMENT` | `hephaestus.release.environment` | `default: local` | `server`, `webhook`, `worker` | The name of this deployment, such as `production`. The webapp, log lines and traces use the same name. |
+| `GH_APP_CLIENT_ID` | `hephaestus.integration.github.app.client-id` | `default: (empty)` | `server` | The App's client ID, which exchanges the code GitHub returns when an installation requests user authorization. |
+| `GH_APP_CLIENT_SECRET` | `hephaestus.integration.github.app.client-secret` | `default: (empty)` | `server` | The client secret of the GitHub App. Set it together with the client ID. |
+| `GH_APP_ID` | `hephaestus.integration.github.app.id` | `default: 0; prod: 0` | `server`, `worker` | ID of the GitHub App. The value 0 turns GitHub App mode off. Must not be negative. |
+| `GH_APP_INSTALLATION_URL` | `hephaestus.integration.github.app.installation-url` | `default: (empty)` | `server` | URL where users install the GitHub App, such as https://github.com/apps/my-app/installations/new. |
+| `GH_APP_PRIVATE_KEY` | `hephaestus.integration.github.app.private-key` | `default: (empty); prod: (empty)` | `server`, `worker` | PEM-encoded private key of the GitHub App, as an inline value. |
+| `GH_AUTH_TOKEN` | `hephaestus.contributors.github.auth-token`<br />`hephaestus.integration.github.meta.auth-token` | `default: (empty); prod: (empty)` | `server`, `worker` | Use a personal access token or fine-grained token to read this application's contributor list from GitHub. Use a personal access token or fine-grained token for GitHub API requests outside an App installation. |
+| `GITHUB_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.github.client-id` | `default: (empty)` | `server` | Client ID of the GitHub OAuth App for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `GITHUB_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.github.client-secret` | `default: (empty)` | `server` | Client secret of the GitHub OAuth App for sign-in. Set it with its client ID. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `GITLAB_DEFAULT_SERVER_URL` | `hephaestus.integration.gitlab.default-server-url` | `default: ${GITLAB_OAUTH_BASE_URL}` | `server`, `worker` | The GitLab server URL for a workspace that names no server of its own. |
+| `GITLAB_ENABLED` | `hephaestus.integration.gitlab.enabled` | `default: false` | `server`, `worker` | Turns on the GitLab integration, which syncs GitLab groups and projects and delivers feedback on merge requests. |
+| `GITLAB_OAUTH_BASE_URL` | `hephaestus.auth.login-providers.gitlab.base-url`<br />`hephaestus.integration.gitlab.default-server-url` | `default: https://gitlab.com` | `server` | Origin of the GitLab instance for sign-in, such as https://gitlab.example.com. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. The GitLab server URL for a workspace that names no server of its own. |
+| `GITLAB_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.gitlab.client-id` | `default: (empty)` | `server` | Client ID of the GitLab OAuth application for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `GITLAB_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.gitlab.client-secret` | `default: (empty)` | `server` | Client secret of the GitLab OAuth application for sign-in. Set it with its client ID. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `GITLAB_OAUTH_DISPLAY_NAME` | `hephaestus.auth.login-providers.gitlab.display-name` | `default: GitLab` | `server` | Label of the GitLab button on the sign-in or account-linking page. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `GITLAB_WORKSPACE_CREATION` | `hephaestus.features.flags.gitlab-workspace-creation` | `default: false` | `server` | Lets admins create GitLab workspaces in the UI and the API. |
+| `GIT_CHECKOUT_ENABLED` | `hephaestus.git.enabled` | `default: false` | `server`, `worker` | Keeps local Git mirrors of monitored repositories, which practice reviews read code from. Turn it on wherever agent jobs run. Without it, the practice review health check reports out of service. |
+| `HEPHAESTUS_AGENT_IMAGE_REFERENCE` | `hephaestus.agent.image.reference` |  | `server`, `webhook`, `worker` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
+| `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` |  | `server`, `webhook`, `worker` | Refuses startup unless the agent image reference is pinned by digest. |
+| `HEPHAESTUS_AUTH_ASSURANCE_ENFORCED` | `hephaestus.auth.assurance-enforced` | `default: true` | `server` | Requires passkey verification and a recent sign-in for protected admin actions. Turn it off only on an isolated test instance. |
+| `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | `hephaestus.auth.bootstrap-admins` |  | `server` | Identities that become instance admins when they sign in, as `provider:@username` or `provider:subject`. Use the subject where a username can be claimed again. Email addresses are never matched. |
+| `HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN` | `hephaestus.auth.bootstrap-token` |  | `server` | Optional token, controlled by the deployment, that recovers an instance without an active admin. A blank value turns off the recovery endpoint. |
+| `HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS` | `hephaestus.auth.browser-extension-ids` | `default: (empty)` | `server` | Chrome extension IDs that may sign in as installed clients. Each ID gets exactly one callback and one CORS origin. |
+| `HEPHAESTUS_AUTH_ISSUER` | `hephaestus.auth.issuer` | `default: http://localhost:${SERVER_PORT}; prod: http://localhost:${SERVER_PORT}` | `server` | Canonical `iss` claim. |
+| `HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS` | `hephaestus.auth.passkeys.allowed-origins` | `default: http://localhost:${WEBAPP_PORT}; prod: (empty)` | `server` | Browser origins that may register and use passkeys, as a comma-separated list. Each must be an HTTPS origin on the RP ID or one of its subdomains. When it is empty, the origin of the auth issuer is used. |
+| `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED` | `hephaestus.auth.passkeys.instance-admin-required` | `default: false; prod: true` | `server` | Requires a verified passkey sign-in from every instance admin. Workspace and account settings cannot turn this off. |
+| `HEPHAESTUS_AUTH_PASSKEYS_RP_ID` | `hephaestus.auth.passkeys.rp-id` | `default: (empty); prod: (empty)` | `server` | WebAuthn relying party ID, the domain that passkeys are bound to. When it is empty, the host of the auth issuer is used. Passkeys registered under one RP ID do not work under another. |
+| `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `hephaestus.auth.passkeys.workspace-admin-required` | `default: false; prod: false` | `server` | Requires a verified passkey sign-in for workspace administration in every workspace. A workspace cannot turn this off. |
+| `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` | `hephaestus.auth.state-cookie-key` | `default: (empty); prod: (empty)` | `server` | Base64-encoded 32-byte AES key that seals the OAuth state and sign-in intent cookies. Required outside development. |
+| `HEPHAESTUS_EMAIL_FROM` | `hephaestus.email.from` | `default: (empty)` | `server` | The sender address in the envelope and the header. Required when `spring.mail.host` is set. The relay must be allowed to send for its domain through SPF and DKIM. |
+| `HEPHAESTUS_EMAIL_FROM_NAME` | `hephaestus.email.from-name` | `default: Hephaestus` | `server` | The display name shown next to `from`. |
+| `HEPHAESTUS_EMAIL_REPLY_TO` | `hephaestus.email.reply-to` | `default: (empty)` | `server` | The address that receives human replies. When it is blank, replies go to the sender address. |
+| `HEPHAESTUS_FABRIC_ROOT` | `hephaestus.fabric.root` | `default: /data/git-repos` | `server`, `worker` | Local directory for the bare Git mirrors and the evidence folders of running reviews. The process must be able to write to it. Its contents are not durable application state. |
+| `HEPHAESTUS_IMAGE_APPLICATION_SERVER` | `hephaestus.release.image` | `default: (empty)` | `server`, `webhook`, `worker` | The digest reference of the image that this container started from. It is empty outside a deployment from a release lock. |
+| `HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` | `hephaestus.integration.consumer.inactive-threshold` | `default: 30d` | `server` | How long JetStream keeps a durable consumer that no running process is bound to before it deletes it. Set 0s to disable deletion, otherwise use at least 1h. A recreated consumer skips the messages that arrived while it was gone. |
+| `HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS` | `hephaestus.integration.outline.allowed-origins` | `default: (empty)` | `server`, `webhook`, `worker` | Outline origins that workspace connections and Outline sign-in may use, as a comma-separated list such as https://wiki.example.com. Each must be an HTTPS origin without a path. Hephaestus refuses every Outline address that is not listed. |
+| `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` | `hephaestus.integration.outline.enabled` | `default: false` | `server`, `webhook`, `worker` | Turns on the Outline integration, which lets workspaces connect Outline and syncs its documents. Each workspace admin still connects their workspace separately. |
+| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID` | `hephaestus.auth.login-providers.slack.client-id`<br />`hephaestus.integration.slack.client-id` | `default: (empty)` | `server` | Use the Slack app's client ID to link a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. Use the Slack app's client ID to connect workspaces to Slack. |
+| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET` | `hephaestus.auth.login-providers.slack.client-secret`<br />`hephaestus.integration.slack.client-secret` | `default: (empty)` | `server` | Use the Slack app's client secret to link a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client ID. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. Use the Slack app's client secret to connect workspaces to Slack. |
+| `HEPHAESTUS_INTEGRATION_SLACK_ENABLED` | `hephaestus.integration.slack.enabled` | `default: false` | `server`, `webhook`, `worker` | Master toggle for the Slack integration (OAuth install, lifecycle listeners, outbound messaging). |
+| `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI` | `hephaestus.integration.slack.redirect-uri` | `default: (empty)` | `server` | Redirect URI registered on the Slack app. It must match the authorization URL that Hephaestus builds for the Slack connection. |
+| `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` | `hephaestus.integration.slack.signing-secret` | `default: (empty)` | `server`, `webhook` | Signing secret of the Slack app, which verifies inbound Events API and interactivity requests. Required when the Slack integration is on, or the server and webhook roles do not start. |
+| `HEPHAESTUS_LLM_DISPLAY_CURRENCY` | `hephaestus.llm.display-currency` | `default: (empty)` | `server` | Code of the second currency in which spend in USD is also shown. Empty shows USD only. |
+| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` | `hephaestus.llm.egress.private-hosts` | `default: (empty)` | `server`, `worker` | Model endpoints on private networks that provider base URLs may use, as host names, IP addresses or CIDR ranges. A host name entry lets that name resolve to a private address. A range admits every host name that resolves into it. Only private addresses qualify: loopback, link-local and the known cloud metadata ranges stay blocked. A range wider than /16 (IPv4) or /48 (IPv6), outside the private ranges, or covering this server's own address stops startup. Empty allows public hosts only. |
+| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP` | `hephaestus.llm.egress.private-hosts-allow-http` | `default: false` | `server`, `worker` | Accepts `http://` base URLs whose host is in `private-hosts`. Every other host still needs HTTPS. |
+| `HEPHAESTUS_LLM_USAGE_RETENTION` | `hephaestus.llm.usage.retention` | `default: P400D` | `server` | Age from `occurred_at` at which a ledger row is deleted. Operator-tunable because the ledger is accounting data: a commercial or tax retention obligation can run years beyond the default, and the deletion is irreversible. |
+| `HEPHAESTUS_MENTOR_TURN_CAPACITY` | `hephaestus.mentor.turn.capacity` | `default: (empty)` | `server` | The conversation turns that all workers together run at once: the number of workers times the conversation turns of each. While every one of them runs a turn, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set. |
+| `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED` | `hephaestus.public-activity.enabled` |  | `server` | Allows public activity pages on this instance until an instance admin changes the switch in the admin console. Each workspace must also opt in. |
+| `HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` | `hephaestus.public-activity.repository-visibility-max-age` |  | `server` | How recently a sync must have confirmed that a repository is public for its work to appear on public activity pages. Must be positive. Accepts 48h, 2d, PT48H. |
+| `HEPHAESTUS_RELEASE_CHECK_ENABLED` | `hephaestus.release.check-enabled` | `default: true` | `server` | Whether the server role may ask GitHub for the newest published release. |
+| `HEPHAESTUS_RELEASE_COMMIT` | `hephaestus.release.commit` | `default: (empty)` | `server`, `webhook`, `worker` | The source commit that the release lock names. It is empty outside a deployment from a release lock. |
+| `HEPHAESTUS_RESEARCH_ORGANIZATION` | `hephaestus.consent.research-organization` | `default: (empty)` | `server` | Name of the organization that runs a research study on this instance. When it is set, first-login setup and account settings ask users for research consent. At most 255 characters. |
+| `HEPHAESTUS_RUNTIME_SERVER_ENABLED` | `hephaestus.runtime.server.enabled` | `default: true` | `webhook` | Runs the server role, which serves the API, syncs provider work and delivers feedback. Turn it off in a worker-only or webhook-only container. |
+| `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` | `hephaestus.runtime.webhook.enabled` | `default: true` | `server`, `webhook` | Runs the webhook role, which receives provider webhooks and publishes them to NATS JetStream. Under the prod profile, this role needs NATS. |
+| `HEPHAESTUS_RUNTIME_WORKER_ENABLED` | `hephaestus.runtime.worker.enabled` | `default: true` | `server`, `webhook` | Runs the worker role, which runs sandboxed practice reviews and conversation turns. Only a container with this role may mount the Docker socket. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS` | `hephaestus.sandbox.kubernetes.conversation-priority-class` |  | `worker` | The PriorityClass of the conversation host and turn sandbox Pods. Blank gives none. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE` | `hephaestus.sandbox.kubernetes.namespace` | `default: (empty)` | `worker` | The namespace of every sandbox Pod and Job. The installation owns it alone, so everything in it of the sandbox kinds is this installation's. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR` | `hephaestus.sandbox.kubernetes.node-selector` | `default: (empty)` | `worker` | The node labels of sandbox Pods, as a JSON object. Empty allows any node. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP` | `hephaestus.sandbox.kubernetes.pod-ip` | `default: (empty)` | `worker` | The address where sandboxes reach this worker: its Pod IP, or the k3d host address during development. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME` | `hephaestus.sandbox.kubernetes.pod-name` | `default: (empty)` | `worker` | This worker's Pod name, or its worktree identity during host development. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL` | `hephaestus.sandbox.kubernetes.probe-interval` | `default: 15m` | `worker` | How often the isolation probe runs again after the worker's start. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS` | `hephaestus.sandbox.kubernetes.review-priority-class` |  | `worker` | The PriorityClass of review and probe Pods, below the conversations': a review is an attempt that runs again, a conversation is a person waiting. Blank gives none. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME` | `hephaestus.sandbox.kubernetes.runtime-class-name` | `default: (empty)` | `worker` | The RuntimeClass of every sandbox Pod, gVisor's for example. Blank selects the cluster's default. A named class that the cluster does not have fails the isolation probe. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE` | `hephaestus.sandbox.kubernetes.seccomp-profile` | `default: (empty)` | `worker` | The shipped `sandbox/agent-seccomp-profile.json` as a Localhost profile, relative to the kubelet's seccomp directory. Blank selects `RuntimeDefault`. |
+| `HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS` | `hephaestus.sandbox.kubernetes.tolerations` | `default: (empty)` | `worker` | The tolerations of sandbox Pods, as a JSON array of Kubernetes tolerations. Empty tolerates no taint. |
+| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | `hephaestus.security.credential-encryption-key` |  | `server`, `webhook`, `worker`, `migration` | Active key that encrypts the stored credentials of integration connections. Exactly 32 bytes, so 32 ASCII characters. Required in production. |
+| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION` | `hephaestus.security.credential-encryption-key-version` |  | `server`, `webhook`, `worker`, `migration` | Positive version number stored with each credential that the active credential key encrypts. Must differ from prior-credential-encryption-key-version. |
+| `HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED` | `hephaestus.security.credential-rotation-enabled` |  | `server`, `webhook`, `worker` | Re-encrypts stored credentials with the active credential key in batches on the server role. Requires both the active and the prior credential key. |
+| `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` | `hephaestus.security.encryption-key` |  | `server`, `webhook`, `worker`, `migration` | Key that encrypts sensitive values at rest, such as login provider secrets, LLM connection keys and JWT signing keys. Exactly 32 bytes, so 32 ASCII characters. Required in production. |
+| `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY` | `hephaestus.security.prior-credential-encryption-key` |  | `server`, `webhook`, `worker`, `migration` | Previous credential key, still used to decrypt credentials stored under its version during a key rotation. Exactly 32 bytes. Set it together with prior-credential-encryption-key-version. |
+| `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION` | `hephaestus.security.prior-credential-encryption-key-version` |  | `server`, `webhook`, `worker`, `migration` | Version number of the previous credential key. Set it together with prior-credential-encryption-key. |
+| `HEPHAESTUS_SYNC_NATS_ENABLED` | `hephaestus.sync.nats.enabled` |  | `webhook` | Whether NATS JetStream integration is enabled. |
+| `HEPHAESTUS_SYNC_NATS_SERVER` | `hephaestus.sync.nats.server` |  | `webhook` | NATS server URL (e.g., nats://localhost:4222). |
+| `HEPHAESTUS_TRUSTED_PROXIES` | `server.tomcat.remoteip.internal-proxies` | `prod: (empty)` | `server`, `webhook`, `worker` | Internal proxies that are to be trusted. Can be set as a comma separate list of CIDR or as a regular expression. |
+| `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES` | `hephaestus.webhook.stream.allow-destructive-limit-updates` | `default: false` | `webhook` | Lets startup apply a limit change that deletes messages that the stream already holds. A smaller bound deletes the excess at once, so the operator must turn this on deliberately. |
+| `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` | `hephaestus.webhook.stream.limit-update-timeout` | `default: 5m` | `webhook` | How long startup waits for one stream limit update. A smaller bound deletes the excess before the broker answers, so a large stream can take long. It is separate from the consumer request timeout, so a slow update does not delay readiness. |
+| `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` | `hephaestus.webhook.stream.max-age` | `default: 7d` | `webhook` | Longest time a webhook stream keeps a message, for each stream without an entry in max-age-by-stream. Must be at least duplicate-window. |
+| `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` | `hephaestus.webhook.stream.max-bytes` | `default: 1GB` | `webhook` | Storage bound of each webhook stream without an entry in max-bytes-by-stream. At the bound, JetStream deletes the oldest messages to admit new ones. Must be at least 4 times http.max-payload-bytes. |
+| `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` | `hephaestus.webhook.stream.max-bytes-by-stream.github` | `default: 10GB` | `webhook` | Storage bounds keyed by stream name that override max-bytes for that stream. The github stream carries most of the traffic. Each entry must be at least 4 times http.max-payload-bytes. |
+| `HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET` | `hephaestus.webhook.stream.storage-budget` | `default: 16GB` | `webhook` | What the broker may hold for all webhook streams together. Keep it at or below the free space on the broker volume. The per-stream bounds must stay inside it, so a full stream refuses messages instead of stopping the broker. |
+| `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `hephaestus.worker.capacity.mentor-max` |  | `worker` | Number of conversation turns this worker runs at once. Accepts an integer or auto, which means 8. |
+| `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `hephaestus.worker.drain.timeout` |  | `worker` | How long a stopping worker waits for running practice reviews to finish before it cancels them. Set 0s to cancel them at once. |
+| `HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN` | `hephaestus.workspace.subdomains.base-domain` | `default: (empty)` | `server` | Domain under which each workspace gets its subdomain, such as hephaestus.build. Lowercase ASCII without a scheme, port or path, at most 189 characters. Required when subdomains are enabled. |
+| `HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED` | `hephaestus.workspace.subdomains.enabled` | `default: false` | `server` | Gives each workspace its own subdomain address on the base domain. Authentication and the API stay on the apex domain. Prepare DNS, TLS and OAuth callbacks before you turn it on. |
+| `MANAGEMENT_SERVER_ADDRESS` | `management.server.address` |  | `server`, `webhook`, `worker` | Network address to which the management endpoints should bind. Requires a custom management.server.port. |
+| `MONITORING_RUN_ON_STARTUP` | `hephaestus.sync.run-on-startup` | `prod: true` | `server` | Whether to trigger a sync run immediately when the application starts. |
+| `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `hephaestus.sync.cooldown-minutes` | `prod: 60` | `server` | Minimum minutes between consecutive sync operations. |
+| `MONITORING_SYNC_CRON` | `hephaestus.sync.cron` | `prod: 0 0 * * * *` | `server` | Cron expression for scheduled sync execution. |
+| `MONITORING_TIMEFRAME` | `hephaestus.sync.timeframe-days` | `prod: 7` | `server` | Number of days to look back when synchronizing pull requests. |
+| `NATS_DURABLE_CONSUMER_NAME` | `hephaestus.sync.nats.durable-consumer-name` | `default: hephaestus; prod: hephaestus` | `server`, `webhook` | Durable consumer name for JetStream subscriptions (empty for ephemeral). |
+| `NATS_ENABLED` | `hephaestus.sync.nats.enabled` | `prod: false` | `server` | Whether NATS JetStream integration is enabled. |
+| `NATS_PASSWORD` | `hephaestus.sync.nats.password` | `default: (empty)` | `server`, `webhook` | Password that the NATS connection authenticates with. Set it together with the user name, or leave both empty. |
+| `NATS_SERVER` | `hephaestus.sync.nats.server` | `prod: (empty)` | `server` | NATS server URL (e.g., nats://localhost:4222). |
+| `NATS_USERNAME` | `hephaestus.sync.nats.username` | `default: (empty)` | `server`, `webhook` | User name that the NATS connection authenticates with. Set it together with the password, or leave both empty. |
+| `OUTLINE_OAUTH_BASE_URL` | `hephaestus.auth.login-providers.outline.base-url` | `default: (empty)` | `server` | Origin of the Outline instance for account linking, such as https://wiki.example.com. Required when the client ID is set. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `OUTLINE_OAUTH_CLIENT_ID` | `hephaestus.auth.login-providers.outline.client-id` | `default: (empty)` | `server` | Client ID of the Outline OAuth application for linking an Outline account. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `OUTLINE_OAUTH_CLIENT_SECRET` | `hephaestus.auth.login-providers.outline.client-secret` | `default: (empty)` | `server` | Client secret of the Outline OAuth application for linking an Outline account. Set it with its client ID. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `OUTLINE_OAUTH_DISPLAY_NAME` | `hephaestus.auth.login-providers.outline.display-name` | `default: Outline` | `server` | Label of the Outline button on the sign-in or account-linking page. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers. |
+| `PAGE_EXPERIENCE_METRICS` | `hephaestus.features.flags.page-experience-metrics` | `default: false` | `server` | Lets the browser of a signed-in reader measure how fast each visit loads and responds and report it to the page experience metrics. In the EU, turning it on can require consent or a documented legal basis. |
+| `SANDBOX_API_PORT` | `hephaestus.sandbox.gateway.port` | `default: 8081` | `worker` | Port of the extra worker connector that serves the sandbox gateway. The gateway API answers only on this port. The value 0 binds a free port at start. |
+| `SANDBOX_MAX_CONCURRENT` | `hephaestus.sandbox.max-concurrent-containers` | `default: 5` | `worker` | The most review sandboxes this worker runs at once. |
+| `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` | `spring.datasource.hikari.maximum-pool-size` |  | `server`, `worker`, `migration` | Most PostgreSQL connections that one process holds in its pool. A worker can hold two connections per running review. Keep the sum over all processes below the PostgreSQL connection limit. |
+| `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE` | `spring.datasource.hikari.minimum-idle` |  | `server`, `worker`, `migration` | The minimum number of idle database connections that this process tries to keep in its pool. |
+| `SPRING_LIQUIBASE_ENABLED` | `spring.liquibase.enabled` |  | `webhook` | Whether to enable Liquibase support. |
+| `SPRING_MAIL_HOST` | `spring.mail.host` | `default: (empty)` | `server` | SMTP server host. For instance, 'smtp.example.com'. |
+| `SPRING_MAIL_PASSWORD` | `spring.mail.password` | `default: (empty)` | `server` | Login password of the SMTP server. |
+| `SPRING_MAIL_PORT` | `spring.mail.port` | `default: 587` | `server` | SMTP server port. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | `spring.mail.properties[mail.smtp.auth]` | `default: true` | `server` | Additional JavaMail Session properties. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE` | `spring.mail.properties[mail.smtp.ssl.enable]` | `default: false` | `server` | Additional JavaMail Session properties. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` | `spring.mail.properties[mail.smtp.starttls.enable]` | `default: true` | `server` | Additional JavaMail Session properties. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED` | `spring.mail.properties[mail.smtp.starttls.required]` | `default: true` | `server` | Additional JavaMail Session properties. |
+| `SPRING_MAIL_USERNAME` | `spring.mail.username` | `default: (empty)` | `server` | Login user of the SMTP server. |
+| `SPRING_PROFILES_ACTIVE` | `spring.profiles.active` |  | `server`, `webhook`, `worker`, `migration` | Comma-separated list of active profiles. Can be overridden by a command line switch. |
+| `TRACING_OTLP_ENABLED` | `management.tracing.export.otlp.enabled` | `default: false` | `server`, `webhook`, `worker` | Whether auto-configuration of tracing is enabled to export OTLP traces. |
+| `TRACING_OTLP_ENDPOINT` | `management.opentelemetry.tracing.export.otlp.endpoint` | `default: http://localhost:4318/v1/traces` | `server`, `webhook`, `worker` | URL to the OTel collector's HTTP API. |
+| `TRACING_SAMPLING_PROBABILITY` | `management.tracing.sampling.probability` | `default: 0.0` | `server`, `webhook`, `worker` | Probability in the range from 0.0 to 1.0 that a trace will be sampled. |
+| `WEBHOOK_ROUTING_PREVIOUS_SECRET` | `hephaestus.webhook.routing.previous-secret` | `default: (empty)` | `server`, `webhook` | Previous routing key that the receiver still accepts during a rotation. Keep it until every hook signed with it is replaced. Requires routing.secret and must differ from it. |
+| `WEBHOOK_ROUTING_SECRET` | `hephaestus.webhook.routing.secret` | `default: (empty)` | `server`, `webhook` | Key that signs the webhook token of each GitLab connection and derives the signing secret of each Outline subscription. At least 32 characters, and must differ from the webhook secret. GitLab and Outline webhook registration is skipped when it is unset. |
+| `WEBHOOK_SECRET` | `hephaestus.webhook.secret` | `default: (empty)` | `server`, `webhook` | Shared secret that verifies GitHub webhook signatures and legacy GitLab webhook tokens. GitLab webhook registration needs at least 32 characters. Must differ from both routing secrets. |

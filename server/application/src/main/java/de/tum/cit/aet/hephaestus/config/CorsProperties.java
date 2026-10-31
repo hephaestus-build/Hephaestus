@@ -22,7 +22,7 @@ import org.springframework.validation.annotation.Validated;
  *       - https://app.example.com
  * }</pre>
  *
- * @param allowedOrigins list of origins allowed to make cross-origin requests
+ * @param allowedOrigins Browsers at these origins can make cross-origin requests to this instance.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.cors")

@@ -19,8 +19,8 @@ import org.springframework.validation.annotation.Validated;
  * buffers the body — {@code server.tomcat.max-http-post-size} only enforces on form-encoded
  * payloads, so we don't rely on it for JSON webhooks.
  *
- * @param externalUrl Public base URL of this instance that GitLab webhooks are registered against. GitLab webhook
- *     registration is skipped when it is unset.
+ * @param externalUrl Set the public base URL used to register this instance's GitLab webhooks.
+ *     GitLab webhook registration is skipped when it is unset.
  * @param secret Shared secret that verifies GitHub webhook signatures and legacy GitLab webhook tokens. GitLab webhook
  *     registration needs at least 32 characters. Must differ from both routing secrets.
  */
