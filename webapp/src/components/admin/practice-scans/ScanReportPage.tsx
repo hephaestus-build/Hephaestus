@@ -189,7 +189,7 @@ function LoadedReport({
 									render={
 										<Button type="button" variant="outline" disabled={cancel.pending}>
 											{cancel.pending ? <Spinner /> : <OctagonXIcon aria-hidden />}
-											{cancel.pending ? "Cancelling scan…" : "Cancel scan"}
+											{cancel.pending ? "Canceling scan…" : "Cancel scan"}
 										</Button>
 									}
 								/>

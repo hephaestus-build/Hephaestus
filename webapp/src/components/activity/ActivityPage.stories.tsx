@@ -201,7 +201,7 @@ export const NoConnectedAccount: Story = {
 			settingsLink: (
 				<Link
 					to="/settings"
-					hash="linked-accounts-heading"
+					hash="connected-accounts"
 					className={buttonVariants({ variant: "outline" })}
 				>
 					Connect an account

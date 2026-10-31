@@ -171,13 +171,13 @@ export const Running: Story = {
 	},
 };
 
-export const Cancelling: Story = {
+export const Canceling: Story = {
 	args: {
 		state: loaded(RUNNING_SCAN, RUNNING_REPORT),
 		cancel: { pending: true, onRun: fn() },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Cancelling scan…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Canceling scan…" })).toBeDisabled();
 	},
 };
 

@@ -91,11 +91,11 @@ export function SettingsPage({
 	const showWeeklyDigest = keepWeeklyDigest || hasWeeklyDigest(digestState);
 
 	const destinations = [
-		{ id: "account-security", label: "Account security" },
+		{ id: "connected-accounts", label: "Connected accounts" },
 		...(passkeys === undefined ? [] : [{ id: "passkeys", label: "Passkeys" }]),
 		{ id: "preferences", label: "Preferences" },
 		...(showResearchSection ? [{ id: "research", label: "Research participation" }] : []),
-		{ id: "your-data", label: "Your data and account" },
+		{ id: "danger-zone", label: "Danger zone" },
 	];
 
 	return (
@@ -118,9 +118,10 @@ export function SettingsPage({
 					</ul>
 				</nav>
 
-				{/* Account security, together: how you sign in, your passkeys, and where you are signed in. */}
+				{/* The account group, under the link to its first heading: how you sign in, your passkeys,
+				    and where you are signed in. */}
 				<Separator />
-				<div id="account-security" className="scroll-mt-20 space-y-8">
+				<div id="connected-accounts" className="scroll-mt-20 space-y-8">
 					<LinkedAccountsSection {...linkedRest} isLoading={linkedLoading} />
 					{passkeys !== undefined && (
 						<>
@@ -196,7 +197,7 @@ export function SettingsPage({
 				)}
 
 				<Separator />
-				<div id="your-data" className="scroll-mt-20">
+				<div id="danger-zone" className="scroll-mt-20">
 					<DangerZoneSection onAccountDeleted={onAccountDeleted} />
 				</div>
 			</div>

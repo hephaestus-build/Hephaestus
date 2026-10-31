@@ -103,7 +103,7 @@ const TAB_DESCRIPTIONS: Record<PracticeTab, string> = {
 	feedback:
 		"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
 	results:
-		"Reviews of your work that reached this practice, newest first. Open one to see its problems, each with its next step.",
+		"Observations about your work on this practice, newest first. Open one to see its outcome and any problems, each with its next step.",
 	guide: "Why this practice matters, what good looks like, and how to do it.",
 };
 

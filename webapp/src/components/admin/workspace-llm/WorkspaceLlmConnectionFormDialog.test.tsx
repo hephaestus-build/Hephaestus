@@ -76,7 +76,7 @@ describe("WorkspaceLlmConnectionFormDialog", () => {
 		fireEvent.change(screen.getByLabelText("Base URL"), {
 			target: { value: "https://rerank.example.test/v1" },
 		});
-		await userEvent.click(screen.getByRole("button", { name: "Add connection" }));
+		await userEvent.click(screen.getByRole("button", { name: "Add provider" }));
 		expect(onCreate).toHaveBeenCalledWith(
 			expect.objectContaining({
 				displayName: "Reranker",

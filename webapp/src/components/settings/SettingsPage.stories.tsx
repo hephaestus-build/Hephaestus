@@ -146,10 +146,10 @@ export const Default: Story = {
 		const nav = within(canvas.getByRole("navigation", { name: "Settings sections" }));
 		const links = nav.getAllByRole("link");
 		await expect(links.map((link) => link.textContent)).toStrictEqual([
-			"Account security",
+			"Connected accounts",
 			"Preferences",
 			"Research participation",
-			"Your data and account",
+			"Danger zone",
 		]);
 		for (const link of links) {
 			const target = link.getAttribute("href")?.slice(1) ?? "";

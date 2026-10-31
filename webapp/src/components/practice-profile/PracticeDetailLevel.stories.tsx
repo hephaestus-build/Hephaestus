@@ -230,7 +230,7 @@ export const ObservationsTab: Story = {
 		await expect(screen.getByRole("button", { name: "Back" })).toBeVisible();
 		// The line under the tabs follows the open tab.
 		await expect(
-			screen.getByText(/^Reviews of your work that reached this practice, newest first\./u),
+			screen.getByText(/^Observations about your work on this practice, newest first\./u),
 		).toBeVisible();
 		await expect(screen.queryByText(/^Feedback about patterns in your work/u)).toBeNull();
 		await expect(screen.getByRole("tab", { name: "Observations 3" })).toHaveAttribute(
