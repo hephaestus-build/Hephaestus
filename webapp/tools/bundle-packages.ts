@@ -5,8 +5,6 @@ import { gzipSync } from "node:zlib";
 import type { Plugin } from "vite";
 import { z } from "zod";
 
-import { packageOf } from "./entry-chunk/entry-closure.ts";
-
 // Vite documents JSON output, but not its fields. Reject a changed native shape before publication.
 const licenses = z
 	.array(
@@ -21,6 +19,14 @@ const licenses = z
 
 export const BUNDLE_LICENSE_FILE = ".vite/license.json";
 export const BUNDLE_METADATA_FILE = ".vite/bundle-metadata.json";
+
+/** The package that a module id belongs to, or `undefined` for application source. */
+export function packageOf(moduleId: string): string | undefined {
+	const match = /[/\\]node_modules[/\\](?<name>@[^/\\]+[/\\][^/\\]+|[^/\\@][^/\\]*)[/\\]/u.exec(
+		moduleId.slice(moduleId.lastIndexOf("node_modules") - 1),
+	);
+	return match?.groups?.name?.replace("\\", "/");
+}
 
 /** One final bundle inventory for Syft's package manifests and the byte budget. */
 export function bundlePackages(): Plugin {
