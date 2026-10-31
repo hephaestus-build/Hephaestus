@@ -241,6 +241,8 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ args: { state }, canvas }) => {
 		await expect(canvas.getByText("We could not load your practices")).toBeVisible();
+		// The reader still knows which page failed.
+		await expect(canvas.getByRole("heading", { level: 1, name: "Practice profile" })).toBeVisible();
 		// A failed load makes no claim about the work: no count, no empty tab, no cold-start copy.
 		await expect(canvas.queryByText("No practices set up yet")).toBeNull();
 		await expect(canvas.queryByRole("tab")).toBeNull();

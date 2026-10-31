@@ -74,6 +74,10 @@ export const Default: Story = {
 			screen.getByRole("radio", { name: /keep my data out of research/u }),
 		).not.toBeChecked();
 		await expect(screen.getByText(/Two things first: accept the terms/u)).toBeVisible();
+		// The product's own name: "Heph" is retired, and "mentor" names people only.
+		const intro = screen.getByText(/^I am Hephaestus\./u);
+		await expect(intro).toBeVisible();
+		await expect(intro.textContent).not.toMatch(/\bHeph\b|\bmentor\b/iu);
 		// Facts are grouped: the sentence sits under its term, indented past the chip.
 		const term = screen.getByText("What it reads");
 		const detail = screen.getByText(/Your work in the tools your project connects/u);

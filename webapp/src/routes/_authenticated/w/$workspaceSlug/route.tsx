@@ -8,6 +8,7 @@ import {
 	listWorkspacesOptions,
 } from "@/api/@tanstack/react-query.gen";
 import { PublicActivityNotice } from "@/components/onboarding/PublicActivityNotice";
+import { noticeCannotOpenWorkspace } from "@/components/workspace/cannot-open-workspace";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
@@ -22,7 +23,7 @@ import { getUserViewSession } from "@/runtime/user-view/session";
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 	// Child guards receive membership or a verified administration target at navigation.
 	// Components observe live workspace facts through `useWorkspaceAccess`.
-	beforeLoad: async ({ context, params, location }) => {
+	beforeLoad: async ({ context, params, location, preload }) => {
 		const workspaces = await context.queryClient
 			.query({ ...listWorkspacesOptions(), retry: false })
 			.catch(() => undefined);
@@ -89,7 +90,15 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 			return { workspace: undefined, administrationWorkspace: undefined };
 		}
 
-		const fallbackSlug = workspaces[0]?.workspaceSlug;
+		// The reader followed a link and lands elsewhere, so say so. A preload is no arrival.
+		const fallback = workspaces[0];
+		const fallbackSlug = fallback?.workspaceSlug;
+		if (!preload) {
+			noticeCannotOpenWorkspace(
+				params.workspaceSlug,
+				hasText(fallbackSlug) ? fallback?.displayName : undefined,
+			);
+		}
 		if (!hasText(fallbackSlug)) {
 			throw redirect({ to: "/", replace: true });
 		}
