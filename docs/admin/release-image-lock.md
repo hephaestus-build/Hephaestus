@@ -44,23 +44,23 @@ Image build metadata retains the candidate version. The chart reports the stable
 
 Use the target release's joint lock:
 
-   ```bash
-   VERSION=vX.Y.Z
-   gh release download "$VERSION" --repo hephaestus-build/Hephaestus \
-  --pattern "release-$VERSION.chart.json" \
-  --pattern "release-$VERSION.chart.json.sigstore.json" \
-  --pattern "release-$VERSION.intoto.jsonl"
-   cosign verify-blob \
-  --bundle "release-$VERSION.chart.json.sigstore.json" \
-     --certificate-identity \
-       'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
-     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  "release-$VERSION.chart.json"
-gh attestation verify "release-$VERSION.chart.json" \
-     --bundle "release-$VERSION.intoto.jsonl" \
-     --predicate-type https://in-toto.io/attestation/release/v0.1 \
-     --repo hephaestus-build/Hephaestus
-   ```
+```bash
+VERSION=X.Y.Z
+LOCK="release-v$VERSION.chart.json"
+gh release download "v$VERSION" --repo hephaestus-build/Hephaestus \
+  --pattern "$LOCK" --pattern "$LOCK.sigstore.json" \
+  --pattern "release-v$VERSION.intoto.jsonl"
+cosign verify-blob \
+  --bundle "$LOCK.sigstore.json" \
+  --certificate-identity \
+    'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "$LOCK"
+gh attestation verify "$LOCK" \
+  --bundle "release-v$VERSION.intoto.jsonl" \
+  --predicate-type https://in-toto.io/attestation/release/v0.1 \
+  --repo hephaestus-build/Hephaestus
+```
 
 Continue with [Verify the release chart](./kubernetes#verify-the-release-chart) to authenticate and inspect the chart that the lock names.
 Do not use the lock contents before signature verification succeeds.

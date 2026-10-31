@@ -97,7 +97,7 @@ For an existing updater, complete the [0.95.1 bootstrap](https://github.com/heph
 For a new host, authenticate the release lock before using its source commit for the tooling checkout.
 Stop if a verification command fails.
 
-   ```bash
+```bash
 VERSION=X.Y.Z
 LOCK="release-v$VERSION.chart.json"
 gh release download "v$VERSION" --repo hephaestus-build/Hephaestus \
@@ -107,7 +107,7 @@ cosign verify-blob --bundle "$LOCK.sigstore.json" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com "$LOCK"
 source_commit=$(jq -er --arg release "v$VERSION" \
   'select(.schemaVersion == 2 and .release == $release) | .commit | select(test("^[a-f0-9]{40}$"))' "$LOCK")
-   sudo install -d -m 0750 /var/lib/hephaestus
+sudo install -d -m 0750 /var/lib/hephaestus
 sudo git clone --no-checkout https://github.com/hephaestus-build/Hephaestus.git /var/lib/hephaestus/checkout
 sudo git -C /var/lib/hephaestus/checkout checkout --detach "$source_commit"
 sudo ln -s /var/lib/hephaestus/checkout /var/lib/hephaestus/tooling
@@ -116,15 +116,15 @@ sudo install -m 0600 /var/lib/hephaestus/tooling/deploy/reconcile/reconcile.env.
 sudo install -m 0600 site.yaml /etc/hephaestus/chart.yaml
 sudo install -m 0644 /var/lib/hephaestus/tooling/deploy/reconcile/hephaestus-reconcile.service \
   /var/lib/hephaestus/tooling/deploy/reconcile/hephaestus-reconcile.timer /etc/systemd/system/
-   ```
+```
 
 Edit `/etc/hephaestus/reconcile.env` for the intended channel, Helm release, namespace and kubeconfig.
 Then enable the timer:
 
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now hephaestus-reconcile.timer
-   ```
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now hephaestus-reconcile.timer
+```
 
 ## Follow a channel with the chart
 
@@ -239,12 +239,15 @@ After you run it, the next tick installs the release again.
 
 ### Stopped major upgrades
 
-For 0.95.x → 1.0, follow [Database maintenance](./kubernetes#database-maintenance) and [Upgrade to 1.0](./upgrade-to-1-0).
+For 0.95.x → 1.0, read [Upgrade to 1.0](./upgrade-to-1-0).
+Use the four [Database maintenance](./kubernetes#database-maintenance) phases with the webhook stopped.
+Keep `webhook.replicas: 0` in `/etc/hephaestus/chart.yaml` through phases 1 to 3 for this stopped cutover.
+Restore its recorded count in phase 4.
 Pause the timer before phase 1.
 Save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json` before you change the release.
 Record the stopped phase-1 Helm revision from `helm history <release> --namespace <namespace>`.
 
-Verify the backups, record the worker count, and use the verified source chart to stop the server and workers.
+Verify the backups, record the worker and webhook counts, and use the verified source chart to stop all three roles.
 Wait until their Pods and every sandbox Pod and Job are removed.
 Then promote the target release and restart the timer for phase 2.
 
@@ -259,8 +262,8 @@ It omits `--rollback-on-failure` because Helm cannot restore the old schema.
 A pending cutover stops reconciliation and requires database recovery.
 It never rolls old workloads onto a migrated database.
 
-After the server is ready, pause the timer and restore the recorded worker count with the verified target chart, as phase 4 describes.
-Keep the desired worker count in `/etc/hephaestus/chart.yaml`, then resume the timer.
+After the server is ready, pause the timer and restore the recorded worker and webhook counts with the verified target chart, as phase 4 describes.
+Keep the desired worker and webhook counts in `/etc/hephaestus/chart.yaml`, then resume the timer.
 A new promotion of the same target can also restore that count after the cutover succeeds.
 
 The reconciler removes no image on a chart host.
@@ -281,16 +284,17 @@ If a stopped cutover fails or remains pending:
    Wait for its Complete or Failed condition before you restore data.
    After its 24-hour TTL, an absent Job is finished only if no migration Pod remains.
    If you must cancel it, delete that Job and wait for its Pods to disappear first.
-5. Scale the server and worker Deployments to zero.
+5. Scale the server, worker and webhook Deployments to zero.
    Wait for their Pods and sandboxes to stop.
    Restore the pre-upgrade database with steps 1 to 14 of [If migration fails](./upgrade#if-migration-fails).
    Defer its application startup and checks in steps 9 to 12 until the selected release succeeds in step 7 below.
 6. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
-   Use the recorded source revision with zero server and worker replicas.
+   Use the recorded source revision with zero server, worker and webhook replicas.
 7. To retry the target, resume the timer.
-   To return to the source release, promote its signed release with rollback enabled, then resume the timer.
+   To return to the source release, first restore `applied-before-cutover.json` to `applied.json` if the completed target already has an applied record.
+   Then promote the signed source release with rollback enabled and resume the timer.
 8. Complete the deferred startup and checks under pre-boot isolation.
-   Then restore the worker count as phase 4 describes.
+   Then restore the worker and webhook counts as phase 4 describes.
 
 A signed rollback request does not permit an automatic major release downgrade.
 A commit channel must descend from the recorded release source.
@@ -298,10 +302,6 @@ For a recorded pre-1.0 release tag, a signed request can permit an older commit.
 For a recorded 1.0 or later release tag, use the manual recovery steps above first.
 An applied commit record has no version.
 This version boundary does not apply to it.
-
-If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json`.
-Do this after the database restore and Helm rollback succeed.
-Then promote the source release and resume the timer.
 
 ## Operating it
 

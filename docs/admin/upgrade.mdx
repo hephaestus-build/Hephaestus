@@ -143,15 +143,16 @@ Each check is one unauthenticated HTTPS GET to
 workspace data or configuration.
 GitHub sees the source IP and the time.
 
-1. On an air-gapped host, set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env`.
-2. Recreate `application-server`.
+1. On an air-gapped host, set `config.releaseCheckEnabled: false` in `site.yaml`.
+2. Apply the values with the [upgrade command](./kubernetes#upgrades).
 
 The overview then shows the identity without a check.
 A failed check reaches only instance administration, never health or readiness.
 
 ## Deployment environment and release history
 
-Set `DEPLOYMENT_ENVIRONMENT` in `.env` to the name of the deployment, such as `production` or `staging`.
+Set `deploymentEnvironment` in `site.yaml` to the name of the deployment, such as `production` or `staging`.
+Apply the values with the [upgrade command](./kubernetes#upgrades).
 Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters.
 Hephaestus refuses to start with another value.
 When it is unset, the instance reports `local`.
