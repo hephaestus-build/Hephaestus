@@ -62,7 +62,8 @@ class ClaimReservationRetirementIntegrationTest {
 
             liquibase.update(1, contexts, labels);
             assertThat(jdbc.queryForObject(
-                    "SELECT count(*) FROM databasechangelog WHERE id='1793443331093-1'", Long.class)).isEqualTo(1L);
+                            "SELECT count(*) FROM databasechangelog WHERE id='1793443331093-1'", Long.class))
+                    .isEqualTo(1L);
 
             assertThat(jdbc.queryForObject("SELECT count(*) FROM llm_call_permit WHERE id=?", Long.class, claim))
                     .isZero();

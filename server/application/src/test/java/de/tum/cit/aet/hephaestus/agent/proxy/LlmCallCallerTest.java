@@ -43,7 +43,4 @@ class LlmCallCallerTest extends BaseUnitTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Product feedback calls have no workspace; all other calls require one");
     }
-
-
-
 }

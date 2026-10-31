@@ -86,7 +86,6 @@ public class ReviewJobClaimService {
         this.llmAdmissionService = llmAdmissionService;
         this.jobTelemetry = jobTelemetry;
         this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
-
     }
 
     sealed interface ClaimAttempt {}
@@ -122,7 +121,8 @@ public class ReviewJobClaimService {
     ClaimAttempt claimJob(UUID jobId, BooleanSupplier reviewRoom) {
         return transactionTemplate.execute(status -> {
             // The review service locks the parent before it changes the review, so the claim takes the parent before
-            // the job. Locking without starting it keeps a refused claim from committing a speculative parent transition.
+            // the job. Locking without starting it keeps a refused claim from committing a speculative parent
+            // transition.
             if (jobRepository.lockParentForQueuedClaim(jobId).isEmpty()) return ClaimOutcome.ALREADY_CLAIMED;
             Optional<ReviewJob> locked = jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now());
             if (locked.isEmpty()) {
@@ -413,7 +413,6 @@ public class ReviewJobClaimService {
         log.info("Refusing claim — configured model unavailable: jobId={}", job.getId());
         return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
     }
-
 
     private @Nullable UsageFundingSource claimedFundingSource(ReviewJob job) {
         return memberAiPolicy
