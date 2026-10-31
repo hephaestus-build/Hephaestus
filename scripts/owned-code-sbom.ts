@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
@@ -66,7 +66,7 @@ export function ownedComponent(file: string, input: string | Uint8Array) {
 		!content
 			.split(/\r?\n/u)
 			.slice(0, 40)
-			.some((line) => /owned\s*from:/iu.test(line))
+			.some((line) => /owned[ \t]*from:/iu.test(line))
 	) {
 		return;
 	}
@@ -153,7 +153,7 @@ export function ownedCandidates(
 			"-z",
 			...(commit === undefined ? ["--untracked", "--exclude-standard"] : []),
 			"-e",
-			"owned[[:space:]]*from:",
+			"owned[ \t]*from:",
 			...(commit === undefined ? [] : [commit]),
 			"--",
 			...paths,
@@ -180,6 +180,65 @@ export function ownedCandidates(
 		.map((entry) => (commit === undefined ? entry : entry.slice(commit.length + 1)));
 }
 
+function git(args: readonly string[], directory: string, failure: string): string {
+	const result = spawnSync("git", args, {
+		cwd: directory,
+		encoding: "utf8",
+		maxBuffer: CAPTURE_LIMIT_BYTES,
+		env: environmentWithoutGitRepository(),
+	});
+	if (result.error || result.status !== 0) {
+		throw new Error(`${failure}: ${exitStatus(result.status, result.signal)}`, {
+			cause: result.error,
+		});
+	}
+	return result.stdout;
+}
+
+/** The scan reads each path's own bytes, so a link out of the roots would ship a file it never reads. */
+export function assertLinksStayInRoots(
+	paths: readonly string[],
+	commit: string | undefined,
+	directory: string,
+): void {
+	const links: [string, string][] = [];
+	if (commit === undefined) {
+		const files = git(
+			["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...paths],
+			directory,
+			"owned-code link discovery failed",
+		);
+		for (const file of files.split("\0").filter(Boolean)) {
+			const absolute = path.join(directory, file);
+			if (lstatSync(absolute, { throwIfNoEntry: false })?.isSymbolicLink()) {
+				links.push([file, readlinkSync(absolute)]);
+			}
+		}
+	} else {
+		const tree = git(
+			["ls-tree", "-r", "-z", commit, "--", ...paths],
+			directory,
+			"owned-code link discovery failed",
+		);
+		for (const entry of tree.split("\0").filter(Boolean)) {
+			const [meta = "", file = ""] = entry.split("\t");
+			const [mode, , object = ""] = meta.split(" ");
+			if (mode === "120000") {
+				links.push([file, git(["cat-file", "blob", object], directory, `cannot read ${file}`)]);
+			}
+		}
+	}
+	for (const [file, target] of links) {
+		const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), target));
+		if (
+			path.posix.isAbsolute(target) ||
+			!roots.some((root) => resolved === root || resolved.startsWith(`${root}/`))
+		) {
+			throw new Error(`${file}: a link in shipped code must point inside ${roots.join(", ")}`);
+		}
+	}
+}
+
 export function readOwnedFile(
 	file: string,
 	commit: string | undefined,
@@ -200,6 +259,7 @@ export function readOwnedFile(
 }
 
 export function scanOwnedCode(commit?: string, directory = process.cwd()): OwnedComponent[] {
+	assertLinksStayInRoots(roots, commit, directory);
 	const files = ownedCandidates(roots, commit, directory);
 	const components: OwnedComponent[] = [];
 	for (const file of files) {

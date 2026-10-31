@@ -94,7 +94,8 @@ After the fields, an empty line and the upstream copyright line and license noti
  */
 ```
 
-Shipped code is each file under `webapp/src/`, `extension/src/`, `docker/` and `server/application/src/main/`.
+Shipped code is each file under `webapp/src/`, `extension/src/`, `docker/` and `server/application/src/main/`, except the package patches that [Owned static assets](#owned-static-assets) covers.
+A symbolic link in shipped code must point inside these directories.
 Test files, story files, and files in `test/` and `__tests__/` directories are not shipped code.
 In shipped code, a file with an `Owned from:` line in its first 40 lines is owned code.
 Such a file needs a complete header and a component in the release SBOM.
@@ -131,7 +132,6 @@ The gate rejects missing files, undeclared assets, duplicate declarations and sy
 Only the notice itself and license filenames that match `^LICENSE(?:-[A-Z0-9-]+)?$` are excluded from asset coverage.
 
 The release records each declared file's raw SHA-256 and the same license and pedigree fields as owned code.
-Run `vp run gate:owned-code` to check both formats.
 
 ## The dependency baseline
 

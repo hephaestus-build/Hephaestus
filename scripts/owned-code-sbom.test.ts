@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -143,6 +143,42 @@ await test("release capture reads the exact commit, while admission reads new an
 	await writeFile(path.join(directory, "webapp/src/new.ts"), "Owned from: incomplete");
 	assert.throws(() => scanOwnedCode(undefined, directory), /new.ts/u);
 });
+
+await test(
+	"a link out of the shipped roots fails both scans; a link between roots passes",
+	{ skip: process.platform === "win32" },
+	async (context) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "owned-links-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
+		const env = environmentForGitFixture();
+		const git = (...args: string[]) =>
+			execFileSync("git", args, { cwd: directory, env, encoding: "utf8" }).trim();
+		for (const folder of ["vendor", "docker/lib", "webapp/src", "server/application/src/main"]) {
+			await mkdir(path.join(directory, folder), { recursive: true });
+		}
+		await writeFile(path.join(directory, "vendor/owned.ts"), header);
+		await writeFile(path.join(directory, "docker/lib/owned.ts"), header);
+		await symlink(
+			"../../../../docker/lib",
+			path.join(directory, "server/application/src/main/lib"),
+		);
+		git("init", "-q");
+		git("add", ".");
+		git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "inside");
+		assert.deepEqual(
+			scanOwnedCode(git("rev-parse", "HEAD"), directory).map((entry) => entry.name),
+			["docker/lib/owned.ts"],
+		);
+
+		await symlink("../../vendor/owned.ts", path.join(directory, "webapp/src/owned.ts"));
+		assert.throws(() => scanOwnedCode(undefined, directory), /webapp\/src\/owned.ts: a link/u);
+		git("add", ".");
+		git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "outside");
+		const commit = git("rev-parse", "HEAD");
+		await rm(path.join(directory, "webapp/src/owned.ts"));
+		assert.throws(() => scanOwnedCode(commit, directory), /webapp\/src\/owned.ts: a link/u);
+	},
+);
 
 await test(
 	"capture writes owned pedigree and both capture-verifier modes reject a removed entry",

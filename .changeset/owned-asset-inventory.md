@@ -2,5 +2,5 @@
 "hephaestus": patch
 ---
 
-The source CycloneDX inventory can now record third-party static assets and maintained package patches from directory notices.
-Each entry preserves the asset's content hash, license and upstream pedigree without changing the asset bytes.
+The release's source CycloneDX SBOM now also lists the third-party static assets that Hephaestus ships, such as brand marks, and the patches applied to packages in the agent image.
+Each entry records the file's content hash, its license and the upstream source it comes from.

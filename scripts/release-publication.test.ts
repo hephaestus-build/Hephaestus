@@ -124,7 +124,8 @@ const option = flag => args[args.indexOf(flag) + 1];
 const write = (name, value) => fs.writeFileSync(path.join(store, name), JSON.stringify(value));
 fs.appendFileSync(process.env.CALL_LOG, JSON.stringify([tool, ...args]) + '\n');
 if (tool === 'git') {
-  if (args[0] === 'grep' && args.includes(read('manifest.json').commit)) process.exit(1);
+  // The release commit has no owned source: grep finds nothing, and the tree lists no links.
+  if (args.includes(read('manifest.json').commit)) process.exit(args[0] === 'grep' ? 1 : 0);
   throw new Error('Unexpected git command');
 } else if (tool === 'gh') {
   if (args[0] === 'attestation') {
