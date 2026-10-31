@@ -44,3 +44,14 @@ it("raises no notice when a link to such a workspace only preloads", async () =>
 	);
 	expect(router.state.location.pathname).toBe("/w/acme/activity");
 });
+
+it("says it on the home page when the reader has no workspace to open", async () => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+	const { router } = renderRouteAtWithRouter("/w/foreign/activity");
+
+	await screen.findByText(NOTICE, {}, ROUTE_RENDER_WAIT);
+	expect(screen.queryByText(/^This is /u)).toBeNull();
+	await waitFor(() => {
+		expect(router.state.location.pathname).toBe("/");
+	}, ROUTE_RENDER_WAIT);
+});

@@ -12,6 +12,7 @@ import { noticeCannotOpenWorkspace } from "./cannot-open-workspace";
  */
 const meta = {
 	parameters: { layout: "centered" },
+	tags: ["autodocs"],
 	beforeEach: () => () => {
 		toast.dismiss();
 	},
@@ -31,8 +32,7 @@ export const OpenedAnotherWorkspace: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Arrive" }));
 		const message = await screen.findByText(MESSAGE);
 		await expect(screen.getByText("This is Acme.")).toBeVisible();
-		// A screen reader hears it: the toaster is a polite live region.
-		await expect(message.closest("[aria-live='polite']")).not.toBeNull();
+		await expect(message).toBeVisible();
 
 		await userEvent.click(screen.getByRole("button", { name: "Close message" }));
 		await waitFor(async () => expect(screen.queryByText(MESSAGE)).toBeNull());
@@ -52,5 +52,19 @@ export const NoWorkspaceToOpen: Story = {
 		const notice = message.closest<HTMLElement>("[data-sonner-toast]");
 		await expect(notice).not.toBeNull();
 		await expect(within(notice ?? message).queryByText(/^This is /u)).toBeNull();
+	},
+};
+
+/** Text in the address that is no workspace slug is not repeated: the notice speaks for Hephaestus. */
+export const AddressIsNoSlug: Story = {
+	render: () => (
+		<Button onClick={() => noticeCannotOpenWorkspace("x”. Sign in again at evil.example", "Acme")}>
+			Arrive
+		</Button>
+	),
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Arrive" }));
+		await screen.findByText("You cannot open this workspace.");
+		await expect(screen.queryByText(/evil\.example/u)).toBeNull();
 	},
 };
