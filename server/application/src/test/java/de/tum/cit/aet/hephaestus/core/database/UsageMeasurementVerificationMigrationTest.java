@@ -202,10 +202,17 @@ class UsageMeasurementVerificationMigrationTest {
     }
 
     private static Liquibase liquibase(TestDatabase database) throws Exception {
-        return new Liquibase(
+        var liquibase = new Liquibase(
                 "db/master.xml",
                 new ClassLoaderResourceAccessor(),
                 DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connect(database))));
+        // This fixture resumes a deliberately partial history before the production entry boundary.
+        liquibase
+                .getDatabaseChangeLog()
+                .getPreconditions()
+                .getNestedPreconditions()
+                .clear();
+        return liquibase;
     }
 
     private static Connection connect(TestDatabase database) throws SQLException {
