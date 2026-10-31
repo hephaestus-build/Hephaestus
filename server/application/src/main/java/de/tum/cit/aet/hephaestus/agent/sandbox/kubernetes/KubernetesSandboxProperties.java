@@ -34,7 +34,7 @@ import org.springframework.validation.annotation.Validated;
  *     kubelet's seccomp directory. Blank selects {@code RuntimeDefault}
  * @param nodeSelector the node labels of sandbox Pods, as a JSON object. Empty allows any node.
  * @param tolerations the tolerations of sandbox Pods, as a JSON array of Kubernetes tolerations. Empty tolerates no taint.
- * @param conversationPriorityClass the PriorityClass of the Heph host and turn sandbox Pods. Blank gives none
+ * @param conversationPriorityClass the PriorityClass of the conversation host and turn sandbox Pods. Blank gives none
  * @param reviewPriorityClass the PriorityClass of review and probe Pods, below the conversations': a review is an
  *     attempt that runs again, a conversation is a person waiting. Blank gives none
  * @param probeInterval how often the isolation probe runs again after the worker's start

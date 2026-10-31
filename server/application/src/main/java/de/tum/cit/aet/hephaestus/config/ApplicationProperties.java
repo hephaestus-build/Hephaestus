@@ -22,7 +22,7 @@ import org.springframework.validation.annotation.Validated;
  *     url: https://app.example.com
  * }</pre>
  *
- * @param hostUrl the public URL of this Hephaestus instance (used for links in notifications)
+ * @param hostUrl Set the public URL of this Hephaestus instance for links in notifications.
  * @param webapp  webapp configuration
  */
 @Validated

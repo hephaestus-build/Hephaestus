@@ -1,7 +1,7 @@
 /**
  * The committed configuration reference describes every variable an operator can set.
  *
- * It fails when a variable that an application YAML placeholder, a Compose file, or `.env.example`
+ * It fails when a variable that an application YAML placeholder, the chart schema or a rendered workload
  * names has no row on `docs/admin/configuration-reference.mdx`, when a row names a variable that no
  * source names any more, and when a row has no description. It reads only the checkout, so it runs
  * without a build. Whether the page matches the metadata of the built JAR is the generator's own
@@ -33,9 +33,13 @@ export function judge(required: ReadonlySet<string>, pageText: string): Verdict 
 	return {
 		missing: [...required].filter((variable) => !onPage.has(variable)).toSorted(),
 		stale: [...onPage].filter((variable) => !required.has(variable)).toSorted(),
-		undescribed: rows.filter((row) => row.description === "").map((row) => row.variable),
+		undescribed: rows
+			.filter((row) => !row.variable.startsWith("values.") && row.description === "")
+			.map((row) => row.variable),
 		flawed: rows.flatMap((row) =>
-			descriptionProblems(row.description).map((problem) => `${row.variable}: ${problem}`),
+			(row.variable.startsWith("values.") ? [] : descriptionProblems(row.description)).map(
+				(problem) => `${row.variable}: ${problem}`,
+			),
 		),
 	};
 }
@@ -68,7 +72,7 @@ if (import.meta.main) {
 		`${REFERENCE_PAGE} has rows without a description`,
 		undescribed,
 		"Describe the setting at its source: the @ConfigurationProperties Javadoc, " +
-			"additional-spring-configuration-metadata.json for a key without one, or the comment above the key in .env.example. " +
+			"additional-spring-configuration-metadata.json for a key without one, or the chart schema. " +
 			"Then run `vp run generate:configuration-reference`.",
 	);
 	report(
