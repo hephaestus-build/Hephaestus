@@ -210,7 +210,7 @@ describe("review route", () => {
 		await screen.findByRole("link", { name: "Back to instance workspaces" }, ROUTE_RENDER_WAIT);
 		screen.getByText("Tutors administration");
 		expect(screen.queryByRole("link", { name: "Hephaestus" })).toBeNull();
-		const sidebarSettings = screen.getByRole("link", { name: "Settings" });
+		const sidebarSettings = screen.getByRole("link", { name: "Workspace settings" });
 		expect(sidebarSettings.getAttribute("href")).toBe("/w/tutors/admin/settings");
 		const automatic = await screen.findByRole(
 			"switch",

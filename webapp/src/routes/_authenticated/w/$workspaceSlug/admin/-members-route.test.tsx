@@ -145,7 +145,7 @@ describe("workspace members route", () => {
 		const { router } = renderRouteAtWithRouter("/w/acme/admin/members");
 
 		await screen.findByRole("heading", { name: "Members" }, ROUTE_RENDER_WAIT);
-		fireEvent.click(await screen.findByRole("link", { name: "Settings" }));
+		fireEvent.click(await screen.findByRole("link", { name: "Workspace settings" }));
 
 		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/admin/settings"));
 	});

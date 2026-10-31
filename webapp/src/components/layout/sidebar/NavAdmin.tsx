@@ -98,48 +98,6 @@ export function NavAdmin({
 		<SidebarGroup>
 			<SidebarGroupLabel>Administration</SidebarGroupLabel>
 			<SidebarMenu aria-label="Administration">
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Settings"
-						isActive={onWorkspaceSettings}
-						render={<Link to="/w/$workspaceSlug/admin/settings" params={{ workspaceSlug }} />}
-					>
-						<Settings2 />
-						<span>Settings</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Members"
-						isActive={onMembers}
-						render={<Link to="/w/$workspaceSlug/admin/members" params={{ workspaceSlug }} />}
-					>
-						<BookUser />
-						<span>Members</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
-				{isOwner && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Member onboarding"
-							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/onboarding" }))}
-							render={<Link to="/w/$workspaceSlug/admin/onboarding" params={{ workspaceSlug }} />}
-						>
-							<Handshake />
-							<span>Member onboarding</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				)}
-				<SidebarMenuItem>
-					<SidebarMenuButton
-						tooltip="Team setup"
-						isActive={onTeams}
-						render={<Link to="/w/$workspaceSlug/admin/teams" params={{ workspaceSlug }} />}
-					>
-						<Network />
-						<span>Team setup</span>
-					</SidebarMenuButton>
-				</SidebarMenuItem>
 				<NavSection
 					label="Practices"
 					icon={<ClipboardCheck />}
@@ -183,17 +141,6 @@ export function NavAdmin({
 					</SidebarMenuSubItem>
 					<SidebarMenuSubItem>
 						<SidebarMenuSubButton
-							isActive={onScans}
-							render={
-								<Link to="/w/$workspaceSlug/admin/practices/scans" params={{ workspaceSlug }} />
-							}
-						>
-							<FileSearch />
-							<span>Scans</span>
-						</SidebarMenuSubButton>
-					</SidebarMenuSubItem>
-					<SidebarMenuSubItem>
-						<SidebarMenuSubButton
 							isActive={onCatalog}
 							render={
 								<Link
@@ -223,7 +170,50 @@ export function NavAdmin({
 							<span>Review settings</span>
 						</SidebarMenuSubButton>
 					</SidebarMenuSubItem>
+					<SidebarMenuSubItem>
+						<SidebarMenuSubButton
+							isActive={onScans}
+							render={
+								<Link to="/w/$workspaceSlug/admin/practices/scans" params={{ workspaceSlug }} />
+							}
+						>
+							<FileSearch />
+							<span>Scans</span>
+						</SidebarMenuSubButton>
+					</SidebarMenuSubItem>
 				</NavSection>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Members"
+						isActive={onMembers}
+						render={<Link to="/w/$workspaceSlug/admin/members" params={{ workspaceSlug }} />}
+					>
+						<BookUser />
+						<span>Members</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Team setup"
+						isActive={onTeams}
+						render={<Link to="/w/$workspaceSlug/admin/teams" params={{ workspaceSlug }} />}
+					>
+						<Network />
+						<span>Team setup</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+				{isOwner && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Member onboarding"
+							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/onboarding" }))}
+							render={<Link to="/w/$workspaceSlug/admin/onboarding" params={{ workspaceSlug }} />}
+						>
+							<Handshake />
+							<span>Member onboarding</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
 				<NavSection
 					label="Integrations"
 					icon={<PlugZapIcon />}
@@ -328,6 +318,16 @@ export function NavAdmin({
 					>
 						<ScrollText />
 						<span>{ADMIN_NAV_LABELS.audit}</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Workspace settings"
+						isActive={onWorkspaceSettings}
+						render={<Link to="/w/$workspaceSlug/admin/settings" params={{ workspaceSlug }} />}
+					>
+						<Settings2 />
+						<span>Workspace settings</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 			</SidebarMenu>

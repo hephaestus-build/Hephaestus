@@ -259,7 +259,7 @@ export const InstanceWorkspaceAdministration: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Tutors administration")).toBeVisible();
-		await expect(canvas.getByRole("link", { name: "Settings" })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: "Workspace settings" })).toHaveAttribute(
 			"href",
 			"/w/tutors/admin/settings",
 		);

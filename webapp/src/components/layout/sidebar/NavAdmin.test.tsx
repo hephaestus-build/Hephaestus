@@ -60,6 +60,7 @@ describe("NavAdmin", () => {
 	});
 
 	it.each([
+		["/w/acme/admin/settings", "Workspace settings"],
 		["/w/acme/admin/teams", "Team setup"],
 		["/w/acme/admin/practices", "Practice setup"],
 		["/w/acme/admin/practices/review", "Review settings"],
@@ -115,12 +116,13 @@ describe("NavAdmin", () => {
 		await screen.findByRole("link", { name: "Practice setup" });
 		const submenu = within(screen.getByRole("list", { name: "Practices" }));
 
-		// Operations first: what the reviews need from an admin is the visit that recurs.
+		// Operations first: what the reviews need from an admin is the visit that recurs. Scans are a
+		// periodic report, so they come after the setup and the settings.
 		expect(submenu.getAllByRole("link").map((link) => link.textContent)).toStrictEqual([
 			"Practice reviews",
-			"Scans",
 			"Practice setup",
 			"Review settings",
+			"Scans",
 		]);
 	});
 
