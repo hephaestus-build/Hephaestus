@@ -256,7 +256,7 @@ A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `@timestamp`                                      | UTC event time, in ISO-8601 format                                                               |
 | `log.level`, `log.logger`, `message`              | Severity, originating logger, and human-readable event description                               |
-| `service.name`, `service.version`                 | `Hephaestus` and the release that the deployment names in `APP_VERSION`, the same values that traces carry |
+| `service.name`, `service.version`                 | `Hephaestus` and the release that the deployment names in `APP_VERSION`, the same values that traces carry. The chart sets `APP_VERSION` from `release.version` on every container of the server image, the migration Job included |
 | `service.environment`                             | `DEPLOYMENT_ENVIRONMENT`                                                                         |
 | `service.node.name`                               | The container ID, the same value as the `X-Hephaestus-Replica` response header                   |
 | `runtime.role`                                    | `server`, `worker` or `webhook`, or `all` for a local process that runs every role               |

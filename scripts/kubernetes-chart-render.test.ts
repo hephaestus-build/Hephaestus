@@ -2376,6 +2376,48 @@ await test("a followed commit reports the commit as its version, as the promotio
 	assert.equal(envValue(workload(resources, "server"), "APP_VERSION"), commit);
 });
 
+await test("every container of the application image names the release that it runs", () => {
+	// The image is promoted without a rebuild, so its JAR cannot know its release. A container
+	// without these values writes logs, spans and metrics with the development version.
+	const resources = rendered([...layersFor("small"), workerLayer]);
+	const image = get(container(workload(resources, "server")), "image");
+	const identities = resources.flatMap((resource) =>
+		[
+			...containers(resource),
+			...list(get(resource, "spec", "jobTemplate", "spec", "template", "spec", "initContainers")),
+			...list(get(resource, "spec", "jobTemplate", "spec", "template", "spec", "containers")),
+		]
+			.filter((entry) => get(entry, "image") === image)
+			.map((entry) => {
+				const value = (name: string) =>
+					get(
+						list(get(entry, "env")).find((variable) => get(variable, "name") === name),
+						"value",
+					);
+				return {
+					component: componentOf(resource),
+					version: value("APP_VERSION"),
+					commit: value("HEPHAESTUS_RELEASE_COMMIT"),
+					environment: value("DEPLOYMENT_ENVIRONMENT"),
+				};
+			}),
+	);
+	assert.deepEqual(identities.map(({ component }) => String(component)).toSorted(byCodePoint), [
+		"migration",
+		"server",
+		"webhook",
+		"worker",
+	]);
+	for (const entry of identities) {
+		assert.deepEqual(
+			{ version: entry.version, commit: entry.commit },
+			{ version: "1.2.3", commit: "c".repeat(40) },
+			String(entry.component),
+		);
+		assert.equal(typeof entry.environment, "string", String(entry.component));
+	}
+});
+
 await test("every revision migrates the database once, in a Job that only reaches PostgreSQL", () => {
 	const first = rendered([...layersFor("small"), workerLayer]);
 	const migration = first.find(
@@ -2398,6 +2440,9 @@ await test("every revision migrates the database once, in a Job that only reache
 	assert.deepEqual(
 		list(get(entry, "env")).map((variable) => get(variable, "name")),
 		[
+			"APP_VERSION",
+			"HEPHAESTUS_RELEASE_COMMIT",
+			"DEPLOYMENT_ENVIRONMENT",
 			"SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
 			"SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
 			"SPRING_PROFILES_ACTIVE",
