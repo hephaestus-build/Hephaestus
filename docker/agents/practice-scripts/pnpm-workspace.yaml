@@ -1,3 +1,18 @@
 # pnpm resolves against the nearest `pnpm-workspace.yaml` at or above the install directory. This
 # file puts that here rather than at the repository root, so no root setting reaches this image.
+# The repository's install policy, restated: `scripts/check-toolchain.ts` holds it to the root file.
+# The malicious releases of recent registry incidents were removed within hours, so a version
+# installs three days after it is published.
 minimumReleaseAge: 4320
+# A registry response without release times fails the install instead of skipping the age check.
+minimumReleaseAgeIgnoreMissingTime: false
+# A version published with less evidence than an earlier one, such as no provenance after trusted
+# publishing, fails: a taken-over account usually publishes from outside the project's pipeline.
+trustPolicy: no-downgrade
+# Versions older than 30 days are not compared: their maintainers publish some backports by hand.
+# The repository's setup-toolchain install sets the same two values; gate:toolchain holds them equal.
+trustPolicyIgnoreAfter: 43200
+# When scripts run, any dependency build fails the install; the image installs with --ignore-scripts.
+strictDepBuilds: true
+# Only direct dependencies can come from a Git repository or a tarball URL (pnpm.io/settings).
+blockExoticSubdeps: true

@@ -115,11 +115,15 @@ runs:
         path: ${{ steps.pnpm-verification-path.outputs.path }}
         key: pnpm-verification-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm.outputs.version }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
     # pnpm/setup cannot pass --ignore-scripts, so the install is its own step. --no-trust-lockfile
-    # verifies every locked entry, which pnpm-workspace.yaml#trustLockfile skips elsewhere.
+    # verifies every locked entry, which pnpm-workspace.yaml#trustLockfile skips elsewhere. The trust
+    # policy applies here, not in pnpm-workspace.yaml: pnpm-workspace.yaml gives the reason.
     - name: Install dependencies
       id: pnpm-install
       if: inputs.install == 'frozen'
       shell: bash
+      env:
+        pnpm_config_trust_policy: no-downgrade
+        pnpm_config_trust_policy_ignore_after: "43200"
       run: pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile
     # Jobs run the Vite+ CLI that the lockfile installed. The global installer downloads a separate
     # CLI package that the lockfile does not pin; the clean-install job still exercises that path.

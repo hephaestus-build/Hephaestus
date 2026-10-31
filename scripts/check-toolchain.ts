@@ -184,15 +184,32 @@ expectConfig("publicHoistPattern", [
 	"@types/react-dom",
 	"@types/hast",
 ]);
-const releaseAge = 4320;
-expectConfig("minimumReleaseAge", releaseAge);
-// The agent image is its own pnpm project: nothing the root pins reaches it unless it is restated.
-const imageWorkspace = asRecord(
-	parse(readFileSync("docker/agents/pi/pnpm-workspace.yaml", "utf8")),
+// pnpm-workspace.yaml owns the install policy's values; this names the settings that form it.
+const installPolicy = [
+	"minimumReleaseAge",
+	"minimumReleaseAgeIgnoreMissingTime",
+	"strictDepBuilds",
+	"blockExoticSubdeps",
+];
+for (const name of installPolicy) {
+	if (workspace[name] === undefined) {
+		throw new Error(`pnpm-workspace.yaml must set ${name}: it is part of the install policy`);
+	}
+}
+// Each agent image is its own pnpm project: nothing the root sets reaches it unless it is restated.
+const imageWorkspaceFiles = [
 	"docker/agents/pi/pnpm-workspace.yaml",
-);
-if (imageWorkspace.minimumReleaseAge !== releaseAge) {
-	throw new Error(`docker/agents/pi/pnpm-workspace.yaml must set minimumReleaseAge ${releaseAge}`);
+	"docker/agents/practice-scripts/pnpm-workspace.yaml",
+];
+for (const file of imageWorkspaceFiles) {
+	const imageWorkspace = asRecord(parse(readFileSync(file, "utf8")), file);
+	for (const name of installPolicy) {
+		if (!isDeepStrictEqual(imageWorkspace[name], workspace[name])) {
+			throw new Error(
+				`${file} ${name} must be ${JSON.stringify(workspace[name])}, as pnpm-workspace.yaml sets it`,
+			);
+		}
+	}
 }
 const imageManifest = asRecord(
 	readJsonFileSync("docker/agents/pi/package.json"),
@@ -289,6 +306,39 @@ if (installInput.default !== "none") {
 }
 if (withOf(setupStep(usesAction("actions/setup-node")))["node-version-file"] !== "package.json") {
 	throw new Error("setup-toolchain must provision package.json#devEngines.runtime");
+}
+// The root's trust policy applies in CI's verifying install (pnpm-workspace.yaml says why); each
+// agent image's workspace file states the same values.
+const verifyingInstall = setupStep((step) => String(step.run).includes("--no-trust-lockfile"));
+const trustEnv = asRecord(verifyingInstall.env, "setup-toolchain install step env");
+const trustPolicy = {
+	trustPolicy: trustEnv.pnpm_config_trust_policy,
+	trustPolicyIgnoreAfter: Number(trustEnv.pnpm_config_trust_policy_ignore_after),
+};
+if (trustPolicy.trustPolicy !== "no-downgrade") {
+	throw new Error(
+		`setup-toolchain's verifying install must set pnpm_config_trust_policy to "no-downgrade", found ${JSON.stringify(trustEnv.pnpm_config_trust_policy)}`,
+	);
+}
+if (!Number.isInteger(trustPolicy.trustPolicyIgnoreAfter)) {
+	throw new Error(
+		`setup-toolchain's verifying install must set pnpm_config_trust_policy_ignore_after to a whole number of minutes, found ${JSON.stringify(trustEnv.pnpm_config_trust_policy_ignore_after)}`,
+	);
+}
+for (const name of Object.keys(trustPolicy)) {
+	if (workspace[name] !== undefined) {
+		throw new Error(`pnpm-workspace.yaml must not set ${name}: CI's verifying install sets it`);
+	}
+}
+for (const file of imageWorkspaceFiles) {
+	const imageWorkspace = asRecord(parse(readFileSync(file, "utf8")), file);
+	for (const [name, value] of Object.entries(trustPolicy)) {
+		if (imageWorkspace[name] !== value) {
+			throw new Error(
+				`${file} ${name} must be ${JSON.stringify(value)}, as setup-toolchain sets it`,
+			);
+		}
+	}
 }
 // Every expression below is derived from the id of the step it reads, so renaming a step is not a
 // drift; changing what a step does is.

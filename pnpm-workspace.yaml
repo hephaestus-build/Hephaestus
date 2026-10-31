@@ -14,7 +14,19 @@ publicHoistPattern:
   - "@types/react"
   - "@types/react-dom"
   - "@types/hast"
+# The install policy. `scripts/check-toolchain.ts` holds both agent images' workspace files to it.
+# The malicious releases of recent registry incidents were removed within hours, so a version
+# installs three days after it is published.
 minimumReleaseAge: 4320
+# A registry response without release times fails the install instead of skipping the age check.
+minimumReleaseAgeIgnoreMissingTime: false
+# The trust policy (`trustPolicy: no-downgrade`, versions younger than 30 days) applies where CI
+# verifies every locked entry: the setup-toolchain install step sets it. A fresh resolve with it
+# needs about 2 GB, which Renovate's 3 GB hosted job cannot spare beside its own process.
+# When scripts run, a dependency build that `allowBuilds` does not list fails the install.
+strictDepBuilds: true
+# Only direct dependencies can come from a Git repository or a tarball URL (pnpm.io/settings).
+blockExoticSubdeps: true
 # An install checks only the versions it newly resolves against the release age. Re-verifying
 # every locked entry needs each package's full registry metadata, more memory than Renovate's
 # hosted job has. The setup-toolchain install in CI still verifies every entry (--no-trust-lockfile).
