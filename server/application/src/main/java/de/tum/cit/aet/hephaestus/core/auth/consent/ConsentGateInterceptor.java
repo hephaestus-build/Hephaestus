@@ -47,6 +47,8 @@ class ConsentGateInterceptor implements HandlerInterceptor {
                 || (method.equals("POST")
                         && (path.equals("/auth/logout")
                                 || path.equals("/auth/refresh")
-                                || path.equals("/auth/dev-login")));
+                                || path.equals("/auth/dev-login")
+                                // A fault on the notice page itself must still reach the operator.
+                                || path.equals("/browser-faults")));
     }
 }

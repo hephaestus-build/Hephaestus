@@ -77,8 +77,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         REVIEW_REQUEST("review-request", true, false),
         SYNC_TRIGGER("sync-trigger", true, false),
         PUBLIC_ACTIVITY("public-activity", false, false),
-        // What a browser measured: losing a report costs less than refusing it with a 503.
-        BROWSER_REPORTS("browser-reports", true, true);
+        // What a browser measured or met: losing a report costs less than refusing it with a 503. Anyone
+        // can send one, so a refusal is counted, never logged: a log line per refusal is the flood itself.
+        BROWSER_REPORTS("browser-reports", true, true, false);
 
         private final String namespace;
         /** Whether the limit keys by account (with IP fallback) vs. always by IP. */
@@ -86,10 +87,17 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
         private final boolean failOpen;
 
+        private final boolean logsRefusal;
+
         Endpoint(String namespace, boolean accountScoped, boolean failOpen) {
+            this(namespace, accountScoped, failOpen, true);
+        }
+
+        Endpoint(String namespace, boolean accountScoped, boolean failOpen, boolean logsRefusal) {
             this.namespace = namespace;
             this.accountScoped = accountScoped;
             this.failOpen = failOpen;
+            this.logsRefusal = logsRefusal;
         }
     }
 
@@ -129,7 +137,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
 
         long retryAfterSeconds = RateLimitResponse.retryAfterSeconds(probe);
         // The bucket key names the account or client IP, so the log carries only the endpoint.
-        log.warn("Rate limit exceeded: endpoint={} retryAfterSeconds={}", endpoint, retryAfterSeconds);
+        if (endpoint.logsRefusal) {
+            log.warn("Rate limit exceeded: endpoint={} retryAfterSeconds={}", endpoint, retryAfterSeconds);
+        }
         // Tag by bucket namespace — bounded, no PII.
         metrics.recordRateLimitBlocked(endpoint.namespace);
         RateLimitResponse.writeTooManyRequests(request, response, retryAfterSeconds, objectMapper);
@@ -194,7 +204,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("/workspaces/[^/]+/connections/[^/]+/sync/jobs")) {
             return Endpoint.SYNC_TRIGGER;
         }
-        if ("POST".equals(method) && path.equals("/web-vitals")) {
+        if ("POST".equals(method) && (path.equals("/web-vitals") || path.equals("/browser-faults"))) {
             return Endpoint.BROWSER_REPORTS;
         }
         return null;

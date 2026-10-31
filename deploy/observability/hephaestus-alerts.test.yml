@@ -949,3 +949,23 @@ tests:
               instance: staging:9100
             exp_annotations:
               summary: A host runs reconciler tooling that no apply has recorded
+
+  - name: twenty browser faults of one kind in an hour fire, a few of another kind do not
+    interval: 1m
+    input_series:
+      - series: 'browser_faults_total{job="hephaestus",instance="server:9090",kind="uncaught_error",page="feedback",error_type="type_error"}'
+        values: "0+1x40"
+      - series: 'browser_faults_total{job="hephaestus",instance="server:9090",kind="unhandled_rejection",page="other",error_type="other"}'
+        values: "0+0.25x40"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusBrowserFaultsRising
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HephaestusBrowserFaultsRising
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: uncaught_error
+            exp_annotations:
+              summary: Readers' browsers reported at least twenty failures of one kind in one hour

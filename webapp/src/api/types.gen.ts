@@ -467,6 +467,31 @@ export type BoundModelSlot = {
     slot: string;
 };
 
+/**
+ * One failure that a reader met, counted while its page stayed open
+ */
+export type BrowserFault = {
+    /**
+     * How often the same failure happened, at most 100
+     */
+    count: number;
+    errorType: 'TYPE_ERROR' | 'REFERENCE_ERROR' | 'SYNTAX_ERROR' | 'RANGE_ERROR' | 'OTHER';
+    frames: Array<Frame>;
+    kind: 'UNCAUGHT_ERROR' | 'UNHANDLED_REJECTION';
+    page: 'PRACTICE_PROFILE' | 'ASK_HEPHAESTUS' | 'FEEDBACK' | 'FEEDBACK_APPROVAL' | 'ACTIVITY' | 'OTHER';
+    /**
+     * The web app's release: a version or a commit
+     */
+    release: string;
+};
+
+/**
+ * The failures that one page met since its last report
+ */
+export type BrowserFaultsReport = {
+    faults: Array<BrowserFault>;
+};
+
 export type CancelScanRequest = {
     status: 'CANCELLED';
 };
@@ -1529,6 +1554,18 @@ export type FirstLoginConsent = {
      */
     researchOrganization?: string;
     termsAccepted: boolean;
+};
+
+/**
+ * One frame of the stack, in a script that the server's own web app ships
+ */
+export type Frame = {
+    /**
+     * The content hash in the script's file name, which names the build
+     */
+    chunk: string;
+    column: number;
+    line: number;
 };
 
 export type FrozenModel = {
@@ -8690,6 +8727,41 @@ export type RefreshResponses = {
 };
 
 export type RefreshResponse = RefreshResponses[keyof RefreshResponses];
+
+export type ReportBrowserFaultsData = {
+    body: BrowserFaultsReport;
+    path?: never;
+    query?: never;
+    url: '/browser-faults';
+};
+
+export type ReportBrowserFaultsErrors = {
+    /**
+     * A fault names an unknown value or is out of range
+     */
+    400: unknown;
+    /**
+     * The browser sent the report from another site, or the CSRF token is missing
+     */
+    403: unknown;
+    /**
+     * The report is larger than 16 KiB
+     */
+    413: unknown;
+    /**
+     * The reader or address sent too many reports
+     */
+    429: unknown;
+};
+
+export type ReportBrowserFaultsResponses = {
+    /**
+     * Faults recorded
+     */
+    204: void;
+};
+
+export type ReportBrowserFaultsResponse = ReportBrowserFaultsResponses[keyof ReportBrowserFaultsResponses];
 
 export type ListGlobalContributorsData = {
     body?: never;

@@ -159,6 +159,7 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
 | `HephaestusSandboxIsolationFailed` | `sandbox_isolation_passed` of a worker | A later probe failed, and the worker starts no sandbox until a probe passes. The wait covers the first probe at the start |
 | `HephaestusWalArchiveFailing` | `database_wal_archive_failing`, and `database_wal_archive_sample_failures_total` | PostgreSQL retries a failed segment about once each minute, so a short fault of the bucket clears itself. A longer failure stops point-in-time recovery after the last archived segment. A server that cannot read the archiver for the same time cannot show that the archive works, so the alert also fires then |
+| `HephaestusBrowserFaultsRising` | `browser_faults_total` | A page that fails for one reader repeats its failure. Twenty of one kind in one hour point to a fault that many readers meet, such as a release that broke a page. The alert stays up for up to one hour after the faults stop |
 | `HephaestusWebhookReceiverDown` | `kube_deployment_status_replicas_available` of the webhook Deployment, while its desired replicas are above 0 | No available receiver means that every provider delivery fails. The wait covers the start of a replacement pod. A Deployment scaled to 0 for maintenance does not fire. A receiver that is unavailable for a shorter time than the wait, for example for 16 seconds to 2 minutes, does not fire. `HephaestusWebhookRedeliveriesRequested` can then fire for the GitHub deliveries that it lost, when they reach its threshold. Deliveries of other providers have no such alert |
 | `HephaestusWebhookReceiverUnready` | `kube_deployment_status_replicas_unavailable` of the webhook Deployment, while another replica is available | The other replicas serve, so this is a warning. The wait is longer than the 10 minutes that a new pod waits for the schema |
 | `HephaestusBackupStale` | The newest successful full or differential backup of a release, or the creation time of CronJobs with no successful backup | A differential backup runs each day. The hours above one day let a full backup run |
@@ -653,6 +654,54 @@ For example, the 75th percentile of LCP on the practice profile:
 ```promql
 histogram_quantile(0.75, sum by (le) (rate(web_vital_duration_seconds_bucket{vital="lcp", navigation="load", page="practice_profile"}[1h])))
 ```
+
+## Browser faults
+
+The web app can report the failures that readers meet in the browser.
+**`BROWSER_FAULT_REPORTS`**, or `config.browserFaultReports` in the Helm chart, turns it on, and it is off by default.
+In the EU, turning it on can require consent or a documented legal basis.
+Read [Browser fault reports](./legal-pages.mdx#browser-fault-reports) before you turn it on.
+When it is off, the browser listens for no failure, and the server has no `POST /browser-faults` endpoint and no `browser_faults_total` metric.
+
+When it is on, each page reports two kinds of failure:
+
+- `uncaught_error`: an error that no code caught.
+- `unhandled_rejection`: a promise that failed with no handler.
+
+Readers who are not signed in report too, because a broken sign-in page is a failure.
+A page sends its failures after five quiet seconds, or when the reader leaves it.
+It counts a repeated failure instead of sending it again.
+It sends at most 20 distinct failures, in at most 10 reports, one at a time.
+
+A report has only closed values: the kind, the journey page, the class of the error and the release of the web app.
+The release is the commit that the web app image was built from, or its version.
+A report also has the positions of the stack frames in the web app's own scripts.
+It has no error message, page address, query string, user agent or identifier of a person or workspace.
+The server refuses a value outside these sets.
+It drops a field that it does not know, and never logs it.
+
+The server also refuses a report that the browser marks as sent from another site, and a body above 16 KiB.
+One account or address can send 30 reports a minute (`HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_*`).
+A refused report writes no log record.
+These metrics count the refusals:
+
+| Refusal | Metric |
+| --- | --- |
+| Above the rate limit (429) | `auth_ratelimit_blocked_total{bucket="browser-reports"}` |
+| A body above 16 KiB (413), or a body without a length (411) | `browser_faults_refused_total{reason}`, with `payload-too-large` or `length-required` |
+| A value outside the sets (400), or a report from another site (403) | `http_server_requests_seconds_count{uri="/browser-faults"}`, by `status` |
+| Another origin or no CSRF token (403) | `http_server_requests_seconds_count{uri="UNKNOWN",status="403"}`, together with these refusals of every other endpoint |
+
+The server writes each failure as one log record and counts it:
+
+| Name | Where | Values |
+| --- | --- | --- |
+| `browser.fault` | `event.name` of a WARN log record | `browser.fault.kind`, `browser.page`, `error.type`, `browser.release`, `browser.fault.count`, `browser.fault.frames` and `browser.signed_in` |
+| `browser_faults_total` | Counter, tags `kind`, `page` and `error_type` | Each failure adds its count |
+
+`error.type` is `type_error`, `reference_error`, `syntax_error`, `range_error` or `other`.
+`browser.fault.frames` lists the frames as `<hash>:<line>:<column>`.
+The hash is the last eight characters of the script's file name, which name one build of the script.
 
 ## Collecting logs
 

@@ -17,6 +17,7 @@ import io.github.bucket4j.BucketConfiguration;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -243,6 +244,26 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 .doFilter(new MockHttpServletRequest("POST", "/web-vitals"), unavailable, chain);
         assertThat(unavailable.getStatus()).isEqualTo(200);
         verify(chain, times(3)).doFilter(any(), any());
+    }
+
+    @Test
+    void shouldShareTheBrowserReportBudgetOfAnAnonymousReaderByIpAndCountRefusalsWithoutLogging() throws Throwable {
+        FilterChain chain = mock(FilterChain.class);
+        List<Integer> statuses = new ArrayList<>();
+        List<ILoggingEvent> warnings = rateLimitWarnings(() -> {
+            for (String path : List.of("/web-vitals", "/browser-faults", "/browser-faults", "/browser-faults")) {
+                MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+                request.setRemoteAddr("198.51.100.9");
+                MockHttpServletResponse response = new MockHttpServletResponse();
+                filter(props()).doFilter(request, response, chain);
+                statuses.add(response.getStatus());
+            }
+        });
+
+        assertThat(statuses).containsExactly(200, 200, 429, 429);
+        assertThat(store).containsOnlyKeys("browser-reports:ip:198.51.100.9");
+        assertThat(blockedCount("browser-reports")).isEqualTo(2);
+        assertThat(warnings).isEmpty();
     }
 
     @Test

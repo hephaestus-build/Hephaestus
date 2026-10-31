@@ -349,6 +349,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated practice results.
 - **Server logs** — IP address and request metadata.
 - **Page experience** — if you turn it on, read [Page experience](#page-experience) first.
+- **Browser fault reports** — if you turn them on, read [Browser fault reports](#browser-fault-reports) first.
 - **Log collection** — you can ship container logs to a log store such as Loki ([Collecting logs](./observability.mdx#collecting-logs)).
   Name the store's operator and retention in the notice.
   Hephaestus ships no error telemetry service.
@@ -434,6 +435,39 @@ leave the page, it sends the new timings to [example.org]. They are counted with
 workspace or page address, and no copy of the report is kept. Like every request, the report reaches
 the server with your IP address and browser information, which the server logs keep for
 [retention]. Purpose: [purpose]. Legal basis: [legal basis].
+```
+
+### Browser fault reports
+
+**`BROWSER_FAULT_REPORTS`** is off by default.
+When it is on, the browser of each reader reports the failures that it meets on a page, also before sign-in.
+A report names the kind of failure, the page type, the class of the error, the release and positions in the web app's scripts.
+It names no person, workspace, page address or error message ([Browser faults](./observability.mdx#browser-faults)).
+
+The server writes each failure to its log and counts it. It keeps no other record.
+The report is a request, so it carries the same request metadata as every other request.
+
+In the EU, turning it on can require consent or a documented legal basis.
+The browser reads these failures on the reader's device, so the same rules apply as for [Page experience](#page-experience).
+Error reports serve the operation of the service, not the measurement of its audience.
+Some regulators treat that purpose differently, so decide it on its own.
+
+Before you turn it on:
+
+1. Determine with your data-protection adviser whether your national ePrivacy law permits the access without consent.
+2. If it requires consent, keep the setting off.
+3. Determine and record a lawful basis for the processing of the report.
+4. Add the text below to your privacy notice.
+5. Set `BROWSER_FAULT_REPORTS=true`, or `config.browserFaultReports: true` in the Helm chart.
+
+```md
+### Error reports
+
+When a page fails in your browser, your browser sends a short report to [example.org]: the kind of
+failure, the type of page and where in our scripts it happened. The report contains no name,
+workspace, page address or error text. Like every request, it reaches the server with your IP
+address and browser information, which the server logs keep for [retention]. Purpose: [purpose].
+Legal basis: [legal basis].
 ```
 
 ### Workspace addresses

@@ -1402,6 +1402,47 @@ export const zBoundModelSlot = z.object({
 });
 
 /**
+ * One frame of the stack, in a script that the server's own web app ships
+ */
+export const zFrame = z.object({
+    chunk: z.string().regex(/[A-Za-z0-9_-]{8}/),
+    column: z.int().gte(1).lte(10000000),
+    line: z.int().gte(1).lte(10000000)
+});
+
+/**
+ * One failure that a reader met, counted while its page stayed open
+ */
+export const zBrowserFault = z.object({
+    count: z.int().gte(1).lte(100),
+    errorType: z.enum([
+        'TYPE_ERROR',
+        'REFERENCE_ERROR',
+        'SYNTAX_ERROR',
+        'RANGE_ERROR',
+        'OTHER'
+    ]),
+    frames: z.array(zFrame).min(0).max(10),
+    kind: z.enum(['UNCAUGHT_ERROR', 'UNHANDLED_REJECTION']),
+    page: z.enum([
+        'PRACTICE_PROFILE',
+        'ASK_HEPHAESTUS',
+        'FEEDBACK',
+        'FEEDBACK_APPROVAL',
+        'ACTIVITY',
+        'OTHER'
+    ]),
+    release: z.string().regex(/[0-9a-f]{7,40}|\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,4})?|DEV/)
+});
+
+/**
+ * The failures that one page met since its last report
+ */
+export const zBrowserFaultsReport = z.object({
+    faults: z.array(zBrowserFault).min(1).max(20)
+});
+
+/**
  * Display-only currency conversion for the USD amounts in this response. Multiply a USD amount by ratePerUsd to get the display-currency estimate; always label it as an estimate and show rateDate, which is the date the rate was actually published on (not necessarily today), and attribute it to source.
  */
 export const zFxRateInfo = z.object({
