@@ -312,7 +312,7 @@ ${failure === "wrong-signature" ? String.raw`printf '%s\n' 'signature refused' >
 });
 
 void describe("complete archived checksum coverage", { skip: process.platform === "win32" }, () => {
-	for (const omission of ["policy", "syft", "advisory"] as const) {
+	for (const omission of ["policy", "syft", "advisory", "source"] as const) {
 		void it(`a signed checksum list missing ${omission} cannot trust the unlisted forged file`, async () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "release-coverage-"));
 			const bin = path.join(directory, "bin");
@@ -330,6 +330,7 @@ void describe("complete archived checksum coverage", { skip: process.platform ==
 					JSON.stringify({
 						schemaVersion: 1,
 						release: "v0.86.1",
+						sourceSbom: omission === "source" ? 1 : undefined,
 						subjects: [subject("linux/amd64"), subject("linux/arm64")],
 					}),
 				],
@@ -352,10 +353,17 @@ void describe("complete archived checksum coverage", { skip: process.platform ==
 			for (const advisory of advisories) {
 				files.set(advisory, "unlisted forged advisory data");
 			}
+			if (omission === "source") {
+				for (const file of ["source.syft.json", "source.spdx.json", "source.cdx.json"]) {
+					files.set(file, "unlisted forged source data");
+				}
+			}
+
 			const missing = {
 				policy: "vulnerability-policy.json",
 				syft: "server-linux-amd64.syft.json",
 				advisory: advisories[0],
+				source: "source.cdx.json",
 			}[omission];
 			assert.ok(missing !== undefined);
 			if (omission === "policy") {
