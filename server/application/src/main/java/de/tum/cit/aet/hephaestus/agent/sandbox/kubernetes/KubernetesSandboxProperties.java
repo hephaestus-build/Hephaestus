@@ -27,8 +27,8 @@ import org.springframework.validation.annotation.Validated;
  *     the sandbox kinds is this installation's
  * @param podName this worker's Pod name, or its worktree identity during host development
  * @param podIp the address where sandboxes reach this worker: its Pod IP, or the k3d host address during development
- * @param runtimeClassName the RuntimeClass of every sandbox Pod, gVisor's for example. Blank selects the cluster's default.
- *     A named class that the cluster does not have fails the isolation probe
+ * @param runtimeClassName the RuntimeClass of every sandbox Pod. Blank selects the cluster's default.
+ *     It must support user namespaces. A missing or incompatible class fails the isolation probe
  * @param seccompProfile the shipped {@code sandbox/agent-seccomp-profile.json} as a Localhost profile, relative to the
  *     kubelet's seccomp directory. Blank selects {@code RuntimeDefault}
  * @param nodeSelector the node labels of sandbox Pods, as a JSON object. Empty allows any node.

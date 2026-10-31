@@ -1242,9 +1242,13 @@ The sandbox nodes need these items:
    It does not protect against a compromised running node or a privileged workload on the node.
    The kubelet deletes a Pod's volumes with the Pod, but deletion does not erase the data from the disk.
 
+4. [User namespace support](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) on every sandbox node: Linux 6.3 or later and a compatible container runtime, such as containerd 2.0 or later.
+   Every sandbox and probe Pod sets `hostUsers: false`.
+   The worker must prove that a real Pod has a private user mapping before it starts sandboxes.
+
 These settings are optional:
 
-- `worker.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. gVisor (`runsc`) is recommended for workloads from people that you do not trust.
+- `worker.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. Use only a RuntimeClass that supports `hostUsers: false` and passes the isolation probe. gVisor (`runsc`) with user namespaces is not qualified. Before upgrading an install that uses it, clear this setting to use the default runtime or qualify a compatible runtime first.
 - `worker.runtime.podOverhead`: the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`. The sandbox quotas count it with each Pod.
 - `worker.runtime.seccompProfile`: the bundled `sandbox/agent-seccomp-profile.json` as a Localhost profile. Put the file below the kubelet's seccomp directory on every sandbox node, and set its relative path. Without it, sandbox Pods use `RuntimeDefault`.
 - `worker.runtime.nodeSelector` and `worker.runtime.tolerations`: the nodes of sandbox Pods.
@@ -1259,26 +1263,28 @@ The probe checks these items on the running cluster:
 - A Pod of no sandbox kind does not reach the gateway port. Turn sandboxes have the same policy.
 - The probe Pods have no service account token, a read-only root filesystem, and a non-root user.
 - A named RuntimeClass exists: without it, no probe Pod runs.
+- A Pod with `hostUsers: false` has a private user mapping. A RuntimeClass does not replace this requirement.
 
 The worker starts no sandbox while one of these items fails.
 At its start, the worker then logs each failed item and stops, and Kubernetes starts it again.
 On a later probe, it logs each failed item, reports itself not ready, and starts no new sandbox until a probe passes again.
 Until a probe passes, at the start and after a failed later probe, the worker is not ready and claims no practice review and no conversation turn.
 They stay queued for a ready worker. Reviews and turns that already run continue.
+A Pod that reaches a node but cannot start with the sandbox configuration fails the probe.
 A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing: the worker logs a warning and keeps its last passing proof.
 A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
 
-The probe also records the isolation tier of the cluster, which is not a requirement:
+The probe also records the runtime and process limit, which are optional:
 
 | Item | Effect |
 | --- | --- |
 | RuntimeClass | The runtime that isolates sandboxes from the node kernel, or the cluster's default. |
-| User namespaces | When a Pod with `hostUsers: false` runs in a user namespace of its own, every sandbox Pod runs that way. The root of a sandbox is then no user of the node. |
 | Process limit | The number of processes that a sandbox Pod could start before the node refused one, or no limit. |
 
 The worker's log and the metrics `sandbox.isolation.passed`, `sandbox.isolation.user_namespaces` and `sandbox.isolation.process_limit` show the tier.
 The probe Pods use the agent image and the sandbox configuration.
-Each probe Pod is the Pod of a Job, and a run takes 768 MiB of the sandbox quota on the cluster's default runtime: 512 MiB for the Pod that tries 1024 processes, and 128 MiB for each of the two others.
+They prove the nodes on which they run, not every eligible node. Ensure that every node selected for sandboxes meets the prerequisites.
+Each probe Pod is the Pod of a Job, and a run takes 640 MiB of the sandbox quota on the cluster's default runtime: 512 MiB for the Pod that tries 1024 processes, and 128 MiB for the other Pod.
 The worker deletes the Jobs when the probe ends.
 If the worker stops during a run, the Job's deadline ends a Pod that still waits for a node, and Kubernetes deletes the finished Job with its Pod after 15 minutes.
 

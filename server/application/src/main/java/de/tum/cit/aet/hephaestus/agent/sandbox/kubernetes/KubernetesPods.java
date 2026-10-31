@@ -314,7 +314,7 @@ public class KubernetesPods {
                 .withVolumeMounts(attemptMounts(true))
                 .withResources(resources)
                 .build();
-        return pod(workload, SANDBOX_UID, null, worker.userNamespaces())
+        return pod(workload, SANDBOX_UID, null)
                 .editSpec()
                 .withInitContainers(isolation(workload.image()), initializer)
                 .withContainers(runtime)
@@ -360,7 +360,7 @@ public class KubernetesPods {
                         .build())
                 .build();
         // The sandbox ends itself at the latest at its limits' runtime: no worker needs to be alive to bound it.
-        return pod(workload, STAGER_UID, limits.maxRuntime().toSeconds(), worker.userNamespaces())
+        return pod(workload, STAGER_UID, limits.maxRuntime().toSeconds())
                 .editSpec()
                 .withInitContainers(isolation(workload.image()))
                 .withContainers(sandbox, stager)
@@ -369,25 +369,20 @@ public class KubernetesPods {
                 .build();
     }
 
-    /**
-     * A Pod of the isolation probe: one container with the sandbox's configuration that runs {@code command}.
-     *
-     * @param hostUsers whether the Pod runs in the node's user namespace; the probe tries it without
-     */
+    /** A Pod of the isolation probe: one container with the sandbox's configuration that runs {@code command}. */
     public Pod probePod(
             Workload workload,
             List<String> command,
             ResourceLimits limits,
             long memoryBytes,
-            long activeDeadlineSeconds,
-            boolean hostUsers) {
+            long activeDeadlineSeconds) {
         Size size = probeSize(limits, memoryBytes);
         Container probe = base(RUNTIME, workload.image(), SANDBOX_UID)
                 .withCommand(command)
                 .withVolumeMounts(scratchMounts())
                 .withResources(resources(limits, size))
                 .build();
-        return pod(workload, SANDBOX_UID, activeDeadlineSeconds, !hostUsers)
+        return pod(workload, SANDBOX_UID, activeDeadlineSeconds)
                 .editSpec()
                 .withInitContainers(isolation(workload.image()))
                 .withContainers(probe)
@@ -443,12 +438,7 @@ public class KubernetesPods {
         return name.isEmpty() ? null : name;
     }
 
-    /**
-     * @param userNamespace whether the Pod runs in a user namespace of its own ({@code hostUsers: false}): its root is
-     *     then no user of the node. Only where the isolation probe showed that the nodes support it
-     */
-    private PodBuilder pod(
-            Workload workload, long fsGroup, @Nullable Long activeDeadlineSeconds, boolean userNamespace) {
+    private PodBuilder pod(Workload workload, long fsGroup, @Nullable Long activeDeadlineSeconds) {
         KubernetesSandboxProperties properties = worker.properties();
         String seccomp = properties.seccompProfile();
         return new PodBuilder()
@@ -466,7 +456,8 @@ public class KubernetesPods {
                 .withPriorityClassName(priorityClass(workload, properties))
                 .withNodeSelector(properties.nodeSelectorMap().isEmpty() ? null : properties.nodeSelectorMap())
                 .withTolerations(properties.tolerationList())
-                .withHostUsers(userNamespace ? Boolean.FALSE : null)
+                // ADR 0068 C: no sandbox falls back to the node's user namespace.
+                .withHostUsers(false)
                 // No DNS: the sandbox reaches its gateway by address (CVE-2024-29018 for the Docker equivalent).
                 .withDnsPolicy("None")
                 .withNewDnsConfig()
