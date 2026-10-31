@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
+import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
+
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
@@ -11,6 +13,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -23,6 +26,7 @@ import java.util.concurrent.Semaphore;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -75,6 +79,7 @@ public class GitRepositoryManager {
     public static final String CAPTURED_REFS = "hephaestus-captured-refs";
 
     private static final String MIRRORS = "mirrors";
+    private static final Pattern MIRROR_ID = Pattern.compile("[1-9][0-9]{0,17}");
     private static final Logger log = LoggerFactory.getLogger(GitRepositoryManager.class);
     private static final int PAGE_SIZE = 256;
 
@@ -111,22 +116,57 @@ public class GitRepositoryManager {
         return isEnabled() && Files.isRegularFile(mirror(repository).resolve(Constants.HEAD));
     }
 
-    /** Every workspace's mirror of the repository. */
-    public void deleteOrphanedRepository(long repositoryId) {
-        Path mirrors = layout.root().resolve(MIRRORS);
-        if (!Files.isDirectory(mirrors)) return;
-        try (Stream<Path> workspaces = Files.list(mirrors)) {
+    /** The mirrors under this process's root, whichever workspace they belong to. */
+    public List<RepositoryKey> localRepositories() {
+        Path root = layout.root().resolve(MIRRORS);
+        if (!Files.isDirectory(root)) return List.of();
+        List<RepositoryKey> keys = new ArrayList<>();
+        try (Stream<Path> workspaces = Files.list(root)) {
             for (Path workspace : workspaces.toList()) {
-                Path mirror = workspace.resolve(repositoryId + ".git");
-                // A fetch that just finished may still be packing in the background; a file it
-                // removes
-                // under the walk is not a failure to delete.
-                if (Files.isDirectory(mirror)) {
-                    FileUtils.delete(mirror.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
+                String workspaceId = workspace.getFileName().toString();
+                if (!MIRROR_ID.matcher(workspaceId).matches() || !Files.isDirectory(workspace, NOFOLLOW_LINKS))
+                    continue;
+                try (Stream<Path> mirrors = Files.list(workspace)) {
+                    for (Path mirror : mirrors.toList()) {
+                        String name = mirror.getFileName().toString();
+                        if (!name.endsWith(".git")) continue;
+                        String repositoryId = name.substring(0, name.length() - ".git".length());
+                        if (MIRROR_ID.matcher(repositoryId).matches() && Files.isDirectory(mirror, NOFOLLOW_LINKS))
+                            keys.add(new RepositoryKey(Long.parseLong(workspaceId), Long.parseLong(repositoryId)));
+                    }
                 }
             }
         } catch (IOException e) {
-            throw new GitOperationException("Cannot delete repository mirrors", e);
+            throw new GitOperationException("Cannot list repository mirrors", e);
+        }
+        return List.copyOf(keys);
+    }
+
+    /**
+     * Deletes one workspace's mirror unless {@code retained} holds. The check runs under the mirror's write lock, so a
+     * fetch or a read that started before it finishes first, and one that starts after it finds no mirror. A capture
+     * fetch has no timeout, so this waits at most {@code wait} for the lock and then leaves the mirror for a later call.
+     *
+     * @return whether the mirror was deleted
+     */
+    public boolean deleteUnretainedRepository(RepositoryKey repository, Duration wait, BooleanSupplier retained) {
+        long deadline = System.nanoTime() + wait.toNanos();
+        try {
+            return locks.withWriteLock(repository, () -> System.nanoTime() - deadline > 0, () -> {
+                if (retained.getAsBoolean()) return false;
+                try {
+                    // A fetch that just finished may still be packing in the background; a file it removes under
+                    // the walk is not a failure to delete.
+                    FileUtils.delete(
+                            mirror(repository).toFile(),
+                            FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
+                } catch (IOException e) {
+                    throw new GitOperationException("Cannot delete repository mirror", e);
+                }
+                return true;
+            });
+        } catch (CancellationException busy) {
+            return false;
         }
     }
 

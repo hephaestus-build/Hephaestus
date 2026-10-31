@@ -81,10 +81,6 @@ public class LlmModelPrice {
     @Column(name = "effective_to")
     private Instant effectiveTo;
 
-    @Nullable
-    @Column(name = "created_by", length = 255)
-    private String createdBy;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

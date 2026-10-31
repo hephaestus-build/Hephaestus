@@ -54,6 +54,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceStore;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -71,6 +72,9 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.ReviewOn;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
@@ -88,6 +92,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
@@ -153,6 +158,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PersonDataService personData;
+
+    @Autowired
+    private PracticeVersionService practiceVersions;
 
     @Autowired
     private PersonProcessingSuppression suppression;
@@ -296,6 +304,114 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(suppression.isAccountSuppressed(accountId)).isTrue();
         assertThat(suppression.isSuppressed(Objects.requireNonNull(provider.getId()), "42", null))
                 .isTrue();
+    }
+
+    @Test
+    void
+            shouldEraseThePersonsPracticeAuthorshipAndRateLimitsAndExportTheirInstallationLoginWhenAnAdministratorErasesThem() {
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        Account target = accounts.saveAndFlush(new Account("Target"));
+        long targetId = Objects.requireNonNull(target.getId());
+        long otherId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Other")).getId());
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("practice-author"));
+        var github = providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseGet(() -> providers.saveAndFlush(
+                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        users.saveAndFlush(TestUserFactory.createUser(4242L, "target-login", github));
+        link(target, github, "4242", null);
+        long personalInstallation = installation("personal-install", "Target-Login", AccountType.USER);
+        // Neither an organization of the same name nor another person's installation is the person's.
+        installation("org-install", "target-login", AccountType.ORG);
+        installation("other-install", "other-login", AccountType.USER);
+        long authored = authoredVersion(workspace, "target-authored", targetId);
+        long otherAuthored = authoredVersion(workspace, "other-authored", otherId);
+        List<String> targetBuckets = List.of("review-request:acct:" + targetId, "export:acct:" + targetId);
+        List<String> keptBuckets = List.of(
+                "review-request:acct:" + otherId,
+                "review-request:acct:" + targetId + "0",
+                "review-request:ip:192.0.2.7");
+        for (String bucket :
+                Stream.concat(targetBuckets.stream(), keptBuckets.stream()).toList())
+            jdbc.update(
+                    "INSERT INTO auth_rate_limit_bucket(id, state, expires_at) VALUES (?, ?, ?)",
+                    bucket,
+                    new byte[] {1},
+                    Long.MAX_VALUE);
+
+        var preview = personData.preview(administratorId, targetId, List.of());
+        UUID requestId = preview.request().getId();
+        var export = personData.export(requestId);
+        assertThat(export.path("stores").path("practice_version"))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.path("id").asLong()).isEqualTo(authored);
+                    assertThat(row.path("created_by_account_id").asLong()).isEqualTo(targetId);
+                });
+        assertThat(export.path("stores").path("auth_rate_limit_bucket"))
+                .extracting(row -> row.path("id").asString())
+                .containsExactlyInAnyOrderElementsOf(targetBuckets);
+        assertThat(export.path("stores").path("auth_rate_limit_bucket").toString())
+                .doesNotContain("state");
+        assertThat(export.path("stores").path("installation_account"))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.path("id").asLong()).isEqualTo(personalInstallation);
+                    assertThat(row.path("display_name").asString()).isEqualTo("Target-Login");
+                });
+
+        personData.requestErasure(requestId, administratorId, false);
+        personData.run(requestId);
+
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        String author = "SELECT created_by_account_id FROM practice_version WHERE id=?";
+        assertThat(jdbc.queryForObject(author, Long.class, authored)).isNull();
+        assertThat(jdbc.queryForObject(author, Long.class, otherAuthored)).isEqualTo(otherId);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM practice p JOIN practice_version v ON v.id=p.current_version_id"
+                                + " WHERE v.id=? AND v.definition IS NOT NULL",
+                        Long.class,
+                        authored))
+                .as("the shared practice keeps its definition")
+                .isOne();
+        assertThat(jdbc.queryForList("SELECT id FROM auth_rate_limit_bucket", String.class))
+                .doesNotContainAnyElementsOf(targetBuckets)
+                .containsAll(keptBuckets);
+        assertThat(jdbc.queryForObject(
+                        "SELECT display_name FROM connection WHERE id=?", String.class, personalInstallation))
+                .as("the installation login stays as the workspace's namespace")
+                .isEqualTo("Target-Login");
+    }
+
+    /** A workspace installed on a provider account with this login, and its GitHub connection. */
+    private long installation(String slug, String login, AccountType type) {
+        var workspace = WorkspaceTestFixtures.activeWorkspace(slug);
+        workspace.setAccountLogin(login);
+        workspace.setAccountType(type);
+        workspace = workspaces.saveAndFlush(workspace);
+        var connection = new Connection(
+                workspace,
+                IntegrationKind.GITHUB,
+                slug,
+                new ConnectionConfig.GitHubAppConfig(1L, login, null, Set.of()));
+        connection.setDisplayName(login);
+        return Objects.requireNonNull(connections.saveAndFlush(connection).getId());
+    }
+
+    private long authoredVersion(Workspace workspace, String slug, long accountId) {
+        var kind = new ItemKind("scm.pull_request");
+        var definition = DefinitionTestFixtures.withLineNotes(
+                DefinitionTestFixtures.withReviewOn(
+                        DefinitionTestFixtures.definition(kind, slug, "Check the authored practice.", null),
+                        new ReviewOn(List.of(), Map.of())),
+                false);
+        var practice = practiceVersions.create(
+                new PracticeVersionService.NewPractice(workspace, slug, kind, definition, null, 0, accountId));
+        return Objects.requireNonNull(practice.getCurrentVersion().getId());
     }
 
     @Test

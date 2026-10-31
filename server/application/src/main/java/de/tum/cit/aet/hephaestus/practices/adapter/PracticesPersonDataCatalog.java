@@ -24,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @PersonDataStores({
+    "practice_version",
     "feedback_send",
     "feedback_response",
     "feedback_copy",
@@ -84,6 +85,16 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
     @Override
     public List<PersonDataContributor> contributors() {
         return List.<PersonDataContributor>of(
+                        new JdbcPersonDataStore(
+                                jdbc,
+                                mapper,
+                                "practice_version",
+                                "practice_version",
+                                "t.created_by_account_id=:account",
+                                "id,workspace_id,practice_id,number,name,created_by_account_id,created_at",
+                                "id,workspace_id",
+                                "created_by_account_id=NULL",
+                                400),
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,

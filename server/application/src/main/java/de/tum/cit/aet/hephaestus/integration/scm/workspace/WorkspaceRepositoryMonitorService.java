@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.events.RepositoryAboutToBeDeletedEvent;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -71,7 +70,6 @@ public class WorkspaceRepositoryMonitorService {
     // natsConsumerService absent under webhook profile.
     private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
-    private final GitRepositoryManager gitRepositoryManager;
 
     /**
      * Installation-bound operations dispatch by the workspace's bound kind. A missing
@@ -97,7 +95,6 @@ public class WorkspaceRepositoryMonitorService {
             IdentityProviderRepository gitProviderRepository,
             ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             WorkspaceScopeFilter workspaceScopeFilter,
-            GitRepositoryManager gitRepositoryManager,
             ConnectionService connectionService,
             ConnectionRepository connectionRepository,
             List<InstallationSuspensionTracker> suspensionTrackerList,
@@ -114,7 +111,6 @@ public class WorkspaceRepositoryMonitorService {
         this.gitProviderRepository = gitProviderRepository;
         this.natsConsumerService = natsConsumerService;
         this.workspaceScopeFilter = workspaceScopeFilter;
-        this.gitRepositoryManager = gitRepositoryManager;
         this.connectionService = connectionService;
         this.connectionRepository = connectionRepository;
         this.eventPublisher = eventPublisher;
@@ -500,7 +496,6 @@ public class WorkspaceRepositoryMonitorService {
             return;
         }
         repositoryRepository.findById(repositoryId).ifPresent(repository -> {
-            gitRepositoryManager.deleteOrphanedRepository(repositoryId);
             eventPublisher.publishEvent(new RepositoryAboutToBeDeletedEvent(repositoryId));
             repositoryRepository.delete(repository);
             log.debug("Deleted orphaned repository: repositoryId={}", repositoryId);

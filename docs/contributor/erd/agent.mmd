@@ -101,7 +101,6 @@ erDiagram
         VARCHAR(500) note
         TIMESTAMPTZ effective_from "NOT NULL"
         TIMESTAMPTZ effective_to
-        VARCHAR(255) created_by
         TIMESTAMPTZ created_at "NOT NULL"
     }
 
@@ -109,7 +108,6 @@ erDiagram
         BIGINT model_id PK,FK
         BIGINT workspace_id PK,FK
         TIMESTAMPTZ granted_at "NOT NULL"
-        VARCHAR(255) granted_by
     }
 
     LlmUsageEvent {

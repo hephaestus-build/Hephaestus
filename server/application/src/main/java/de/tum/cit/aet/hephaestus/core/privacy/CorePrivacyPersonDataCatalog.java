@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @PersonDataStores({
+    "auth_rate_limit_bucket",
     "passkey_credential",
     "passkey_challenge",
     "passkey_recovery_code",
@@ -46,6 +47,16 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "auth_rate_limit_bucket",
+                        "auth_rate_limit_bucket",
+                        "split_part(t.id,':',2)='acct' AND split_part(t.id,':',3)=CAST(:account AS text)",
+                        "id,expires_at",
+                        "id",
+                        "",
+                        900),
                 new PersonDataStoreAdministrationContributor(jdbc, mapper),
                 new JdbcPersonDataStore(
                         jdbc,

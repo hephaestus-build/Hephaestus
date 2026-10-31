@@ -4,48 +4,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Inheritance;
-import jakarta.persistence.InheritanceType;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.jupiter.api.Tag;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Makes {@code docs/admin/dsms/personal-data-map.md} enforceable: a new table has to be classified
  * before it can ship, and the map's evidence links cannot rot silently.
  *
- * <p>The authority is the mapped set — every {@code @Entity} plus every physical table an association
- * or secondary-table annotation creates — rather than the Liquibase chain, because the chain also
- * carries tables that later changelogs renamed or dropped and the drops inside {@code <rollback>}
- * blocks are indistinguishable from real ones.
+ * <p>The authority is the migrated PostgreSQL schema, so a native table without a JPA mapping is
+ * classified too. A table declared free of personal data must not reference a person: the schema,
+ * not the declaration, decides which columns do. The schema needs a database, so this rule runs in
+ * the integration tier.
  */
-@Tag("architecture")
-class PersonalDataMapArchTest {
+class PersonalDataMapArchTest extends BaseIntegrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private static final Path REPOSITORY_ROOT = Path.of("../..");
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java/de/tum/cit/aet/hephaestus");
     private static final Path MAP = REPOSITORY_ROOT.resolve("docs/admin/dsms/personal-data-map.md");
 
-    private static final Pattern ENTITY = Pattern.compile("(?m)^@Entity\\b");
-    private static final Pattern TABLE_NAME =
-            Pattern.compile("@Table\\s*\\(\\s*name\\s*=\\s*\"(?:\\\\\")?([a-z0-9_]+)");
-    /** A mapping annotation that creates a physical table of its own, alongside the entity's. */
-    private static final Pattern SECONDARY_TABLE_ANNOTATION =
-            Pattern.compile("@(?:JoinTable|CollectionTable|SecondaryTable)\\s*\\(");
-
-    private static final Pattern SECONDARY_TABLE_NAME =
-            Pattern.compile("@(?:JoinTable|CollectionTable|SecondaryTable)\\s*\\(\\s*name\\s*=\\s*\"([a-z0-9_]+)\"");
-    private static final Pattern CAMEL_BOUNDARY = Pattern.compile("(?<!^)(?=[A-Z])");
     private static final Pattern CODE_SPAN = Pattern.compile("`([^`]+)`");
 
     /**
@@ -87,7 +79,6 @@ class PersonalDataMapArchTest {
             "login_provider",
             "item", // Technical source references; personal proof is stored in the mapped result tables.
             "practice",
-            "practice_version",
             "review_batch_target",
             // Frozen practice/model configuration and typed readiness flags contain no person or captured words.
             "review_practice",
@@ -110,6 +101,19 @@ class PersonalDataMapArchTest {
             "workspace_team_repository_settings",
             "workspace_team_settings");
 
+    /**
+     * The login of the provider account that a workspace is installed on is the namespace of its repositories, like a
+     * repository's {@code owner/name}. It is a person's login when the account is a personal one. Person export lists
+     * it, and it stays, also after an uninstall or a workspace purge, which keep the workspace row.
+     */
+    private static final Set<String> SOURCE_NAMESPACE =
+            Set.of("workspace.account_login", "connection.display_name", "repository_to_monitor.name_with_owner");
+
+    /** Columns whose name matches the person heuristic but that hold no person. */
+    private static final Map<String, String> NOT_A_PERSON = Map.of(
+            "llm_model.operated_by", "Who operates the model: the own organisation or the provider",
+            "workspace_llm_model.operated_by", "Who operates the model: the own organisation or the provider");
+
     @Test
     void everyTableIsEitherMappedOrDeclaredFreeOfPersonalData() throws IOException {
         Set<String> mapped = codeSpans();
@@ -126,7 +130,7 @@ class PersonalDataMapArchTest {
     }
 
     @Test
-    void noAllowlistedTableHasBeenRenamedAway() throws IOException {
+    void noAllowlistedTableHasBeenRenamedAway() {
         assertThat(NOT_PERSONAL_DATA)
                 .as("NOT_PERSONAL_DATA entries that are no longer a table")
                 .isSubsetOf(tableNames());
@@ -239,29 +243,6 @@ class PersonalDataMapArchTest {
         }
     }
 
-    /**
-     * A {@code @JoinTable}, {@code @CollectionTable} or {@code @SecondaryTable} whose name is not the
-     * annotation's first attribute is one the scanner cannot classify. JPA lets that name default from
-     * the owning entity and attribute, and a table nobody can name is a table nobody classifies.
-     */
-    @Test
-    void everySecondaryTableNamesItself() throws IOException {
-        List<String> unnamed = new ArrayList<>();
-        for (Path path : productionSources()) {
-            String source = Files.readString(path);
-            long annotations =
-                    SECONDARY_TABLE_ANNOTATION.matcher(source).results().count();
-            long named = SECONDARY_TABLE_NAME.matcher(source).results().count();
-            if (annotations != named) {
-                unnamed.add(path.toString());
-            }
-        }
-
-        assertThat(unnamed)
-                .as("sources whose @JoinTable/@CollectionTable/@SecondaryTable does not open with name = \"...\"")
-                .isEmpty();
-    }
-
     private static Set<String> codeSpans() throws IOException {
         Set<String> spans = new TreeSet<>();
         Matcher matcher = CODE_SPAN.matcher(Files.readString(MAP));
@@ -271,25 +252,57 @@ class PersonalDataMapArchTest {
         return spans;
     }
 
-    private static Set<String> tableNames() throws IOException {
-        Set<String> tables = new TreeSet<>();
-        for (Path path : productionSources()) {
-            String source = Files.readString(path);
-            Matcher secondary = SECONDARY_TABLE_NAME.matcher(source);
-            while (secondary.find()) {
-                tables.add(secondary.group(1));
-            }
-            if (!ENTITY.matcher(source).find()) {
-                continue;
-            }
-            Matcher name = TABLE_NAME.matcher(source);
-            if (name.find()) {
-                tables.add(name.group(1));
-            } else if (!usesParentSingleTable(path)) {
-                tables.add(defaultTableName(path));
-            }
-        }
-        return tables;
+    @Test
+    void noTableDeclaredFreeOfPersonalDataReferencesAPerson() {
+        assertThat(Stream.concat(SOURCE_NAMESPACE.stream(), NOT_A_PERSON.keySet().stream()))
+                .as("excepted columns that the schema still has")
+                .allSatisfy(column -> assertThat(jdbc.queryForObject(
+                                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public'"
+                                        + " AND table_name || '.' || column_name = ?",
+                                Long.class,
+                                column))
+                        .isOne());
+        assertThat(personColumns().stream()
+                        .filter(column -> NOT_PERSONAL_DATA.contains(column.substring(0, column.indexOf('.'))))
+                        .filter(column -> !SOURCE_NAMESPACE.contains(column) && !NOT_A_PERSON.containsKey(column))
+                        .toList())
+                .as("person-referencing columns in tables that NOT_PERSONAL_DATA declares free of personal data")
+                .isEmpty();
+    }
+
+    /** Every table in the migrated schema, mapped or native, except Liquibase's and ShedLock's bookkeeping. */
+    private Set<String> tableNames() {
+        return new TreeSet<>(jdbc.queryForList("""
+                SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+                  AND c.relname NOT IN ('databasechangelog', 'databasechangeloglock', 'shedlock')
+                """, String.class));
+    }
+
+    /**
+     * Columns, as {@code table.column}, that may reference a person: a foreign key to an account, a
+     * contributor profile, an identity or a membership's account, a name that says it holds one even
+     * without a foreign key, or the source namespace. A name is a heuristic, and a key that embeds an
+     * id inside a text value is invisible to it.
+     */
+    private Set<String> personColumns() {
+        return new TreeSet<>(jdbc.queryForList("""
+                SELECT t.relname || '.' || a.attname
+                FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum > 0 AND NOT a.attisdropped
+                WHERE n.nspname = 'public' AND t.relkind IN ('r', 'p') AND NOT t.relispartition
+                  AND t.relname NOT IN ('databasechangelog', 'databasechangeloglock', 'shedlock')
+                  AND (a.attname ~ '(^|_)(account|user|actor|author|creator|developer|requester|owner|sender|recipient|assignee|reviewer|member|subject)(_ids?)?$'
+                    OR a.attname ~ '(^|_)(login|email|ip|ip_address)$'
+                    OR a.attname ~ '_by(_[a-z]+)?(_ids?)?$'
+                    OR EXISTS (SELECT 1 FROM pg_constraint fk
+                        JOIN pg_class parent ON parent.oid = fk.confrelid
+                        JOIN LATERAL unnest(fk.conkey, fk.confkey) k(child_key, parent_key) ON true
+                        JOIN pg_attribute pa ON pa.attrelid = parent.oid AND pa.attnum = k.parent_key
+                        WHERE fk.contype = 'f' AND fk.conrelid = t.oid AND k.child_key = a.attnum
+                          AND (parent.relname IN ('account', 'user', 'identity')
+                            OR (parent.relname = 'membership' AND pa.attname = 'account_id'))))
+                """, String.class));
     }
 
     private static List<Path> productionSources() throws IOException {
@@ -297,21 +310,5 @@ class PersonalDataMapArchTest {
             return paths.filter(candidate -> candidate.toString().endsWith(".java"))
                     .toList();
         }
-    }
-
-    private static boolean usesParentSingleTable(Path source) {
-        Class<?> parent = sourceClass(source).getSuperclass();
-        while (parent != null && parent.isAnnotationPresent(Entity.class)) {
-            var inheritance = parent.getDeclaredAnnotation(Inheritance.class);
-            if (inheritance != null) return inheritance.strategy() == InheritanceType.SINGLE_TABLE;
-            parent = parent.getSuperclass();
-        }
-        return false;
-    }
-
-    /** Hibernate's default strategy when an entity declares no {@code @Table} name. */
-    private static String defaultTableName(Path entity) {
-        String className = entity.getFileName().toString().replace(".java", "");
-        return CAMEL_BOUNDARY.matcher(className).replaceAll("_").toLowerCase(Locale.ROOT);
     }
 }
