@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { InstanceSettings } from "@/api/types.gen";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { SilentModeCard } from "./SilentModeCard";
 
@@ -55,7 +56,7 @@ export const Engaged: Story = {
 		await userEvent.type(screen.getByLabelText(/to confirm/iu), "nope");
 		await userEvent.click(confirm);
 		await expect(args.onRelease).not.toHaveBeenCalled();
-		await expect(await screen.findByText(/does not match/iu)).toBeVisible();
+		await expectSettledVisible(await screen.findByText(/does not match/iu));
 
 		await userEvent.clear(screen.getByLabelText(/to confirm/iu));
 		await userEvent.type(screen.getByLabelText(/to confirm/iu), "turn off");
