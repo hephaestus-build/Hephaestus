@@ -34,6 +34,8 @@ const GENERIC_ERROR = {
 export interface LoginPageProps extends SignInButtonsProps {
 	title?: string;
 	error?: string;
+	/** Something the reader must know before signing in, such as their own account deletion. */
+	notice?: "account-deletion-scheduled";
 }
 
 /**
@@ -41,7 +43,12 @@ export interface LoginPageProps extends SignInButtonsProps {
  * link, a reload, and the return trip from a provider. All of them came here to pick a provider, so
  * the page holds nothing else.
  */
-export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }: LoginPageProps) {
+export function LoginPage({
+	title = "Sign in to Hephaestus",
+	error,
+	notice,
+	...signIn
+}: LoginPageProps) {
 	const errorCopy = hasText(error) ? (ERROR_COPY.get(error) ?? GENERIC_ERROR) : undefined;
 
 	return (
@@ -63,6 +70,18 @@ export function LoginPage({ title = "Sign in to Hephaestus", error, ...signIn }:
 				    lands in it or nothing is announced, and as a flex or space-y sibling its empty box
 				    would still claim a slot and push the buttons down on every ordinary sign-in. */}
 				<CardContent>
+					{/* A note, not a live region: it is on the page from the first render, and it stays
+					    until the reader leaves, because a deletion notice must not leave on a timer. */}
+					{notice === "account-deletion-scheduled" ? (
+						<Alert role="note" className="mb-4">
+							<AlertTitle>Your account is scheduled for deletion</AlertTitle>
+							<AlertDescription>
+								You’re signed out on all devices, and you cannot sign in to this account again.
+								After a waiting period, Hephaestus permanently deletes the account. If this was a
+								mistake, contact your instance operator now.
+							</AlertDescription>
+						</Alert>
+					) : null}
 					<div aria-live="assertive" aria-atomic="true" className="not-empty:mb-4">
 						{errorCopy ? (
 							<Alert variant="destructive">

@@ -94,7 +94,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function RouteComponent() {
 	const passkeys = usePasskeySettings();
 	const queryClient = useQueryClient();
-	const { logout, linkAccount, isAppAdmin, linkedProviders } = useAuth();
+	const { linkAccount, isAppAdmin, linkedProviders } = useAuth();
 	const userSettingsQueryKey = getUserSettingsQueryKey();
 	const consentQuery = useQuery(getConsentStatusOptions({}));
 	const accountConsent = consentQuery.data;
@@ -344,12 +344,6 @@ function RouteComponent() {
 		};
 	}
 
-	// After deletion: end the session. `logout()` performs a full reload to "/",
-	// so no further navigation is needed here.
-	const handleAccountDeleted = async () => {
-		await logout();
-	};
-
 	// Disconnect a federated identity. The server enforces the lockout guard (409 on the last
 	// identity) and ownership; the UI also disables that case, so this path is the happy one.
 	const unlinkMutation = useMutation({
@@ -565,9 +559,17 @@ function RouteComponent() {
 			showSlackPreferencesSection={slackAvailable}
 			slackPreferencesProps={slackPreferencesProps}
 			sessionsProps={{ state: sessionsState }}
-			onAccountDeleted={handleAccountDeleted}
+			onAccountDeleted={openSignInAfterDeletion}
 		/>
 	);
+}
+
+/**
+ * After deletion: a full reload to the sign-in page, which shows the notice that the Danger zone
+ * recorded. No sign-out request: the deletion already revoked every session of the account.
+ */
+function openSignInAfterDeletion() {
+	window.location.assign("/login");
 }
 
 /**

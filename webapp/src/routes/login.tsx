@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { toast } from "@/lib/toast";
+import { useEffect, useState } from "react";
 
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { pageHead } from "@/lib/page-title";
-import { ACCOUNT_DELETED_NOTICE_KEY } from "@/runtime/auth/account-deleted-notice";
+import {
+	accountDeletedRecently,
+	clearAccountDeletedNotice,
+} from "@/runtime/auth/account-deleted-notice";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 
@@ -36,24 +38,18 @@ function LoginRoute() {
 		}
 	}, [isAuthenticated, navigate, returnTo]);
 
-	// Account deletion reloads this route; the confirmation must survive that reload.
+	// Account deletion reloads this route, so the Danger zone leaves a record behind. Read it on the
+	// first render and clear it afterwards: a later reload must not repeat the notice.
+	const [accountDeletionScheduled] = useState(accountDeletedRecently);
 	useEffect(() => {
-		try {
-			if (sessionStorage.getItem(ACCOUNT_DELETED_NOTICE_KEY) === "1") {
-				sessionStorage.removeItem(ACCOUNT_DELETED_NOTICE_KEY);
-				toast.success(
-					"Your account is scheduled for deletion, and you’re signed out everywhere. Hephaestus removes it permanently after about 48 hours.",
-				);
-			}
-		} catch {
-			// Storage can be unavailable; confirmation must not block sign-in.
-		}
+		clearAccountDeletedNotice();
 	}, []);
 
 	return (
 		<LoginPage
 			options={providers}
 			error={error}
+			notice={accountDeletionScheduled ? "account-deletion-scheduled" : undefined}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
 			devReturnTo={returnTo}
 		/>
