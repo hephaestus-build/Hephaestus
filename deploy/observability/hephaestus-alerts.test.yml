@@ -34,6 +34,9 @@ tests:
       - series: 'integration_consumer_poison_total{job="hephaestus",instance="server:9090",kind="gitlab"}'
         values: "2x4"
     alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusConsumerPoison
+        exp_alerts: []
       - eval_time: 4m
         alertname: HephaestusConsumerPoison
         exp_alerts:
