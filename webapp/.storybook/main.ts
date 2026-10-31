@@ -72,14 +72,14 @@ const config: StorybookConfig = {
 				},
 			],
 		};
-		// The app entry budget and release inventory describe the SPA. The preview has its own chunk budgets.
+		// The bundle budget and release inventory describe the SPA. The preview has its own chunk budgets.
 		viteConfig.plugins = (viteConfig.plugins ?? []).filter(
 			(plugin) =>
 				!(
 					typeof plugin === "object" &&
 					plugin !== null &&
 					"name" in plugin &&
-					(plugin.name === "entry-chunk-budget" || plugin.name === "bundle-packages")
+					(plugin.name === "bundle-budget" || plugin.name === "bundle-packages")
 				),
 		);
 		viteConfig.plugins.push(storybookChunkBudgets());
