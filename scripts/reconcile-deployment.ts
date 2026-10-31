@@ -9,7 +9,6 @@ import {
 	rename,
 	rm,
 	stat,
-	statfs,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -22,32 +21,6 @@ import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json
 import { output, run, succeeds } from "./lib/process.ts";
 import { compareVersions, parseVersion } from "./lib/release-version.ts";
 import { chartPackageName } from "./release-chart.ts";
-
-export type Stack = "proxy" | "core" | "app" | "chart";
-
-/**
- * The `app` stack's migration service applies the schema the webhook runtime in `core` waits for, and
- * the edge comes last so it never routes to a stack that is still starting. `chart` is the whole
- * release on Kubernetes and stands alone.
- */
-const STACK_ORDER: readonly Stack[] = ["app", "core", "proxy", "chart"];
-
-/**
- * The application server never reports ready without the broker, and the broker lives in the `core`
- * project, which Compose cannot express as a dependency. PostgreSQL needs no entry: it sits in `app`
- * beside the services that declare `depends_on` on it.
- */
-const FOUNDATION: Partial<Record<Stack, readonly string[]>> = {
-	core: ["nats-server"],
-};
-
-/**
- * The `app` stack's one-shot migration, run before the worker stops and any stack replaces its
- * services (docs/admin/runtime-roles.mdx#database-migrations). `run` returns its exit status;
- * `up --wait` returns once it starts, and `wait` fails once it has exited. A release from before the
- * migrate run mode declares no such service.
- */
-const MIGRATION_SERVICE = "database-migration";
 
 /**
  * A black-holed connection must not hold a tick until the unit's start timeout; the next tick
@@ -189,7 +162,7 @@ export function serializeChannel(channel: Channel): string {
 }
 
 /**
- * The images a commit channel pins, as the environment the Compose files read. Every value is a
+ * The digest-pinned images a commit channel gives the chart. Every value is a
  * digest: a tag would let the registry answer with something else later, which is the whole reason
  * the release path pins digests too.
  */
@@ -309,9 +282,7 @@ export function decide(
 }
 
 /**
- * The environment a commit channel's images become, in the shape the Compose files already read.
- * IMAGE_TAG is what the webapp reports as its version, so an environment following the default
- * branch reports the commit it is running rather than a release it is not.
+ * The stored image pins and source of a commit channel. The chart's release values name this commit.
  */
 export function commitLockEnvironment(
 	commit: string,
@@ -337,8 +308,6 @@ export function renderMetrics(state: {
 	lastSuccessAt?: Date;
 	/** The applied record predates the kept commit, so the tooling waits for the next apply. */
 	toolingPending?: boolean;
-	/** Free space on the filesystem that holds Docker's data, when it could be read. */
-	freeBytes?: number;
 }): string {
 	const lines = [
 		"# HELP hephaestus_deploy_info The release this host currently runs.",
@@ -354,13 +323,6 @@ export function renderMetrics(state: {
 		"# TYPE hephaestus_deploy_tooling_pending gauge",
 		`hephaestus_deploy_tooling_pending ${state.toolingPending === true ? 1 : 0}`,
 	];
-	if (state.freeBytes !== undefined) {
-		lines.push(
-			"# HELP hephaestus_deploy_free_bytes Free space on the filesystem that holds Docker's data.",
-			"# TYPE hephaestus_deploy_free_bytes gauge",
-			`hephaestus_deploy_free_bytes ${state.freeBytes}`,
-		);
-	}
 	if (state.lastSuccessAt) {
 		lines.push(
 			"# HELP hephaestus_deploy_last_success_timestamp_seconds When the release this host runs was applied.",
@@ -369,20 +331,6 @@ export function renderMetrics(state: {
 		);
 	}
 	return `${lines.join("\n")}\n`;
-}
-
-/**
- * The lock only guarantees anything if nothing the release renders escapes it: a compose file that
- * hardcoded a tag would otherwise deploy an image no signature covers.
- */
-export function unlockedImages(rendered: readonly string[], lockEnv: string): string[] {
-	const locked = new Set(
-		lockEnv
-			.split("\n")
-			.map((line) => line.slice(line.indexOf("=") + 1).trim())
-			.filter((value) => value.includes("@sha256:")),
-	);
-	return rendered.filter((image) => !locked.has(image));
 }
 
 function lockValues(lockEnv: string, key: string): string[] {
@@ -418,7 +366,7 @@ export const POSTGRES_IMAGE_INPUTS = [
  * pin the host last applied unless `rebuilt` says to take the channel's.
  *
  * A commit channel names a new PostgreSQL digest on every commit — `docker/postgres/Dockerfile` says
- * why the image is rebuilt that often — and Compose recreates a container whose image changed, which
+ * why the image is rebuilt that often — and Kubernetes replaces a Pod whose image changed, which
  * drops every connection pool and kills the practice reviews in flight. A release is applied as
  * signed: its lock is the artifact its evidence describes, so this never touches one.
  */
@@ -443,218 +391,6 @@ export function carryPostgresImage(
 	return { ...images, [POSTGRES_IMAGE]: kept };
 }
 
-/** Docker lists a Docker Hub image without its registry and without the `library/` namespace. */
-function repositoryName(repository: string): string {
-	return repository.replace(/^docker\.io\//u, "").replace(/^library\//u, "");
-}
-
-/** The digest-pinned image references a lock names. */
-export function lockImages(lockEnvs: readonly string[]): string[] {
-	return lockEnvs.flatMap((lockEnv) =>
-		lockEnv
-			.split("\n")
-			.map((line) => line.slice(line.indexOf("=") + 1).trim())
-			.filter((value) => IMAGE_DIGEST.test(value)),
-	);
-}
-
-/** One image as `docker image ls --all --digests` lists it. */
-export interface ListedImage {
-	repository: string;
-	/** `<none>` for an image pulled by digest, as every release image is. */
-	tag: string;
-	digest: string;
-	id: string;
-}
-
-/**
- * The images a host may remove: those of a repository a kept lock uses that are neither named by a
- * kept lock nor the same image as one it names. An image of any other repository is not this
- * deployment's to judge, and so is a tagged image: a release image is pulled by digest and carries no
- * tag. The image ID decides sameness, because the digest Docker lists can be a platform manifest's
- * where the lock names the index.
- *
- * `docker image prune` cannot express this. Without `-a`, it removes only untagged images that
- * nothing references; with `-a`, it also removes the previous release's images and every idle image
- * of other workloads.
- */
-export function unkeptImages(
-	listed: readonly ListedImage[],
-	keptReferences: readonly string[],
-	keptIds: ReadonlySet<string>,
-): string[] {
-	const named = new Set<string>();
-	const repositories = new Set<string>();
-	for (const reference of keptReferences) {
-		const at = reference.indexOf("@");
-		const repository = repositoryName(reference.slice(0, at));
-		repositories.add(repository);
-		named.add(`${repository}${reference.slice(at)}`);
-	}
-	return listed
-		.filter(({ repository, tag, digest, id }) => {
-			const name = repositoryName(repository);
-			return (
-				tag === "<none>" &&
-				repositories.has(name) &&
-				!named.has(`${name}@${digest}`) &&
-				!keptIds.has(id)
-			);
-		})
-		.map(({ repository, digest }) => `${repository}@${digest}`);
-}
-
-/** The ID of a local image, or nothing when the host does not have it. */
-async function localImageId(reference: string): Promise<string | undefined> {
-	try {
-		const id = await output("docker", ["image", "inspect", "--format", "{{.Id}}", reference]);
-		return id.trim();
-	} catch {
-		return undefined;
-	}
-}
-
-async function readLocks(
-	config: HostConfig,
-	releases: readonly (string | undefined)[],
-): Promise<string[]> {
-	const lockEnvs: string[] = [];
-	for (const release of new Set(releases)) {
-		if (release === undefined) {
-			continue;
-		}
-		try {
-			lockEnvs.push(await readFile(path.join(locksDirectory(config), `${release}.env`), "utf8"));
-		} catch (error) {
-			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-				throw error;
-			}
-		}
-	}
-	return lockEnvs;
-}
-
-/**
- * Removes the images that no kept lock names. Docker refuses to remove an image that a container
- * uses, running or stopped, so a refusal leaves the image and the next cleanup tries again.
- */
-async function removeUnkeptImages(keptLockEnvs: readonly string[]): Promise<number> {
-	const keptReferences = lockImages(keptLockEnvs);
-	// Without a kept lock, nothing says which images are this deployment's, so nothing is removed.
-	if (keptReferences.length === 0) {
-		return 0;
-	}
-	const keptIds = new Set<string>();
-	for (const reference of keptReferences) {
-		const id = await localImageId(reference);
-		if (id !== undefined) {
-			keptIds.add(id);
-		}
-	}
-	// Docker hides untagged images from the listing unless asked, and every release image is one.
-	const listing = await output("docker", [
-		"image",
-		"ls",
-		"--all",
-		"--digests",
-		"--no-trunc",
-		"--format",
-		"{{json .}}",
-	]);
-	const listed = listing
-		.split("\n")
-		.filter((line) => line.trim() !== "")
-		.map((line) => asRecord(parseJson(line), "docker image ls entry"))
-		.filter((image) => typeof image.Digest === "string" && image.Digest.startsWith("sha256:"))
-		.map((image) => ({
-			repository: asString(image.Repository, "image repository"),
-			tag: asString(image.Tag, "image tag"),
-			digest: asString(image.Digest, "image digest"),
-			id: asString(image.ID, "image ID"),
-		}));
-	let removed = 0;
-	for (const image of unkeptImages(listed, keptReferences, keptIds)) {
-		if (await succeeds("docker", ["image", "rm", image])) {
-			removed += 1;
-			console.log(`Removed image ${image}`);
-		} else {
-			console.log(`Keeping image ${image}: Docker refused to remove it`);
-		}
-	}
-	return removed;
-}
-
-/** Docker's image store may be containerd's, which keeps its content outside Docker's data root. */
-const CONTAINERD_ROOT = "/var/lib/containerd";
-
-/** The least free space on the filesystems that hold Docker's images, containers and volumes. */
-async function dockerFreeBytes(): Promise<number> {
-	const dockerRoot = await output("docker", ["info", "--format", "{{.DockerRootDir}}"]);
-	const roots = [dockerRoot.trim()];
-	if (await isDirectory(CONTAINERD_ROOT)) {
-		roots.push(CONTAINERD_ROOT);
-	}
-	const free = await Promise.all(
-		roots.map(async (root) => {
-			const { bavail, bsize } = await statfs(root);
-			return bavail * bsize;
-		}),
-	);
-	return Math.min(...free);
-}
-
-/** For the metric only: a metric that cannot be measured is left out rather than failing the tick. */
-async function readableFreeBytes(): Promise<number | undefined> {
-	return dockerFreeBytes().catch(() => undefined);
-}
-
-const GIB = 1024 ** 3;
-
-/**
- * Refuses a pull that could fill the disk. A full disk stops PostgreSQL first, so the apply would
- * take the running release down with it. Unkept images go first: that is the one cleanup that
- * cannot hurt a rollback.
- */
-export async function guardFreeSpace(
-	minimumBytes: number,
-	measure: () => Promise<number>,
-	cleanup: () => Promise<number>,
-): Promise<void> {
-	if ((await measure()) >= minimumBytes) {
-		return;
-	}
-	const removed = await cleanup();
-	const free = await measure();
-	if (free < minimumBytes) {
-		throw new OperatorActionRequiredError(
-			`Only ${(free / GIB).toFixed(1)} GiB is free for Docker's data, below the ${(minimumBytes / GIB).toFixed(0)} GiB that HEPHAESTUS_MIN_FREE_GIB requires before a pull, after removing ${removed} unused release images. Free space on the host; the next tick applies the release.`,
-		);
-	}
-}
-
-function isStack(name: string): name is Stack {
-	return STACK_ORDER.some((stack) => stack === name);
-}
-
-export function parseStacks(value: string | undefined): Stack[] {
-	const names = (value ?? "").split(/[\s,]+/u).filter(Boolean);
-	if (names.length === 0) {
-		throw new Error("HEPHAESTUS_STACKS must name at least one stack");
-	}
-	const unknown = names.filter((name) => !isStack(name));
-	if (unknown.length > 0) {
-		throw new Error(`unknown stack(s): ${unknown.join(", ")}`);
-	}
-	const stacks = STACK_ORDER.filter((stack) => names.includes(stack));
-	if (stacks.includes("chart") && stacks.length > 1) {
-		throw new Error(
-			"the chart stack runs the whole release: HEPHAESTUS_STACKS=chart takes no other stack",
-		);
-	}
-	return stacks;
-}
-
-/** How a host that follows its channel with the Helm chart installs it. */
 export interface ChartSettings {
 	release: string;
 	namespace: string;
@@ -753,9 +489,7 @@ export function helmArguments(
 
 interface HostConfig {
 	channel: string;
-	stacks: Stack[];
-	/** Set only on a host whose one stack is `chart`. */
-	chart?: ChartSettings;
+	chart: ChartSettings;
 	checkout: string;
 	/** A link to the tree whose tooling this host runs: the checkout until the first apply. */
 	tooling: string;
@@ -764,7 +498,6 @@ interface HostConfig {
 	metricsFile?: string;
 	waitTimeoutSeconds: number;
 	promoteIdentity: string;
-	minimumFreeBytes: number;
 }
 
 function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
@@ -773,22 +506,14 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 		throw new Error("HEPHAESTUS_CHANNEL must contain lowercase letters, digits, and hyphens");
 	}
 	const stateDirectory = environment.STATE_DIRECTORY ?? "/var/lib/hephaestus";
-	const stacks = parseStacks(environment.HEPHAESTUS_STACKS);
 	// A new chart Pod waits up to 10 minutes for the migrated schema, so Helm needs more than that.
-	const waitTimeoutSeconds = Number(
-		environment.HEPHAESTUS_WAIT_TIMEOUT ?? (stacks.includes("chart") ? 1200 : 600),
-	);
+	const waitTimeoutSeconds = Number(environment.HEPHAESTUS_WAIT_TIMEOUT ?? 1200);
 	if (!Number.isSafeInteger(waitTimeoutSeconds) || waitTimeoutSeconds <= 0) {
 		throw new Error("HEPHAESTUS_WAIT_TIMEOUT must be a positive integer");
 	}
-	const minimumFreeGiB = Number(environment.HEPHAESTUS_MIN_FREE_GIB ?? 10);
-	if (!Number.isFinite(minimumFreeGiB) || minimumFreeGiB <= 0) {
-		throw new Error("HEPHAESTUS_MIN_FREE_GIB must be a positive number");
-	}
 	return {
 		channel,
-		stacks,
-		...(stacks.includes("chart") ? { chart: chartSettings(environment) } : {}),
+		chart: chartSettings(environment),
 		checkout: path.join(stateDirectory, "checkout"),
 		tooling: path.join(stateDirectory, "tooling"),
 		stateDirectory,
@@ -796,7 +521,6 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 		metricsFile: environment.HEPHAESTUS_METRICS_FILE,
 		waitTimeoutSeconds,
 		promoteIdentity: requiredEnv(environment, "HEPHAESTUS_PROMOTE_IDENTITY"),
-		minimumFreeBytes: minimumFreeGiB * GIB,
 	};
 }
 
@@ -1032,13 +756,12 @@ async function recordUnchanged(
 				now: startedAt,
 				lastSuccessAt: new Date(applied.appliedAt),
 				toolingPending: appliedCommit(applied) === undefined,
-				freeBytes: config.chart === undefined ? await readableFreeBytes() : undefined,
 			}),
 		);
 	}
 }
 
-/** Prepare the signed package for a chart release, or the image lock for a commit or Compose. */
+/** Prepare the signed release package or the verified image pins for a commit chart. */
 async function prepareDeployment(
 	config: HostConfig,
 	channel: Channel,
@@ -1046,8 +769,8 @@ async function prepareDeployment(
 	release: string,
 	releaseCommit: string,
 	releaseTree: string,
-): Promise<{ lockEnv: string; lockFile: string; chartPackage?: string }> {
-	if (config.chart !== undefined && channel.images === undefined) {
+): Promise<{ lockEnv: string; chartPackage?: string }> {
+	if (channel.images === undefined) {
 		const directory = path.join(config.stateDirectory, "chart");
 		await mkdir(directory, { recursive: true });
 		for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -1069,215 +792,23 @@ async function prepareDeployment(
 		);
 		return {
 			lockEnv: "",
-			lockFile: "",
 			chartPackage: path.join(directory, chartPackageName(release)),
 		};
 	}
 	const lockDirectory = locksDirectory(config);
 	await mkdir(lockDirectory, { recursive: true });
 	const lockFile = path.join(lockDirectory, `${release}.env`);
-	if (channel.images) {
-		// A commit channel carries its own digests, and the channel file they arrived in was
-		// signature-verified before this point, so there is no release to fetch or verify. The
-		// version the instance reports is the commit, which is what the environment is following.
-		const images = await commitImages(
-			config.checkout,
-			lockDirectory,
-			applied,
-			releaseCommit,
-			channel.images,
-			channel.refreshDatabaseImage,
-		);
-		await writeFile(lockFile, commitLockEnvironment(release, images), { mode: 0o600 });
-	} else {
-		// The verifier is the tooling this tick runs, never the release's own copy of it.
-		await run(
-			process.execPath,
-			[path.join(import.meta.dirname, "prepare-release-lock.ts"), release, lockFile],
-			{ cwd: releaseTree },
-		);
-	}
-	const lockEnv = await readFile(lockFile, "utf8");
-	if (!channel.images && lockedReleaseCommit(lockEnv) !== releaseCommit) {
-		throw new Error(`signed release lock does not cover the ${release} source tree`);
-	}
-	return { lockEnv, lockFile };
-}
-
-interface RenderedStack {
-	composeArgs: string[];
-	/** The services the release declares for the stack, as Compose rendered them. */
-	services: readonly string[];
-}
-
-const WORKER_SERVICE = "application-worker";
-
-/**
- * The compose arguments of each stack, each rendered and checked against the lock first: a release
- * that renders an unlocked image cannot get one running in the window before the guard refuses it.
- */
-async function verifiedComposeArgs(
-	config: HostConfig,
-	stacks: readonly Stack[],
-	releaseTree: string,
-	lockFile: string,
-	lockEnv: string,
-): Promise<Map<Stack, RenderedStack>> {
-	const composeArgsByStack = new Map<Stack, RenderedStack>();
-	for (const stack of stacks) {
-		const composeArgs = [
-			"compose",
-			"--project-name",
-			stack,
-			"--env-file",
-			path.join(config.secretsDirectory, `${stack}.env`),
-			"--env-file",
-			lockFile,
-			"--file",
-			path.join(releaseTree, `docker/compose.${stack}.yaml`),
-		];
-		const rendered = asRecord(
-			parseJson(
-				await output("docker", [...composeArgs, "config", "--format", "json"], {
-					cwd: releaseTree,
-				}),
-			),
-			`${stack} configuration`,
-		);
-		const services = asRecord(rendered.services, `${stack}.services`);
-		const images = Object.values(services).map((service) =>
-			asString(asRecord(service, `${stack} service`).image, `${stack} service image`),
-		);
-		const unlocked = unlockedImages(images, lockEnv);
-		if (unlocked.length > 0) {
-			throw new Error(`${stack} renders images outside the release lock: ${unlocked.join(", ")}`);
-		}
-		composeArgsByStack.set(stack, { composeArgs, services: Object.keys(services) });
-	}
-	return composeArgsByStack;
-}
-
-/**
- * Downloads every verified stack's images while the applied release still runs, so the worker is not
- * stopped for the length of a download. `pull` starts no container, and `--policy missing` leaves an
- * image the host already has alone.
- */
-async function pullStacks(
-	releaseTree: string,
-	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
-): Promise<void> {
-	for (const [, { composeArgs }] of composeArgsByStack) {
-		await run("docker", [...composeArgs, "pull", "--policy", "missing"], { cwd: releaseTree });
-	}
-}
-
-interface AppliedWorker {
-	composeArgs: string[];
-	tree: string;
-}
-
-/**
- * The worker the applied release runs, from that release's own app configuration and lock, so it is
- * stopped before anything it depends on is replaced: `stop` waits up to the stop_grace_period the
- * running worker was started with, whatever the candidate declares, and the candidate's `up` starts
- * what it declares. A first install, or an applied release without the worker, has none to stop.
- * Every refusal here comes before any image is pulled.
- */
-async function appliedWorker(
-	config: HostConfig,
-	applied: AppliedState | undefined,
-): Promise<AppliedWorker | undefined> {
-	if (!applied || !config.stacks.includes("app")) {
-		return undefined;
-	}
-	// As for its tooling, only the commit the record keeps identifies what runs: a retained lock or tree
-	// cannot tell the accepted source from one a failed re-promotion staged. A worker that may be running
-	// is never skipped silently, so a record without it, or a lock for other source, stops the apply.
-	const commit = appliedCommit(applied);
-	if (commit === undefined) {
-		throw new OperatorActionRequiredError(
-			`${applied.release} was recorded without its source commit, so the worker it runs cannot be ` +
-				"stopped as it was started. Verify the revision this host runs before it applies another release.",
-		);
-	}
-	const lockFile = path.join(locksDirectory(config), `${applied.release}.env`);
-	const lockEnv = await readFile(lockFile, "utf8");
-	if (lockedReleaseCommit(lockEnv) !== commit) {
-		throw new Error(`the ${applied.release} lock does not cover the commit recorded for it`);
-	}
-	const { tree } = await ensureReleaseTree(
+	const images = await commitImages(
 		config.checkout,
-		releasesDirectory(config),
-		applied.release,
-		commit,
+		lockDirectory,
+		applied,
+		releaseCommit,
+		channel.images,
+		channel.refreshDatabaseImage,
 	);
-	const rendered = await verifiedComposeArgs(config, ["app"], tree, lockFile, lockEnv);
-	const app = rendered.get("app");
-	return app !== undefined && app.services.includes(WORKER_SERVICE)
-		? { composeArgs: app.composeArgs, tree }
-		: undefined;
-}
-
-async function migrate(
-	releaseTree: string,
-	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
-): Promise<void> {
-	const app = composeArgsByStack.get("app");
-	if (app?.services.includes(MIGRATION_SERVICE) !== true) {
-		return;
-	}
-	// `run` starts the dependencies, and recreates PostgreSQL if the release changed it, under the
-	// running roles. A running PostgreSQL is left to the `up` that replaces the roles.
-	const postgres = await output(
-		"docker",
-		[...app.composeArgs, "ps", "--status", "running", "--quiet", "postgres"],
-		{ cwd: releaseTree },
-	);
-	const deps = postgres.trim() === "" ? [] : ["--no-deps"];
-	await run("docker", [...app.composeArgs, "run", "--rm", "-T", ...deps, MIGRATION_SERVICE], {
-		cwd: releaseTree,
-	});
-}
-
-async function startStacks(
-	config: HostConfig,
-	releaseTree: string,
-	composeArgsByStack: ReadonlyMap<Stack, RenderedStack>,
-): Promise<void> {
-	for (const [stack, { composeArgs }] of composeArgsByStack) {
-		const foundation = FOUNDATION[stack];
-		if (!foundation) {
-			continue;
-		}
-		await run(
-			"docker",
-			[
-				...composeArgs,
-				"up",
-				"--detach",
-				"--wait",
-				`--wait-timeout=${config.waitTimeoutSeconds}`,
-				...foundation,
-			],
-			{ cwd: releaseTree },
-		);
-	}
-
-	for (const [, { composeArgs }] of composeArgsByStack) {
-		await run(
-			"docker",
-			[
-				...composeArgs,
-				"up",
-				"--detach",
-				"--wait",
-				`--wait-timeout=${config.waitTimeoutSeconds}`,
-				// A service the release removed would otherwise keep running, unmanaged.
-				"--remove-orphans",
-			],
-			{ cwd: releaseTree },
-		);
-	}
+	await writeFile(lockFile, commitLockEnvironment(release, images), { mode: 0o600 });
+	const lockEnv = await readFile(lockFile, "utf8");
+	return { lockEnv };
 }
 
 export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
@@ -1339,9 +870,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		decision.release,
 		releaseCommit,
 	);
-	// Read before the new lock is written: a re-promotion of the running release rewrites its lock.
-	const runningLocks = await readLocks(config, [applied?.release, applied?.previous]);
-	const { lockEnv, lockFile, chartPackage } = await prepareDeployment(
+	const { lockEnv, chartPackage } = await prepareDeployment(
 		config,
 		channel,
 		applied,
@@ -1351,42 +880,16 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	);
 	// A re-promotion of the running release keeps the rollback target the host already had.
 	const previous = applied?.release === decision.release ? applied.previous : applied?.release;
-	if (config.chart === undefined) {
-		const composeArgsByStack = await verifiedComposeArgs(
-			config,
-			config.stacks,
-			releaseTree,
-			lockFile,
-			lockEnv,
-		);
-		const worker = await appliedWorker(config, applied);
-		// A rollback or re-promotion whose images are all on the host pulls nothing, so a full disk
-		// must not stop it.
-		const needed = lockImages([lockEnv]);
-		const present = await Promise.all(needed.map(async (image) => localImageId(image)));
-		if (present.includes(undefined)) {
-			await guardFreeSpace(config.minimumFreeBytes, dockerFreeBytes, async () =>
-				removeUnkeptImages([...runningLocks, lockEnv]),
-			);
-		}
-		await pullStacks(releaseTree, composeArgsByStack);
-		await migrate(releaseTree, composeArgsByStack);
-		if (worker !== undefined) {
-			await run("docker", [...worker.composeArgs, "stop", WORKER_SERVICE], { cwd: worker.tree });
-		}
-		await startStacks(config, releaseTree, composeArgsByStack);
-	} else {
-		await applyChart(
-			config,
-			config.chart,
-			decision.release,
-			previous,
-			releaseTree,
-			lockEnv,
-			chartPackage,
-			applied,
-		);
-	}
+	await applyChart(
+		config,
+		config.chart,
+		decision.release,
+		previous,
+		releaseTree,
+		lockEnv,
+		chartPackage,
+		applied,
+	);
 
 	const finishedAt = new Date();
 	await writeAtomic(
@@ -1403,20 +906,15 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 				success: true,
 				now: finishedAt,
 				lastSuccessAt: finishedAt,
-				freeBytes: config.chart === undefined ? await readableFreeBytes() : undefined,
 			}),
 		);
 	}
-	console.log(`Applied ${decision.release} to ${config.stacks.join(", ")}`);
+	console.log(`Applied ${decision.release} to Helm release ${config.chart.release}`);
 	// Only now, with the release verified and running, does the host run that release's tooling.
 	await followTooling(config, releaseTree, unitsDirectory);
 	// Last, so a prune that fails leaves this release running, recorded and adopted; the next apply
 	// prunes again.
 	await pruneReleases(config, [decision.release, previous]);
-	// On a chart host the kubelet's image garbage collection owns the images, in containerd.
-	if (config.chart === undefined) {
-		await removeUnkeptImages(await readLocks(config, [decision.release, previous]));
-	}
 }
 
 /** The images a verified lock names, by the `HEPHAESTUS_IMAGE_*` keys that the lock writers use. */
@@ -1900,10 +1398,7 @@ export async function ensureReleaseTree(
 			},
 		);
 	}
-	// Tracked content only: Compose writes into the worktree it renders from — an older release's
-	// proxy keeps its ACME store in `docker/letsencrypt/` — so counting untracked files would turn
-	// every retry after a partial apply into a permanent refusal. An untracked file cannot alter a
-	// tracked Compose file, and anyone who can write here already has the Docker socket.
+	// Only tracked files define the source identity. Local operator files stay in place.
 	const changes = await output("git", ["status", "--porcelain=v1", "--untracked-files=no"], {
 		cwd: tree,
 	});
@@ -1917,7 +1412,7 @@ export async function ensureReleaseTree(
  * Removes the release trees nothing needs after an apply, then the lock of every release left without
  * a tree. Kept are the releases in `kept`, the tree the tooling link names, a tree locked with
  * `git worktree lock` — how anything else working in a tree says so — and a tree holding anything its
- * release does not, such as the `acme.json` an older release's proxy keeps in `docker/letsencrypt/`.
+ * release does not, such as ignored local operator files.
  * That file is ignored, and `git worktree remove` refuses only untracked and modified content, so the
  * check here includes ignored files. The next apply finishes a prune that stopped partway.
  */
@@ -2058,10 +1553,6 @@ async function reportFailure(): Promise<void> {
 			lastSuccessAt: applied ? new Date(applied.appliedAt) : undefined,
 			// Pending is a fact about the record, so a failed run must not read as the apply that ends it.
 			toolingPending: applied !== undefined && appliedCommit(applied) === undefined,
-			// The free space is Docker's root, which a chart host does not use.
-			freeBytes: (process.env.HEPHAESTUS_STACKS ?? "").split(/[\s,]+/u).includes("chart")
-				? undefined
-				: await readableFreeBytes(),
 		}),
 	);
 }

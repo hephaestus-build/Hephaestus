@@ -1,9 +1,7 @@
 [Unit]
 Description=Reconcile this host to its Hephaestus release channel
 Documentation=https://docs.hephaestus.build/admin/pull-based-deployment
-# Wants, not Requires: a host that follows its channel with the chart may have no Docker.
-Wants=docker.service
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -20,7 +18,6 @@ StateDirectoryMode=0750
 ExecStart=/usr/bin/env node /var/lib/hephaestus/tooling/scripts/reconcile-deployment.ts
 TimeoutStartSec=2h
 # Helm keeps its cache, configuration and data in the state directory: ProtectHome hides /root.
-# Only a host whose stack is `chart` starts Helm.
 Environment=HELM_CACHE_HOME=/var/lib/hephaestus/helm/cache
 Environment=HELM_CONFIG_HOME=/var/lib/hephaestus/helm/config
 Environment=HELM_DATA_HOME=/var/lib/hephaestus/helm/data
@@ -31,8 +28,7 @@ ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=-/var/lib/node_exporter
 ReadWritePaths=/etc/systemd/system
-# The Docker socket is reached over AF_UNIX; omitting it here breaks connect(2). Read-only
-# directory protections do not block Unix sockets, so ProtectSystem=strict leaves it reachable.
+# systemctl uses local Unix sockets to reload the deployed units.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictSUIDSGID=yes
 RestrictRealtime=yes
