@@ -335,7 +335,7 @@ The [labelling guide](./label-feedback-quality.md) gives the independent human r
 
 ### Hephaestus voice eval
 
-`server/application/src/test/resources/agent/heph-voice.live.ts` sends nine questions to a real model through the conversation host.
+`server/application/src/test/resources/agent/heph-voice.live.ts` sends questions to a real model through the conversation host.
 The eval composes the prompt as `HephHostSpec` does, from `system.md` and the writing guide, and a fake worker serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 

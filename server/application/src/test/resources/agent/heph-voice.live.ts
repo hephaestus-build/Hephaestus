@@ -396,11 +396,14 @@ const CALENDAR =
 	"yesterday was Mon 2026-10-26. This week runs Mon 2026-10-26 to Sun 2026-11-01; last week ran Mon 2026-10-19 " +
 	"to Sun 2026-10-25. Use these days; do not compute others.\n";
 
-function situation(extra = ""): string {
+/** Where the developer asked, as the message marker and the situation name it. */
+type Origin = "app" | "Slack";
+
+function situation(extra = "", where: Origin = "app"): string {
 	return [
 		"<situation>",
 		"Now: Tue 2026-10-27 09:12 Europe/Berlin.",
-		"The developer asked this in the app. Your answer appears there.",
+		`The developer asked this in ${where === "app" ? "the app" : "Slack"}. Your answer appears there.`,
 		"This is the first message of the conversation.",
 		`The conversation has no threads.\n${extra}${CALENDAR}</situation>`,
 	].join("\n");
@@ -486,11 +489,16 @@ async function ask(
 	return { ...reply, looked, linked: worker.linked };
 }
 
-function turn(prompt: string, contextFolder: boolean, extra = ""): TurnContext {
-	const base = contextOf([], `[Tue 2026-10-27 09:12 Europe/Berlin · app] ${prompt}`);
+function turn(
+	prompt: string,
+	contextFolder: boolean,
+	extra = "",
+	where: Origin = "app",
+): TurnContext {
+	const base = contextOf([], `[Tue 2026-10-27 09:12 Europe/Berlin · ${where}] ${prompt}`);
 	return {
 		...base,
-		situation: situation(extra),
+		situation: situation(extra, where),
 		contextFolder,
 		model: { ...base.model, modelId },
 	};
@@ -827,3 +835,47 @@ void test(
 		assertNoInternalTerm(TERMS, reply.text);
 	},
 );
+
+/** A remark about Hephaestus's own answer or the conversation (T2-2). */
+const SELF_REFERENCE =
+	/\b(?:my|the) (?:previous|earlier|last|above) (?:answer|reply|message)\b|\b(?:answer|reply|message) above\b|\balready (?:covered|answered|said|mentioned|explained)\b|\bas I (?:said|mentioned|explained)\b/iu;
+
+function assertNoSelfReference(text: string) {
+	assert.doesNotMatch(text, SELF_REFERENCE, `remarks on its own answer: ${text}`);
+}
+
+void test("T2-2: the oracle rejects staging's remark and accepts an answer that ends at its link", () => {
+	for (const text of [
+		"My previous answer already covered this.",
+		"As I said, the 404 is the main problem.",
+		"See the reply above for the details.",
+	]) {
+		assert.throws(() => assertNoSelfReference(text), text);
+	}
+	assertNoSelfReference(
+		"The review of pull request #46 found that a missing file returns 200 instead of 404. Two practices couldn't be checked.",
+	);
+});
+
+/** Staging's question of turn 115fee59 (T2-2), whose answer ended with "My previous answer already covered this". */
+const T2_2_QUESTION = "What feedback did I get recently, and which item matters most?";
+
+for (const where of ["app", "Slack"] as const) {
+	void test(
+		`T2-2 (${where}): an answer that links what it cites ends without a remark about itself`,
+		{ skip, timeout: TURN_MS },
+		async () => {
+			const reply = await ask(
+				`t2-2-no-self-reference-${where}`,
+				turn(T2_2_QUESTION, true, WAITING, where),
+				PREPARED,
+			);
+			assertNoSelfReference(reply.text);
+			assert.ok(
+				reply.linked.some(([tool]) => tool === "link_result" || tool === "show_feedback"),
+				`does not link the observation or feedback it discusses: ${reply.text}`,
+			);
+			assertNoInternalTerm(TERMS, reply.text);
+		},
+	);
+}

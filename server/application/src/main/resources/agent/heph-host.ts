@@ -1601,7 +1601,7 @@ function unanswered(entries: readonly SessionEntry[]): FailureDetail | null {
 		return "no_answer";
 	}
 	// The provider's error message stays out: it can quote the request. The worker's proxy logs the call's status.
-	const { stopReason, content } = last.message;
+	const { stopReason } = last.message;
 	if (stopReason === "error") {
 		return "model_error";
 	}
@@ -1610,14 +1610,48 @@ function unanswered(entries: readonly SessionEntry[]): FailureDetail | null {
 	}
 	// An answer with no words would end the turn done and show the developer nothing. Chat-template control tokens
 	// (`<|channel|>`) a model leaks are not words either.
-	if (
-		!content.some(
-			(part) => part.type === "text" && part.text.replace(CONTROL_TOKENS, "").trim() !== "",
-		)
-	) {
-		return stopReason === "length" ? "output_limit" : "empty_answer";
+	if (!hasWords(last.message)) {
+		if (stopReason === "length") {
+			return "output_limit";
+		}
+		// The prompt asks for nothing more after an answer whose last call showed what it cites.
+		return answeredBeforeLinks(entries, last) ? null : "empty_answer";
 	}
 	return null;
+}
+
+function hasWords(message: AssistantMessage): boolean {
+	return message.content.some(
+		(part) => part.type === "text" && part.text.replace(CONTROL_TOKENS, "").trim() !== "",
+	);
+}
+
+/**
+ * Whether this turn's messages before `last` showed the developer an answer and then only feedback that the worker
+ * admitted: words, or the `text` of an admitted link call, with no other tool and no refused link after them.
+ */
+function answeredBeforeLinks(entries: readonly SessionEntry[], last: SessionEntry): boolean {
+	const before = entries.slice(0, entries.indexOf(last));
+	const refused = new Set(
+		before.flatMap((entry) =>
+			entry.type === "message" && entry.message.role === "toolResult" && entry.message.isError
+				? [entry.message.toolCallId]
+				: [],
+		),
+	);
+	for (const entry of before.toReversed()) {
+		if (entry.type !== "message" || entry.message.role !== "assistant") {
+			continue;
+		}
+		const calls = entry.message.content.filter((part) => part.type === "toolCall");
+		if (calls.some((call) => !isLinkTool(call.name) || refused.has(call.id))) {
+			return false;
+		}
+		if (hasWords(entry.message) || calls.some((call) => argumentText(call.arguments.text) !== "")) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**

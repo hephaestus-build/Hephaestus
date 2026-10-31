@@ -198,6 +198,11 @@ Its question stays in the path with a marker ([The path](#the-path)), and the de
 | The worker refuses the end with `413` again, after the host replaced its documents with read notes. | The host, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
 | The second attempt loses its lease. | `MentorTurnLeaseReaper`. | "Hephaestus could not finish this reply. Try again." |
 
+"Pi writes no answer" includes a last message with no words (`empty_answer`).
+One exception applies: the turn showed words or the `text` of an admitted link call before that message.
+After them, it called only `link_result`, `link_problem` or `show_feedback`, and the worker admitted each call.
+The prompt asks Hephaestus to end there without more text, so that turn ends done.
+
 An attempt that loses its lease does not fail by itself.
 The host stops it without a call to the worker, and the reaper decides (see [Leases and retries](#leases-and-retries)).
 
