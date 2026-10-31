@@ -13,12 +13,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Item requests become queue work only after their frozen review has committed. */
+/** Queues item execution before the request transaction commits. */
 @Component
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
@@ -28,8 +27,7 @@ public class ReviewJobEventListener {
     private final ReviewQueue queue;
     private final ReviewAssignmentQuery assignments;
 
-    @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onReviewRequested(ReviewRequested event) {
         var review = reviews.find(event.workspaceId(), event.reviewId())
                 .orElseThrow(() -> new IllegalStateException("The requested review is unavailable"));

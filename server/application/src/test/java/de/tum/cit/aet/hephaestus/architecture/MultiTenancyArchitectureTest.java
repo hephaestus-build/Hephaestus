@@ -562,10 +562,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
         static final Set<String> ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT = Set.of(
                 // ActivityEventListener handles CommentCreated, ReviewSubmitted events which carry full entity graphs
                 "ActivityEventListener",
-                // ReviewJobEventListener handles ScmDomainEvent.PullRequest{Created,Ready,Synchronized,
-                // Merged,Closed}/ReviewSubmitted whose EventContext carries the originating repository →
-                // workspaceId is resolved per-event
-                "ReviewJobEventListener",
                 // GitHubProjectActivityListener handles GitHubProjectEvent payloads whose EventContext
                 // carries scopeId (the originating workspace) — same payload-carries-context contract
                 "GitHubProjectActivityListener");

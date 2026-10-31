@@ -38,6 +38,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
+            assignment("agent.job.ReviewJobEventListenerIntegrationTest", "review-enqueue-atomicity"),
             assignment("workspace.RepositoryProviderScopeIntegrationTest", "repository-provider-scope"),
             assignment("workspace.ManualRepositoryAuthorityIntegrationTest", "manual-repository-authority"),
             assignment("workspace.WorkspaceRepositoryCoverageIntegrationTest", "repository-coverage"),
@@ -109,6 +110,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
+            Map.entry(
+                    "review-enqueue-atomicity",
+                    "real review transaction and event listener with an injected fault before queue creation"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, review fixtures and application acceptance context"),
             Map.entry(
                     "repository-provider-scope",
@@ -315,6 +319,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             TestPropertySource.class);
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "agent.job.ReviewJobEventListenerIntegrationTest",
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
             "core.database.PracticeV1ReviewJobsIntegrationTest",
