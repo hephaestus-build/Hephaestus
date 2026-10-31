@@ -26,6 +26,26 @@ Each workspace enables practice review and selects its own coverage.
 3. Give every server and worker container its own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs.
 4. Set campaign, request-rate, retry, and retention limits appropriate to the deployment's budget and governance policy.
 
+### Quiet window
+
+Events on the same work wait in one quiet window, so that one review covers a burst of pushes and edits.
+The window closes `ITEM_EVENT_LEDGER_QUIET_WINDOW` after the newest event. The default is 2 minutes.
+It stays open at most `ITEM_EVENT_LEDGER_QUIET_WINDOW_CAP` after the first event. The default is 10 minutes.
+Merged, closed, a submitted pull request review, a closed or deleted issue, and an archived document do not wait.
+
+While the window is open, the event waits with `QUIET_WINDOW`.
+When the window closes, one review runs at the newest event. The older events are withheld with `COALESCED`.
+An event waits longer in two cases:
+
+- An earlier review of the same work still measures a practice that the event selects. The event waits with `REVIEW_IN_PROGRESS` until that review ends.
+- A practice needs the work's checks (its checks source is Required or Complete) and the checks have not finished.
+  The review withholds that practice with the reason `CHECKS_PENDING`, `CHECKS_AWAITING_APPROVAL` or `NO_CHECKS_REPORTED`.
+  The next event on the work, such as the checks event when they finish, selects it again.
+  A practice that reads the checks as Optional never waits for them.
+
+An event that selects only practices that already have a current observation is withheld with `ALREADY_CURRENT`.
+Opened, ready and a review request measure every practice that they select, current or not.
+
 ### Work budgets
 
 By default, groups with more than six practices are split into smaller sets.

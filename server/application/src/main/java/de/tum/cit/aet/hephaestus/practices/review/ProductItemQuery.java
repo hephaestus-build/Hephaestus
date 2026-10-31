@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecksSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
@@ -30,6 +32,7 @@ public class ProductItemQuery {
     private final ProductItemRepository rows;
     private final List<ItemSource> sources;
     private final List<ItemUrlResolver> urlResolvers;
+    private final List<ItemChecksSource> checks;
 
     public Optional<ItemRef> find(long workspaceId, long itemId) {
         return rows.activeItem(workspaceId, itemId).map(row -> row.ref(workspaceId));
@@ -47,6 +50,11 @@ public class ProductItemQuery {
 
     public ItemRef require(long workspaceId, long itemId) {
         return find(workspaceId, itemId).orElseThrow(() -> new EntityNotFoundException("Item", Long.toString(itemId)));
+    }
+
+    /** The item kind's checks source and what it says for this review, or empty when the kind has no checks. */
+    public Optional<ItemChecksSource> checks(ItemKind kind) {
+        return checks.stream().filter(source -> source.kind().equals(kind)).findFirst();
     }
 
     public ItemSnapshot pin(ItemRef item, @Nullable ItemVersion version) {

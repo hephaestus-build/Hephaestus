@@ -35,8 +35,29 @@ flowchart TD
 
 ## Select a review
 
-[ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md) decides a quiet window and supersede for item reviews. They are not shipped yet.
-[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides readiness per practice, freshness by source fingerprints, and a composer agent that sees its earlier feedback. They are not shipped yet.
+[ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md) decides a quiet window and supersede for item reviews.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides readiness per practice, freshness by source fingerprints, and a composer agent that sees its earlier feedback.
+The quiet window and readiness per practice are shipped. Supersede, source fingerprints and the composer agent are not shipped yet.
+
+An item event joins its item's quiet window, unless its item kind marks it as immediate.
+These events are immediate: merged, closed, a submitted pull request review, a closed or deleted issue, and an archived document.
+While the window is open, the event waits with `QUIET_WINDOW`.
+Each newer event of the item extends the window, up to the cap from the first event.
+`QuietWindowCloser` offers each closed window to `ItemEventReviewListener`.
+
+At the [readiness edge](practice-review-glossary#review-terms), one review runs at the newest event of the window.
+Its practices are the union of what the window's events select, together with every practice whose last membership on the item waits for the checks.
+Selection never takes a practice whose stored version declares an event or About role that the item kind does not offer.
+It also never takes a practice with a read that the current source catalog cannot capture for the item kind (`UncapturableReads`).
+Capture would withhold such a practice on every review and leave each review Partial.
+`ReviewServiceImpl` then removes practices that do not run now:
+
+1. A practice that a queued or running review of the item still measures holds the whole window. The events wait with `REVIEW_IN_PROGRESS` and are offered again one window later.
+2. A continuing occasion leaves out each practice with a current result. A [milestone](practice-review-glossary#review-terms) keeps them. If nothing is left, the event is withheld with `ALREADY_CURRENT`.
+3. A practice can need the item's checks source (Required or Complete). If the checks have not settled, it gets a withheld membership. Its [readiness reason](practice-review-glossary#readiness-reasons) says why.
+
+The newest event starts the review, and the older events of the window are withheld with `COALESCED`.
+A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 
 Adapters record item events after source sync establishes the recorded change.
 Repeated provider delivery does not create another event for the same item, name and version.

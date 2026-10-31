@@ -3,10 +3,12 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -107,6 +109,38 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         ORDER BY COALESCE(history.has_current,false),history.last_verdict ASC NULLS FIRST,m.practice_id
         """, nativeQuery = true)
     List<Long> executablePracticeIds(long workspaceId, UUID reviewId, long itemId);
+
+    /** The practices that a queued or running review of the item lists and has not judged yet, with that review. */
+    @Query(value = """
+        SELECT m.practice_id AS practiceId, r.id AS reviewId, r.status AS status,
+        CAST(r.checks->>'startedAt' AS timestamptz) AS startedAt FROM review_item m
+        JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id WHERE m.workspace_id=:workspaceId
+        AND m.item_id=:itemId AND m.state='LISTED' AND r.kind='ITEM' AND r.status IN ('QUEUED','RUNNING')
+        """, nativeQuery = true)
+    List<ListedPractice> listedPractices(long workspaceId, long itemId);
+
+    interface ListedPractice {
+        long getPracticeId();
+
+        UUID getReviewId();
+
+        String getStatus();
+
+        /** When the review started running; null while it is queued. */
+        @Nullable
+        Instant getStartedAt();
+    }
+
+    /** Practices whose newest review of the item withheld them for one of {@code reasons}. */
+    @Query(value = """
+        SELECT latest.practice_id FROM (
+          SELECT DISTINCT ON (m.practice_id) m.practice_id, m.state, m.reason FROM review_item m
+          JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id
+          WHERE m.workspace_id=:workspaceId AND m.item_id=:itemId AND r.kind='ITEM'
+          ORDER BY m.practice_id, r.created_at DESC, r.id DESC
+        ) latest WHERE latest.state='WITHHELD' AND latest.reason IN (:reasons)
+        """, nativeQuery = true)
+    List<Long> lastWithheldPracticeIds(long workspaceId, long itemId, Collection<String> reasons);
 
     boolean existsByWorkspaceIdAndReviewIdAndStateIn(
             long workspaceId, UUID reviewId, Collection<ReviewItemState> states);

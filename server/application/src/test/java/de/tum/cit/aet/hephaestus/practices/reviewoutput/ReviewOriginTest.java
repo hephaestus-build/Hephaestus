@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +30,8 @@ class ReviewOriginTest extends BaseUnitTest {
                 null,
                 null,
                 List.of(),
-                true);
+                true,
+                Set.of());
         assertThat(request.eventId()).isNull();
         assertThat(request.origin()).isEqualTo(ReviewOrigin.SCHEDULE);
     }

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventDefinition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersionScheme;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
@@ -68,14 +69,16 @@ final class FixtureIntegration {
                                 Set.of(ASSEMBLY_EVENT),
                                 ItemVersionScheme.CONTENT_DIGEST,
                                 false,
-                                true),
+                                true,
+                                OccasionKind.CONTINUING),
                         new ItemEventDefinition(
                                 WIDGET_SHIPPED,
                                 "Widget shipped",
                                 Set.of(SHIPMENT_EVENT),
                                 ItemVersionScheme.TERMINAL_STATE,
                                 false,
-                                true)),
+                                true,
+                                OccasionKind.IMMEDIATE)),
                 reviewable,
                 roles,
                 lanes);
