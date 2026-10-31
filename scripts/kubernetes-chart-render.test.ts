@@ -2381,9 +2381,10 @@ await test("every container of the application image names the release that it r
 	// without these values writes logs, spans and metrics with the development version.
 	const resources = rendered([...layersFor("small"), workerLayer]);
 	const image = get(container(workload(resources, "server")), "image");
-	const named = resources.flatMap((resource) =>
+	const identities = resources.flatMap((resource) =>
 		[
-			...list(get(resource, "spec", "template", "spec", "containers")),
+			...containers(resource),
+			...list(get(resource, "spec", "jobTemplate", "spec", "template", "spec", "initContainers")),
 			...list(get(resource, "spec", "jobTemplate", "spec", "template", "spec", "containers")),
 		]
 			.filter((entry) => get(entry, "image") === image)
@@ -2401,13 +2402,13 @@ await test("every container of the application image names the release that it r
 				};
 			}),
 	);
-	assert.deepEqual(named.map(({ component }) => component).toSorted(), [
+	assert.deepEqual(identities.map(({ component }) => String(component)).toSorted(byCodePoint), [
 		"migration",
 		"server",
 		"webhook",
 		"worker",
 	]);
-	for (const entry of named) {
+	for (const entry of identities) {
 		assert.deepEqual(
 			{ version: entry.version, commit: entry.commit },
 			{ version: "1.2.3", commit: "c".repeat(40) },
