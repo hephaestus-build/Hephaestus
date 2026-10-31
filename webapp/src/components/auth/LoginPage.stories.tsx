@@ -39,6 +39,16 @@ export const Default: Story = {
 		);
 	},
 };
+/** After the person deleted their own account: the notice stays until they leave the page. */
+export const AccountDeletionScheduled: Story = {
+	args: { notice: "account-deletion-scheduled" },
+	play: async () => {
+		const notice = await screen.findByRole("note");
+		await expect(notice).toHaveTextContent("Your account is scheduled for deletion");
+		await expect(notice).toHaveTextContent("contact your instance operator");
+		await expect(screen.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+	},
+};
 export const Cancelled: Story = { args: { error: "access_denied" } };
 export const ProviderUnavailable: Story = { args: { error: "idp_unavailable" } };
 export const UnknownError: Story = { args: { error: "unknown" } };

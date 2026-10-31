@@ -8,6 +8,7 @@ import {
 import { getCurrentUser } from "@/api/sdk.gen";
 import type { CurrentUserView, WorkspaceMembership } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
+import { clearAccountDeletedNoticeUnlessFor } from "@/runtime/auth/account-deleted-notice";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { clearUserViewUnlessOperator } from "@/runtime/user-view/session";
 
@@ -47,9 +48,11 @@ export function currentUserQueryOptions() {
 				signal: AbortSignal.timeout(IDENTITY_READ_TIMEOUT_MS),
 			});
 			// Every request waits for this identity, so a view left in the tab by another account, or
-			// by a session that has ended, is dropped here before any request can carry it.
+			// by a session that has ended, is dropped here before any request can carry it. A deletion
+			// notice left by another account is dropped here too.
 			if (data !== undefined && response?.ok === true) {
 				clearUserViewUnlessOperator(data.id);
+				clearAccountDeletedNoticeUnlessFor(String(data.id));
 				return data;
 			}
 			if (response !== undefined && !unreachableStatus(response.status)) {

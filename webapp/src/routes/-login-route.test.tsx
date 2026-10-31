@@ -1,13 +1,18 @@
 import { createRouter } from "@tanstack/react-router";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import {
+	ACCOUNT_DELETED_NOTICE_LIFETIME_MS,
+	recordAccountDeleted,
+} from "@/runtime/auth/account-deleted-notice";
 import { authClient } from "@/runtime/auth/auth-client";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -92,6 +97,29 @@ describe("contextual sign-in", () => {
 		await userEvent.keyboard("{Escape}");
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 		expect(router.state.location.href).toBe("/about?source=invite#team");
+	});
+
+	it("shows the account deletion notice once, and not again after a reload", async () => {
+		recordAccountDeleted(String(currentUser.id));
+		renderRouteAtWithRouter("/login");
+		const notice = await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
+		expect(notice.textContent).toContain("Your account is scheduled for deletion");
+		expect(notice.textContent).toContain("contact your instance operator");
+		// A fresh render models the reload.
+		cleanup();
+		renderRouteAtWithRouter("/login");
+		await screen.findByRole("button", { name: "Continue with GitHub" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("note")).toBeNull();
+	});
+
+	it("does not show an account deletion notice recorded too long ago", async () => {
+		// oxlint-disable-next-line no-restricted-properties -- The record expires in wall-clock time.
+		const recordedAt = Date.now() - ACCOUNT_DELETED_NOTICE_LIFETIME_MS;
+		vi.spyOn(Date, "now").mockReturnValueOnce(recordedAt);
+		recordAccountDeleted(String(currentUser.id));
+		renderRouteAtWithRouter("/login");
+		await screen.findByRole("button", { name: "Continue with GitHub" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("note")).toBeNull();
 	});
 
 	it("uses the generic error for inherited object-property names", async () => {

@@ -3,11 +3,10 @@ import { useState } from "react";
 import { toast } from "@/lib/toast";
 
 import {
-	deleteCurrentUserMutation,
 	getDataExportStatusOptions,
 	requestDataExportMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { downloadDataExport } from "@/api/sdk.gen";
+import { deleteCurrentUser, downloadDataExport } from "@/api/sdk.gen";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -25,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { saveBlobFile } from "@/lib/download";
 import { hasText } from "@/lib/text";
-import { ACCOUNT_DELETED_NOTICE_KEY } from "@/runtime/auth/account-deleted-notice";
+import { recordAccountDeleted } from "@/runtime/auth/account-deleted-notice";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 const DELETE_CONFIRM_PHRASE = "delete my account";
@@ -37,7 +36,7 @@ const EXPORT_IN_PROGRESS = new Set(["PENDING", "PROCESSING"]);
 const MAX_EXPORT_WAIT_MS = 3 * 60 * 1000;
 
 interface DangerZoneSectionProps {
-	/** Called after the account is deleted (e.g. logout + redirect to /login). */
+	/** Called after the server confirms the deletion (e.g. open the sign-in page). */
 	onAccountDeleted: () => void | Promise<void>;
 }
 
@@ -188,6 +187,14 @@ function DataExportRow() {
 	);
 }
 
+// The server requires the confirmation header to equal the caller's own account id
+// (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
+// The sign-in page notice is recorded only once the server confirms the deletion.
+async function deleteOwnAccount(accountId: string): Promise<void> {
+	await deleteCurrentUser({ headers: { "X-Confirm-Delete": accountId }, throwOnError: true });
+	recordAccountDeleted(accountId);
+}
+
 /**
  * GDPR Art. 17 account deletion. Requires typing a confirmation phrase before the
  * destructive action enables.
@@ -198,15 +205,8 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 	const confirmed = confirmText.trim().toLowerCase() === DELETE_CONFIRM_PHRASE;
 
 	const deleteAccount = useMutation({
-		...deleteCurrentUserMutation(),
+		mutationFn: deleteOwnAccount,
 		onSuccess: async () => {
-			// Stash a one-shot flag so the login page (after logout's reload) can confirm the outcome —
-			// a toast here would be destroyed by the reload onAccountDeleted triggers.
-			try {
-				sessionStorage.setItem(ACCOUNT_DELETED_NOTICE_KEY, "1");
-			} catch {
-				// best-effort; private mode may block sessionStorage
-			}
 			await onAccountDeleted();
 		},
 		onError: () => {
@@ -215,13 +215,11 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 	});
 
 	const handleConfirm = () => {
-		// The server requires the confirmation header to equal the caller's own account id
-		// (a deliberate "you know who you are" guard against forged/CSRF-style deletes).
 		const userId = getUserId();
 		if (!confirmed || !hasText(userId)) {
 			return;
 		}
-		deleteAccount.mutate({ headers: { "X-Confirm-Delete": userId } });
+		deleteAccount.mutate(userId);
 	};
 
 	return (
@@ -230,8 +228,8 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 				<h3 className="text-base font-medium">Delete account</h3>
 				<p className="text-sm leading-relaxed text-muted-foreground">
 					Permanently delete your account and erase your personal data (GDPR Art. 17). Hephaestus
-					signs you out on all devices at once, then deletes the account after a cooldown of about
-					48 hours. You cannot recover it from here.
+					signs you out on all devices at once, then deletes the account after a waiting period that
+					your instance operator sets. You cannot recover it from here.
 				</p>
 			</div>
 			<AlertDialog
@@ -256,7 +254,7 @@ function DeleteAccountRow({ onAccountDeleted }: DangerZoneSectionProps) {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete your account?</AlertDialogTitle>
 						<AlertDialogDescription>
-							This signs you out on all devices and disables your account. After about 48 hours,
+							This signs you out on all devices and disables your account. After a waiting period,
 							Hephaestus permanently deletes the account and your data. You cannot undo this from
 							here. To confirm, enter{" "}
 							<span className="font-medium text-foreground">{DELETE_CONFIRM_PHRASE}</span> below.
