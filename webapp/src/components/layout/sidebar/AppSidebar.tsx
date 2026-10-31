@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { MouseEvent, ReactNode } from "react";
 
 import type { IntegrationCatalogEntry, WorkspaceListItem, Workspace } from "@/api/types.gen";
-import { NoWorkspace } from "@/components/common/NoWorkspace";
+import { NoWorkspace, type WorkspaceCreation } from "@/components/common/NoWorkspace";
 import { Button } from "@/components/ui/button";
 import {
 	Sidebar,
@@ -58,6 +58,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	onWorkspaceChange?: (workspace: WorkspaceListItem) => void;
 	onAddWorkspace?: () => void;
 	workspacesLoading?: boolean;
+	/** Whether this person may create a workspace; undefined while the creation policy loads. */
+	workspaceCreation?: WorkspaceCreation;
 }
 
 export function AppSidebar({
@@ -77,6 +79,7 @@ export function AppSidebar({
 	onWorkspaceChange,
 	onAddWorkspace,
 	workspacesLoading = false,
+	workspaceCreation,
 	onClick,
 	...props
 }: AppSidebarProps) {
@@ -178,7 +181,7 @@ export function AppSidebar({
 	} else {
 		sidebarContent = (
 			<div className="group-data-[collapsible=icon]:hidden">
-				<NoWorkspace headingLevel={2} />
+				<NoWorkspace headingLevel={2} creation={workspaceCreation} />
 			</div>
 		);
 	}

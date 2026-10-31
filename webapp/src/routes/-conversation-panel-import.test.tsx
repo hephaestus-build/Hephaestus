@@ -20,6 +20,8 @@ vi.mock("./-GlobalConversationPanel", () => {
 it("keeps the main route available and offers a reload when the Hephaestus panel import rejects", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([])),
+		// Anyone may create a workspace here, so the empty page offers the action this test looks for.
+		http.get("*/workspaces/providers", () => HttpResponse.json({ creationPolicy: "SELF_SERVICE" })),
 		http.get("*/user/features", () => HttpResponse.json({})),
 	);
 	const queryClient = testQueryClient();

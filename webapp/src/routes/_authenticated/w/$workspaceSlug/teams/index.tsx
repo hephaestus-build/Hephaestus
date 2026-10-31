@@ -3,13 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { getAllTeamsOptions } from "@/api/@tanstack/react-query.gen";
-import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { queryLoadState } from "@/components/common/panel-state";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { TeamsPage, type TeamsPageProps } from "@/components/teams/TeamsPage";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
+import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/teams/")({
 	head: pageHead("Teams"),
@@ -37,7 +37,7 @@ function TeamsContainer() {
 	}, [queryClient, options.queryKey, teamsQuery.isError, teamsQuery.error, teamsQuery.data]);
 
 	if (!hasText(workspaceSlug)) {
-		return <NoWorkspace />;
+		return <NoWorkspaceContainer />;
 	}
 
 	// A refresh that failed and may pass on retry keeps the teams on screen; anything else is the read's state.

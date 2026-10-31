@@ -5,16 +5,18 @@ import { useWorkspacePasskeySettings } from "@/hooks/use-workspace-passkey-setti
 
 import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/WorkspacePasskeyPolicySection";
 import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
-import { NoWorkspace } from "@/components/common/NoWorkspace";
+import { WorkspaceSetupSummary } from "@/components/admin/settings/WorkspaceSetupSummary";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
+import { useWorkspaceSetup } from "@/hooks/use-workspace-setup";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
+import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/settings")({
 	head: workspaceAdminHead("Workspace settings"),
@@ -37,6 +39,7 @@ function AdminSettings() {
 	} = useWorkspaceAccess();
 	const workspace =
 		administrationWorkspaceSlug === undefined ? chromeWorkspace : administrationWorkspace;
+	const setup = useWorkspaceSetup(workspaceSlug ?? "", { enabled: hasText(workspaceSlug) });
 	const { hiddenPeople, ...publicActivity } = useWorkspacePublicActivity({
 		workspaceSlug,
 		live:
@@ -47,7 +50,7 @@ function AdminSettings() {
 	});
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading && error === undefined) {
-		return <NoWorkspace />;
+		return <NoWorkspaceContainer />;
 	}
 
 	let settings: ReactNode;
@@ -66,6 +69,7 @@ function AdminSettings() {
 	} else {
 		settings = (
 			<WorkspaceSettingsPage
+				setupSummary={<WorkspaceSetupSummary workspaceSlug={workspaceSlug} state={setup} />}
 				security={<WorkspacePasskeyPolicySection {...passkeys} />}
 				workspaceSlug={workspaceSlug}
 				practicesEnabled={workspace.practicesEnabled}

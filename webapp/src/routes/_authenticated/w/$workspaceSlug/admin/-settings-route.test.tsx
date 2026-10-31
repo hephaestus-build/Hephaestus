@@ -10,9 +10,16 @@ import {
 	getPublicActivityPolicyQueryKey,
 	listWorkspacesQueryKey,
 	getWorkspacePublicActivitySettingsQueryKey,
+	listAgentsQueryKey,
 	listHiddenContributorsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import type { UpdateWorkspacePublicActivityRequest } from "@/api/types.gen";
+import type {
+	ConnectionSyncStatus,
+	SyncJob,
+	UpdateWorkspacePublicActivityRequest,
+} from "@/api/types.gen";
+import { SETUP_SYNC_POLL_MS } from "@/hooks/use-workspace-setup";
+import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
@@ -29,7 +36,8 @@ import { switchWorkspace } from "@/test/workspace-switcher";
 // deadlock backstop, not a budget these renders were meant to fit inside.
 vi.setConfig({ testTimeout: 15_000 });
 
-function renderSettingsRoute(practicesEnabled: boolean) {
+/** The settings page for an admin of acme, with the integrations the catalog lists. */
+function renderSettingsRoute(practicesEnabled: boolean, catalog: JsonBodyType = []) {
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
@@ -37,7 +45,7 @@ function renderSettingsRoute(practicesEnabled: boolean) {
 		http.get("*/workspaces", () =>
 			HttpResponse.json([workspaceListItem("acme", { practicesEnabled })]),
 		),
-		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
+		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json(catalog)),
 	);
 	return renderRouteAt("/w/acme/admin/settings", testQueryClient());
 }
@@ -114,6 +122,224 @@ describe("workspace settings route", () => {
 		renderSettingsRoute(false);
 
 		await screen.findByText(/^Off\./u, undefined, ROUTE_RENDER_WAIT);
+	});
+});
+
+/** The admin reads the setup summary is composed of, for a fresh GitHub workspace. */
+function serveSetupReads(workspaceSlug: string) {
+	const reads: string[] = [];
+	const record = (request: Request) => {
+		reads.push(new URL(request.url).pathname);
+	};
+	server.use(
+		http.get(`*/workspaces/${workspaceSlug}/connections/catalog`, ({ request }) => {
+			record(request);
+			return HttpResponse.json([]);
+		}),
+		http.get(`*/workspaces/${workspaceSlug}/practices`, ({ request }) => {
+			record(request);
+			return HttpResponse.json([]);
+		}),
+		http.get(`*/workspaces/${workspaceSlug}/agents`, ({ request }) => {
+			record(request);
+			return HttpResponse.json({ status: 503, title: "Unavailable" }, { status: 503 });
+		}),
+		http.get(`*/workspaces/${workspaceSlug}/onboarding/settings`, ({ request }) => {
+			record(request);
+			return HttpResponse.json({
+				enabled: false,
+				aiChoiceRequired: false,
+				requiredConnectionIds: [],
+				revision: 1,
+			});
+		}),
+		http.get(`*/workspaces/${workspaceSlug}/practices/feedback-modes`, ({ request }) => {
+			record(request);
+			return HttpResponse.json({
+				off: 0,
+				approveFirst: 0,
+				automatic: 0,
+				defaultMode: "APPROVE_FIRST",
+			});
+		}),
+		http.get(`*/workspaces/${workspaceSlug}/practices/reviews`, ({ request }) => {
+			record(request);
+			const url = new URL(request.url);
+			// Only a finished review of work counts as the first review.
+			expect(url.searchParams.get("kind")).toBe("ITEM");
+			expect(url.searchParams.getAll("status")).toStrictEqual(["COMPLETE", "PARTIAL"]);
+			return HttpResponse.json({ content: [], totalElements: 0, totalPages: 0 });
+		}),
+	);
+	return reads;
+}
+
+/** The row of the setup summary that a title link opens from. */
+function setupRow(title: string) {
+	const summary = screen.getByRole("list", { name: "Setup summary" });
+	const row = within(summary).getByRole("link", { name: title }).closest("li");
+	if (row === null) {
+		throw new Error(`No setup row for ${title}`);
+	}
+	return row;
+}
+
+/** The workspace read the summary takes its review switches and provider from. */
+function serveAcmeWorkspace() {
+	server.use(
+		http.get("*/workspaces/acme", () =>
+			HttpResponse.json({
+				...workspaceListItem("acme"),
+				kind: "GITHUB",
+				practicesEnabled: false,
+				practiceReviewAutoTriggerEnabled: true,
+				practiceReviewManualTriggerEnabled: true,
+			}),
+		),
+	);
+}
+
+/** The connection's first sync job, as the server reports it. */
+const initialSyncJob = (status: SyncJob["status"]): Wire<SyncJob> => ({
+	id: 1,
+	status,
+	type: "INITIAL",
+	trigger: "LIFECYCLE",
+	cancelRequested: false,
+	createdAt: "2026-10-01T00:00:00Z",
+});
+
+describe("the setup summary", () => {
+	it("states each fact from the admin reads, and a fact that could not be read as Unknown", async () => {
+		serveSetupReads("acme");
+		serveAcmeWorkspace();
+		renderSettingsRoute(false);
+
+		await screen.findByRole("list", { name: "Setup summary" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(setupRow("Review model").textContent).toContain("Unknown"));
+		expect(setupRow("Repositories").textContent).toContain("Not connected");
+		expect(setupRow("Practice reviews").textContent).toContain("Off");
+		expect(setupRow("Practices").textContent).toContain("None chosen");
+		expect(setupRow("First review").textContent).toContain("None yet");
+		expect(screen.getByRole("link", { name: "Review recent work" }).getAttribute("href")).toBe(
+			"/w/acme/admin/practices/review?section=past-work",
+		);
+	});
+
+	it("says Unknown for a fact whose refresh failed, and the fact again once it reads", async () => {
+		serveSetupReads("acme");
+		serveAcmeWorkspace();
+		const agents = serveRead("*/workspaces/acme/agents", {
+			status: 200,
+			body: [
+				{
+					purpose: "PRACTICE_REVIEW",
+					dataHandlingTier: "UNDECLARED",
+					enabled: true,
+					ready: true,
+					servedTiers: ["IN_HOUSE", "CLOUD", "UNDECLARED"],
+				},
+			],
+		});
+		const queryClient = renderSettingsRoute(false);
+
+		await screen.findByRole("list", { name: "Setup summary" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(setupRow("Review model").textContent).toContain("Done"));
+
+		// The cache still holds the ready model; the failed read must not keep claiming it.
+		agents.answer = { status: 503 };
+		await reread(queryClient, listAgentsQueryKey(ACME));
+		await waitFor(() => expect(setupRow("Review model").textContent).toContain("Unknown"));
+		expect(setupRow("Review model").textContent).not.toContain("Ready for every AI choice");
+
+		agents.answer = { status: 200, body: [] };
+		await reread(queryClient, listAgentsQueryKey(ACME));
+		await waitFor(() =>
+			expect(setupRow("Review model").textContent).toContain(
+				"No review model is ready, so no review can start.",
+			),
+		);
+	});
+
+	it("follows the first sync from waiting to running to finished without navigation", async () => {
+		vi.useFakeTimers({
+			shouldAdvanceTime: true,
+			toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+		});
+		try {
+			serveSetupReads("acme");
+			serveAcmeWorkspace();
+			const status: Wire<ConnectionSyncStatus> = {
+				connectionId: 3,
+				kind: "GITHUB",
+				connectionState: "ACTIVE",
+				health: "PENDING",
+				backfillSupported: true,
+				resourceCounts: { total: 4, pending: 4, errored: 0, stale: 0 },
+			};
+			const sync = serveRead<Wire<ConnectionSyncStatus>>("*/workspaces/acme/connections/3/sync", {
+				status: 200,
+				body: { ...status, activeJob: initialSyncJob("PENDING") },
+			});
+			renderSettingsRoute(false, [
+				{ kind: "GITHUB", displayName: "GitHub", connected: true, connectionId: 3 },
+			]);
+
+			await screen.findByRole("list", { name: "Setup summary" }, ROUTE_RENDER_WAIT);
+			await waitFor(() =>
+				expect(setupRow("Repositories").textContent).toContain("Waiting for the first sync"),
+			);
+
+			sync.answer = {
+				status: 200,
+				body: {
+					...status,
+					activeJob: initialSyncJob("RUNNING"),
+					backfill: { state: "RUNNING", percent: 40 },
+				},
+			};
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(SETUP_SYNC_POLL_MS);
+			});
+			await waitFor(() => expect(setupRow("Repositories").textContent).toContain("Syncing · 40%"));
+
+			sync.answer = {
+				status: 200,
+				body: {
+					...status,
+					health: "HEALTHY",
+					lastSuccessfulSyncAt: "2026-10-01T01:00:00Z",
+					resourceCounts: { total: 4, pending: 0, errored: 0, stale: 0 },
+				},
+			};
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(SETUP_SYNC_POLL_MS);
+			});
+			await waitFor(() =>
+				expect(setupRow("Repositories").textContent).toContain("4 repositories synced."),
+			);
+
+			// Settled: the summary stops asking.
+			const reads = sync.count;
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(SETUP_SYNC_POLL_MS * 3);
+			});
+			expect(sync.count).toBe(reads);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("reads the administered workspace's facts for an instance admin who is not a member", async () => {
+		serveTarget();
+		const reads = serveSetupReads("tutors");
+		renderRouteAtWithRouter("/w/tutors/admin/settings");
+
+		await screen.findByRole("list", { name: "Setup summary" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(reads).toContain("/workspaces/tutors/practices/reviews"));
+		expect(
+			within(setupRow("Practices")).getByRole("link", { name: "Practices" }).getAttribute("href"),
+		).toBe("/w/tutors/admin/practices");
 	});
 });
 

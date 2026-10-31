@@ -25,13 +25,13 @@ import { WorkspaceChangeRoleDialog } from "@/components/admin/members/WorkspaceC
 import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMembersPage";
 import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
 import { accountName } from "@/components/admin/users/account-labels";
-import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { pageParam, useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
+import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
@@ -201,7 +201,7 @@ function AdminMembersContainer() {
 	const isLoading = isWorkspaceLoading || membersQuery.isPending;
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading && workspaceError === undefined) {
-		return <NoWorkspace />;
+		return <NoWorkspaceContainer />;
 	}
 
 	return (
