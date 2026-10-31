@@ -12,8 +12,18 @@ minimumReleaseAgeExclude:
   - "@earendil-works/pi-telemetry@1.0.0"
   - "@earendil-works/pi-tui@1.0.0"
 
-# @earendil-works/pi-coding-agent pins undici exactly; take undici security fixes without a new agent.
 overrides:
+  # Pi SDK 1.0.0 accepts any 1.x of its own packages. A fresh resolve, such as lockfile maintenance,
+  # would move them past the SDK version, which the pi-ai patch and the agent image expect.
+  # gate:agent-runtime-pins holds each one to the SDK version.
+  "@earendil-works/chord": 1.0.0
+  "@earendil-works/pi-agent-core": 1.0.0
+  "@earendil-works/pi-ai": 1.0.0
+  "@earendil-works/pi-codemode": 1.0.0
+  "@earendil-works/pi-mcp": 1.0.0
+  "@earendil-works/pi-telemetry": 1.0.0
+  "@earendil-works/pi-tui": 1.0.0
+  # @earendil-works/pi-coding-agent pins undici exactly; take undici security fixes without a new agent.
   "undici@>=8.0.0 <8.12.2": 8.12.2
 
 # OpenAI-compatible proxies may name cache writes created_cache_tokens; read it like cache_write_tokens.
