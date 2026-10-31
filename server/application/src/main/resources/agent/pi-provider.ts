@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import type { ExtensionFactory, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
-import { errorText } from "./pi-error-text.ts";
+import { diagnose, errorKind } from "./pi-diagnostics.ts";
 import { hasText } from "./pi-text.ts";
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 
@@ -179,7 +179,7 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
 		return asProviderConfig(parsed);
 	} catch (error) {
-		console.error(`[pi-provider] failed to parse ${path}: ${errorText(error)}`);
+		diagnose("provider.parse_failed", { error: errorKind(error) }, "provider");
 		return null;
 	}
 }

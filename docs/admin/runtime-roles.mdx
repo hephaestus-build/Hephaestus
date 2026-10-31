@@ -621,8 +621,17 @@ If the host leaves 6 pings in a row without an answer, about 30 seconds, the wor
 
 The worker logs the removal with the host's id at `INFO`.
 It does not copy the host's output into its own log, because that output can hold the conversation, a provider's answer, or a credential.
+
 When a sandbox ends abnormally, the worker logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
-Only for a practice review does that line also carry the review runtime's own last error lines.
+Only for a practice review does that line also carry the review runtime's own last diagnostic lines, as `sandbox.stderr.tail`.
+Each kept line names one runtime event with counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`.
+A turn and a practice are named by their positions in the review's practice index, not by their names.
+The line never holds a tool result, a provider's error message, model output, reviewed code, a name, a path or an identifier.
+
+The worker keeps a line only when its event, fields and values are in the runtime's diagnostic vocabulary.
+This rule also applies to a line from an older runtime image.
+It counts every other line in `sandbox.stderr.dropped`.
+
 When a host cannot start, the worker logs the cause that it knows.
 For example, it logs the hostname rule or the exit code of the host's workspace setup.
 

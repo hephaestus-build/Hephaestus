@@ -7,6 +7,7 @@ import { test } from "node:test";
 
 import {
 	capturedLines,
+	toldTheModel,
 	field,
 	readJsonFile,
 	runRunner,
@@ -154,10 +155,12 @@ export default definePracticeScript({
 		const results = existsSync(nodePath.join(cwd, "out/result.json"))
 			? field(readJsonFile(cwd, "out/result.json"), "results")
 			: [];
+		const replies = capturedLines(cwd, "submitted");
 		return {
 			...exit,
 			results,
-			replies: capturedLines(cwd, "submitted"),
+			replies,
+			said: toldTheModel(cwd),
 		};
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
@@ -270,11 +273,11 @@ void test("the live Git-log-as-HEAD shape is refused with an exact captured comm
 		endLine: 3,
 		quote: `commit ${HEAD}\n    Add authentication\n    Add checked helper`,
 	});
-	assert.match(result.stderr, /A Git log is not the content of \.git\/HEAD/u);
-	assert.match(result.stderr, /Corrected citation example:/u);
-	assert.match(result.stderr, /commits\.json/u);
-	const example = /Corrected citation example: (?<example>\{[^\n]*?\})\./u.exec(result.stderr)
-		?.groups?.example;
+	assert.match(result.said, /A Git log is not the content of \.git\/HEAD/u);
+	assert.match(result.said, /Corrected citation example:/u);
+	assert.match(result.said, /commits\.json/u);
+	const example = /Corrected citation example: (?<example>\{[^\n]*?\})\./u.exec(result.said)?.groups
+		?.example;
 	assert.ok(example !== undefined, result.stderr);
 	const corrected: unknown = JSON.parse(example);
 	assert.ok(typeof corrected === "object" && corrected !== null);
@@ -295,9 +298,9 @@ void test("generated practice input redirects citations to captured evidence wit
 		[],
 		true,
 	);
-	assert.match(result.stderr, /generated practice preparation, not captured evidence/u);
-	assert.match(result.stderr, /read\(\{"path":"evidence\/manifest\.json"\}\)/u);
-	assert.doesNotMatch(result.stderr, /no such file at commit/u);
+	assert.match(result.said, /generated practice preparation, not captured evidence/u);
+	assert.match(result.said, /read\(\{"path":"evidence\/manifest\.json"\}\)/u);
+	assert.doesNotMatch(result.said, /no such file at commit/u);
 	assert.deepEqual(result.results, []);
 
 	const captured = await run(
@@ -326,9 +329,9 @@ void test("an absolute generated-input citation receives the same captured-sourc
 		[],
 		true,
 	);
-	assert.match(result.stderr, /generated practice preparation, not captured evidence/u);
-	assert.match(result.stderr, /read\(\{"path":"evidence\/manifest\.json"\}\)/u);
-	assert.doesNotMatch(result.stderr, /no such file at commit/u);
+	assert.match(result.said, /generated practice preparation, not captured evidence/u);
+	assert.match(result.said, /read\(\{"path":"evidence\/manifest\.json"\}\)/u);
+	assert.doesNotMatch(result.said, /no such file at commit/u);
 	assert.deepEqual(result.results, []);
 });
 
@@ -344,7 +347,7 @@ const CHANGED_LINE = {
 void test("a changed line cited with its side but no source is stored as a citation of the change", async () => {
 	const result = await run(CHANGED_LINE, false, [], false, true);
 	assert.equal(result.status, 0, result.stderr);
-	assert.doesNotMatch(result.stderr, /side is forbidden/u);
+	assert.doesNotMatch(result.said, /side is forbidden/u);
 	assert.partialDeepStrictEqual(result.results, [
 		{
 			candidate: {
@@ -369,18 +372,18 @@ void test("a changed line cited with its side but no source is stored as a citat
 
 void test("a side alone never makes a citation one of the change", async () => {
 	const uncaptured = await run(CHANGED_LINE);
-	assert.match(uncaptured.stderr, /side is forbidden by the source catalog/u);
+	assert.match(uncaptured.said, /side is forbidden by the source catalog/u);
 	assert.deepEqual(uncaptured.results, []);
 	const repository = await run({ ...CHANGED_LINE, sourceKind: TREE }, false, [], false, true);
-	assert.match(repository.stderr, /side is forbidden by the source catalog/u);
+	assert.match(repository.said, /side is forbidden by the source catalog/u);
 	assert.deepEqual(repository.results, []);
 });
 
 void test("a quote that is not the changed line is refused with a line of the change to cite", async () => {
 	const result = await run({ ...CHANGED_LINE, quote: "checked(token);" }, false, [], false, true);
-	assert.match(result.stderr, /citation does not match src\/Auth\.java:10-10 \(NEW\)/u);
+	assert.match(result.said, /citation does not match src\/Auth\.java:10-10 \(NEW\)/u);
 	assert.match(
-		result.stderr,
+		result.said,
 		/Corrected citation example: .*"sourceKind":"scm\.pull-request\.diff"/u,
 	);
 	assert.deepEqual(result.results, []);
@@ -393,17 +396,17 @@ void test("a missing repository file keeps the normal citation mismatch", async 
 		[],
 		true,
 	);
-	assert.match(result.stderr, /citation does not match src\/Missing\.java/u);
-	assert.match(result.stderr, /no such file at commit/u);
-	assert.doesNotMatch(result.stderr, /generated practice preparation/u);
+	assert.match(result.said, /citation does not match src\/Missing\.java/u);
+	assert.match(result.said, /no such file at commit/u);
+	assert.doesNotMatch(result.said, /generated practice preparation/u);
 	assert.deepEqual(result.results, []);
 });
 
 void test("a wrong repository quotation is refused and its corrected citation verifies", async () => {
 	const result = await run({ path: "src/Auth.java", startLine: 2, quote: "insecure(user);" });
-	assert.match(result.stderr, /reads .*insecure/u);
-	const example = /Corrected citation example: (?<example>\{[^\n]*?\})\./u.exec(result.stderr)
-		?.groups?.example;
+	assert.match(result.said, /reads .*insecure/u);
+	const example = /Corrected citation example: (?<example>\{[^\n]*?\})\./u.exec(result.said)?.groups
+		?.example;
 	assert.ok(example !== undefined, result.stderr);
 	const corrected: unknown = JSON.parse(example);
 	assert.ok(typeof corrected === "object" && corrected !== null);
@@ -443,7 +446,7 @@ void test("a repeated diff quote resolves the physical line's file instead of ch
 
 void test("an absolute path outside the sandbox cannot provide evidence", async () => {
 	const result = await run({ path: "/etc/passwd", startLine: 1, quote: "root" });
-	assert.match(result.stderr, /outside the captured sandbox/u);
+	assert.match(result.said, /outside the captured sandbox/u);
 	assert.deepEqual(result.results, []);
 });
 
@@ -454,8 +457,8 @@ for (const citation of [
 ]) {
 	void test(`a prohibited citation field on ${citation.path} gives a corrected example that verifies`, async () => {
 		const result = await run(citation);
-		assert.match(result.stderr, /forbidden by the source catalog/u);
-		const example = /Corrected citation example: (?<example>\{[^\n]*?\})\./u.exec(result.stderr)
+		assert.match(result.said, /forbidden by the source catalog/u);
+		const example = /Corrected citation example: (?<example>\{[^\n]*?\})\./u.exec(result.said)
 			?.groups?.example;
 		assert.ok(example !== undefined, result.stderr);
 		const corrected: unknown = JSON.parse(example);

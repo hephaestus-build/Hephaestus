@@ -24,6 +24,8 @@ public final class HephHostSpec {
     static final List<String> SIDECARS = List.of(
             "heph-host-protocol.ts",
             "pi-agent-sandbox.ts",
+            "pi-diagnostics.ts",
+            "pi-diagnostics.json",
             "pi-error-text.ts",
             "pi-text.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
