@@ -4802,7 +4802,7 @@
 		"baseFiles": {
 			"repo/Sources/Trips/TripNotesContent.swift": "import SwiftUI\n\nstruct TripNote: Identifiable {\n    let id = UUID()\n    let text: String\n}\n\nstruct TripNotesContent: View {\n    let notes: [TripNote]\n\n    var body: some View {\n        List(notes) { note in\n            Text(note.text)\n        }\n    }\n}\n\n#Preview {\n    TripNotesContent(notes: [TripNote(text: \"Book the ferry\"), TripNote(text: \"Pack rain jackets\")])\n}\n"
 		},
-		"reason": "The new TripNotesScreen owner passes everything to the existing TripNotesContent, whose previews were added before this change. The criteria say the checkout never supplies a preview the change did not add, and the change adds no preview for the new view. The owner adds no presentation of its own, so the case is borderline.",
+		"reason": "The new TripNotesScreen owner passes everything to the existing TripNotesContent, whose previews were added before this change. The criteria count only a preview that the change adds, and the change adds no preview for the new view. The owner adds no presentation of its own, so the case is borderline.",
 		"workType": "pull_request"
 	},
 	{
@@ -4949,7 +4949,7 @@
 			"context/description.md": "Adds the avatar stack that the team header will show.\n",
 			"repo/Sources/Team/AvatarStack.swift": "import SwiftUI\n\nstruct AvatarStack: View {\n    let initials: [String]\n\n    var body: some View {\n        HStack(spacing: -8) {\n            ForEach(initials, id: \\.self) { initial in\n                Text(initial)\n                    .font(.caption.bold())\n                    .frame(width: 28, height: 28)\n                    .background(.tint, in: Circle())\n            }\n        }\n    }\n}\n\n#Preview {\n    TeamHeaderView(teamName: \"Platform\")\n}\n"
 		},
-		"reason": "The preview constructs TeamHeaderView, which the change does not declare and the checkout does not hold (it lives in the uncaptured TeamKit package). Whether that host renders the new AvatarStack, and with which data, cannot be read; the file is Packages/TeamKit/Sources/TeamHeaderView.swift.",
+		"reason": "The preview constructs TeamHeaderView, which the change does not declare and the captured files do not include (it lives in the uncaptured TeamKit package). Whether that host renders the new AvatarStack, and with which data, cannot be read; the file is Packages/TeamKit/Sources/TeamHeaderView.swift.",
 		"workType": "pull_request"
 	},
 	{
@@ -5239,7 +5239,7 @@
 			"context/description.md": "Adds the intro screen for the route planner with the new illustration.\n",
 			"repo/Sources/Onboarding/RoutePlannerIntro.swift": "import SwiftUI\n\nstruct RoutePlannerIntro: View {\n    var body: some View {\n        VStack(spacing: 16) {\n            Image(\"illustration-3\")\n                .resizable()\n                .scaledToFit()\n            Text(\"Plan your route\")\n                .font(.title2)\n            Text(\"Pick where you start and we do the rest.\")\n                .font(.body)\n        }\n        .padding()\n    }\n}\n"
 		},
-		"reason": "Image(\"illustration-3\") is neither labelled nor hidden, and the checkout has no asset catalog or text that says what it shows, so the asset's informative or decorative role is not settled.",
+		"reason": "Image(\"illustration-3\") is neither labelled nor hidden, and no captured asset catalog or text says what it shows, so the asset's informative or decorative role is not settled.",
 		"workType": "pull_request"
 	},
 	{
@@ -5252,7 +5252,7 @@
 			"context/description.md": "Adds the row for one character with the portrait.\n",
 			"repo/Sources/Cast/CharacterRow.swift": "import SwiftUI\n\nstruct Character: Identifiable {\n    let id: Int\n    let name: String\n    let portraitAsset: String\n}\n\nstruct CharacterRow: View {\n    let character: Character\n\n    var body: some View {\n        HStack {\n            Image(character.portraitAsset)\n                .resizable()\n                .frame(width: 48, height: 48)\n            Text(character.name)\n                .font(.headline)\n        }\n    }\n}\n"
 		},
-		"reason": "The portrait asset name comes from `character.portraitAsset` and no asset catalog is captured. The checkout does not settle whether the portrait shows anything the name does not give, so the image's role is unknown.",
+		"reason": "The portrait asset name comes from `character.portraitAsset` and no asset catalog is captured. The captured files do not settle whether the portrait shows anything the name does not give, so the image's role is unknown.",
 		"workType": "pull_request"
 	}
 ]
