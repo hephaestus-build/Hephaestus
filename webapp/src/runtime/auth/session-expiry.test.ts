@@ -87,13 +87,15 @@ async function settled(): Promise<void> {
 }
 
 describe("handlePossibleSessionExpiry", () => {
-	it("leaves a refused page-timing report alone, so a hidden tab keeps its session", async () => {
+	it("leaves a refused browser report alone, so a hidden tab keeps its session", async () => {
 		const calls = serveSession({ user: 401, refresh: 401 });
 		const { assigned } = stubLocation("/w/acme/practice-profile", "");
 
-		expect(
-			handlePossibleSessionExpiry(res(401, "http://localhost:8080/web-vitals"), makeQueryClient()),
-		).toBe(false);
+		for (const report of ["web-vitals", "browser-faults"]) {
+			expect(
+				handlePossibleSessionExpiry(res(401, `http://localhost:8080/${report}`), makeQueryClient()),
+			).toBe(false);
+		}
 		await settled();
 
 		expect(calls).toStrictEqual({ user: 0, refresh: 0 });

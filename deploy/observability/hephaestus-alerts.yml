@@ -160,6 +160,12 @@ groups:
           severity: critical
         annotations:
           summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
+      - alert: HephaestusBrowserFaultsRising
+        expr: sum by (kind) (increase(browser_faults_total{job="hephaestus"}[1h])) >= 20
+        labels:
+          severity: warning
+        annotations:
+          summary: Readers' browsers reported at least twenty failures of one kind in one hour
 
   # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
   # The PVC and CronJob names are those that the chart gives a release. The webhook rules select the

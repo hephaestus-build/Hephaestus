@@ -26,6 +26,7 @@ interface RuntimeEnvVars {
 	GIT_BRANCH?: string;
 	GIT_COMMIT?: string;
 	DEPLOYED_AT?: string;
+	BROWSER_FAULT_REPORTS?: string;
 }
 
 /**
@@ -48,6 +49,7 @@ const defaults: RuntimeEnvVars = {
 	GIT_BRANCH: "",
 	GIT_COMMIT: "",
 	DEPLOYED_AT: "",
+	BROWSER_FAULT_REPORTS: "",
 };
 
 const env = (key: keyof RuntimeEnvVars): string => window.__ENV__?.[key] ?? defaults[key] ?? "";
@@ -112,6 +114,9 @@ const environment = {
 	devtools: {
 		tanstack: env("TANSTACK_DEVTOOLS_ENABLED") === "true",
 	},
+
+	/** The operator's switch for browser fault reports. Anonymous pages read it here, not from the reader's flags. */
+	browserFaultReports: env("BROWSER_FAULT_REPORTS") === "true",
 };
 
 export default environment;

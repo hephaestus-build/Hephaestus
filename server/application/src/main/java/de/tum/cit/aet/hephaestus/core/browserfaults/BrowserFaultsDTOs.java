@@ -1,0 +1,67 @@
+package de.tum.cit.aet.hephaestus.core.browserfaults;
+
+import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Page;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import java.util.List;
+
+/**
+ * What a browser reports about a failure that a reader met. Every value is a closed set or a bounded
+ * pattern, so a report carries no text that a caller chose.
+ */
+public final class BrowserFaultsDTOs {
+
+    private BrowserFaultsDTOs() {}
+
+    /** How the failure reached the reader. */
+    public enum Kind {
+        /** An error that nothing caught: the window's `error` event or React's root. */
+        UNCAUGHT_ERROR,
+        /** A promise that failed with no handler. */
+        UNHANDLED_REJECTION
+    }
+
+    /** The failure's class, reduced to the cases that decide a fix. */
+    public enum ErrorType {
+        TYPE_ERROR,
+        REFERENCE_ERROR,
+        SYNTAX_ERROR,
+        RANGE_ERROR,
+        OTHER
+    }
+
+    @Schema(description = "One frame of the stack, in a script that the server's own web app ships")
+    public record FrameDTO(
+            @Schema(description = "The content hash in the script's file name, which names the build")
+            @NotNull
+            @Pattern(regexp = "[A-Za-z0-9_-]{8}")
+            String chunk,
+
+            @NotNull @Min(1) @Max(10_000_000) Integer line,
+            @NotNull @Min(1) @Max(10_000_000) Integer column) {}
+
+    @Schema(description = "One failure that a reader met, counted while its page stayed open")
+    public record BrowserFaultDTO(
+            @NotNull Kind kind,
+            @NotNull Page page,
+            @NotNull ErrorType errorType,
+
+            @Schema(description = "The web app's release: a version or a commit")
+            @NotNull
+            @Pattern(regexp = "[0-9a-f]{7,40}|\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}(-(alpha|beta|rc)\\.\\d{1,4})?|DEV")
+            String release,
+
+            @NotNull @Size(max = 10) List<@Valid @NotNull FrameDTO> frames,
+
+            @Schema(description = "How often the same failure happened, at most 100") @NotNull @Min(1) @Max(100)
+            Integer count) {}
+
+    @Schema(description = "The failures that one page met since its last report")
+    public record BrowserFaultsReportDTO(
+            @NotNull @Size(min = 1, max = 20) List<@Valid @NotNull BrowserFaultDTO> faults) {}
+}

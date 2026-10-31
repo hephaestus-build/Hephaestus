@@ -22,6 +22,7 @@ import { AuthProvider, useAuth } from "@/runtime/auth/AuthContext";
 import { installPasskeyChallenge } from "@/runtime/auth/passkey-challenge";
 import { handlePossibleSessionExpiry } from "@/runtime/auth/session-expiry";
 import { SessionKeepAlive } from "@/runtime/auth/use-session-keep-alive";
+import { installBrowserFaults } from "@/runtime/browser-faults";
 import { TanstackDevtools } from "@/runtime/devtools/TanstackDevtools";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 import { applyUserViewHeaders } from "@/runtime/user-view/session";
@@ -64,6 +65,7 @@ const router = createRouter({
 	defaultPendingComponent: PageSkeleton,
 });
 
+installBrowserFaults(router);
 installPasskeyChallenge(router);
 reportVisitVitals(router, TanstackQuery.getContext().queryClient);
 installPreloadErrorReload(router);

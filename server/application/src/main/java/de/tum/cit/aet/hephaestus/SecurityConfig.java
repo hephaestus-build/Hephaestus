@@ -375,6 +375,8 @@ public class SecurityConfig {
             // Public workspace provider discovery (workspace creation UI)
             requests.requestMatchers(HttpMethod.GET, "/workspaces/providers").permitAll();
             requests.requestMatchers(PublicActivityReadRequestMatcher.MATCHER).permitAll();
+            // A broken sign-in page is a fault too, so a reader need not be signed in to report one.
+            requests.requestMatchers(HttpMethod.POST, "/browser-faults").permitAll();
             // Registry/listing stays authenticated to avoid leaking tenant directory.
             requests.requestMatchers(HttpMethod.GET, "/workspaces", "/workspaces/")
                     .authenticated();
