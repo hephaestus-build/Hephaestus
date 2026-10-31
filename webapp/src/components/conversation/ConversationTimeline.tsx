@@ -1,5 +1,12 @@
 import { ArrowDownIcon, MessageSquareWarningIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+	type ReactNode,
+	type RefObject,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 
 import type { MentorEntry, MentorTurn } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
@@ -394,6 +401,104 @@ function TimelineError({ onRetry }: { onRetry: () => void }) {
 	);
 }
 
+/** Where the scroller put the opening view, for the rows it had then: at the end, or the last anchor at an offset from the top. */
+type OpeningPlacement = { rowCount: number } & (
+	| { atEnd: true }
+	| { atEnd: false; anchorOffset: number }
+);
+
+const offsetIn = (viewport: HTMLElement, element: HTMLElement) =>
+	element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+
+/**
+ * The first row that renders while the view opens, or `undefined` once it has opened.
+ *
+ * The scroller places the opening view in its own layout effect, which runs before this one. It
+ * decides from the last anchor (`start`) and the rows after it, which always render. The rows above
+ * that the view shows are still 10rem placeholders then, so when they render at their real height,
+ * the content moves under the view. Before the browser paints, this renders rows upward from `start`,
+ * one more each time and then twice as many, until they fill one view height, and puts the view back
+ * where the scroller placed it. Rows that arrive meanwhile, such as an older page, end the window: the
+ * scroller places the view for them. A frame after the rows render, `contain-intrinsic-size: auto`
+ * holds their real heights, and they skip rendering again when away from the view.
+ *
+ * A view that opens on a linked message (`jumpTo`) has no window: the scroller places that message
+ * itself, also when it arrives on an older page, and keeps its place as the page settles. That opening
+ * ends the window too, so the link going away later, as when the reader opens a thread, starts none.
+ */
+function useOpeningWindow(
+	content: RefObject<HTMLDivElement | null>,
+	rowCount: number,
+	start: number,
+	jumpTo: string | undefined,
+): number | undefined {
+	const [from, setFrom] = useState<number>();
+	const [phase, setPhase] = useState<"opening" | "rendered" | "opened">("opening");
+	const placement = useRef<OpeningPlacement>(undefined);
+	const step = useRef(1);
+	if (jumpTo !== undefined && phase === "opening" && rowCount > 0) {
+		setPhase("opened");
+	}
+	useLayoutEffect(() => {
+		const viewport = content.current?.closest<HTMLElement>(
+			"[data-slot='message-scroller-viewport']",
+		);
+		const items = [
+			...(content.current?.querySelectorAll<HTMLElement>(
+				":scope > [data-slot='message-scroller-item']",
+			) ?? []),
+		];
+		const anchor = items[start];
+		const last = items.at(-1);
+		if (
+			jumpTo !== undefined ||
+			phase !== "opening" ||
+			rowCount === 0 ||
+			!viewport ||
+			!anchor ||
+			!last
+		) {
+			return;
+		}
+		if (placement.current === undefined) {
+			placement.current =
+				viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 1
+					? { rowCount, atEnd: true }
+					: { rowCount, atEnd: false, anchorOffset: offsetIn(viewport, anchor) };
+		} else if (placement.current.rowCount !== rowCount) {
+			setPhase("rendered");
+			return;
+		} else if (placement.current.atEnd) {
+			viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
+		} else {
+			viewport.scrollTop += offsetIn(viewport, anchor) - placement.current.anchorOffset;
+		}
+		const first = from ?? start;
+		const shown =
+			last.getBoundingClientRect().bottom - (items[first] ?? anchor).getBoundingClientRect().top;
+		if (shown < viewport.clientHeight && first > 0) {
+			setFrom(Math.max(0, first - step.current));
+			step.current *= 2;
+			return;
+		}
+		setPhase("rendered");
+	}, [content, from, jumpTo, phase, rowCount, start]);
+	useEffect(() => {
+		if (phase !== "rendered") {
+			return;
+		}
+		let frame = requestAnimationFrame(() => {
+			frame = requestAnimationFrame(() => {
+				setPhase("opened");
+			});
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+		};
+	}, [phase]);
+	return jumpTo !== undefined || phase === "opened" ? undefined : (from ?? start);
+}
+
 /**
  * One scope of the developer's Hephaestus conversation — the main conversation or a thread — as a log.
  * It opens at the newest question without motion. A question the developer sends scrolls near the
@@ -431,7 +536,14 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 	const statusLabel = useTurnStatusLabel(liveTurn);
 	const anchors = useAnchorKeys(rows, state.status === "ready");
 	const isAnchor = (key: string) => anchors.opened.has(key) || anchors.sent.has(key);
-	const newestSent = rows.map(({ key }) => anchors.sent.has(key)).lastIndexOf(true);
+	const lastAnchor = rows.map(({ key }) => isAnchor(key)).lastIndexOf(true);
+	const content = useRef<HTMLDivElement>(null);
+	const openingFrom = useOpeningWindow(
+		content,
+		rows.length,
+		lastAnchor === -1 ? rows.length - 1 : lastAnchor,
+		jumpTo,
+	);
 	const first = rows[0];
 	const firstDay = first !== undefined && first.kind !== "live" ? first.day : undefined;
 
@@ -449,7 +561,11 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 							)}
 							{state.status === "ready" && rows.length === 0 && empty}
 							{firstDay && <DayMarker date={firstDay} />}
-							<MessageScrollerContent aria-busy={liveTurn !== undefined} className="gap-4">
+							<MessageScrollerContent
+								ref={content}
+								aria-busy={liveTurn !== undefined}
+								className="gap-4"
+							>
 								{rows.map((row, index) => {
 									const next = rows[index + 1];
 									return (
@@ -457,14 +573,15 @@ export function ConversationTimeline(props: ConversationTimelineProps) {
 											key={row.key}
 											messageId={row.messageId}
 											scrollAnchor={isAnchor(row.key)}
-											// The scroller places a sent question in the commit that adds it, before the
-											// browser renders it. Under `content-visibility: auto` a row not rendered yet
-											// measures its 10rem placeholder, so the question landed lower once its real
-											// height arrived. The newest sent question and the rows after it render at
-											// once. Rows there at opening keep `auto`: rendered while the view is still
-											// hidden for its first scroll, their controls would fade in as it shows.
+											// The scroller measures rows in the commit that adds them, before the browser
+											// renders them: the last anchor and the rows after it, for the opening view
+											// (the end when that last turn fits, else its question at its peek) and for a
+											// sent question's place. Under `content-visibility: auto` a row not rendered
+											// yet measures its 10rem placeholder, so those rows always render. While the
+											// view opens, the rows it shows render too (`useOpeningWindow`).
 											className={
-												newestSent !== -1 && index >= newestSent
+												(openingFrom !== undefined && index >= openingFrom) ||
+												(lastAnchor !== -1 && index >= lastAnchor)
 													? "[content-visibility:visible]"
 													: undefined
 											}
