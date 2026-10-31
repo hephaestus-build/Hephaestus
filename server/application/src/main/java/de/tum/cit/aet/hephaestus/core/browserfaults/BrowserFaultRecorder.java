@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +38,7 @@ public class BrowserFaultRecorder {
         // Every series exists from the start at 0, so `increase` sees the first faults after a restart.
         for (Kind kind : Kind.values()) {
             for (Page page : Page.values()) {
-                for (ErrorType errorType : ErrorType.values()) {
+                for (ErrorType errorType : kind.errorTypes()) {
                     counter(tag(kind), tag(page), tag(errorType));
                 }
             }
@@ -56,7 +57,7 @@ public class BrowserFaultRecorder {
         String page = tag(fault.page());
         String errorType = tag(fault.errorType());
         counter(kind, page, errorType).increment(fault.count());
-        log.atWarn()
+        LoggingEventBuilder event = log.atWarn()
                 .addKeyValue("event.name", "browser.fault")
                 .addKeyValue("browser.fault.kind", kind)
                 .addKeyValue("browser.page", page)
@@ -68,8 +69,14 @@ public class BrowserFaultRecorder {
                         fault.frames().stream()
                                 .map(frame -> frame.chunk() + ":" + frame.line() + ":" + frame.column())
                                 .collect(Collectors.joining(" ")))
-                .addKeyValue("browser.signed_in", signedIn)
-                .log("A reader's browser met a fault");
+                .addKeyValue("browser.signed_in", signedIn);
+        if (fault.traceId() != null) {
+            event = event.addKeyValue("browser.request.trace_id", fault.traceId());
+        }
+        if (fault.status() != null) {
+            event = event.addKeyValue("http.response.status_code", fault.status());
+        }
+        event.log("A reader's browser met a fault");
     }
 
     private static String tag(Enum<?> value) {

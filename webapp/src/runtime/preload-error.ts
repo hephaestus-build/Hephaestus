@@ -1,5 +1,7 @@
 import type { AnyRouter } from "@tanstack/react-router";
 
+import type { BrowserFaults } from "@/runtime/browser-faults";
+
 const MARKER_KEY = "hephaestus.preload-error-reload-at";
 const RELOAD_WINDOW_MS = 60_000;
 
@@ -30,12 +32,23 @@ function claimReload(): boolean {
  * dynamic import.
  *
  * A failed preload on hover or focus does nothing. The page may hold input that a reload would
- * discard, and the link's own navigation fails again and reloads. Returns the function that removes
- * the handling.
+ * discard, and the link's own navigation fails again and reloads. A failed navigation is a fault the
+ * reader met, so it reports one, whether the reload follows or the route error shows. Returns the
+ * function that removes the handling.
  */
-export function installPreloadErrorReload(router: AnyRouter): () => void {
+export function installPreloadErrorReload(
+	router: AnyRouter,
+	faults: Pick<BrowserFaults, "report">,
+): () => void {
 	const reloadForNavigation = (event: Event) => {
-		if (router.state.isLoading && claimReload()) {
+		if (!router.state.isLoading) {
+			return;
+		}
+		// Vite throws the payload when nothing reloads, so the boundary that shows it sees the same error.
+		faults.report("CHUNK_LOAD_FAILED", "payload" in event ? event.payload : event, {
+			errorType: "CHUNK",
+		});
+		if (claimReload()) {
 			event.preventDefault();
 			window.location.reload();
 		}

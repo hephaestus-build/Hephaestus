@@ -12230,6 +12230,9 @@ components:
           - SYNTAX_ERROR
           - RANGE_ERROR
           - OTHER
+          - CHUNK
+          - HTTP_5XX
+          - NETWORK
         frames:
           type: array
           items:
@@ -12241,6 +12244,10 @@ components:
           enum:
           - UNCAUGHT_ERROR
           - UNHANDLED_REJECTION
+          - RENDER_ERROR
+          - RECOVERED_ERROR
+          - CHUNK_LOAD_FAILED
+          - REQUEST_FAILED
         page:
           type: string
           enum:
@@ -12255,6 +12262,17 @@ components:
           description: "The web app's release: a version or a commit"
           pattern: "[0-9a-f]{7,40}|\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}(-(alpha|beta|rc)\\\
             .\\d{1,4})?|DEV"
+        status:
+          type: integer
+          format: int32
+          description: "For a failed request: its 5xx status"
+          maximum: 599
+          minimum: 500
+        traceId:
+          type: string
+          description: "For a failed request: the trace id that the server returned\
+            \ as X-Request-Id"
+          pattern: "[0-9a-f]{32}"
       required:
       - count
       - errorType

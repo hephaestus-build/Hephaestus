@@ -663,10 +663,18 @@ In the EU, turning it on can require consent or a documented legal basis.
 Read [Browser fault reports](./legal-pages.mdx#browser-fault-reports) before you turn it on.
 When it is off, the browser listens for no failure, and the server has no `POST /browser-faults` endpoint and no `browser_faults_total` metric.
 
-When it is on, each page reports two kinds of failure:
+When it is on, each page reports these kinds of failure:
 
 - `uncaught_error`: an error that no code caught.
 - `unhandled_rejection`: a promise that failed with no handler.
+- `render_error`: the page showed an error view instead of its content.
+  A not-found or no-access view is not a failure.
+  A view that shows a failed request is reported as `request_failed`.
+- `recovered_error`: the page failed to render a part and rendered it again.
+- `chunk_load_failed`: a script of the web app did not load when the reader opened a page.
+  A deploy that removed the script is a common cause.
+- `request_failed`: a request to the server failed with a 5xx status, or did not reach the server.
+  A request that the reader cancelled is not a failure.
 
 Readers who are not signed in report too, because a broken sign-in page is a failure.
 A page sends its failures after five quiet seconds, or when the reader leaves it.
@@ -696,10 +704,13 @@ The server writes each failure as one log record and counts it:
 
 | Name | Where | Values |
 | --- | --- | --- |
-| `browser.fault` | `event.name` of a WARN log record | `browser.fault.kind`, `browser.page`, `error.type`, `browser.release`, `browser.fault.count`, `browser.fault.frames` and `browser.signed_in` |
+| `browser.fault` | `event.name` of a WARN log record | `browser.fault.kind`, `browser.page`, `error.type`, `browser.release`, `browser.fault.count`, `browser.fault.frames` and `browser.signed_in`. For a `request_failed` with a status: `browser.request.trace_id` and `http.response.status_code` |
 | `browser_faults_total` | Counter, tags `kind`, `page` and `error_type` | Each failure adds its count |
 
-`error.type` is `type_error`, `reference_error`, `syntax_error`, `range_error` or `other`.
+`error.type` is `type_error`, `reference_error`, `syntax_error`, `range_error` or `other` for a script error.
+It is `chunk` for `chunk_load_failed`, and `http_5xx` or `network` for `request_failed`.
+`browser.request.trace_id` is the trace id that the server returned for the failed request as `X-Request-Id`.
+Search the log store for it to find every server record of that request ([Correlating a request](#correlating-a-request)).
 `browser.fault.frames` lists the frames as `<hash>:<line>:<column>`.
 The hash is the last eight characters of the script's file name, which name one build of the script.
 

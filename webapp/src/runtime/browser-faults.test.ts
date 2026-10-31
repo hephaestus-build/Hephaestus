@@ -65,7 +65,7 @@ function install(...routeIds: string[]) {
 	const router = {
 		state: { matches: routeIds.map((routeId) => ({ routeId })) },
 	} as unknown as AnyRouter;
-	uninstall = installBrowserFaults(router);
+	uninstall = installBrowserFaults(router).uninstall;
 }
 
 function rejected(reason: unknown) {
