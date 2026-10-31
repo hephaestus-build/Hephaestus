@@ -139,8 +139,8 @@ export function WorkspaceUsageReport({
 				<CircleAlert aria-hidden />
 				<AlertTitle>
 					{unpricedEventCount === 1
-						? "1 run has unavailable cost"
-						: `${unpricedEventCount.toLocaleString()} runs have unavailable cost`}
+						? "1 use has unavailable cost"
+						: `${unpricedEventCount.toLocaleString()} uses have unavailable cost`}
 				</AlertTitle>
 				<AlertDescription>
 					<p>
@@ -209,7 +209,7 @@ export function WorkspaceUsageReport({
 
 			{hasUsage ? (
 				<>
-					<Section title="By run type">
+					<Section title="By use">
 						<LlmUsageByJobTypeTable report={report} purses={purses} />
 					</Section>
 

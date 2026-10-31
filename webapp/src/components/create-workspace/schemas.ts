@@ -35,7 +35,7 @@ export const workspaceDetailsSchema = z.object({
 		.pipe(
 			z
 				.string()
-				.min(3, "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens")
+				.min(3, "Enter a short name of 3 to 51 characters: a to z, 0 to 9, or hyphens")
 				.max(51, "Use 51 characters or fewer")
 				.regex(/^[a-z0-9-]+$/u, "Use only lowercase letters, digits, and hyphens")
 				.regex(/^[a-z0-9]/u, "Start with a lowercase letter or digit")

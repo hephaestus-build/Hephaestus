@@ -249,13 +249,13 @@ export const REVIEW_JOB_STATUS_DEFS: StatusDefs<ReviewJobStatus> = {
 		label: "Queued",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description: "Waiting for a worker.",
+		description: "Waiting for capacity.",
 	},
 	RUNNING: {
 		label: "Running",
 		icon: LoaderIcon,
 		badgeVariant: "secondary",
-		description: "A worker is running it.",
+		description: "Running now.",
 	},
 	COMPLETED: {
 		label: "Completed",

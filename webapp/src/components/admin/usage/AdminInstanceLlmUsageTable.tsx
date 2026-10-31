@@ -234,7 +234,7 @@ export function AdminInstanceLlmUsageTable({
 				),
 				columnHelper.accessor("events", {
 					id: "runs",
-					header: "Runs",
+					header: "Uses",
 					cell: ({ getValue }) => getValue().toLocaleString(),
 					enableGlobalFilter: false,
 					sortDescFirst: true,
@@ -535,7 +535,7 @@ function WorkspaceUsageDetails({
 							))}
 						</div>
 					)}
-					<Section level={3} title="By run type">
+					<Section level={3} title="By use">
 						<LlmUsageByJobTypeTable report={loaded} purses={purses} />
 					</Section>
 					{/* Only once loaded: most workspaces have no practice script calls, and a skeleton that

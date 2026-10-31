@@ -119,7 +119,7 @@ For budget state, the copy says what happens ("paused", "resumes"), not which en
   Use `<$0.01` for a nonzero amount too small for cents.
   Use plain cents otherwise.
 - **`formatCapUsd`** — a cap someone typed, rendered the way they typed it: `$50`, not `$50.00`.
-- **`formatAverageUsd`** — an average spend, such as **Avg per run**.
+- **`formatAverageUsd`** — an average spend, such as **Avg per use**.
   One column has one number of decimals, which `averageFractionDigits` takes from all its averages, the total included.
   The [worked example](/admin/ai-providers#worked-example) owns the decimal places and display thresholds.
 

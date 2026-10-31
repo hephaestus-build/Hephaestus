@@ -162,7 +162,7 @@ function JobsTableHeader() {
 				<TableHead>Type</TableHead>
 				<TableHead>Started</TableHead>
 				<TableHead>Duration</TableHead>
-				<TableHead className="text-right">Items</TableHead>
+				<TableHead className="text-right">Records</TableHead>
 				<TableHead className="w-0 text-right">
 					<span className="sr-only">Error</span>
 				</TableHead>
@@ -195,7 +195,7 @@ function JobRow({ job }: { job: SyncJob }) {
 					<CollapsibleTrigger
 						className="group"
 						render={
-							<Button variant="ghost" size="icon-sm" aria-label={`Show details for job ${job.id}`}>
+							<Button variant="ghost" size="icon-sm" aria-label={`Show details for sync ${job.id}`}>
 								<ChevronDownIcon className="size-4 transition-transform group-data-[panel-open]:rotate-180" />
 							</Button>
 						}
@@ -228,7 +228,7 @@ function JobRow({ job }: { job: SyncJob }) {
 							render={
 								<button
 									type="button"
-									aria-label={`Show error for job ${job.id}`}
+									aria-label={`Show error for sync ${job.id}`}
 									className={cn("inline-flex cursor-help rounded-sm", FOCUS_RING)}
 								/>
 							}
@@ -271,7 +271,7 @@ export function SyncJobsTable({
 }: SyncJobsTableProps) {
 	if (isError) {
 		return (
-			<QueryErrorAlert error={error} title="We could not load the job history" onRetry={onRetry} />
+			<QueryErrorAlert error={error} title="We could not load the sync history" onRetry={onRetry} />
 		);
 	}
 
@@ -285,7 +285,7 @@ export function SyncJobsTable({
 	}
 
 	const refreshAlert = refreshFailure !== undefined && (
-		<QueryErrorAlert title="The job history may be out of date" {...refreshFailure} />
+		<QueryErrorAlert title="The sync history may be out of date" {...refreshFailure} />
 	);
 
 	if (jobs.length === 0) {
@@ -297,7 +297,7 @@ export function SyncJobsTable({
 						<EmptyMedia variant="icon">
 							<HistoryIcon />
 						</EmptyMedia>
-						<EmptyTitle>No sync jobs yet</EmptyTitle>
+						<EmptyTitle>No syncs yet</EmptyTitle>
 						<EmptyDescription>
 							Initial syncs, reconciliations and manual triggers appear here as they run.
 						</EmptyDescription>

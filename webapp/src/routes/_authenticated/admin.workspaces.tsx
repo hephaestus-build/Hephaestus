@@ -76,7 +76,7 @@ function AdminWorkspacesPage() {
 				<InputGroupInput
 					id="admin-workspaces-search"
 					type="search"
-					placeholder="Search by name, slug, owner, provider, or status…"
+					placeholder="Search by name, short name, owner, provider, or status…"
 					value={search}
 					onChange={(event) => {
 						void navigate({

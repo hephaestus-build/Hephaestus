@@ -277,6 +277,36 @@ export const ScanWithManyJobs: Story = {
 	},
 };
 
+const scanManyJobs = lineageStateCase("scan-many-jobs");
+const retriedScan = scanManyJobs.review && {
+	...scanManyJobs.review,
+	runtime: {
+		jobs: (scanManyJobs.review.runtime?.jobs ?? []).map((job, index) =>
+			index === 0 ? { ...job, attempt: 1 } : job,
+		),
+	},
+};
+
+/**
+ * Four jobs, one of them retried: the jobs say nothing about how many attempts ran in total, so the
+ * review's facts give no attempt count at all.
+ */
+export const ScanJobsWithARetry: Story = {
+	args: {
+		chain: { status: "ready", lineage: scanManyJobs.lineage },
+		display: FULL_TRACE_DISPLAY,
+		review: retriedScan,
+	},
+	play: async () => {
+		const panel = await settledDrawerPanel();
+		const facts = [...panel.querySelectorAll("[data-step-facts]")];
+		await expect(facts.some((fact) => /Asked for/u.test(fact.textContent))).toBe(true);
+		for (const fact of facts) {
+			await expect(fact).not.toHaveTextContent(/Attempts|\d+ attempts?\b|Latest attempt/u);
+		}
+	},
+};
+
 export const EveryDeliveryState: Story = {
 	args: {
 		chain: { status: "ready", lineage: lineageStateCase("delivery-states").lineage },

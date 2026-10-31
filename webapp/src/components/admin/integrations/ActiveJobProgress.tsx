@@ -39,7 +39,7 @@ export function ActiveJobProgress({ job }: ActiveJobProgressProps) {
 							className="w-32 shrink-0"
 							aria-label="Sync progress"
 							getAriaValueText={() =>
-								`${processed.toLocaleString()} of ${total.toLocaleString()} items${
+								`${processed.toLocaleString()} of ${total.toLocaleString()} records${
 									hasText(currentStep) ? `, ${currentStep}` : ""
 								}`
 							}

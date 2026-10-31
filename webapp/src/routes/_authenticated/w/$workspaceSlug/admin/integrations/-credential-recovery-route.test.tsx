@@ -1474,7 +1474,7 @@ describe("Outline connection drafts", () => {
 	});
 });
 
-describe("integration job history", () => {
+describe("integration sync history", () => {
 	it.each([
 		{ integration: "scm", kind: "GITHUB" },
 		{ integration: "slack", kind: "SLACK" },
@@ -1525,7 +1525,7 @@ describe("integration job history", () => {
 			} finally {
 				response.resolve();
 			}
-			await screen.findByText("No sync jobs yet");
+			await screen.findByText("No syncs yet");
 		},
 	);
 });
@@ -1745,7 +1745,7 @@ describe("sync evidence through a failed refresh", () => {
 			ROUTE_RENDER_WAIT,
 		);
 		await user.type(search, "ledger");
-		await user.click(await screen.findByRole("button", { name: "Show details for job 41" }));
+		await user.click(await screen.findByRole("button", { name: "Show details for sync 41" }));
 		screen.getByText("Sub-issue sync stopped after 40 of 52 issues.");
 		const alertsBefore = screen.queryAllByRole("alert").length;
 		const requestsBefore = { ...reads.requests };
@@ -1766,11 +1766,11 @@ describe("sync evidence through a failed refresh", () => {
 		);
 		screen.getByText("1 of 2 repositories");
 		screen.getByText("Sub-issue sync stopped after 40 of 52 issues.");
-		screen.getByRole("button", { name: "Show error for job 41" });
+		screen.getByRole("button", { name: "Show error for sync 41" });
 		screen.getByText("The repository sync state may be out of date");
-		screen.getByText("The job history may be out of date");
+		screen.getByText("The sync history may be out of date");
 		expect(screen.queryByText("We could not load the repository sync state")).toBeNull();
-		expect(screen.queryByText("We could not load the job history")).toBeNull();
+		expect(screen.queryByText("We could not load the sync history")).toBeNull();
 
 		const response = deferred();
 		reads.answer(
@@ -1801,7 +1801,7 @@ describe("sync evidence through a failed refresh", () => {
 		screen.getByText("3,200");
 		screen.getByText("Sub-issue sync stopped after 40 of 52 issues.");
 		expect(screen.queryByText("The repository sync state may be out of date")).toBeNull();
-		expect(screen.queryByText("The job history may be out of date")).toBeNull();
+		expect(screen.queryByText("The sync history may be out of date")).toBeNull();
 	});
 
 	it("does not bring back refused sync evidence when a later read fails", async () => {
@@ -1815,18 +1815,18 @@ describe("sync evidence through a failed refresh", () => {
 		reads.answer({ status: 403 });
 		await refreshSyncReads(queryClient);
 		await screen.findByText("You do not have access to the repository sync state");
-		screen.getByText("You do not have access to the job history");
+		screen.getByText("You do not have access to the sync history");
 		expect(screen.queryByText("acme/platform/ledger")).toBeNull();
 		expect(screen.queryByText("40/52")).toBeNull();
 
 		reads.answer({ status: 503 });
 		await refreshSyncReads(queryClient);
 		await screen.findByText("We could not load the repository sync state");
-		screen.getByText("We could not load the job history");
+		screen.getByText("We could not load the sync history");
 		expect(screen.queryByText("acme/platform/ledger")).toBeNull();
 		expect(screen.queryByText("40/52")).toBeNull();
 		expect(screen.queryByText("The repository sync state may be out of date")).toBeNull();
-		expect(screen.queryByText("The job history may be out of date")).toBeNull();
+		expect(screen.queryByText("The sync history may be out of date")).toBeNull();
 
 		reads.answer({
 			status: 200,

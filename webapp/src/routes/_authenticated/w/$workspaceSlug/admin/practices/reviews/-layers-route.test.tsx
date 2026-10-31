@@ -374,11 +374,7 @@ describe("a review's sheet", () => {
 
 		renderRouteAtWithRouter(`${REVIEWS}?detail=review:${REVIEW}`);
 		const sheet = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
-		const execution = await within(sheet).findByRole(
-			"list",
-			{ name: "Execution" },
-			ROUTE_RENDER_WAIT,
-		);
+		const execution = await within(sheet).findByRole("list", { name: "Timing" }, ROUTE_RENDER_WAIT);
 		expect(execution.textContent).toContain("Wait to start: 12 seconds · Running: 5 minutes");
 	});
 

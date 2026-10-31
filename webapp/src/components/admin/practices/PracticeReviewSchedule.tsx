@@ -94,7 +94,7 @@ const describeSchedule = (schedule: ReviewSchedule) => {
 	if (scans(schedule.itemKind)) {
 		const budget =
 			schedule.budgetUsd === null ? "no budget" : formatCapUsd(Number(schedule.budgetUsd));
-		return `${every}, scanning each repository in the review scope, up to ${budget} per run`;
+		return `${every}, scanning each repository in the review scope, up to ${budget} for all repositories`;
 	}
 	const window =
 		schedule.lookbackDays === 1 ? "the last day" : `the last ${schedule.lookbackDays ?? 0} days`;
@@ -430,10 +430,10 @@ function ScheduleForm({
 				{scan ? (
 					<Field orientation="responsive" data-invalid={showBudgetError || undefined}>
 						<FieldContent>
-							<FieldLabel htmlFor={`${id}-budget`}>Budget per run (USD)</FieldLabel>
+							<FieldLabel htmlFor={`${id}-budget`}>Budget for all repositories (USD)</FieldLabel>
 							<FieldDescription id={`${id}-budget-description`}>
-								Each run scans the repositories in the review scope one at a time and stops at this
-								amount.
+								Each scheduled check scans the repositories in the review scope one at a time. The
+								scans share this amount and stop when it is spent.
 							</FieldDescription>
 							{showBudgetError ? (
 								<FieldError id={`${id}-budget-error`}>{budgetProblem}</FieldError>

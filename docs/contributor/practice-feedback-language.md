@@ -264,6 +264,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Automation** | Provider bots and machine users that a workspace admin excludes from people counts. | bots (for machine users), service account |
 | **Public activity page** | Work counts and links from public repositories, available without sign-in. It has no practice observations or feedback. | public leaderboard, public profile, public workspace |
 | **Workspace address** | A workspace's own host. Sign-in stays on the instance host. | subdomain, vanity URL, tenant URL |
+| **Short name** | The part of a workspace's URL after `/w/`, such as `/w/my-team`. Use slug only in contributor documentation, code and API contracts. | slug, URL slug |
 | **Open work** | Open requests and assigned issues that need the developer or another person. | backlog, inbox, to-do |
 | **Needs you** | Open work that requires an action from the developer now. | inbox, to-do, action items |
 | **Covered** | A review request settled for now by another reviewer's decision, under the provider's approval state. | dismissed, done, resolved |

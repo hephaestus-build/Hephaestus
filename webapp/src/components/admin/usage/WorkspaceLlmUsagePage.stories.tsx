@@ -37,7 +37,7 @@ export const Ready: Story = {
 		await expect(canvas.getByRole("heading", { name: "AI usage" })).toBeVisible();
 		await expect(
 			canvas.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
-		).toStrictEqual(["Spend this month", "By run type", "By day"]);
+		).toStrictEqual(["Spend this month", "By use", "By day"]);
 		canvas.getByRole("region", { name: "Spend this month" });
 	},
 };
@@ -45,7 +45,7 @@ export const Ready: Story = {
 export const Loading: Story = {
 	args: { view: { status: "loading" } },
 	play: async ({ canvas }) => {
-		const table = await canvas.findByRole("table", { name: "AI spend by run type" });
+		const table = await canvas.findByRole("table", { name: "AI spend by use" });
 		await expect(table.closest("[aria-busy]")).toHaveAttribute("aria-busy", "true");
 		// The skeleton must not claim the landmarks the report will own.
 		await expect(canvas.queryByRole("region", { name: /spend/u })).toBeNull();

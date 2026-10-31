@@ -96,7 +96,7 @@ function PurseLeafHeads() {
 				Spend
 			</TableHead>
 			<TableHead scope="col" numeric className="text-right">
-				Avg per run
+				Avg per use
 			</TableHead>
 		</>
 	);
@@ -143,7 +143,7 @@ function EmptyRow({ columns }: { columns: number }) {
 	return (
 		<TableRow variant="static">
 			<TableCell colSpan={columns} className="h-24 text-center text-muted-foreground">
-				No runs
+				No usage
 			</TableCell>
 		</TableRow>
 	);
@@ -182,7 +182,7 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 	const rows = report?.byJobType;
 	const hasUnpriced = rows?.some((row) => row.unpricedEventCount > 0) === true;
 	const trailing: TrailingHead[] = [
-		{ label: "Runs" },
+		{ label: "Uses" },
 		...(hasUnpriced ? [UNPRICED_RUNS] : []),
 		...TOKEN_COLUMNS,
 	];
@@ -209,8 +209,8 @@ export function LlmUsageByJobTypeTable({ report, purses }: LlmUsageByJobTypeTabl
 
 	return (
 		<Table bordered>
-			<TableCaption className="sr-only">AI spend by run type</TableCaption>
-			<PurseHeaderRows purses={purses} leading="Run type" trailing={trailing} />
+			<TableCaption className="sr-only">AI spend by use</TableCaption>
+			<PurseHeaderRows purses={purses} leading="Use" trailing={trailing} />
 			{rows == null ? (
 				<TableRowsSkeleton rows={3} columns={skeletonColumns(purses, 2, trailing)} />
 			) : (
@@ -303,7 +303,7 @@ export interface LlmUsageByDayTableProps {
 export function LlmUsageByDayTable({ report, purses }: LlmUsageByDayTableProps) {
 	const rows = report?.byDay;
 	const hasUnpriced = rows?.some((row) => row.unpricedEventCount > 0) === true;
-	const trailing: TrailingHead[] = [{ label: "Runs" }, ...(hasUnpriced ? [UNPRICED_RUNS] : [])];
+	const trailing: TrailingHead[] = [{ label: "Uses" }, ...(hasUnpriced ? [UNPRICED_RUNS] : [])];
 	const total =
 		report == null || rows == null || rows.length < 2
 			? null

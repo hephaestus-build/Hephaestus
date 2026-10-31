@@ -180,7 +180,9 @@ describe("AgentBindingsPage", () => {
 		fireEvent.change(timeout, { target: { value: "14400" } });
 		fireEvent.click(saveButton(inHouse));
 
-		inHouse.getByText("Runs stop after three hours, so enter 10800 seconds or less.");
+		inHouse.getByText(
+			"One attempt of a review stops after three hours, so enter 10800 seconds or less.",
+		);
 		expect(timeout.getAttribute("aria-invalid")).toBe("true");
 		expect(onSave).not.toHaveBeenCalled();
 
@@ -198,14 +200,16 @@ describe("AgentBindingsPage", () => {
 		const inHouse = reviewsInHouse();
 
 		fireEvent.click(inHouse.getByRole("button", { name: /^Advanced/u }));
-		fireEvent.change(inHouse.getByLabelText(/^Max concurrent runs/u), { target: { value: "0" } });
+		fireEvent.change(inHouse.getByLabelText(/^Max concurrent reviews/u), {
+			target: { value: "0" },
+		});
 		fireEvent.click(inHouse.getByRole("button", { name: /^Advanced/u }));
-		expect(inHouse.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
+		expect(inHouse.queryByLabelText(/^Max concurrent reviews/u)).toBeNull();
 
 		fireEvent.click(saveButton(inHouse));
 
-		inHouse.getByText("Enter a whole number of runs, 1 or more.");
-		expect(document.activeElement).toBe(inHouse.getByLabelText(/^Max concurrent runs/u));
+		inHouse.getByText("Enter a whole number of reviews, 1 or more.");
+		expect(document.activeElement).toBe(inHouse.getByLabelText(/^Max concurrent reviews/u));
 	});
 
 	it("keeps unrelated validation errors visible while another field is corrected", () => {
@@ -214,7 +218,7 @@ describe("AgentBindingsPage", () => {
 
 		fireEvent.click(inHouse.getByRole("button", { name: /^Advanced/u }));
 		const timeout = timeoutInput(inHouse);
-		const concurrency = inHouse.getByLabelText(/^Max concurrent runs/u);
+		const concurrency = inHouse.getByLabelText(/^Max concurrent reviews/u);
 		fireEvent.change(timeout, { target: { value: "" } });
 		fireEvent.change(concurrency, { target: { value: "0" } });
 		fireEvent.click(saveButton(inHouse));
@@ -222,7 +226,7 @@ describe("AgentBindingsPage", () => {
 		fireEvent.change(timeout, { target: { value: "60" } });
 
 		expect(inHouse.queryByText("Enter a number of seconds.")).toBeNull();
-		inHouse.getByText("Enter a whole number of runs, 1 or more.");
+		inHouse.getByText("Enter a whole number of reviews, 1 or more.");
 	});
 
 	it("offers Clear assignment only for a row that is actually bound", () => {

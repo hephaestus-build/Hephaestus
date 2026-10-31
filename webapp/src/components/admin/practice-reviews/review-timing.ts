@@ -36,7 +36,7 @@ export const REVIEW_STAGES: readonly ReviewStageDef[] = [
 	{
 		key: "queue",
 		label: TRACE_SPAN_LABELS.queue,
-		text: "from the request until a worker picks the review up.",
+		text: "from the request until the first attempt starts.",
 		parts: ["queue"],
 	},
 	{

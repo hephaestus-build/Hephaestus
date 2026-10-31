@@ -199,11 +199,12 @@ describe("workspace AI models route", () => {
 		fireEvent.click(advancedButton(reviews));
 		fireEvent.click(advancedButton(conversations));
 		expect(
-			within(reviews).getByRole<HTMLInputElement>("spinbutton", { name: /^Max concurrent runs/u })
-				.value,
+			within(reviews).getByRole<HTMLInputElement>("spinbutton", {
+				name: /^Max concurrent reviews/u,
+			}).value,
 		).toBe("3");
 		expect(
-			within(conversations).queryByRole("spinbutton", { name: /^Max concurrent runs/u }),
+			within(conversations).queryByRole("spinbutton", { name: /^Max concurrent reviews/u }),
 		).toBeNull();
 		expect(timeoutInput(conversations).value).toBe("600");
 	});

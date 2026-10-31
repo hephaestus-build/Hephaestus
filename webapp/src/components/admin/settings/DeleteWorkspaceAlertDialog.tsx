@@ -114,7 +114,7 @@ export function DeleteWorkspaceAlertDialog({
 						/>
 						{mismatch && (
 							<FieldError id="delete-workspace-confirm-error">
-								That does not match. Enter the workspace slug exactly.
+								That does not match. Enter the workspace’s short name exactly.
 							</FieldError>
 						)}
 					</Field>

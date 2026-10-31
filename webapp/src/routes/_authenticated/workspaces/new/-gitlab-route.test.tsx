@@ -334,7 +334,7 @@ describe("GitLab workspace wizard", () => {
 });
 
 describe("GitLab workspace wizard: workspace address", () => {
-	const shortSlug = "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens";
+	const shortSlug = "Enter a short name of 3 to 51 characters: a to z, 0 to 9, or hyphens";
 
 	it.each([
 		["QA", "qa"],
@@ -350,14 +350,17 @@ describe("GitLab workspace wizard: workspace address", () => {
 			const nameField = screen.getByRole("textbox", { name: "Display name" });
 			await user.clear(nameField);
 			await user.type(nameField, name);
-			const slugField = screen.getByRole<HTMLInputElement>("textbox", { name: "URL slug" });
+			const slugField = screen.getByRole<HTMLInputElement>("textbox", { name: "Short name" });
 			expect(slugField.value).toBe(slug);
 			// Nothing interrupts the reader while they type.
 			expect(screen.queryByRole("alert")).toBeNull();
 
 			await user.click(createButton());
 			expect(
-				screen.getByRole("textbox", { name: "URL slug", description: new RegExp(shortSlug, "u") }),
+				screen.getByRole("textbox", {
+					name: "Short name",
+					description: new RegExp(shortSlug, "u"),
+				}),
 			).toBe(slugField);
 			expect(document.activeElement).toBe(slugField);
 			expect(requests.create).toStrictEqual([]);
@@ -377,7 +380,7 @@ describe("GitLab workspace wizard: workspace address", () => {
 		renderRouteAt("/workspaces/new/gitlab");
 		await configure(user);
 
-		const slugField = screen.getByRole<HTMLInputElement>("textbox", { name: "URL slug" });
+		const slugField = screen.getByRole<HTMLInputElement>("textbox", { name: "Short name" });
 		await user.clear(slugField);
 		await user.type(screen.getByRole("textbox", { name: "Display name" }), "{Enter}");
 		expect(document.activeElement).toBe(slugField);

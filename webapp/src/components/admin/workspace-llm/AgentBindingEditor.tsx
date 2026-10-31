@@ -41,7 +41,7 @@ const MIN_CONCURRENT_JOBS = 1;
 
 const CONVERSATION_TURN_SECONDS = 300;
 
-/** The longest one run may last: a review up to three hours, one Hephaestus answer five minutes. */
+/** The longest one attempt may last: a review attempt up to three hours, one Hephaestus answer five minutes. */
 function timeoutCeiling(purpose: BindingTarget["purpose"]) {
 	return purpose === "MENTOR"
 		? {
@@ -50,7 +50,7 @@ function timeoutCeiling(purpose: BindingTarget["purpose"]) {
 			}
 		: {
 				max: MAX_TIMEOUT_SECONDS,
-				error: `Runs stop after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
+				error: `One attempt of a review stops after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
 			};
 }
 
@@ -87,9 +87,9 @@ const runLimitsSchema = (ceiling: ReturnType<typeof timeoutCeiling>) =>
 		maxConcurrentJobs: z.preprocess(
 			numberInput,
 			z.coerce
-				.number({ error: "Enter a number of runs." })
-				.int({ error: "Enter a whole number of runs, 1 or more." })
-				.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of runs, 1 or more." }),
+				.number({ error: "Enter a number of reviews." })
+				.int({ error: "Enter a whole number of reviews, 1 or more." })
+				.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of reviews, 1 or more." }),
 		),
 	});
 
@@ -310,7 +310,7 @@ export function AgentBindingEditor({
 						/>
 						<CollapsibleContent>
 							<FieldSet className="pt-2 pb-2">
-								<FieldLegend variant="label">Run limits</FieldLegend>
+								<FieldLegend variant="label">Limits</FieldLegend>
 								<FieldGroup>
 									<Field data-invalid={Boolean(timeoutError)}>
 										<FieldLabel htmlFor={`${rowId}-timeout`}>Timeout (seconds){forRow}</FieldLabel>
@@ -333,7 +333,7 @@ export function AgentBindingEditor({
 									{purpose === "PRACTICE_REVIEW" && (
 										<Field data-invalid={Boolean(concurrencyError)}>
 											<FieldLabel htmlFor={`${rowId}-concurrency`}>
-												Max concurrent runs{forRow}
+												Max concurrent reviews{forRow}
 											</FieldLabel>
 											<Input
 												id={`${rowId}-concurrency`}
@@ -427,7 +427,7 @@ function ModelHint({
 	if (undeclared) {
 		return (
 			<FieldDescription id={id}>
-				No model for this purpose is available yet.{" "}
+				No model for this use is available yet.{" "}
 				{ownProviderAllowed
 					? "Ask an instance admin to share one, or connect a provider under Your providers."
 					: "Ask an instance admin to share one."}
@@ -436,7 +436,7 @@ function ModelHint({
 	}
 	return (
 		<FieldDescription id={id}>
-			No model for this purpose declared as <span className="font-medium">{tierLabel}</span> is
+			No model for this use declared as <span className="font-medium">{tierLabel}</span> is
 			available yet.{" "}
 			{ownProviderAllowed
 				? "Ask an instance admin, or add one to a provider under Your providers."

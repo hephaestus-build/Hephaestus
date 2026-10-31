@@ -223,7 +223,6 @@ function ReviewFacts({
 					<DayTime at={review.completedAt} from={pickedUp ?? review.createdAt} />
 				</Fact>
 			)}
-			{jobs.length > 1 && <Fact label="Jobs">{countOf(jobs.length, "job", "jobs")}</Fact>}
 			{latest !== undefined && <Fact label="Latest attempt">{latest}</Fact>}
 			{hasText(detail?.model) && <Fact label="Model">{detail.model}</Fact>}
 			<Fact label="How far">

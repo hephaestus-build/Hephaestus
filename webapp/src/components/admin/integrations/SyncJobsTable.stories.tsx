@@ -173,7 +173,7 @@ export const StartedRevealsAbsoluteTime: Story = {
 export const ErrorHover: Story = {
 	args: { jobs: allStatuses },
 	play: async ({ canvas }) => {
-		await userEvent.hover(canvas.getByRole("button", { name: "Show error for job 10" }));
+		await userEvent.hover(canvas.getByRole("button", { name: "Show error for sync 10" }));
 		await expectSettledVisible(await screen.findByText(/rate limit exceeded after 3 retries/iu));
 	},
 };
@@ -197,8 +197,10 @@ export const ExpandProgressDetail: Story = {
 	},
 	play: async ({ canvas }) => {
 		// Only the job with a progress report is expandable.
-		await expect(canvas.getAllByRole("button", { name: /show details for job/iu })).toHaveLength(1);
-		await userEvent.click(canvas.getByRole("button", { name: /show details for job 3/iu }));
+		await expect(canvas.getAllByRole("button", { name: /show details for sync/iu })).toHaveLength(
+			1,
+		);
+		await userEvent.click(canvas.getByRole("button", { name: /show details for sync 3/iu }));
 		await expectSettledVisible(await canvas.findByText(/backfilling ls1intum\/artemis/iu));
 		canvas.getByText("Pull requests");
 	},
@@ -220,7 +222,7 @@ export const WarningDetail: Story = {
 		],
 	},
 	play: async ({ canvas }) => {
-		await userEvent.click(canvas.getByRole("button", { name: /show details for job 1/iu }));
+		await userEvent.click(canvas.getByRole("button", { name: /show details for sync 1/iu }));
 		await expectSettledVisible(
 			await canvas.findByText("Project discovery stopped at the provider rate limit."),
 		);
@@ -243,10 +245,10 @@ export const RefreshFailed: Story = {
 		refreshFailure: { error: { status: 503 }, pending: false, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("The job history may be out of date");
+		canvas.getByText("The sync history may be out of date");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
-		canvas.getByRole("button", { name: "Show error for job 30" });
-		await expect(canvas.queryByText("We could not load the job history")).not.toBeInTheDocument();
+		canvas.getByRole("button", { name: "Show error for sync 30" });
+		await expect(canvas.queryByText("We could not load the sync history")).not.toBeInTheDocument();
 	},
 };
 
@@ -257,7 +259,7 @@ export const RefreshRetrying: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
-		canvas.getByRole("button", { name: "Show error for job 30" });
+		canvas.getByRole("button", { name: "Show error for sync 30" });
 	},
 };
 
