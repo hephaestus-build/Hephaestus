@@ -32,6 +32,9 @@ export interface ImporterCounts {
 }
 
 export interface LockfileCounts {
+	// Packages of pnpm's env document: the package manager and the config dependencies, which run
+	// during an install. A lockfile without that document has none.
+	envPackages: number;
 	packages: number;
 	importers: Record<string, ImporterCounts>;
 }
@@ -54,18 +57,23 @@ const references = (entry: Record<string, unknown>, fields: readonly string[]) =
 		return isRecord(value) ? Object.entries(value) : [];
 	});
 
-// pnpm 12 writes the package manager's own resolution as a first YAML document. The project's
-// resolution is the last one.
-const projectLock = (text: string, file: string): Record<string, unknown> => {
+// pnpm 12 writes an env document first, with the package manager and the config dependencies. The
+// project's resolution is the last document.
+const lockDocuments = (text: string, file: string) => {
 	const documents = parseAllDocuments(text);
 	if (!Array.isArray(documents) || documents.length === 0) {
 		throw new TypeError(`${file} has no YAML document`);
 	}
-	return asRecord(documents.at(-1)?.toJS(), file);
+	const parsed = documents.map((document, index) => asRecord(document.toJS(), `${file}#${index}`));
+	const lock = parsed.at(-1);
+	if (lock === undefined) {
+		throw new TypeError(`${file} has no YAML document`);
+	}
+	return { env: parsed.length > 1 ? parsed[0] : undefined, lock };
 };
 
 export function countLockfile(text: string, file: string): LockfileCounts {
-	const lock = projectLock(text, file);
+	const { env, lock } = lockDocuments(text, file);
 	const importers = asRecord(lock.importers, `${file}#importers`);
 	const snapshots = isRecord(lock.snapshots) ? lock.snapshots : {};
 	const packages = isRecord(lock.packages) ? lock.packages : {};
@@ -129,7 +137,9 @@ export function countLockfile(text: string, file: string): LockfileCounts {
 			transitive: { prod: closure(importer, prod), all: closure(importer, [...prod, ...dev]) },
 		};
 	}
-	return { packages: Object.keys(packages).length, importers: counts };
+	const envPackages =
+		env !== undefined && isRecord(env.packages) ? Object.keys(env.packages).length : 0;
+	return { envPackages, packages: Object.keys(packages).length, importers: counts };
 }
 
 export function measure(read: (file: string) => string = (file) => readFileSync(file, "utf8")) {

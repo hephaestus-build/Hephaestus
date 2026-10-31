@@ -29,6 +29,12 @@ Answer each item in the pull request body:
 6. **Bundle bytes.** For a webapp or extension runtime package, give the gzip bytes that it adds to the production build.
 7. **License.** The license permits use in an MIT project. Copyleft and unknown licenses need a maintainer decision.
 
+A Gradle dependency answers items 1, 5 and 7.
+Its transitive cost is the change to the Gradle lockfiles.
+For its provenance, Gradle dependency verification checks the checksum of each artifact against `server/gradle/verification-metadata.xml`.
+[Updating Java dependencies](./local-development.mdx#updating-java-dependencies) describes that review.
+The dependency baseline, install scripts and bundle bytes apply only to npm packages.
+
 A platform feature comes before a package.
 Examples are a Node built-in such as `util.parseArgs`, `util.styleText`, `fs.glob` or `fetch`, a browser API, or a feature of a framework that we already use.
 
@@ -95,6 +101,7 @@ Such a file needs a complete header and a component in the release SBOM.
 ## The dependency baseline
 
 `security/dependency-baseline.json` records, for each lockfile and workspace, the number of direct and transitive packages.
+It also records the packages of pnpm's env document: the package manager and the config dependencies, which run during an install.
 `gate:dependency-baseline` compares it with the lockfiles and fails when a count rises above the baseline.
 Thus, an addition that takes a count above the baseline raises the baseline in its pull request.
 The review sees the cost beside the change.
@@ -116,7 +123,7 @@ node scripts/check-dependency-baseline.ts --write
 3. Remove the package from its `package.json`.
 4. Run `pnpm install`.
 5. Find each `pnpm-workspace.yaml` entry that names the package: `allowBuilds`, `overrides`, `minimumReleaseAgeExclude`, `packageExtensions` and `patchedDependencies`.
-6. For each entry, run `pnpm why <package>` in each lockfile directory. Remove the entry only if no package in any lockfile still needs it. A security override for a package that stays as a transitive dependency must stay.
+6. For each entry, run `pnpm why -r <package>` in each lockfile directory, so that every workspace importer is searched. Remove the entry only if no package in any lockfile still needs it. A security override for a package that stays as a transitive dependency must stay.
 7. If you removed an entry, run `pnpm install` again. The lockfile records the workspace settings.
 8. Update the dependency baseline.
 9. Run the tests of each tree that used the package.

@@ -103,6 +103,8 @@ snapshots:
 
 await test("counts direct and reachable packages per importer from the project resolution", () => {
 	assert.deepEqual(countLockfile(LOCKFILE, "fixture"), {
+		// The env document's pnpm counts on its own, so a new config dependency is visible.
+		envPackages: 1,
 		packages: 7,
 		importers: {
 			".": { direct: { prod: 0, dev: 1 }, transitive: { prod: 0, all: 1 } },
@@ -111,6 +113,12 @@ await test("counts direct and reachable packages per importer from the project r
 			shared: { direct: { prod: 1, dev: 1 }, transitive: { prod: 1, all: 5 } },
 		},
 	});
+});
+
+await test("a lockfile with one document has no env packages", () => {
+	const single = LOCKFILE.slice(LOCKFILE.indexOf("---", 3) + 4);
+	assert.equal(countLockfile(single, "fixture").envPackages, 0);
+	assert.equal(countLockfile(single, "fixture").packages, 7);
 });
 
 await test("a reference without a snapshot or a link without an importer fails rather than undercounting", () => {
@@ -151,12 +159,12 @@ await test("a count above the baseline is a rise, below it a fall, and equal is 
 });
 
 await test("a lockfile the baseline does not name rises; one the lockfiles no longer have falls", () => {
-	assert.deepEqual(compare({}, { "a.yaml": { packages: 1, importers: {} } }), {
-		rises: ["a.yaml › packages: undefined → 1"],
+	assert.deepEqual(compare({}, { "a.yaml": { envPackages: 0, packages: 1, importers: {} } }), {
+		rises: ["a.yaml › envPackages: undefined → 0", "a.yaml › packages: undefined → 1"],
 		falls: [],
 	});
-	assert.deepEqual(compare({ "a.yaml": { packages: 1, importers: {} } }, {}), {
+	assert.deepEqual(compare({ "a.yaml": { envPackages: 0, packages: 1, importers: {} } }, {}), {
 		rises: [],
-		falls: ["a.yaml › packages: 1 → undefined"],
+		falls: ["a.yaml › envPackages: 0 → undefined", "a.yaml › packages: 1 → undefined"],
 	});
 });
