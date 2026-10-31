@@ -58,15 +58,17 @@ We measured the sizes on 2026-10-31 with esbuild 0.25 (ESM, minified, gzip -9, R
    A browser fault becomes one structured log event and one counter with closed labels.
    The server stores no row.
    The report then goes to the logs and metrics that the operator already collects.
-2. **One id joins a browser event to the server.**
-   The server returns its trace id as `X-Request-Id`.
+2. **One id joins a browser event to the server, when tracing is on.**
+   With tracing on, the server returns its trace id as `X-Request-Id`.
    A browser fault that a request caused carries that id.
    The error view shows the id to the reader as a reference.
+   With tracing off, the server returns no id, and the error view shows no reference. There is no second correlation mechanism.
    The browser sends no `traceparent`, so the server keeps its sampling decision ([OpenTelemetry samplers](https://opentelemetry.io/docs/specs/otel/trace/sdk/#parentbased)).
 3. **Signals carry no content and no direct identifiers, and labels are closed sets.**
-   A browser report has closed values only.
-   It has no address, query string, error message, component stack, user agent, person id or workspace id.
-   The server validates each value against its closed set before it writes a log record.
+   A browser report has closed values only, with one exception: the trace id of a failed request.
+   The server checks that id as 32 lowercase hexadecimal characters, and writes it to the log record only, never to a metric label.
+   A report has no address, query string, error message, component stack, user agent, person id or workspace id.
+   The server validates each other value against its closed set before it writes a log record.
 4. **Source maps come from the build that is shipped, and are never served.**
    The web app build writes hidden source maps as a separate output of the same build.
    They are kept with the release, and contributors decode a stack offline.
@@ -86,6 +88,7 @@ The browser fault reporter, the reference on error views, and the source map out
 
 ## Consequences
 
+- The reporter is the web app's own code. If the web app's entry script itself does not load, it sends no report. That failure shows only in the access log of the server that serves the web app, and in the reader's report.
 - The web app adds no runtime package for browser faults.
 - An operator gets browser faults in the log store and the Prometheus that they already run.
 - There is no issue UI with grouping, assignment or regression tracking. A log query and an alert replace it.
