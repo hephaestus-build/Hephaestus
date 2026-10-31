@@ -192,16 +192,25 @@ Service or the Gateway.
   value: $(POD_IP)
 {{- end -}}
 
-{{/* What the verified release lock says this container runs, reported under `release` in /actuator/info. */}}
-{{- define "hephaestus.env.release" -}}
+{{/*
+The release that the verified release lock names, for every container of the application image. The image is
+promoted without a rebuild, so the JAR cannot know its release: each log record, span and metric of the
+container names this version, commit and environment.
+*/}}
+{{- define "hephaestus.env.releaseIdentity" -}}
 - name: APP_VERSION
   value: {{ trimPrefix "v" .Values.release.version | quote }}
 - name: HEPHAESTUS_RELEASE_COMMIT
   value: {{ .Values.release.commit | quote }}
-- name: HEPHAESTUS_IMAGE_APPLICATION_SERVER
-  value: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
 - name: DEPLOYMENT_ENVIRONMENT
   value: {{ .Values.deploymentEnvironment | quote }}
+{{- end -}}
+
+{{/* What the verified release lock says this container runs, reported under `release` in /actuator/info. */}}
+{{- define "hephaestus.env.release" -}}
+{{ include "hephaestus.env.releaseIdentity" . }}
+- name: HEPHAESTUS_IMAGE_APPLICATION_SERVER
+  value: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
 - name: TRACING_SAMPLING_PROBABILITY
   value: {{ .Values.config.tracing.samplingProbability | quote }}
 - name: TRACING_OTLP_ENABLED

@@ -53,6 +53,7 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
           imagePullPolicy: IfNotPresent
           env:
+            {{- include "hephaestus.env.releaseIdentity" . | nindent 12 }}
             {{- include "hephaestus.env.databasePool" .Values.migration.databasePool | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod,migrate
