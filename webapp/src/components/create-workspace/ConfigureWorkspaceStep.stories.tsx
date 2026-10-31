@@ -142,7 +142,7 @@ export const TypingInsideTheSlug: Story = {
 		}),
 	],
 	play: async ({ canvas }) => {
-		const slug = canvas.getByRole<HTMLInputElement>("textbox", { name: "URL slug" });
+		const slug = canvas.getByRole<HTMLInputElement>("textbox", { name: "Short name" });
 		await userEvent.type(slug, "New ", { initialSelectionStart: 3, initialSelectionEnd: 3 });
 		await expect(slug).toHaveValue("my-New custom-workspace");
 		await expect(slug.selectionStart).toBe(7);
