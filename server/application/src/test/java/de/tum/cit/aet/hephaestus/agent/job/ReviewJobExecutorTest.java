@@ -53,6 +53,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
@@ -71,6 +72,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -109,6 +111,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final ReviewMemberAiPolicy policy = mock(ReviewMemberAiPolicy.class);
     private final DefaultReviewExecutionHandler handler = mock(DefaultReviewExecutionHandler.class);
+    private final ReviewStart reviewStart = mock(ReviewStart.class);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
     private final SandboxManager sandbox = mock(SandboxManager.class);
     private final LlmBudgetService budgets = mock(LlmBudgetService.class);
@@ -152,6 +155,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     private ReviewJobExecutor executor(AsyncTaskExecutor pool) {
+        lenient().when(jobs.lockParentForQueuedClaim(any())).thenReturn(Optional.of(UUID.randomUUID()));
+        lenient().when(reviewStart.start(anyLong(), any())).thenReturn(true);
+        lenient().when(jobs.databaseClock()).thenAnswer(ignored -> Instant.now());
         var transactions = mock(TransactionTemplate.class);
         lenient().when(transactions.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
@@ -185,7 +191,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         assignments,
                         transactions,
                         new JsonMapper(),
-                        meters,
+                        reviewStart,
                         budgets,
                         null,
                         telemetry,
@@ -347,6 +353,19 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         // A review arrives at a runtime that has been full for two hours: its own hour starts now.
         when(jobs.existsQueuedForRoom()).thenReturn(true);
         executor.endReviewsWithoutRoom(start.plus(Duration.ofHours(3)));
+
+        verify(jobs, never()).cancelQueuedForRoom(any(), any());
+    }
+
+    @Test
+    void shouldKeepQueuedReviewsWhenTheQuotaIsUnobservedForTwoHours() {
+        when(sandbox.roomFor(any())).thenReturn(SandboxRoom.UNKNOWN_ROOM);
+        lenient().when(jobs.existsQueuedForRoom()).thenReturn(true);
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        Instant start = Instant.now();
+
+        executor.endReviewsWithoutRoom(start);
+        executor.endReviewsWithoutRoom(start.plus(Duration.ofHours(2)));
 
         verify(jobs, never()).cancelQueuedForRoom(any(), any());
     }
@@ -711,7 +730,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void sandboxRuntimeReady() {
         when(sandbox.ready()).thenReturn(true);
         // A claim leases its attempt on the database clock.
-        lenient().when(jobs.lease(any(), anyLong())).thenReturn(1);
+        lenient().when(jobs.lease(any(), anyLong(), anyInt(), any(), anyLong())).thenReturn(1);
         lenient().when(jobs.databaseNow()).thenAnswer(invocation -> Instant.now());
         lenient().when(sandbox.roomFor(any())).thenReturn(Integer.MAX_VALUE);
     }

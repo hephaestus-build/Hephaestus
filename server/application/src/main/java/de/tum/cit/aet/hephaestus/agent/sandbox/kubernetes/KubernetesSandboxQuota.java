@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.Quantity;
@@ -50,7 +51,7 @@ public class KubernetesSandboxQuota {
         this.reviewPriorityClass = reviewPriorityClass;
     }
 
-    /** @return {@link Integer#MAX_VALUE} without a quota, or when the quotas cannot be read: as before, a start decides */
+    /** @return {@link Integer#MAX_VALUE} without a quota, or {@link SandboxRoom#UNKNOWN_ROOM} without an observation. */
     public int roomFor(ResourceLimits limits) {
         List<ResourceQuota> quotas;
         try {
@@ -58,11 +59,11 @@ public class KubernetesSandboxQuota {
         } catch (RuntimeException e) {
             if (unreadable.compareAndSet(false, true)) {
                 log.warn(
-                        "Sandbox quota unreadable, so reviews are claimed without it: namespace={}, error={}",
+                        "Sandbox quota unreadable, so reviews wait: namespace={}, error={}",
                         namespace,
                         e.getClass().getSimpleName());
             }
-            return Integer.MAX_VALUE;
+            return SandboxRoom.UNKNOWN_ROOM;
         }
         unreadable.set(false);
         int room = fits(quotas, footprint(limits, overhead()), reviewPriorityClass);
@@ -76,7 +77,7 @@ public class KubernetesSandboxQuota {
 
     /**
      * Whether a quota of the namespace is smaller than one review sandbox, so that no wait gives it room. False when the
-     * quotas cannot be read: a start then decides, as for {@link #roomFor}. Warns once each time it becomes true.
+     * quotas cannot be read: reviews wait through {@link #roomFor} until the observation returns. Warns once each time it becomes true.
      */
     public boolean neverFits(ResourceLimits limits) {
         List<ResourceQuota> quotas;
@@ -211,20 +212,18 @@ public class KubernetesSandboxQuota {
     static int fits(List<ResourceQuota> quotas, Map<String, Quantity> footprint, String reviewClass) {
         int room = Integer.MAX_VALUE;
         for (ResourceQuota quota : quotas) {
-            if (quota.getStatus() == null || quota.getStatus().getHard() == null || !countsReviews(quota, reviewClass))
-                continue;
-            Map<String, Quantity> used = quota.getStatus().getUsed() == null
-                    ? Map.of()
-                    : quota.getStatus().getUsed();
-            for (var hard : quota.getStatus().getHard().entrySet()) {
+            if (!countsReviews(quota, reviewClass)) continue;
+            var status = quota.getStatus();
+            if (status == null || status.getHard() == null) return SandboxRoom.UNKNOWN_ROOM;
+            Map<String, Quantity> used = status.getUsed();
+            for (var hard : status.getHard().entrySet()) {
                 Quantity need = footprint.get(hard.getKey());
                 if (need == null) continue;
+                // A new or reconciling quota has no usage observation yet; absence is not zero usage.
+                if (used == null || !used.containsKey(hard.getKey())) return SandboxRoom.UNKNOWN_ROOM;
                 BigDecimal free = hard.getValue()
                         .getNumericalAmount()
-                        .subtract(
-                                used.containsKey(hard.getKey())
-                                        ? used.get(hard.getKey()).getNumericalAmount()
-                                        : BigDecimal.ZERO);
+                        .subtract(used.get(hard.getKey()).getNumericalAmount());
                 BigDecimal each = need.getNumericalAmount();
                 int fit = free.signum() <= 0
                         ? 0

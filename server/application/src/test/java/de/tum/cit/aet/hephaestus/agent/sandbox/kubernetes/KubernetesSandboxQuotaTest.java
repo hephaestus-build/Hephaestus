@@ -59,14 +59,46 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     @Test
     void shouldSetNoBoundWhenNoQuotaLimitsWhatAReviewUses() {
         var storageOnly = quota(Map.of("requests.storage", "6Gi"), Map.of("requests.storage", "6Gi"));
-        var unobserved = new ResourceQuotaBuilder()
-                .withNewMetadata()
-                .withName("new")
-                .endMetadata()
-                .build();
 
         assertThat(KubernetesSandboxQuota.fits(List.of(), REVIEW, REVIEWS)).isEqualTo(Integer.MAX_VALUE);
-        assertThat(KubernetesSandboxQuota.fits(List.of(storageOnly, unobserved), REVIEW, REVIEWS))
+        assertThat(KubernetesSandboxQuota.fits(List.of(storageOnly), REVIEW, REVIEWS))
+                .isEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
+    void shouldWaitForAQuotaWhoseStatusIsNotObserved() {
+        var unobserved = new ResourceQuotaBuilder().build();
+        var missingHard = new ResourceQuotaBuilder().withNewStatus().endStatus().build();
+
+        assertThat(KubernetesSandboxQuota.fits(List.of(unobserved), REVIEW, REVIEWS))
+                .isEqualTo(-1);
+        assertThat(KubernetesSandboxQuota.fits(List.of(missingHard), REVIEW, REVIEWS))
+                .isEqualTo(-1);
+        assertThat(KubernetesSandboxQuota.neverFits(List.of(unobserved, missingHard), REVIEW, REVIEWS))
+                .isFalse();
+    }
+
+    @Test
+    void shouldWaitForEveryRelevantUsageCounterInsteadOfAssumingZero() {
+        var missingUsed = quota(Map.of("pods", "4"), Map.of());
+        missingUsed.getStatus().setUsed(null);
+        var incomplete = quota(Map.of("pods", "4", "requests.memory", "16Gi"), Map.of("pods", "0"));
+
+        assertThat(KubernetesSandboxQuota.fits(List.of(missingUsed), REVIEW, REVIEWS))
+                .isEqualTo(-1);
+        assertThat(KubernetesSandboxQuota.fits(List.of(incomplete), REVIEW, REVIEWS))
+                .isEqualTo(-1);
+        incomplete.getStatus().getUsed().put("requests.memory", new Quantity("0"));
+        assertThat(KubernetesSandboxQuota.fits(List.of(incomplete), REVIEW, REVIEWS))
+                .isEqualTo(4);
+    }
+
+    @Test
+    void shouldIgnoreUnobservedCountersFromAnotherTier() {
+        var conversations = tierQuota("hephaestus-heph-conversations", Map.of("pods", "2"), Map.of());
+        conversations.setStatus(null);
+
+        assertThat(KubernetesSandboxQuota.fits(List.of(conversations), REVIEW, REVIEWS))
                 .isEqualTo(Integer.MAX_VALUE);
     }
 
@@ -170,13 +202,16 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldClaimAsBeforeWhenTheQuotasCannotBeRead() {
+    void shouldWaitUntilTheQuotasCanBeRead() {
         KubernetesSandboxCache cache = mock(KubernetesSandboxCache.class);
-        when(cache.quotas()).thenThrow(new KubernetesClientException("not listed yet"));
+        when(cache.quotas())
+                .thenThrow(new KubernetesClientException("not listed yet"))
+                .thenReturn(List.of());
+        var quota = new KubernetesSandboxQuota(cache, "sandboxes", "", REVIEWS);
+        var limits = new ResourceLimits(1.0, Duration.ofMinutes(30));
 
-        assertThat(new KubernetesSandboxQuota(cache, "sandboxes", "", REVIEWS)
-                        .roomFor(new ResourceLimits(1.0, Duration.ofMinutes(30))))
-                .isEqualTo(Integer.MAX_VALUE);
+        assertThat(quota.roomFor(limits)).isEqualTo(-1);
+        assertThat(quota.roomFor(limits)).isEqualTo(Integer.MAX_VALUE);
     }
 
     private static ResourceQuota tierQuota(String priorityClass, Map<String, String> hard, Map<String, String> used) {

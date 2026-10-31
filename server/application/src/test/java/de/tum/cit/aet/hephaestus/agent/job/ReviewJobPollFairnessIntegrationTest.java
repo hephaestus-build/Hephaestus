@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
@@ -12,9 +11,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
-import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -134,20 +132,16 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
                 .put("connectionId", openConnection.getId());
         jdbc.update(
                 "UPDATE review_job SET config_snapshot=CAST(? AS jsonb) WHERE id=?", openSnapshot.toString(), runnable);
-        var capacity = LlmCallPermitsTestFixtures.worker(context, "new-worker");
         long blockedId = blocked.getId();
         UUID oldest = Objects.requireNonNull(first);
-        var candidates = transactionTemplate.execute(status -> {
-            assertThat(capacity.reserve(
-                                    blockedId,
-                                    LlmCallClass.REQUEST,
-                                    new LlmCallPermits.Caller(blockedWorkspace.getId(), oldest, 0, null))
-                            .granted())
-                    .isFalse();
-            return jobRepository.findQueuedIdsStartedFirst(1, Set.of(blockedId), Set.of());
-        });
+        var candidates = jobRepository.findQueuedIdsStartedFirst(1, Set.of(blockedId), Set.of());
         assertThat(candidates).containsExactly(runnable);
         assertThat(jobRepository.findById(oldest).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        jdbc.update(
+                "UPDATE review_job SET attempt=1, admission_attempt=0, admission_digest=repeat('a',64) WHERE id=?",
+                oldest);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(1, Set.of(blockedId), Set.of()))
+                .containsExactly(oldest);
     }
 
     @Test
@@ -270,9 +264,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         UUID retried = queuedJob(ws, base.plusSeconds(10));
         jdbc.update("UPDATE review_job SET attempt = 1 WHERE id = ?", retried);
         UUID admitted = queuedJob(ws, base.plusSeconds(20));
-        jdbc.update(
-                "UPDATE review_job SET capture = jsonb_build_object('admission', jsonb_build_object()) WHERE id = ?",
-                admitted);
+        jdbc.update("UPDATE review_job SET admission_attempt=0, admission_digest=repeat('a',64) WHERE id=?", admitted);
 
         List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(10).stream()
                 .filter(List.of(fresh, alsoFresh, retried, admitted)::contains)
@@ -292,6 +284,85 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         Optional<ReviewJob> claimed = transactionTemplate.execute(
                 status -> jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now()));
         assertThat(claimed).isEmpty();
+    }
+
+    @Test
+    void shouldOfferAnIdleWorkspaceBeforeOneWithRunningReviews() {
+        var busy = activeWorkspace("busy-priority");
+        var idle = activeWorkspace("idle-priority");
+        binding(busy, 10);
+        binding(idle, 10);
+        runningJob(busy);
+        runningJob(busy);
+        queuedJob(busy, Instant.now().minusSeconds(3600));
+        UUID expected = queuedJob(idle, Instant.now().minusSeconds(60));
+
+        assertThat(jobRepository.findQueuedIdsStartedFirst(1)).containsExactly(expected);
+    }
+
+    @Test
+    void shouldGiveAnotherWorkspaceABatchPlaceWhenOneWorkspaceHasAnOlderBacklog() {
+        var busy = activeWorkspace("batch-busy");
+        var other = activeWorkspace("batch-other");
+        binding(busy, 10);
+        binding(other, 10);
+        Instant old = Instant.now().minusSeconds(3600);
+        UUID first = queuedJob(busy, old);
+        UUID second = queuedJob(busy, old.plusSeconds(1));
+        for (int i = 2; i < 5; i++) queuedJob(busy, old.plusSeconds(i));
+        UUID expected = queuedJob(other, Instant.now().minusSeconds(60));
+
+        assertThat(jobRepository.findQueuedIdsStartedFirst(3)).containsExactly(first, expected, second);
+    }
+
+    @Test
+    void shouldOfferARequestedReviewBeforeAnOlderBackfill() {
+        var workspace = activeWorkspace("origin-priority");
+        binding(workspace, 10);
+        UUID backfill = queuedJob(workspace, Instant.now().minusSeconds(60));
+        UUID requested = queuedJob(workspace, Instant.now().minusSeconds(30));
+        origin(backfill, ReviewOrigin.BACKFILL);
+        origin(requested, ReviewOrigin.REQUEST);
+        jdbc.update("UPDATE review_job SET available_at=clock_timestamp()-interval '1 minute' WHERE id=?", backfill);
+        jdbc.update("UPDATE review_job SET available_at=clock_timestamp() WHERE id=?", requested);
+
+        assertThat(jobRepository.findQueuedIdsStartedFirst(1)).containsExactly(requested);
+    }
+
+    @Test
+    void shouldAgeBackfillAheadOfNewRequestsAfterThirtyMinutes() {
+        var workspace = activeWorkspace("aged-priority");
+        binding(workspace, 10);
+        UUID backfill = queuedJob(workspace, Instant.now().minusSeconds(3600));
+        UUID requested = queuedJob(workspace, Instant.now().minusSeconds(30));
+        origin(backfill, ReviewOrigin.BACKFILL);
+        origin(requested, ReviewOrigin.REQUEST);
+        jdbc.update("UPDATE review_job SET available_at=clock_timestamp()-interval '31 minutes' WHERE id=?", backfill);
+        jdbc.update("UPDATE review_job SET available_at=clock_timestamp() WHERE id=?", requested);
+
+        assertThat(jobRepository.findQueuedIdsStartedFirst(1)).containsExactly(backfill);
+    }
+
+    @Test
+    void shouldNotCountCompositionAgainstWorkspaceReviewOccupancy() {
+        var composing = activeWorkspace("composing-priority");
+        var idle = activeWorkspace("idle-beside-composition");
+        binding(composing, 10);
+        binding(idle, 10);
+        UUID running = runningJob(composing);
+        jdbc.update("UPDATE review_job SET admission_attempt=0, admission_digest=repeat('a',64) WHERE id=?", running);
+        UUID expected = queuedJob(composing, Instant.now().minusSeconds(3600));
+        queuedJob(idle, Instant.now().minusSeconds(60));
+
+        assertThat(jobRepository.findQueuedIdsStartedFirst(1)).containsExactly(expected);
+    }
+
+    private void origin(UUID job, ReviewOrigin origin) {
+        assertThat(jdbc.update(
+                        "UPDATE review SET origin=? WHERE id=(SELECT review_id FROM review_job WHERE id=?)",
+                        origin.name(),
+                        job))
+                .isEqualTo(1);
     }
 
     private Workspace activeWorkspace(String slug) {

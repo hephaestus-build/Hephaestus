@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793443331093-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="llm_call_permit" columnName="state" />
+            <columnExists tableName="llm_call_permit" columnName="closed_at" />
+            <columnExists tableName="llm_call_permit" columnName="requests" />
+            <columnExists tableName="llm_call_permit" columnName="tokens" />
+        </preConditions>
+        <comment>Retire claim-only pool demand during the stopped runtime cutover. Keep grant history independent of refunded provider debits.</comment>
+        <sql>
+            DELETE FROM llm_call_permit WHERE state = 'CLAIM_WAITING';
+            UPDATE llm_call_permit
+            SET state = 'CLOSED', closed_at = clock_timestamp(), requests = 0, tokens = 0
+            WHERE state = 'RESERVED';
+        </sql>
+        <rollback>
+            <stop>Claim-only demand cannot be reconstructed. Stop every role and restore the verified pre-upgrade backup before starting an older release.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

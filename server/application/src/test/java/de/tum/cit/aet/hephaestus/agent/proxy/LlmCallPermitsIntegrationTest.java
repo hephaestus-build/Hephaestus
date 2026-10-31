@@ -423,58 +423,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldReserveTheLastBackgroundSlotForOnlyOneClaimAcrossWorkers() throws Exception {
-        long pool = pool(2, 1);
-        try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = calls.submit(() -> transactions.execute(status ->
-                    workerA.reserve(pool, LlmCallClass.EVENT, caller(1)).granted()));
-            var second = calls.submit(() -> transactions.execute(status ->
-                    workerB.reserve(pool, LlmCallClass.EVENT, caller(2)).granted()));
-            assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
-                    .containsExactlyInAnyOrder(true, false);
-        }
-        assertThat(rows.countActive(pool)).isEqualTo(1);
-        assertThat(waiting(pool)).isEqualTo(1);
-    }
-
-    @Test
-    void shouldUseOnlyTheReservationForTheExactAttemptAndWorker() {
-        long pool = pool(1, 0);
-        var caller = caller(1);
-        Boolean reserved = transactions.execute(
-                status -> workerA.reserve(pool, LlmCallClass.EVENT, caller).granted());
-        assertThat(reserved).isTrue();
-        assertThat(probe(workerB, pool, LlmCallClass.EVENT, 1)).isNull();
-        var call = Objects.requireNonNull(workerA.acquire(
-                pool, LlmCallClass.EVENT, caller, () -> false, Instant.now().plusSeconds(2)));
-        assertThat(rows.countActive(pool)).isEqualTo(1);
-        call.close();
-        assertThat(rows.countActive(pool)).isZero();
-    }
-
-    @Test
-    void shouldRecoverAnUnusedReservationFromADeadWorkerBeforeGrantingItsReplacement() {
-        long pool = pool(2, 1);
-        Boolean reserved = transactions.execute(
-                status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller(1)).granted());
-        assertThat(reserved).isTrue();
-        jdbc.update(
-                "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '1 minute' WHERE pool_id=?", pool);
-        var replacement = workerB.acquire(
-                pool,
-                LlmCallClass.REQUEST,
-                caller(2),
-                () -> false,
-                Instant.now().plusSeconds(5));
-        assertThat(replacement)
-                .as("a dead owner's unused reservation must not retire background capacity")
-                .isNotNull();
-        assertThat(rows.countActive(pool)).isEqualTo(1);
-        Objects.requireNonNull(replacement).close();
-        assertThat(rows.countActive(pool)).isZero();
-    }
-
-    @Test
     void shouldCloseAFreshGrantWhenTheFinalOwnershipReadThrows() {
         long pool = pool(1, 0);
         AtomicInteger checks = new AtomicInteger();
@@ -484,30 +432,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                         caller(1),
                         () -> {
                             if (checks.incrementAndGet() == 3) throw new IllegalStateException("ownership read failed");
-                            return false;
-                        },
-                        Instant.now().plusSeconds(5)))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("ownership read failed");
-        assertThat(rows.countActive(pool)).isZero();
-        workerA.renew();
-        admit(workerB, pool, LlmCallClass.REQUEST, 2).close();
-    }
-
-    @Test
-    void shouldCloseAnActivatedReservationWhenTheFinalOwnershipReadThrows() {
-        long pool = pool(1, 0);
-        var caller = caller(1);
-        Boolean reserved = transactions.execute(
-                status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller).granted());
-        assertThat(reserved).isTrue();
-        AtomicInteger checks = new AtomicInteger();
-        assertThatThrownBy(() -> workerA.acquire(
-                        pool,
-                        LlmCallClass.REQUEST,
-                        caller,
-                        () -> {
-                            if (checks.incrementAndGet() == 2) throw new IllegalStateException("ownership read failed");
                             return false;
                         },
                         Instant.now().plusSeconds(5)))
@@ -554,105 +478,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    @Test
-    void shouldMakeProgressWhenReviewsCallAnotherPoolBeforeTheirReservedModel() throws Exception {
-        long firstPool = pool(1, 0);
-        long secondPool = pool(1, 0);
-        var firstCaller = caller(1);
-        var secondCaller = caller(2);
-        Boolean firstReserved = transactions.execute(status ->
-                workerA.reserve(firstPool, LlmCallClass.REQUEST, firstCaller).granted());
-        Boolean secondReserved = transactions.execute(status ->
-                workerB.reserve(secondPool, LlmCallClass.REQUEST, secondCaller).granted());
-        assertThat(firstReserved).isTrue();
-        assertThat(secondReserved).isTrue();
-        try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = calls.submit(() -> {
-                try (var permit = workerA.acquire(
-                        secondPool,
-                        LlmCallClass.REQUEST,
-                        firstCaller,
-                        () -> false,
-                        Instant.now().plusSeconds(2))) {
-                    return permit != null;
-                }
-            });
-            var second = calls.submit(() -> {
-                try (var permit = workerB.acquire(
-                        firstPool,
-                        LlmCallClass.REQUEST,
-                        secondCaller,
-                        () -> false,
-                        Instant.now().plusSeconds(2))) {
-                    return permit != null;
-                }
-            });
-            assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
-                    .as("both calls must progress without retaining unused reservations in the other endpoint")
-                    .containsOnly(true);
-        } finally {
-            Objects.requireNonNull(workerA.acquire(
-                            firstPool,
-                            LlmCallClass.REQUEST,
-                            firstCaller,
-                            () -> false,
-                            Instant.now().plusSeconds(2)))
-                    .close();
-            Objects.requireNonNull(workerB.acquire(
-                            secondPool,
-                            LlmCallClass.REQUEST,
-                            secondCaller,
-                            () -> false,
-                            Instant.now().plusSeconds(2)))
-                    .close();
-        }
-    }
-
-    @Test
-    void shouldGiveAnOlderCompositionATurnAfterAnUnusedReservationIsReleased() {
-        long primary = pool(2, 0);
-        var shared = pools.findById(primary).orElseThrow();
-        shared.setRequestsPerMinute(2);
-        shared.setTokensPerMinute(14L);
-        shared.setTokensPerCall(7L);
-        pools.saveAndFlush(shared);
-        long auxiliary = pool(1, 0);
-        UUID pending = UUID.randomUUID();
-        String queuedWorker = "composition-" + UUID.randomUUID();
-        try (var ongoing = admit(workerB, primary, LlmCallClass.EVENT, 2)) {
-            transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
-                    pending, primary, queuedWorker, "COMPOSITION", 2L, UUID.randomUUID(), 0, "WAITING")));
-            int granted = 0;
-            for (int round = 0; round < 6; round++) {
-                var caller = caller(1);
-                var reservation =
-                        transactions.execute(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
-                if (!Objects.requireNonNull(reservation).granted()) break;
-                granted++;
-                assertThat(rows.countActive(primary)).isEqualTo(2);
-                Objects.requireNonNull(workerA.acquire(
-                                auxiliary,
-                                LlmCallClass.REQUEST,
-                                caller,
-                                () -> false,
-                                Instant.now().plusSeconds(2)))
-                        .close();
-                assertThat(rows.countActive(primary)).isEqualTo(1);
-                var rates = rows.rates(primary);
-                assertThat(rates.getRequests()).isEqualTo(1);
-                assertThat(rates.getTokens()).isEqualTo(7);
-                assertThat(rows.next(primary, false)).contains(pending);
-            }
-            assertThat(ongoing.isRevoked()).isFalse();
-            assertThat(granted)
-                    .as("an older composition must win before another unused reservation repeats")
-                    .isEqualTo(1);
-            assertThat(rows.next(primary, false)).contains(pending);
-        } finally {
-            transactions.executeWithoutResult(status -> rows.abandon(pending, queuedWorker));
-        }
-    }
-
     private LlmCallPermits worker(String id, SimpleMeterRegistry registry) {
         return new LlmCallPermits(pools, rows, transactions, PROPERTIES, id, registry, mock(LlmModelResolver.class));
     }
@@ -662,7 +487,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         long primary = pool(1, 0);
         long auxiliary = pool(1, 0);
         var caller = caller(1);
-        transactions.executeWithoutResult(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
         try (var active = Objects.requireNonNull(workerA.acquire(
                 primary,
                 LlmCallClass.REQUEST,
@@ -681,49 +505,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                 assertThat(other.isRevoked()).isFalse();
             }
             assertThat(rows.countActive(primary)).isEqualTo(1);
-        }
-    }
-
-    @Test
-    void shouldKeepOtherOwnersAndAttemptsUnusedReservationsWhenChangingPools() {
-        long primary = pool(1, 0);
-        long auxiliary = pool(1, 0);
-        var caller = caller(1);
-        transactions.executeWithoutResult(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
-        var otherAttempt =
-                new LlmCallPermits.Caller(caller.workspaceId(), caller.sourceId(), caller.attempt() + 1, null);
-        var otherWorkspace = new LlmCallPermits.Caller(
-                Objects.requireNonNull(caller.workspaceId()) + 1, caller.sourceId(), caller.attempt(), null);
-        var otherSource = new LlmCallPermits.Caller(caller.workspaceId(), UUID.randomUUID(), caller.attempt(), null);
-        try {
-            for (var fenced : List.of(otherAttempt, otherWorkspace, otherSource)) {
-                try (var call = Objects.requireNonNull(workerA.acquire(
-                        auxiliary,
-                        LlmCallClass.REQUEST,
-                        fenced,
-                        () -> false,
-                        Instant.now().plusSeconds(2)))) {
-                    assertThat(call.isRevoked()).isFalse();
-                    assertThat(rows.countActive(primary)).isEqualTo(1);
-                }
-            }
-            try (var otherWorker = Objects.requireNonNull(workerB.acquire(
-                    auxiliary,
-                    LlmCallClass.REQUEST,
-                    caller,
-                    () -> false,
-                    Instant.now().plusSeconds(2)))) {
-                assertThat(otherWorker.isRevoked()).isFalse();
-                assertThat(rows.countActive(primary)).isEqualTo(1);
-            }
-        } finally {
-            Objects.requireNonNull(workerA.acquire(
-                            primary,
-                            LlmCallClass.REQUEST,
-                            caller,
-                            () -> false,
-                            Instant.now().plusSeconds(2)))
-                    .close();
         }
     }
 
@@ -767,8 +548,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     private long waiting(long pool) {
         return Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state IN ('WAITING','CLAIM_WAITING')",
-                Long.class,
-                pool));
+                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING'", Long.class, pool));
     }
 }

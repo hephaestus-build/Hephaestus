@@ -7,7 +7,12 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
  */
 public interface SandboxRoom {
 
-    /** How many more sandboxes of these limits the runtime admits now; {@link Integer#MAX_VALUE} for no bound. */
+    int UNKNOWN_ROOM = -1;
+
+    /**
+     * How many more sandboxes of these limits the runtime admits now; {@link Integer#MAX_VALUE} for no bound,
+     * {@link #UNKNOWN_ROOM} when the runtime has no current observation.
+     */
     int roomFor(ResourceLimits limits);
 
     /** Whether no room of the runtime can ever hold one sandbox of these limits, so that waiting does not help. */

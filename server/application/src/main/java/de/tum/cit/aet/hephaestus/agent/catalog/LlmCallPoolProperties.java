@@ -11,7 +11,7 @@ import org.springframework.validation.annotation.Validated;
  * Renewal and cancellation bounds. Admission reclaims permits whose owner has not renewed within the lease.
  *
  * @param permitLease Permit renewal window. A live worker cancels calls after three quarters of this window
- *                    without renewal. Admission and administration reclaim expired grants. Only unused reservations are refunded.
+ *                    without renewal. Admission and administration reclaim expired grants. Provider debits remain charged after closure or expiry.
  * @param maxCooldown Longest shared provider pause accepted from an instance-funded HTTP 429 response.
  */
 @Validated
