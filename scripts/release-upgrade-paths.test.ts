@@ -103,8 +103,8 @@ mock.module("node:child_process", { exports: {
 	}
 }
 
-// Seed cases stop when the candidate starts. Protocol cases continue through both receivers with a
-// stopped-upgrade waiver. These stubs prove orchestration; CI runs the PostgreSQL and NATS operations.
+// Seed cases stop when the candidate starts. Protocol cases continue through both receivers, with and
+// without a stopped-upgrade waiver. These stubs prove orchestration; CI runs the PostgreSQL and NATS operations.
 for (const [scenario, args, previousKeepsChat, expectedError, seeded] of [
 	["required-admitted", ["--require-seed=heph-chat"], true, "candidate start stubbed", true],
 	[
@@ -117,10 +117,12 @@ for (const [scenario, args, previousKeepsChat, expectedError, seeded] of [
 	["optional-admitted", [], true, "candidate start stubbed", true],
 	["optional-missing", [], false, "candidate start stubbed", false],
 	["unknown-seed", ["--require-seed=chat"], true, "Unknown option: --require-seed=chat", false],
+	["rolling-protocol-pass", [], false, "", false],
 	["stopped-protocol-pass", [], false, "", false],
 	["stopped-protocol-refused", [], false, "the body changed", false],
 ] as const) {
-	const protocol = scenario.startsWith("stopped-protocol-");
+	const protocol = scenario.endsWith("-protocol-pass") || scenario.endsWith("-protocol-refused");
+	const stopped = scenario.startsWith("stopped-");
 	await test(`upgrade qualification: ${scenario}`, () => {
 		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-seed-"));
 		try {
@@ -136,11 +138,12 @@ const commands = ${JSON.stringify(commands)};
 const fixtures = ${JSON.stringify(fixtures)};
 const previousKeepsChat = ${JSON.stringify(previousKeepsChat)};
 const protocol = ${JSON.stringify(protocol)};
+const stopped = ${JSON.stringify(stopped)};
 const mismatch = ${JSON.stringify(scenario === "stopped-protocol-refused")};
 const deliveries = new Map();
 if (protocol) {
   mock.module(${JSON.stringify(new URL("lib/migration-guide.ts", import.meta.url).href)}, {
-    exports: { stopEveryRoleEntries: () => ["#### 🔴 Stop every role for the upgrade"] }
+    exports: { stopEveryRoleEntries: () => (stopped ? ["#### 🔴 Stop every role for the upgrade"] : []) }
   });
   mock.module(${JSON.stringify(import.meta.resolve("@nats-io/transport-node"))}, { exports: { connect: async () => ({ close: async () => {} }) } });
   mock.module(${JSON.stringify(import.meta.resolve("@nats-io/jetstream"))}, { exports: {
@@ -175,6 +178,10 @@ globalThis.fetch = async (input, init) => {
     return Response.json({ practices: [{ slug: "fixture", offered: true }] });
   }
   if (protocol && url.endsWith("/practices")) return Response.json([{ slug: "fixture" }]);
+  // A rolling upgrade first runs the previous release on the candidate's schema and binds a review model there.
+  if (protocol && (url.includes("/admin/llm/") || url.endsWith("/agents/PRACTICE_REVIEW"))) {
+    return Response.json({ id: 1 });
+  }
   throw new Error("Unexpected HTTP request: " + url);
 };
 mock.module("node:child_process", { exports: {
@@ -195,6 +202,7 @@ mock.module("node:child_process", { exports: {
         stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
       }
       else if (protocol && sql.includes("LEFT JOIN practice_version")) stdout = "0";
+      else if (protocol && sql.includes("FROM review_job WHERE id=")) stdout = "1|true|RUNNING|status=RUNNING";
       else if (sql.includes("count(*)")) stdout = "1";
     }
     return { status, stdout, stderr };
@@ -240,7 +248,10 @@ mock.module("node:child_process", { exports: {
 				invocations,
 			);
 			if (protocol) {
-				assert.match(result.stdout, /Previous application\/schema boot coverage is off/u);
+				assert.equal(
+					/Previous application\/schema boot coverage is off/u.test(result.stdout),
+					stopped,
+				);
 				const calls = invocations
 					.trim()
 					.split("\n")
@@ -252,7 +263,7 @@ mock.module("node:child_process", { exports: {
 				assert.ok(receivers[0]?.includes("old-image"));
 				assert.ok(
 					receivers[0]?.includes(
-						"SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus_partial",
+						`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${stopped ? "hephaestus_partial" : "hephaestus"}`,
 					),
 				);
 				assert.ok(receivers[1]?.includes("target-image"));
@@ -262,7 +273,10 @@ mock.module("node:child_process", { exports: {
 					),
 				);
 				assert.equal(calls.filter((call) => call[0] === "delivery").length, 4);
-				assert.ok(!calls.some((call) => call[0] === "pull" && call.includes("agent-image")));
+				assert.equal(
+					calls.some((call) => call[0] === "pull" && call.includes("agent-image")),
+					!stopped,
+				);
 				if (expectedError === "") {
 					for (const provider of ["github", "gitlab"]) {
 						assert.ok(

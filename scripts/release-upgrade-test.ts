@@ -1035,8 +1035,9 @@ const WEBHOOK_DELIVERIES = [
  * The webhook receivers of both releases publish the same deliveries. Apart from the delivery id, each pair of stream
  * messages must have the same subject and body, and the candidate must keep every header of the previous release. It
  * may add one. Each release tests its own receiver against its own consumer, so the server of either release reads
- * the messages of the other receiver, unless the candidate's server needs a header it added. The previous receiver
- * uses the pre-upgrade database copy, so this protocol check does not require schema compatibility.
+ * the messages of the other receiver, unless the candidate's server needs a header it added. In a rolling upgrade the
+ * previous receiver keeps running on the candidate's schema, so it starts there. A release that stops every role
+ * never runs it on that schema, so it starts on the pre-upgrade database copy instead.
  */
 async function assertWebhookContract(): Promise<void> {
 	const nats = `${runId}-nats`;
@@ -1078,7 +1079,11 @@ async function assertWebhookContract(): Promise<void> {
 		const targets = [
 			{
 				name: receivers[0],
-				port: startWebhookReceiver(receivers[0], previousImage, PARTIAL_DATABASE),
+				port: startWebhookReceiver(
+					receivers[0],
+					previousImage,
+					stopEveryRole.length === 0 ? "hephaestus" : PARTIAL_DATABASE,
+				),
 			},
 			{
 				name: receivers[1],
