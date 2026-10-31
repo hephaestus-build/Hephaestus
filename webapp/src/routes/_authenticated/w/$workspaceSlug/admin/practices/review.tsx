@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { toast } from "sonner";
 import {
 	createReviewBatchMutation,
 	createReviewScheduleMutation,
@@ -60,6 +59,7 @@ import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import { toast } from "@/lib/toast";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { springPageParams } from "@/runtime/tanstack-query/spring-page";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";

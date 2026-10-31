@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
 	getFeedbackModeRollupQueryKey,
 	getPracticeReviewSettingsQueryKey,
@@ -10,6 +9,7 @@ import {
 import type { PracticeReviewSettings } from "@/api/types.gen";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { toast } from "@/lib/toast";
 
 export function usePracticeReviewSettingsMutation(
 	workspaceSlug: string,

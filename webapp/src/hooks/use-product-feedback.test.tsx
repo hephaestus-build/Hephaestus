@@ -11,12 +11,12 @@ import {
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
-import { Toaster } from "sonner";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { listProductSurveyInvitationsQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { SurveyInvitation } from "@/api/types.gen";
 import { researchInvitation, surveyInvitation } from "@/components/product-feedback/fixtures";
+import { Toaster } from "@/components/ui/sonner";
 import { server } from "@/mocks/server";
 import { useProductSurveys, useSubmitProductFeedback } from "./use-product-feedback";
 

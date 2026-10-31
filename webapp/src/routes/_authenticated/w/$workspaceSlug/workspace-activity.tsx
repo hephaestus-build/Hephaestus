@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
@@ -223,6 +223,7 @@ function WorkspaceActivity() {
 				}
 				toast.success(`${subject.name} is hidden from activity`, {
 					description,
+					duration: Number.POSITIVE_INFINITY,
 					action: {
 						label: "Undo",
 						onClick: () =>

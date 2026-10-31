@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import { authClient, toUserProfile, type UserProfile } from "./auth-client";
 import {

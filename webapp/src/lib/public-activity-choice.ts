@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 /** Says what a person's choice does, and when other people see it: on their next load, which a shared cache can delay by a minute. */
 export function announcePublicActivityChoice(visible: boolean) {

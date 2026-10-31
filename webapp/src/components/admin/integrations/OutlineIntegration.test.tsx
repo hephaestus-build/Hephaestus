@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "@/lib/toast";
 
 import { listOutlineCollectionsQueryKey } from "@/api/@tanstack/react-query.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -19,7 +19,7 @@ import { OutlineConnectCard } from "./outline/OutlineConnectCard";
 import { SyncResourcesTable } from "./SyncResourcesTable";
 import { SyncStatusHeader } from "./SyncStatusHeader";
 
-vi.mock("sonner", () => ({
+vi.mock("@/lib/toast", () => ({
 	toast: { success: vi.fn(), message: vi.fn(), error: vi.fn() },
 }));
 

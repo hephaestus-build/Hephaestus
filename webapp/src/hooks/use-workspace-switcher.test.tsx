@@ -8,15 +8,15 @@ import {
 } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "@/lib/toast";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { Route as workspaceActivityRoute } from "@/routes/_authenticated/w/$workspaceSlug/workspace-activity";
 
 import { useWorkspaceSwitcher } from "./use-workspace-switcher";
 
-vi.mock("sonner", () => ({ toast: { info: vi.fn() } }));
+vi.mock("@/lib/toast", () => ({ toast: { info: vi.fn() } }));
 
 function SwitchWorkspace() {
 	const switchWorkspace = useWorkspaceSwitcher();

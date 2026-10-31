@@ -2,8 +2,8 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType } from "msw";
-import { toast } from "sonner";
 import { describe, expect, it, vi } from "vitest";
+import { toast } from "@/lib/toast";
 
 import {
 	getGitLabRepositorySelectionQueryKey,

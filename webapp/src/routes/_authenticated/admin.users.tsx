@@ -9,8 +9,8 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
+import { toast } from "@/lib/toast";
 
 import {
 	adminListUsersInfiniteOptions,

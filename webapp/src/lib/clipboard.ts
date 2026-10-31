@@ -1,4 +1,4 @@
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 const COPY_FAILED = "We could not copy that to the clipboard. Try again.";
 

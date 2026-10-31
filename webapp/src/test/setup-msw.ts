@@ -5,8 +5,8 @@
 // the explicitly-mocked auth endpoints are intercepted. Handlers reset after each test so a
 // `server.use(...)` override in one test never leaks into the next.
 
-import { toast } from "sonner";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
+import { toast } from "@/lib/toast";
 
 import { client } from "@/api/client.gen";
 import { clearDrafts } from "@/lib/composer-drafts";

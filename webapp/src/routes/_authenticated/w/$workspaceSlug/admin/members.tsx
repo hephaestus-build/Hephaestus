@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
+import { toast } from "@/lib/toast";
 
 import {
 	assignMemberRoleMutation,

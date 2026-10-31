@@ -12,7 +12,9 @@ import { deferred } from "@/test/async";
 import { useConnectionSync } from "./use-connection-sync";
 
 const toasts = vi.hoisted(() => ({ message: vi.fn<(message: string) => void>() }));
-vi.mock("sonner", () => ({ toast: { message: toasts.message, success: vi.fn(), error: vi.fn() } }));
+vi.mock("@/lib/toast", () => ({
+	toast: { message: toasts.message, success: vi.fn(), error: vi.fn() },
+}));
 
 const stoppingBackfill = {
 	id: 7,

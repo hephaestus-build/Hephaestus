@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 import {
 	acknowledgeProductSurveyInvitationMutation,
@@ -128,7 +128,7 @@ export function useProductSurveys(workspaceSlug: string | undefined) {
 		onSuccess: (_, variables) => {
 			removeFromCaches(variables.path.surveyId);
 			toast.success("Survey declined. You will not be asked again.", {
-				duration: 15_000,
+				duration: Number.POSITIVE_INFINITY,
 				action: { label: "Undo", onClick: () => undoDecline.mutate({ path: variables.path }) },
 			});
 		},
