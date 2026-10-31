@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import { ConversationComposer } from "@/components/conversation/ConversationComposer";
 import {
@@ -25,7 +25,8 @@ import {
 	useMarkConversationRead,
 } from "@/hooks/use-conversation";
 import { copyToClipboard } from "@/lib/clipboard";
-import { firstNonBlank } from "@/lib/text";
+import { readDraft, writeDraft } from "@/lib/composer-drafts";
+import { firstNonBlank, hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 /**
@@ -77,9 +78,13 @@ function NoMessagesYet({ name }: { name: string }) {
  * above the conversation already says why and what to do, so a second empty state under it would
  * only repeat that nothing is there.
  */
-function emptyConversation({ readOnly, canAsk }: ConversationAccess, developer: MessageAuthor) {
+function emptyConversation(
+	{ readOnly, canAsk }: ConversationAccess,
+	developer: MessageAuthor,
+	onAsk: ((question: string) => void) | undefined,
+) {
 	if (canAsk) {
-		return <Greeting />;
+		return <Greeting onAsk={onAsk} />;
 	}
 	return readOnly ? <NoMessagesYet name={developer.name} /> : undefined;
 }
@@ -125,6 +130,16 @@ export function MainConversation({
 	// for answers in its threads too. A user view reads another member's conversation, not the reader's.
 	useMarkConversationRead(workspaceSlug, !readOnly);
 	const stoppable = stoppableTurn(state);
+	const draftKey = `${workspaceSlug}:main`;
+	// An example question goes into an empty draft, and the composer remounts to read it and take
+	// focus. Examples show only while nothing is typed, so one never replaces the developer's words.
+	const [composerMount, setComposerMount] = useState(0);
+	const [drafting, setDrafting] = useState(() => hasText(readDraft(draftKey)));
+	const askExample = (question: string) => {
+		writeDraft(draftKey, question);
+		setDrafting(true);
+		setComposerMount((mount) => mount + 1);
+	};
 	return (
 		<ConversationTimeline
 			label="Your conversation"
@@ -136,14 +151,16 @@ export function MainConversation({
 			livePaused={livePaused}
 			jumpTo={jumpTo}
 			actions={offeredActions(actions, { readOnly, canAsk })}
-			empty={emptyConversation({ readOnly, canAsk }, developer)}
+			empty={emptyConversation({ readOnly, canAsk }, developer, drafting ? undefined : askExample)}
 			composer={
 				canAsk ? (
 					<ConversationComposer
+						key={composerMount}
 						label="Message Hephaestus"
 						placeholder="Message Hephaestus"
-						focusOnMount={focusComposer}
-						draftKey={`${workspaceSlug}:main`}
+						focusOnMount={focusComposer || composerMount > 0}
+						draftKey={draftKey}
+						onDraftChange={(text) => setDrafting(hasText(text))}
 						context={pageContext?.chip}
 						onSend={(text) => actions.send(text, { pageContext: pageContext?.label })}
 						stop={

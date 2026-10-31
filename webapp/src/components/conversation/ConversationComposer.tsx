@@ -29,6 +29,8 @@ export interface ConversationComposerProps {
 	focusOnMount?: boolean;
 	/** Keeps unsent text under this key, such as one per thread, so returning to it restores the draft. */
 	draftKey?: string;
+	/** Told whenever the unsent text changes, including when it is sent and the field empties. */
+	onDraftChange?: (text: string) => void;
 }
 
 /**
@@ -53,6 +55,7 @@ export function ConversationComposer({
 	context,
 	focusOnMount = false,
 	draftKey,
+	onDraftChange,
 }: ConversationComposerProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const [input, setDraft] = useState(() => (draftKey === undefined ? "" : readDraft(draftKey)));
@@ -61,6 +64,7 @@ export function ConversationComposer({
 		if (draftKey !== undefined) {
 			writeDraft(draftKey, text);
 		}
+		onDraftChange?.(text);
 	};
 	const canSend = hasText(input.trim());
 	const touch = useMediaQuery(TOUCH);
