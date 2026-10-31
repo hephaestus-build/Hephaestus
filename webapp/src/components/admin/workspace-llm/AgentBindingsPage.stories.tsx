@@ -676,7 +676,7 @@ export const AdvancedDisclosure: Story = {
 		const conversations = row(await openPurpose(canvas, "Conversations"), "In-house");
 		await openAdvanced(conversations);
 		await expect(conversations.queryByLabelText(/^Max concurrent reviews/u)).toBeNull();
-		await expect(conversations.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
+		await expect(conversations.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(900);
 		await expect(
 			row(await openPurpose(canvas, "Embedding model"), "In-house").queryByRole("button", {
 				name: /^Advanced/u,

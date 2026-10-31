@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        A conversation turn may take up to 900 seconds (AgentBindingLimits.MAX_HEPH_TURN_SECONDS), and a new
+        conversation binding gets that. A binding at the former ceiling of 300 seconds, or above it, gets the new
+        ceiling. A shorter timeout was an administrator's choice and stays.
+    -->
+    <changeSet id="1793471062753-1" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="workspace_agent_binding.timeout_seconds is required to raise the conversation turn ceiling">
+            <columnExists tableName="workspace_agent_binding" columnName="timeout_seconds"/>
+        </preConditions>
+        <sql>
+            UPDATE workspace_agent_binding
+            SET timeout_seconds = 900, updated_at = now()
+            WHERE purpose = 'MENTOR'
+              AND timeout_seconds &gt;= 300
+              AND timeout_seconds &lt;&gt; 900
+        </sql>
+        <!-- The previous release ends a turn at 300 seconds whatever its binding stores. -->
+        <rollback/>
+    </changeSet>
+</databaseChangeLog>

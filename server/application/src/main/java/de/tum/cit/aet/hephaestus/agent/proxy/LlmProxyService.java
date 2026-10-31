@@ -712,7 +712,8 @@ class LlmProxyService {
         var parts = request.bodyValue(outgoingBody)
                 .exchangeToFlux(upstream -> {
                     answered.set(true);
-                    // No cap on a stream's body: it would cut a conversation answer that keeps writing, and the exchange's
+                    // No cap on a stream's body: it would cut a conversation answer that keeps writing, and the
+                    // exchange's
                     // limit bounds every call.
                     return ProxyStreamingUtils.parts(upstream, null, body);
                 })

@@ -39,14 +39,14 @@ const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
 const MIN_CONCURRENT_JOBS = 1;
 
-const CONVERSATION_TURN_SECONDS = 300;
+const CONVERSATION_TURN_SECONDS = 900;
 
-/** The longest one attempt may last: a review attempt up to three hours, one Hephaestus answer five minutes. */
+/** The longest one attempt may last: a review attempt up to three hours, one Hephaestus answer 15 minutes. */
 function timeoutCeiling(purpose: BindingTarget["purpose"]) {
 	return purpose === "MENTOR"
 		? {
 				max: CONVERSATION_TURN_SECONDS,
-				error: `Hephaestus stops an answer after five minutes, so enter ${CONVERSATION_TURN_SECONDS} seconds or less.`,
+				error: `Hephaestus stops an answer after 15 minutes, so enter ${CONVERSATION_TURN_SECONDS} seconds or less.`,
 			}
 		: {
 				max: MAX_TIMEOUT_SECONDS,
