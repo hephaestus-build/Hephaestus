@@ -16,7 +16,7 @@ import {
 	updateGitLabRepositorySelectionMutation,
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { GitLabRepositorySelection, GitLabStoppedProject, Workspace } from "@/api/types.gen";
+import type { GitLabRepositorySelection, GitLabStoppedProject } from "@/api/types.gen";
 import { SCM_CLASS_KEYS } from "@/components/admin/integrations/SyncResourcesTable";
 import type { WorkspaceGitLabProjectSelection } from "@/components/admin/integrations/WorkspaceGitLabProjectSelection";
 import type { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
@@ -25,27 +25,12 @@ import type { WorkspaceStoppedGitLabProjects } from "@/components/admin/integrat
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { scmProviderOf } from "@/lib/scm-provider";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
-
-type ScmKind = "GITHUB" | "GITLAB";
 
 /** Whether a failed refresh can be retried, so the data this key last read still stands beside it. */
 function refreshRetryable(query: { isRefetchError: boolean; error: unknown }) {
 	return query.isRefetchError && queryErrorIsRetryable(query.error);
-}
-
-/** Which source-control provider the workspace is on, and its display name once that is known. */
-function scmProviderOf(workspace: Workspace | undefined): {
-	kind: ScmKind | undefined;
-	label: string;
-} {
-	if (!workspace) {
-		return { kind: undefined, label: "Source control" };
-	}
-	if (workspace.kind === "GITLAB") {
-		return { kind: "GITLAB", label: "GitLab" };
-	}
-	return { kind: "GITHUB", label: "GitHub" };
 }
 
 export function useScmIntegration(workspaceSlug: string) {
@@ -56,7 +41,7 @@ export function useScmIntegration(workspaceSlug: string) {
 	useQueryReadRefusal(workspaceQueryOptions.queryKey, workspaceQuery.isError, workspaceQuery.error);
 	const workspaceData =
 		!workspaceQuery.isError || refreshRetryable(workspaceQuery) ? workspaceQuery.data : undefined;
-	const { kind, label } = scmProviderOf(workspaceData);
+	const { kind, label } = scmProviderOf(workspaceData?.kind);
 	const isAppInstallationWorkspace = kind === "GITHUB" && workspaceData?.installationId != null;
 
 	const catalogQueryOptions = getIntegrationCatalogOptions({ path: { workspaceSlug } });

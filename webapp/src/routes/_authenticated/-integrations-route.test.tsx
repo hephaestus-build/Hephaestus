@@ -70,4 +70,26 @@ describe("integration connection outcome", () => {
 		expect(screen.getAllByText(CONFLICT).length).toBeGreaterThan(0);
 		expect(screen.queryByText("connected_elsewhere")).toBeNull();
 	});
+
+	it("opens the integrations of the workspace the app shows when the provider sent none back", async () => {
+		mockSlackPage();
+
+		renderRouteAtWithRouter(failureRedirect());
+
+		const link = await screen.findByRole(
+			"button",
+			{ name: "Open integrations" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(link.getAttribute("href")).toBe("/w/intro-course/admin/integrations");
+	});
+
+	it("goes back to the app when the account has no workspace", async () => {
+		server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+
+		renderRouteAtWithRouter(failureRedirect());
+
+		const link = await screen.findByRole("button", { name: "Back to app" }, ROUTE_RENDER_WAIT);
+		expect(link.getAttribute("href")).toBe("/");
+	});
 });

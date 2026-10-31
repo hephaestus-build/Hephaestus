@@ -121,10 +121,9 @@ function ProviderSelectionPage() {
 			<Link
 				to="/"
 				className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-				aria-label="Back to dashboard"
 			>
 				<ArrowLeftIcon className="size-3.5" />
-				Back
+				Back to app
 			</Link>
 			<div className="mb-8 space-y-1.5">
 				<h1 className="text-2xl font-semibold tracking-tight">Create workspace</h1>

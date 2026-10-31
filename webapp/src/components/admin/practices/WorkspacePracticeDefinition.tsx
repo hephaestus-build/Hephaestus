@@ -20,7 +20,8 @@ export interface WorkspacePracticeDefinitionProps {
 	 * says the feedback mode, so it is said once.
 	 */
 	showStanding?: boolean;
-	resetAction?: ReactNode;
+	/** What the reader can do about where it came from, such as reset it to the catalog. */
+	originActions?: ReactNode;
 	/** A notice under the feedback mode, such as the members a practice script does not run for. */
 	notice?: ReactNode;
 	/** What the practice script needs, beside its code; see `PracticeDefinitionPreview`. */
@@ -34,7 +35,7 @@ export function WorkspacePracticeDefinition({
 	definitionOptions,
 	groupName,
 	showStanding = true,
-	resetAction,
+	originActions,
 	notice,
 	practiceScript,
 	headingLevel,
@@ -48,7 +49,7 @@ export function WorkspacePracticeDefinition({
 						<CatalogOriginNote
 							origin={practice.catalogOrigin}
 							kind="practice"
-							action={resetAction}
+							action={originActions}
 						/>
 						<Item variant="muted" size="sm" role="listitem">
 							<ItemContent>
