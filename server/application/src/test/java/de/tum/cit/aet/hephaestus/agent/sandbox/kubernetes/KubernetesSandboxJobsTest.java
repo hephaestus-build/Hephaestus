@@ -40,8 +40,7 @@ import org.junit.jupiter.api.Test;
 class KubernetesSandboxJobsTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";
-    private static final ResourceLimits LIMITS =
-            new ResourceLimits(1024L * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5));
+    private static final ResourceLimits LIMITS = new ResourceLimits(1.0, Duration.ofMinutes(5));
 
     private @Nullable KubernetesMockServer server;
     private @Nullable KubernetesClient client;

@@ -37,8 +37,7 @@ public final class HephHostSpec {
      * Many sessions share one process: a larger heap than a practice runner's, and no review workspace. The runtime
      * bounds only the workspace's initialization; the host runs until the worker removes it.
      */
-    public static final ResourceLimits LIMITS =
-            new ResourceLimits(2L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5));
+    public static final ResourceLimits LIMITS = new ResourceLimits(1.0, Duration.ofMinutes(5));
 
     private static final String WRITABLE = SandboxLayout.PI_AGENT_DIR + " " + PiRunnerProfile.AGENT_TMPDIR;
 

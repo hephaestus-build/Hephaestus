@@ -29,7 +29,7 @@ import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The Heph host is a worker capability: it runs where the Docker sandbox runs, so the monolith runs it too. Artifact
+ * The Heph host is a worker capability: it runs with the Kubernetes sandbox backend. Host development runs the worker in the JVM too. Artifact
  * generation and the image's training run start no host and claim no turn.
  */
 @Configuration(proxyBeanMethods = false)

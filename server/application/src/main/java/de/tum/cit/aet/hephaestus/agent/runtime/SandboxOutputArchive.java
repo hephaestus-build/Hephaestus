@@ -80,7 +80,7 @@ public final class SandboxOutputArchive {
                 totalBytes += bytes.length;
                 files.put(name, bytes);
             }
-            // Commons Compress stops at the tar end marker, not the end of the HTTP/Docker body.
+            // Commons Compress stops at the tar end marker, not the end of the HTTP body.
             // Bound and validate that remainder too, rather than accepting a second hidden archive.
             byte[] buffer = new byte[8192];
             int count;

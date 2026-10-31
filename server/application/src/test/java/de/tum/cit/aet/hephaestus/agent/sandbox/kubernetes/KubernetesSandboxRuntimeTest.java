@@ -88,8 +88,7 @@ class KubernetesSandboxRuntimeTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";
     private static final String IMAGE = "ghcr.io/example/agent@sha256:" + "a".repeat(64);
-    private static final ResourceLimits LIMITS =
-            new ResourceLimits(1024L * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5));
+    private static final ResourceLimits LIMITS = new ResourceLimits(1.0, Duration.ofMinutes(5));
 
     private @Nullable KubernetesMockServer server;
     private @Nullable KubernetesClient client;
@@ -279,7 +278,12 @@ class KubernetesSandboxRuntimeTest {
         assertDiskBounded(hostPod, KubernetesPods.RUNTIME, KubernetesPods.HOST);
         assertDiskBounded(turnPod, KubernetesPods.SANDBOX, KubernetesPods.TURN);
         Pod probePod = pods.probePod(
-                new KubernetesPods.Workload("p", review, IMAGE, "agent"), List.of("true"), LIMITS, 60, true);
+                new KubernetesPods.Workload("p", review, IMAGE, "agent"),
+                List.of("true"),
+                LIMITS,
+                1024L * 1024 * 1024,
+                60,
+                true);
         for (Container each : Stream.concat(
                         probePod.getSpec().getInitContainers().stream(), probePod.getSpec().getContainers().stream())
                 .toList()) {
@@ -348,6 +352,7 @@ class KubernetesSandboxRuntimeTest {
                                 new KubernetesPods.Workload("p", turnProbe, IMAGE, "agent"),
                                 List.of("true"),
                                 LIMITS,
+                                1024L * 1024 * 1024,
                                 60,
                                 true)
                         .getSpec()
@@ -538,8 +543,7 @@ class KubernetesSandboxRuntimeTest {
         var adapter = adapter();
         UUID jobId = UUID.randomUUID();
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        var shortWork =
-                new ResourceLimits(LIMITS.memoryBytes(), LIMITS.cpus(), LIMITS.pidsLimit(), Duration.ofSeconds(3));
+        var shortWork = new ResourceLimits(LIMITS.cpus(), Duration.ofSeconds(3));
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId, shortWork)), background);
         awaitJob(name);

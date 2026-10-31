@@ -6,7 +6,7 @@ import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { Minimatch } from "minimatch";
 import { isMap, isSeq, parseDocument } from "yaml";
 
-// The Kubernetes legs, the host boot smoke and the release preflight install every image under the
+// The Kubernetes legs and the release preflight install every image under the
 // run's commit. Jobs put an image there by building it, by reusing the merge group's build on a push,
 // or by aliasing it, under conditions that differ per event. A combination where none runs fails only
 // in the run that meets it, often a later pull request's merge group, so this test evaluates the
@@ -280,51 +280,7 @@ function* cases(): Generator<Case> {
 	}
 }
 
-/**
- * Follows an output of `Docker` through ci-docker-build.yml and reusable-docker-build.yml to the
- * step that sets it, and returns the image whose digest that step reports.
- */
-function digestSource(output: string): string {
-	const called = String(docker.getIn(["on", "workflow_call", "outputs", output, "value"]));
-	const inner = /^\$\{\{ jobs\.manifests\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(called)?.groups
-		?.name;
-	assert.ok(
-		inner !== undefined,
-		`ci-docker-build.yml's ${output} is not an output of its manifests job: ${called}`,
-	);
-	const value = String(reusableBuild.getIn(["on", "workflow_call", "outputs", inner, "value"]));
-	const job = /^\$\{\{ jobs\.(?<job>[\w-]+)\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(value)?.groups;
-	assert.ok(
-		job?.job === "merge" && job.name !== undefined,
-		`${inner} is not the manifest job's: ${value}`,
-	);
-	const step = String(reusableBuild.getIn(["jobs", "merge", "outputs", job.name]));
-	const image = /^\$\{\{ steps\.digest\.outputs\.(?<image>[\w-]+) \}\}$/u.exec(step)?.groups?.image;
-	assert.ok(image !== undefined && image in IMAGES, `${job.name} reports no image digest: ${step}`);
-	return image;
-}
-
-// The digest outputs that each consumer reads, anywhere in its job.
-const READS_DIGEST = new Map(
-	["Kubernetes", "Supported-host-smoke", "Release-preflight"].map((name) => [
-		name,
-		[
-			...JSON.stringify(cicd.getIn(["jobs", name])).matchAll(
-				/needs\.Docker\.outputs\.(?<name>[\w-]+)/gu,
-			),
-		].map(({ groups }) => String(groups?.name)),
-	]),
-);
-
-// Every `Docker` output that cicd.yml reads, with the image whose digest it carries.
-const DIGESTS = new Map(
-	[...String(cicd).matchAll(/needs\.Docker\.outputs\.(?<name>[\w-]+)/gu)].map(({ groups }) => {
-		const output = String(groups?.name);
-		return [output, digestSource(output)] as const;
-	}),
-);
-
-const CONSUMERS = ["Kubernetes", "Supported-host-smoke", "Release-preflight"];
+const CONSUMERS = ["Kubernetes", "Release-preflight"];
 
 // The detect-changes outputs that these jobs read; evaluating only those keeps the test fast.
 const READ = new Set(
@@ -358,10 +314,6 @@ function needed(entry: Case): Record<string, boolean | undefined> {
 		Kubernetes:
 			builtAtAll &&
 			(entry.event === "push" ? entry.queueImages === "[]" : entry.filters.kubernetes === "true"),
-		"Supported-host-smoke":
-			builtAtAll &&
-			entry.event === "pull_request" &&
-			entry.filters["supported-host-smoke"] === "true",
 		"Release-preflight": !fails && evidence,
 	};
 }
@@ -516,16 +468,7 @@ function run(entry: Case) {
 	if (dockerRuns) {
 		dockerResult = fails ? "failure" : "success";
 	}
-	// Each digest output, wired as the workflows wire it, is set when its image is published.
-	needs.Docker = {
-		result: dockerResult,
-		outputs: Object.fromEntries(
-			[...DIGESTS].map(([output, image]) => [
-				output,
-				published[image] === true ? `sha256:${image}` : "",
-			]),
-		),
-	};
+	needs.Docker = { result: dockerResult };
 	needs["Kubernetes-chart"] = { result: job("Kubernetes-chart") ? "success" : "skipped" };
 	return {
 		present,
@@ -537,20 +480,12 @@ function run(entry: Case) {
 		packaged: needs["server-package"].result === "success",
 		expected: needed(entry),
 		consumers: Object.fromEntries(CONSUMERS.map((name) => [name, job(name)])),
-		digests: needs.Docker.outputs ?? {},
 	};
 }
 
 function describeCase(entry: Case): string {
 	return `${entry.event} changing [${entry.paths.join(", ")}], alias base '${entry.aliasBase}', preview '${entry.preview}', release candidate '${entry.releaseCandidate}', queue images ${entry.queueImages}, version bump '${entry.versionBump}', preflight '${entry.preflight}', skip '${entry.skip}'`;
 }
-
-void test("each digest that cicd.yml reads comes from its own image's publication", () => {
-	assert.ok(DIGESTS.size > 0);
-	for (const [output, image] of DIGESTS) {
-		assert.equal(`${image}-digest`, output, `${output} carries the ${image} digest`);
-	}
-});
 
 void test("the step ids this model sets are the workflow's", () => {
 	const steps = cicd.getIn(["jobs", "detect-changes", "steps"]);
@@ -572,8 +507,7 @@ void test("the step ids this model sets are the workflow's", () => {
 void test("a job that installs every image runs exactly when its event needs it and the run has put every image there", () => {
 	const reached = new Set<string>();
 	for (const entry of cases()) {
-		const { present, published, aliased, built, packaged, expected, consumers, digests } =
-			run(entry);
+		const { present, published, aliased, built, packaged, expected, consumers } = run(entry);
 		for (const image of Object.keys(IMAGES)) {
 			// An alias would overwrite the tag of the image this run built.
 			assert.ok(
@@ -601,11 +535,10 @@ void test("a job that installs every image runs exactly when its event needs it 
 			if (!runs) {
 				continue;
 			}
-			for (const output of READS_DIGEST.get(consumer) ?? []) {
-				assert.notEqual(
-					digests[output],
-					"",
-					`${consumer} runs without ${output} on ${describeCase(entry)}`,
+			if (consumer === "Kubernetes" && entry.filters.kubernetes === "true") {
+				assert.ok(
+					packaged,
+					`Kubernetes adapters have no packaged server on ${describeCase(entry)}`,
 				);
 			}
 			reached.add(`${consumer} on ${entry.event}`);
@@ -628,6 +561,5 @@ void test("a job that installs every image runs exactly when its event needs it 
 		"Release-preflight on merge_group",
 		"Release-preflight on pull_request",
 		"Release-preflight on workflow_dispatch",
-		"Supported-host-smoke on pull_request",
 	]);
 });

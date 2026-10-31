@@ -43,7 +43,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("workspace.ManualRepositoryAuthorityIntegrationTest", "manual-repository-authority"),
             assignment("workspace.WorkspaceRepositoryCoverageIntegrationTest", "repository-coverage"),
             assignment("StartupBudgetIntegrationTest", "startup"),
-            assignment("agent.mentor.live.HephTurnLiveTest", "heph-live"),
             assignment("agent.mentor.weeklydigest.WeeklyDigestIntegrationTest", "review-evidence"),
             assignment("agent.practice.live.PracticeScriptLiveLlmTest", "practice-script-live"),
             assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
@@ -143,8 +142,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "gitlab-token-lifecycle",
                     "real credential storage, lifecycle locks and attention with only"
                             + " irreversible upstream token rotation mocked"),
-            Map.entry(
-                    "heph-live", "worker role with a real Hephaestus host container, the agent image and a live model"),
             Map.entry("webhook-role", "the webhook role alone, with real JetStream and no database"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry("outline-origin", "enabled Outline integration wiring with one allowed document origin"),
@@ -154,7 +151,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                             + " after the production migration"),
             Map.entry(
                     "practice-script-live",
-                    "worker role with the real LLM proxy on a free sandbox gateway port," + " calling live models"),
+                    "worker role with the real LLM proxy and mocked Kubernetes orchestration, calling live models"),
             Map.entry("real-auth", "real OAuth and authentication wiring without test security"),
             Map.entry(
                     "test-instance-assurance",
@@ -254,7 +251,6 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
-            "agent.mentor.live.HephTurnLiveTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
@@ -320,6 +316,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "agent.job.ReviewJobEventListenerIntegrationTest",
+            "agent.practice.live.PracticeScriptLiveLlmTest",
+            "core.runtime.RuntimeRoleContextIntegrationTest$WorkerGraph",
             "workspace.ManualRepositoryAuthorityIntegrationTest",
             "workspace.WorkspaceRepositoryCoverageIntegrationTest",
             "core.database.PracticeV1ReviewJobsIntegrationTest",

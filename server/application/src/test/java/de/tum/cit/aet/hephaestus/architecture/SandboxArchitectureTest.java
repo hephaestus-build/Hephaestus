@@ -16,20 +16,18 @@ import org.junit.jupiter.api.Test;
 /** Architecture tests for the sandbox module boundaries. */
 class SandboxArchitectureTest extends HephaestusArchitectureTest {
 
+    @Test
+    void applicationMustNotUseADockerSandboxClient() {
+        noClasses()
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("com.github.dockerjava..")
+                .because("sandbox execution uses Kubernetes; Docker is only test/development infrastructure")
+                .check(classes);
+    }
+
     @Nested
     class SpiIsolation {
-
-        @Test
-        void spiShouldNotDependOnDockerJava() {
-            noClasses()
-                    .that()
-                    .resideInAPackage("..agent.sandbox.spi..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("com.github.dockerjava..")
-                    .because("SPI types must remain Docker-agnostic for future remote runner support")
-                    .check(classes);
-        }
 
         @Test
         void spiShouldNotDependOnSpring() {
@@ -42,58 +40,10 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .because("SPI types must be framework-agnostic — no Spring annotations or imports")
                     .check(classes);
         }
-
-        @Test
-        void spiShouldNotDependOnDockerImpl() {
-            noClasses()
-                    .that()
-                    .resideInAPackage("..agent.sandbox.spi..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..agent.sandbox.docker..")
-                    .because("SPI must not reference implementation details")
-                    .check(classes);
-        }
     }
 
     @Nested
-    class DockerIsolation {
-
-        @Test
-        void dockerImplNotImportedOutside() {
-            noClasses()
-                    .that()
-                    .resideOutsideOfPackage("..agent.sandbox..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..agent.sandbox.docker..")
-                    .because("Only the SPI should be used outside the sandbox package")
-                    .check(classes);
-        }
-
-        @Test
-        void attemptRunnerIsBackendNeutral() {
-            noClasses()
-                    .that()
-                    .resideInAPackage("..agent.sandbox")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..agent.sandbox.docker..")
-                    .because("The attempt runner drives every backend through SandboxBackend")
-                    .check(classes);
-        }
-
-        @Test
-        void dockerClientOnlyInDockerPackage() {
-            noClasses()
-                    .that()
-                    .resideOutsideOfPackage("..agent.sandbox.docker..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("com.github.dockerjava..")
-                    .because("Docker SDK access must be confined to the docker subpackage")
-                    .check(classes);
-        }
+    class KubernetesIsolation {
 
         @Test
         void kubernetesClientOnlyInKubernetesPackage() {
@@ -116,18 +66,6 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .dependOnClassesThat()
                     .resideInAPackage("..agent.sandbox.kubernetes..")
                     .because("Only the SPI should be used outside the sandbox package")
-                    .check(classes);
-        }
-
-        @Test
-        void kubernetesRuntimeUsesNoDockerClient() {
-            noClasses()
-                    .that()
-                    .resideInAPackage("..agent.sandbox.kubernetes..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("com.github.dockerjava..")
-                    .because("The Kubernetes runtime must not reach a Docker daemon")
                     .check(classes);
         }
     }

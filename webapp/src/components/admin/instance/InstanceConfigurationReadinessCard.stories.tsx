@@ -47,18 +47,6 @@ const emailNotConfigured = fact("notification.email", "spring.mail.host", "email
 		"Email is optional. If you set a mail server host, hephaestus.email.from must name the sender address.",
 });
 
-const workerRuntime = fact(
-	"sandbox.isolation-runtime",
-	"hephaestus.sandbox.docker.container-runtime",
-	"sandbox-isolation",
-	{
-		roles: ["WORKER"],
-		requirement: "RECOMMENDED",
-		status: "ACTION_REQUIRED",
-		explanation: "Use gVisor (runsc) for stronger agent sandbox isolation.",
-	},
-);
-
 const noLoginProvider = fact("auth.login-provider", "login-provider capability", "login", {
 	status: "ACTION_REQUIRED",
 	explanation: "At least one enabled sign-in provider is required.",
@@ -82,7 +70,7 @@ const meta = {
 	args: {
 		state: {
 			status: "ready",
-			facts: [...satisfied, workerRuntime, noLoginProvider, emailNotConfigured, notApplicable],
+			facts: [...satisfied, noLoginProvider, emailNotConfigured, notApplicable],
 		},
 	},
 } satisfies Meta<typeof InstanceConfigurationReadinessCard>;
@@ -90,16 +78,14 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** What a first operator sees: the required miss leads, the recommendation follows it. */
+/** A missing required setting leads the optional and passed settings. */
 export const ActionRequired: Story = {
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("2 settings need action. 1 setting not configured."),
+			canvas.getByText("1 setting needs action. 1 setting not configured."),
 		).toBeVisible();
-		const [first, second] = canvas.getAllByRole("code");
+		const [first] = canvas.getAllByRole("code");
 		await expect(first).toHaveTextContent("login-provider capability");
-		await expect(second).toHaveTextContent("hephaestus.sandbox.docker.container-runtime");
-		await expect(canvas.getByText("Recommended")).toBeVisible();
 		await expect(
 			canvas.getByRole("link", { name: /Read the guide for login-provider capability/u }),
 		).toHaveAttribute("href", `${GUIDE}#login`);

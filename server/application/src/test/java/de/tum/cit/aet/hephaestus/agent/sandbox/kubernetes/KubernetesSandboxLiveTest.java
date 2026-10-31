@@ -9,11 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnDocuments;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxFixtures;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
@@ -22,9 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.AgentImageReferenceGuard;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntime;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureExceptio
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
@@ -61,8 +62,10 @@ import jakarta.validation.ValidatorFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -71,6 +74,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -90,17 +94,24 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.eclipse.jgit.api.Git;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.slf4j.Logger;
@@ -149,7 +160,7 @@ class KubernetesSandboxLiveTest {
 
     private static final Logger log = LoggerFactory.getLogger(KubernetesSandboxLiveTest.class);
 
-    /** Selects this class without changing ordinary Docker live runs. */
+    /** Selects the Kubernetes sandbox qualification. */
     private static final String OPT_IN = "HEPHAESTUS_KUBERNETES_LIVE";
 
     private static final String IMAGE_VARIABLE = "HEPHAESTUS_AGENT_IMAGE_REFERENCE";
@@ -161,7 +172,6 @@ class KubernetesSandboxLiveTest {
      * profile are optional: the bound values decide what the Pods name.
      */
     private static final List<String> WORKER_VARIABLES = List.of(
-            "HEPHAESTUS_SANDBOX_RUNTIME",
             "HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE",
             "HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME",
             "HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP",
@@ -272,10 +282,6 @@ class KubernetesSandboxLiveTest {
                 "the Pod's service account CA is mounted");
 
         Binder binder = Binder.get(shippedEnvironment());
-        assertEquals(
-                SandboxRuntime.KUBERNETES,
-                binder.bind(SandboxRuntime.PROPERTY, SandboxRuntime.class).orElse(SandboxRuntime.DOCKER),
-                SandboxRuntime.PROPERTY + " selects the Kubernetes runtime");
         properties = validated(binder.bindOrCreate("hephaestus.sandbox.kubernetes", KubernetesSandboxProperties.class));
         SandboxProperties sandbox = validated(binder.bindOrCreate("hephaestus.sandbox", SandboxProperties.class));
         SandboxGatewayProperties gatewayProperties =
@@ -382,6 +388,54 @@ class KubernetesSandboxLiveTest {
     // --- Practice reviews ---
 
     @Test
+    void shouldStageATreeFarPastEveryRemovedLimit(@TempDir Path staging) throws Exception {
+
+        Path large = staging.resolve("large.bin");
+        byte[] chunk = new byte[1024 * 1024];
+        Arrays.fill(chunk, (byte) 'x');
+        try (OutputStream out = Files.newOutputStream(large)) {
+            for (int i = 0; i < 64; i++) {
+                out.write(chunk);
+            }
+        }
+
+        Path many = Files.createDirectories(staging.resolve("many"));
+        for (int i = 0; i < 25_000; i++) {
+            Path file = many.resolve("file" + i + ".txt");
+            Files.writeString(file, "content " + i);
+        }
+
+        String script = "set -e\n" + "repo=/workspace/"
+                + SandboxLayout.REPO_MOUNT_RELATIVE
+                + "\n"
+                + "bytes=$(wc -c < ${repo}large.bin)\n"
+                + "files=$(find ${repo}many -type f | wc -l)\n"
+                + "sample=$(cat ${repo}many/file24999.txt)\n"
+                + "echo \"bytes=$bytes files=$files sample=$sample\" > /workspace/"
+                + SandboxLayout.OUTPUT_PREFIX
+                + "seen.txt\n";
+
+        SandboxSpec spec = new SandboxSpec(
+                UUID.randomUUID(),
+                0,
+                agentImage.reference(),
+                List.of("sh", "-c", script),
+                Map.of(),
+                ReviewJob.generateJobToken(),
+                limits(Duration.ofMinutes(5)),
+                null,
+                Map.of(),
+                Map.of(),
+                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, staging)));
+
+        SandboxResult result = reviews.execute(spec);
+
+        assertThat(result.exitCode()).as("container logs: %s", result.logs()).isZero();
+        String seen = new String(result.outputFiles().get("seen.txt"), UTF_8).trim();
+        assertThat(seen).isEqualTo("bytes=" + (64 * 1024L * 1024L) + " files=" + 25_000 + " sample=content 24999");
+    }
+
+    @Test
     void shouldRunAReviewOnItsInjectedFileAndRemoveItsJobAndPod() throws Exception {
         UUID jobId = UUID.randomUUID();
         String name = KubernetesSandboxBackend.jobName(jobId, 0);
@@ -486,7 +540,8 @@ class KubernetesSandboxLiveTest {
                     .containsEntry(KubernetesWorker.JOB_ID, jobId.toString())
                     .containsEntry(KubernetesWorker.JOB_ATTEMPT, "0");
             requireHardened(pod);
-            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits);
+            requireBounds(
+                    container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits, KubernetesPods.REVIEW);
             requirePinnedImageRan(pod, KubernetesPods.RUNTIME);
             assertThat(pod.getStatus().getQosClass())
                     .as("its whole memory requested, a share of CPU")
@@ -700,7 +755,8 @@ class KubernetesSandboxLiveTest {
             assertThat(pod.getMetadata().getLabels())
                     .containsEntry(KubernetesWorker.SESSION_ID, host.id().toString());
             requireHardened(pod);
-            requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits);
+            requireBounds(
+                    container(pod.getSpec().getContainers(), KubernetesPods.RUNTIME), limits, KubernetesPods.HOST);
             assertThat(hosts.isRunning(host)).isTrue();
             // The host API returns no output: the Pod's log is where its process reports.
             assertThat(awaitLog(name, expected, Duration.ofMinutes(1)))
@@ -731,7 +787,7 @@ class KubernetesSandboxLiveTest {
         requireCustody(pod, KubernetesWorker.KIND_TURN);
         assertThat(pod.getMetadata().getLabels()).containsEntry(KubernetesWorker.SANDBOX_ID, sandboxId);
         requireHardened(pod);
-        requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.SANDBOX), limits);
+        requireBounds(container(pod.getSpec().getContainers(), KubernetesPods.SANDBOX), limits, KubernetesPods.TURN);
         requirePinnedImageRan(pod, KubernetesPods.SANDBOX);
         assertThat(pod.getStatus().getQosClass())
                 .as("its whole memory requested, a share of CPU")
@@ -1299,18 +1355,19 @@ class KubernetesSandboxLiveTest {
         });
     }
 
-    /** The container's limits and requests as the API holds them: the sandbox's memory both times, a tenth of its CPU. */
-    private static void requireBounds(Container container, ResourceLimits limits) {
+    /** The API holds the Pod kind's measured requests and limits and the caller's CPU limit. */
+    private static void requireBounds(Container container, ResourceLimits limits, KubernetesPods.Size size) {
         Map<String, Quantity> bounds = container.getResources().getLimits();
         Map<String, Quantity> requests = container.getResources().getRequests();
-        for (Map<String, Quantity> each : List.of(bounds, requests)) {
-            assertThat(Quantity.getAmountInBytes(each.get("memory")))
-                    .isEqualByComparingTo(BigDecimal.valueOf(limits.memoryBytes()));
-        }
+        assertThat(Quantity.getAmountInBytes(bounds.get("memory")))
+                .isEqualByComparingTo(BigDecimal.valueOf(size.memoryLimit()));
+        assertThat(Quantity.getAmountInBytes(requests.get("memory")))
+                .isEqualByComparingTo(BigDecimal.valueOf(size.memoryRequest()));
         assertThat(Quantity.getAmountInBytes(bounds.get("cpu")))
                 .isEqualByComparingTo(BigDecimal.valueOf(limits.cpus()));
         assertThat(Quantity.getAmountInBytes(requests.get("cpu")))
-                .isEqualByComparingTo(BigDecimal.valueOf(limits.cpus()).movePointLeft(1));
+                .isEqualByComparingTo(
+                        BigDecimal.valueOf(size.cpuRequestMillicores()).movePointLeft(3));
     }
 
     /** The Pod requests the pinned image; the runtime may report its resolved platform image ID. */
@@ -1412,7 +1469,7 @@ class KubernetesSandboxLiveTest {
     }
 
     private static ResourceLimits limits(Duration maxRuntime) {
-        return new ResourceLimits(1024L * 1024 * 1024, 1.0, 256, maxRuntime);
+        return new ResourceLimits(1.0, maxRuntime);
     }
 
     private ExecSandboxes.Execution run(String sandbox, String script) {
@@ -1550,6 +1607,333 @@ class KubernetesSandboxLiveTest {
             }
             failure.addSuppressed(e);
             return failure;
+        }
+    }
+
+    /** The context folder's read, Git, timeout and cancellation contracts on the qualified turn Pod. */
+    @Nested
+    class TurnContext {
+        @TempDir
+        Path temp;
+
+        private KubernetesExecSandboxes runtime;
+        private TurnSandboxes sandboxes;
+        private TurnContextFolder folder;
+        private TurnAttempt turn;
+        private Instant deadline;
+        private Path repository;
+
+        @BeforeEach
+        void setUp() throws Exception {
+            runtime = turns;
+            sandboxes = new TurnSandboxes(runtime, 1, new SimpleMeterRegistry());
+            repository = repository(temp.resolve("api"));
+            var beans = new DefaultListableBeanFactory();
+            beans.registerSingleton("loader", new FixedLoader(repository));
+            folder = new TurnContextFolder(sandboxes, beans.getBeanProvider(ContextLoader.class), Clock.systemUTC());
+            turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
+            deadline = Instant.now().plus(Duration.ofMinutes(5));
+        }
+
+        @AfterEach
+        void tearDown() throws IOException {
+            sandboxes.close();
+        }
+
+        @Test
+        void shouldStageReadRunGitAndRemoveTheSandboxWhenTheAttemptEnds() throws Exception {
+            sandboxes.reconcile((turnId, attempt) -> true);
+            long poolStarted = System.nanoTime();
+            while (TurnSandboxFixtures.pooled(sandboxes) < 1
+                    && System.nanoTime() - poolStarted < Duration.ofSeconds(60).toNanos()) {
+                Thread.sleep(50);
+            }
+            log.info("TIMING pool fill (cold start of one sandbox): {} ms", millis(poolStarted));
+            assertThat(TurnSandboxFixtures.pooled(sandboxes)).isOne();
+
+            long first = System.nanoTime();
+            ObjectNode index = folder.read(turn, deadline, documents(), "INDEX.md", null, null);
+            log.info("TIMING first call (acquire + stage + read): {} ms", millis(first));
+            assertThat(index.path("ok").asBoolean()).as(index.toString()).isTrue();
+            assertThat(index.path("text").asString()).contains("# Context folder", "inputs/context/activity.json");
+
+            List<Long> reads = new ArrayList<>();
+            for (int run = 0; run < 10; run++) {
+                long started = System.nanoTime();
+                ObjectNode page = folder.read(turn, deadline, documents(), "inputs/context/activity.json", 10, 5);
+                reads.add(millis(started));
+                assertThat(page.path("text").asString())
+                        .contains("[3988 more lines in file. Use offset=15 to continue.]");
+            }
+            log.info("TIMING read p50={} ms p95={} ms", percentile(reads, 50), percentile(reads, 95));
+
+            ObjectNode item = folder.read(turn, deadline, documents(), "inputs/context/issue/7.json", null, null);
+            assertThat(item.path("text").asString()).contains("\"issue\" : 7");
+            assertThat(folder.read(turn, deadline, documents(), "../etc/passwd", null, null)
+                            .path("error")
+                            .asString())
+                    .isEqualTo("NOT_FOUND");
+            assertThat(folder.read(turn, deadline, documents(), "inputs", null, null)
+                            .path("error")
+                            .asString())
+                    .isEqualTo("IS_DIRECTORY");
+
+            long loadStarted = System.nanoTime();
+            ObjectNode loaded = folder.load(turn, deadline, documents(), "repos/github.com/acme/api");
+            log.info("TIMING load (stage of a repository with its history): {} ms", millis(loadStarted));
+            assertThat(loaded.path("ok").asBoolean()).as(loaded.toString()).isTrue();
+            assertThat(loaded.path("resolved").path("cite").asString()).startsWith("@");
+
+            List<Long> execs = new ArrayList<>();
+            ObjectNode history = null;
+            for (int run = 0; run < 10; run++) {
+                long started = System.nanoTime();
+                history = folder.exec(
+                        turn, deadline, documents(), "git -C repos/github.com/acme/api log --format=%s", null);
+                execs.add(millis(started));
+            }
+            log.info("TIMING exec git log p50={} ms p95={} ms", percentile(execs, 50), percentile(execs, 95));
+            assertThat(history).isNotNull();
+            assertThat(history.path("exitCode").asInt()).as(history.toString()).isZero();
+            assertThat(history.path("output").asString()).contains("Second commit", "First commit");
+
+            assertThat(folder.exec(turn, deadline, documents(), "sha256sum inputs/context/user.json", null)
+                            .path("output")
+                            .asString())
+                    .as("the added document has its exact bytes")
+                    .startsWith(sha256("{\n  \"counts\" : 3\n}"));
+            assertThat(folder.exec(turn, deadline, documents(), "sha256sum repos/github.com/acme/api/README.md", null)
+                            .path("output")
+                            .asString())
+                    .as("the loaded file has its exact bytes")
+                    .startsWith(sha256("# API\n\nSecond line.\n"));
+
+            ObjectNode write = folder.exec(turn, deadline, documents(), "touch INDEX.md.new || echo refused", null);
+            assertThat(write.path("output").asString()).contains("refused");
+            ObjectNode append = folder.exec(
+                    turn,
+                    deadline,
+                    documents(),
+                    "(echo x >> inputs/context/user.json) 2>/dev/null || echo refused",
+                    null);
+            assertThat(append.path("output").asString()).contains("refused");
+            ObjectNode addition = folder.exec(
+                    turn,
+                    deadline,
+                    documents(),
+                    "touch repos/github.com/acme/api/new 2>/dev/null || echo refused",
+                    null);
+            assertThat(addition.path("output").asString()).contains("refused");
+            ObjectNode environment = folder.exec(turn, deadline, documents(), "env | grep -c TOKEN || true", null);
+            assertThat(environment.path("output").asString().strip()).isEqualTo("0");
+
+            ObjectNode many = folder.exec(turn, deadline, documents(), "seq 1 5000", null);
+            assertThat(many.path("truncated").asBoolean()).isTrue();
+            String fullOutput = many.path("fullOutputPath").asString();
+            assertThat(many.path("output").asString())
+                    .endsWith("[Showing lines 3001-5000 of 5000. Full output: " + fullOutput + "]");
+            assertThat(folder.read(turn, deadline, documents(), fullOutput, 1, 2)
+                            .path("text")
+                            .asString())
+                    .startsWith("1\n2\n");
+
+            Files.delete(repository.resolve("README.md"));
+            Files.writeString(repository.resolve("NOTES.md"), "notes\n");
+            ObjectNode reloaded = folder.load(turn, deadline, documents(), "repos/github.com/acme/api");
+            assertThat(reloaded.path("ok").asBoolean()).as(reloaded.toString()).isTrue();
+            assertThat(folder.exec(turn, deadline, documents(), "ls repos/github.com/acme/api", null)
+                            .path("output")
+                            .asString())
+                    .as("a second load replaces the directory")
+                    .isEqualTo("NOTES.md\n");
+
+            long timeoutStarted = System.nanoTime();
+            ObjectNode slow = folder.exec(
+                    turn,
+                    deadline,
+                    documents(),
+                    "setsid sh -c 'echo $$ > /tmp/detached.pid; exec sleep 300' & sleep 30",
+                    1000);
+            log.info("TIMING exec with a 1 s timeout: {} ms", millis(timeoutStarted));
+            assertThat(slow.path("timedOut").asBoolean()).as(slow.toString()).isTrue();
+            assertThat(millis(timeoutStarted)).isLessThan(10_000);
+            ObjectNode detached = folder.exec(
+                    turn,
+                    deadline,
+                    documents(),
+                    "[ -s /tmp/detached.pid ] || { echo missing; exit 0; }; p=$(cat /tmp/detached.pid);"
+                            + " for i in 1 2 3 4 5 6 7 8 9 10; do"
+                            + " kill -0 \"$p\" 2>/dev/null || { echo gone; exit 0; }; sleep 0.2; done; echo alive",
+                    null);
+            assertThat(detached.path("output").asString())
+                    .as("the cancellation ends a child that left the command's process group")
+                    .isEqualTo("gone\n");
+            ObjectNode after = folder.exec(turn, deadline, documents(), "echo still here", null);
+            assertThat(after.path("output").asString())
+                    .as("the kill of the sandbox user's processes leaves the sandbox running")
+                    .isEqualTo("still here\n");
+
+            String container = held();
+            sandboxes.release(turn.turnId(), turn.attempt());
+            awaitGone(container);
+        }
+
+        @Test
+        void shouldRemoveTheSandboxAndEndItsCommandWhenTheAttemptStopsWhileTheCommandRuns() throws Exception {
+            ObjectNode first = folder.exec(turn, deadline, documents(), "true", null);
+            assertThat(first.path("exitCode").isInt()).as(first.toString()).isTrue();
+            assertThat(first.path("exitCode").asInt()).isZero();
+            CompletableFuture<ObjectNode> running =
+                    CompletableFuture.supplyAsync(() -> folder.exec(turn, deadline, documents(), "sleep 50", null));
+            Thread.sleep(1000);
+            String container = held();
+
+            long stopped = System.nanoTime();
+            sandboxes.release(turn.turnId(), turn.attempt());
+            ObjectNode ended = running.get();
+            log.info("TIMING command end after the attempt stopped: {} ms", millis(stopped));
+
+            assertThat(ended.path("ok").asBoolean()).as(ended.toString()).isFalse();
+            assertThat(millis(stopped)).isLessThan(15_000);
+            awaitGone(container);
+        }
+
+        /** The attempt's sandbox, which its first call took. */
+        private String held() {
+            return TurnSandboxFixtures.held(sandboxes, turn);
+        }
+
+        private void awaitGone(String container) throws InterruptedException {
+            long started = System.nanoTime();
+            while (runtime.list().stream().anyMatch(listed -> listed.id().equals(container))
+                    && System.nanoTime() - started < Duration.ofSeconds(30).toNanos()) {
+                Thread.sleep(100);
+            }
+            assertThat(runtime.list())
+                    .as("the attempt's sandbox is removed")
+                    .noneMatch(listed -> listed.id().equals(container));
+        }
+
+        private static TurnDocuments documents() {
+            StringBuilder activity = new StringBuilder("{\n");
+            for (int line = 1; line < 4000; line++) {
+                activity.append("  \"line")
+                        .append(line)
+                        .append("\" : ")
+                        .append(line)
+                        .append(",\n");
+            }
+            activity.append("  \"end\" : true\n}");
+            Map<String, byte[]> built = new LinkedHashMap<>();
+            built.put("inputs/context/activity.json", activity.toString().getBytes(StandardCharsets.UTF_8));
+            built.put("inputs/context/user.json", "{\n  \"counts\" : 3\n}".getBytes(StandardCharsets.UTF_8));
+            return new TurnDocuments() {
+                @Override
+                public Map<String, byte[]> built() {
+                    return built;
+                }
+
+                @Override
+                public Optional<byte[]> item(String path) {
+                    return path.equals("inputs/context/issue/7.json")
+                            ? Optional.of("{\n  \"issue\" : 7\n}".getBytes(StandardCharsets.UTF_8))
+                            : Optional.empty();
+                }
+
+                @Override
+                public String builtAt() {
+                    return "Tue 2026-10-20 10:00";
+                }
+            };
+        }
+
+        private static Path repository(Path directory) throws Exception {
+            try (Git git = Git.init()
+                    .setDirectory(directory.toFile())
+                    .setInitialBranch("main")
+                    .call()) {
+                Files.writeString(directory.resolve("README.md"), "# API\n");
+                git.add().addFilepattern(".").call();
+                git.commit()
+                        .setMessage("First commit")
+                        .setAuthor("A", "a@example.invalid")
+                        .setSign(false)
+                        .call();
+                Files.writeString(directory.resolve("README.md"), "# API\n\nSecond line.\n");
+                git.add().addFilepattern(".").call();
+                git.commit()
+                        .setMessage("Second commit")
+                        .setAuthor("A", "a@example.invalid")
+                        .setSign(false)
+                        .call();
+            }
+            return directory;
+        }
+
+        /** Loads the one test repository at its head, as the SCM loader stages a checkout. */
+        private record FixedLoader(Path directory) implements ContextLoader {
+            @Override
+            public String prefix() {
+                return "repos/";
+            }
+
+            @Override
+            public String index(long workspaceId, long accountId) {
+                return "## repos/\n\n- `repos/github.com/acme/api`\n";
+            }
+
+            @Override
+            public Loaded load(long workspaceId, long accountId, String path, BooleanSupplier abandoned) {
+                Supplier<String> head = () -> {
+                    try (Git git = Git.open(directory.toFile())) {
+                        return Objects.requireNonNull(git.getRepository().resolve("HEAD"))
+                                .name();
+                    } catch (IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                };
+                String sha = head.get();
+                return new Loaded() {
+                    @Override
+                    public String path() {
+                        return "repos/github.com/acme/api";
+                    }
+
+                    @Override
+                    public Path directory() {
+                        return directory;
+                    }
+
+                    @Override
+                    public Version version() {
+                        return new Version("main", sha, "@" + sha.substring(0, 7));
+                    }
+
+                    @Override
+                    public String note() {
+                        return "Loaded.";
+                    }
+
+                    @Override
+                    public void close() {}
+                };
+            }
+        }
+
+        private static String sha256(String content) throws NoSuchAlgorithmException {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8)));
+        }
+
+        private static long millis(long startedNanos) {
+            return Duration.ofNanos(System.nanoTime() - startedNanos).toMillis();
+        }
+
+        private static long percentile(List<Long> values, int percentile) {
+            List<Long> sorted = new ArrayList<>(values);
+            Collections.sort(sorted);
+            int index = (int) Math.ceil(percentile / 100.0 * sorted.size()) - 1;
+            return sorted.get(Math.max(0, index));
         }
     }
 }

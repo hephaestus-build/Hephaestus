@@ -24,7 +24,6 @@ import io.fabric8.kubernetes.api.model.StatusBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.utils.KubernetesSerialization;
 import io.fabric8.mockwebserver.MockWebServer;
 import io.fabric8.mockwebserver.http.Dispatcher;
@@ -244,6 +243,61 @@ class KubernetesExecSandboxesTest {
     }
 
     @Test
+    void shouldDrainABurstBeforeThePeerClosesWithoutLosingTheExitCode() {
+        String chunk = "x".repeat(8192);
+        exec = request -> new MockResponse().withWebSocketUpgrade(new WebSocketListener() {
+            @Override
+            public void onOpen(WebSocket webSocket, Response response) {
+                for (int i = 0; i < 64; i++) {
+                    webSocket.send(channel(1, chunk));
+                }
+                webSocket.send(channel(3, SUCCESS));
+                webSocket.close(1000, "Complete");
+            }
+        });
+        var sandboxes = sandboxes(server.url("/").toString());
+
+        ExecSandboxes.Execution run = sandboxes.exec(SANDBOX, command(Duration.ofSeconds(30)));
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(new String(run.stdout(), UTF_8)).isEqualTo("x".repeat(1024));
+        assertThat(run.truncated()).isTrue();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
+    void shouldNotReplayAnExecWhoseConnectionClosesDuringTheUpgrade() throws Exception {
+        withVertx(vertx -> {
+            AtomicLong upgrades = new AtomicLong();
+            String pod = new KubernetesSerialization().asJson(runningPod());
+            int port = vertx.createHttpServer()
+                    .requestHandler(request -> {
+                        if ((POD_PATH + "/exec").equals(request.path())) {
+                            upgrades.incrementAndGet();
+                            request.connection().close();
+                        } else {
+                            request.response()
+                                    .putHeader("Content-Type", "application/json")
+                                    .end(pod);
+                        }
+                    })
+                    .listen(0, "127.0.0.1")
+                    .toCompletionStage()
+                    .toCompletableFuture()
+                    .get(10, TimeUnit.SECONDS)
+                    .actualPort();
+            var sandboxes = sandboxes("http://127.0.0.1:" + port);
+            // A pooled connection can fail after the API has already received the exec request.
+            shared().pods().inNamespace(TURNS).withName(SANDBOX).get();
+
+            assertThatThrownBy(() -> sandboxes.exec(SANDBOX, command(Duration.ofSeconds(10))))
+                    .isInstanceOf(SandboxException.class);
+
+            assertThat(upgrades).hasValue(1);
+        });
+    }
+
+    @Test
     void shouldStartNoRequestWhenTheCommandHasNoTimeLeft() {
         ExecSandboxes.Execution run = sandboxes(server.url("/").toString()).exec(SANDBOX, command(Duration.ZERO));
 
@@ -418,8 +472,7 @@ class KubernetesExecSandboxesTest {
                     .isTrue();
             assertThat(failure)
                     .as("the client's failure arrives as the adapter's exception, which its callers discard on")
-                    .isInstanceOf(SandboxException.class)
-                    .hasRootCauseMessage("received continuation data frame outside fragmented message");
+                    .isInstanceOf(SandboxException.class);
             assertThat(archive.available())
                     .as("the staging began to send the archive")
                     .isLessThan(LARGE_ARCHIVE);
@@ -704,8 +757,9 @@ class KubernetesExecSandboxesTest {
                 .withRequestRetryBackoffLimit(10)
                 .withRequestRetryBackoffInterval(100)
                 .build();
-        KubernetesClient shared =
-                new KubernetesClientBuilder().withConfig(config).build();
+        KubernetesClient shared = KubernetesSandboxConfiguration.clientBuilder()
+                .withConfig(config)
+                .build();
         client = shared;
         var worker = KubernetesFixtures.worker(TURNS);
         worker.proved(KubernetesSandboxRuntimeTest.passed());

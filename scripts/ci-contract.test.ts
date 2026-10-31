@@ -1114,13 +1114,13 @@ void describe("CI contract", () => {
 			["pull_request", { pullRequest: draft }, "false", "false"],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: ready, filter: { "supported-host-smoke": "true" } },
+				{ preview: "false", pullRequest: ready, filter: { kubernetes: "true" } },
 				"true",
 				"true",
 			],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: draft, filter: { "supported-host-smoke": "true" } },
+				{ preview: "false", pullRequest: draft, filter: { kubernetes: "true" } },
 				"false",
 				"false",
 			],
@@ -1138,7 +1138,7 @@ void describe("CI contract", () => {
 			],
 			[
 				"pull_request",
-				{ preview: "true", pullRequest: fork, filter: { "supported-host-smoke": "true" } },
+				{ preview: "true", pullRequest: fork, filter: { kubernetes: "true" } },
 				"false",
 				"false",
 			],
@@ -1987,7 +1987,7 @@ void describe("CI contract", () => {
 			"server-package",
 			"Security-merge-group",
 		]);
-		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
+		for (const name of ["Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
 			assert.ok(isSeq(dependencies));
 			assert.deepEqual(dependencies.toJSON(), [
@@ -2003,7 +2003,7 @@ void describe("CI contract", () => {
 			"Build",
 			"Test",
 			"Docker",
-			"Supported-host-smoke",
+			"Kubernetes",
 			"Release-preflight",
 		]) {
 			assert.ok(
@@ -2612,69 +2612,40 @@ void describe("CI contract", () => {
 		}
 	});
 
-	void test("a pull request boots the supported installation from the images its own run built", async () => {
+	void test("a pull request qualifies the Kubernetes installation from its own images", async () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
-		const orchestrator = parseDocument(source);
-		const condition = String(orchestrator.getIn(["jobs", "Supported-host-smoke", "if"]));
-		// A fork publishes no images, so there is nothing for this job to pull. The smoke selects the
-		// head images itself, so it does not wait for a preview label.
-		assert.match(condition, /needs\.detect-changes\.outputs\.head-images == 'true'/u);
-		// Without the server image (a failed package) a boot would only repeat that failure.
-		assert.match(condition, /needs\.Docker\.outputs\.application-server-digest != ''/u);
-		const headImages = String(
-			orchestrator.getIn(["jobs", "detect-changes", "outputs", "head-images"]),
-		);
+		const workflow = parseDocument(source);
+		assert.equal(workflow.getIn(["jobs", "Supported-host-smoke"]), undefined);
+		const cluster = job(source, "Kubernetes-chart");
+		assert.match(cluster, /needs\.Docker\.result == 'success'/u);
+		assert.match(cluster, /needs\.server-package\.result != 'failure'/u);
+		assert.match(cluster, /outputs\.kubernetes == 'true'/u);
 		assert.match(
-			headImages,
-			/github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository/u,
+			cluster,
+			/commit: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u,
 		);
-		assert.match(headImages, /steps\.filter\.outputs\.supported-host-smoke == 'true'/u);
-		assert.match(condition, /needs\.detect-changes\.outputs\.supported-host-smoke == 'true'/u);
-
-		const smoke = job(source, "Supported-host-smoke");
+		assertNeeds(source, "all-ci-passed", "Kubernetes");
+		assertNeeds(source, "all-ci-passed", "Kubernetes-chart");
+		assertNeeds(source, "Kubernetes", "server-package");
+		assertNeeds(source, "Kubernetes", "Kubernetes-chart");
 		assert.match(
-			smoke,
-			/APPLICATION_DIGEST: \$\{\{ needs\.Docker\.outputs\.application-server-digest \}\}/u,
+			job(source, "Kubernetes"),
+			/application-artifact:.*needs\.server-package\.result == 'success'/u,
 		);
-		// The worker pulls and checks this commit's own agent image, never a placeholder.
-		assert.match(smoke, /scripts\/resolve-release-images\.ts "\$HEAD_SHA"/u);
-		assert.match(smoke, /AGENT_PI_DIGEST: \$\{\{ steps\.images\.outputs\.agent-pi-digest \}\}/u);
-		// The reduced topology an operator's first boot has to get through: no edge, no webapp. The
-		// service list runs onto a continuation line, so the command is rejoined before it is read.
-		const boot = /up -d --wait --wait-timeout \d+ (?<services>[^\n]+)/u.exec(
-			smoke.replaceAll(/\s*\\\n\s+/gu, " "),
-		);
-		assert.ok(boot, "the boot smoke must start the installation and wait for it to be ready");
-		assert.deepEqual(String(boot.groups?.services).trim().split(/\s+/u).toSorted(), [
-			"application-server",
-			"application-worker",
-			"nats-server",
-			"postgres",
-		]);
-		// ADR 0041's isolation probe runs against both booted installations.
-		for (const booted of [
-			smoke,
-			job(await readFile(".github/workflows/release.yml", "utf8"), "supported-host-smoke"),
-		]) {
-			assert.match(booted, /scripts\/sandbox-isolation-probe\.ts/u);
-		}
-		// The installer an operator runs, filled in by the one script both smoke jobs call.
-		assert.match(smoke, /scripts\/prepare-host-smoke-env\.ts/u);
+		const reusable = await readFile(".github/workflows/ci-kubernetes.yml", "utf8");
+		assert.match(reusable, /resolve-release-images\.ts "\$COMMIT"/u);
+		assert.match(reusable, /kubernetes-cluster\.ts verify/u);
+		assert.match(reusable, /kubernetes-cluster\.ts request/u);
+		assert.match(reusable, /kubernetes-cluster\.ts live --packaged/u);
 		assert.match(
-			job(await readFile(".github/workflows/release.yml", "utf8"), "supported-host-smoke"),
-			/scripts\/prepare-host-smoke-env\.ts/u,
+			reusable,
+			/inputs\.application-artifact != '' && inputs\.minor == '1.37' && inputs\.arch == 'amd64'/u,
 		);
-		// The paths that trigger the smoke also have to rebuild the images it boots.
-		assert.match(job(source, "Docker"), /application_server_image: .*supported-host-smoke/u);
-		assert.match(source, /application_server_changed:.*supported-host-smoke/u);
-		assertNeeds(source, "all-ci-passed", "Supported-host-smoke");
+		assert.doesNotMatch(source, /sandbox-isolation-probe\.ts/u);
 	});
 
-	void test("the supported-host boot smoke runs on every source it can be broken by", async () => {
-		const filter = pathFilter(
-			await readFile(".github/workflows/cicd.yml", "utf8"),
-			"supported-host-smoke",
-		);
+	void test("the Kubernetes boot qualification runs on every source it can be broken by", async () => {
+		const filter = pathFilter(await readFile(".github/workflows/cicd.yml", "utf8"), "kubernetes");
 		const patterns = [...filter.matchAll(/^ +- '(?<pattern>.+)'$/gmu)].map(({ groups }) =>
 			String(groups?.pattern),
 		);
@@ -2688,7 +2659,7 @@ void describe("CI contract", () => {
 			}
 			assert.ok(
 				selected.has(file),
-				`${file} binds configuration at boot, so a change to it must run the supported-host boot smoke`,
+				`${file} binds configuration at boot, so a change to it must run the Kubernetes boot qualification`,
 			);
 		}
 	});
@@ -2764,8 +2735,11 @@ void describe("CI contract", () => {
 		);
 		assert.match(preflight, /resolve-release-images\.ts "\$COMMIT"/u);
 		assert.match(preflight, /--commit "\$COMMIT"/u);
-		const smoke = job(source, "Supported-host-smoke");
-		assert.match(smoke, /HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/u);
+		const cluster = job(source, "Kubernetes");
+		assert.match(
+			cluster,
+			/commit: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u,
+		);
 		// `workflow_run.head_sha` is the producing push run's own `github.sha`.
 		const release = await readFile(".github/workflows/release.yml", "utf8");
 		assert.match(
@@ -5831,7 +5805,6 @@ const HEAVY_LEGS = [
 	"Build",
 	"Test",
 	"Docker",
-	"Supported-host-smoke",
 	"Kubernetes-chart",
 	"Kubernetes",
 	"Release-preflight",
@@ -5849,7 +5822,6 @@ const RUN_ORDER = [
 	"Test",
 	"Build",
 	"Docker",
-	"Supported-host-smoke",
 	"Kubernetes-chart",
 	"Kubernetes",
 	"Release-preflight",

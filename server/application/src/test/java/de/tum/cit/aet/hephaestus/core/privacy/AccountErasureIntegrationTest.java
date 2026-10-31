@@ -392,7 +392,6 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                 null,
                 null,
                 600,
-                false,
                 null);
         // The fixture ends the job; this run is still executing on its worker when the erasure starts.
         jdbc.update(

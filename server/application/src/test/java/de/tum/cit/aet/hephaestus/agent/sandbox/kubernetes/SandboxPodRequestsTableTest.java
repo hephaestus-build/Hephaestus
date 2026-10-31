@@ -79,7 +79,8 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
         Function<Long, Pod> probe = memory -> pods.probePod(
                 workload(KubernetesWorker.KIND_REVIEW),
                 List.of("node"),
-                new ResourceLimits(memory, 0.5, 256, time),
+                new ResourceLimits(0.5, time),
+                memory,
                 time.toSeconds(),
                 true);
 

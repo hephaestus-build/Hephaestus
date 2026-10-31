@@ -77,7 +77,7 @@ const jobSteps = (job: string, names: readonly string[]) => {
 	});
 };
 const publication = jobSteps("publish-release", [
-	"Verify supported-host smoke records",
+	"Verify k3s host smoke records",
 	"Verify durable assets from a clean environment",
 	"Publish immutable release",
 	"Promote verified image digests",
@@ -258,7 +258,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 	const fixtureJointLock = `release-${fixtureRelease}.chart.json`;
 	const archive = path.join(directory, "archive");
 	const bin = path.join(directory, "bin");
-	const smoke = path.join(directory, "host-smoke");
+	const smoke = path.join(directory, "host-smoke-k3s");
 	for (const folder of [archive, bin, smoke]) {
 		await mkdir(folder);
 	}
@@ -465,14 +465,31 @@ async function fixture(directory: string, source = commit, tag = release) {
 	);
 	for (const architecture of platforms) {
 		await writeFile(
-			path.join(smoke, `host-smoke-${architecture}.json`),
+			path.join(smoke, `host-smoke-k3s-${architecture}.json`),
 			JSON.stringify({
 				schemaVersion: 1,
 				release: fixtureRelease,
 				commit: source,
-				testedAt: "2026-10-15T10:00:00Z",
-				host: { architecture, os: "Ubuntu 24.04", dockerEngine: "28.0.0", dockerCompose: "2.24.4" },
-				services: [{ service: "webapp", state: "running", health: "healthy", exitCode: 0 }],
+				testedAt: new Date("2026-10-15T10:00:00Z").toISOString(),
+				host: {
+					architecture,
+					os: "Ubuntu 24.04",
+					kernel: "6.14.0",
+					kubeletVersion: "v1.35.9+k3s1",
+				},
+				workers: 2,
+				checks: {
+					install: true,
+					secondInstall: true,
+					upgrade: true,
+					workloadsReady: true,
+					isolation: true,
+					reviewsEnabled: true,
+					gateway: true,
+					shutdownBudget: true,
+					statefulPodsPreserved: true,
+					secretsPreserved: true,
+				},
 			}),
 		);
 	}
@@ -675,8 +692,8 @@ for (const scenario of [
 					/\["gh","attestation","verify","[^"]*\/chart\/hephaestus-0\.93\.0\.tgz","--repo","hephaestus-build\/Hephaestus","--signer-workflow","hephaestus-build\/Hephaestus\/\.github\/workflows\/release\.yml"/u,
 				);
 				assert.deepEqual(
-					await readFile(path.join(archive, "host-smoke-arm64.json")),
-					await readFile(path.join(smoke, "host-smoke-arm64.json")),
+					await readFile(path.join(archive, "host-smoke-k3s-arm64.json")),
+					await readFile(path.join(smoke, "host-smoke-k3s-arm64.json")),
 				);
 				assert.deepEqual(JSON.parse(await readFile(path.join(archive, "state"), "utf8")), {
 					isDraft: false,
@@ -700,10 +717,10 @@ for (const scenario of [
 			assert.equal(first.status, 23, first.output);
 			assert.match(first.calls, /"upload"/u);
 			assert.match(first.calls, /"edit"/u);
-			const archivedSmoke = path.join(archive, "host-smoke-amd64.json");
+			const archivedSmoke = path.join(archive, "host-smoke-k3s-amd64.json");
 			assert.deepEqual(
 				await readFile(archivedSmoke),
-				await readFile(path.join(smoke, "host-smoke-amd64.json")),
+				await readFile(path.join(smoke, "host-smoke-k3s-amd64.json")),
 			);
 			if (scenario === "tampered-smoke") {
 				await writeFile(archivedSmoke, "{}");
@@ -1346,5 +1363,43 @@ void test(
 		);
 		await json(file, { ...native, files: [] });
 		assert.throws(() => verifyReleaseEvidence(archive, "write-validation"), /no bundled npm/u);
+	},
+);
+
+void test(
+	"publication refuses incomplete, legacy or mismatched k3s host evidence before publishing",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-k3s-receipts-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const { smoke, run } = await fixture(directory);
+		const file = path.join(smoke, "host-smoke-k3s-arm64.json");
+		const bytes = await readFile(file);
+		const valid = asRecord(parseJson(bytes.toString()), "receipt");
+		const invalid = [
+			{ ...valid, commit: "d".repeat(40) },
+			{ ...valid, release: "v0.93.1" },
+			{ ...valid, host: { ...asRecord(valid.host, "host"), architecture: "amd64" } },
+			{ ...valid, checks: { ...asRecord(valid.checks, "checks"), isolation: false } },
+			{ ...valid, workers: "2" },
+			{
+				schemaVersion: 1,
+				release,
+				commit,
+				testedAt: valid.testedAt,
+				host: { architecture: "arm64", os: "Ubuntu 24.04", dockerCompose: "2.24.4" },
+				services: [{ state: "running", health: "healthy" }],
+			},
+		];
+		for (const value of invalid) {
+			await writeFile(file, JSON.stringify(value));
+			const result = await run();
+			assert.notEqual(result.status, 0);
+			assert.doesNotMatch(result.calls, /"edit"|"upload"|"imagetools","create"/u);
+		}
+		await rm(file);
+		const missing = await run();
+		assert.notEqual(missing.status, 0);
+		assert.doesNotMatch(missing.calls, /"edit"|"upload"|"imagetools","create"/u);
 	},
 );

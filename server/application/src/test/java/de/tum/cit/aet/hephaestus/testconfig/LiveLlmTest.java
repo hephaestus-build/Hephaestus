@@ -12,8 +12,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 /**
  * Live test that hits a real LLM endpoint. The {@code HEPHAESTUS_LIVE_LLM_API_KEY} environment
  * variable is the <em>primary gate</em> — JUnit skips the entire class/method when it is unset,
- * so the test never reaches the runtime credential check. Pair with {@link LiveDockerTest} when
- * the test also requires a Docker daemon.
+ * so the test never reaches the runtime credential check. A test that launches sandbox work also
+ * requires the qualified Kubernetes live worker.
  *
  * <p>Tagged {@code live}: excluded from every non-live tier. Run
  * {@code ./gradlew :application:liveTest} to opt in.

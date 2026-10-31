@@ -135,7 +135,6 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                         null,
                         null,
                         timeoutSeconds,
-                        false,
                         null)
                 .withPriceSnapshot(new LlmPriceSnapshot(
                         UsageFundingSource.INSTANCE,
@@ -367,7 +366,6 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                             snapshot.contextWindow(),
                             snapshot.maxOutputTokens(),
                             snapshot.timeoutSeconds(),
-                            snapshot.allowInternet(),
                             null)
                     .toJson(objectMapper));
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(legacyJob));

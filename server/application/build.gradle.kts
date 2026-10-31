@@ -14,6 +14,8 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.commons.compress)
+    implementation(libs.httpcore5)
     implementation(platform(libs.okhttp.bom))
     implementation(project(":generated-clients"))
     implementation(libs.jspecify)
@@ -34,7 +36,10 @@ dependencies {
     implementation(libs.spring.boot.starter.websocket)
     implementation(libs.spring.boot.restclient)
     implementation(libs.java.jwt)
-    implementation(libs.spring.boot.starter.webflux)
+    implementation(libs.spring.boot.starter.webflux) {
+        // No client enables HTTP/3; keep its optional native binaries out of the application.
+        exclude(group = "io.netty", module = "netty-codec-native-quic")
+    }
     implementation(libs.spring.boot.webclient)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
     implementation(libs.spring.boot.starter.liquibase)
@@ -48,8 +53,6 @@ dependencies {
     implementation(libs.postgresql)
     runtimeOnly(libs.h2)
     compileOnly(libs.lombok)
-    // docker-java exposes Immutables metadata; consumers need annotations, not its processor.
-    compileOnly(libs.immutables.value.annotations)
     // PostgreSQL driver types carry Checker Framework annotations that javac must resolve.
     compileOnly(libs.checker.qual)
     implementation(libs.spring.modulith.starter.core)
@@ -72,10 +75,13 @@ dependencies {
     testImplementation(libs.archunit.junit5)
     implementation(libs.therapi.runtime.javadoc)
     implementation(libs.jnats)
-    implementation(libs.docker.java.api)
-    implementation(libs.docker.java.core)
-    implementation(libs.docker.java.transport.httpclient5)
-    implementation(libs.fabric8.kubernetes.client)
+    implementation(libs.fabric8.kubernetes.client) {
+        exclude(group = "io.fabric8", module = "kubernetes-httpclient-vertx-5")
+    }
+    implementation(libs.fabric8.httpclient.okhttp) {
+        because("the OkHttp transport preserves buffered exec output when the peer closes")
+    }
+    testImplementation(libs.vertx.core)
     testImplementation(libs.fabric8.kubernetes.server.mock)
     implementation(libs.bolt) {
         exclude(group = "com.squareup.okhttp3", module = "okhttp")
@@ -591,6 +597,16 @@ for ((taskName, command) in
             )
         }
     }
+}
+
+// A qualification image adds only the test classpath to the same server image that the chart runs.
+tasks.register<Sync>("kubernetesLiveBundle") {
+    if (!packagedServer.get()) dependsOn(tasks.testClasses)
+    into(layout.buildDirectory.dir("kubernetes-live"))
+    from(compiledMain) { into("main") }
+    from(layout.buildDirectory.dir("classes/java/test")) { into("test") }
+    from(layout.buildDirectory.dir("resources/test")) { into("test") }
+    from(configurations.testRuntimeClasspath) { into("lib") }
 }
 
 // Consumer jobs execute the package job's compiled test artifact; no compilation is scheduled.

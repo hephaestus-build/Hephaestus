@@ -31,10 +31,10 @@ public final class SandboxLayout {
     /** Container workspace root. */
     public static final String WORKSPACE_ROOT = "/workspace";
 
-    /** Each scratch place, {@code /tmp} and {@code ~/.local}: a tmpfs on Docker, a disk volume on Kubernetes. */
+    /** Each scratch place, {@code /tmp} and {@code ~/.local}: a bounded disk volume in Kubernetes. */
     public static final long SCRATCH_BYTES = 1024L * 1024 * 1024;
 
-    /** A turn sandbox's workspace: a tmpfs on Docker, a disk volume on Kubernetes. */
+    /** A turn sandbox's workspace: a bounded disk volume in Kubernetes. */
     public static final long TURN_WORKSPACE_BYTES = 512L * 1024 * 1024;
 
     /** The Heph host's memory limit on Kubernetes. Its Node heap stops at three quarters of it, on both backends. */

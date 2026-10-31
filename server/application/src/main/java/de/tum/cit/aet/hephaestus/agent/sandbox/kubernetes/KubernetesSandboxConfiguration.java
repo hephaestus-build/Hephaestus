@@ -6,37 +6,35 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntime;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.fabric8.kubernetes.client.okhttp.OkHttpClientFactory;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import java.time.Duration;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 /**
- * The Kubernetes sandbox runtime: practice reviews as Jobs, the Heph host and Heph's turn sandboxes as Pods, in the
- * sandbox namespace the chart names. It loads on the worker role only, and only when {@link SandboxRuntime#PROPERTY}
- * selects it; it then replaces {@code DockerSandboxConfiguration} entirely and never falls back to it. The client uses
- * the worker Pod's service account, as the client's own configuration finds it. The attempt protocol, the Heph hosts
- * and the reconciler over this backend are the shared ones ({@code SandboxRuntimeConfiguration}).
+ * The worker's Kubernetes runtime: review Jobs, a conversation host, and turn Pods.
+ * The client uses the worker Pod's service account, or the host dev launcher's namespace-scoped kubeconfig.
  */
 @Configuration(proxyBeanMethods = false)
+@Profile("!specs & !cds-training")
 @ConditionalOnWorkerRole
-@ConditionalOnProperty(name = SandboxRuntime.PROPERTY, havingValue = "kubernetes")
 @EnableConfigurationProperties({SandboxProperties.class, KubernetesSandboxProperties.class})
 public class KubernetesSandboxConfiguration {
 
@@ -54,7 +52,17 @@ public class KubernetesSandboxConfiguration {
                 .withConnectionTimeout((int) CONNECTION_TIMEOUT.toMillis())
                 .build();
         log.info("Kubernetes sandbox client configured: requestTimeout={}", REQUEST_TIMEOUT);
-        return new KubernetesClientBuilder().withConfig(config).build();
+        return clientBuilder().withConfig(config).build();
+    }
+
+    static KubernetesClientBuilder clientBuilder() {
+        return new KubernetesClientBuilder().withHttpClientFactory(new OkHttpClientFactory() {
+            @Override
+            protected void additionalConfig(OkHttpClient.Builder builder) {
+                // An exec uses a bodyless GET; connection recovery must not send it a second time.
+                builder.retryOnConnectionFailure(false);
+            }
+        });
     }
 
     @Bean
@@ -161,7 +169,7 @@ public class KubernetesSandboxConfiguration {
     }
 
     /**
-     * Readiness, as {@code DockerHealthIndicator}: down while the worker does not watch the sandbox namespace or the
+     * Readiness: down while the worker does not watch the sandbox namespace or the
      * isolation probe failed. The details give the isolation tier of the latest probe.
      */
     @Bean

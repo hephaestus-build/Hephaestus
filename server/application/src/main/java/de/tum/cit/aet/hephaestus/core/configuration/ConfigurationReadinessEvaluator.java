@@ -24,23 +24,6 @@ public final class ConfigurationReadinessEvaluator {
 
     static final String DOC = "https://docs.hephaestus.build/admin/configuration-readiness";
 
-    /** Spring property paths the Docker sandbox rename retired; none has a compatibility alias. */
-    private static final List<String> LEGACY_SANDBOX_PROPERTIES = List.of(
-            "hephaestus.sandbox.docker-host",
-            "hephaestus.sandbox.tls-verify",
-            "hephaestus.sandbox.cert-path",
-            "hephaestus.sandbox.container-runtime",
-            "hephaestus.sandbox.app-server-container-id",
-            "hephaestus.mentor.docker-cli");
-
-    /**
-     * Environment variable names the rename retired. Unlike {@link #LEGACY_SANDBOX_PROPERTIES},
-     * these do not share a prefix with their replacement, so Spring's relaxed binding cannot find
-     * them under the new property path — they must be checked by their literal name.
-     */
-    private static final List<String> LEGACY_SANDBOX_ENVIRONMENT_VARIABLES =
-            List.of("SANDBOX_TLS_VERIFY", "SANDBOX_CONTAINER_RUNTIME");
-
     private final Environment environment;
 
     public ConfigurationReadinessEvaluator(Environment environment) {
@@ -170,30 +153,6 @@ public final class ConfigurationReadinessEvaluator {
                 this::validAgentImage,
                 "The worker image contract requires digest enforcement and a digest-pinned agent image.",
                 "agent-image");
-        add(
-                facts,
-                "sandbox.isolation-runtime",
-                "hephaestus.sandbox.docker.container-runtime",
-                roles(RuntimeRole.WORKER),
-                ConfigurationRequirement.RECOMMENDED,
-                worker,
-                "runsc".equals(property("hephaestus.sandbox.docker.container-runtime")),
-                "gVisor (runsc) gives stronger agent sandbox isolation. We recommend it.",
-                "sandbox-isolation");
-        String legacySandboxKey = firstConfiguredLegacySandboxKey();
-        add(
-                facts,
-                "sandbox.docker-legacy-configuration",
-                legacySandboxKey == null ? "hephaestus.sandbox.docker.*" : legacySandboxKey,
-                roles(RuntimeRole.WORKER),
-                ConfigurationRequirement.REQUIRED,
-                worker,
-                legacySandboxKey == null,
-                legacySandboxKey == null
-                        ? "Docker sandbox settings live under hephaestus.sandbox.docker.*."
-                        : "\"" + legacySandboxKey
-                                + "\" moved under hephaestus.sandbox.docker.*. The server no longer reads it.",
-                "docker-configuration");
         // Email is on exactly when a relay host is set; the sender address is then the one thing that
         // can still be missing, and its absence leaves every notification withheld as NOT_CONFIGURED.
         boolean relayConfigured = notBlank(property("spring.mail.host"));
@@ -364,16 +323,6 @@ public final class ConfigurationReadinessEvaluator {
         if ("true".equalsIgnoreCase(value)) return new BooleanSetting(true, true);
         if ("false".equalsIgnoreCase(value)) return new BooleanSetting(true, false);
         return new BooleanSetting(false, false);
-    }
-
-    private @Nullable String firstConfiguredLegacySandboxKey() {
-        for (String key : LEGACY_SANDBOX_PROPERTIES) {
-            if (environment.containsProperty(key)) return key;
-        }
-        for (String key : LEGACY_SANDBOX_ENVIRONMENT_VARIABLES) {
-            if (environment.containsProperty(key)) return key;
-        }
-        return null;
     }
 
     private boolean validFalse(String key, boolean fallback) {

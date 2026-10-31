@@ -159,7 +159,7 @@ jobs:
       reuse-images: ${{ inputs.reuse_images }}
       scan-images: ${{ inputs.scan-images }}
 
-  # A pull request with the `preview` label or the host boot smoke needs every component at its head
+  # The `preview` label and the Kubernetes cluster jobs need every component at its head
   # SHA; alias verified digests for the components this pull request left alone. They are aliased
   # from the published commit `detect-changes` resolved, which is the pull request's base only when
   # the default branch contains it — docs/contributor/ci-cd.mdx has the rule.

@@ -57,12 +57,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerConfiguration", RuntimeRole.WORKER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxConfiguration",
-                    RuntimeRole.WORKER_PROPERTY),
-            Map.entry(
-                    "de.tum.cit.aet.hephaestus.agent.sandbox.docker.AgentImagePullBootstrapper",
-                    RuntimeRole.WORKER_PROPERTY),
-            Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxConfiguration",
                     RuntimeRole.WORKER_PROPERTY),
             Map.entry(
@@ -467,7 +461,7 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
 
     @Test
     void noBeanIsGatedOnTheRetiredSandboxEnabledFlag() {
-        // The Docker sandbox is the worker role and Heph is always offered, so no capability flag may
+        // The Kubernetes sandbox is the worker role and Heph is always offered, so no capability flag may
         // gate either, through @ConditionalOnProperty or @ConditionalOnExpression.
         List<String> violations = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
