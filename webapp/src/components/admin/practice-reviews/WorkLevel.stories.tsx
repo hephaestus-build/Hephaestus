@@ -1,7 +1,7 @@
 import type { ReviewRef } from "@/api/types.gen";
 
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { eventLabel } from "@/components/practice-trace/fixtures";
@@ -110,9 +110,6 @@ export const WithEvents: Story = {
 			expect.stringContaining("/checks"),
 		);
 		await userEvent.click(panel.getByRole("button", { name: "Request review" }));
-		await expect(args.onRequestReview).not.toHaveBeenCalled();
-		const confirm = await screen.findByRole("alertdialog");
-		await userEvent.click(within(confirm).getByRole("button", { name: "Request review" }));
 		await expect(args.onRequestReview).toHaveBeenCalledOnce();
 	},
 };

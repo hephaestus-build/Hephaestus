@@ -41,7 +41,7 @@ import { browserTimeZone } from "@/lib/dates";
 import { itemName } from "@/lib/item-kinds";
 import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
-import { deferred } from "@/test/async";
+import { deferred, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -452,13 +452,13 @@ const listReads = () =>
 describe("a new review from a row of the Reviews table", () => {
 	const REQUESTS = "*/workspaces/:workspaceSlug/practices/review-requests";
 
-	it("asks for a review of the row's item after the confirmation, and reads the reviews again", async () => {
+	/** Serves one completed review as the whole table, and answers each ask with `reply`. */
+	function serveRowAsk(reply: () => Promise<Response>): unknown[] {
 		const bodies: unknown[] = [];
-		const completed = reviewDetail();
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/reviews", () =>
 				HttpResponse.json({
-					content: [completed],
+					content: [reviewDetail()],
 					number: 0,
 					size: 25,
 					totalElements: 1,
@@ -471,37 +471,95 @@ describe("a new review from a row of the Reviews table", () => {
 			),
 			http.post(REQUESTS, async ({ request }) => {
 				bodies.push(await request.json());
-				return HttpResponse.json({
-					status: "SUBMITTED",
-					reviewId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01",
-					reason: null,
-				});
+				return reply();
 			}),
 		);
-		renderRouteAtWithRouter(REVIEWS);
-		const itemLabel = itemName(reviewItem);
-		const name = `${itemLabel.charAt(0).toLowerCase()}${itemLabel.slice(1)}`;
-		// The table first stands as its skeleton, so the rows are found once they are drawn.
+		return bodies;
+	}
+
+	const itemLabel = itemName(reviewItem);
+	const work = `${itemLabel.charAt(0).toLowerCase()}${itemLabel.slice(1)}`;
+
+	/** The first row's Request review, once the table has drawn its rows over the skeleton. */
+	async function rowRequestButton() {
 		const [button] = await screen.findAllByRole(
 			"button",
-			{ name: `Request review of ${name}` },
+			{ name: `Request review of ${work}` },
 			ROUTE_RENDER_WAIT,
 		);
 		assert(button !== undefined);
-		await userEvent.click(button);
-		const dialog = await screen.findByRole("alertdialog", {
-			name: `Request a review of ${name}?`,
+		return button;
+	}
+
+	it("asks for a review of the row's item on one key press, says it is requesting, and reads the reviews again", async () => {
+		const answer = deferred();
+		const bodies = serveRowAsk(async () => {
+			await answer.promise;
+			return HttpResponse.json({
+				status: "SUBMITTED",
+				reviewId: "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01",
+				reason: null,
+			});
 		});
-		// Nothing is asked for until the reader confirms.
-		expect(bodies).toHaveLength(0);
+		renderRouteAtWithRouter(REVIEWS);
+		const button = await rowRequestButton();
 		const before = listReads().length;
-		await userEvent.click(within(dialog).getByRole("button", { name: "Request review" }));
+		button.focus();
+		await userEvent.keyboard("{Enter}");
 
 		await waitFor(() => expect(bodies).toHaveLength(1), ROUTE_RENDER_WAIT);
 		expect(bodies[0]).toStrictEqual({ itemId: reviewItem.id });
-		await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("alertdialog")).toBeNull();
+		// While the answer is out, the same button keeps the focus and its name says it is asking.
+		await waitFor(() => expect(button.getAttribute("aria-disabled")).toBe("true"));
+		expect(document.activeElement).toBe(button);
+		expect(screen.getAllByRole("button", { name: `Requesting review of ${work}` })).toContain(
+			button,
+		);
+		// A second press while it waits asks nothing.
+		await userEvent.keyboard("{Enter}");
+		expect(bodies).toHaveLength(1);
+
+		answer.resolve();
+		await screen.findByText("Review requested", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(listReads().length).toBeGreaterThan(before), ROUTE_RENDER_WAIT);
+		// Answered, it is the same button again, ready to ask.
+		await waitFor(() => expect(button.getAttribute("aria-disabled")).toBeNull());
+		expect(screen.getAllByRole("button", { name: `Request review of ${work}` })).toContain(button);
+	});
+
+	it("says what to do when the review budget is spent, apart from too many requests", async () => {
+		const budgetSpent =
+			"This workspace’s monthly AI budget does not allow another review now. A workspace admin can see why, and how to resume, under AI usage.";
+		const tooMany = "Too many requests. Wait 30 seconds, then try again.";
+		const replies = [
+			() =>
+				HttpResponse.json(
+					{ status: 429, title: "Too Many Requests", detail: budgetSpent },
+					{ status: 429 },
+				),
+			() =>
+				HttpResponse.json(
+					{ status: 429, title: "Too many requests", detail: tooMany, retryAfterSeconds: 30 },
+					{ status: 429, headers: { "Retry-After": "30" } },
+				),
+		];
+		const bodies = serveRowAsk(async () => {
+			const reply = replies[bodies.length - 1];
+			assert(reply, "an ask nobody expected");
+			return reply();
+		});
+		renderRouteAtWithRouter(REVIEWS);
+
+		await userEvent.click(await rowRequestButton());
+		await screen.findByText(budgetSpent, undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText(tooMany)).toBeNull();
+
+		await userEvent.click(await rowRequestButton());
+		await screen.findByText(tooMany, undefined, ROUTE_RENDER_WAIT);
+		expect(screen.getAllByText("We could not request the review")).toHaveLength(2);
+		expect(bodies).toHaveLength(2);
 	});
 });
 
@@ -917,8 +975,12 @@ describe("another review of the work from a review's sheet", () => {
 			await vi.advanceTimersByTimeAsync(2 * ACTIVE_REVIEW_POLL_MS);
 			expect(activeReads()).toHaveLength(settled);
 
+			// One press asks at once; the answer is held, since only the ask is under test.
+			server.use(
+				http.post("*/workspaces/:workspaceSlug/practices/review-requests", async () => pending()),
+			);
 			await userEvent.click(requestButton());
-			await screen.findByRole("alertdialog", { name: /^Request a review of/u });
+			await vi.waitFor(() => expect(requestsTo("/practices/review-requests")).toHaveLength(1));
 		} finally {
 			vi.useRealTimers();
 		}
@@ -948,7 +1010,7 @@ describe("another review of the work from a review's sheet", () => {
 			expect(requestButton().getAttribute("aria-disabled")).toBe("true");
 			expect(activeReads().length).toBeGreaterThan(reads);
 			await userEvent.click(requestButton());
-			expect(screen.queryByRole("alertdialog")).toBeNull();
+			expect(requestsTo("/practices/review-requests")).toHaveLength(0);
 
 			active = [];
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
@@ -1002,8 +1064,6 @@ const opens = async (router: Located, level: string) =>
 async function askFrom(level: HTMLElement, label: string) {
 	const button = await within(level).findByRole("button", { name: label }, ROUTE_RENDER_WAIT);
 	await userEvent.click(button);
-	const confirm = await screen.findByRole("alertdialog", { name: /^Request a review of/u });
-	await userEvent.click(within(confirm).getByRole("button", { name: "Request review" }));
 }
 
 /** Every read of one review, in any workspace. */
@@ -1128,10 +1188,6 @@ describe("the way to a review an accepted ask created", () => {
 		);
 		assert(button !== undefined);
 		await userEvent.click(button);
-		const confirm = await screen.findByRole("alertdialog", {
-			name: `Request a review of ${work}?`,
-		});
-		await userEvent.click(within(confirm).getByRole("button", { name: "Request review" }));
 
 		const note = await screen.findByRole("note", undefined, ROUTE_RENDER_WAIT);
 		expect(bodies).toStrictEqual([{ itemId: base.item.id }]);

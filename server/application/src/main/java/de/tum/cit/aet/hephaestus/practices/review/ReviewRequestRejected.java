@@ -48,6 +48,17 @@ public final class ReviewRequestRejected extends ErrorResponseException {
         this.reason = reason;
     }
 
+    /**
+     * A spent or unverifiable monthly AI budget. The reader cannot tell which cap stopped the review, or
+     * whether its spend is unconfirmed, so the detail sends them to the page that says so and offers the fix.
+     */
+    public static ReviewRequestRejected budgetUnavailable() {
+        return new ReviewRequestRejected(
+                Reason.BUDGET_UNAVAILABLE,
+                "This workspace’s monthly AI budget does not allow another review now. A workspace admin can see why,"
+                        + " and how to resume, under AI usage.");
+    }
+
     private static HttpStatus status(Reason reason) {
         return switch (reason) {
             case REQUEST_CONFLICT, VERSION_CHANGED, WORKSPACE_INACTIVE, SCAN_ACTIVE -> HttpStatus.CONFLICT;

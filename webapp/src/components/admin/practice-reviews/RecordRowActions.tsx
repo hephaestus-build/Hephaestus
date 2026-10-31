@@ -39,7 +39,7 @@ const ROW_ACTION_LINES: readonly InfoLine[] = [
 const REQUEST_REVIEW_LINE: InfoLine = {
 	term: "Request review",
 	icon: RequestReviewIcon,
-	text: "asks for a new review of the row’s work now. It asks you to confirm first.",
+	text: "asks for a new review of the row’s work now.",
 };
 
 /**
