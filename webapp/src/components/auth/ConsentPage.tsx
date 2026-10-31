@@ -61,8 +61,9 @@ export interface ConsentPageProps {
 type Answer = "yes" | "no";
 
 /**
- * Heph carries the page, so `--highlight` is its accent throughout: the bubble it speaks from, and the
- * marker on each step. `PageHeader` and its lucide icon belong to the app chrome, which is not up yet.
+ * Hephaestus carries the page, so `--highlight` is its accent throughout: the bubble it speaks from,
+ * and the marker on each step. `PageHeader` and its lucide icon belong to the app chrome, which is not
+ * up yet.
  *
  * The steps are not numbered. A member is handed workspace setup after this and a changed notice
  * brings an existing account back here, so "step 1 of n" would be a claim about a flow this screen
@@ -82,7 +83,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const answered = !asksAboutResearch || answer !== undefined;
 	const ready = state.status === "ready" && !stale && termsAccepted && answered;
 
-	// Heph narrates, and only Heph is a live region. The footer hint says the same thing factually
+	// Hephaestus narrates, and only Hephaestus is a live region. The footer hint says the same thing factually
 	// and reaches the button through `aria-describedby`, so focusing the button does not replay it.
 	function narrate() {
 		if (state.status === "loading") {
@@ -157,7 +158,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 					<header className="space-y-4">
 						<h1 className="text-2xl font-semibold tracking-tight break-words">Get set up</h1>
 						<HephaestusSays
-							intro="I am Heph, the mentor in Hephaestus. I read the work you’re already doing, give you feedback on the practices your workspace adopts, and talk it through whenever you ask."
+							intro="I am Hephaestus. I read the work you’re already doing, give you feedback on the practices your workspace adopts, and talk it through whenever you ask."
 							narration={narration}
 						/>
 					</header>
