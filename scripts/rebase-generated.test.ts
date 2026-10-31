@@ -37,6 +37,7 @@ async function fixture(t: TestContext) {
 	await git("config", "user.name", "Fixture");
 	await git("config", "user.email", "fixture@example.test");
 	await git("config", "commit.gpgsign", "false");
+	await git("config", "core.autocrlf", "false");
 	await git("config", "core.hooksPath", path.join(cwd, "no-hooks"));
 	const commit = async (message: string) => {
 		await git("add", ".");
@@ -331,10 +332,8 @@ export const repositoryCli = () => fileURLToPath(import.meta.resolve('vite-plus/
 export async function executableJar() { await writeFile(new URL('../../builder-ran', import.meta.url), import.meta.dirname); return 'target-checkout.jar'; }`,
 	);
 	await regenerateArtifacts(f.cwd);
-	assert.equal(
-		await readFile(path.join(f.cwd, "builder-ran"), "utf8"),
-		await realpath(path.join(f.cwd, "scripts/lib")),
-	);
+	const builderDirectory = await readFile(path.join(f.cwd, "builder-ran"), "utf8");
+	assert.equal(await realpath(builderDirectory), await realpath(path.join(f.cwd, "scripts/lib")));
 	for (const file of ["api-result", "config-result"]) {
 		assert.equal(await readFile(path.join(f.cwd, file), "utf8"), "target-checkout.jar");
 	}
