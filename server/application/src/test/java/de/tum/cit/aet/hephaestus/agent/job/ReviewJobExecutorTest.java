@@ -157,7 +157,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private ReviewJobExecutor executor(AsyncTaskExecutor pool) {
         lenient().when(jobs.lockParentForQueuedClaim(any())).thenReturn(Optional.of(UUID.randomUUID()));
         lenient().when(reviewStart.start(anyLong(), any())).thenReturn(true);
-        lenient().when(jobs.databaseClock()).thenAnswer(ignored -> Instant.now());
         var transactions = mock(TransactionTemplate.class);
         lenient().when(transactions.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
@@ -730,7 +729,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     void sandboxRuntimeReady() {
         when(sandbox.ready()).thenReturn(true);
         // A claim leases its attempt on the database clock.
-        lenient().when(jobs.lease(any(), anyLong(), anyInt(), any(), anyLong())).thenReturn(1);
+        lenient().when(jobs.lease(any(), anyLong())).thenReturn(1);
         lenient().when(jobs.databaseNow()).thenAnswer(invocation -> Instant.now());
         lenient().when(sandbox.roomFor(any())).thenReturn(Integer.MAX_VALUE);
     }

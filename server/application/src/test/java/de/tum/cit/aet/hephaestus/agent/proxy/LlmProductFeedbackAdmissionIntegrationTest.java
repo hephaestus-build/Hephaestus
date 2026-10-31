@@ -193,7 +193,6 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(1L);
     }
 
-
     @Test
     void shouldWaitForSharedCooldownWhenFeedbackRequestsAGrant() throws Exception {
         long pool = pool(2, 0);

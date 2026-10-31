@@ -23,12 +23,18 @@ class ReviewStartServiceTest extends BaseUnitTest {
     private static final long WORKSPACE = 17;
     private static final UUID REVIEW = UUID.fromString("b43146d6-0e12-4775-8a2d-4459b4a279a1");
     private static final Instant NOW = Instant.parse("2026-10-31T19:00:00Z");
-    @Mock private ReviewRepository reviews;
+
+    @Mock
+    private ReviewRepository reviews;
 
     @Test
     void shouldStartAQueuedReviewAndKeepItsExistingChecks() {
         var checks = JsonNodeFactory.instance.objectNode().put("selectionComplete", true);
-        var review = Review.builder().id(REVIEW).workspaceId(WORKSPACE).checks(checks).build();
+        var review = Review.builder()
+                .id(REVIEW)
+                .workspaceId(WORKSPACE)
+                .checks(checks)
+                .build();
         when(reviews.lockByIdAndWorkspaceId(REVIEW, WORKSPACE)).thenReturn(Optional.of(review));
 
         assertThat(starts().start(WORKSPACE, REVIEW)).isTrue();
@@ -39,9 +45,15 @@ class ReviewStartServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRetainTheFirstStartTimeForAnAlreadyRunningReview() {
-        var checks = JsonNodeFactory.instance.objectNode().put("startedAt", NOW.minusSeconds(60).toString());
-        var review = Review.builder().id(REVIEW).workspaceId(WORKSPACE)
-                .status(ReviewStatus.RUNNING).checks(checks).build();
+        var checks = JsonNodeFactory.instance
+                .objectNode()
+                .put("startedAt", NOW.minusSeconds(60).toString());
+        var review = Review.builder()
+                .id(REVIEW)
+                .workspaceId(WORKSPACE)
+                .status(ReviewStatus.RUNNING)
+                .checks(checks)
+                .build();
         when(reviews.lockByIdAndWorkspaceId(REVIEW, WORKSPACE)).thenReturn(Optional.of(review));
 
         assertThat(starts().start(WORKSPACE, REVIEW)).isTrue();
@@ -50,9 +62,15 @@ class ReviewStartServiceTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReviewStatus.class, names = {"COMPLETE", "PARTIAL", "FAILED", "CANCELLED"})
+    @EnumSource(
+            value = ReviewStatus.class,
+            names = {"COMPLETE", "PARTIAL", "FAILED", "CANCELLED"})
     void shouldNeverRestartATerminalReview(ReviewStatus status) {
-        var review = Review.builder().id(REVIEW).workspaceId(WORKSPACE).status(status).build();
+        var review = Review.builder()
+                .id(REVIEW)
+                .workspaceId(WORKSPACE)
+                .status(status)
+                .build();
         when(reviews.lockByIdAndWorkspaceId(REVIEW, WORKSPACE)).thenReturn(Optional.of(review));
 
         assertThat(starts().start(WORKSPACE, REVIEW)).isFalse();
@@ -61,10 +79,16 @@ class ReviewStartServiceTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReviewStatus.class, names = {"QUEUED", "RUNNING"})
+    @EnumSource(
+            value = ReviewStatus.class,
+            names = {"QUEUED", "RUNNING"})
     void shouldLeaveACancelRequestedReviewForSettlement(ReviewStatus status) {
-        var review = Review.builder().id(REVIEW).workspaceId(WORKSPACE).status(status)
-                .checks(JsonNodeFactory.instance.objectNode().put("cancellationRequested", true)).build();
+        var review = Review.builder()
+                .id(REVIEW)
+                .workspaceId(WORKSPACE)
+                .status(status)
+                .checks(JsonNodeFactory.instance.objectNode().put("cancellationRequested", true))
+                .build();
         when(reviews.lockByIdAndWorkspaceId(REVIEW, WORKSPACE)).thenReturn(Optional.of(review));
 
         assertThat(starts().start(WORKSPACE, REVIEW)).isFalse();

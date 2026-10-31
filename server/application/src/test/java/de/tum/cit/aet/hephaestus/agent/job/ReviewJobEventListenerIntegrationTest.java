@@ -85,9 +85,7 @@ class ReviewJobEventListenerIntegrationTest extends BaseIntegrationTest {
                         978001L,
                         reviewId))
                 .isZero();
-        assertThat(failure)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Simulated crash before enqueue");
+        assertThat(failure).isInstanceOf(IllegalStateException.class).hasMessage("Simulated crash before enqueue");
     }
 
     @TestConfiguration
