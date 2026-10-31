@@ -1,0 +1,21 @@
+{{- range $component, $enabled := dict "postgresql" .Values.postgresql.bundled "nats" .Values.nats.bundled "server" true "worker" .Values.worker.enabled }}
+{{- if $enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" $ "component" $component) }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" $component) | nindent 4 }}
+spec:
+  {{- if and (eq $component "worker") (gt (int $.Values.worker.replicas) 1) }}
+  maxUnavailable: 1
+  {{- else }}
+  # A singleton stops voluntary eviction until the operator starts planned maintenance.
+  minAvailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" $ "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}

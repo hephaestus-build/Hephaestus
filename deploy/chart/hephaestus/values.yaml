@@ -255,8 +255,8 @@ worker:
   conversationTurns: 8
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
-  # that is still running stops: it is tried again on another worker and spends one of its attempts.
-  drainTimeoutSeconds: 3600
+  # that is still running stops and is tried again, within its separate limit on drains.
+  drainTimeoutSeconds: 1800
   # RollingUpdate starts the new workers before the old ones drain. Recreate stops the old workers
   # first, for a node that cannot hold both: each upgrade is then a planned outage of reviews and conversations.
   rolloutStrategy: RollingUpdate

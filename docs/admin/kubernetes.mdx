@@ -941,8 +941,8 @@ The chart refuses a worker without them.
 The chart runs the workers as one Deployment:
 
 - Two replicas by default, spread across nodes where the cluster has several. `worker.replicas` sets the count.
-- A rollout starts all new workers before an old one stops, and a PodDisruptionBudget lets a node drain take one worker at a time. `worker.rolloutStrategy=Recreate` stops the old workers first, for a node that cannot hold both ([Profiles](#profiles)).
-- A stopping worker claims no new work and serves its running attempts for `worker.drainTimeoutSeconds`, 3600 by default.
+- A rollout starts all new workers before an old one stops. At two or more workers, a PodDisruptionBudget lets a node drain evict one at a time. A singleton worker blocks voluntary eviction until [planned node maintenance](#planned-node-maintenance). `worker.rolloutStrategy=Recreate` stops the old workers first, for a node that cannot hold both ([Profiles](#profiles)).
+- A stopping worker claims no new work and serves its running attempts for `worker.drainTimeoutSeconds`, 1800 by default.
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
@@ -1273,7 +1273,7 @@ The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 The server stops before its new version starts (`Recreate`).
 The webhook role rolls. In the single-node profiles, the worker drains and stops before its replacement starts.
 The replacement proves the cluster with the isolation probe before it claims work.
-An old worker drains for up to `worker.drainTimeoutSeconds`, 60 minutes by default, and Kubernetes no longer counts it while it terminates.
+An old worker drains for up to `worker.drainTimeoutSeconds`, 30 minutes by default, and Kubernetes no longer counts it while it terminates.
 Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
 A review runs for up to 3 hours.
 When the drain ends first, the review stops: an attempt that was not yet admitted runs again on another worker, and an admitted one keeps its results.
@@ -1319,6 +1319,45 @@ Keep all roles stopped, preserve the log and failed change set before the Job's 
 
 Phase 3 creates another migration Job for the same release; it has no new schema changes to apply.
 Resume deployment automation only after its release and replica counts match the verified installation.
+
+### Planned node maintenance
+
+PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL and NATS Pods, the server, and a singleton worker.
+With two or more workers, at most one worker can be unavailable.
+The webhook budget applies only above one replica and keeps at least one receiver available.
+Each budget selects one role in one release. Review Jobs have no budget.
+These budgets do not prevent pressure eviction or OOM, and they do not provide high availability on one node.
+Deployment rollouts and direct scaling do not use the eviction API, so the budgets do not block those operations.
+See Kubernetes' [disruption budget guide](https://kubernetes.io/docs/tasks/run-application/configure-pdb/).
+
+Plan an outage before you drain the only node.
+Keep PostgreSQL and NATS running until the workers have drained:
+
+1. Suspend [pull-based reconciliation](./pull-based-deployment#operating-it) and wait for an active reconciliation to finish.
+   Suspend any other automation that restores the release.
+   Record the replica counts and take the [database and broker backups](#backup-and-restore).
+2. Cordon the node: `kubectl cordon <node>`.
+3. Stop the workers with `kubectl --namespace hephaestus scale deployment/hephaestus-worker --replicas=0`.
+   Wait for their Pods to disappear: `kubectl --namespace hephaestus wait --for=delete pod -l app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component=worker --timeout=35m`.
+   Check the sandbox namespace: `kubectl --namespace hephaestus-sandboxes get pods`. Expect no Pods.
+   Do not proceed while worker Pods or their sandbox Pods remain.
+   The workers stop claims first and keep their gateways and lease renewal alive while attempts drain.
+   Their termination grace is the configured drain plus 120 seconds.
+4. Stop the server and the receiver: `kubectl --namespace hephaestus scale deployment/hephaestus-server deployment/hephaestus-webhook --replicas=0`.
+   Wait for both roles to stop: `kubectl --namespace hephaestus wait --for=delete pod -l 'app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component in (server,webhook)' --timeout=5m`.
+5. List the release's budgets: `kubectl --namespace hephaestus get pdb -l app.kubernetes.io/instance=hephaestus`.
+   Remove only these budgets for this maintenance: `kubectl --namespace hephaestus delete pdb -l app.kubernetes.io/instance=hephaestus`.
+6. Drain the node: `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data --timeout=10m`.
+   The emptyDir data is disposable sandbox and cache data. Persistent volumes remain.
+   If another workload's budget blocks the drain, follow its maintenance procedure.
+7. Complete the host work and uncordon the node: `kubectl uncordon <node>`.
+   Reapply the verified release with its saved values and replica counts through [Upgrades](#upgrades).
+   This restores the budgets. Verify that the roles and budgets are ready before you resume reconciliation.
+
+The commands use the release and namespace `hephaestus`. Substitute your own names and allow more time if you configured a longer drain.
+The `small-16gib` profile retains a ten-minute drain and `Recreate` updates until upgrade capacity is qualified.
+The host's five-minute kubelet shutdown budget cannot provide a full thirty-minute review drain.
+After a reboot or an interrupted drain, fenced attempts retry through durable recovery.
 
 ### Database maintenance
 

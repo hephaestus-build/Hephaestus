@@ -804,7 +804,7 @@ A Docker call that does not respond to interruption can finish after the deadlin
 The worker does not wait indefinitely for that call.
 Leftover containers remain subject to normal sandbox reconciliation.
 
-The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 3600 by default, and the grace period to that value plus two minutes.
+The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 1800 by default, and the grace period to that value plus two minutes.
 The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 
 ## Cancellation
