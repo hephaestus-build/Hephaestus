@@ -1,7 +1,7 @@
 name: CI / Fail fast
 
-# A merge group that has already lost frees its runners. `cicd.yml` calls this once per leg when
-# that leg fails. The graceful cancel lets `CI Status Gate` (`if: always()`) still run and fail, so
+# A merge group that has already lost frees its runners. Each failed worker calls this helper.
+# The graceful cancel lets `CI Status Gate` (`if: always()`) still run and fail, so
 # the queue removes the entry. A force-cancel skips the gate, and the entry then waits in the queue
 # with no verdict until its check timeout: docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
 
@@ -13,10 +13,11 @@ permissions: {}
 jobs:
   cancel:
     name: "Cancel the run"
+    if: github.event_name == 'merge_group'
     runs-on: ubuntu-slim
     timeout-minutes: 15
-    # The only `actions: write` grant of the CI run. This job runs no checkout and no action, so no
-    # other code holds the token.
+    # Callers forward the permission through reusable workflows. Only this worker receives a
+    # token that can cancel runs. It runs no checkout and no action.
     permissions:
       actions: write # cancel this run
     steps:

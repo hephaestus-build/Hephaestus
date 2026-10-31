@@ -58,6 +58,12 @@ void test("the pull-request cohort is the server fast tier", () => {
 	// Docs-only and duplicate-skipped runs have no server suites; ci:full adds the queue tier.
 	assert.equal(isFastTier([{ name: "Quality / Tooling and Docs / Gates" }]), false);
 	assert.equal(isFastTier([unit, { name: "Test / App Server: Integration (providers)" }]), false);
+	const callerUnit = { name: "Test (unit) / App Server: Unit and architecture" };
+	assert.equal(isFastTier([callerUnit]), true);
+	assert.equal(
+		isFastTier([callerUnit, { name: "Test (providers) / App Server: Integration (providers)" }]),
+		false,
+	);
 });
 
 void test("a release candidate's evidence run is not a latency sample", () => {
@@ -95,6 +101,15 @@ void test("the revert criterion counts groups a queue-tier job failed, apart fro
 		...Array.from({ length: 14 }, () => ({ conclusion: "success", failedJobs: [] })),
 	];
 	assert.equal(queueTierFailures(enough).queueTierShare, 2 / 20);
+	assert.equal(
+		queueTierFailures([
+			{
+				conclusion: "failure",
+				failedJobs: ["Test (providers) / App Server: Integration (providers)"],
+			},
+		]).queueTierFailed,
+		1,
+	);
 });
 
 const verificationJobs = [
@@ -128,6 +143,19 @@ void test("lightweight runs cannot make full verification's latency budget pass"
 		}
 	}
 	assert.equal(isFullVerification([{ name: "Quality / Tooling and Docs" }]), false);
+	const current = [
+		...verificationJobs,
+		...integration("providers", "runtime-and-startup", "practices-and-agent", "application"),
+	].map((name) => ({
+		name:
+			name === "Test / App Server: Unit and architecture"
+				? "Test (unit) / App Server: Unit and architecture"
+				: name.replace(
+						/^Test \/ App Server: Integration \((?<shard>[^)]+)\)$/u,
+						"Test ($<shard>) / App Server: Integration ($<shard>)",
+					),
+	}));
+	assert.equal(isFullVerification(current), true);
 });
 
 void test("only a complete integration shard layout counts as full verification", () => {

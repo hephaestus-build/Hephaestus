@@ -22,8 +22,12 @@ on:
         required: false
         type: string
         default: "false"
+      shard:
+        description: "The unit tier or one integration shard selected by the caller"
+        required: true
+        type: string
       queue_tier:
-        description: "Whether the run also verifies the queue tier (docs/contributor/ci-cd.mdx § Two verification tiers)"
+        description: "Whether integration tests are selected by this run"
         required: true
         type: string
 
@@ -37,7 +41,7 @@ env:
 jobs:
   server-verification:
     name: "App Server: Unit and architecture"
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.shard == 'unit'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -80,18 +84,10 @@ jobs:
           if-no-files-found: warn
 
   server-integration:
-    name: "App Server: Integration (${{ matrix.shard }})"
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
+    name: "App Server: Integration (${{ inputs.shard }})"
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.shard != 'unit' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.shard == 'runtime-and-startup' && 20 || 30 }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shard: providers
-          - shard: runtime-and-startup
-          - shard: practices-and-agent
-          - shard: application
+    timeout-minutes: ${{ inputs.shard == 'runtime-and-startup' && 20 || 30 }}
     permissions:
       contents: read
       checks: write
@@ -113,14 +109,14 @@ jobs:
           tag: hephaestus-postgres:ci
       - name: Run integration tests
         env:
-          HEPHAESTUS_INTEGRATION_SHARD: ${{ matrix.shard }}
+          HEPHAESTUS_INTEGRATION_SHARD: ${{ inputs.shard }}
           HEPHAESTUS_TEST_POSTGRES_IMAGE: hephaestus-postgres:ci
         run: vp run test:server:integration
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
-          name: "Test Results - App Server Integration (${{ matrix.shard }})"
+          name: "Test Results - App Server Integration (${{ inputs.shard }})"
           path: "server/application/build/test-results/integrationTest/TEST-*.xml"
           reporter: java-junit
           list-suites: failed
@@ -132,7 +128,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: server-integration-${{ matrix.shard }}-reports-${{ github.run_attempt }}
+          name: server-integration-${{ inputs.shard }}-reports-${{ github.run_attempt }}
           path: server/application/build/test-results/integrationTest
           retention-days: 14
           if-no-files-found: warn
@@ -140,7 +136,14 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: server-integration-${{ matrix.shard }}-dependency-verification-${{ github.run_attempt }}
+          name: server-integration-${{ inputs.shard }}-dependency-verification-${{ github.run_attempt }}
           path: server/build/reports/dependency-verification
           retention-days: 14
           if-no-files-found: ignore
+
+  fail-fast:
+    needs: [server-verification, server-integration]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write

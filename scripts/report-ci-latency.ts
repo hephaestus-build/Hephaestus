@@ -1,5 +1,7 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 
+import { canonicalCiJobName } from "./lib/ci-job-name.ts";
+
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { median, percentile } from "./lib/statistics.ts";
@@ -49,7 +51,7 @@ const INTEGRATION_LAYOUTS = [
 ];
 
 export function isFullVerification(jobs: readonly { name: string }[]) {
-	const names = new Set(jobs.map((job) => job.name));
+	const names = new Set(jobs.map((job) => canonicalCiJobName(job.name)));
 	const integrationJobs = [...names].filter((name) =>
 		name.startsWith("Test / App Server: Integration ("),
 	);
@@ -78,7 +80,7 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 // The queue tier's job names, past drill names included; ci-contract.test.ts holds them to the
 // jobs that carry the tier guard.
 export const QUEUE_TIER_JOBS = [
-	/^Test \/ App Server: Integration \(/u,
+	/^Test(?: \([a-z-]+\))? \/ App Server: Integration \(/u,
 	/^Build \/ App Server: Database$/u,
 	/^Build \/ App Server: PostgreSQL drill/u,
 	/^Build \/ Webapp: E2E$/u,
@@ -91,8 +93,9 @@ export const QUEUE_TIER_JOBS = [
  */
 export function isFastTier(jobs: readonly { name: string }[]) {
 	return (
-		jobs.some((job) => job.name === "Test / App Server: Unit and architecture") &&
-		!jobs.some((job) => QUEUE_TIER_JOBS.some((pattern) => pattern.test(job.name)))
+		jobs.some(
+			(job) => canonicalCiJobName(job.name) === "Test / App Server: Unit and architecture",
+		) && !jobs.some((job) => QUEUE_TIER_JOBS.some((pattern) => pattern.test(job.name)))
 	);
 }
 

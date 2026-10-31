@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
+import { canonicalCiJobName } from "./lib/ci-job-name.ts";
+
 import {
 	imageAttestations,
 	imageManifestJob,
@@ -81,6 +83,71 @@ async function resolve(data = fixture()) {
 
 await test("selects the immutable artifact of an exact-commit successful release-candidate merge group", async () => {
 	assert.deepEqual(await resolve(), { runId: 101, artifactId: 202 });
+});
+
+await test("caller matrix names preserve exact-commit build reuse and reject mismatched shards", async () => {
+	const ci = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const tests = parseDocument(await readFile(".github/workflows/ci-tests.yml", "utf8"));
+	const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+	const images = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	const aliases = new Map<string, string>();
+	for (const shard of [
+		"unit",
+		"application",
+		"providers",
+		"runtime-and-startup",
+		"practices-and-agent",
+	]) {
+		const caller = String(ci.getIn(["jobs", "Test", "name"])).replace(
+			`\${{ matrix.shard }}`,
+			shard,
+		);
+		const worker = String(
+			tests.getIn([
+				"jobs",
+				shard === "unit" ? "server-verification" : "server-integration",
+				"name",
+			]),
+		).replace(`\${{ inputs.shard }}`, shard);
+		const name = `${caller} / ${worker}`;
+		const canonical =
+			shard === "unit"
+				? "Test / App Server: Unit and architecture"
+				: `Test / App Server: Integration (${shard})`;
+		assert.equal(canonicalCiJobName(name), canonical);
+		aliases.set(canonical, name);
+	}
+	for (const platform of ["linux/amd64", "linux/arm64"]) {
+		const caller = String(docker.getIn(["jobs", "images", "name"])).replace(
+			`\${{ matrix.platform }}`,
+			platform,
+		);
+		const worker = String(images.getIn(["jobs", "build", "name"])).replace(
+			`\${{ inputs.platform }}`,
+			platform,
+		);
+		const name = `Docker / ${caller} / ${worker}`;
+		const canonical = `Docker / Images / Build ${platform} images`;
+		assert.equal(canonicalCiJobName(name), canonical);
+		aliases.set(canonical, name);
+	}
+	const data = fixture();
+	data.jobs = data.jobs.map((job) => ({ ...job, name: aliases.get(job.name) ?? job.name }));
+	assert.deepEqual(await resolve(data), { runId: 101, artifactId: 202 });
+	for (const bad of [
+		"Test (application) / App Server: Integration (providers)",
+		"Docker / Images (linux/arm64) / Build linux/amd64 images",
+	]) {
+		assert.equal(canonicalCiJobName(bad), bad);
+	}
+	const providers = data.jobs.find(
+		(job) => job.name === aliases.get("Test / App Server: Integration (providers)"),
+	);
+	assert.ok(providers !== undefined);
+	providers.conclusion = "failure";
+	assert.equal(await resolve(data), undefined);
 });
 
 await test("reuses an ordinary merge group without the release-only evidence job", async () => {
@@ -323,7 +390,7 @@ await test("the image builds receive the queue run a default-branch push resolve
 	assert.equal(workflow.hasIn(["jobs", "Docker", "name"]), false);
 	assert.equal(
 		imageManifestJob,
-		`Docker / ${String(docker.getIn(["jobs", "images", "name"]))} / ${String(build.getIn(["jobs", "merge", "name"]))}`,
+		`Docker / ${String(docker.getIn(["jobs", "manifests", "name"]))} / ${String(build.getIn(["jobs", "merge", "name"]))}`,
 	);
 	// One image list: the attestation steps the lookup reads are the images the workflow can select,
 	// so `complete` cannot call a run complete that left out an image CI builds. Each listed image has

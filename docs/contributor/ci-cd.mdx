@@ -290,15 +290,20 @@ The queue removes an entry only when a required check fails.
 Two rules end a failed merge group early and free its runners.
 Neither rule applies to a pull request, which still reports the failure of every leg.
 
-**A failed leg cancels the run.**
-Each leg of `CI Status Gate` that runs in a merge group has a `fail-fast-<leg>` job in `cicd.yml`.
-That job needs only its own leg, so it starts when that leg ends.
-In a merge group, if the leg failed, the job calls `fail-fast.yml`, which runs `gh run cancel` on the run.
+**A failed worker cancels the run.**
+Each build, test and quality worker has a dependent job that calls `fail-fast.yml` if the worker fails in a merge group.
+That job needs only its worker, so it starts without waiting for other workers in the workflow.
+The test, image-platform and cluster matrices are on the reusable-workflow callers.
+Each invocation has one selected worker, so a failed matrix entry can cancel the run before the other entries finish.
+The caller's matrix uses `fail-fast: false`: the isolated helper cancels the run in a merge group, and other events collect every result.
+Matrix callers have explicit shard or platform names.
+Artifact lookup and latency reporting recognize both the previous names and these names, and require the caller and worker to identify the same shard or platform.
 
-- The condition starts with `always()`. Without a status function, GitHub adds `success()`, which is false after a failed leg.
-- Queued jobs do not start, and running jobs stop.
-- `CI Status Gate` has `if: always()`, so it still runs after the cancel. It sees the failed leg and fails, and the queue removes the entry.
-- The `fail-fast-<leg>` jobs are not in the gate's `needs`. The ruleset requires `CI Status Gate`, `Actionlint` and `Zizmor`, and a cancel job is none of them.
+- The condition starts with `always()`. Without a status function, GitHub adds `success()`, which is false after a failed worker.
+- The helper runs `gh run cancel` on its own run. Queued jobs do not start, and running jobs stop.
+- `CI Status Gate` has `if: always()`, so it still runs after the cancel and fails.
+- A cancelled reusable caller can contain a failed worker. The gate reads native job conclusions for the current run attempt to preserve the failure verdict. If this read fails, the gate fails.
+- The outer `fail-fast-<leg>` jobs in `cicd.yml` also cover failures at a caller boundary. The gate does not wait for cancel jobs. The ruleset requires `CI Status Gate`, `Actionlint` and `Zizmor`.
 - `Security` and `Changesets` never run in a merge group, so they have no cancel job.
 
 After the cancel, `cancelled()` is true for the whole run.
@@ -332,7 +337,9 @@ Use only the graceful cancel of `fail-fast.yml`.
 
 **Only the cancel jobs can write to Actions.**
 The `actions: write` permission also lets a job dispatch workflows, rerun runs and delete caches.
-Thus, in `cicd.yml` only the `fail-fast-<leg>` jobs get it, and they pass it to the job in `fail-fast.yml`.
+Reusable-workflow callers forward this permission to the helper.
+A call job sets a permission ceiling; each build and test worker sets its own narrower permissions.
+Only the worker in `fail-fast.yml` receives a token that can cancel runs.
 That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
 Each workflow keeps `permissions: {}` at the top level.
 `ACTIONS_WRITE_GRANTS` in `scripts/ci-contract.test.ts` lists each other job with this permission, and the reason.
@@ -867,7 +874,8 @@ Right after a merge, that run is still building, so the pull request builds ever
   `core.database` tests own databases separate from other Spring contexts. Gradle's native test filters partition
   the tier. `vp run test:server:selection` checks coverage through JUnit dry-run reports before
   unit/architecture verification. Discovery reports stay separate from execution results.
-  All shards use `fail-fast: false`. `CI Status Gate` requires their aggregate result. Locally
+  The caller matrix uses `fail-fast: false`; a failed merge-group worker calls the isolated cancel helper.
+  `CI Status Gate` requires the aggregate result. Locally
   the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
   the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
@@ -947,8 +955,8 @@ Right after a merge, that run is still building, so the pull request builds ever
 - `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
   snapshot, so only it waits for `Image advisory database`.
 - Quality legs run independently. In a merge group, a failed leg cancels the run.
-  The platform matrix in `reusable-docker-build.yml` uses
-  `fail-fast: false`. One platform's refusal does not cancel the scan of the other platform.
+  The platform matrix in `ci-docker-build.yml` uses `fail-fast: false`.
+  A failed platform cancels a merge group through the isolated helper. Other events collect both scans.
 - All images of a run share one build job per platform and one manifest job.
   Each job pays a runner's setup.
   The App Server image is built from the packaged JAR.

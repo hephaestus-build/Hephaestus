@@ -86,25 +86,64 @@ on:
     outputs:
       application-server-digest:
         description: "Published application-server image index digest"
-        value: ${{ jobs.images.outputs.application-server-digest }}
+        value: ${{ jobs.manifests.outputs.application-server-digest }}
 
 permissions: {}
 
 jobs:
   # One build job per platform and one manifest job for every image the run publishes.
   images:
-    name: "Images"
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platforms) }}
+    name: "Images (${{ matrix.platform }})"
     if: >-
       inputs.application_server_image == 'true' || (inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' &&
       (inputs.webapp_changed == 'true' || inputs.agent_images_changed == 'true' || inputs.postgres_image_changed == 'true'))
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
+      actions: write
       contents: read
       packages: write
       id-token: write
       attestations: write
       artifact-metadata: write
     with:
+      phase: build
+      platform: ${{ matrix.platform }}
+      database-artifact: ${{ inputs.database-artifact }}
+      application-server: ${{ inputs.application_server_image == 'true' }}
+      webapp: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.webapp_changed == 'true' }}
+      agent-pi: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.agent_images_changed == 'true' }}
+      postgres: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.postgres_image_changed == 'true' }}
+      application-artifact: ${{ inputs.application-artifact }}
+      project-descriptor: ${{ inputs.project-descriptor }}
+      run-image: ${{ inputs.run-image }}
+      registry: "ghcr.io"
+      publish: ${{ inputs.publish }}
+      platforms: ${{ inputs.platforms }}
+      reuse-run: ${{ inputs.reuse_run }}
+      reuse-images: ${{ inputs.reuse_images }}
+      scan-images: ${{ inputs.scan-images }}
+
+  manifests:
+    needs: [images]
+    name: "Images"
+    if: >-
+      !cancelled() && (needs.images.result == 'success' || needs.images.result == 'skipped') &&
+      (inputs.application_server_image == 'true' || (inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' &&
+      (inputs.webapp_changed == 'true' || inputs.agent_images_changed == 'true' || inputs.postgres_image_changed == 'true')))
+    uses: ./.github/workflows/reusable-docker-build.yml
+    permissions:
+      actions: write
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    with:
+      phase: merge
       database-artifact: ${{ inputs.database-artifact }}
       application-server: ${{ inputs.application_server_image == 'true' }}
       webapp: ${{ inputs.dockerfile_images == 'true' && inputs.should_skip != 'true' && inputs.webapp_changed == 'true' }}
