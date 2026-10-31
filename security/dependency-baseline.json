@@ -1,0 +1,87 @@
+{
+	"pnpm-lock.yaml": {
+		"packages": 2544,
+		"importers": {
+			".": {
+				"direct": {
+					"prod": 0,
+					"dev": 50
+				},
+				"transitive": {
+					"prod": 0,
+					"all": 953
+				}
+			},
+			"docs": {
+				"direct": {
+					"prod": 22,
+					"dev": 6
+				},
+				"transitive": {
+					"prod": 1437,
+					"all": 1460
+				}
+			},
+			"extension": {
+				"direct": {
+					"prod": 7,
+					"dev": 26
+				},
+				"transitive": {
+					"prod": 12,
+					"all": 876
+				}
+			},
+			"scripts/api-generator": {
+				"direct": {
+					"prod": 0,
+					"dev": 2
+				},
+				"transitive": {
+					"prod": 0,
+					"all": 58
+				}
+			},
+			"webapp": {
+				"direct": {
+					"prod": 33,
+					"dev": 47
+				},
+				"transitive": {
+					"prod": 224,
+					"all": 1248
+				}
+			}
+		}
+	},
+	"docker/agents/pi/pnpm-lock.yaml": {
+		"packages": 176,
+		"importers": {
+			".": {
+				"direct": {
+					"prod": 1,
+					"dev": 1
+				},
+				"transitive": {
+					"prod": 155,
+					"all": 176
+				}
+			}
+		}
+	},
+	"docker/agents/practice-scripts/pnpm-lock.yaml": {
+		"packages": 65,
+		"importers": {
+			".": {
+				"direct": {
+					"prod": 11,
+					"dev": 0
+				},
+				"transitive": {
+					"prod": 65,
+					"all": 65
+				}
+			}
+		}
+	}
+}

@@ -391,6 +391,7 @@ jobs:
               - 'opencode.json'
               - '.github/renovate.json'
               - 'security/scorecard-baseline.json'
+              - 'security/dependency-baseline.json'
               - 'project.code-workspace'
               - '.vscode/settings.json'
             # Select Windows early for paths outside the excluded trees and instruction files.

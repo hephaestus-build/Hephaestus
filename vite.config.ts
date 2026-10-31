@@ -112,6 +112,7 @@ const policyGates = [
 	"gate:runner-contract",
 	"gate:lint-contract",
 	"gate:agent-runtime-pins",
+	"gate:dependency-baseline",
 	"gate:changesets",
 	"gate:instructions",
 	"gate:prose",
@@ -242,6 +243,7 @@ export default defineConfig({
 			"gate:runner-contract": run("node --test scripts/check-runner-contract.ts"),
 			"gate:lint-contract": run("node --test scripts/check-lint-contract.ts"),
 			"gate:agent-runtime-pins": cached("node scripts/check-agent-runtime-pins.ts"),
+			"gate:dependency-baseline": cached("node scripts/check-dependency-baseline.ts"),
 			"gate:env": run(
 				"node scripts/check-env-defaults.ts && node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts scripts/self-host-setup.test.ts",
 			),
