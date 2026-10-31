@@ -117,8 +117,8 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                         LlmCallClass.EVENT,
                         new LlmCallPermits.Caller(2, UUID.randomUUID(), 0, null),
                         () -> false,
-                        lastRenewal.plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
-                    Duration age = Duration.between(lastRenewal, Instant.now());
+                        Instant.now().plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
+                    Duration age = Duration.between(lastRenewal, databaseNow());
                     assertThat(age).isGreaterThanOrEqualTo(PROPERTIES.permitLease());
                     assertThat(age).isLessThan(PROPERTIES.permitLease().plusSeconds(3));
                     assertThat(rows.countActive(poolId)).isEqualTo(1);
@@ -137,6 +137,11 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 survivor.stop();
             }
         }
+    }
+
+    private Instant databaseNow() {
+        return Objects.requireNonNull(jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                .toInstant();
     }
 
     private Instant renewedAt(long poolId) {
