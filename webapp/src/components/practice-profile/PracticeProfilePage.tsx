@@ -22,7 +22,11 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { newestFirst } from "./practice-feedback-cards";
 import { FeedbackEmpty, type FeedbackEmptyProps } from "./practice-profile-blocks";
 import { FEEDBACK_TABS, type FeedbackTab, type PracticeTab } from "./practice-profile-search";
-import { PRACTICE_PROFILE_INTRO, PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
+import {
+	PRACTICE_PROFILE_INTRO,
+	PRACTICE_PROFILE_TITLE,
+	PracticeProfilePageHeader,
+} from "./PracticeProfilePageHeader";
 import { firstRunApplies, ProfileFirstRun, type ProfileFirstRunProps } from "./ProfileFirstRun";
 
 export interface PracticeProfilePageProps {
@@ -125,7 +129,7 @@ export function PracticeProfilePage({
 	if (state.status === "error") {
 		return (
 			<div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-				<PageHeader title="Practice profile" description={PRACTICE_PROFILE_INTRO} />
+				<PageHeader title={PRACTICE_PROFILE_TITLE} description={PRACTICE_PROFILE_INTRO} />
 				<QueryErrorAlert
 					error={state.error}
 					title="We could not load your practices"

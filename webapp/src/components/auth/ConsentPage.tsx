@@ -83,8 +83,9 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 	const answered = !asksAboutResearch || answer !== undefined;
 	const ready = state.status === "ready" && !stale && termsAccepted && answered;
 
-	// Hephaestus narrates, and only Hephaestus is a live region. The footer hint says the same thing factually
-	// and reaches the button through `aria-describedby`, so focusing the button does not replay it.
+	// Hephaestus narrates, and only Hephaestus is a live region. The footer hint says the same thing
+	// factually and reaches the button through `aria-describedby`, so focusing the button does not
+	// replay it.
 	function narrate() {
 		if (state.status === "loading") {
 			return "One moment while I fetch your setup.";
