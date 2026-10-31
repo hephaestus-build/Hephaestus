@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { expectSettledVisible } from "@/stories/overlay";
 
@@ -65,7 +65,10 @@ export const Open: Story = {
 		const legend = within(region);
 		// It opens at its top, so the first group is in view and no term's tooltip shows.
 		await expectSettledVisible(legend.getByRole("heading", { name: "How to read the trace" }));
-		await expect(legend.getByRole("heading", { name: "How to read the trace" })).toHaveFocus();
+		// Base UI moves the initial focus after the popup mounts, not in the same frame.
+		await waitFor(async () => {
+			await expect(legend.getByRole("heading", { name: "How to read the trace" })).toHaveFocus();
+		});
 		for (const group of [
 			"Stages",
 			"Steps",

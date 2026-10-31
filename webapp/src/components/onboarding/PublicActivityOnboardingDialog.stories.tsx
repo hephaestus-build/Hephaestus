@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, within } from "storybook/test";
+import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { withProvider, withStandardPage } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
@@ -43,8 +43,11 @@ export const Default: Story = {
 		const hide = step.getByRole("button", { name: "Hide me" });
 		await expect(show).not.toHaveFocus();
 		await expect(hide).not.toHaveFocus();
-		// Focus is on the dialog, announced with its title and text, so no ring marks the title.
-		await expect(screen.getByRole("alertdialog")).toHaveFocus();
+		// Focus is on the dialog, announced with its title and text, so no ring marks the title. Base UI
+		// moves it there after the dialog mounts, not in the same frame.
+		await waitFor(async () => {
+			await expect(screen.getByRole("alertdialog")).toHaveFocus();
+		});
 		await expect(show.getBoundingClientRect().width).toBeCloseTo(
 			hide.getBoundingClientRect().width,
 			0,

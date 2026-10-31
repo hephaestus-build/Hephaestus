@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
@@ -55,7 +55,10 @@ export const FocusesTheFirstAnswer: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expectSettledVisible(dialog.getByRole("progressbar"));
-		await expect(dialog.getByRole("radio", { name: "1" })).toHaveFocus();
+		// Base UI moves the initial focus after the popup mounts, not in the same frame.
+		await waitFor(async () => {
+			await expect(dialog.getByRole("radio", { name: "1" })).toHaveFocus();
+		});
 	},
 };
 

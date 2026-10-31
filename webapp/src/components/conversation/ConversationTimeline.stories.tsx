@@ -412,38 +412,56 @@ export const WaitingForCapacity: Story = {
 	},
 };
 
+/** How far the view is from the end of the conversation. */
+const fromEnd = (viewport: HTMLElement) =>
+	viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+
 /**
- * Presses Next and checks that `row` took the change in place while the view stayed where the reader
- * was: the scroller sees no new row, so it has nothing to scroll to. `anchor` is the sent question
- * that the opening view puts at its peek. The scroller settles the opening view over a few frames,
- * and can pass the peek on its way, so the view is read only once it holds still at the peek.
+ * Waits until the view holds still: its scroll position and its content height are the same over two
+ * frames. The scroller settles over several frames: each resize makes it reanchor on the next one.
+ */
+async function viewHeldStill(viewport: HTMLElement) {
+	await waitFor(async () => {
+		const before = [viewport.scrollTop, viewport.scrollHeight];
+		await nextFrame();
+		await nextFrame();
+		await expect([viewport.scrollTop, viewport.scrollHeight]).toStrictEqual(before);
+	});
+}
+
+/**
+ * Where the conversation opens: at the end when its last turn fits in the view, or with that turn's
+ * question at its peek, so that a long answer is read from its start.
+ */
+type Opening = { at: "end" } | { at: "peek"; question: HTMLElement };
+
+/**
+ * Checks the opening view, presses Next, and checks that `row` took the change in place while the view
+ * stayed where the reader was: the view never follows the stream, so a row that grows does not move
+ * what the reader sees. The view is read only once it holds still, before the change and after it.
  */
 async function expectViewKept(
 	viewport: HTMLElement,
 	row: HTMLElement,
+	opening: Opening,
 	pressNext: () => Promise<void>,
 	changed: () => Promise<void>,
-	anchor?: HTMLElement,
 ) {
 	await waitFor(async () => {
 		await expect(viewport.scrollTop).toBeGreaterThan(0);
 	});
-	if (anchor !== undefined) {
-		await waitFor(async () => {
-			const settledTop = viewport.scrollTop;
-			await nextFrame();
-			await nextFrame();
-			await expect(viewport.scrollTop).toBe(settledTop);
-			const anchorOffset =
-				anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
-			await expect(Math.round(anchorOffset)).toBe(PEEK);
-		});
+	await viewHeldStill(viewport);
+	if (opening.at === "end") {
+		await expect(fromEnd(viewport), "distance from the end at opening").toBeLessThanOrEqual(1);
+	} else {
+		const questionOffset =
+			opening.question.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+		await expect(Math.round(questionOffset)).toBe(PEEK);
 	}
 	const rowOffset = row.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
 	await pressNext();
 	await waitFor(changed);
-	await nextFrame();
-	await nextFrame();
+	await viewHeldStill(viewport);
 	await expect(row).toBeVisible();
 	const nextOffset = row.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
 	await expect(Math.abs(nextOffset - rowOffset)).toBeLessThanOrEqual(1);
@@ -472,8 +490,166 @@ export const SentMessageStored: Story = {
 		await expectViewKept(
 			canvas.getByRole("region", { name: "Your conversation" }),
 			row,
+			{ at: "end" },
 			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
 			async () => expect(row).toHaveAttribute("data-message-id", STORED.id),
+		);
+	},
+};
+
+/**
+ * The last question and its short answer fit in the view together, so the conversation opens at the
+ * end. As 10rem placeholders, the two rows would not fit, and the view would open at the question.
+ * The timeline renders its rows while the view opens, so the opening rests on their real height.
+ */
+export const OpensAtTheEndWhenTheLastTurnFits: Story = {
+	args: {
+		state: ready({
+			entries: [
+				...BEFORE_FOLLOW_UP,
+				FOLLOW_UP,
+				entry({
+					id: "e1000000-0000-4000-8000-000000000010",
+					kind: "HEPH",
+					text: "Yes, the cache keeps its entries for a day.",
+					turnId: FOLLOW_UP.turnId,
+					createdAt: FOLLOW_UP.createdAt,
+				}),
+			],
+		}),
+	},
+	decorators: SHORT_VIEW,
+	play: async ({ canvas }) => {
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
+		await waitFor(async () => {
+			await expect(viewport.scrollTop).toBeGreaterThan(0);
+		});
+		await viewHeldStill(viewport);
+		await expect(fromEnd(viewport)).toBeLessThanOrEqual(1);
+		const question = rowOf(canvas.getByText(FOLLOW_UP.text));
+		await expect(question).toBeVisible();
+		// The rows above the question render only while the view opens, then skip rendering again
+		// when away from the view, and keep their real height.
+		const rows = [...viewport.querySelectorAll<HTMLElement>("[data-slot='message-scroller-item']")];
+		const above = rows.slice(0, rows.indexOf(question));
+		await waitFor(async () => {
+			await expect(above.map((row) => getComputedStyle(row).contentVisibility)).toStrictEqual(
+				above.map(() => "auto"),
+			);
+		});
+		await viewHeldStill(viewport);
+		await expect(fromEnd(viewport)).toBeLessThanOrEqual(1);
+	},
+};
+
+/** Many short replies, then a last question and its short answer. */
+const REPLIES = Array.from({ length: 60 }, (_, index) =>
+	entry({
+		id: `e2000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+		kind: "HEPH",
+		text: `Reply ${index + 1}: the cache keeps its entries for a day.`,
+	}),
+);
+const AFTER_REPLIES = [
+	...REPLIES,
+	entry({
+		id: "e2000000-0000-4000-8000-000000000100",
+		kind: "USER",
+		text: "Does that hold for the staging cache too?",
+		turnId: "t2000000-0000-4000-8000-000000000100",
+	}),
+	entry({
+		id: "e2000000-0000-4000-8000-000000000101",
+		kind: "HEPH",
+		text: "Yes, it does.",
+		turnId: "t2000000-0000-4000-8000-000000000100",
+	}),
+];
+const LINKED_REPLY = REPLIES[20];
+
+/** Opens on a linked message, then drops the link once the story presses Next, as opening a thread does. */
+function LinkDropped({ jumpTo, ...props }: ConversationTimelineProps) {
+	const [linked, setLinked] = useState(true);
+	return (
+		<div className="flex h-full flex-col">
+			<Button variant="outline" onClick={() => setLinked(false)}>
+				Next
+			</Button>
+			<div className="min-h-0 flex-1">
+				<ConversationTimeline {...props} jumpTo={linked ? jumpTo : undefined} />
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The view opened on a linked message stays where the reader is when the link goes away, as when they
+ * open a thread beside the conversation.
+ */
+export const LinkDroppedKeepsPlace: Story = {
+	args: { jumpTo: LINKED_REPLY?.id, state: ready({ entries: AFTER_REPLIES }) },
+	render: (args) => <LinkDropped {...args} />,
+	decorators: SHORT_VIEW,
+	play: async ({ canvas, userEvent }) => {
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
+		const row = rowOf(await canvas.findByText(LINKED_REPLY?.text ?? ""));
+		const offset = () => row.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+		await waitFor(async () => {
+			await expect(Math.abs(offset())).toBeLessThan(2);
+		});
+		await viewHeldStill(viewport);
+		const before = offset();
+		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
+		await nextFrame();
+		await viewHeldStill(viewport);
+		await expect(Math.abs(offset() - before)).toBeLessThanOrEqual(1);
+	},
+};
+
+/**
+ * A long answer is read from its start: its question opens at its peek. When the answer is stored and
+ * its row grows below the fold, what the reader sees stays where it was.
+ */
+export const LongAnswerStoredWhileReadingItsStart: Story = {
+	render: (args) => (
+		<Transition
+			{...args}
+			before={ready({
+				entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP],
+				turns: [
+					turn({
+						id: FOLLOW_UP.turnId ?? "",
+						status: "RUNNING",
+						partial: { activity: "WRITING", stage: "Thinking…", text: wordsOf(180) },
+					}),
+				],
+			})}
+			after={ready({
+				entries: [
+					...BEFORE_FOLLOW_UP,
+					FOLLOW_UP,
+					entry({
+						id: "e1000000-0000-4000-8000-000000000009",
+						kind: "HEPH",
+						text: wordsOf(220),
+						turnId: FOLLOW_UP.turnId,
+						createdAt: FOLLOW_UP.createdAt,
+					}),
+				],
+			})}
+		/>
+	),
+	decorators: SHORT_VIEW,
+	play: async ({ canvas, userEvent }) => {
+		const question = rowOf(await canvas.findByText(FOLLOW_UP.text));
+		await expectViewKept(
+			canvas.getByRole("region", { name: "Your conversation" }),
+			question,
+			{ at: "peek", question },
+			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
+			async () => {
+				await canvas.findByText(wordsOf(220));
+			},
 		);
 	},
 };
@@ -788,9 +964,9 @@ export const FollowUpQueued: Story = {
 		await expectViewKept(
 			canvas.getByRole("region", { name: "Your conversation" }),
 			row,
+			{ at: "end" },
 			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
 			async () => expect(row).toHaveTextContent("Queued. This is answered next."),
-			row,
 		);
 	},
 };
@@ -811,9 +987,9 @@ export const AnswerStored: Story = {
 		await expectViewKept(
 			canvas.getByRole("region", { name: "Your conversation" }),
 			row,
+			{ at: "end" },
 			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
 			async () => expect(row).toHaveTextContent("What made you pick the time-based cache?"),
-			rowOf(canvas.getByText(FOLLOW_UP.text)),
 		);
 	},
 };
