@@ -12,6 +12,7 @@ import { act, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, vi } from "vitest";
 
+import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
@@ -96,6 +97,8 @@ export function renderRouteAtWithRouter(
 		routeTree,
 		history: createMemoryHistory({ initialEntries: Array.isArray(path) ? path : [path] }),
 		context: { queryClient, auth: undefined },
+		// As `main.tsx` sets it, so a test sees what a slow navigation shows.
+		defaultPendingComponent: PageSkeleton,
 	});
 	rendered.add(router);
 	render(

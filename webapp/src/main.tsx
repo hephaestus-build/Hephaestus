@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 
 import { client } from "@/api/client.gen";
+import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import environment from "@/environment";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { csrfFetch } from "@/runtime/auth/csrf";
@@ -57,6 +58,10 @@ const router = createRouter({
 	defaultStructuralSharing: true,
 	defaultPreloadStaleTime: 0,
 	defaultErrorComponent: RouteError,
+	// A route renders nothing of its own while it loads, so without a default a slow navigation keeps
+	// the previous page on screen under the new address. After `defaultPendingMs` the page area shows
+	// a skeleton instead, and the layout around it stays.
+	defaultPendingComponent: PageSkeleton,
 });
 
 installPasskeyChallenge(router);
