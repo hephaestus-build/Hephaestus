@@ -66,7 +66,8 @@ We measured the sizes on 2026-10-31 with esbuild 0.25 (ESM, minified, gzip -9, R
    The browser sends no `traceparent`, so the server keeps its sampling decision ([OpenTelemetry samplers](https://opentelemetry.io/docs/specs/otel/trace/sdk/#parentbased)).
 3. **Signals carry no content and no direct identifiers, and labels are closed sets.**
    A browser report has closed values only, with one exception: the trace id of a failed request.
-   The server checks that id as 32 lowercase hexadecimal characters, and writes it to the log record only, never to a metric label.
+   The server accepts only 32 lowercase hexadecimal characters for that id.
+   It writes the id to the log record, never to a metric label.
    A report has no address, query string, error message, component stack, user agent, person id or workspace id.
    The server validates each other value against its closed set before it writes a log record.
 4. **Source maps come from the build that is shipped, and are never served.**
@@ -88,7 +89,8 @@ The browser fault reporter, the reference on error views, and the source map out
 
 ## Consequences
 
-- The reporter is the web app's own code. If the web app's entry script itself does not load, it sends no report. That failure shows only in the access log of the server that serves the web app, and in the reader's report.
+- The reporter is the web app's own code. If the entry script does not load, no report is sent.
+  That failure shows only in the web server's access log and in the reader's complaint.
 - The web app adds no runtime package for browser faults.
 - An operator gets browser faults in the log store and the Prometheus that they already run.
 - There is no issue UI with grouping, assignment or regression tracking. A log query and an alert replace it.
