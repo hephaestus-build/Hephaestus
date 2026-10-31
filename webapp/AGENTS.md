@@ -23,9 +23,9 @@ It omits conventions that the tree or a lint message at the call site already ex
 
 ## Ask first
 
-Ask before you add a UI library dependency, add a global style, or change `src/components/ui/` (below).
+Ask before you add a dependency, add a global style, or change `src/components/ui/` (below).
 Each is easy to add and expensive to reverse.
-None has a gate.
+A new dependency meets the bar in `docs/contributor/dependencies.md`.
 
 ## `src/components/ui/` is a registry install, not a directory you own
 

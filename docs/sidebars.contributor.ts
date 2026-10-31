@@ -96,6 +96,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				"ci-cd",
 				"supply-chain-security",
+				"dependencies",
 				"add-a-ci-service",
 				"recover-the-chromatic-baseline",
 				"release-management",
