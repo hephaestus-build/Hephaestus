@@ -14,6 +14,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { withAnimationTime } from "@/stories/animation-time";
 import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
@@ -405,6 +406,8 @@ export const DismissedLevelDoesNotComeBack: Story = {
  */
 export const LevelSwappedInWhileClosingOpens: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
+	// The decision lands inside the exit, so the exit needs its own time.
+	decorators: [withAnimationTime()],
 	render: (args) => (
 		<Stateful initial={args.stack}>
 			{(stack, setStack) => (

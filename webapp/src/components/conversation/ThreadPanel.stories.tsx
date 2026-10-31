@@ -4,6 +4,7 @@ import { useState } from "react";
 import { expect, fn, screen, waitFor, within } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
+import { withAnimationTime } from "@/stories/animation-time";
 import { expectSettledVisible } from "@/stories/overlay";
 
 import { ConversationComposer } from "./ConversationComposer";
@@ -142,7 +143,8 @@ export const NotMeasuredYet: Story = {
  * collapsed to its icons. Only a region that leaves the conversation 24rem beside the 26rem column
  * gets the column, whatever the window: this canvas is 1440px wide. A drawer still closes with
  * Close, and leaves as every drawer does before the page drops the thread: its exit, a fade under
- * reduced motion, is still running when Close returns.
+ * reduced motion, is still running when Close returns. That exit needs its own time, so these stories
+ * opt out of the suite's zero animation time.
  */
 const opensAsDrawer: Story["play"] = async ({ args, userEvent }) => {
 	const panel = await screen.findByRole("dialog", { name: "Thread" });
@@ -157,13 +159,25 @@ const opensAsDrawer: Story["play"] = async ({ args, userEvent }) => {
 };
 
 /** 820px, sidebar open: 564px (35.25rem) for both, a column would leave the conversation 148px. */
-export const TabletSidebarOpen: Story = { args: { availableRem: 35.25 }, play: opensAsDrawer };
+export const TabletSidebarOpen: Story = {
+	args: { availableRem: 35.25 },
+	decorators: [withAnimationTime()],
+	play: opensAsDrawer,
+};
 
 /** 820px, sidebar as icons: 772px (48.25rem), a column would leave the conversation 356px. */
-export const TabletSidebarCollapsed: Story = { args: { availableRem: 48.25 }, play: opensAsDrawer };
+export const TabletSidebarCollapsed: Story = {
+	args: { availableRem: 48.25 },
+	decorators: [withAnimationTime()],
+	play: opensAsDrawer,
+};
 
 /** 1000px, sidebar open: 744px (46.5rem), a column would leave the conversation 328px. */
-export const LaptopSidebarOpen: Story = { args: { availableRem: 46.5 }, play: opensAsDrawer };
+export const LaptopSidebarOpen: Story = {
+	args: { availableRem: 46.5 },
+	decorators: [withAnimationTime()],
+	play: opensAsDrawer,
+};
 
 type PlayUser = Parameters<NonNullable<Story["play"]>>[0]["userEvent"];
 
@@ -205,7 +219,10 @@ export const DrawerReplyReturnsFocus: Story = {
 		await userEvent.click(opener);
 		const panel = await screen.findByRole("dialog", { name: "Thread" });
 		await expectSettledVisible(panel);
-		await expect(within(panel).getByRole("textbox", { name: "Reply in thread" })).toHaveFocus();
+		// Base UI moves the initial focus after the popup mounts, not in the same frame.
+		await waitFor(async () => {
+			await expect(within(panel).getByRole("textbox", { name: "Reply in thread" })).toHaveFocus();
+		});
 		await userEvent.click(within(panel).getByRole("button", { name: "Close thread" }));
 		await waitFor(async () => {
 			await expect(args.onClose).toHaveBeenCalledOnce();
@@ -303,6 +320,7 @@ function largerText() {
  */
 export const LargerText: Story = {
 	beforeEach: largerText,
+	decorators: [withAnimationTime()],
 	render: (args) => <DrawnRegion {...args} className="w-[952px]" pixels={952} />,
 	play: opensAsDrawer,
 };
