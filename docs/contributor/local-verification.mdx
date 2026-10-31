@@ -4,11 +4,12 @@ title: Local verification
 
 # Local verification
 
-| Command                 | What success proves                                           | Excludes                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `vp run check:affected` | Selected gates passed, including any tests they contain       | Unselected scopes, verification-only suites and builds, and CI-only checks                                                       |
-| `vp run check`          | Every gate the `quality` task in `vite.config.ts` runs passed | Distributable builds, browser and live-service tests, images, mutation analysis, and release security                            |
-| `vp run verify`         | The local verification suites and builds passed               | Server integration and database tests, full-application E2E, live-service tests, images, mutation analysis, and release security |
+| Command                 | What success proves                                                | Excludes                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `vp run check:affected` | Selected gates passed, including any tests they contain            | Unselected scopes, verification-only suites and builds, and CI-only checks                                                       |
+| `vp run check:push`     | Selected static checks, prose checks and focused unit tests passed | Complete Node suites, Gradle checks and tests, browser suites, builds and live-service tests                                     |
+| `vp run check`          | Every gate the `quality` task in `vite.config.ts` runs passed      | Distributable builds, browser and live-service tests, images, mutation analysis, and release security                            |
+| `vp run verify`         | The local verification suites and builds passed                    | Server integration and database tests, full-application E2E, live-service tests, images, mutation analysis, and release security |
 
 While you work, run `check:affected`.
 Before you push, run `check`.
@@ -45,7 +46,8 @@ The command compares committed, staged, unstaged, untracked, and deleted paths w
 | `server/**/resources/{agent,practices/scripts}/**`, `docker/agents/**`                                                                                                                               | `affected:agents`                     |
 | `docs/**`                                                                                                                                                                                            | `affected:docs`                       |
 | `docs/images/readme/**`                                                                                                                                                                              | `affected:docs` and `affected:webapp` |
-| `.github/**`, `.claude/**`, `.agents/**`, `.changeset/**`, `scripts/**`, `webapp/tools/oxlint/**`, root package and tsconfig files, generated artifacts, `AGENTS.md`, `CLAUDE.md`, or any other path | `quality`                             |
+| `.changeset/*.md` except `README.md` | `affected:changesets`: release-note validation, Markdown lint and prose |
+| `.github/**`, `.claude/**`, `.agents/**`, other `.changeset/**` files, `scripts/**`, `webapp/tools/oxlint/**`, root package and tsconfig files, generated artifacts, `AGENTS.md`, `CLAUDE.md`, or any other path | `quality`                             |
 
 The tasks are defined in `vite.config.ts`. Selection uses `git diff --no-renames`, so both sides of a
 rename are evaluated. Git documents the underlying change statuses in
@@ -69,9 +71,31 @@ A worktree without one has no dispatcher, so Git runs no hook in it.
 `vp hooks status` reports the dispatcher as missing.
 It never falls back to another checkout's `vp` or to one on `PATH`, because that `vp` may not read this worktree's configuration.
 
-The pre-push hook runs `vp run check`.
-`git push --no-verify` skips it. With custom hooks, run
-`vp run check` yourself before pushing.
+The pre-push hook runs `vp run check:push` with one task worker.
+It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
+It does not write source files.
+Run `vp run check` before each push, as required above.
+`git push --no-verify` skips the hook.
+
+For Node, it runs changed test files, existing source companion tests and the CI contract suites for workflow changes.
+This selection does not cover every fixture or resource input.
+The complete Node suites remain in `check` and CI.
+Java formatting, PMD and Java tests remain in the full gate and their test tiers.
+Instruction changes also run the instruction gate.
+The workflow parser and CI linters remain outside the hook.
+
+For frontend source files, Vitest selects related unit tests through its static import graph.
+Shared inputs, deleted files and non-code resources select the complete unit project.
+The extension selects its unit project only.
+Each test runner uses one worker.
+See [Vitest related tests](https://main.vitest.dev/guide/cli#vitest-related) for the import graph limits.
+
+An unknown path or missing merge base selects every scoped check and both frontend unit projects.
+The hook does not fetch, install tools, start a browser or build a distributable artifact.
+If a pinned tool is absent, run `vp run check` to prepare its verified cache.
+The hook reports its selected scope and the suites that still require the full gate or CI.
+It checks the current worktree, its HEAD and pending changes.
+Before you push another local ref, run the full gate on that exact commit.
 
 ## Complete local verification
 

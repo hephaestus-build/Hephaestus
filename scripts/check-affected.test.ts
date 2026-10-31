@@ -309,6 +309,22 @@ await test("maps scopes to the documented commands", () => {
 	]);
 });
 
+await test("release notes select their validation without expanding an unrelated change", () => {
+	assert.deepEqual(scopesFor([".changeset/fix-feedback.md"]), ["changesets"]);
+	assert.deepEqual(scopesFor(["webapp/src/a.tsx", ".changeset/fix-feedback.md"]), [
+		"changesets",
+		"webapp",
+	]);
+	assert.deepEqual(commandsFor(["changesets"]), [["run", "affected:changesets"]]);
+	for (const file of [
+		".changeset/README.md",
+		".changeset/config.json",
+		".changeset/nested/note.md",
+	]) {
+		assert.deepEqual(scopesFor([file]), ["full"], file);
+	}
+});
+
 await test("fails closed for shared, generated, contract, tooling, and unknown inputs", () => {
 	for (const file of [
 		"package.json",

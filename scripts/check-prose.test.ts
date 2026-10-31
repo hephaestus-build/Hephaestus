@@ -155,6 +155,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		assert.ok(address !== null && typeof address !== "string");
 		const options = {
 			cache,
+			allowDownload: true,
 			version: "test",
 			asset,
 			url: `http://127.0.0.1:${address.port}/`,
@@ -163,8 +164,10 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		const source = `
 			import { installValeBinary } from ${JSON.stringify(new URL("lib/vale.ts", import.meta.url).href)};
 			const [cache, version, name, sha256, url] = process.argv.slice(1);
-			console.log(await installValeBinary({ cache, version, asset: { name, sha256 }, url, windows: true }));
+			console.log(await installValeBinary({ cache, version, asset: { name, sha256 }, url, windows: true, allowDownload: true }));
 		`;
+		await assert.rejects(installValeBinary({ ...options, allowDownload: false }), /is not cached/u);
+		assert.equal(downloads, 0);
 		const results = await Promise.all(
 			Array.from({ length: workers }, async () =>
 				output(
@@ -206,7 +209,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		const entries = await readdir(cache);
 		assert.deepEqual(entries.toSorted(), directories);
 		const before = await stat(binary);
-		assert.equal(await installValeBinary(options), binary);
+		assert.equal(await installValeBinary({ ...options, allowDownload: false }), binary);
 		const after = await stat(binary);
 		assert.equal(after.ino, before.ino);
 		assert.equal(after.mtimeMs, before.mtimeMs);
