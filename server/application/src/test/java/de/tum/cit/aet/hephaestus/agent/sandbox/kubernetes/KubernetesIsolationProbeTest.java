@@ -1,8 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
+import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
+import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.StatusBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
@@ -13,6 +23,8 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -33,7 +45,8 @@ class KubernetesIsolationProbeTest {
     private @Nullable KubernetesMockServer server;
     private @Nullable KubernetesClient client;
 
-    private static final String CONFINED = "\"token\":false,\"rootWritable\":false,\"uid\":1000";
+    private static final String CONFINED =
+            "\"token\":false,\"rootWritable\":false,\"uid\":1000,\"uidMap\":\"0 1879048192 65536\"";
 
     private static JsonNode line(String json) {
         JsonNode parsed = KubernetesIsolationProbe.parse(json);
@@ -62,7 +75,7 @@ class KubernetesIsolationProbeTest {
     @Test
     void shouldFailAPodWithATokenAWritableRootOrTheRootUser() {
         JsonNode result = line("{\"reached\":{\"gateway\":true,\"Kubernetes API\":false},"
-                + "\"token\":true,\"rootWritable\":true,\"uid\":0}");
+                + "\"token\":true,\"rootWritable\":true,\"uid\":0,\"uidMap\":\"0 1879048192 65536\"}");
 
         assertThat(KubernetesIsolationProbe.judge("the review probe Pod", TARGETS, result))
                 .containsExactly(
@@ -97,9 +110,119 @@ class KubernetesIsolationProbeTest {
                 .isTrue();
         assertThat(KubernetesIsolationProbe.ownUserNamespace(line("{\"uidMap\":\"0 0 4294967295\"}")))
                 .isFalse();
+        assertThat(KubernetesIsolationProbe.ownUserNamespace(line("{\"uidMap\":\"\"}")))
+                .isFalse();
         assertThat(KubernetesIsolationProbe.ownUserNamespace(line("{\"uidMap\":null}")))
                 .isFalse();
         assertThat(KubernetesIsolationProbe.ownUserNamespace(null)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"private", "host", "image-pull"})
+    void shouldRequireAPrivateUserMappingAtStartupAndInvalidateAPreviousProof(String outcome) {
+        boolean privateMapping = "private".equals(outcome);
+        boolean imagePull = "image-pull".equals(outcome);
+        Objects.requireNonNull(server)
+                .expect()
+                .post()
+                .withPath(PODS)
+                .andReturn(
+                        403,
+                        new StatusBuilder()
+                                .withCode(403)
+                                .withMessage("violates PodSecurity \"restricted:latest\"")
+                                .build())
+                .once();
+        KubernetesClient api = Objects.requireNonNull(client);
+        var worker = KubernetesFixtures.worker(SANDBOXES);
+        var previous = new KubernetesIsolationProbe.Proof(Instant.EPOCH, List.of(), true, "", 248);
+        worker.proved(previous);
+        var pods = spy(new KubernetesPods(api, worker, 10, ImagePullPolicy.IF_NOT_PRESENT));
+        var completed = new PodBuilder()
+                .withNewStatus()
+                .withPhase("Succeeded")
+                .withContainerStatuses(new ContainerStatusBuilder()
+                        .withName(KubernetesPods.RUNTIME)
+                        .withNewState()
+                        .withNewTerminated()
+                        .withExitCode(0)
+                        .endTerminated()
+                        .endState()
+                        .build())
+                .endStatus()
+                .build();
+        doAnswer(call -> {
+                    String name = call.getArgument(0);
+                    if (imagePull) {
+                        var pending = new PodBuilder()
+                                .withNewSpec()
+                                .withNodeName("sandbox-node")
+                                .endSpec()
+                                .withNewStatus()
+                                .addNewCondition()
+                                .withType("PodReadyToStartContainers")
+                                .withStatus("True")
+                                .endCondition()
+                                .withContainerStatuses(new ContainerStatusBuilder()
+                                        .withName(KubernetesPods.RUNTIME)
+                                        .withNewState()
+                                        .withNewWaiting()
+                                        .withReason("ImagePullBackOff")
+                                        .endWaiting()
+                                        .endState()
+                                        .build())
+                                .endStatus()
+                                .build();
+                        return new KubernetesPods.Waited(true, pending);
+                    }
+                    return !privateMapping && name.contains("-review-")
+                            ? new KubernetesPods.Waited(true, null)
+                            : new KubernetesPods.Waited(false, completed);
+                })
+                .when(pods)
+                .waitFor(anyString(), any(), any());
+        doAnswer(call -> {
+                    String name = call.getArgument(0);
+                    return "{\"reached\":{\"gateway\":" + name.contains("-review-")
+                            + ",\"worker management port\":false,\"Kubernetes API\":false,\"DNS server\":false},"
+                            + "\"token\":false,\"rootWritable\":false,\"uid\":1000,\"uidMap\":\""
+                            + (privateMapping ? "0 1879048192 65536" : "0 0 4294967295")
+                            + "\"}";
+                })
+                .when(pods)
+                .logs(anyString(), anyString());
+        var jobs = mock(KubernetesSandboxJobs.class);
+        when(jobs.job(any(), anyLong())).thenCallRealMethod();
+        when(jobs.awaitPod(anyString(), any(), any()))
+                .thenAnswer(call -> new PodBuilder()
+                        .withNewMetadata()
+                        .withName((String) call.getArgument(0))
+                        .endMetadata()
+                        .build());
+        var probe = new KubernetesIsolationProbe(api, pods, jobs, worker, "agent", 9090);
+
+        if (imagePull) {
+            assertThat(probe.prove()).isSameAs(previous);
+            assertThat(worker.isolated()).isTrue();
+        } else if (privateMapping) {
+            assertThat(probe.prove().passed()).isTrue();
+            assertThat(worker.isolated()).isTrue();
+        } else {
+            assertThatThrownBy(probe::prove)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("must support user namespaces");
+            assertThat(worker.isolated()).isFalse();
+            assertThat(Objects.requireNonNull(worker.proof()).failures())
+                    .hasSize(2)
+                    .anySatisfy(failure -> assertThat(failure).contains("no private user mapping"));
+        }
+    }
+
+    @Test
+    void shouldRejectAProofWithoutUserNamespacesEvenWithAnIsolatingRuntime() {
+        var proof = new KubernetesIsolationProbe.Proof(Instant.EPOCH, List.of(), false, "gvisor", 243);
+
+        assertThat(proof.passed()).isFalse();
     }
 
     @Test

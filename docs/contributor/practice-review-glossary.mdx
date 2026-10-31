@@ -164,7 +164,7 @@ The same name is the source capture code that causes it.
 | **Turn sandbox**               | The sandbox that holds the context folder of a conversation for one turn attempt, with no network and no credentials. | TurnSandboxes               |
 | **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | worker.sandbox.namespace       |
 | **Isolation probe**            | A worker's check, with real Pods, that the cluster holds the sandbox boundary. No sandbox starts while it fails. | KubernetesIsolationProbe |
-| **Isolation tier**             | What the isolation probe records without gating: the runtime class, user namespaces and the process limit. | sandbox.isolation.*     |
+| **Isolation tier**             | The runtime class and process limit that the isolation probe records. User namespaces are required by the sandbox boundary. | sandbox.isolation.*     |
 | **Runtime attempt**            | One attempt of a review job or of a conversation turn, with one lease, one attempt token and writes fenced on the lease. | planned: AttemptJwt |
 | **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token, and a tools container without one. | planned                |
 | **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one conversation turn attempt, with no token and no egress. | planned             |

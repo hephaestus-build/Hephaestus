@@ -73,21 +73,19 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the three Pods of one isolation probe run count what the table says")
-    void shouldMatchTheTableWhenTheProbeRunsItsThreePods() throws IOException {
+    @DisplayName("the two Pods of one isolation probe run count what the table says")
+    void shouldMatchTheTableWhenTheProbeRunsItsTwoPods() throws IOException {
         Duration time = Duration.ofMinutes(2);
         Function<Long, Pod> probe = memory -> pods.probePod(
                 workload(KubernetesWorker.KIND_REVIEW),
                 List.of("node"),
                 new ResourceLimits(memory, 0.5, 256, time),
-                time.toSeconds(),
-                true);
+                time.toSeconds());
 
         assertCounts(
                 "isolationProbe",
                 List.of(
                         probe.apply(KubernetesIsolationProbe.TRIAL_MEMORY),
-                        probe.apply(KubernetesIsolationProbe.PROBE_MEMORY),
                         probe.apply(KubernetesIsolationProbe.PROBE_MEMORY)));
     }
 
