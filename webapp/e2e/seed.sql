@@ -111,9 +111,11 @@ CROSS JOIN (VALUES
 WHERE p.type = 'GITHUB' AND p.server_url = 'https://github.com'
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO account (id, display_name, status, created_at, updated_at)
-VALUES (940001, 'E2E River', 'UNCLAIMED', now(), now()),
-  (940002, 'E2E Hidden', 'UNCLAIMED', now(), now())
+-- Both chose to show on public pages: a member who has not answered is hidden, and E2E Hidden must
+-- stay off the page because an admin hid them, not because of that default.
+INSERT INTO account (id, display_name, status, created_at, updated_at, public_activity_visible)
+VALUES (940001, 'E2E River', 'UNCLAIMED', now(), now(), true),
+  (940002, 'E2E Hidden', 'UNCLAIMED', now(), now(), true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO identity (account_id, provider_id, provider_user_key, linked_via, linked_at)
@@ -123,8 +125,8 @@ CROSS JOIN (VALUES (940001, '930001'), (940002, '930002')) AS fixture(account_id
 WHERE p.type = 'GITHUB' AND p.server_url = 'https://github.com'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO membership (workspace_id, account_id, role, hidden)
-VALUES (9, 940001, 'MEMBER', false), (9, 940002, 'MEMBER', true)
+INSERT INTO membership (workspace_id, account_id, role, hidden, public_activity_seen)
+VALUES (9, 940001, 'MEMBER', false, true), (9, 940002, 'MEMBER', true, true)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO repository (id, native_id, provider_id, created_at, updated_at, html_url, is_archived, is_disabled,
