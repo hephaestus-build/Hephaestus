@@ -97,6 +97,12 @@ pnpm's `minimumReleaseAge` in `pnpm-workspace.yaml` still applies to a version t
 A fix younger than that age opens as a pull request with a failed lockfile update.
 To take it earlier, a maintainer adds the version to `minimumReleaseAgeExclude`.
 
+CI verifies every locked entry against these policies, so a lockfile that bypassed them locally fails there.
+That install also applies pnpm's `trustPolicy`. It fails when a version younger than 30 days has less publish evidence than an earlier one, such as no provenance after trusted publishing.
+`pnpm-workspace.yaml` says why the trust policy applies only in CI.
+If it fails, compare the version's publisher and contents with the previous release before you trust it.
+If the version is a legitimate release, a maintainer adds it to `trustPolicyExclude` in `pnpm-workspace.yaml`, with a comment that gives the evidence.
+
 Lockfile maintenance runs on Mondays. `.github/renovate.json` owns the managed ecosystems and extraction
 rules. `scripts/renovate-config.test.ts` exercises each custom manager against its source.
 
