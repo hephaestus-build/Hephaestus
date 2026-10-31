@@ -123,7 +123,10 @@ const state = () => read('state');
 const option = flag => args[args.indexOf(flag) + 1];
 const write = (name, value) => fs.writeFileSync(path.join(store, name), JSON.stringify(value));
 fs.appendFileSync(process.env.CALL_LOG, JSON.stringify([tool, ...args]) + '\n');
-if (tool === 'gh') {
+if (tool === 'git') {
+  if (args[0] === 'grep' && args.includes(read('manifest.json').commit)) process.exit(1);
+  throw new Error('Unexpected git command');
+} else if (tool === 'gh') {
   if (args[0] === 'attestation') {
     // The chart package has no release attestation in this scenario; images keep theirs.
     if (process.env.CHART_ATTESTATION_MISSING === 'true' && args[2].endsWith('.tgz')) { console.error('no matching attestations found'); process.exit(1); }
@@ -265,7 +268,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 	await symlink(path.join(root, "deploy"), path.join(directory, "deploy"), "dir");
 	const json = async (name: string, value: unknown) =>
 		writeFile(path.join(archive, name), JSON.stringify(value));
-	for (const tool of ["gh", "cosign", "docker", "helm"]) {
+	for (const tool of ["gh", "cosign", "docker", "helm", "git"]) {
 		await writeFile(path.join(bin, tool), transport, { mode: 0o755 });
 	}
 	const environment = {

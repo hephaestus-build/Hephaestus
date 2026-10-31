@@ -98,6 +98,10 @@ Shipped code is each file under `webapp/src/`, `extension/src/`, `docker/` and `
 Test files, story files, and files in `test/` and `__tests__/` directories are not shipped code.
 In shipped code, a file with an `Owned from:` line in its first 40 lines is owned code.
 Such a file needs a complete header and a component in the release SBOM.
+Run `vp run gate:owned-code` to check these headers before merge.
+
+The gate checks the header structure and npm coordinates.
+Reviewers verify the SPDX expression and the fixed upstream tag or commit.
 
 ## The dependency baseline
 

@@ -803,6 +803,23 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("every shipped-code quality leg admits owned source into the release generator", async () => {
+		const tasks = await loadTasks();
+		for (const leg of [
+			"quality",
+			"ci:server",
+			"ci:tooling",
+			"ci:webapp",
+			"ci:extension",
+			"ci:windows",
+		]) {
+			assert.ok(
+				taskClosure(tasks, [leg]).has("gate:owned-code"),
+				`${leg} must check shipped owned code`,
+			);
+		}
+	});
+
 	void test("every gate belongs to quality or the CI-only inventory", async () => {
 		const tasks = await loadTasks();
 		const reachable = taskClosure(tasks, ["quality"]);
