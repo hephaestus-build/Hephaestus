@@ -1430,6 +1430,12 @@ export function createHephHost(options: HostOptions): HephHost {
 					messages: [...event.messages, situationMessage(context.situation)],
 				}));
 				pi.on("before_provider_request", (event) => breakpointBeforeSituation(event.payload));
+				// Pi checks its threshold before each model request inside the turn. A summary there turns what the
+				// turn just read, or an older turn it splits, into a memory beside the answer in progress. The host
+				// compacts before each prompt instead (compactBeforePrompt, Pi's `manual`); overflow still compacts.
+				pi.on("session_before_compact", (event) =>
+					event.reason === "threshold" ? { cancel: true } : undefined,
+				);
 				pi.on("agent_before_settle", (event) =>
 					event.outcome === "completed"
 						? { entries: staleContextResults(sessionManager.getEntries(), stored) }
