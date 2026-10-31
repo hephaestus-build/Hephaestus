@@ -17,9 +17,17 @@ import { PRACTICE_TREND_DEFS } from "@/components/practice-vocabulary/practice-t
 import { asDate, formatDay } from "@/lib/dates";
 import { capitalise, hasText } from "@/lib/text";
 
-type OverviewInput = Pick<PracticeProfileOverview, "latestReview" | "changes">;
+type OverviewInput = Pick<
+	PracticeProfileOverview,
+	"latestReview" | "changes" | "reviewReadiness" | "activeReview"
+>;
 
-export const EMPTY_OVERVIEW: OverviewInput = { changes: [], latestReview: null };
+export const EMPTY_OVERVIEW: OverviewInput = {
+	changes: [],
+	latestReview: null,
+	reviewReadiness: null,
+	activeReview: null,
+};
 
 export interface ComposedOverview {
 	latestReview?: ProfileReviewRef;

@@ -19,6 +19,15 @@ describe("useSectionOpen", () => {
 		expect(next.result.current[0]).toBe(false);
 	});
 
+	it("starts closed when asked, and remembers an opening for the next visit", () => {
+		const first = renderHook(() => useSectionOpen("test:queue", { defaultOpen: false }));
+		expect(first.result.current[0]).toBe(false);
+		act(() => first.result.current[1](true));
+
+		const next = renderHook(() => useSectionOpen("test:queue", { defaultOpen: false }));
+		expect(next.result.current[0]).toBe(true);
+	});
+
 	it("is always open without a key", () => {
 		const { result } = renderHook(() => useSectionOpen(undefined));
 		expect(result.current[0]).toBe(true);

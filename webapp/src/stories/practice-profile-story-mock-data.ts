@@ -1,4 +1,5 @@
 import type {
+	MemberReviewReadiness,
 	GroupRef,
 	ItemRef,
 	PracticeGroupStanding,
@@ -447,8 +448,17 @@ const REVIEWING_CHANGES: ProfileChange[] = [
 	),
 ];
 
+/** A member whose work Hephaestus reviews when they open a pull request or mark it ready. */
+export const READY_REVIEW_READINESS: MemberReviewReadiness = {
+	blocker: null,
+	events: ["scm.pull_request.opened", "scm.pull_request.ready"],
+	approvalBeforePosting: false,
+};
+
 export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 	latestReview: LATEST_REVIEW,
+	activeReview: null,
+	reviewReadiness: READY_REVIEW_READINESS,
 	reviewedItems: [pullRequest(22)],
 	window: { since: inStoryYear("09-02T09:00"), until: LATEST_REVIEW_AT },
 	changes: [
@@ -513,6 +523,8 @@ export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 
 export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 	latestReview: LATEST_REVIEW,
+	activeReview: null,
+	reviewReadiness: READY_REVIEW_READINESS,
 	reviewedItems: [pullRequest(22)],
 	window: { since: inStoryYear("09-02T09:00"), until: LATEST_REVIEW_AT },
 	changes: [...PACKAGING_CHANGES, ...COMMUNICATION_CHANGES, ...REVIEWING_CHANGES],

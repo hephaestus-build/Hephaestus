@@ -30,6 +30,11 @@ export interface PracticeProfilePageHeaderProps {
 	 * opens the reviews of their work; absent while none has run, when the chip says so instead.
 	 */
 	latestReview?: ProfileReviewRef;
+	/**
+	 * A review of the reader's work that is waiting or running and has recorded nothing yet. The chip
+	 * names it while no review has recorded anything.
+	 */
+	activeReview?: ProfileReviewRef;
 	/** How many practices sit at each standing; the ring and the legend are drawn from these. */
 	counts: StandingCounts;
 	/**
@@ -50,19 +55,21 @@ const INTRO =
 	"Hephaestus reviews your work against the practices your workspace cares about. What it records appears here.";
 
 /**
- * Where this browser keeps whether the reader closed "How to read this page". It opens on a first
- * visit and stays as the reader left it.
+ * Where this browser keeps whether the reader opened or closed "How to read this page". It starts
+ * closed, because the page itself says what a first visit needs, and then stays as the reader left
+ * it.
  */
 export const GUIDE_FOLD_KEY = "practice-profile:how-to-read";
 
 export function PracticeProfilePageHeader({
 	latestReview,
+	activeReview,
 	counts,
 	practiceCount,
 	groupCount,
 	isLoading = false,
 }: PracticeProfilePageHeaderProps) {
-	const [guideOpen, setGuideOpen] = useSectionOpen(GUIDE_FOLD_KEY);
+	const [guideOpen, setGuideOpen] = useSectionOpen(GUIDE_FOLD_KEY, { defaultOpen: false });
 	return (
 		<header className="flex flex-col gap-3">
 			<div className="flex min-w-0 flex-col gap-2">
@@ -71,7 +78,7 @@ export function PracticeProfilePageHeader({
 					{isLoading ? (
 						<Skeleton className="h-5 w-64 rounded-full" />
 					) : (
-						<LatestReviewChip review={latestReview} />
+						<LatestReviewChip review={latestReview} activeReview={activeReview} />
 					)}
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">{INTRO}</p>
@@ -110,6 +117,8 @@ const { RUNNING } = OWN_REVIEW_STATUS_DEFS;
 interface LatestReviewChipProps {
 	/** The newest review of the reader's work; absent until one has run. */
 	review?: ProfileReviewRef;
+	/** A first review still under way, which has no result to open yet. */
+	activeReview?: ProfileReviewRef;
 }
 
 /**
@@ -117,8 +126,23 @@ interface LatestReviewChipProps {
  * linked here: a link inside the chip would be a control inside a control. A review still going
  * says so in words; its icon stands still, as every status icon does.
  */
-function LatestReviewChip({ review }: LatestReviewChipProps) {
+function LatestReviewChip({ review, activeReview }: LatestReviewChipProps) {
 	const today = new Date(useNow());
+	if (review === undefined && activeReview !== undefined) {
+		// Not a link: the reviews of the reader's work list a review once it records something.
+		const waiting = activeReview.status === "QUEUED";
+		const def = waiting ? OWN_REVIEW_STATUS_DEFS.QUEUED : RUNNING;
+		return (
+			<Badge variant="muted" className="max-w-full">
+				<def.icon className={statusToneClass(def.badgeVariant)} aria-hidden />
+				<span className="font-semibold">{waiting ? "Review waiting" : "Review running"}</span>
+				<ClauseDot />
+				<span className="min-w-0 truncate font-normal text-muted-foreground">
+					on {activeReview.item.label}
+				</span>
+			</Badge>
+		);
+	}
 	if (review === undefined) {
 		return (
 			<Badge variant="muted">

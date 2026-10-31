@@ -86,14 +86,21 @@ public class ReviewGate {
             Map<String, String> state,
             ReviewOrigin origin,
             @Nullable ItemEventName event) {
-        var definition = json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class);
-        if (definition.reviewedBy().by() != ReviewedByKind.HEPHAESTUS) return false;
-        if (UnofferedItemCapabilities.of(descriptor, definition) != null) return false;
+        var definition = selectable(practice, descriptor).orElse(null);
+        if (definition == null) return false;
         if (origin != ReviewOrigin.EVENT) return true;
         return event != null
                 && definition.reviewOn().events().contains(event)
                 && definition.reviewOn().state().entrySet().stream()
                         .allMatch(e ->
                                 state.containsKey(e.getKey()) && e.getValue().contains(state.get(e.getKey())));
+    }
+
+    /** The definition of a practice that Hephaestus reviews and whose events and About role its item kind offers. */
+    Optional<PracticeDefinition> selectable(Practice practice, ItemDescriptor descriptor) {
+        var definition = json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class);
+        if (definition.reviewedBy().by() != ReviewedByKind.HEPHAESTUS) return Optional.empty();
+        if (UnofferedItemCapabilities.of(descriptor, definition) != null) return Optional.empty();
+        return Optional.of(definition);
     }
 }

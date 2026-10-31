@@ -21,7 +21,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberMentorReadiness;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiReadiness;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.time.Instant;
 import java.util.HashMap;
@@ -60,7 +60,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     private WorkspaceAiAvailability availability;
 
     @Mock
-    private MemberMentorReadiness mentorReadiness;
+    private MemberAiReadiness aiReadiness;
 
     @Mock
     private ConfigAuditPort audit;
@@ -79,7 +79,7 @@ class WorkspaceOnboardingServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new WorkspaceOnboardingService(
-                workspaces, settings, members, choices, memberships, links, availability, mentorReadiness, audit);
+                workspaces, settings, members, choices, memberships, links, availability, aiReadiness, audit);
         lenient().when(choices.find(anyLong())).thenAnswer(invocation -> {
             var row = savedChoices.get(invocation.<Long>getArgument(0));
             return row == null

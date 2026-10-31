@@ -1317,6 +1317,9 @@ const overviewWindowSchemaResponseTransformer = (data: any) => {
 };
 
 const practiceProfileOverviewSchemaResponseTransformer = (data: any) => {
+    if (data.activeReview) {
+        data.activeReview = profileReviewRefSchemaResponseTransformer(data.activeReview);
+    }
     data.changes = data.changes.map((item: any) => profileChangeSchemaResponseTransformer(item));
     if (data.latestReview) {
         data.latestReview = profileReviewRefSchemaResponseTransformer(data.latestReview);

@@ -36,9 +36,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A first visit: open, and every label's sentence is on the page, not only behind a hover. */
+/** Open: every label's sentence is on the page, not only behind a hover, and so is who sees what. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/^Your Practice profile is yours\./u)).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "How to read this page" })).toHaveAttribute(
 			"aria-expanded",
 			"true",

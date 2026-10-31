@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+	PracticeProfileOverview,
 	PracticeGuidanceDto,
 	PracticeGroupStanding,
 	PracticePageFeedback,
@@ -29,6 +30,7 @@ import {
 	packagingStanding,
 	practiceStandings,
 	pullRequest,
+	READY_REVIEW_READINESS,
 } from "@/stories/practice-profile-story-mock-data";
 import {
 	openProfileReview,
@@ -1777,5 +1779,34 @@ describe("practice profile pattern label and folds", () => {
 		renderRouteAtWithRouter(groupPage);
 		const label = await screen.findByText(/^Has open feedback/u, {}, ROUTE_RENDER_WAIT);
 		expect(label.closest("button")).toBeNull();
+	});
+});
+
+/** The overview of a member who has no recorded review yet, with the server's word on readiness. */
+const dayOneOverview = (reviewReadiness: PracticeProfileOverview["reviewReadiness"]) =>
+	http.get("*/workspaces/:workspaceSlug/practice-profile/overview", () =>
+		HttpResponse.json({ ...OVERVIEW_FIXTURE, latestReview: null, reviewReadiness }),
+	);
+
+describe("a profile without feedback", () => {
+	it("says what starts a first review, from the server's events", async () => {
+		server.use(dayOneOverview(READY_REVIEW_READINESS));
+		await renderProfile();
+		await screen.findByText("No review of your work yet", undefined, ROUTE_RENDER_WAIT);
+		screen.getByText(/ready for review$/u);
+	});
+
+	it("names why no review runs and opens the AI choice, returning to the profile", async () => {
+		server.use(dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "NO_AI" }));
+		await renderProfile();
+		const link = await screen.findByRole(
+			"link",
+			{ name: "Change your AI choice" },
+			ROUTE_RENDER_WAIT,
+		);
+		const href = new URL(String(link.getAttribute("href")), "https://app.invalid");
+		expect(href.pathname).toBe("/w/acme/onboarding");
+		expect(href.searchParams.get("returnTo")).toBe("/w/acme/practice-profile");
+		expect(screen.queryByText("No review of your work yet")).toBeNull();
 	});
 });

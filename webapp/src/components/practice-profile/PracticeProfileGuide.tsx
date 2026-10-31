@@ -28,6 +28,7 @@ const POINTS = [
 	"Your standing on a practice comes from your recent reviewed work. It is not a grade. Gray means there is nothing to judge yet.",
 	"A feedback card appears when reviews find the same problem in at least two pieces of your work. It resolves when several pieces of your work in a row, reviewed after it, come back clean, and the card counts how many more it needs.",
 	"Feedback about one piece of work, such as a pull request, stays on that work. If something is unclear, ask Hephaestus.",
+	"Your Practice profile is yours. Feedback on a pull request is visible to everyone who can see that pull request. Workspace admins can see all practice reviews, and instance admins can open a read-only view.",
 	GROUP_COLORS_NOTE,
 ] as const;
 
@@ -47,7 +48,7 @@ const TREND_ENTRIES: StatusDef[] = statusValues(PRACTICE_TREND_DEFS).map(
 );
 
 /**
- * The page's own explanation, open on a first visit: what a practice is, what the standings and
+ * The page's own explanation, opened by the reader: what a practice is, what the standings and
  * trends mean, and when a feedback card appears and resolves. The label sentences are the
  * registries' own, the ones a badge shows only on hover, so each sentence has one home.
  */

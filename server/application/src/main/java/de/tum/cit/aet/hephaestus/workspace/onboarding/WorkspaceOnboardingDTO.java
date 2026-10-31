@@ -2,9 +2,9 @@ package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
+import de.tum.cit.aet.hephaestus.workspace.spi.AiRefusalReason;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
-import de.tum.cit.aet.hephaestus.workspace.spi.MentorRefusalReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.util.List;
@@ -29,7 +29,7 @@ public record WorkspaceOnboardingDTO(
                 description =
                         "Why Hephaestus declines this member here, by the rule that admits each question; null when Hephaestus can answer")
         @Nullable
-        MentorRefusalReason mentorRefusal) {
+        AiRefusalReason mentorRefusal) {
     public record WorkspaceAiOptionDTO(
             @NonNull AiChoice choice,
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean practiceReviewsReady,

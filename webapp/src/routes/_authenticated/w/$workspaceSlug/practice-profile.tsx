@@ -49,6 +49,8 @@ import {
 	ObservationDetailSkeleton,
 	ReviewResultDetails,
 } from "@/components/profile/ReviewResultRow";
+import { buttonVariants } from "@/components/ui/button";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
@@ -100,6 +102,9 @@ function PracticeProfile() {
 		...standings
 	} = usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
+	const workspaceName =
+		useActiveWorkspaceSlug().workspaces.find((each) => each.workspaceSlug === workspaceSlug)
+			?.displayName ?? workspaceSlug;
 	// The cards: read here, which is also what delivers the unread ones — so the read waits for a
 	// definite "this workspace reviews practices", or it would mark feedback delivered for a reader
 	// the answer below is about to send away.
@@ -207,6 +212,36 @@ function PracticeProfile() {
 				onOpenPractice={openPractice}
 				feedbackTab={search.feedback}
 				onFeedbackTabChange={(tab) => setView({ feedback: tab })}
+				firstRun={
+					overview.reviewReadiness === null
+						? undefined
+						: {
+								workspaceName,
+								readiness: overview.reviewReadiness,
+								activeReview: overview.activeReview ?? undefined,
+								requestReviewLink: readOnly ? undefined : (
+									<Link
+										to="/w/$workspaceSlug/activity"
+										params={{ workspaceSlug }}
+										className={buttonVariants({ variant: "outline", size: "sm" })}
+									>
+										Request a review on Activity
+									</Link>
+								),
+								aiChoiceLink: readOnly
+									? undefined
+									: (label) => (
+											<Link
+												to="/w/$workspaceSlug/onboarding"
+												params={{ workspaceSlug }}
+												search={{ returnTo: `/w/${workspaceSlug}/practice-profile` }}
+												className={buttonVariants({ variant: "outline", size: "sm" })}
+											>
+												{label}
+											</Link>
+										),
+							}
+				}
 				state={page}
 			/>
 			<PracticeGroupDetailDrawer

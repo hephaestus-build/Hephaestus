@@ -22,6 +22,7 @@ import { newestFirst } from "./practice-feedback-cards";
 import { FeedbackEmpty, type FeedbackEmptyProps } from "./practice-profile-blocks";
 import { FEEDBACK_TABS, type FeedbackTab, type PracticeTab } from "./practice-profile-search";
 import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
+import { firstRunApplies, ProfileFirstRun, type ProfileFirstRunProps } from "./ProfileFirstRun";
 
 export interface PracticeProfilePageProps {
 	/** The review the header's latest-review chip names; absent before the first review. */
@@ -47,6 +48,12 @@ export interface PracticeProfilePageProps {
 	/** The tab over the feedback cards, from the route's `feedback` search param. */
 	feedbackTab: FeedbackTab;
 	onFeedbackTabChange?: (tab: FeedbackTab) => void;
+	/**
+	 * What the page says while the reader has no feedback at all: why no review can run, a first
+	 * review under way, or what starts one. Absent where the server's word is not known, such as
+	 * before the overview loads; the plain empty tab speaks then.
+	 */
+	firstRun?: Omit<ProfileFirstRunProps, "reviewed">;
 	state: LoadState;
 }
 
@@ -96,6 +103,7 @@ export function PracticeProfilePage({
 	onOpenPractice,
 	feedbackTab,
 	onFeedbackTabChange,
+	firstRun,
 	state,
 }: PracticeProfilePageProps) {
 	const openGroupBySlug = (groupSlug: string) => {
@@ -105,6 +113,11 @@ export function PracticeProfilePage({
 		}
 	};
 	const cardsByTab = feedbackCardsByTab(feedbackCards);
+	const reviewed = latestReview !== undefined;
+	const showFirstRun =
+		firstRun !== undefined &&
+		feedbackCards.length === 0 &&
+		firstRunApplies(firstRun.readiness, reviewed, firstRun.activeReview);
 
 	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
 	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
@@ -125,6 +138,7 @@ export function PracticeProfilePage({
 		<div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
 			<PracticeProfilePageHeader
 				latestReview={latestReview}
+				activeReview={firstRun?.activeReview}
 				counts={countPracticeStandings(practices)}
 				practiceCount={practices.length}
 				groupCount={groups.length}
@@ -166,9 +180,13 @@ export function PracticeProfilePage({
 								Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
 									<PracticeFeedbackCardSkeleton key={index} />
 								))}
-							{!isLoading && cardsByTab[feedbackTab].length === 0 && (
-								<FeedbackEmpty {...EMPTY_TAB[feedbackTab]} />
-							)}
+							{!isLoading &&
+								cardsByTab[feedbackTab].length === 0 &&
+								(showFirstRun ? (
+									<ProfileFirstRun {...firstRun} reviewed={reviewed} />
+								) : (
+									<FeedbackEmpty {...EMPTY_TAB[feedbackTab]} />
+								))}
 							{!isLoading &&
 								cardsByTab[feedbackTab].map((card) => (
 									<PracticeFeedbackCard

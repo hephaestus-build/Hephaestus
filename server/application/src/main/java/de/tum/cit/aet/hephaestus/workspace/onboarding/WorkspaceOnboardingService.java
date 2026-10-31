@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
-import de.tum.cit.aet.hephaestus.workspace.spi.MemberMentorReadiness;
+import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiReadiness;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceAiAvailability;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +41,7 @@ class WorkspaceOnboardingService {
     private final AccountMembershipQuery memberships;
     private final WorkspaceOnboardingLinks links;
     private final WorkspaceAiAvailability availability;
-    private final MemberMentorReadiness mentorReadiness;
+    private final MemberAiReadiness aiReadiness;
     private final ConfigAuditPort audit;
 
     @Transactional(readOnly = true)
@@ -82,7 +82,7 @@ class WorkspaceOnboardingService {
                                         .toList()))
                         .toList(),
                 linkOptions,
-                mentorReadiness.refusal(context.id(), accountId).orElse(null));
+                aiReadiness.conversationRefusal(context.id(), accountId).orElse(null));
     }
 
     private static boolean hasOpenRequiredLink(List<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO> linkOptions) {
