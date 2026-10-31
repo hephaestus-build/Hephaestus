@@ -51,7 +51,7 @@ export interface PracticeProfilePageHeaderProps {
  * feedback ends is in "How to read this page", under it. Everything below the fold is the record
  * this sentence introduces.
  */
-const INTRO =
+export const PRACTICE_PROFILE_INTRO =
 	"Hephaestus reviews your work against the practices your workspace cares about. What it records appears here.";
 
 /**
@@ -81,7 +81,7 @@ export function PracticeProfilePageHeader({
 						<LatestReviewChip review={latestReview} activeReview={activeReview} />
 					)}
 				</div>
-				<p className="max-w-2xl text-sm text-muted-foreground">{INTRO}</p>
+				<p className="max-w-2xl text-sm text-muted-foreground">{PRACTICE_PROFILE_INTRO}</p>
 			</div>
 			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} />
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole

@@ -7,6 +7,7 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Section } from "@/components/layout/Section";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import {
@@ -21,7 +22,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { newestFirst } from "./practice-feedback-cards";
 import { FeedbackEmpty, type FeedbackEmptyProps } from "./practice-profile-blocks";
 import { FEEDBACK_TABS, type FeedbackTab, type PracticeTab } from "./practice-profile-search";
-import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
+import { PRACTICE_PROFILE_INTRO, PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
 import { firstRunApplies, ProfileFirstRun, type ProfileFirstRunProps } from "./ProfileFirstRun";
 
 export interface PracticeProfilePageProps {
@@ -119,15 +120,17 @@ export function PracticeProfilePage({
 		feedbackCards.length === 0 &&
 		firstRunApplies(firstRun.readiness, reviewed, firstRun.activeReview);
 
-	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
-	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
+	// The page's title and the alert: the header's "No practices set up yet" and a tab's "No feedback
+	// yet" are claims about the workspace, and a failed load has none to make.
 	if (state.status === "error") {
 		return (
-			<div className="mx-auto w-full max-w-xl">
+			<div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+				<PageHeader title="Practice profile" description={PRACTICE_PROFILE_INTRO} />
 				<QueryErrorAlert
 					error={state.error}
 					title="We could not load your practices"
 					onRetry={state.onRetry}
+					className="max-w-xl"
 				/>
 			</div>
 		);
