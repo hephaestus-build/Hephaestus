@@ -19,7 +19,11 @@ import {
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
-import { SUPPORTED_SCHEMA_VERSION } from "../../../main/resources/agent/pi-task-paths.ts";
+import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
+import {
+	resolveTaskPaths,
+	SUPPORTED_SCHEMA_VERSION,
+} from "../../../main/resources/agent/pi-task-paths.ts";
 import {
 	AUTHENTICATION_PRACTICE,
 	GOLDEN_INPUTS,
@@ -232,6 +236,9 @@ export async function runRunner(
 	env: Record<string, string> = {},
 ): Promise<RunnerExit> {
 	const firstCompletion = env.PI_HOST_FIRST_COMPLETION;
+	// A diagnostic names a practice by its position in the practice index.
+	const firstCompletionAt =
+		firstCompletion === undefined ? undefined : practiceIndexOf(cwd).indexOf(firstCompletion);
 	const child = spawn(
 		process.execPath,
 		["--experimental-test-module-mocks", import.meta.filename],
@@ -265,11 +272,9 @@ export async function runRunner(
 	child.stderr.on("data", (chunk: string) => {
 		stderr += chunk;
 		if (
-			firstCompletion !== undefined &&
+			firstCompletionAt !== undefined &&
 			!released &&
-			["built-in", "custom"].some((kind) =>
-				stderr.includes(`[pi-runner] ${firstCompletion}: ${kind} program `),
-			)
+			stderr.includes(`[pi-runner] practice.program_finished practice=${firstCompletionAt} `)
 		) {
 			released = true;
 			child.send("first-program-completed");
@@ -296,6 +301,51 @@ export function field(value: unknown, key: string): unknown {
 	}
 	const found: unknown = Reflect.get(value, key);
 	return found;
+}
+
+/** What the runner told the model in its tool replies, accepted or refused: where a refusal says why. */
+export function repliedText(replies: readonly unknown[]): string {
+	return replies
+		.flatMap((entry) => {
+			const reply = isJsonObject(entry) ? entry.reply : undefined;
+			const content = isJsonObject(reply) && Array.isArray(reply.content) ? reply.content : [];
+			return content.flatMap((part: unknown) =>
+				isJsonObject(part) && typeof part.text === "string" ? [part.text] : [],
+			);
+		})
+		.join("\n");
+}
+
+/**
+ * Every tool reply of a run, accepted and refused, as the model read it, with the refusal and tool
+ * error reasons that the runner kept in runner-debug.json for the calls the SDK answered itself.
+ */
+export function toldTheModel(cwd: string): string {
+	const debugPath = nodePath.join(cwd, "out/runner-debug.json");
+	const debug: unknown = existsSync(debugPath) ? parseJson(readFileSync(debugPath, "utf8")) : {};
+	const turns: unknown[] = isJsonObject(debug) && Array.isArray(debug.turns) ? debug.turns : [];
+	const reasons = turns.flatMap((turn: unknown) =>
+		isJsonObject(turn)
+			? [turn.refusalReasons, turn.toolErrorReasons].flatMap((list) =>
+					Array.isArray(list) ? list.filter((reason) => typeof reason === "string") : [],
+				)
+			: [],
+	);
+	return [
+		repliedText([...capturedLines(cwd, "submitted"), ...capturedLines(cwd, "refused")]),
+		...reasons,
+	].join("\n");
+}
+
+/** The slugs of the task's practice index, in its order. */
+export function practiceIndexOf(cwd: string): string[] {
+	const task: unknown = parseJson(readFileSync(nodePath.join(cwd, "task.json"), "utf8"));
+	const index: unknown = parseJson(readFileSync(resolveTaskPaths(cwd, task).practiceIndex, "utf8"));
+	return Array.isArray(index)
+		? index.flatMap((entry: unknown) =>
+				isJsonObject(entry) && typeof entry.slug === "string" ? [entry.slug] : [],
+			)
+		: [];
 }
 
 export function capturedLines(cwd: string, name: string): unknown[] {
@@ -447,10 +497,8 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 					const reply = await submit.execute(`submit-${session}`, argumentsToSubmit);
 					capture("submitted", { slug, reply });
 				} catch (error) {
-					if (!allowFailure) {
-						throw error;
-					}
-					capture("submitted", {
+					// A refusal throws; the SDK hands its message to the model as the tool's result.
+					capture(allowFailure ? "submitted" : "refused", {
 						slug,
 						reply: {
 							isError: true,
@@ -459,6 +507,9 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 							],
 						},
 					});
+					if (!allowFailure) {
+						throw error;
+					}
 				}
 			};
 
@@ -475,11 +526,25 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 					const upsert = options.customTools.find((tool) => tool.name === "upsert_problem");
 					assert.ok(upsert);
 					for (const problem of problems) {
-						const reply = await upsert.execute(
-							"draft",
-							upsert.prepareArguments?.(problem) ?? problem,
-						);
-						capture("problem-drafts", { slug, reply });
+						try {
+							const reply = await upsert.execute(
+								"draft",
+								upsert.prepareArguments?.(problem) ?? problem,
+							);
+							capture("problem-drafts", { slug, reply });
+						} catch (error) {
+							// As for a submission, the SDK hands a refused draft's message to the model.
+							capture("refused", {
+								slug,
+								reply: {
+									isError: true,
+									content: [
+										{ type: "text", text: error instanceof Error ? error.message : String(error) },
+									],
+								},
+							});
+							throw error;
+						}
 					}
 					const keyed = Object.fromEntries(
 						Object.entries(candidate).filter(([key]) => key !== "problems"),
