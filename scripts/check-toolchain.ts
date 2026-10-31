@@ -213,10 +213,8 @@ if (
 	);
 }
 expectConfig("allowBuilds", {
-	"@nestjs/core": false,
 	protobufjs: false,
 	"core-js": false,
-	"@openapitools/openapi-generator-cli": false,
 	msw: false,
 	esbuild: true,
 	"@google/genai": false,
