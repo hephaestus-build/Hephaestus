@@ -28,15 +28,11 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import okhttp3.Response;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -258,40 +254,6 @@ public class SlackMessageService {
                     e.getClass().getSimpleName());
             return Optional.empty();
         }
-    }
-
-    /**
-     * The scopes that the workspace's bot token holds. Slack names them in the {@code X-OAuth-Scopes} header of every
-     * Web API response; {@code auth.test} needs no scope of its own.
-     *
-     * @throws SlackSendException when the workspace has no usable token, Slack did not answer, or Slack named no
-     *     scopes ({@code scopes_not_reported}): a missing header proves no missing scope
-     */
-    public Set<String> grantedScopes(long workspaceId) {
-        String token = resolveToken(workspaceId)
-                .orElseThrow(() -> new SlackSendException(workspaceId, "", "no_active_slack_connection"));
-        AuthTestResponse r;
-        try {
-            r = callHonoringRateLimit(
-                    SlackBackoff.interactive(rateLimitTracker, workspaceId),
-                    () -> slack.methods(token).authTest(req -> req));
-        } catch (SlackApiException | IOException e) {
-            throw new SlackSendException(workspaceId, "", "transport_failure", e);
-        }
-        if (!r.isOk()) {
-            throw new SlackSendException(workspaceId, "", r.getError() == null ? "unknown" : r.getError());
-        }
-        // The SDK stores header names in lower case.
-        Map<String, List<String>> headers = r.getHttpResponseHeaders() == null ? Map.of() : r.getHttpResponseHeaders();
-        List<String> named = headers.get("x-oauth-scopes");
-        if (named == null) {
-            throw new SlackSendException(workspaceId, "", "scopes_not_reported");
-        }
-        return named.stream()
-                .flatMap(value -> Arrays.stream(value.split(",")))
-                .map(String::strip)
-                .filter(scope -> !scope.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**

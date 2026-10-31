@@ -1,7 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.slack.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -26,9 +30,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @Tag(name = "Slack connection", description = "The scopes of the workspace's Slack connection")
 public class SlackScopesController {
 
-    private final SlackMessageService slack;
+    private final SlackCredentialProvider credentials;
+    private final SlackOAuthClient slack;
 
-    public SlackScopesController(SlackMessageService slack) {
+    public SlackScopesController(SlackCredentialProvider credentials, SlackOAuthClient slack) {
+        this.credentials = credentials;
         this.slack = slack;
     }
 
@@ -37,7 +43,18 @@ public class SlackScopesController {
             operationId = "getSlackScopes",
             summary = "List the Slack scopes that Hephaestus requests and the workspace's Slack token does not hold")
     public ResponseEntity<SlackScopesDTO> getSlackScopes(WorkspaceContext workspace) {
-        Set<String> granted = slack.grantedScopes(workspace.id());
+        String token = credentials
+                .resolve(new IntegrationRef(IntegrationKind.SLACK, workspace.id(), null))
+                .filter(BearerToken.class::isInstance)
+                .map(bundle -> ((BearerToken) bundle).token())
+                .orElseThrow(() -> new SlackSendException(workspace.id(), "", "no_active_slack_connection"));
+        Set<String> granted;
+        try {
+            granted = slack.grantedScopes(token);
+        } catch (SlackOAuthException e) {
+            // The Slack routes share one problem shape: SlackChannelControllerAdvice maps SlackSendException.
+            throw new SlackSendException(workspace.id(), "", String.valueOf(e.getMessage()), e);
+        }
         return ResponseEntity.ok(new SlackScopesDTO(SlackConnectionStrategy.DEFAULT_SCOPES.stream()
                 .filter(scope -> !granted.contains(scope))
                 .sorted()

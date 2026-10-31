@@ -210,63 +210,6 @@ class SlackMessageServiceTest extends BaseUnitTest {
         }
     }
 
-    @Test
-    void shouldReadTheGrantedScopesFromTheHeaderOfAuthTest() throws Exception {
-        try (MockWebServer slackApi = new MockWebServer()) {
-            slackApi.start();
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
-            slackApi.enqueue(new MockResponse.Builder()
-                    .code(200)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("X-OAuth-Scopes", "chat:write,assistant:write, im:history")
-                    .body("{\"ok\":true,\"team_id\":\"T1\",\"user_id\":\"U1\"}")
-                    .build());
-            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
-            try {
-                assertThat(local.grantedScopes(7L))
-                        .containsExactlyInAnyOrder("chat:write", "assistant:write", "im:history");
-            } finally {
-                local.close();
-            }
-        }
-    }
-
-    @Test
-    void shouldRefuseToNameTheGrantedScopesWhenSlackSendsNoScopeHeader() throws Exception {
-        try (MockWebServer slackApi = new MockWebServer()) {
-            slackApi.start();
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\",\"user_id\":\"U1\"}"));
-            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
-            try {
-                assertThatThrownBy(() -> local.grantedScopes(7L))
-                        .isInstanceOfSatisfying(
-                                SlackSendException.class,
-                                e -> assertThat(e.slackError()).isEqualTo("scopes_not_reported"));
-            } finally {
-                local.close();
-            }
-        }
-    }
-
-    @Test
-    void shouldRefuseToNameTheGrantedScopesWhenSlackRefusesTheToken() throws Exception {
-        try (MockWebServer slackApi = new MockWebServer()) {
-            slackApi.start();
-            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
-            slackApi.enqueue(json("{\"ok\":false,\"error\":\"invalid_auth\"}"));
-            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
-            try {
-                assertThatThrownBy(() -> local.grantedScopes(7L))
-                        .isInstanceOfSatisfying(
-                                SlackSendException.class,
-                                e -> assertThat(e.slackError()).isEqualTo("invalid_auth"));
-            } finally {
-                local.close();
-            }
-        }
-    }
-
     // Slack's 429 here asks for no wait (Retry-After: 0), so the budget waits its fallback of about a second.
 
     @Test
