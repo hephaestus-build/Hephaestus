@@ -907,7 +907,9 @@ class KubernetesSandboxRuntimeTest {
         assertThat(quota.roomFor(LIMITS))
                 .as("a cache that stopped has no observation, so reviews wait instead of starting without one")
                 .isEqualTo(SandboxRoom.UNKNOWN_ROOM);
-        assertThat(quota.neverFits(LIMITS)).as("waiting is not a quota that can never fit").isFalse();
+        assertThat(quota.neverFits(LIMITS))
+                .as("waiting is not a quota that can never fit")
+                .isFalse();
     }
 
     @Test
