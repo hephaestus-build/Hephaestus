@@ -24,7 +24,7 @@ import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/onboarding")({
-	head: pageHead("Choose your AI"),
+	head: pageHead("Your AI choice"),
 	staticData: { surface: "auth" },
 	validateSearch: (search): { returnTo?: string; step?: "accounts" } => ({
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,

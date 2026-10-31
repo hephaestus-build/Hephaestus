@@ -16,7 +16,7 @@ import {
 	updateGitLabRepositorySelectionMutation,
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { GitLabRepositorySelection, GitLabStoppedProject, Workspace } from "@/api/types.gen";
+import type { GitLabRepositorySelection, GitLabStoppedProject } from "@/api/types.gen";
 import { SCM_CLASS_KEYS } from "@/components/admin/integrations/SyncResourcesTable";
 import type { WorkspaceGitLabProjectSelection } from "@/components/admin/integrations/WorkspaceGitLabProjectSelection";
 import type { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
@@ -34,15 +34,15 @@ function refreshRetryable(query: { isRefetchError: boolean; error: unknown }) {
 	return query.isRefetchError && queryErrorIsRetryable(query.error);
 }
 
-/** Which source-control provider the workspace is on, and its display name once that is known. */
-function scmProviderOf(workspace: Workspace | undefined): {
+/** Which source-control provider a workspace kind names, and its display name once that is known. */
+export function scmProviderOf(workspaceKind: string | undefined): {
 	kind: ScmKind | undefined;
 	label: string;
 } {
-	if (!workspace) {
+	if (workspaceKind === undefined) {
 		return { kind: undefined, label: "Source control" };
 	}
-	if (workspace.kind === "GITLAB") {
+	if (workspaceKind === "GITLAB") {
 		return { kind: "GITLAB", label: "GitLab" };
 	}
 	return { kind: "GITHUB", label: "GitHub" };
@@ -56,7 +56,7 @@ export function useScmIntegration(workspaceSlug: string) {
 	useQueryReadRefusal(workspaceQueryOptions.queryKey, workspaceQuery.isError, workspaceQuery.error);
 	const workspaceData =
 		!workspaceQuery.isError || refreshRetryable(workspaceQuery) ? workspaceQuery.data : undefined;
-	const { kind, label } = scmProviderOf(workspaceData);
+	const { kind, label } = scmProviderOf(workspaceData?.kind);
 	const isAppInstallationWorkspace = kind === "GITHUB" && workspaceData?.installationId != null;
 
 	const catalogQueryOptions = getIntegrationCatalogOptions({ path: { workspaceSlug } });

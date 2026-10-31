@@ -49,7 +49,7 @@ const SIGNED_IN: Surface[] = [
 	{ name: "Members", path: "/w/e2e/admin/members" },
 	{ name: "Teams admin", path: "/w/e2e/admin/teams" },
 	{ name: "Practices", path: "/w/e2e/admin/practices" },
-	{ name: "Practice updates", path: "/w/e2e/admin/practices/releases" },
+	{ name: "Catalog updates", path: "/w/e2e/admin/practices/releases" },
 	{ name: "Review settings", path: "/w/e2e/admin/practices/review" },
 	{ name: "Practice reviews", path: "/w/e2e/admin/practices/reviews" },
 	{ name: "Review overview", path: "/w/e2e/admin/practices/reviews/overview" },

@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { getPracticeGuidanceOptions } from "@/api/@tanstack/react-query.gen";
 import type { PracticeReleaseProposal } from "@/api/types.gen";
@@ -11,6 +11,9 @@ import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, testQueryClient } from "@/test/router-harness";
 
 import { practiceSetupHandlers, wireGuidance, wirePractice } from "./-practice-server";
+
+// The round trip renders Practice setup, the slowest page here to import and draw.
+vi.setConfig({ testTimeout: 15_000 });
 
 const base = definitionOf({ name: "Explain the change", criteria: "Earlier criteria" });
 
@@ -37,6 +40,21 @@ beforeEach(() => {
 		http.get("*/workspaces/:workspaceSlug/practices/releases", () => HttpResponse.json([proposal])),
 		...practiceSetupHandlers(),
 	);
+});
+
+it("names Catalog updates the same from Practice setup, on its page, and on the way back", async () => {
+	renderRouteAt("/w/acme/admin/practices");
+	const open = await screen.findByRole(
+		"button",
+		{ name: "Catalog updates (1)" },
+		ROUTE_RENDER_WAIT,
+	);
+	expect(open.getAttribute("href")).toBe("/w/acme/admin/practices/releases");
+
+	fireEvent.click(open);
+	await screen.findByRole("heading", { name: "Catalog updates", level: 1 }, ROUTE_RENDER_WAIT);
+	const back = screen.getByRole("button", { name: "Back to practice setup" });
+	expect(back.getAttribute("href")).toBe("/w/acme/admin/practices");
 });
 
 it("accepts a workspace update with explicit field choice and the reviewed version", async () => {
@@ -206,7 +224,7 @@ it.each(decisions)(
 				name: action,
 			}),
 		);
-		await screen.findByText("We could not load practice updates", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("We could not load catalog updates", undefined, ROUTE_RENDER_WAIT);
 		await screen.findByText(success);
 		expect(screen.queryByText("We could not accept the update")).toBeNull();
 		expect(screen.queryByText("We could not decline the update")).toBeNull();

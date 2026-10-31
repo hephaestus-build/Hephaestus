@@ -6,6 +6,7 @@ import { toast } from "@/lib/toast";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 
@@ -67,6 +68,8 @@ function IntegrationsCallback() {
 	const { status } = search;
 	const detail = failureDetail(search);
 	const toasted = useRef(false);
+	// The provider sent no workspace back, so the link opens the one the app chrome shows.
+	const { chromeWorkspaceSlug } = useActiveWorkspaceSlug();
 
 	useEffect(() => {
 		if (toasted.current) {
@@ -92,9 +95,23 @@ function IntegrationsCallback() {
 							<p className="mt-2 text-sm wrap-anywhere text-muted-foreground">{detail}</p>
 						)}
 					</div>
-					<Button nativeButton={false} render={<Link to="/" />}>
-						Back to dashboard
-					</Button>
+					{chromeWorkspaceSlug === undefined ? (
+						<Button nativeButton={false} render={<Link to="/" />}>
+							Back to app
+						</Button>
+					) : (
+						<Button
+							nativeButton={false}
+							render={
+								<Link
+									to="/w/$workspaceSlug/admin/integrations"
+									params={{ workspaceSlug: chromeWorkspaceSlug }}
+								/>
+							}
+						>
+							Open integrations
+						</Button>
+					)}
 				</CardContent>
 			</Card>
 		</div>
