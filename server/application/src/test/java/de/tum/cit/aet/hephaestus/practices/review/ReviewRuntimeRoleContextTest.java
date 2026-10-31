@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
+import java.time.Clock;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -34,12 +36,14 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
             new ApplicationContextRunner()
                     .withUserConfiguration(
                             ReviewSnapshotQueryService.class,
+                            ReviewStartService.class,
                             PracticeReviewCoverageService.class,
                             ResultAdmissionPolicy.class,
                             ResultViewQuery.class,
                             ResultPresentation.class,
                             ResultVisibilityPolicy.class,
                             ProductReferenceQuery.class)
+                    .withBean(Clock.class, Clock::systemUTC)
                     .withBean(JsonMapper.class, () -> JsonMapper.builder().build()),
             WorkspaceRepository.class,
             RepositoryToMonitorRepository.class,
@@ -84,6 +88,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                         "hephaestus.runtime.webhook.enabled=false")
                 .run(app -> {
                     assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
+                    assertThat(app).hasSingleBean(ReviewStart.class);
                     assertThat(app).hasSingleBean(ResultViewQuery.class);
                     assertThat(app).hasSingleBean(ResultPresentation.class);
                     assertThat(app).hasSingleBean(ResultVisibilityPolicy.class);
@@ -102,6 +107,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                         "hephaestus.runtime.webhook.enabled=false")
                 .run(app -> {
                     assertThat(app).hasSingleBean(ReviewSnapshotQuery.class);
+                    assertThat(app).hasSingleBean(ReviewStart.class);
                     assertThat(app).hasSingleBean(PracticeReviewCoverageService.class);
                     assertThat(app).hasSingleBean(ResultAdmissionPolicy.class);
                 });
@@ -117,6 +123,7 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                     assertThat(app).doesNotHaveBean(PracticeReviewCoverageService.class);
                     assertThat(app).doesNotHaveBean(ResultAdmissionPolicy.class);
                     assertThat(app).doesNotHaveBean(ReviewSnapshotQuery.class);
+                    assertThat(app).doesNotHaveBean(ReviewStart.class);
                     assertThat(app).doesNotHaveBean(ResultViewQuery.class);
                     assertThat(app).doesNotHaveBean(ResultPresentation.class);
                     assertThat(app).doesNotHaveBean(ResultVisibilityPolicy.class);
