@@ -617,6 +617,8 @@ for (const scenario of [
 		await writeFile(archive, bytes);
 		const digest = createHash("sha256").update(bytes).digest();
 		const requests: { method: string | undefined; headers: Headers; body: Buffer }[] = [];
+		const responses = [scenario.first, scenario.expires ? scenario.first : 204];
+		let exhausted = false;
 		let now = 0;
 		context.mock.method(Date, "now", () => now);
 		// Advance protocol time at backoff; archive I/O and host scheduling consume no deadline.
@@ -624,17 +626,23 @@ for (const scenario of [
 			now += delay;
 		});
 		context.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
+			const status = responses.shift();
+			if (status === undefined) {
+				exhausted = true;
+				// A permanent refusal ends upload's retry loop; throwing here would be retried.
+				return new Response(null, { status: 422 });
+			}
 			assert.ok(init?.body instanceof Blob);
 			requests.push({
 				method: init.method,
 				headers: new Headers(init.headers),
 				body: Buffer.from(await init.body.arrayBuffer()),
 			});
-			if (requests.length === 1 || scenario.expires) {
-				if (scenario.first === null) {
-					throw new TypeError("Disconnected response");
-				}
-				return new Response(null, { status: scenario.first });
+			if (status === null) {
+				throw new TypeError("Disconnected response");
+			}
+			if (status !== 204) {
+				return new Response(null, { status });
 			}
 			return new Response(null, { status: 204, headers: { ETag: `"${digest.toString("hex")}"` } });
 		});
@@ -665,6 +673,7 @@ for (const scenario of [
 		} finally {
 			context.mock.restoreAll();
 			syncBuiltinESMExports();
+			assert.equal(exhausted, false, "Upload retry fixture exhausted its responses");
 		}
 	});
 }
