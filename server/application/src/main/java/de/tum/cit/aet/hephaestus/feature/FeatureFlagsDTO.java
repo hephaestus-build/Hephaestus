@@ -30,7 +30,10 @@ public record FeatureFlagsDTO(
 
         // Operational/development flags (Spring Boot config)
         @Schema(description = "GitLab workspace creation feature is enabled")
-        boolean GITLAB_WORKSPACE_CREATION) {
+        boolean GITLAB_WORKSPACE_CREATION,
+
+        @Schema(description = "The browser measures and reports how page visits feel to the reader")
+        boolean PAGE_EXPERIENCE_METRICS) {
     /**
      * Evaluate all feature flags against the given service and build the DTO.
      *
@@ -41,6 +44,7 @@ public record FeatureFlagsDTO(
         return new FeatureFlagsDTO(
                 service.isEnabled(FeatureFlag.NOTIFICATION_ACCESS),
                 service.isEnabled(FeatureFlag.ADMIN),
-                service.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION));
+                service.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION),
+                service.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS));
     }
 }

@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
+import { getUserFeaturesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { getUserFeatures } from "@/api/sdk.gen";
 import type { FeatureFlags } from "@/api/types.gen";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -9,8 +10,6 @@ import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
 export type FeatureFlagName = keyof Required<FeatureFlags>;
 
 type FeatureFlagsResponse = Record<FeatureFlagName, boolean>;
-
-const FEATURE_FLAGS_QUERY_KEY = ["user", "features"] as const;
 
 /**
  * Every flag is optional on the wire — an older server omits one it has never heard of — so each is
@@ -21,6 +20,7 @@ const featureFlagsSchema = z.object({
 	ADMIN: z.boolean().catch(false),
 	GITLAB_WORKSPACE_CREATION: z.boolean().catch(false),
 	NOTIFICATION_ACCESS: z.boolean().catch(false),
+	PAGE_EXPERIENCE_METRICS: z.boolean().catch(false),
 });
 
 async function fetchFeatureFlags(): Promise<FeatureFlagsResponse> {
@@ -37,7 +37,16 @@ const USER_VIEW_FLAGS: FeatureFlagsResponse = {
 	ADMIN: false,
 	GITLAB_WORKSPACE_CREATION: false,
 	NOTIFICATION_ACCESS: false,
+	PAGE_EXPERIENCE_METRICS: false,
 };
+
+/** The signed-in reader's flags. Outside React, read them through the query client with these. */
+export const featureFlagsQueryOptions = queryOptions({
+	queryKey: getUserFeaturesQueryKey(),
+	queryFn: fetchFeatureFlags,
+	staleTime: 60_000,
+	retry: retryQuery,
+});
 
 function useFeatureFlagsQuery(): {
 	data: FeatureFlagsResponse | undefined;
@@ -46,12 +55,9 @@ function useFeatureFlagsQuery(): {
 } {
 	const { isAuthenticated, userView } = useAuth();
 
-	const query = useQuery<FeatureFlagsResponse>({
-		queryKey: FEATURE_FLAGS_QUERY_KEY,
-		queryFn: fetchFeatureFlags,
+	const query = useQuery({
+		...featureFlagsQueryOptions,
 		enabled: isAuthenticated && !userView,
-		staleTime: 60_000,
-		retry: retryQuery,
 	});
 	return userView ? { data: USER_VIEW_FLAGS, isLoading: false, isError: false } : query;
 }

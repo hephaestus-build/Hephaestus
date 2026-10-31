@@ -29,7 +29,8 @@ public enum FeatureFlag {
     ADMIN(Kind.ROLE, "app_admin"),
 
     // Operational/development flags (Spring Boot config)
-    GITLAB_WORKSPACE_CREATION(Kind.CONFIG, "gitlab-workspace-creation");
+    GITLAB_WORKSPACE_CREATION(Kind.CONFIG, "gitlab-workspace-creation"),
+    PAGE_EXPERIENCE_METRICS(Kind.CONFIG, "page-experience-metrics");
 
     private final Kind kind;
     private final String key;

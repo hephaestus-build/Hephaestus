@@ -25,6 +25,10 @@ function isExemptFromSessionExpiry(pathname: string, url: string): boolean {
 	if (requestPath === "/user") {
 		return true;
 	}
+	// Page timings go out as a tab hides; a refusal must not sign the reader out of a background tab.
+	if (requestPath === "/web-vitals") {
+		return true;
+	}
 	if (requestPath.startsWith("/auth/")) {
 		return true;
 	}

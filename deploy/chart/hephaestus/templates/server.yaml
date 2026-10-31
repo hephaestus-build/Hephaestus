@@ -146,6 +146,8 @@ spec:
               value: {{ $config.gitlab.oauthDisplayName | quote }}
             - name: GITLAB_WORKSPACE_CREATION
               value: {{ $config.gitlab.workspaceCreation | quote }}
+            - name: PAGE_EXPERIENCE_METRICS
+              value: {{ $config.pageExperienceMetrics | quote }}
             - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
               value: {{ $config.slack.clientId | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET" "optional" true) | nindent 12 }}

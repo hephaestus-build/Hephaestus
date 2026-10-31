@@ -17,6 +17,8 @@ public final class CoreMetrics {
     public static final String PRIVACY_JOB_COMPLETED = "privacy.job.completed";
     public static final String TENANCY_PARSE_FAILURE_TOTAL = "tenancy.parse_failure.total";
     public static final String TENANCY_VIOLATION_TOTAL = "tenancy.violation.total";
+    public static final String WEB_VITAL_DURATION = "web.vital.duration";
+    public static final String WEB_VITAL_LAYOUT_SHIFT = "web.vital.layout_shift";
 
     private CoreMetrics() {}
 }

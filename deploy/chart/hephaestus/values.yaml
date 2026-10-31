@@ -314,6 +314,9 @@ config:
   publicActivity:
     enabled: false
     repositoryVisibilityMaxAge: 48h
+  # Readers' browsers report how fast pages load and respond. In the EU this can need consent or a
+  # documented legal basis: docs/admin/legal-pages.mdx.
+  pageExperienceMetrics: false
   # The scheduled sync of each workspace's repositories.
   monitoring:
     runOnStartup: true

@@ -18,36 +18,18 @@ servers:
 security:
 - bearerAuth: []
 tags:
-- description: Global contributor information
-  name: Contributors
 - description: The current developer's practice profile
   name: Practice Profile
-- description: User preferences
-  name: Account
 - description: The authenticated developer's feedback
   name: Practice feedback
-- description: Instance-admin login provider management
-  name: Admin
-- description: Per-workspace Slack channel consent + activation
-  name: Slack channel activation
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
 - description: Running release identity and update checks
   name: Instance Release
-- description: "Sign-in, refresh and sign-out for installed clients"
-  name: Client session
 - description: The current developer's standing in each practice
   name: Practice Standings
 - description: Recipient responses to delivered practice feedback
   name: Feedback Response
-- description: Workspace-scoped per-purpose agent configuration
-  name: Agents
-- description: The current developer's standing in each practice group
-  name: Practice Group Standings
-- description: Asking for a review of a piece of work by hand
-  name: Practice review requests
-- description: Current account transparency and research consent
-  name: Consent
 - description: "User account management (settings, deletion)"
   name: Account
 - description: Instance-admin account management
@@ -56,21 +38,12 @@ tags:
   name: Slack User Preferences
 - description: Instance-admin research disclosures and downstream removal receipts
   name: Research
-- description: Adopt instance catalog practices into a workspace
-  name: Practice Catalog Adoption
 - description: |-
     Practices across the workspace, read by the calling developer: everyone, the caller included, inside a count, and
      the caller's own figures beside the workspace's. Like the Practice profile, the route takes no user parameter.
   name: practices-across-workspace-controller
 - description: Per-workspace Outline collection mirroring control plane
   name: Outline collections
-- description: Team management within workspace
-  name: Teams
-- description: Instance-wide email transport verification
-  name: Instance Email
-- description: "Workspace-scoped \"bring your own\" AI provider connections, models\
-    \ and settings"
-  name: Workspace LLM
 - description: Why each practice did or did not run on one piece of work. Any workspace
     member can read it.
   name: Practice review trace
@@ -80,29 +53,17 @@ tags:
   name: Auth
 - description: Workspace-scoped practice-review policy
   name: Practice Review Settings
-- description: Active sessions
-  name: Account
 - description: Instance-admin-only read-only access to users
   name: User view
 - description: Review catalog changes before they affect a workspace
   name: Practice Catalog
-- description: |-
-    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
-     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
-  name: git-lab-preflight-controller
 - description: Workspace integration connection management
   name: Connections
-- description: Instance-admin LLM connection and settings management
-  name: Admin LLM
-- description: Public JWK set for verifying Hephaestus session JWTs
-  name: Auth discovery
 - description: "Workspace-admin access to reviews, results, and feedback delivery\
     \ history"
   name: Practice reviews
 - description: GDPR Art. 20 self-service data export
   name: Account
-- description: The developer's conversation with Hephaestus
-  name: Mentor
 - description: Instance-administrator access and erasure requests
   name: Person Data
 - description: Workspace-scoped history of admin configuration changes
@@ -113,18 +74,59 @@ tags:
      on both success and failure; only <code>Accept: application/json</code> requests get
      4xx JSON.
   name: o-auth-callback-controller
-- description: Repository contributions and open work
-  name: Activity
 - description: Redacted production configuration facts
   name: Configuration Readiness
 - description: Identity provider discovery (public)
   name: Auth discovery
+- description: Read-only access to practice evaluation results
+  name: Practice Results
+- description: Global contributor information
+  name: Contributors
+- description: User preferences
+  name: Account
+- description: Instance-admin login provider management
+  name: Admin
+- description: Per-workspace Slack channel consent + activation
+  name: Slack channel activation
+- description: "Sign-in, refresh and sign-out for installed clients"
+  name: Client session
+- description: Workspace-scoped per-purpose agent configuration
+  name: Agents
+- description: The current developer's standing in each practice group
+  name: Practice Group Standings
+- description: Asking for a review of a piece of work by hand
+  name: Practice review requests
+- description: Current account transparency and research consent
+  name: Consent
+- description: Adopt instance catalog practices into a workspace
+  name: Practice Catalog Adoption
+- description: Team management within workspace
+  name: Teams
+- description: Page load and interaction timings from the browser
+  name: Web vitals
+- description: Instance-wide email transport verification
+  name: Instance Email
+- description: "Workspace-scoped \"bring your own\" AI provider connections, models\
+    \ and settings"
+  name: Workspace LLM
+- description: Active sessions
+  name: Account
+- description: |-
+    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
+     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
+  name: git-lab-preflight-controller
+- description: Instance-admin LLM connection and settings management
+  name: Admin LLM
+- description: Public JWK set for verifying Hephaestus session JWTs
+  name: Auth discovery
+- description: The developer's conversation with Hephaestus
+  name: Mentor
+- description: Repository contributions and open work
+  name: Activity
 - description: Integration sync observability and manual controls
   name: Sync
 - description: "Current user identity, linked accounts, deletion"
   name: Account
-- description: Read-only access to practice evaluation results
-  name: Practice Results
 paths:
   /.well-known/jwks.json:
     get:
@@ -3346,6 +3348,26 @@ paths:
       summary: Get current user's Slack preferences
       tags:
       - Slack User Preferences
+  /web-vitals:
+    post:
+      operationId: reportWebVitals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebVitalsReport"
+        required: true
+      responses:
+        "204":
+          description: Measurements recorded
+        "400":
+          description: "A measurement names an unknown vital, page or region, or names\
+            \ a vital twice, or is out of range"
+        "401":
+          description: Not signed in
+      summary: Record the measurements of one page visit
+      tags:
+      - Web vitals
   /workspaces:
     get:
       operationId: listWorkspaces
@@ -14751,6 +14773,10 @@ components:
         NOTIFICATION_ACCESS:
           type: boolean
           description: User can receive notifications
+        PAGE_EXPERIENCE_METRICS:
+          type: boolean
+          description: The browser measures and reports how page visits feel to the
+            reader
     FeedbackAccountRef:
       type: object
       description: "Who produced a record, as an administrator sees it; absent once\
@@ -27085,6 +27111,58 @@ components:
       required:
       - challengeId
       - credentialJson
+    WebVital:
+      type: object
+      description: One measurement of a page visit
+      properties:
+        page:
+          type: string
+          enum:
+          - PRACTICE_PROFILE
+          - ASK_HEPHAESTUS
+          - FEEDBACK
+          - FEEDBACK_APPROVAL
+          - ACTIVITY
+          - OTHER
+        region:
+          type: string
+          enum:
+          - SIDEBAR
+          - HEADER
+          - PAGE
+          - OTHER
+        value:
+          type: number
+          format: double
+          description: "Milliseconds for LCP, INP and TTFB; the unitless layout-shift\
+            \ score for CLS, at most 100"
+          maximum: 600000
+          minimum: 0
+        vital:
+          type: string
+          enum:
+          - LCP
+          - INP
+          - CLS
+          - TTFB
+      required:
+      - page
+      - region
+      - value
+      - vital
+    WebVitalsReport:
+      type: object
+      description: "The measurements of one page visit, one of each vital, sent once\
+        \ when the reader leaves it"
+      properties:
+        vitals:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebVital"
+          maxItems: 4
+          minItems: 1
+      required:
+      - vitals
     WeeklyDigest:
       type: object
       description: "A weekly digest as it reads now, from the live facts"

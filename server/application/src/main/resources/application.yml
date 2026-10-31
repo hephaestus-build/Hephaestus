@@ -557,6 +557,7 @@ hephaestus:
     features:
         flags:
             gitlab-workspace-creation: ${GITLAB_WORKSPACE_CREATION:false}
+            page-experience-metrics: ${PAGE_EXPERIENCE_METRICS:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # PRACTICE REVIEW GATE
