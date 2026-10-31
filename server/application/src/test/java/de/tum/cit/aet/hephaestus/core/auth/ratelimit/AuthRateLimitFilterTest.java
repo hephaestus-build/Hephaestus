@@ -215,6 +215,23 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNameTheRequestInTheProblemOfARefusal() throws Exception {
+        AuthRateLimitFilter filter = filter(props(new AuthRateLimitProperties.Limit(1, Duration.ofMinutes(1))));
+        MockHttpServletResponse refused = new MockHttpServletResponse();
+        for (MockHttpServletResponse response : List.of(new MockHttpServletResponse(), refused)) {
+            response.setHeader("X-Request-Id", "4bf92f3577b34da6a3ce929d0e0e4736");
+            filter.doFilter(
+                    new MockHttpServletRequest("GET", "/oauth2/authorization/github"),
+                    response,
+                    mock(FilterChain.class));
+        }
+
+        assertThat(refused.getStatus()).isEqualTo(429);
+        // The test's plain mapper nests a problem's properties; the application's writes them at the top.
+        assertThat(refused.getContentAsString()).contains("\"requestId\":\"4bf92f3577b34da6a3ce929d0e0e4736\"");
+    }
+
+    @Test
     void shouldCapInstalledClientSessionPostsPerIpWhenTheBudgetIsSpent() throws Exception {
         AuthRateLimitFilter filter = filter(props(
                 new AuthRateLimitProperties.Limit(20, Duration.ofMinutes(1)),

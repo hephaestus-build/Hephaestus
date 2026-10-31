@@ -1,7 +1,7 @@
 import { type ErrorComponentProps, useRouter } from "@tanstack/react-router";
 
 import { PageError, type PageErrorProps } from "@/components/common/PageError";
-import { problemIsRetryable, problemStatusOf } from "@/lib/problem-detail";
+import { problemIsRetryable, problemStatusOf, requestIdOf } from "@/lib/problem-detail";
 
 /**
  * What a route shows when its `beforeLoad`, loader or component throws. It names the cause when the
@@ -24,9 +24,10 @@ export function RouteError({ error }: Pick<ErrorComponentProps, "error">) {
 			onRetry: () => {
 				void router.invalidate();
 			},
+			reference: requestIdOf(error),
 		};
 	} else {
-		state = { cause: "failed" };
+		state = { cause: "failed", reference: requestIdOf(error) };
 	}
 	// `PageError` owns the rule: an error is an alert, a missing page is not.
 	return state.cause === "not-found" ? (
