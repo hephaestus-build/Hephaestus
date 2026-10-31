@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect } from "storybook/test";
+import { expect, waitFor, within } from "storybook/test";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 
@@ -31,16 +31,39 @@ export const GitLabWorkspace: Story = {
 	},
 };
 
+/** Every entry an owner sees, in order; Member onboarding is the owner's only addition. */
+const OWNER_ENTRIES = [
+	"Practices",
+	"Members",
+	"Team setup",
+	"Member onboarding",
+	"Integrations",
+	"AI models",
+	"AI usage",
+	"Audit log",
+	"Workspace settings",
+];
+
+/**
+ * Practices comes first, because its reviews are the visit that recurs. The people entries follow
+ * it, and Workspace settings, the occasional visit, comes last.
+ */
 export const OwnerNavigation: Story = {
 	args: { isOwner: true },
 	play: async ({ canvas }) => {
+		// Both sections are folded, so the list holds only the top-level entries.
+		const entries = within(canvas.getByRole("list", { name: "Administration" })).getAllByRole(
+			"listitem",
+		);
+		await expect(entries.map((entry) => entry.textContent)).toStrictEqual(OWNER_ENTRIES);
 		await expect(canvas.getByRole("link", { name: "Member onboarding" })).toHaveAttribute(
 			"href",
 			"/w/aet/admin/onboarding",
 		);
-		// Onboarding is a members concern, so it sits with Members rather than at the top.
-		const labels = canvas.getAllByRole("link").map((link) => link.textContent);
-		await expect(labels.indexOf("Member onboarding")).toBe(labels.indexOf("Members") + 1);
+		await expect(canvas.getByRole("link", { name: "Workspace settings" })).toHaveAttribute(
+			"href",
+			"/w/aet/admin/settings",
+		);
 	},
 };
 
@@ -49,8 +72,13 @@ export const ExpandedNavigation: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Practices" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Integrations" }));
 
-		canvas.getByRole("link", { name: "Practice setup" });
-		canvas.getByRole("link", { name: "Practice reviews" });
+		const practices = within(canvas.getByRole("list", { name: "Practices" }));
+		await expect(practices.getAllByRole("link").map((link) => link.textContent)).toStrictEqual([
+			"Practice reviews",
+			"Practice setup",
+			"Review settings",
+			"Scans",
+		]);
 		await expect(canvas.getByRole("link", { name: "Scans" })).toHaveAttribute(
 			"href",
 			"/w/aet/admin/practices/scans",
@@ -112,6 +140,26 @@ export const FeedbackAwaitingApprovalFolded: Story = {
 		await expect(
 			canvas.getByRole("link", { name: "Practices (7 pieces of feedback awaiting approval)" }),
 		).toHaveAttribute("href", "/w/aet/admin/practices/reviews/overview");
+	},
+};
+
+/** Folded to icons, the entries keep their order, and each tooltip says the entry's name. */
+export const OwnerNavigationFolded: Story = {
+	args: { isOwner: true },
+	decorators: FeedbackAwaitingApprovalFolded.decorators,
+	play: async ({ canvas, canvasElement, userEvent }) => {
+		await expect(canvas.getAllByRole("link").map((link) => link.textContent)).toStrictEqual(
+			OWNER_ENTRIES,
+		);
+		canvas.getByRole("link", { name: "Audit log" }).focus();
+		await userEvent.tab();
+		await waitFor(async () =>
+			expect(
+				within(canvasElement.ownerDocument.body).getByText("Workspace settings", {
+					selector: '[data-slot="tooltip-content"]',
+				}),
+			).toBeVisible(),
+		);
 	},
 };
 
