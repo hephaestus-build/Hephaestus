@@ -15,7 +15,6 @@ import { output, run, succeeds } from "./lib/process.ts";
 const root = path.join(import.meta.dirname, "..");
 const server = path.join(root, "server");
 const dataDirectory = path.join(server, "postgres-data");
-const changelogDirectory = NEXT_CHANGELOG_DIRECTORY;
 // liquibaseDiff produces no file when the schema matches.
 const draft = path.join(server, "application/build/changelog_new.xml");
 
@@ -236,17 +235,17 @@ async function branchChangelog(repository: string, baseRef: string): Promise<str
 	const base = mergeBase.trim();
 	const added = await output(
 		"git",
-		["diff", "--name-only", "--diff-filter=A", base, "HEAD", "--", changelogDirectory],
+		["diff", "--name-only", "--diff-filter=A", base, "HEAD", "--", NEXT_CHANGELOG_DIRECTORY],
 		{ cwd: repository },
 	);
 	const staged = await output(
 		"git",
-		["diff", "--cached", "--name-only", "--diff-filter=A", "--", changelogDirectory],
+		["diff", "--cached", "--name-only", "--diff-filter=A", "--", NEXT_CHANGELOG_DIRECTORY],
 		{ cwd: repository },
 	);
 	const untracked = await output(
 		"git",
-		["ls-files", "--others", "--exclude-standard", "--", changelogDirectory],
+		["ls-files", "--others", "--exclude-standard", "--", NEXT_CHANGELOG_DIRECTORY],
 		{
 			cwd: repository,
 		},
@@ -279,11 +278,15 @@ export async function promote(
 		return existing;
 	}
 
-	const directory = path.join(repository, changelogDirectory);
+	const directory = path.join(repository, NEXT_CHANGELOG_DIRECTORY);
 	await mkdir(directory, { recursive: true });
 	const branchName = await output("git", ["branch", "--show-current"], { cwd: repository });
 	const branch = branchName.trim();
-	const fileName = migrationFilename(branch, await readdir(directory));
+	const entries = await readdir(directory);
+	const fileName = migrationFilename(
+		branch,
+		entries.filter((file) => file.endsWith(".xml")),
+	);
 	const target = path.join(directory, fileName);
 	await writeFile(target, promoteDraft(draftXml, Date.now()));
 	return target;

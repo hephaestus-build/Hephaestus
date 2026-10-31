@@ -80,7 +80,7 @@ This table adds only what the annotation cannot tell you.
 | `routeTree.gen.ts is stale` | A Vite build writes it. `vp run build:webapp`, then commit the file. |
 | `Brand assets are stale` | `Webapp: Stories` runs `export:assets` after `test:storybook`. Thus, the job fails after a clean pass line. Run `vp run --filter webapp export:assets`. Commit `webapp/brand`, `webapp/public`, `docs/images/readme`, `docs/static/img`, and `webapp/docker/maintenance.html`. |
 | `App Server: Generated artifacts` | OpenAPI out of sync → `vp run generate:api`. Schema drift → `vp run db:draft-changelog`. ERD outdated → `vp run db:generate-erd-docs`. |
-| `Changelog immutability guard` (Security → `Dependencies, secrets, and policy`) | A changelog that reached `main` was edited, renamed or deleted, the released include prefix changed, or a new timestamped file sorts before existing history. Fix forward with a new changeset. Never edit the released file. |
+| `Changelog immutability guard` (Security → `Dependencies, secrets, and policy`) | A changelog that reached `main` was edited, renamed or deleted, or the released include prefix changed, or a new timestamped file sorts before existing history. Fix forward with a new changeset. Never edit the released file. |
 | `Verify changesets` | The PR touches shipped code with no `.changeset/*.md`. `/land-pr` step 7 has the rules. |
 | `Tooling and Docs` red on a docs-only PR | Expected: `docs/**` is in the tooling path filter, where `docs:lint` and `gate:diagrams` run. |
 

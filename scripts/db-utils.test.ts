@@ -201,13 +201,14 @@ void test("a stacked layer writes its own changelog and leaves its parent's migr
 		git("commit", "--quiet", "-m", "parent migration");
 		git("update-ref", "refs/remotes/origin/parent", "main");
 		git("checkout", "--quiet", "-b", "child");
+		await writeFile(path.join(directory, ".DS_Store"), "local metadata");
 		const child = await promote(native, repository, "parent");
 		assert.notEqual(child, parent);
 		assert.equal(await readFile(parent, "utf8"), original);
 		assert.equal(await promote(native, repository, "parent"), child);
 		assert.equal(await readFile(parent, "utf8"), original);
 		const files = await readdir(directory);
-		assert.equal(files.length, 2);
+		assert.equal(files.filter((file) => file.endsWith(".xml")).length, 2);
 		assert.match(path.basename(child), /^\d{14}-child\.xml$/u);
 		assert.ok(path.basename(child) > path.basename(parent));
 		assert.equal(await readFile(master, "utf8"), "<databaseChangeLog>\n</databaseChangeLog>\n");

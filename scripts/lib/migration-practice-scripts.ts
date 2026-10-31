@@ -120,10 +120,12 @@ export async function migrationOwnedPracticeScripts(
 				}
 				throw error;
 			});
-			for (const fileEntry of entries
+			const files = entries
 				.filter((entry) => entry.isFile() && entry.name.endsWith(".xml"))
-				.toSorted((a, b) => (a.name < b.name ? -1 : Number(a.name > b.name)))) {
-				await visit(path.join(directory, fileEntry.name));
+				.map((entry) => entry.name)
+				.toSorted();
+			for (const fileName of files) {
+				await visit(path.join(directory, fileName));
 			}
 		}
 
