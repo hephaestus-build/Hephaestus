@@ -7,6 +7,13 @@ page_type: reference
 CI runs these controls on pull requests, merge groups, `main` pushes and releases.
 [CI/CD architecture](./ci-cd.mdx) describes the pipeline that runs them.
 
+## Actions
+
+Checkout steps disable credential persistence unless a later Git operation needs authentication.
+The Version PR retains credentials because Changesets commits and pushes its branch.
+The CI contract tests enforce this exception.
+For a single API operation, use a runner tool when it meets the workflow's requirements.
+
 ## Controls
 
 | Control                               | Timing                                                                       | Enforcement                                                                                                             | Destination                                 |
