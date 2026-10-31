@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.IssueItemDescriptor;
@@ -30,6 +31,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiRefusalReason;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiReadiness;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -56,7 +58,11 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
             new PullRequestItemDescriptor(), new PullRequestReviewItemDescriptor(), new IssueItemDescriptor())));
     private final MemberReviewReadinessService service = new MemberReviewReadinessService(
             workspaces,
-            new ReviewGate(practices, items, new JsonMapper()),
+            new ReviewGate(
+                    practices,
+                    items,
+                    new JsonMapper(),
+                    new ClasspathSourceCatalogRegistry(JsonMapper.builder().build(), Clock.systemUTC())),
             coverage,
             selection,
             ai,

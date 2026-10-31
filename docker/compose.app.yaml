@@ -28,6 +28,8 @@ x-practice-review-env:
   ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER: ${ITEM_EVENT_LEDGER_PENDING_RETRY_AFTER:-1h}
   ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER: ${ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER:-7d}
   ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE: ${ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE:-200}
+  ITEM_EVENT_LEDGER_QUIET_WINDOW: ${ITEM_EVENT_LEDGER_QUIET_WINDOW:-2m}
+  ITEM_EVENT_LEDGER_QUIET_WINDOW_CAP: ${ITEM_EVENT_LEDGER_QUIET_WINDOW_CAP:-10m}
 
 # Both application roles reach the SCM: the server clones on a push, the worker fetches the commit a
 # review pins before it can read a diff. Anchored for the same reason as the block above — a role

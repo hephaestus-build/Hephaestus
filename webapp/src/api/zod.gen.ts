@@ -1716,7 +1716,10 @@ export const zItemEvent = z.object({
         'PENDING_DEADLINE_EXCEEDED',
         'ITEM_GONE',
         'LEGACY_REVIEW_UNBOUND',
-        'OCCASION_EVIDENCE_UNAVAILABLE'
+        'OCCASION_EVIDENCE_UNAVAILABLE',
+        'QUIET_WINDOW',
+        'REVIEW_IN_PROGRESS',
+        'ALREADY_CURRENT'
     ]).nullable(),
     reviewId: z.uuid().nullable(),
     state: z.enum([
@@ -4038,7 +4041,10 @@ export const zReviewRequestOutcome = z.object({
         'PENDING_DEADLINE_EXCEEDED',
         'ITEM_GONE',
         'LEGACY_REVIEW_UNBOUND',
-        'OCCASION_EVIDENCE_UNAVAILABLE'
+        'OCCASION_EVIDENCE_UNAVAILABLE',
+        'QUIET_WINDOW',
+        'REVIEW_IN_PROGRESS',
+        'ALREADY_CURRENT'
     ]).nullable(),
     reviewId: z.uuid().nullable(),
     status: z.enum(['SUBMITTED', 'REFUSED'])

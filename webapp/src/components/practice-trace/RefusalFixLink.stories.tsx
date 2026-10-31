@@ -32,6 +32,9 @@ const REASON_KEYS = {
 	ITEM_GONE: true,
 	LEGACY_REVIEW_UNBOUND: true,
 	OCCASION_EVIDENCE_UNAVAILABLE: true,
+	QUIET_WINDOW: true,
+	REVIEW_IN_PROGRESS: true,
+	ALREADY_CURRENT: true,
 } satisfies Record<RefusalReason, true>;
 
 const REASONS = Object.keys(REASON_KEYS).filter((key): key is RefusalReason => key in REASON_KEYS);

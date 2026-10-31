@@ -2,21 +2,28 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
+import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCancellationRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
@@ -43,11 +50,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
@@ -60,6 +70,10 @@ import tools.jackson.databind.node.ObjectNode;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
+    /** Membership reasons of a practice that waits for the item's checks; the next edge offers it again. */
+    private static final List<String> CHECKS_REASONS =
+            List.of("CHECKS_PENDING", "NO_CHECKS_REPORTED", "CHECKS_AWAITING_APPROVAL");
+
     private final ReviewRepository reviews;
     private final ReviewPracticeRepository assignments;
     private final ReviewItemRepository memberships;
@@ -78,6 +92,9 @@ public class ReviewServiceImpl implements ReviewService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final ScanReportService reports;
+    private final PracticeItemOptions itemOptions;
+    private final ResultRepository results;
+    private final ItemEventService itemEvents;
 
     @Override
     @Transactional(noRollbackFor = ReviewRequestRejected.class)
@@ -137,13 +154,13 @@ public class ReviewServiceImpl implements ReviewService {
         }
         var now = clock.instant();
         Instant ordered = now;
-        ItemEventName event = null;
+        var occasions = new HashSet<>(request.occasions());
         if (request.eventId() != null) {
             var fact = itemRows.event(request.workspaceId(), request.itemId(), request.eventId());
             if (!pinned.version().value().equals(fact.getItemVersion()))
                 throw new ReviewRequestRejected(
                         ReviewRequestRejected.Reason.REQUEST_CONFLICT, "The event version does not match the review.");
-            event = new ItemEventName(fact.getName());
+            occasions.add(new ItemEventName(fact.getName()));
             ordered = fact.getOccurredAt();
         }
         List<Practice> selected;
@@ -164,7 +181,13 @@ public class ReviewServiceImpl implements ReviewService {
                     .sorted(Comparator.comparing(Practice::getId))
                     .toList();
         } else {
-            selected = switch (gate.evaluate(workspace, pinned, request.origin(), event, request.practiceIds())) {
+            boolean event = request.origin() == ReviewOrigin.EVENT;
+            Set<Long> awaitingChecks = event
+                    ? Set.copyOf(memberships.lastWithheldPracticeIds(
+                            request.workspaceId(), request.itemId(), CHECKS_REASONS))
+                    : Set.of();
+            selected = switch (gate.evaluate(
+                    workspace, pinned, request.origin(), occasions, awaitingChecks, request.practiceIds())) {
                 case GateDecision.Skip skip ->
                     throw new ReviewRequestRejected(
                             ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
@@ -172,6 +195,7 @@ public class ReviewServiceImpl implements ReviewService {
                             skip.eventReason());
                 case GateDecision.Run run -> run.matchedPractices();
             };
+            if (event) selected = pending(pinned, occasions, selected);
         }
         if (selected.isEmpty()
                 || (!request.practiceIds().isEmpty()
@@ -182,8 +206,16 @@ public class ReviewServiceImpl implements ReviewService {
                                         .containsAll(request.practiceIds()))))
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE, "Select eligible practices from this workspace.");
+        var checksOfItem =
+                request.kind() == ReviewKind.ITEM ? items.checks(ref.kind()).orElse(null) : null;
+        var checksSource = checksOfItem == null ? null : checksOfItem.source();
+        // Read once, and only when a selected practice needs the checks settled: the checks its capture will read.
+        ItemChecks headChecks = checksOfItem != null
+                        && selected.stream().anyMatch(p -> needsChecks(definition(p), checksOfItem.source()))
+                ? checksOfItem.checks(pinned, occasion)
+                : ItemChecks.SETTLED;
         var planned = selected.stream()
-                .map(p -> selection(workspace, p, request.kind(), pinned))
+                .map(p -> selection(workspace, p, request.kind(), pinned, checksSource, headChecks))
                 .toList();
         var developers = new ArrayList<@Nullable Long>();
         for (var plan : planned) {
@@ -296,7 +328,77 @@ public class ReviewServiceImpl implements ReviewService {
         return refusal;
     }
 
-    private SelectedPractice selection(Workspace workspace, Practice practice, ReviewKind kind, ItemSnapshot pinned) {
+    /**
+     * Of the practices the occasions select, those to measure now. A practice that an earlier review of the item still
+     * measures (queued, or running with an unsettled job) holds the whole window until that review ends, so its
+     * occasions are never lost. A continuing occasion
+     * leaves out every practice whose result is current; a milestone measures them again.
+     */
+    private List<Practice> pending(ItemSnapshot pinned, Set<ItemEventName> occasions, List<Practice> selected) {
+        long workspaceId = pinned.item().workspaceId();
+        long itemId = pinned.item().itemId();
+        var selectedIds = selected.stream().map(Practice::getId).collect(Collectors.toSet());
+        // Starting a review commits before its job is enqueued, so a running review with no job yet still measures.
+        // One that never got a job stops holding the window one cap after it started.
+        Instant enqueuedBy = clock.instant().minus(itemEvents.quietWindowCap());
+        boolean measured = memberships.listedPractices(workspaceId, itemId).stream()
+                .filter(listed -> selectedIds.contains(listed.getPracticeId()))
+                .anyMatch(listed -> listed.getStatus().equals(ReviewStatus.QUEUED.name())
+                        || hasUnsettledInvocation(workspaceId, listed.getReviewId())
+                        || listed.getStartedAt() == null
+                        || listed.getStartedAt().isAfter(enqueuedBy));
+        if (measured)
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.REQUEST_CONFLICT,
+                    "An earlier review of this item still measures a selected practice.",
+                    ReviewRequestReason.REVIEW_IN_PROGRESS);
+        if (occasions.stream()
+                .anyMatch(name -> itemOptions.occasion(pinned.item().kind(), name) == OccasionKind.MILESTONE))
+            return selected;
+        var current = Set.copyOf(results.currentPracticeVersionIds(
+                workspaceId,
+                itemId,
+                pinned.version().value(),
+                selected.stream().map(p -> p.getCurrentVersion().getId()).toList()));
+        var pending = selected.stream()
+                .filter(p -> !current.contains(p.getCurrentVersion().getId()))
+                .toList();
+        if (pending.isEmpty())
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
+                    "Every selected practice already has a current result.",
+                    ReviewRequestReason.ALREADY_CURRENT);
+        return pending;
+    }
+
+    private PracticeDefinition definition(Practice practice) {
+        return json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class);
+    }
+
+    /** An optional read of the checks never waits: the practice judges without them, as it would with none. */
+    private static boolean needsChecks(PracticeDefinition definition, SourceKind checksSource) {
+        return definition.reads().sources().stream()
+                .anyMatch(read -> read.source().equals(checksSource) && read.need() != ReadNeed.OPTIONAL);
+    }
+
+    private static @Nullable String readiness(
+            PracticeDefinition definition, @Nullable SourceKind checksSource, ItemChecks checks) {
+        if (checksSource == null || !needsChecks(definition, checksSource)) return null;
+        return switch (checks) {
+            case SETTLED -> null;
+            case PENDING -> "CHECKS_PENDING";
+            case AWAITING_APPROVAL -> "CHECKS_AWAITING_APPROVAL";
+            case NONE_REPORTED -> "NO_CHECKS_REPORTED";
+        };
+    }
+
+    private SelectedPractice selection(
+            Workspace workspace,
+            Practice practice,
+            ReviewKind kind,
+            ItemSnapshot pinned,
+            @Nullable SourceKind checksSource,
+            ItemChecks checks) {
         var version = practice.getCurrentVersion();
         var definition = json.convertValue(version.getDefinition(), PracticeDefinition.class);
         if (kind == ReviewKind.SCAN) return new SelectedPractice(practice, version, List.of(), null);
@@ -314,6 +416,7 @@ public class ReviewServiceImpl implements ReviewService {
                         pinned.item().kind().value().equals("scm.pull_request")
                                 || pinned.item().kind().value().equals("scm.pull_request_review")))
             reason = "OUTSIDE_REVIEW_SCOPE";
+        if (reason == null) reason = readiness(definition, checksSource, checks);
         return new SelectedPractice(practice, version, roles, reason);
     }
 

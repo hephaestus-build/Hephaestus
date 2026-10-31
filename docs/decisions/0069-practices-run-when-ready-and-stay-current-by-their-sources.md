@@ -802,3 +802,31 @@ An inconclusive probe keeps the last confirmed capability.
 The native SDK keeps hosted tool discovery and system updates inside the conversation disabled.
 The gateway serves custom client tools and a top-level system prompt with one fixed API version.
 Known model metadata still supplies its supported thinking mode.
+
+## Update — 2026-10-30: the quiet window and readiness per practice (L9, L10)
+
+L9 and L10 ship together, because the window's edge is where readiness is derived. Four details of the implementation refine § Readiness per practice.
+
+- **Readiness reads the need, not only the declaration.** A practice waits for the checks only when it declares the checks source as Required or Complete.
+  An Optional read runs at once with what the head shows. The admission refusal of an unfinished run keeps it from judging unfinished CI.
+  [#3430](https://github.com/hephaestus-build/Hephaestus/pull/3430) gave each practice that read the core source an Optional read of the checks.
+  With the formula as written, each of these practices would wait for CI, which § Considered options rejects.
+  So `ready(p) = (p does not need I's checks ∨ I's checks settled) ∧ …`, where "needs" means Required or Complete.
+- **A practice in flight holds the window.** If a queued or running review of the item still measures a selected practice, the window does not close.
+  Its occasions wait with the new reason `REVIEW_IN_PROGRESS` and are offered again one window later, until that review ends.
+  To subtract the practice would lose the occasion. The earlier review measures an older version. Nothing selects the practice again.
+  This is the durable re-evaluation after an active review that the checks edge needs. It stores nothing new.
+- **The checks edge selects the practices that wait.** Each readiness edge also selects every practice whose newest membership on the item is withheld with a checks reason.
+  The checks event is such an edge. No practice has to select **Checks finished** for this.
+- **Window membership is derived.** The window is the item's open occasions that join windows. Their `decided_at` records when each began to wait, so the cap needs no column.
+  The older occasions are withheld with `COALESCED` at the edge, not when a newer one joins. A refusal that can pass keeps the whole window waiting, so the retry selects the union.
+
+Until L7 ships, `current(p)` is an unended result of p's current version at the pinned item version. L7 replaces it with the fingerprint predicate.
+The item kind declares, for each event name, whether it is a milestone, a continuing occasion or immediate.
+An opened issue and a published document are milestones. A closed or deleted issue and an archived document are immediate.
+
+New reason values beside the table in § New reason values:
+
+| Kind | Values |
+| --- | --- |
+| Item event, waiting | `QUIET_WINDOW`, `REVIEW_IN_PROGRESS` |
