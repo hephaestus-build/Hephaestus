@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.netty.channel.Channel;
@@ -38,8 +39,10 @@ import org.junit.jupiter.api.TestReporter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.netty.Connection;
+import reactor.test.StepVerifier;
 
 class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     private static final LlmCallPoolProperties PROPERTIES =
@@ -59,11 +62,12 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     private LlmCallPermits workerA;
     private LlmCallPermits workerB;
+    private final SimpleMeterRegistry workerAMeters = new SimpleMeterRegistry();
 
     @BeforeEach
     void setUp() {
-        workerA = worker("a-" + UUID.randomUUID());
-        workerB = worker("b-" + UUID.randomUUID());
+        workerA = worker("a-" + UUID.randomUUID(), workerAMeters);
+        workerB = worker("b-" + UUID.randomUUID(), new SimpleMeterRegistry());
     }
 
     @AfterEach
@@ -162,6 +166,47 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
             composition.close();
             repeat.get(5, TimeUnit.SECONDS).close();
         }
+    }
+
+    @Test
+    void shouldCancelAnExpiredLocalLeaseBeforeTheNextFenceTick() {
+        long pool = pool(1, 0);
+        try (var call = admit(workerA, pool, LlmCallClass.EVENT, 1)) {
+            ReflectionTestUtils.setField(
+                    call,
+                    "confirmedAt",
+                    System.nanoTime() - PROPERTIES.selfFenceAfter().toNanos() - 1);
+            assertThat(call.isRevoked()).isTrue();
+            StepVerifier.create(call.revoked()).expectComplete().verify(Duration.ofSeconds(1));
+            assertThat(rows.countActive(pool)).isEqualTo(1);
+            assertThat(probe(workerB, pool, LlmCallClass.EVENT, 2)).isNull();
+        }
+        assertThat(rows.countActive(pool)).isZero();
+    }
+
+    @Test
+    void shouldCancelAReclaimedGrantOnRenewalWithoutReleasingItsReplacement() {
+        long pool = pool(1, 0);
+        try (var expired = admit(workerA, pool, LlmCallClass.EVENT, 1)) {
+            var active = workerAMeters
+                    .get(AgentMetrics.LLM_POOL_PERMITS_ACTIVE)
+                    .tags("pool", pools.findById(pool).orElseThrow().getSlug(), "class", LlmCallClass.EVENT.tag())
+                    .gauge();
+            assertThat(active.value()).isEqualTo(1);
+            jdbc.update(
+                    "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?",
+                    pool);
+            try (var replacement = admit(workerB, pool, LlmCallClass.EVENT, 2)) {
+                assertThat(expired.isRevoked()).isFalse();
+                workerA.renew();
+                assertThat(expired.isRevoked()).isTrue();
+                StepVerifier.create(expired.revoked()).expectComplete().verify(Duration.ofSeconds(1));
+                assertThat(active.value()).isZero();
+                assertThat(rows.countActive(pool)).isEqualTo(1);
+                assertThat(replacement.isRevoked()).isFalse();
+            }
+        }
+        assertThat(rows.countActive(pool)).isZero();
     }
 
     @Test
@@ -608,9 +653,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    private LlmCallPermits worker(String id) {
-        return new LlmCallPermits(
-                pools, rows, transactions, PROPERTIES, id, new SimpleMeterRegistry(), mock(LlmModelResolver.class));
+    private LlmCallPermits worker(String id, SimpleMeterRegistry registry) {
+        return new LlmCallPermits(pools, rows, transactions, PROPERTIES, id, registry, mock(LlmModelResolver.class));
     }
 
     @Test

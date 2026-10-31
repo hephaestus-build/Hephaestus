@@ -554,6 +554,8 @@ Closed calls retain their debit for a full minute after closure.
 The rate account also leaves an interactive share when the pool has an interactive reserve.
 
 A live worker cancels a call after three quarters of the permit lease without renewal.
+The proxy also checks that local lease before it starts or retries a provider call, without waiting for the next periodic check.
+
 The proxy releases capacity only after the response completes or the cancelled transport closes.
 Cancellation also closes a JSON response body after its headers arrive.
 The request UUID fences renewal and release.

@@ -486,7 +486,9 @@ public class LlmCallPermits {
             return revoked.asMono();
         }
 
+        /** Recheck elapsed time so a resumed request does not wait for the periodic fence. */
         public boolean isRevoked() {
+            if (System.nanoTime() - confirmedAt > properties.selfFenceAfter().toNanos()) revoke("no_renewal");
             return lost.get();
         }
 
