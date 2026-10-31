@@ -400,14 +400,14 @@ public class PracticeStandingService {
             Map<UUID, String> deliveredGuidance,
             Instant since) {
         Map<String, List<ResultView>> current = byPractice(
-                rows.current().stream().filter(view -> view.result().getEvidenceVersion() != 0), readable.standing());
+                rows.current().stream().filter(view -> !view.result().isMigratedHistory()), readable.standing());
         Map<String, List<ResultView>> earlier = byPractice(
                 Stream.concat(rows.current().stream(), rows.live().stream())
-                        .filter(view -> view.result().getEvidenceVersion() == 0)
+                        .filter(view -> view.result().isMigratedHistory())
                         .distinct(),
                 readable.standing());
         Map<String, List<ResultView>> live = byPractice(
-                rows.live().stream().filter(view -> view.result().getEvidenceVersion() != 0), readable.standing());
+                rows.live().stream().filter(view -> !view.result().isMigratedHistory()), readable.standing());
         int window = practiceTrendService.standingWindow();
 
         List<StandingSnapshot.PracticeStandingSnapshot> standings = new ArrayList<>();

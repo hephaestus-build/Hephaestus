@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.research;
 
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchPseudonyms.Kind;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.BasisRow;
 import de.tum.cit.aet.hephaestus.practices.research.ResearchSnapshot.FeedbackRow;
@@ -318,7 +319,8 @@ final class ResearchDatasetAssembler {
 
     /** Derived from the identities actually recorded, not from the evidence-version number alone. */
     static String proof(ResultRow result) {
-        if (result.evidenceVersion() == 0) return "LEGACY_CAPTURE_CONTRACT_NOT_ESTABLISHED";
+        if (result.evidenceVersion() == Result.MIGRATED_EVIDENCE_VERSION)
+            return "LEGACY_CAPTURE_CONTRACT_NOT_ESTABLISHED";
         return result.practiceVersionId() != null && result.itemVersionRecorded()
                 ? "VERSION_IDENTITIES_RECORDED"
                 : "VERSION_IDENTITIES_INCOMPLETE";

@@ -46,7 +46,7 @@ public class ResultProofMapper {
     }
 
     private AdmittedResultSnapshot snapshot(Result result, List<Problem> storedChildren) {
-        if (result.getEvidenceVersion() != 1
+        if (result.isMigratedHistory()
                 || result.getPracticeVersionId() == null
                 || result.getItemVersion() == null
                 || result.getSummary() == null
