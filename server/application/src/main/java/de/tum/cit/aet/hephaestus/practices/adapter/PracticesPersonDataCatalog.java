@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyCleanupCustody;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import java.util.List;
 import java.util.Map;
@@ -42,12 +43,13 @@ import tools.jackson.databind.ObjectMapper;
 })
 public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConversationCopySource {
     // Migrated review IDs preserve producer job IDs after runtime retention removes the job pointer.
-    private static final String RESULT_IDS =
-            "SELECT id FROM result WHERE developer_id=:account OR (evidence_version=0 AND review_id=ANY(:derivedJobs))"
-                    + " OR id IN(SELECT result_id FROM review_item WHERE"
-                    + " result_id IS NOT NULL AND (job_id=ANY(:derivedJobs) OR EXISTS(SELECT 1 FROM"
-                    + " jsonb_array_elements_text(COALESCE(detail->'custody'->'sourceJobIds','[]'::jsonb)) source(value)"
-                    + " WHERE source.value::uuid=ANY(:derivedJobs))))";
+    private static final String RESULT_IDS = "SELECT id FROM result WHERE developer_id=:account OR (evidence_version="
+            + Result.MIGRATED_EVIDENCE_VERSION
+            + " AND review_id=ANY(:derivedJobs))"
+            + " OR id IN(SELECT result_id FROM review_item WHERE"
+            + " result_id IS NOT NULL AND (job_id=ANY(:derivedJobs) OR EXISTS(SELECT 1 FROM"
+            + " jsonb_array_elements_text(COALESCE(detail->'custody'->'sourceJobIds','[]'::jsonb)) source(value)"
+            + " WHERE source.value::uuid=ANY(:derivedJobs))))";
     private static final String FEEDBACK_IDS =
             "SELECT id FROM feedback WHERE developer_id=:account OR id IN(SELECT feedback_id FROM feedback_basis WHERE"
                     + " result_id IN(" + RESULT_IDS + "))";

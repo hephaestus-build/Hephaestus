@@ -94,10 +94,25 @@ public class Result {
     @Column(name = "coverage", columnDefinition = "jsonb")
     private @Nullable JsonNode coverage;
 
+    /**
+     * Migrated history (ADR 0070 F-1): a read-only earlier review. It is never current and never delivered.
+     * The {@code ck_result_evidence_version} constraint allows only this value and
+     * {@link #CAPTURED_EVIDENCE_VERSION}. SQL that filters {@code evidence_version} names these constants.
+     */
+    public static final short MIGRATED_EVIDENCE_VERSION = 0;
+
+    /** Evidence captured under the established capture contract. */
+    public static final short CAPTURED_EVIDENCE_VERSION = 1;
+
     @Default
     @ColumnDefault("1")
     @Column(name = "evidence_version", nullable = false)
-    private short evidenceVersion = (short) 1;
+    private short evidenceVersion = CAPTURED_EVIDENCE_VERSION;
+
+    /** True for migrated history, which stays read-only. */
+    public boolean isMigratedHistory() {
+        return evidenceVersion == MIGRATED_EVIDENCE_VERSION;
+    }
 
     @Column(name = "recorded_at", nullable = false)
     private Instant recordedAt;

@@ -400,7 +400,7 @@ public class FeedbackGate {
 
         boolean current(Result result) {
             Long versionId = result.getPracticeVersionId();
-            if (result.getEndedAt() != null || versionId == null || result.getEvidenceVersion() != 1) return false;
+            if (result.getEndedAt() != null || versionId == null || result.isMigratedHistory()) return false;
             var version = version(versionId);
             var practice = practicesById.computeIfAbsent(
                     result.getPracticeId(), key -> practices.findByIdAndWorkspaceId(key, workspaceId));

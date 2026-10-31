@@ -177,7 +177,7 @@ public class FeedbackPreparationService {
         if (draft.destination() == FeedbackDestination.ON_WORK) {
             if (support.stream()
                     .anyMatch(row -> row.getPracticeVersionId() == null
-                            || row.getEvidenceVersion() != 1
+                            || row.isMigratedHistory()
                             || versions.findByIdAndWorkspaceId(row.getPracticeVersionId(), draft.workspaceId())
                                     .filter(version -> AboutRole.AUTHOR
                                             .name()

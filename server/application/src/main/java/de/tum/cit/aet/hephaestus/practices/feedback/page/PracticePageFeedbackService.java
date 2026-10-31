@@ -290,7 +290,7 @@ public class PracticePageFeedbackService {
                 card.withdrawn() ? null : card.closedBy(),
                 card.withdrawn() ? null : card.response(),
                 card.withdrawn(),
-                card.evidence().stream().anyMatch(result -> result.getEvidenceVersion() == 0));
+                card.evidence().stream().anyMatch(result -> result.isMigratedHistory()));
     }
 
     private static @Nullable String guidance(Practice practice, String key) {

@@ -73,13 +73,12 @@ public class ScanComparisonService {
                 var allowed = eligibility.permitted(review, rows);
                 var unmarked = eligibility.unmarked(review, rows);
                 var comparisonFacts = new ArrayList<ScanProblemComparison>();
-                if (result.getEvidenceVersion() == 1 && allowed.contains(result.getId())) {
+                if (!result.isMigratedHistory() && allowed.contains(result.getId())) {
                     var current = proof.snapshot(result);
                     var currentKeys = comparison.identities(current, key.path());
-                    var old =
-                            previous != null && previous.getEvidenceVersion() == 1 && allowed.contains(previous.getId())
-                                    ? proof.snapshot(previous)
-                                    : null;
+                    var old = previous != null && !previous.isMigratedHistory() && allowed.contains(previous.getId())
+                            ? proof.snapshot(previous)
+                            : null;
                     var previousKeys = old == null
                             ? Map.<String, AdmittedProblemSnapshot>of()
                             : comparison.identities(old, key.path());

@@ -38,7 +38,7 @@ public class AdmittedResultQueryService implements AdmittedResultQuery {
                         .filter(r -> r.getReviewId().equals(reviewId)
                                 && r.getPracticeId() == i.getPracticeId()
                                 && r.getItemId() == i.getItemId()
-                                && r.getEvidenceVersion() == 1
+                                && !r.isMigratedHistory()
                                 && r.getEvidence() != null
                                 && r.getCoverage() != null
                                 && r.getPracticeVersionId() != null

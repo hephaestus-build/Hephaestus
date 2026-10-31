@@ -44,7 +44,7 @@ final class OpportunityBundler {
         return byItem(
                 results.stream()
                         .filter(v ->
-                                v.result().getEndedAt() == null && v.result().getEvidenceVersion() == 1)
+                                v.result().getEndedAt() == null && !v.result().isMigratedHistory())
                         .filter(v -> (v.review().getOrigin() == ReviewOrigin.REQUEST
                                         || v.review().getOrigin() == ReviewOrigin.BACKFILL)
                                 == selfSelected)

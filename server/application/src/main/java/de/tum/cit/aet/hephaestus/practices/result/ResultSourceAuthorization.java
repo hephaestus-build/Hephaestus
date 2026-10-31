@@ -65,7 +65,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
     private HistoryCustody custody(Result result, Lookups lookups) {
         var producer = lookups.producer(result)
                 .filter(m -> produced(result, m)
-                        || (result.getEvidenceVersion() == 0
+                        || (result.isMigratedHistory()
                                 && m.getState() == ReviewItemState.WITHHELD
                                 && ReviewItem.LEGACY_AMBIGUOUS_RESULTS.equals(m.getReason())));
         var retained = lookups.retained(result).stream()
@@ -189,7 +189,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         Set<UUID> permitted = new HashSet<>();
         for (var result : owned) {
             var facts = custody(result, lookups);
-            boolean admitted = (history && result.getEvidenceVersion() == 0)
+            boolean admitted = (history && result.isMigratedHistory())
                     ? historyAuthorized(result, facts, purpose, audience, lookups)
                     : authorized(result, facts, purpose, audience, lookups);
             if (admitted) permitted.add(result.getId());
@@ -437,7 +437,7 @@ public class ResultSourceAuthorization implements ResultProofAccess {
         return results.findByIdAndWorkspaceId(resultId, workspaceId)
                 .map(result -> {
                     var facts = custody(result, lookups);
-                    if (result.getEvidenceVersion() != 0)
+                    if (!result.isMigratedHistory())
                         return authorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
                     return historyAuthorized(result, facts, purpose, SourceReadAudience.PROCESSING, lookups);
                 })

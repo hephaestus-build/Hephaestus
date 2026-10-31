@@ -215,7 +215,7 @@ public class FeedbackReadService {
                         || (!allowed
                                 && (row.getBody() != null
                                         || children.stream().anyMatch(copy -> copy.getBody() != null))),
-                selected.results().stream().anyMatch(result -> result.getEvidenceVersion() == 0),
+                selected.results().stream().anyMatch(result -> result.isMigratedHistory()),
                 resultCount,
                 new FeedbackCopyCountsDTO(
                         copyCounts.getOrDefault(FeedbackCopyState.PLANNED, 0),
