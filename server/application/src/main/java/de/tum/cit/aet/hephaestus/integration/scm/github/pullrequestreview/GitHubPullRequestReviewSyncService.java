@@ -15,10 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ExponentialBackoff;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
@@ -39,8 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,8 +68,6 @@ public class GitHubPullRequestReviewSyncService {
     private static final String QUERY_DOCUMENT = "GetPullRequestReviews";
     private static final String REVIEW_COMMENTS_QUERY_DOCUMENT = "GetReviewComments";
 
-    private final RepositoryRepository repositoryRepository;
-    private final PullRequestRepository pullRequestRepository;
     private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubPullRequestReviewProcessor reviewProcessor;
     private final GitHubSyncProperties syncProperties;
@@ -84,16 +78,12 @@ public class GitHubPullRequestReviewSyncService {
     private static final int MAX_DEADLOCK_RETRIES = 3;
 
     public GitHubPullRequestReviewSyncService(
-            RepositoryRepository repositoryRepository,
-            PullRequestRepository pullRequestRepository,
             GitHubGraphQlClientProvider graphQlClientProvider,
             GitHubPullRequestReviewProcessor reviewProcessor,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
             GitHubGraphQlSyncCoordinator graphQlSyncHelper,
             PlatformTransactionManager transactionManager) {
-        this.repositoryRepository = repositoryRepository;
-        this.pullRequestRepository = pullRequestRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.reviewProcessor = reviewProcessor;
         this.syncProperties = syncProperties;
@@ -101,47 +91,6 @@ public class GitHubPullRequestReviewSyncService {
         this.graphQlSyncHelper = graphQlSyncHelper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(Propagation.REQUIRES_NEW.value());
-    }
-
-    /**
-     * Synchronizes all reviews for all pull requests in a repository.
-     * <p>
-     * Uses streaming to avoid loading all pull requests into memory at once.
-     *
-     * @param scopeId  the scope ID for authentication
-     * @param repositoryId the repository ID to sync reviews for
-     * @return number of reviews synced
-     */
-    @Transactional
-    public int syncForRepository(Long scopeId, Long repositoryId) {
-        Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
-        if (repository == null) {
-            log.debug("Skipped review sync: reason=repositoryNotFound, repoId={}", repositoryId);
-            return 0;
-        }
-
-        AtomicInteger totalSynced = new AtomicInteger(0);
-        AtomicInteger prCount = new AtomicInteger(0);
-
-        try (Stream<PullRequest> prStream = pullRequestRepository.streamAllByRepository_Id(repositoryId)) {
-            prStream.forEach(pullRequest -> {
-                totalSynced.addAndGet(syncForPullRequest(scopeId, pullRequest));
-                prCount.incrementAndGet();
-            });
-        }
-
-        String safeNameWithOwner = sanitizeForLog(repository.getNameWithOwner());
-        if (prCount.get() == 0) {
-            log.debug("Skipped review sync: reason=noPullRequestsFound, repoName={}", safeNameWithOwner);
-            return 0;
-        }
-
-        log.info(
-                "Completed review sync: repoName={}, reviewCount={}, prCount={}",
-                safeNameWithOwner,
-                totalSynced.get(),
-                prCount.get());
-        return totalSynced.get();
     }
 
     /**

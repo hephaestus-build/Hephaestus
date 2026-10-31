@@ -71,7 +71,8 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
         // 5. Sync pull requests
-        SyncResult syncResult = pullRequestSyncService.syncForRepository(workspace.getId(), localRepo.getId());
+        SyncResult syncResult =
+                pullRequestSyncService.syncForRepository(workspace.getId(), localRepo.getId(), null, null, null);
 
         // 6. Verify
         assertThat(syncResult.isCompleted()).isTrue();
@@ -101,7 +102,8 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
         // 3. Sync pull requests
-        SyncResult syncResult = pullRequestSyncService.syncForRepository(workspace.getId(), localRepo.getId());
+        SyncResult syncResult =
+                pullRequestSyncService.syncForRepository(workspace.getId(), localRepo.getId(), null, null, null);
         assertThat(syncResult.isCompleted()).isTrue();
         assertThat(syncResult.count()).isGreaterThanOrEqualTo(1);
 
@@ -167,7 +169,8 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 
         // 5. Sync pull requests
-        SyncResult syncResult = pullRequestSyncService.syncForRepository(workspace.getId(), localRepo.getId());
+        SyncResult syncResult =
+                pullRequestSyncService.syncForRepository(workspace.getId(), localRepo.getId(), null, null, null);
 
         // 6. Verify both PRs are synced
         assertThat(syncResult.isCompleted()).isTrue();

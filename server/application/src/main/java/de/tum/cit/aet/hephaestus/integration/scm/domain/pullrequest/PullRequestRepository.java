@@ -3,12 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import jakarta.persistence.LockModeType;
-import jakarta.persistence.QueryHint;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
-import org.hibernate.jpa.HibernateHints;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +13,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -221,14 +217,6 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
             "SELECT p FROM PullRequest p LEFT JOIN FETCH p.author LEFT JOIN FETCH p.milestone WHERE p.repository.id = :repositoryId AND p.deletedAt IS NULL ORDER BY p.number DESC")
     List<PullRequest> findPullRequestInventoryByRepositoryId(
             @Param("repositoryId") long repositoryId, Pageable pageable);
-
-    /**
-     * Streams all pull requests belonging to a repository. Must be consumed within a try-with-resources
-     * block so the stream closes and releases its connection, and the caller must be annotated
-     * {@code @Transactional(readOnly = true)} for streaming to work.
-     */
-    @QueryHints(@QueryHint(name = HibernateHints.HINT_FETCH_SIZE, value = "50"))
-    Stream<PullRequest> streamAllByRepository_Id(Long repositoryId);
 
     /**
      * Atomically inserts or updates a pull request's core fields (race-condition safe).

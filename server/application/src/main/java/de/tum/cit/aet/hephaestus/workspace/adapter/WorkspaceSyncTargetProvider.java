@@ -103,12 +103,23 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     public List<SyncTarget> getSyncTargetsForScope(Long scopeId) {
         return workspaceRepository
                 .findById(scopeId)
-                .map(ws -> ws.getRepositoriesToMonitor().stream()
-                        // Apply repository filter to respect monitoring
-                        // configuration (e.g., dev environment limits)
-                        .filter(workspaceScopeFilter::isRepositoryAllowed)
-                        .map(rtm -> SyncTargetFactory.create(ws, rtm, connectionService))
-                        .toList())
+                .map(ws -> {
+                    // Apply repository filter to respect monitoring
+                    // configuration (e.g., dev environment limits)
+                    List<RepositoryToMonitor> monitors = ws.getRepositoriesToMonitor().stream()
+                            .filter(workspaceScopeFilter::isRepositoryAllowed)
+                            .toList();
+                    List<SyncTarget> targets = monitors.stream()
+                            .flatMap(rtm -> SyncTargetFactory.create(ws, rtm, connectionService).stream())
+                            .toList();
+                    if (targets.isEmpty() && !monitors.isEmpty()) {
+                        log.info(
+                                "Skipped sync targets: reason=noActiveConnection, workspaceId={}, monitorCount={}",
+                                scopeId,
+                                monitors.size());
+                    }
+                    return targets;
+                })
                 .orElse(List.of());
     }
 
@@ -296,9 +307,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
     private Optional<SyncTarget> loadSyncTarget(Long syncTargetId) {
         return repositoryToMonitorRepository.findById(syncTargetId).flatMap(rtm -> {
             var workspace = rtm.getWorkspace();
-            return workspace == null
-                    ? Optional.empty()
-                    : Optional.of(SyncTargetFactory.create(workspace, rtm, connectionService));
+            return workspace == null ? Optional.empty() : SyncTargetFactory.create(workspace, rtm, connectionService);
         });
     }
 
@@ -639,7 +648,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
         // Filter repositories by workspace scope
         List<SyncTarget> syncTargets = workspace.getRepositoriesToMonitor().stream()
                 .filter(workspaceScopeFilter::isRepositoryAllowed)
-                .map(rtm -> SyncTargetFactory.create(workspace, rtm, connectionService))
+                .flatMap(rtm -> SyncTargetFactory.create(workspace, rtm, connectionService).stream())
                 .toList();
 
         long workspaceId = workspace.getId();
