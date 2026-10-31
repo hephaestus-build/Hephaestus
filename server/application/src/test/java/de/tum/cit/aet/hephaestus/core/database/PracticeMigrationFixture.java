@@ -225,7 +225,11 @@ final class PracticeMigrationFixture {
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
             // These historical fixtures stop before 0.95.0; the entry guard has its own integration test.
-            liquibase.getDatabaseChangeLog().getPreconditions().getNestedPreconditions().clear();
+            liquibase
+                    .getDatabaseChangeLog()
+                    .getPreconditions()
+                    .getNestedPreconditions()
+                    .clear();
             liquibase.update(new Contexts(context), new LabelExpression());
         }
     }
@@ -238,7 +242,11 @@ final class PracticeMigrationFixture {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
-            liquibase.getDatabaseChangeLog().getPreconditions().getNestedPreconditions().clear();
+            liquibase
+                    .getDatabaseChangeLog()
+                    .getPreconditions()
+                    .getNestedPreconditions()
+                    .clear();
             var contexts = new Contexts(context);
             var labels = new LabelExpression();
             var pending = liquibase.listUnrunChangeSets(contexts, labels);
