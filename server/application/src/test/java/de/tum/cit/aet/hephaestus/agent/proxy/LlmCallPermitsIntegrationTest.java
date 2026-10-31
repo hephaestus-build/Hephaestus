@@ -576,7 +576,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         String queuedWorker = "composition-" + UUID.randomUUID();
         try (var ongoing = admit(workerB, primary, LlmCallClass.EVENT, 2)) {
             transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
-                    pending, primary, queuedWorker, "COMPOSITION", 2, UUID.randomUUID(), 0, "WAITING")));
+                    pending, primary, queuedWorker, "COMPOSITION", 2L, UUID.randomUUID(), 0, "WAITING")));
             int granted = 0;
             for (int round = 0; round < 6; round++) {
                 var caller = caller(1);
@@ -648,8 +648,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
         var otherAttempt =
                 new LlmCallPermits.Caller(caller.workspaceId(), caller.sourceId(), caller.attempt() + 1, null);
-        var otherWorkspace =
-                new LlmCallPermits.Caller(caller.workspaceId() + 1, caller.sourceId(), caller.attempt(), null);
+        var otherWorkspace = new LlmCallPermits.Caller(
+                Objects.requireNonNull(caller.workspaceId()) + 1, caller.sourceId(), caller.attempt(), null);
         var otherSource = new LlmCallPermits.Caller(caller.workspaceId(), UUID.randomUUID(), caller.attempt(), null);
         try {
             for (var fenced : List.of(otherAttempt, otherWorkspace, otherSource)) {
