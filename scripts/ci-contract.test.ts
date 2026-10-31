@@ -75,7 +75,7 @@ async function posixGlob(pattern: string): Promise<string[]> {
 	return files.map((file) => file.split(path.sep).join("/")).toSorted();
 }
 
-void test("only the Version PR checkout retains Git credentials", async () => {
+void test("checkouts never retain Git credentials", async () => {
 	for (const file of await posixGlob(".github/{workflows/*.yml,actions/*/action.yml}")) {
 		visit(parseDocument(await readFile(file, "utf8")), {
 			Map(_key, node) {
@@ -83,7 +83,7 @@ void test("only the Version PR checkout retains Git credentials", async () => {
 				if (typeof uses === "string" && uses.startsWith("actions/checkout@")) {
 					assert.equal(
 						node.getIn(["with", "persist-credentials"]),
-						file === ".github/workflows/version-pr.yml",
+						false,
 						`${file}: checkout credential persistence must be explicit`,
 					);
 				}
