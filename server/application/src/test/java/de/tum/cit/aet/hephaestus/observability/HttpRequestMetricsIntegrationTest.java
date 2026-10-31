@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,5 +75,22 @@ class HttpRequestMetricsIntegrationTest extends BaseIntegrationTest {
         assertThat(meterRegistry.find("http.server.requests").timers())
                 .isNotEmpty()
                 .noneSatisfy(timer -> assertThat(timer.getId().getTag("uri")).contains(marker));
+    }
+
+    @Test
+    void shouldCountRequestsWithinTheTwoSecondReadObjective() {
+        webTestClient
+                .get()
+                .uri("/not-a-route/" + UUID.randomUUID())
+                .exchange()
+                .expectStatus()
+                .is4xxClientError()
+                .expectBody(Void.class);
+
+        // The API read objective (hephaestus-alerts.yml, group hephaestus-slos) reads the bucket at 2 s.
+        assertThat(meterRegistry.find("http.server.requests").timers())
+                .isNotEmpty()
+                .allSatisfy(timer -> assertThat(timer.takeSnapshot().histogramCounts())
+                        .anySatisfy(bucket -> assertThat(bucket.bucket(TimeUnit.SECONDS)).isEqualTo(2.0)));
     }
 }

@@ -171,6 +171,20 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusDeployToolingPending` | `hephaestus_deploy_tooling_pending` | The host runs tooling that no apply recorded. The next promotion of the release that the host runs ends it. An hour leaves time for that promotion |
 | `HephaestusCertificateExpiring` | `certmanager_certificate_expiration_timestamp_seconds` | cert-manager renews a certificate when one third of its lifetime remains: 15 days of a 45-day certificate. For a certificate with a lifetime of less than 21 days, lower the threshold. cert-manager reports 0 for a certificate that it did not issue yet. Therefore, the alert also fires when a first issuance takes longer than its wait |
 
+#### Service level objectives
+
+The group `hephaestus-slos` turns three objectives into burn-rate alerts.
+Each objective has a budget for 30 days.
+A fast burn spends 2 % of that budget in one hour, and a slow burn spends 5 % in six hours.
+Each alert checks a long window and a short window, so it ends soon after the cause ends ([Google SRE workbook](https://sre.google/workbook/alerting-on-slos/)).
+Each alert also needs a minimum number of requests, so one failure on an idle instance does not page.
+
+| Objective | Signal | Why this objective |
+| --- | --- | --- |
+| 99.5 % of API requests get no server error (`HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`) | `http_server_requests_seconds_count` of the server role, without the `/internal/` routes | A reader sees every server error. The `/internal/` routes serve review sandboxes and the model proxy, which have their own alerts |
+| 99.5 % of API reads finish within 2 seconds (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`) | `http_server_requests_seconds_bucket` with `le="2.0"`, for `GET` without server errors, event streams and downloads | A page waits for its reads. An event stream stays open on purpose, and a download takes as long as its size. The server publishes one bucket at 2 seconds, not a full histogram |
+| 75 % of page loads show their main content within 2.5 seconds (`HephaestusPageExperiencePoor`) | `web_vital_duration_seconds_bucket` for `lcp` with `le="2.5"`, over six hours | The Core Web Vitals threshold for a good Largest Contentful Paint ([web.dev](https://web.dev/articles/lcp)). It needs [page experience metrics](#page-experience-metrics) on, and 50 loads in six hours |
+
 The WAL archive rule reads the server's [WAL archive metrics](#wal-archive-metrics).
 It also applies to an external PostgreSQL that archives its WAL.
 No rule reads the age of the last archived segment.

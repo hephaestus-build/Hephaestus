@@ -165,6 +165,62 @@ groups:
   # The PVC and CronJob names are those that the chart gives a release. The webhook rules select the
   # Deployment by the chart's labels, which kube-state-metrics exports only when they are allowed. Add a namespace matcher to
   # limit a rule to the release namespace.
+  # Service level objectives, as multi-window burn-rate alerts over a 30-day budget. A fast burn spends 2 % of
+  # the budget in one hour; a slow burn spends 5 % in six hours. Each alert needs a floor of requests, so that
+  # one failed request on an idle instance does not page. docs/admin/observability.mdx § Service level
+  # objectives gives each objective and its reason.
+  - name: hephaestus-slos
+    rules:
+      - alert: HephaestusApiErrorBudgetBurnFast
+        expr: >-
+          (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[1h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[1h]))) > 14.4 * 0.005
+          and (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[5m])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[5m]))) > 14.4 * 0.005
+          and sum(increase(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[1h])) >= 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The API answers with server errors fast enough to spend its monthly error budget in two days
+      - alert: HephaestusApiErrorBudgetBurnSlow
+        expr: >-
+          (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[6h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[6h]))) > 6 * 0.005
+          and (sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*",status=~"5.."}[30m])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[30m]))) > 6 * 0.005
+          and sum(increase(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",uri!~"/internal/.*"}[6h])) >= 300
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The API answers with server errors fast enough to spend its monthly error budget in five days
+      - alert: HephaestusApiLatencyBudgetBurnFast
+        expr: >-
+          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download",le="2.0"}[1h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download"}[1h]))) > 14.4 * 0.005
+          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download",le="2.0"}[5m])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download"}[5m]))) > 14.4 * 0.005
+          and sum(increase(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download"}[1h])) >= 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: API reads take longer than 2 seconds often enough to spend the monthly budget in two days
+      - alert: HephaestusApiLatencyBudgetBurnSlow
+        expr: >-
+          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download",le="2.0"}[6h])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download"}[6h]))) > 6 * 0.005
+          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download",le="2.0"}[30m])) / sum(rate(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download"}[30m]))) > 6 * 0.005
+          and sum(increase(http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri!~"/internal/.*|.*/events|.*/download"}[6h])) >= 300
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: API reads take longer than 2 seconds often enough to spend the monthly budget in five days
+      - alert: HephaestusPageExperiencePoor
+        expr: >-
+          sum(rate(web_vital_duration_seconds_bucket{job="hephaestus",vital="lcp",le="2.5"}[6h]))
+          / sum(rate(web_vital_duration_seconds_count{job="hephaestus",vital="lcp"}[6h])) < 0.75
+          and sum(increase(web_vital_duration_seconds_count{job="hephaestus",vital="lcp"}[6h])) >= 50
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: Fewer than 75 % of page loads showed their main content within 2.5 seconds over six hours
   - name: hephaestus-kubernetes
     rules:
       - alert: HephaestusWebhookReceiverDown
