@@ -237,7 +237,9 @@ mock.module("node:child_process", { exports: {
 				protocol && expectedError === "" ? 0 : 1,
 				result.stdout + result.stderr,
 			);
-			if (expectedError !== "") assert.ok(result.stderr.includes(expectedError), result.stderr);
+			if (expectedError !== "") {
+				assert.ok(result.stderr.includes(expectedError), result.stderr);
+			}
 			const executed = existsSync(fixtures) ? readFileSync(fixtures, "utf8") : "";
 			assert.equal(executed.includes("INSERT INTO mentor_slack_thread"), seeded, executed);
 			const invocations = existsSync(commands) ? readFileSync(commands, "utf8") : "";
@@ -260,17 +262,16 @@ mock.module("node:child_process", { exports: {
 					(call) => call[0] === "run" && call.includes("SPRING_PROFILES_ACTIVE=e2e,webhook"),
 				);
 				assert.equal(receivers.length, 2);
-				assert.ok(receivers[0]?.includes("old-image"));
+				const [previous = [], candidate = []] = receivers;
+				assert.ok(previous.includes("old-image"));
 				assert.ok(
-					receivers[0]?.includes(
+					previous.includes(
 						`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${stopped ? "hephaestus_partial" : "hephaestus"}`,
 					),
 				);
-				assert.ok(receivers[1]?.includes("target-image"));
+				assert.ok(candidate.includes("target-image"));
 				assert.ok(
-					receivers[1]?.includes(
-						"SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus",
-					),
+					candidate.includes("SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus"),
 				);
 				assert.equal(calls.filter((call) => call[0] === "delivery").length, 4);
 				assert.equal(

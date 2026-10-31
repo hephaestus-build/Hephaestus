@@ -220,6 +220,16 @@ await test("the producer refuses evidence it cannot turn into one strict joint l
 	);
 });
 
+const execute = (...args: string[]) =>
+	spawnSync(
+		process.execPath,
+		[new URL("release-image-lock.ts", import.meta.url).pathname, ...args],
+		{
+			encoding: "utf8",
+			timeout: 30_000,
+		},
+	);
+
 await test("the CLI writes and verifies one joint lock and refuses legacy commands", async (t) => {
 	const directory = await mkdtemp(path.join(tmpdir(), "release-lock-cli-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
@@ -230,22 +240,14 @@ await test("the CLI writes and verifies one joint lock and refuses legacy comman
 	const environment = path.join(directory, "release-lock.env");
 	await writeFile(manifest, JSON.stringify(evidence));
 	await writeFile(metadata, JSON.stringify(chart));
-	const execute = (...args: string[]) =>
-		spawnSync(
-			process.execPath,
-			[new URL("release-image-lock.ts", import.meta.url).pathname, ...args],
-			{
-				encoding: "utf8",
-				timeout: 30_000,
-			},
-		);
 	const produced = execute("write", manifest, metadata, "v1.2.3", output);
 	assert.equal(produced.status, 0, produced.stderr);
 	const original = await readFile(output, "utf8");
 	assert.deepEqual(JSON.parse(original), jointLock);
+	const written = await readdir(directory);
 	assert.deepEqual(
-		(await readdir(directory)).sort(),
-		["chart.json", "manifest.json", path.basename(output)].sort(),
+		written.toSorted(),
+		["chart.json", "manifest.json", path.basename(output)].toSorted(),
 	);
 	const verified = execute("verify", output, manifest, "v1.2.3");
 	assert.equal(verified.status, 0, verified.stderr);
