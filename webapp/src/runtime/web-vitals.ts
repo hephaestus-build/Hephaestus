@@ -77,85 +77,133 @@ function regionOf(metric: Measured): WebVital["region"] {
 	}
 }
 
-/** What a page visit measured so far: the latest value of each vital, with its region. */
-type Measurements = Map<Measured["name"], Omit<WebVital, "page">>;
+/** How many route views the reporter remembers, to name the page of a measurement that arrives late. */
+const REMEMBERED_VIEWS = 50;
+/** The most measurements that one report carries. The server refuses a longer list, so a full batch goes at once. */
+const REPORT_LIMIT = 40;
+
+/** A page address without its fragment, as the browser names a navigation. */
+const addressOf = (href: string) => {
+	const url = new URL(href, location.href);
+	url.hash = "";
+	return url.href;
+};
 
 /**
- * Measures a visit and sends what it measured once, when the reader first leaves the page, in one
- * request that outlives the page (`keepalive`). It measures only on an instance whose operator turned
- * page experience metrics on, and only for a visit that started on a signed-in page outside a user
- * view: the server counts only signed-in readers, and a refused report would start session recovery.
- * Until both are known, the app does not even load `web-vitals`, whose module observes resource
- * timings when it loads. Once loaded, `web-vitals` reads the timings that the browser buffered since
- * the page opened. A visit counts from then: if the reader left before, the next time they leave
- * sends it. A visit is the document's life until the reader leaves, so INP and CLS cover every page
- * the reader moved to, and each is named after the page the visit started on. A page restored from
- * the back-forward cache reports nothing more: `web-vitals` starts late and readies its own restore
- * handling only after timers that a restore can overtake, so a restored visit could carry the first
- * load's timings.
+ * Measures how a document's page loads and route views felt, and sends each measurement once. The
+ * app measures only on an instance whose operator turned page experience metrics on, and only for a
+ * document that started on a signed-in page outside a user view: the server counts only signed-in
+ * readers, and a refused report would start session recovery. Until both are known, the app does not
+ * load `web-vitals`, whose module observes resource timings when it loads.
+ *
+ * With `reportSoftNavs`, a browser that detects route changes (Chromium) measures each route view as
+ * its own `ROUTE` navigation, and the first view as the `LOAD` navigation. Another browser measures
+ * the whole document as one `LOAD`. `web-vitals` reports a navigation's INP and CLS when the next
+ * navigation starts, or when the page hides. The first report of each metric is the one sent: a
+ * histogram cannot replace a value, so a later report of the same metric is dropped. A page that the
+ * back-forward cache restores reports nothing more: `web-vitals` starts late and readies its own
+ * restore handling only after timers that a restore can overtake.
  */
 export function reportVisitVitals(router: AnyRouter, queryClient: QueryClient) {
 	const pageNow = () => {
 		const routeIds = router.state.matches.map(({ routeId }) => routeId);
 		return routeIds.includes(SIGNED_IN) ? journeyPageOf(routeIds) : null;
 	};
-	/** `null` until the landing page resolves, and for a visit that does not report. */
-	let page: WebVital["page"] | null = null;
+	/** `null` until the landing page resolves, and for a document that does not report. */
+	let landing: WebVital["page"] | null = null;
+	let landed = false;
 	let measuring = false;
-	const measured: Measurements = new Map();
-	/** The visit has reported, or the page came back from the back-forward cache. */
-	let done = false;
+	let restored = false;
+	const pages = new Map<string, WebVital["page"]>();
+	const reported = new Set<string>();
+	const queued: WebVital[] = [];
+	const send = () => {
+		if (measuring && queued.length > 0) {
+			void reportWebVitals({ body: { vitals: queued.splice(0) }, keepalive: true });
+		}
+	};
+	const forgetRestored = () => {
+		restored = true;
+		queued.length = 0;
+	};
 	addEventListener("pageshow", (event) => {
 		if (event.persisted) {
-			done = true;
+			forgetRestored();
 		}
 	});
 	// `web-vitals` reports CLS and INP when the page hides; this listener runs after it.
 	document.addEventListener("visibilitychange", () => {
 		queueMicrotask(() => {
-			if (document.visibilityState !== "hidden" || !measuring || done) {
-				return;
-			}
-			done = true;
-			const landing = page;
-			if (landing !== null && measured.size > 0) {
-				const vitals = [...measured.values()].map((vital) => ({ ...vital, page: landing }));
-				void reportWebVitals({ body: { vitals }, keepalive: true });
+			if (document.visibilityState === "hidden" && !restored) {
+				send();
 			}
 		});
 	});
 	const collect = (metric: Measured) => {
-		if (!done && page !== null) {
-			measured.set(metric.name, {
-				vital: metric.name,
-				region: regionOf(metric),
-				value: metric.value,
-			});
+		// `web-vitals` reports a restored page from its own capture-phase `pageshow` listener, which
+		// can run before the one above.
+		if (metric.navigationType === "back-forward-cache") {
+			forgetRestored();
+		}
+		if (restored || landing === null || reported.has(metric.id)) {
+			return;
+		}
+		reported.add(metric.id);
+		const navigation = metric.navigationType === "soft-navigation" ? "ROUTE" : "LOAD";
+		// A route view has no document of its own, so its TTFB is always 0.
+		if (metric.name === "TTFB" && navigation === "ROUTE") {
+			return;
+		}
+		const page =
+			navigation === "LOAD"
+				? landing
+				: (pages.get(addressOf(metric.navigationURL ?? "")) ?? "OTHER");
+		queued.push({
+			vital: metric.name,
+			navigation,
+			page,
+			region: regionOf(metric),
+			value: metric.value,
+		});
+		if (queued.length >= REPORT_LIMIT) {
+			send();
 		}
 	};
 	const measure = async () => {
 		const { onCLS, onINP, onLCP, onTTFB } = await import("web-vitals/attribution");
-		const options = { generateTarget: landmarkOf };
+		const options = { generateTarget: landmarkOf, reportSoftNavs: true };
 		onLCP(collect, options);
 		onINP(collect, options);
 		onCLS(collect, options);
-		onTTFB(collect);
+		onTTFB(collect, { reportSoftNavs: true });
 		measuring = true;
 	};
-	const unsubscribe = router.subscribe("onResolved", () => {
-		unsubscribe();
-		page = pageNow();
-		// A user view shows another person's pages; the administrator's visit is no reader's.
-		if (!done && page !== null && getUserViewSession() === undefined) {
-			// While the app's own read of the flags is fresh, this shares it.
-			queryClient
-				.query({ ...featureFlagsQueryOptions, retry: false })
-				.then(async (flags) => {
-					if (flags.PAGE_EXPERIENCE_METRICS) {
-						await measure();
-					}
-				})
-				.catch(noop);
+	router.subscribe("onResolved", () => {
+		const page = pageNow();
+		if (page !== null) {
+			pages.delete(addressOf(location.href));
+			pages.set(addressOf(location.href), page);
+			if (pages.size > REMEMBERED_VIEWS) {
+				pages.delete(pages.keys().next().value ?? "");
+			}
 		}
+		if (landed) {
+			return;
+		}
+		landed = true;
+		// A user view shows another person's pages; the administrator's visit is no reader's.
+		if (restored || page === null || getUserViewSession() !== undefined) {
+			return;
+		}
+		landing = page;
+		// While the app's own read of the flags is fresh, this shares it.
+		queryClient
+			.query({ ...featureFlagsQueryOptions, retry: false })
+			.then(async (flags) => {
+				if (flags.PAGE_EXPERIENCE_METRICS) {
+					await measure();
+				}
+			})
+			.catch(noop);
 	});
 }

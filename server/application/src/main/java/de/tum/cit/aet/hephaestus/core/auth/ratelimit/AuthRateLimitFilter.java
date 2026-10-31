@@ -76,7 +76,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         MENTOR_TURNS("mentor-turns", true, false),
         REVIEW_REQUEST("review-request", true, false),
         SYNC_TRIGGER("sync-trigger", true, false),
-        PUBLIC_ACTIVITY("public-activity", false, false);
+        PUBLIC_ACTIVITY("public-activity", false, false),
+        // What a browser measured: losing a report costs less than refusing it with a 503.
+        BROWSER_REPORTS("browser-reports", true, true);
 
         private final String namespace;
         /** Whether the limit keys by account (with IP fallback) vs. always by IP. */
@@ -192,6 +194,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if ("POST".equals(method) && path.matches("/workspaces/[^/]+/connections/[^/]+/sync/jobs")) {
             return Endpoint.SYNC_TRIGGER;
         }
+        if ("POST".equals(method) && path.equals("/web-vitals")) {
+            return Endpoint.BROWSER_REPORTS;
+        }
         return null;
     }
 
@@ -208,6 +213,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             case REVIEW_REQUEST -> properties.reviewRequest();
             case SYNC_TRIGGER -> properties.syncTrigger();
             case PUBLIC_ACTIVITY -> properties.publicActivity();
+            case BROWSER_REPORTS -> properties.browserReports();
         };
     }
 

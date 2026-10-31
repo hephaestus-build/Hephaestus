@@ -6436,6 +6436,7 @@ export type VerifyPasskeyRequest = {
  * One measurement of a page visit
  */
 export type WebVital = {
+    navigation: 'LOAD' | 'ROUTE';
     page: 'PRACTICE_PROFILE' | 'ASK_HEPHAESTUS' | 'FEEDBACK' | 'FEEDBACK_APPROVAL' | 'ACTIVITY' | 'OTHER';
     region: 'SIDEBAR' | 'HEADER' | 'PAGE' | 'OTHER';
     /**
@@ -6446,7 +6447,7 @@ export type WebVital = {
 };
 
 /**
- * The measurements of one page visit, one of each vital, sent once when the reader leaves it
+ * Measurements of a document's page load and route views, each sent once when the page hides
  */
 export type WebVitalsReport = {
     vitals: Array<WebVital>;
@@ -9722,7 +9723,7 @@ export type ReportWebVitalsData = {
 
 export type ReportWebVitalsErrors = {
     /**
-     * A measurement names an unknown vital, page or region, or names a vital twice, or is out of range
+     * A measurement names an unknown vital, navigation, page or region, is out of range, or is the time to first byte of a route view
      */
     400: unknown;
     /**

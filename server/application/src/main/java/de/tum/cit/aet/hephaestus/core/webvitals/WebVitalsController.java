@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.core.webvitals;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Navigation;
 import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Vital;
-import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.WebVitalDTO;
 import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.WebVitalsReportDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -41,7 +41,7 @@ public class WebVitalsController {
     @ApiResponse(
             responseCode = "400",
             description =
-                    "A measurement names an unknown vital, page or region, or names a vital twice, or is out of range")
+                    "A measurement names an unknown vital, navigation, page or region, is out of range, or is the time to first byte of a route view")
     @ApiResponse(responseCode = "401", description = "Not signed in")
     public ResponseEntity<Void> report(@Valid @RequestBody WebVitalsReportDTO report) {
         if (!isPlausible(report)) {
@@ -51,12 +51,10 @@ public class WebVitalsController {
         return ResponseEntity.noContent().build();
     }
 
-    /** A visit has one value of each vital, and a layout shift score above 100 is no real page. */
+    /** A route view loads no document, so it has no time to first byte, and a layout shift score above 100 is no real page. */
     private static boolean isPlausible(WebVitalsReportDTO report) {
-        long vitals =
-                report.vitals().stream().map(WebVitalDTO::vital).distinct().count();
-        return vitals == report.vitals().size()
-                && report.vitals().stream()
-                        .noneMatch(vital -> vital.vital() == Vital.CLS && vital.value() > MAX_LAYOUT_SHIFT);
+        return report.vitals().stream()
+                .noneMatch(vital -> (vital.vital() == Vital.TTFB && vital.navigation() == Navigation.ROUTE)
+                        || (vital.vital() == Vital.CLS && vital.value() > MAX_LAYOUT_SHIFT));
     }
 }
