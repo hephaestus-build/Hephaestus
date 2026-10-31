@@ -22,6 +22,7 @@ import { githubReleaseBody } from "./github-release-notes.ts";
 import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 import { lockFromEvidence } from "./release-image-lock.ts";
+import { verifyReleaseEvidence } from "./verify-release-evidence.ts";
 
 const release = "v0.93.0";
 const commit = "c".repeat(40);
@@ -304,7 +305,13 @@ async function fixture(directory: string, source = commit, tag = release) {
 			})),
 		),
 	];
-	const manifest = { schemaVersion: 1, release: fixtureRelease, commit: source, subjects };
+	const manifest = {
+		schemaVersion: 1,
+		release: fixtureRelease,
+		commit: source,
+		bundledNpmSbom: 1,
+		subjects,
+	};
 	await json("manifest.json", manifest);
 	await json("release-images.json", inventory);
 	// The checkout's inventory, which the release scripts read beside the evidence.
@@ -338,12 +345,17 @@ async function fixture(directory: string, source = commit, tag = release) {
 	for (const subject of subjects) {
 		const prefix = `${subject.image}-${subject.platform.replace("/", "-")}`;
 		const reference = `${subject.repository}@${subject.digest}`;
+		const packagePath =
+			subject.image === "webapp"
+				? "/usr/share/nginx/html/.vite/packages/example%401.0.0/package.json"
+				: "/app/package.json";
 		const artifact = {
 			name: "example",
 			version: "1.0.0",
 			type: "npm",
+			foundBy: "javascript-package-cataloger",
 			purl: "pkg:npm/example@1.0.0",
-			locations: [{ path: "/app/package.json" }],
+			locations: [{ path: packagePath }],
 			licenses: [{ value: "MIT" }],
 		};
 		await json(`${prefix}.syft.json`, {
@@ -361,6 +373,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 				},
 			},
 			artifacts: [artifact],
+			files: [{ location: { path: packagePath } }],
 		});
 		await json(`${prefix}.spdx.json`, {
 			spdxVersion: "SPDX-2.3",
@@ -388,7 +401,25 @@ async function fixture(directory: string, source = commit, tag = release) {
 			components: [artifact],
 		});
 		for (const kind of ["trivy", "license"]) {
-			await json(`${prefix}.${kind}.json`, { ArtifactName: reference, Results: [] });
+			await json(`${prefix}.${kind}.json`, {
+				ArtifactName: reference,
+				Results:
+					subject.image === "webapp"
+						? [
+								{
+									Type: "node-pkg",
+									Target: "Node.js",
+									Packages: [
+										{
+											Name: artifact.name,
+											Version: artifact.version,
+											FilePath: packagePath.slice(1),
+										},
+									],
+								},
+							]
+						: [],
+			});
 		}
 	}
 	const validation = spawnSync(
@@ -1288,3 +1319,32 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 		assert.match(refused.stderr, /lock has missing or extra fields/u);
 	});
 }
+
+void test(
+	"capture verifies declared bundle coverage even with an older release label",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-bundle-coverage-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const { archive, json } = await fixture(directory);
+		const scanFile = "webapp-linux-amd64.trivy.json";
+		const scan = asRecord(
+			parseJson(await readFile(path.join(archive, scanFile), "utf8")),
+			"Trivy report",
+		);
+		await json(scanFile, { ...scan, Results: [] });
+		assert.throws(
+			() => verifyReleaseEvidence(archive, "write-validation"),
+			/Trivy omitted bundled npm/u,
+		);
+		await json(scanFile, scan);
+
+		const file = "webapp-linux-amd64.syft.json";
+		const native = asRecord(
+			parseJson(await readFile(path.join(archive, file), "utf8")),
+			"Syft inventory",
+		);
+		await json(file, { ...native, files: [] });
+		assert.throws(() => verifyReleaseEvidence(archive, "write-validation"), /no bundled npm/u);
+	},
+);

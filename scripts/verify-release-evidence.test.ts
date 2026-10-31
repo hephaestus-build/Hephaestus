@@ -11,6 +11,7 @@ import { advisoryFile, componentAdvisories } from "./check-release-vulnerabiliti
 import {
 	attestationContainsSbom,
 	indexContainsSubject,
+	validateImageBundleInventory,
 	requiresSignedEvidence,
 	validateLicenseReport,
 	validateManifest,
@@ -392,4 +393,10 @@ void it("signed evidence is required from the owned release boundary, including 
 	for (const tag of ["v0.86.2", "v0.86.2-rc.1", "v0.86.10", "v1.0.0"]) {
 		assert.equal(requiresSignedEvidence(tag), true);
 	}
+});
+
+void it("requires bundle metadata and scanner coverage when the signed manifest declares it", () => {
+	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "webapp", false));
+	assert.doesNotThrow(() => validateImageBundleInventory({}, {}, "agent-pi", true));
+	assert.throws(() => validateImageBundleInventory({}, {}, "webapp", true), /no bundled npm/u);
 });

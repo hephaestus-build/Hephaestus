@@ -4,6 +4,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import Terminal from "vite-plugin-terminal";
 import { configDefaults, defineConfig } from "vite-plus";
 
+import { BUNDLE_LICENSE_FILE, bundlePackages } from "./tools/bundle-packages.ts";
 import { entryChunkBudget } from "./tools/entry-chunk/entry-chunk-budget.ts";
 import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
@@ -17,11 +18,13 @@ const viteConfig = defineConfig({
 		tanstackRouter({ autoCodeSplitting: true }),
 		...appSourcePlugins(),
 		entryChunkBudget(),
+		bundlePackages(),
 		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
 			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),
 	],
 	build: {
+		license: { fileName: BUNDLE_LICENSE_FILE },
 		rolldownOptions: {
 			// The generated zod schemas carry no pure annotations. Without this, a chunk that imports one schema ships all of them.
 			// It marks every `z.*` call pure, so a call kept only for its side effect, such as `z.config(...)`, would be dropped.

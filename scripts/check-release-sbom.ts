@@ -247,6 +247,77 @@ function assertDerivedInventoriesCover(
 /** The one Syft configuration: every file's metadata and SHA-256, package catalogers at their defaults. */
 export const SYFT_CONFIG = path.join(import.meta.dirname, "..", "security", "syft.yaml");
 
+const BUNDLE_PACKAGES = "/usr/share/nginx/html/.vite/packages/";
+
+function bundledNpmManifests(syft: JsonObject): string[] {
+	return array(syft.files ?? [], "Syft files")
+		.map((file) =>
+			text(object(object(file, "Syft file").location, "Syft location").path, "file path"),
+		)
+		.filter((file) => file.startsWith(BUNDLE_PACKAGES) && file.endsWith("/package.json"));
+}
+
+/** Each package manifest emitted from the bundle must survive the image scan as its own npm identity. */
+export function assertBundledNpmInventory(syftInput: unknown): void {
+	const syft = object(syftInput, "Syft SBOM");
+	const manifests = bundledNpmManifests(syft);
+	if (manifests.length === 0) {
+		throw new Error("webapp image has no bundled npm package manifests");
+	}
+	const covered = new Set<string>();
+	for (const value of array(syft.artifacts, "Syft artifacts")) {
+		const artifact = object(value, "Syft artifact");
+		if (artifact.type !== "npm" || artifact.foundBy !== "javascript-package-cataloger") {
+			continue;
+		}
+		const identity = `${text(artifact.name, "npm name")}@${text(artifact.version, "npm version")}`;
+		const expected = `${BUNDLE_PACKAGES}${encodeURIComponent(identity)}/package.json`;
+		for (const location of array(artifact.locations, "npm locations")) {
+			if (object(location, "npm location").path === expected) {
+				covered.add(expected);
+			}
+		}
+	}
+	for (const manifest of manifests) {
+		if (!covered.has(manifest)) {
+			throw new Error(`Syft omitted the bundled npm identity from ${manifest}`);
+		}
+	}
+}
+
+/** Prove that the vulnerability scanner read the same emitted identities as the SBOM scanner. */
+export function assertBundledNpmScan(syftInput: unknown, trivyInput: unknown): void {
+	const manifests = bundledNpmManifests(object(syftInput, "Syft SBOM"));
+	const covered = new Set<string>();
+	for (const value of array(object(trivyInput, "Trivy report").Results, "Trivy results")) {
+		const result = object(value, "Trivy result");
+		if (result.Type !== "node-pkg") {
+			continue;
+		}
+		for (const item of array(result.Packages ?? [], "Trivy packages")) {
+			const pkg = object(item, "Trivy package");
+			if (typeof pkg.FilePath !== "string") {
+				continue;
+			}
+			const file = imagePath(pkg.FilePath);
+			if (file === undefined || !file.startsWith(BUNDLE_PACKAGES)) {
+				continue;
+			}
+			covered.add(
+				`${file}\0${text(pkg.Name, "Trivy package name")}@${text(pkg.Version, "Trivy package version")}`,
+			);
+		}
+	}
+	for (const file of manifests) {
+		const identity = decodeURIComponent(
+			file.slice(BUNDLE_PACKAGES.length, -"/package.json".length),
+		);
+		if (!covered.has(`${file}\0${identity}`)) {
+			throw new Error(`Trivy omitted bundled npm package ${identity} at ${file}`);
+		}
+	}
+}
+
 /**
  * Syft reading one platform manifest from its registry. A daemon pull would re-serialize an OCI manifest
  * as Docker schema 2 and record a locally computed digest; `--platform` makes Syft fail loudly if the
@@ -419,6 +490,10 @@ export function validateReleaseSbom(
 		throw new Error("Syft SBOM contains no packages");
 	}
 	const { expectedPurls, missingLicenses } = syftArtifactInventory(artifacts);
+	// Standalone image validation has no manifest, so it checks bundle metadata when present.
+	if (bundledNpmManifests(syft).length > 0) {
+		assertBundledNpmInventory(syft);
+	}
 
 	const spdx = spdxInventory(spdxInput, repository, digest);
 	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest);
