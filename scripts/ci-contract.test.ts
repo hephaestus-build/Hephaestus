@@ -4668,6 +4668,7 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	const prePushHook = runScript(workflow, qualityPath, "Pre-push hook");
 	assert.match(prePushHook, /node scripts\/enable-hooks\.ts/u);
 	assert.match(prePushHook, /git push --dry-run\b/u);
+	assert.match(prePushHook, /\[ "\$2" != check:push \]/u);
 	// The step moves the launcher aside, so it must put it back however it exits.
 	assert.match(prePushHook, /trap .*EXIT/u);
 	assert.doesNotMatch(prePushHook, /^\s*vp run check\s*$/mu);
@@ -4827,6 +4828,7 @@ void test("a change to the task graph or the hooks selects every quality leg", a
 	const filter = pathFilter(orchestrator, "quality-config");
 	for (const entry of [
 		"vite.config.ts",
+		"scripts/lib/push-gates.ts",
 		".vite-hooks/**",
 		".java-version",
 		".github/workflows/ci-quality-leg.yml",

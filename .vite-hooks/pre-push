@@ -2,4 +2,4 @@
 # Git points every command a hook runs at the repository being pushed. The gate below creates and
 # drives its own throwaway repositories, so it addresses that one only by mistake.
 unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_PREFIX GIT_WORK_TREE
-exec vp run check
+exec vp run check:push

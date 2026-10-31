@@ -551,6 +551,7 @@ jobs:
               - '.github/workflows/ci-quality-gates.yml'
               - '.github/workflows/ci-quality-leg.yml'
               - 'vite.config.ts'
+              - 'scripts/lib/push-gates.ts'
               - '.vite-hooks/**'
               - '.java-version'
               - '.github/actions/setup-toolchain/**'

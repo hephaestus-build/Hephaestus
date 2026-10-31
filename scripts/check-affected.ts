@@ -9,7 +9,7 @@ import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES, repositoryCli } from "./lib/process.ts";
 
-export type Scope = "agents" | "docs" | "extension" | "full" | "server" | "webapp";
+export type Scope = "agents" | "changesets" | "docs" | "extension" | "full" | "server" | "webapp";
 /** The arguments of one repository CLI call. */
 export type Command = readonly [string, ...string[]];
 
@@ -85,13 +85,23 @@ const serverInputsOfTheTooling = [
 	/^server\/application\/src\/main\/resources\/practices\/guidance\//u,
 ];
 
+export function isReleaseNote(file: string): boolean {
+	return /^\.changeset\/(?!README\.md$)[^/]+\.md$/u.test(file);
+}
+
 export function scopesFor(paths: string[]): Scope[] {
-	if (paths.some((file) => fullGateInputs.some((pattern) => pattern.test(file)))) {
+	if (
+		paths.some(
+			(file) => !isReleaseNote(file) && fullGateInputs.some((pattern) => pattern.test(file)),
+		)
+	) {
 		return ["full"];
 	}
 	const scopes = new Set<Scope>();
 	for (const file of paths) {
-		if (file === FEEDBACK_WRITING_GUIDE) {
+		if (isReleaseNote(file)) {
+			scopes.add("changesets");
+		} else if (file === FEEDBACK_WRITING_GUIDE) {
 			scopes.add("docs");
 			scopes.add("server");
 		} else if (file.startsWith("docs/images/readme/")) {
@@ -148,7 +158,7 @@ function git(cwd: string, ...args: string[]): string[] {
 }
 
 export function changedPaths(requestedBase: string, cwd = process.cwd()): string[] {
-	const base = git(cwd, "merge-base", "HEAD", requestedBase)[0];
+	const base = git(cwd, "merge-base", "--end-of-options", "HEAD", requestedBase)[0];
 	if (base === undefined) {
 		throw new Error(`No merge base with ${requestedBase}`);
 	}
@@ -168,6 +178,7 @@ export function commandsFor(scopes: Scope[]): Command[] {
 	}
 	const commands: Record<Exclude<Scope, "full">, Command> = {
 		agents: ["run", "affected:agents"],
+		changesets: ["run", "affected:changesets"],
 		docs: ["run", "affected:docs"],
 		extension: ["run", "affected:extension"],
 		server: ["run", "affected:server"],

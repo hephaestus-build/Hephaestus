@@ -9,6 +9,7 @@ import path from "node:path";
 import { unzipSync } from "fflate";
 
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
+import { PUSH_CHECK_ENV } from "./push-gates.ts";
 
 export interface PinnedAsset {
 	readonly name: string;
@@ -52,6 +53,8 @@ export async function installPinnedBinary(options: {
 	executable: string;
 	/** The archive member of the executable, when it is not `executable`. */
 	member?: string;
+	/** Fixture installers can allow their local HTTP server during a push check. */
+	allowDownload?: boolean;
 }): Promise<string> {
 	const { cache, version, asset, url, executable } = options;
 	const member = options.member ?? executable;
@@ -79,6 +82,11 @@ export async function installPinnedBinary(options: {
 		}
 	}
 
+	if (!(options.allowDownload ?? process.env[PUSH_CHECK_ENV] !== "true")) {
+		throw new Error(
+			`${executable} is not cached. Run \`vp run check\` to install the pinned tools before push checks.`,
+		);
+	}
 	const response = await fetch(`${url}${asset.name}`, {
 		signal: AbortSignal.timeout(120_000),
 	});

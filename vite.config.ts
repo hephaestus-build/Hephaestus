@@ -3,6 +3,15 @@ import path from "node:path";
 import { defineConfig } from "vite-plus";
 
 import { asStringArray } from "./scripts/lib/json.ts";
+import {
+	agentStaticGates,
+	PUSH_CHECK_ENV,
+	changesetGates,
+	docsStaticGates,
+	extensionGates,
+	serverStaticGates,
+	webappGates,
+} from "./scripts/lib/push-gates.ts";
 import { readJsonc } from "./webapp/tools/jsonc.ts";
 
 const formatConfig = readJsonc(new URL(".oxfmtrc.json", import.meta.url));
@@ -96,7 +105,7 @@ const docsLintInputs = [
 
 const gradlew = "node scripts/run-gradlew.ts";
 // Each native test file can start subprocesses. Bound file workers independently of task concurrency.
-const nodeTestConcurrency = 2;
+const nodeTestConcurrency = process.env[PUSH_CHECK_ENV] === "true" ? 1 : 2;
 // The gates, by the tree they judge. `quality` runs all of them; each CI job runs one tree's set.
 const policyGates = [
 	"gate:toolchain",
@@ -112,14 +121,7 @@ const policyGates = [
 	"gate:configuration-reference",
 	"gate:shell",
 ];
-const serverGates = ["gate:java-nullness", "gate:server"];
-const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
-const extensionGates = [
-	"gate:extension",
-	"gate:extension-format",
-	"gate:components",
-	"gate:stories",
-];
+const serverGates = [...serverStaticGates, "gate:server"];
 const agentGates = ["gate:agents", "gate:agent-tests"];
 const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens", "gate:docs-pages"];
 const loadGates = ["gate:load-format"];
@@ -160,6 +162,7 @@ export default defineConfig({
 				"vp run verification:docs-build",
 			]),
 			"check:affected": run("node scripts/check-affected.ts"),
+			"check:push": run("node scripts/check-push.ts"),
 
 			// Formatting
 			format: group([
@@ -258,7 +261,7 @@ export default defineConfig({
 				"node scripts/check-agent-instructions.ts && node --test scripts/check-agent-instructions.test.ts",
 			),
 			"gate:changesets": run(
-				"node scripts/verify-changesets.ts --local && node --test scripts/verify-changesets.test.ts scripts/sync-release-version.test.ts",
+				`node scripts/verify-changesets.ts --local && node --test --test-concurrency=${nodeTestConcurrency} scripts/verify-changesets.test.ts scripts/sync-release-version.test.ts`,
 			),
 
 			// Gradle owns Java task inputs and cached outputs; Vite starts it once per quality run.
@@ -336,11 +339,7 @@ export default defineConfig({
 			"gate:release-image-inventory": run("node scripts/check-release-image-inventory.ts"),
 			"gate:tooling-tests": group(["test:tooling"]),
 			"gate:agents": group([
-				"gate:agents-format",
-				"gate:config-format",
-				"gate:agents-lint",
-				"gate:agents-typecheck",
-				"gate:scripts-typecheck",
+				...agentStaticGates,
 				"gate:release-image-inventory",
 				"gate:tooling-tests",
 			]),
@@ -380,7 +379,7 @@ export default defineConfig({
 			"gate:docs-pages": cached(
 				"node scripts/check-docs-pages.ts && node --test scripts/check-docs-pages.test.ts",
 			),
-			"gate:docs": group(["gate:docs-format", "gate:docs-lint"]),
+			"gate:docs": group(docsStaticGates),
 			"docs:lint": group(["gate:docs-lint"]),
 			"docs:dev": run("vp run --filter docs start"),
 			"docs:build": run("vp run --filter docs build"),
@@ -422,6 +421,7 @@ export default defineConfig({
 
 			// Scoped selections for check:affected
 			"affected:agents": group(agentGates),
+			"affected:changesets": group(changesetGates),
 			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose"]),
 			"affected:server": group(serverGates),
 			"affected:webapp": group([...webappGates, "gate:prose"]),

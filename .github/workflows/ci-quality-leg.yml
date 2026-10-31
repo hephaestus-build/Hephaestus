@@ -134,7 +134,7 @@ jobs:
           trap 'mv "$launcher.real" "$launcher"; rm -f "$probe"; rm -rf "$remote"' EXIT
           cat > "$launcher" <<'EOF'
           #!/bin/sh
-          if [ "$#" -ne 2 ] || [ "$1" != run ] || [ "$2" != check ]; then
+          if [ "$#" -ne 2 ] || [ "$1" != run ] || [ "$2" != check:push ]; then
             exit 1
           fi
           printf 'ran\n' > "$PRE_PUSH_PROBE"
