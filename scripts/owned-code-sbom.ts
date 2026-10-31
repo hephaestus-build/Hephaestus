@@ -228,12 +228,45 @@ export function assertLinksStayInRoots(
 			}
 		}
 	}
-	for (const [file, target] of links) {
-		const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), target));
-		if (
-			path.posix.isAbsolute(target) ||
-			!roots.some((root) => resolved === root || resolved.startsWith(`${root}/`))
-		) {
+	const targets = new Map(links);
+	const inside = (file: string) =>
+		roots.some((root) => file === root || file.startsWith(`${root}/`));
+	const above = (directory: string) => roots.some((root) => root.startsWith(`${directory}/`));
+	// The OS follows a directory link before it applies a later `..`, so resolve one segment at a time.
+	const resolve = (link: string, hops: number): string | undefined => {
+		const target = targets.get(link) ?? "";
+		if (hops > 40 || path.posix.isAbsolute(target)) {
+			return undefined;
+		}
+		let parts = path.posix.dirname(link).split("/");
+		for (const segment of target.split("/")) {
+			if (segment === "" || segment === ".") {
+				continue;
+			}
+			if (segment === "..") {
+				if (parts.pop() === undefined) {
+					return undefined;
+				}
+				continue;
+			}
+			const current = [...parts, segment].join("/");
+			if (targets.has(current)) {
+				const followed = resolve(current, hops + 1);
+				if (followed === undefined) {
+					return undefined;
+				}
+				parts = followed.split("/");
+			} else if (inside(current) || above(current)) {
+				parts.push(segment);
+			} else {
+				return undefined;
+			}
+		}
+		const resolved = parts.join("/");
+		return inside(resolved) ? resolved : undefined;
+	};
+	for (const [file] of links) {
+		if (resolve(file, 0) === undefined) {
 			throw new Error(`${file}: a link in shipped code must point inside ${roots.join(", ")}`);
 		}
 	}

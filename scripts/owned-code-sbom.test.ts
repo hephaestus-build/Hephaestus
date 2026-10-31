@@ -170,6 +170,15 @@ await test(
 			["docker/lib/owned.ts"],
 		);
 
+		// The OS follows `d` before `..`, so this reaches vendor/, though the text names webapp/src/vendor/.
+		await symlink("../../docker", path.join(directory, "webapp/src/d"));
+		await symlink("d/../vendor/owned.ts", path.join(directory, "webapp/src/via.ts"));
+		assert.throws(() => scanOwnedCode(undefined, directory), /webapp\/src\/via.ts: a link/u);
+		await rm(path.join(directory, "webapp/src/via.ts"));
+		await symlink("../../../webapp/src/d", path.join(directory, "webapp/src/up"));
+		assert.throws(() => scanOwnedCode(undefined, directory), /webapp\/src\/up: a link/u);
+		await rm(path.join(directory, "webapp/src/up"));
+
 		await symlink("../../vendor/owned.ts", path.join(directory, "webapp/src/owned.ts"));
 		assert.throws(() => scanOwnedCode(undefined, directory), /webapp\/src\/owned.ts: a link/u);
 		git("add", ".");
