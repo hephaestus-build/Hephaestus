@@ -131,7 +131,8 @@ for (const [scenario, args, previousKeepsChat, expectedError, seeded] of [
 			const preload = path.join(directory, "stubs.mjs");
 			writeFileSync(
 				preload,
-				`import { appendFileSync } from "node:fs";
+				`import fs, { appendFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { mock } from "node:test";
 import * as childProcess from "node:child_process";
 const commands = ${JSON.stringify(commands)};
@@ -141,6 +142,12 @@ const protocol = ${JSON.stringify(protocol)};
 const stopped = ${JSON.stringify(stopped)};
 const mismatch = ${JSON.stringify(scenario === "stopped-protocol-refused")};
 const deliveries = new Map();
+if (protocol && !stopped) {
+  // The previous release's worker mounts the host's Docker socket, which a Windows runner lacks.
+  const statSync = fs.statSync;
+  fs.statSync = (file, ...rest) => (file === "/var/run/docker.sock" ? { gid: 0 } : statSync(file, ...rest));
+  syncBuiltinESMExports();
+}
 if (protocol) {
   mock.module(${JSON.stringify(new URL("lib/migration-guide.ts", import.meta.url).href)}, {
     exports: { stopEveryRoleEntries: () => (stopped ? ["#### 🔴 Stop every role for the upgrade"] : []) }

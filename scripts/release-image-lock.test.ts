@@ -4,6 +4,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
 	chartVersion,
@@ -223,7 +224,7 @@ await test("the producer refuses evidence it cannot turn into one strict joint l
 const execute = (...args: string[]) =>
 	spawnSync(
 		process.execPath,
-		[new URL("release-image-lock.ts", import.meta.url).pathname, ...args],
+		[fileURLToPath(new URL("release-image-lock.ts", import.meta.url)), ...args],
 		{
 			encoding: "utf8",
 			timeout: 30_000,
