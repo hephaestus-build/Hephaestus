@@ -718,6 +718,7 @@ jobs:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
       SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
     permissions:
+      actions: write
       checks: write
       contents: read
       pull-requests: write
@@ -867,6 +868,7 @@ jobs:
     uses: ./.github/workflows/ci-build.yml
     needs: [detect-changes, server-package]
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -972,6 +974,12 @@ jobs:
 
   # The suites run the packaged classes, so a package skipped while they are selected fails them.
   Test:
+    name: "Test (${{ matrix.shard }})"
+    # Each invocation selects one worker; its cancel callback does not wait for other shards.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.detect-changes.outputs.queue-tier == 'true' && '["unit","providers","runtime-and-startup","practices-and-agent","application"]' || '["unit"]') }}
     uses: ./.github/workflows/ci-tests.yml
     needs: [detect-changes, server-package, Security-merge-group]
     if: |
@@ -981,6 +989,7 @@ jobs:
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.server-tests == 'true'
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -989,6 +998,7 @@ jobs:
       # A stacked layer's own base published no image; the alias base is the nearest commit that did.
       postgres_base_sha: ${{ needs.detect-changes.outputs.alias-base || github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      shard: ${{ matrix.shard }}
       queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
   Changesets:
@@ -1020,6 +1030,7 @@ jobs:
         (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     permissions:
+      actions: write
       contents: read
       packages: write
       id-token: write
@@ -1119,7 +1130,8 @@ jobs:
   # fork publishes none, so there is nothing to install.
   # `Docker` succeeds with the Dockerfile images alone when `App Server: Package` failed, so this job
   # waits for the package too: the run reports that failure once, not again as a cluster failure.
-  Kubernetes:
+  Kubernetes-chart:
+    name: "Kubernetes"
     needs: [detect-changes, server-package, Docker]
     if: >-
       !cancelled() && needs.Docker.result == 'success' && needs.server-package.result != 'failure' &&
@@ -1129,12 +1141,32 @@ jobs:
         github.event_name != 'push' && needs.detect-changes.outputs.kubernetes == 'true')
     uses: ./.github/workflows/ci-kubernetes.yml
     permissions:
+      actions: write
       contents: read
     with:
+      leg: chart
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
       # A pull request runs the chart and the latest k3s on amd64; the floor on both architectures,
       # kind and the drill wait for the merge queue, which tests the commit that main receives.
       queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+
+  Kubernetes:
+    name: "Kubernetes (${{ matrix.leg }} ${{ matrix.minor }} ${{ matrix.arch }})"
+    needs: [Kubernetes-chart]
+    if: ${{ !cancelled() && needs.Kubernetes-chart.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.Kubernetes-chart.outputs.matrix) }}
+    uses: ./.github/workflows/ci-kubernetes.yml
+    permissions:
+      contents: read
+      actions: write
+    with:
+      leg: ${{ matrix.leg }}
+      minor: ${{ matrix.minor }}
+      arch: ${{ matrix.arch }}
+      queue: ${{ needs.Kubernetes-chart.outputs.queue == 'true' }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
@@ -1208,6 +1240,7 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-slim
     permissions:
+      actions: read
       statuses: write
     # The reporter below reads the verdict. After a fail-fast cancel, `cancelled()` is true for the
     # whole run, so only this output tells that run's failure from a regroup's cancellation.
@@ -1230,6 +1263,7 @@ jobs:
         Compose,
         Docker,
         Supported-host-smoke,
+        Kubernetes-chart,
         Kubernetes,
         Release-preflight,
       ]
@@ -1239,7 +1273,12 @@ jobs:
         id: evaluate
         env:
           NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          MERGE_GROUP: ${{ github.event_name == 'merge_group' }}
         run: |
+          set -o pipefail
           echo "detect-changes: ${{ needs.detect-changes.result }}"
           echo "workflow-lint: ${{ needs.workflow-lint.result }}"
           echo "zizmor:        ${{ needs.zizmor.result }}"
@@ -1254,6 +1293,7 @@ jobs:
           echo "Compose:        ${{ needs.Compose.result }}"
           echo "Docker:         ${{ needs.Docker.result }}"
           echo "Host smoke:     ${{ needs.Supported-host-smoke.result }}"
+          echo "Chart:          ${{ needs.Kubernetes-chart.result }}"
           echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
           echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
@@ -1271,6 +1311,21 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
             echo "status=failure" >> $GITHUB_OUTPUT
             exit 1
+          fi
+
+          # A leaf may fail before cancellation gives its reusable caller a cancelled result.
+          # Read this attempt's native conclusions to keep that failure distinct from a regroup.
+          if [[ "$MERGE_GROUP" == true && "${{ contains(needs.*.result, 'cancelled') }}" == true ]]; then
+            if ! failed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT/jobs?per_page=100" \
+              --jq '[.jobs[] | select(.conclusion == "failure")] | length' | jq -s 'add'); then
+              echo '::error::Cannot read native job results for this attempt'
+              echo "status=failure" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            if (( failed > 0 )); then
+              echo "status=failure" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
           fi
 
           if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
@@ -1374,6 +1429,7 @@ jobs:
             An image build or scan failure also first shows here; add the `preview` label to build
             the images on the pull request.
 
+  # These caller callbacks also cover failures before a worker or its nested callback can run.
   # Fail fast in a merge group: when a leg fails, its job below cancels the run, so a group that has
   # already lost frees its runners and leaves the queue early. Each job needs only its own leg, so it
   # starts when that leg ends. `always()` is required: without a status function, GitHub adds
@@ -1491,3 +1547,10 @@ jobs:
     uses: ./.github/workflows/fail-fast.yml
     permissions:
       actions: write # cancel this run
+
+  fail-fast-Kubernetes-chart:
+    needs: [Kubernetes-chart]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Kubernetes-chart.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write

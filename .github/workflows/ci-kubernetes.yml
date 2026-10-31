@@ -7,6 +7,18 @@ name: CI / Kubernetes
 on:
   workflow_call:
     inputs:
+      leg:
+        description: "The chart preflight or one cluster leg selected by the caller"
+        type: string
+        required: true
+      minor:
+        description: "Kubernetes minor for a k3s worker"
+        type: string
+        default: ""
+      arch:
+        description: "Native architecture for a k3s worker"
+        type: string
+        default: ""
       commit:
         description: The commit whose images the Docker jobs published under its tag
         type: string
@@ -20,8 +32,15 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
+    outputs:
+      queue:
+        description: "Whether the chart selected all cluster legs"
+        value: ${{ jobs.schema.outputs.queue }}
+      matrix:
+        description: "Cluster legs selected by the chart preflight"
+        value: ${{ jobs.schema.outputs.matrix }}
+
+permissions: {}
 
 env:
   # The schema sources of kubeconform, at pinned commits.
@@ -31,6 +50,14 @@ env:
 jobs:
   schema:
     name: "Chart"
+    if: inputs.leg == 'chart'
+    permissions:
+      contents: read
+    outputs:
+      queue: ${{ inputs.queue }}
+      # Native workflow data stays independent of the tested ref, which a nightly run can select
+      # from before this workflow changed.
+      matrix: ${{ inputs.queue && '{"include":[{"leg":"k3d","minor":"1.35","arch":"amd64"},{"leg":"k3d","minor":"1.35","arch":"arm64"},{"leg":"k3d","minor":"1.37","arch":"amd64"},{"leg":"calico","minor":"1.37","arch":"amd64"}]}' || '{"include":[{"leg":"k3d","minor":"1.37","arch":"amd64"}]}' }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     steps:
@@ -56,23 +83,12 @@ jobs:
   # A leg's name is its distribution, minor and architecture, so its check history survives an
   # image update. The pinned image, which Renovate updates within the minor, is in the summary.
   k3d:
-    name: "k3s ${{ matrix.minor }} ${{ matrix.arch }}"
-    needs: [schema]
+    name: "k3s ${{ inputs.minor }} ${{ inputs.arch }}"
+    if: inputs.leg == 'k3d'
+    permissions:
+      contents: read
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        # The lowest minor that the chart takes and the latest one. A pull request runs the latest on
-        # amd64 alone, with the images it builds. The merge queue, which builds arm64 too, also runs
-        # the lowest minor on both architectures; arm64 hosts run that minor. No `include`: GitHub
-        # applies it after `exclude` and would add an excluded minor back as a job of its own.
-        minor: ["1.35", "1.37"]
-        arch: [amd64, arm64]
-        exclude:
-          - minor: "1.37"
-            arch: arm64
-          - minor: ${{ !inputs.queue && '1.35' || 'none' }}
-    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     env:
       # One node image per minor, pinned by digest.
       K3S_IMAGES: >-
@@ -80,7 +96,7 @@ jobs:
         "1.37": "docker.io/rancher/k3s:v1.37.1-k3s1@sha256:ca7f37d993d82ef0dcdcfecb2e0e2618ea541dbaffc620c8cedebe01a82acd0d"}
       # The lowest minor on amd64 installs the profile of a 16 GiB host, which a runner is, so a
       # shipped profile that cannot start fails here. The other legs install the dev profile.
-      PROFILES: ${{ matrix.minor == '1.35' && matrix.arch == 'amd64' && '--profile small --profile small-16gib' || '--profile dev' }}
+      PROFILES: ${{ inputs.minor == '1.35' && inputs.arch == 'amd64' && '--profile small --profile small-16gib' || '--profile dev' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -100,7 +116,7 @@ jobs:
       # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
       - name: Create a server and an agent node
         env:
-          NODE_IMAGE: ${{ fromJSON(env.K3S_IMAGES)[matrix.minor] }}
+          NODE_IMAGE: ${{ fromJSON(env.K3S_IMAGES)[inputs.minor] }}
         run: |
           set -euo pipefail
           echo "Node image: \`$NODE_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
@@ -128,7 +144,7 @@ jobs:
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       # On the latest minor, amd64, in the queue.
       - name: Back up, then restore to a point in time
-        if: ${{ inputs.queue && matrix.minor == '1.37' && matrix.arch == 'amd64' }}
+        if: ${{ inputs.queue && inputs.minor == '1.37' && inputs.arch == 'amd64' }}
         run: node scripts/kubernetes-cluster.ts backup-drill --work "$RUNNER_TEMP/kubernetes-cluster" --pod-cidr 10.42.0.0/16
       - name: Record the cluster state
         if: ${{ failure() }}
@@ -148,8 +164,9 @@ jobs:
 
   calico:
     name: "kind 1.37 Calico"
-    needs: [schema]
-    if: inputs.queue
+    if: inputs.leg == 'calico'
+    permissions:
+      contents: read
     timeout-minutes: 45
     runs-on: ubuntu-24.04
     env:
@@ -225,3 +242,10 @@ jobs:
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
           kubectl -n hephaestus-sandboxes describe pods || true
           kubectl describe nodes | grep -A 12 "Allocated resources" || true
+
+  fail-fast:
+    needs: [schema, k3d, calico]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write

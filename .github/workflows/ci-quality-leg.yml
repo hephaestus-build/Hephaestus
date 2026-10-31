@@ -200,3 +200,10 @@ jobs:
         with:
           path: node_modules/.vite/task-cache
           key: ${{ steps.task-cache.outputs.cache-primary-key }}
+
+  fail-fast-quality:
+    needs: [quality]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.quality.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write

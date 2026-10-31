@@ -351,7 +351,7 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	assert.ok(isSeq(steps));
 	const scan = steps.items.find((item) => isMap(item) && item.get("id") === "scan");
 	assert.ok(isMap(scan));
-	assert.equal(scan.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
+	assert.equal(scan.getIn(["env", "SCAN_PLATFORM"]), `\${{ inputs.platform }}`);
 	assert.equal(scan.getIn(["env", "IMAGES"]), `\${{ steps.prep.outputs.images }}`);
 	const run = String(scan.get("run"));
 	// Each image resolves its own subject from the directory its build exported.

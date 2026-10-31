@@ -1,5 +1,6 @@
 import { appendFile } from "node:fs/promises";
 
+import { canonicalCiJobName } from "./lib/ci-job-name.ts";
 import { requiredEnv } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
@@ -132,7 +133,12 @@ async function* queueRuns(
 			.map((job) => asRecord(job, "job"));
 		if (
 			!jobNames.every((name) =>
-				jobs.some((job) => job.name === name && job.conclusion === "success"),
+				jobs.some(
+					(job) =>
+						typeof job.name === "string" &&
+						canonicalCiJobName(job.name) === name &&
+						job.conclusion === "success",
+				),
 			)
 		) {
 			continue;

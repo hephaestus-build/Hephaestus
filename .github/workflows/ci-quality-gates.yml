@@ -57,6 +57,7 @@ jobs:
     if: inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -69,6 +70,7 @@ jobs:
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -79,6 +81,7 @@ jobs:
     if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true'
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -89,6 +92,7 @@ jobs:
     if: inputs.should_skip != 'true' && inputs.extension_changed == 'true'
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -99,6 +103,7 @@ jobs:
     if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true' && (github.event_name != 'pull_request' || inputs.windows_changed != 'false')
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
+      actions: write
       contents: read
       checks: write
     with:
@@ -299,3 +304,17 @@ jobs:
             echo "::error::Storybook interaction tests failed."
             exit 1
           fi
+
+  fail-fast-clean-install:
+    needs: [clean-install]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.clean-install.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write
+
+  fail-fast-webapp-stories:
+    needs: [webapp-stories]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.webapp-stories.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write

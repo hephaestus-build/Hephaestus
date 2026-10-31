@@ -422,3 +422,38 @@ jobs:
             e2e-server.log
           if-no-files-found: warn
           retention-days: 7
+
+  fail-fast-server-api:
+    needs: [server-api]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.server-api.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write
+
+  fail-fast-server-database:
+    needs: [server-database]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.server-database.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write
+
+  fail-fast-postgres-drill:
+    needs: [postgres-drill]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.postgres-drill.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write
+
+  fail-fast-webapp-e2e:
+    needs: [webapp-e2e]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.webapp-e2e.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write
+
+  fail-fast-extension-e2e:
+    needs: [extension-e2e]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.extension-e2e.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write
