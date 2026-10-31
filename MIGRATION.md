@@ -63,6 +63,87 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v0.96.0
+
+#### 🔴 Account for the single-node worker deployment outage
+
+The `small` profile now uses `Recreate` for the worker. The `small-16gib` profile keeps `Recreate`. Each upgrade drains and stops the old worker before starting its replacement. Reviews and conversation turns pause in that interval. Measure the outage against the 99.5% availability budget before promotion.
+
+Both profiles admit 32 resident turns from the declared CPU budget. The conversations quota keeps its existing ten tools-Pod slots, including up to two warm Pods. A turn uses tools only on demand and waits when that quota is full. No Pod request or limit is reduced. An explicit `worker.conversationTurns` still overrides the automatic count.
+
+#### 🔴 Complete the 0.95.0 database upgrade first
+
+If your database is older than 0.95.0, upgrade it to 0.95.0 with that release's signed image lock and [versioned upgrade guide](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/upgrade.mdx). Run that release to completion before you start the target release.
+
+The target release checks the final 0.95.0 migration identity before update or synchronization. It refuses an older history. Do not synchronize to bypass this check. Fresh databases need no intermediate release.
+
+#### 🔴 Move custom pgBackRest configuration
+
+If you edited `docker/self-host/pgbackrest.conf`, move those edits to `deploy/postgresql/pgbackrest.conf` before upgrading.
+The backup and restore overlays now mount that file.
+The PITR drill uses the same configuration.
+
+#### 🔴 Plan node drains before removing disruption budgets
+
+The chart now blocks voluntary eviction of bundled PostgreSQL and NATS, the server, and a singleton worker. A node drain waits until you remove those budgets for planned maintenance.
+
+Pause reconciliation, record the replica counts, and back up the database and broker. Cordon the node, scale workers to zero, and wait for their Pods and sandboxes to stop while the database and broker remain available. Then stop the server and receiver, remove only this release's PodDisruptionBudgets, and drain the node. After maintenance, uncordon the node and reapply the verified release with its saved values to restore the replicas and budgets. Verify them before you resume reconciliation.
+
+Follow [Planned node maintenance](https://docs.hephaestus.build/admin/kubernetes#planned-node-maintenance) for the commands. The default worker drain is now thirty minutes, with termination grace of drain plus 120 seconds. The 16 GiB profile keeps its ten-minute drain and Recreate updates. A host shutdown still has only five minutes, so it relies on durable retry for interrupted reviews.
+
+#### 🔴 Convert stored secrets before you start the new server
+
+Back up the database and encryption keys. Stop all database writers, then run the database migration with the existing `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`. Keep the active credential key version. Configure a key only if it is missing. Keep the prior credential key and its version configured if stored credentials still use them.
+
+For chart hosts, use [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades).
+
+The migration encrypts plaintext login-provider and LLM connection secrets. It seals active and inactive JWT private keys without changing their signing identity. It authenticates integration credentials with no key version against the configured active, prior and legacy system keys, then encrypts them with the active credential key and records its version.
+
+If a key is missing or cannot decrypt a stored credential, the conversion stops and rolls back. Keep writers stopped, correct the key configuration, and retry. Start the server only after the migration succeeds. The new server cannot read or write plaintext secrets.
+
+#### 🔴 Recalculate custom PostgreSQL connection budgets
+
+The small profile now has an explicit PostgreSQL connection ceiling and separate role pools.
+Apply the change through the existing [stopped database-maintenance procedure](https://docs.hephaestus.build/admin/kubernetes#database-maintenance).
+Do not lower the database ceiling while older, larger pools are still running.
+For custom worker replica counts or pool sizes, set `postgresql.parameters.max_connections` and each role's `databasePool` values together before upgrading.
+The chart rejects a ceiling that cannot hold the configured worker overlap and maintenance reserves.
+See [Database connections](https://docs.hephaestus.build/admin/sizing#database-connections) for the calculation.
+
+Check node capacity against the full `postgresql.resources` and `postgresql.backup.resources` memory requests before upgrading.
+Count the resident backup sidecar and each backup or stanza Job separately.
+Existing memory limits remain in place until representative load qualifies lower ceilings.
+
+#### 🔴 Update API clients that call the removed operations
+
+This release removes the 21 API operations that 0.95.0 deprecated.
+A request to a removed operation now fails.
+Stored data does not change.
+
+Before you upgrade, find each removed operation in your API clients and scripts.
+Replace it with the operation in the second column.
+Paths are relative to the API base URL.
+
+| Removed operation | Use instead |
+| --- | --- |
+| `renameSlug` (`PATCH /workspaces/{workspaceSlug}/slug`) | None. Old workspace addresses keep redirecting to the current one. |
+| `getTeamSettings`, `getLabelFilters`, `getRepositorySettings` | `getAllTeams` (`GET /workspaces/{workspaceSlug}/team`) |
+| `updateTeamSettings` | `updateTeamVisibility` (`POST /workspaces/{workspaceSlug}/team/{id}/visibility`) |
+| `addLabelFilter` | `addLabelToTeam` (`POST /workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}`) |
+| `removeLabelFilter` | `removeLabelFromTeam` (`DELETE /workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}`) |
+| `updateRepositorySettings` | `updateRepositoryVisibility` (`POST /workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility`) |
+| `getMembership` | `listMemberships` (`GET /workspaces/{workspaceSlug}/members`), or `getOwnMembership` (`GET /workspaces/{workspaceSlug}/members/me`) for your own membership |
+| `reorderPractices` | None |
+| `getReviewBatch` | `listReviewBatches` (`GET /workspaces/{workspaceSlug}/practices/review-batches`) |
+| `getReviewEvidenceOutcomes` | None |
+| `getReviewUsage` | The `usage` field of `getReview` (`GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}`) |
+| `listReviewPracticeScripts` | The `practices[].script` field of `getReview` |
+| `getReviewItem` | The `item` field of `getItemFacts` (`GET /workspaces/{workspaceSlug}/practices/items/{itemId}/facts`) or `getItemTrace` |
+| `listItemEvents` | The `events` field of `getItemTrace` (`GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace`) |
+| `getOutlineCollection` | `listOutlineCollections` (`GET /workspaces/{workspaceSlug}/outline/collections`) |
+| `adminGetLlmConnection`, `adminGetLlmModel` | `adminListLlmConnections` (`GET /admin/llm/connections`), `adminListLlmModels` (`GET /admin/llm/models`) |
+| `workspaceGetLlmConnection`, `workspaceGetLlmModel` | `workspaceListLlmConnections` (`GET /workspaces/{workspaceSlug}/llm/connections`), `workspaceListLlmModels` (`GET /workspaces/{workspaceSlug}/llm/models`) |
+
 ### v0.95.1
 
 #### 🔴 Update the installed reconciler before the 1.0 chart upgrade
@@ -2737,7 +2818,7 @@ Do not assume that a failed upgrade rolled back or that the previous application
 
 | Symptom in the log | What it means | What to do |
 | --- | --- | --- |
-| `Could not acquire change log lock` | A migration is active, or an interrupted process left its lock. | Follow [stale lock recovery](https://docs.hephaestus.build/admin/liquibase-baseline-runbook#stale-lock-recovery) with the target release image. Never clear an active migration process's lock. |
+| `Could not acquire change log lock` | A migration is active, or an interrupted process left its lock. | Follow [stale lock recovery](https://docs.hephaestus.build/admin/runtime-roles#one-migration-at-a-time) with the target release image. Never clear an active migration process's lock. |
 | `Validation Failed: … checksums do not match` | A changelog file that already ran was edited. Released changelogs are immutable for exactly this reason. | Restore the file to its released content and fix forward with a *new* changelog. Do not `clearCheckSums` on production to make the error go away — it tells Liquibase to trust a file whose applied effect you no longer know. |
 | A constraint or `NOT NULL` addition fails | Existing rows violate the new constraint. Migration tests do not cover every installed dataset. | Report the failing changeset and follow the release's recovery instructions. Do not bypass the constraint or mark a failed changeset as applied. |
 | `permission denied` / `must be owner of` | The migration user lacks the required rights on an existing object. | Have the database owner restore the required ownership or permissions before retrying. |
