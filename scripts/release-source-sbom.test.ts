@@ -230,7 +230,8 @@ await test("native archive aliases preserve both committed plugin locks byte for
 	await archiveReleaseSource(revision, archive, directory);
 	for (const [name, content] of Object.entries(locks)) {
 		assert.equal(
-			execFileSync("tar", ["-xOf", archive, `gradle-inputs/${name}/gradle.lockfile`], {
+			execFileSync("tar", ["-xOf", "source.tar", `gradle-inputs/${name}/gradle.lockfile`], {
+				cwd: directory,
 				encoding: "utf8",
 			}),
 			content,
