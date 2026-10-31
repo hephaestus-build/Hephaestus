@@ -273,14 +273,7 @@ public class OAuthCallbackService {
     private static ConnectionConfig defaultConfig(IntegrationKind kind) {
         return switch (kind) {
             case GITHUB -> new ConnectionConfig.GitHubAppConfig(null, null, null, new HashSet<>());
-            case GITLAB ->
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        new HashSet<>(),
-                        null);
+            case GITLAB -> new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, new HashSet<>(), null);
             case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, new HashSet<>());
             case OUTLINE -> new ConnectionConfig.OutlineConfig(null, null, null, new HashSet<>());
         };

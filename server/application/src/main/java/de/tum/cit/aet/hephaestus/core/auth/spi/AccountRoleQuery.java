@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
  * flag? Exposed so callers (e.g. the practices {@code UserRoleChecker} in the notification module)
  * can check roles without reaching into {@code core.auth}'s domain types.
  *
- * <p>Roles map 1:1 to {@code FeatureFlag} keys ({@code notification_access}, {@code admin}).
+ * <p>Roles map 1:1 to {@code FeatureFlag} keys (such as {@code admin}).
  * Resolution is {@code (gitProviderId, subject) → Identity → Account → account_feature}
  * (appRole-based admin is resolved at JWT-mint time in {@code JwtPrincipalFactory}, not by this
  * query).

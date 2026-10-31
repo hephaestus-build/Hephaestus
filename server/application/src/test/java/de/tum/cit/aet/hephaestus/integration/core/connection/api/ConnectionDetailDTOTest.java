@@ -76,7 +76,6 @@ class ConnectionDetailDTOTest {
                         "https://gitlab.com",
                         null,
                         null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
                         Set.of(),
                         new ConnectionConfig.GitLabTokenMetadata(expiry, checked)));
         stampPersistenceFields(connection);

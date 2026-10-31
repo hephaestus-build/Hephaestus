@@ -142,9 +142,7 @@ class GitHubAppUserAuthorizationClientTest extends BaseUnitTest {
     private GitHubAppUserAuthorizationClient client(@Nullable String clientId, @Nullable String clientSecret) {
         String base = github.url("/").toString().replaceAll("/$", "");
         return new GitHubAppUserAuthorizationClient(
-                new GitHubProperties(
-                        new GitHubProperties.App(1, null, null, null, clientId, clientSecret),
-                        new GitHubProperties.Meta(null)),
+                new GitHubProperties(new GitHubProperties.App(1, null, null, null, clientId, clientSecret)),
                 base,
                 base,
                 RestClient.builder());

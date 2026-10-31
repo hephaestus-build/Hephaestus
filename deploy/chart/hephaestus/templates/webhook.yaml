@@ -75,9 +75,7 @@ spec:
             # The migration Job is the only migration owner.
             - name: SPRING_LIQUIBASE_ENABLED
               value: "false"
-            - name: HEPHAESTUS_SYNC_NATS_ENABLED
-              value: "true"
-            - name: HEPHAESTUS_SYNC_NATS_SERVER
+            - name: NATS_SERVER
               value: {{ include "hephaestus.natsUrl" . | quote }}
             # Stream bounds belong on this role: the beans that read them are gated on it.
             - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE

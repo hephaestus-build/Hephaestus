@@ -13,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
  * hephaestus:
  *   features:
  *     flags:
- *       gitlab-workspace-creation: false
+ *       page-experience-metrics: false
  * }</pre>
  *
  * @param flags map of feature flag keys to their enabled state
@@ -26,7 +26,7 @@ public record FeatureProperties(@DefaultValue Map<String, Boolean> flags) {
     /**
      * Check if a CONFIG flag is enabled. Returns {@code false} for unknown keys.
      *
-     * @param key the config flag key (e.g. "gitlab-workspace-creation")
+     * @param key the config flag key (e.g. "page-experience-metrics")
      * @return true if the flag is explicitly set to true
      */
     public boolean isEnabled(String key) {

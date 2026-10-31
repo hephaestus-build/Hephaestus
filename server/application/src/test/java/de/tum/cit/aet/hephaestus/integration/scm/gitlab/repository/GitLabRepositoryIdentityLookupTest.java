@@ -47,8 +47,7 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
     void setUp() {
         lenient()
                 .when(connection.getConfig())
-                .thenReturn(new ConnectionConfig.GitLabConfig(
-                        CONFIGURED, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null));
+                .thenReturn(new ConnectionConfig.GitLabConfig(CONFIGURED, null, null, Set.of(), null));
         lenient()
                 .when(connections.findActive(WORKSPACE_ID, IntegrationKind.GITLAB))
                 .thenReturn(Optional.of(connection));
@@ -118,7 +117,6 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
     }
 
     private static ConnectionConfig.GitLabConfig withoutServer() {
-        return new ConnectionConfig.GitLabConfig(
-                null, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
+        return new ConnectionConfig.GitLabConfig(null, null, null, Set.of(), null);
     }
 }

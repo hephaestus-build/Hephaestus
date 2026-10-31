@@ -308,13 +308,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
                 workspace,
                 IntegrationKind.GITLAB,
                 "https://gitlab.com",
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connection = repository.save(connection);
         connections.rotateBearerToken(workspace.getId(), IntegrationKind.GITLAB, new BearerToken(token, null));

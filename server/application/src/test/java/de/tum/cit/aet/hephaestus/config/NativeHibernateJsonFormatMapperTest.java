@@ -45,7 +45,6 @@ class NativeHibernateJsonFormatMapperTest extends BaseUnitTest {
                                 "https://typed.example",
                                 42L,
                                 null,
-                                ConnectionConfig.GitLabConfig.SigningMode.WHSEC,
                                 Set.of("merge_requests"),
                                 new ConnectionConfig.GitLabTokenMetadata(
                                         null, Instant.parse("2026-10-01T12:00:00Z")))));

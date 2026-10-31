@@ -159,13 +159,7 @@ class MentorContextQueryRepositoryIntegrationTest extends BaseIntegrationTest {
             connectSource(
                     gitLab.scope(),
                     IntegrationKind.GITLAB,
-                    new ConnectionConfig.GitLabConfig(
-                            user.getProvider().getServerUrl(),
-                            null,
-                            null,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+                    new ConnectionConfig.GitLabConfig(user.getProvider().getServerUrl(), null, null, Set.of(), null));
             connectSource(
                     gitHub.scope(),
                     IntegrationKind.GITHUB,

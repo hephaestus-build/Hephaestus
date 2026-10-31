@@ -12,9 +12,6 @@ hephaestus:
     init-default: false
     creation-policy: SELF_SERVICE
     auto-seed-membership: true
-  features:
-    flags:
-      gitlab-workspace-creation: true
   dev:
     trigger-enabled: true
   agent:

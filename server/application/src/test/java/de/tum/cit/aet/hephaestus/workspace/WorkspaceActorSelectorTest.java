@@ -52,12 +52,7 @@ class WorkspaceActorSelectorTest extends BaseUnitTest {
     private void connectGitLab() {
         when(connections.findActiveProviderKind(WORKSPACE_ID)).thenReturn(Optional.of(IntegrationKind.GITLAB));
         when(connections.findActiveGitLabConfig(WORKSPACE_ID))
-                .thenReturn(Optional.of(new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.lrz.de",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null)));
+                .thenReturn(Optional.of(
+                        new ConnectionConfig.GitLabConfig("https://gitlab.lrz.de", null, null, Set.of(), null)));
     }
 }

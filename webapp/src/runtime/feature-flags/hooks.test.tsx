@@ -44,8 +44,7 @@ describe("useFeatureFlags", () => {
 			http.get("*/user/features", () =>
 				HttpResponse.json({
 					ADMIN: "true",
-					NOTIFICATION_ACCESS: true,
-					GITLAB_WORKSPACE_CREATION: false,
+					PAGE_EXPERIENCE_METRICS: true,
 				}),
 			),
 		);
@@ -55,9 +54,7 @@ describe("useFeatureFlags", () => {
 		});
 
 		await waitFor(() => expect(result.current.flags?.ADMIN).toBe(false));
-		// Both well-formed flags: a `true` that has to survive, and the `false` the malformed one
-		// collapses to, which a blanket coercion would flatten together.
-		expect(result.current.flags?.NOTIFICATION_ACCESS).toBe(true);
-		expect(result.current.flags?.GITLAB_WORKSPACE_CREATION).toBe(false);
+		// The well-formed flag keeps its `true`, which a blanket coercion would flatten to `false`.
+		expect(result.current.flags?.PAGE_EXPERIENCE_METRICS).toBe(true);
 	});
 });

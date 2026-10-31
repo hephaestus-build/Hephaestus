@@ -105,8 +105,7 @@ application contract without runtime bootstrap, container-image validation or im
 supply no shared placeholder secrets. If an authentication component needs a key to initialize,
 the build uses the existing non-production ephemeral-key behavior, without a runtime warning.
 
-Never combine either profile with `prod`, including through the `worker-node` or `webhook-server`
-profile groups. Startup rejects that combination even when production secrets are configured.
+Never combine either profile with `prod`. Startup rejects that combination even when production secrets are configured.
 Production encryption requirements apply to Spring's expanded profiles, so selecting a production
 profile group requires the same keys as selecting `prod` directly.
 
@@ -212,7 +211,7 @@ Otherwise, it uses the base default.
 | `hephaestus.runtime.webhook.enabled`             | true    | **false** | true      | profile overlay                                 |
 | `hephaestus.workspace.init-default`              | false   | false     | false     | `prod` profile                                  |
 | `hephaestus.git.enabled`                         | false   | false     | false     | env default                                     |
-| `hephaestus.sync.nats.enabled`                   | false   | **false** | **true**  | env default / profile overlay                   |
+| `hephaestus.sync.nats.enabled`                   | true    | **false** | **true**  | `prod` profile / profile overlay                |
 | `hephaestus.agent.enabled`                       | false   | false     | false     | env default                                     |
 | `hephaestus.integration.outline.allowed-origins` | empty   | empty     | empty     | env default                                     |
 | `hephaestus.sandbox.gateway.port`                | 8081    | 8081      | —         | env default (`SANDBOX_API_PORT`)                |
@@ -289,7 +288,8 @@ The worker application HTTP endpoint binds to loopback. Every role has a separat
 management listener on port **9090**, including a single-JVM topology. Management does not run on
 `SERVER_PORT`. See [Observability](./observability#scrape-metrics) for network restrictions.
 
-The chart enables the NATS consumer on the server and the publisher on the webhook role.
+The runtime role decides `sync.nats.enabled`. No setting changes it.
+The server role consumes from NATS, and the webhook role publishes to it.
 The worker uses the PostgreSQL job queue and does not connect to NATS (ADR 0025).
 
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.

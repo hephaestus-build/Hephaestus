@@ -39,13 +39,8 @@ import org.springframework.context.ApplicationEventPublisher;
 
 class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
 
-    private static final ConnectionConfig.GitLabConfig GITLAB_CONFIG = new ConnectionConfig.GitLabConfig(
-            "https://gitlab.example.com",
-            null,
-            null,
-            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-            Set.of(),
-            null);
+    private static final ConnectionConfig.GitLabConfig GITLAB_CONFIG =
+            new ConnectionConfig.GitLabConfig("https://gitlab.example.com", null, null, Set.of(), null);
 
     @Mock
     private WorkspaceRepository workspaceRepository;

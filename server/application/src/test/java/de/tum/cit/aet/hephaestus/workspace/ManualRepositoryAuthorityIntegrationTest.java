@@ -473,13 +473,7 @@ class ManualRepositoryAuthorityIntegrationTest extends AbstractWorkspaceIntegrat
                 workspace,
                 IntegrationKind.GITLAB,
                 source.getServerUrl(),
-                new ConnectionConfig.GitLabConfig(
-                        source.getServerUrl(),
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig(source.getServerUrl(), null, null, Set.of(), null));
         unsaved.setCredentials(new BearerToken(tokenOf(workspace), null), credentialConverter);
         Connection connection = connections.saveAndFlush(unsaved);
         connectionService.transition(

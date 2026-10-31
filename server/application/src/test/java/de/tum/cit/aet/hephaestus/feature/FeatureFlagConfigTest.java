@@ -16,7 +16,7 @@ class FeatureFlagConfigTest extends BaseUnitTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(FeatureFlagConfiguration.class)
-            .withPropertyValues("hephaestus.features.flags.gitlab-workspace-creation=true");
+            .withPropertyValues("hephaestus.features.flags.page-experience-metrics=true");
 
     @AfterEach
     void clearSecurityContext() {
@@ -31,7 +31,7 @@ class FeatureFlagConfigTest extends BaseUnitTest {
         contextRunner.run(context -> {
             FeatureFlagsDTO response = FeatureFlagsDTO.from(context.getBean(FeatureFlagService.class));
 
-            assertThat(response.GITLAB_WORKSPACE_CREATION()).isTrue();
+            assertThat(response.PAGE_EXPERIENCE_METRICS()).isTrue();
             assertThat(response.ADMIN()).isFalse();
         });
     }

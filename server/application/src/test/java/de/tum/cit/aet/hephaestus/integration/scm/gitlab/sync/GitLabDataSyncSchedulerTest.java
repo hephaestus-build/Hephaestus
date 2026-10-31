@@ -192,13 +192,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 workspace,
                 IntegrationKind.GITLAB,
                 "gitlab.com:1",
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        1L,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.com", 1L, null, Set.of(), null));
         ReflectionTestUtils.setField(connection, "id", CONNECTION_ID);
         return connection;
     }

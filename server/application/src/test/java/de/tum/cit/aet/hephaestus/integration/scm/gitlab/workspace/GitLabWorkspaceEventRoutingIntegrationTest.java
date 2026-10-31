@@ -2428,8 +2428,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 saved,
                 IntegrationKind.GITLAB,
                 SERVER_URL,
-                new ConnectionConfig.GitLabConfig(
-                        SERVER_URL, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null),
+                new ConnectionConfig.GitLabConfig(SERVER_URL, null, null, Set.of(), null),
                 "glpat-test",
                 "event-routing-" + saved.getId());
         return saved;

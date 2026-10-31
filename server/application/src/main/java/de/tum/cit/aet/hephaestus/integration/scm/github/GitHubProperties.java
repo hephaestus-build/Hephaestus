@@ -28,28 +28,21 @@ import org.springframework.validation.annotation.Validated;
  *           -----BEGIN RSA PRIVATE KEY-----
  *           ...
  *           -----END RSA PRIVATE KEY-----
- *       meta:
- *         auth-token: ghp_xxxxxxxxxxxx
  * }</pre>
  *
- * @param app  GitHub App configuration for installation-based authentication
- * @param meta metadata API configuration (e.g., for fetching contributor avatars)
+ * @param app GitHub App configuration for installation-based authentication
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.integration.github")
-public record GitHubProperties(@Valid App app, @Valid Meta meta) {
+public record GitHubProperties(@Valid App app) {
     /**
      * Compact constructor ensuring nested records are never null.
      *
-     * @param app  GitHub App configuration (defaults to empty App if null)
-     * @param meta metadata API configuration (defaults to empty Meta if null)
+     * @param app GitHub App configuration (defaults to empty App if null)
      */
     public GitHubProperties {
         if (app == null) {
             app = new App(0, null, null, null, null, null);
-        }
-        if (meta == null) {
-            meta = new Meta(null);
         }
     }
 
@@ -97,14 +90,4 @@ public record GitHubProperties(@Valid App app, @Valid Meta meta) {
             return value == null || value.isBlank() ? null : value;
         }
     }
-
-    /**
-     * GitHub metadata API configuration.
-     *
-     * <p>Used for authenticated requests to GitHub's API that don't require
-     * App installation context (e.g., fetching public user profiles).
-     *
-     * @param authToken Use a personal access token or fine-grained token for GitHub API requests outside an App installation.
-     */
-    public record Meta(@Nullable String authToken) {}
 }

@@ -146,8 +146,7 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 workspace,
                 IntegrationKind.GITLAB,
                 "GITLAB",
-                new ConnectionConfig.GitLabConfig(
-                        INSTANCE, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null));
+                new ConnectionConfig.GitLabConfig(INSTANCE, null, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
         course = monitored("context/course");

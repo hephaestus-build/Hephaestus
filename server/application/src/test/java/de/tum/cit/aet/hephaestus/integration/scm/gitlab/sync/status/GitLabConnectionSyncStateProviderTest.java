@@ -282,13 +282,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         }
 
         private ConnectionConfig.GitLabConfig gitLabConfig(@Nullable Long webhookId) {
-            return new ConnectionConfig.GitLabConfig(
-                    "https://gitlab.com",
-                    1L,
-                    webhookId,
-                    ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                    Set.of(),
-                    null);
+            return new ConnectionConfig.GitLabConfig("https://gitlab.com", 1L, webhookId, Set.of(), null);
         }
     }
 

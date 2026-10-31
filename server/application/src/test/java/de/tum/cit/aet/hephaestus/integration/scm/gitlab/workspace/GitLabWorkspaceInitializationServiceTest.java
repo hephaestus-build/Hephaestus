@@ -182,13 +182,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         // here so the test bodies don't have to know about the Connection registry.
         lenient()
                 .when(connectionService.findActiveGitLabConfig(anyLong()))
-                .thenReturn(Optional.of(new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null)));
+                .thenReturn(Optional.of(
+                        new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null)));
         lenient()
                 .when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.of(new BearerToken("glpat-test-token", null)));
@@ -466,13 +461,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldLeaveRegisteredWebhookAlone() {
             when(gitLabWebhookService.isRegistrationEnabled()).thenReturn(true);
             when(connectionService.findActiveGitLabConfig(1L))
-                    .thenReturn(Optional.of(new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null)));
+                    .thenReturn(Optional.of(
+                            new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null)));
 
             assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
             verifyNoInteractions(gitLabSyncServiceHolderProvider);

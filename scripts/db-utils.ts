@@ -87,7 +87,7 @@ async function migrate(value: Config, diff = false, signal?: AbortSignal): Promi
 			`-PpostgresPort=${value.port}`,
 			...(value.ci ? ["-PpackagedServer=true"] : []),
 		],
-		{ cwd: server, env: { ...value.env, SPRING_PROFILES_ACTIVE: "local,dev" }, signal },
+		{ cwd: server, env: { ...value.env, SPRING_PROFILES_ACTIVE: "local" }, signal },
 	);
 }
 

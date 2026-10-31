@@ -240,13 +240,7 @@ class ScmJobFolderProjectorIntegrationTest extends AbstractWorkspaceIntegrationT
         connect(
                 gitLabWorkspace,
                 IntegrationKind.GITLAB,
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null));
         RepositoryToMonitor gitLabMonitor = new RepositoryToMonitor();
         gitLabMonitor.setNameWithOwner(onGitLab.getNameWithOwner());
         gitLabMonitor.setNativeId(onGitLab.getNativeId());
