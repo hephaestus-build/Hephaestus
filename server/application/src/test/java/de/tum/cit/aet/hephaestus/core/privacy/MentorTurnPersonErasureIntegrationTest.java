@@ -296,7 +296,11 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 MentorLedgerFixtures.toolResult(
                         MentorLedgerFixtures.piId(), "fetch-1", "fetch_context", "Target's open review", false),
                 MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), answer));
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, appended, null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, appended, null, null));
     }
 
     /** A source step that fails on its first run, before the last step, so the erasure fails and resumes. */

@@ -236,7 +236,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
     }
 
     private MentorTurn stored(MentorTurn turn) {
@@ -278,7 +278,11 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         MentorTurn turn = admittedTurn(ADMITTED);
         accumulate(attempt(turn), new ProxyTokenUsage(100, 40, 0, 0, 0));
 
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(), null, null));
         accumulate(attempt(turn), new ProxyTokenUsage(999, 999, 0, 0, 0));
 
         MentorTurn row = stored(turn);
@@ -324,7 +328,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
 
         MentorTurn ended = stored(turn);
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.DONE);

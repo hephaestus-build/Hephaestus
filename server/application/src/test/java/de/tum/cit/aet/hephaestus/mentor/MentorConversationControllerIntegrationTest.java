@@ -412,25 +412,27 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 running.getId(),
                 running.getAttempt(),
                 WORKER,
-                MentorTurn.Status.DONE,
-                List.of(
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(), "call-shown", "show_feedback", shownCall),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-shown", "show_feedback", "Shown", false),
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(), "call-refused", "show_feedback", refusedCall),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-refused", "show_feedback", "No", true),
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-fetch",
-                                "fetch_context",
-                                JsonNodeFactory.instance.objectNode().put("path", "results.json")),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-fetch", "fetch_context", "{}", false),
-                        MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "That is all I saw.")),
-                null);
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(), "call-shown", "show_feedback", shownCall),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-shown", "show_feedback", "Shown", false),
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(), "call-refused", "show_feedback", refusedCall),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-refused", "show_feedback", "No", true),
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-fetch",
+                                        "fetch_context",
+                                        JsonNodeFactory.instance.objectNode().put("path", "results.json")),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-fetch", "fetch_context", "{}", false),
+                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "That is all I saw.")),
+                        null,
+                        null));
 
         get("/entries")
                 .jsonPath("$.entries[*].kind")
@@ -483,19 +485,23 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 running.getId(),
                 running.getAttempt(),
                 WORKER,
-                MentorTurn.Status.DONE,
-                List.of(
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-1",
-                                "show_feedback",
-                                JsonNodeFactory.instance
-                                        .objectNode()
-                                        .put("feedbackId", UUID.randomUUID().toString())
-                                        .put("text", text)),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-1", "show_feedback", "Result", refused)),
-                null);
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-1",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put(
+                                                        "feedbackId",
+                                                        UUID.randomUUID().toString())
+                                                .put("text", text)),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-1", "show_feedback", "Result", refused)),
+                        null,
+                        null));
     }
 
     @Test
@@ -532,9 +538,11 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 running.getId(),
                 running.getAttempt(),
                 WORKER,
-                MentorTurn.Status.FAILED,
-                List.of(),
-                "Hephaestus could not finish this reply. Try again.");
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.FAILED,
+                        List.of(),
+                        null,
+                        "Hephaestus could not finish this reply. Try again."));
 
         get("/entries")
                 .jsonPath("$.entries[0].id")

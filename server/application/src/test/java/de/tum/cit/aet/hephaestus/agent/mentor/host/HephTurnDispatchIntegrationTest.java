@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
@@ -223,7 +224,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         clock = new MutableClock(Instant.now(), ZoneOffset.UTC);
         meters = new SimpleMeterRegistry();
         // Its own listener, so the dispatcher stops hearing the ledger when this test ends.
-        notifications = new MentorLedgerNotifications(turnRepository, dataSource, mapper);
+        notifications =
+                new MentorLedgerNotifications(turnRepository, new MentorTurnProgress(mapper), dataSource, mapper);
         dispatcher = newDispatcher(host, WORKER, 4);
         controller = new HephTurnController(
                 HephTurnFixtures.contexts(beans),
@@ -293,6 +295,10 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private MentorTurn row(MentorTurn turn) {
         return turnRepository.findById(turn.getId()).orElseThrow();
+    }
+
+    private @Nullable JsonNode sent(MentorTurn turn) {
+        return dispatcher.sentPartial(turn.getId(), row(turn).getAttempt());
     }
 
     private static JsonNode answer(String text) {
@@ -406,25 +412,21 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try {
             await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.waitingForQuota(attempt));
             dispatcher.tick();
-            assertThat(Objects.requireNonNull(row(asked).getPartial())
-                            .path("stage")
-                            .asString())
+            assertThat(Objects.requireNonNull(sent(asked)).path("stage").asString())
                     .isEqualTo("Waiting for tools…");
             JsonNode writing = mapper.readTree("""
                     {"activity":"writing","tool":null,"messages":[{"content":[{"type":"text","text":"Found it"}]}]}""");
             controller.partial(asked.getId(), writing, HephTurnFixtures.authenticated(turn));
             dispatcher.tick();
-            assertThat(row(asked).getPartial()).isEqualTo(writing);
+            assertThat(sent(asked)).isEqualTo(writing);
             controller.partial(asked.getId(), reading, HephTurnFixtures.authenticated(turn));
             dispatcher.tick();
-            assertThat(Objects.requireNonNull(row(asked).getPartial())
-                            .path("stage")
-                            .asString())
+            assertThat(Objects.requireNonNull(sent(asked)).path("stage").asString())
                     .isEqualTo("Waiting for tools…");
             runtime.quotaFull = false;
             waiting.get(5, TimeUnit.SECONDS);
             dispatcher.tick();
-            assertThat(row(asked).getPartial()).isEqualTo(reading);
+            assertThat(sent(asked)).isEqualTo(reading);
         } finally {
             sandboxes.release(turn.turnId(), turn.attempt());
             runtime.quotaFull = false;
@@ -433,7 +435,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldStoreAChangedPartialAnswerInThreeStatementsWithoutAFlushWaitAndAnUnchangedOneInNone() throws Exception {
+    void shouldSendAChangedPartialAnswerInThreeStatementsWithoutAFlushWaitAndAnUnchangedOneInNone() throws Exception {
         MentorTurn asked = ask("How do I pin the image?");
         TurnAttempt turn = credential(host.next("start"));
         JsonNode writing = mapper.readTree("""
@@ -441,14 +443,13 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         JsonNode longer = mapper.readTree("""
                 {"activity":"writing","tool":null,"messages":[{"content":[{"type":"text","text":"Pin it by digest"}]}]}""");
 
-        // The commit mode, the conditional write and its notification; before, a row read, a locking read, a write and
-        // the notification.
+        // The commit mode, the lease read and the notification of its one frame; no row is written.
         assertThat(statements(() -> controller.partial(asked.getId(), writing, HephTurnFixtures.authenticated(turn))))
                 .isEqualTo(3);
         assertThat(statements(() ->
                         controller.partial(asked.getId(), writing.deepCopy(), HephTurnFixtures.authenticated(turn))))
                 .isZero();
-        assertThat(row(asked).getPartial()).isEqualTo(writing);
+        assertThat(sent(asked)).isEqualTo(writing);
         // PostgreSQL serialises notifying commits, flush included; a partial answer's commit does not wait for it.
         String commitMode = transactions.execute(tx -> {
             controller.partial(asked.getId(), longer, HephTurnFixtures.authenticated(turn));

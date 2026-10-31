@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
@@ -120,6 +121,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private MentorTurnService turns;
+
+    @Autowired
+    private MentorTurnProgress progress;
 
     @Autowired
     private MentorTurnRepository turnRepository;
@@ -241,6 +245,17 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         }
     }
 
+    /**
+     * Sends a partial answer and waits until this process's listener received it: readers see a partial answer only
+     * once its notification arrived, so a projection that the test triggers right after would otherwise race it.
+     */
+    private void sendPartial(UUID turnId, int attempt, String workerId, JsonNode snapshot) {
+        turns.updatePartial(turnId, attempt, workerId, snapshot);
+        Awaitility.await()
+                .atMost(10, TimeUnit.SECONDS)
+                .until(() -> snapshot.equals(progress.snapshot(turns.require(workspace.getId(), turnId))));
+    }
+
     /** The ledger notification of the turn's current state, as the projector hears it. */
     private void changed(MentorTurn turn) {
         MentorTurn now = turns.require(workspace.getId(), turn.getId());
@@ -256,7 +271,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     /** Hephaestus writes more of the answer once the stream may take more text. */
     private void writes(MentorTurn turn, String text) {
         clock.advance(SlackMentorProjector.APPEND_INTERVAL);
-        turns.updatePartial(turn.getId(), turn.getAttempt(), WORKER, partial(text));
+        sendPartial(turn.getId(), turn.getAttempt(), WORKER, partial(text));
         changed(turn);
     }
 
@@ -270,7 +285,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(outcome, entries, error.isEmpty() ? null : error, null, null));
+                new MentorTurnCompletion.Ending(outcome, entries, error.isEmpty() ? null : error, null, null, null));
     }
 
     private static ObjectNode answer(String text) {
@@ -648,7 +663,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         progressPostsAt("Reading your pull requests…", "500.1");
         ask(main, "Is anything of mine waiting for a review?", "100.1");
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
         changed(running);
 
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER.minusSeconds(1));
@@ -660,7 +675,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         advance(SlackMentorProjector.PROGRESS_INTERVAL);
         verify(slack, never()).updateMessage(anyLong(), anyString(), anyString(), anyList(), anyString(), any());
 
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
         advance(SlackMentorProjector.PROGRESS_INTERVAL);
         verify(slack)
                 .updateMessage(
@@ -693,7 +708,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(queued);
         advance(Duration.ofSeconds(1));
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Thinking…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Thinking…"));
         changed(running);
 
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
@@ -708,7 +723,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn asked =
                 ask(main, "Is anything of mine waiting for a review?", "100.1").turn();
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
 
@@ -719,7 +734,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         progressPostsAt("Reading your pull requests…", "500.2");
         MentorTurn retried = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(retried.getId(), retried.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        sendPartial(retried.getId(), retried.getAttempt(), WORKER, staged("Reading your pull requests…"));
         changed(retried);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
 
@@ -735,10 +750,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         ask(main, "Is anything of mine waiting for a review?", "100.1");
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
         advance(SlackMentorProjector.PROGRESS_INTERVAL);
         verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
 
@@ -764,10 +779,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "invalid_receipt"));
         ask(main, "Is anything of mine waiting for a review?", "100.1");
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
         advance(SlackMentorProjector.PROGRESS_INTERVAL);
 
         verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
@@ -786,7 +801,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
         ask(main, "Is anything of mine waiting for a review?", "100.1");
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
         changed(running);
         advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
 
@@ -958,7 +973,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
 
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         assertThat(question(asked).getSlackStreamTs()).isEqualTo("300.1");
         writes(running, "Your reviews are quick.");
@@ -990,10 +1005,10 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         // Within the append interval: the stream waits for a wake-up.
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews are quick."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews are quick."));
         changed(running);
         assertThat(wakeUps).hasSize(1);
 
@@ -1014,7 +1029,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
         changed(running);
         // The server stops before the turn ends; Slack ends the stream when it times out.
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you think?"), "");
@@ -1043,7 +1058,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
         changed(running);
         // Slack ends an idle stream on its own, for example while Hephaestus waits for a tool.
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "message_not_in_streaming_state"));
@@ -1077,7 +1092,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
         changed(running);
         // The stream got no text while Hephaestus showed feedback, and Slack ended it meanwhile.
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "message_not_in_streaming_state"));
@@ -1105,7 +1120,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "ratelimited", 1_000L));
         for (int written = 1; written <= 9; written++) {
@@ -1130,7 +1145,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         String opened = SlackTs.ofInstant(clock.instant());
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         historyHolds(botMessage(opened, null));
 
@@ -1159,7 +1174,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         // While Hephaestus works, Hephaestus refuses another message in the thread with a reply of its own.
         clock.advance(Duration.ofSeconds(30));
@@ -1183,7 +1198,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews ar"))
                 .thenReturn("300.1");
         // A model call fails after Slack showed part of its text; the retried call writes another text.
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews ar"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews ar"));
         changed(running);
         writes(running, "Let me look again.");
 
@@ -1211,7 +1226,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews ar"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews ar"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews ar"));
         changed(running);
         writes(running, "Let me look");
 
@@ -1232,14 +1247,14 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "ratelimited", 1_000L));
 
         writes(running, "Your reviews are");
         // Later than the workspace's spacing, earlier than the stream's interval.
         clock.advance(SlackMentorProjector.WORKSPACE_APPEND_SPACING);
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews are quick."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews are quick."));
         changed(running);
         verify(slack, times(1)).appendStream(anyLong(), anyString(), anyString(), anyString());
 
@@ -1254,7 +1269,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "internal_error"));
         writes(running, "Your reviews are");
@@ -1290,7 +1305,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "message_not_found"));
         writes(running, "Your reviews are quick.");
@@ -1334,15 +1349,15 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenReturn("300.1");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.2", "Your issues"))
                 .thenReturn("300.2");
-        turns.updatePartial(one.getId(), one.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(one.getId(), one.getAttempt(), WORKER, partial("Your reviews"));
         changed(one);
-        turns.updatePartial(two.getId(), two.getAttempt(), WORKER, partial("Your issues"));
+        sendPartial(two.getId(), two.getAttempt(), WORKER, partial("Your issues"));
         changed(two);
 
         clock.advance(SlackMentorProjector.APPEND_INTERVAL);
-        turns.updatePartial(one.getId(), one.getAttempt(), WORKER, partial("Your reviews are quick."));
+        sendPartial(one.getId(), one.getAttempt(), WORKER, partial("Your reviews are quick."));
         changed(one);
-        turns.updatePartial(two.getId(), two.getAttempt(), WORKER, partial("Your issues are old."));
+        sendPartial(two.getId(), two.getAttempt(), WORKER, partial("Your issues are old."));
         changed(two);
         verify(slack).appendStream(workspace.getId(), CHANNEL, "300.1", " are quick.");
         verify(slack, never()).appendStream(workspace.getId(), CHANNEL, "300.2", " are old.");
@@ -1358,7 +1373,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
         changed(running);
 
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
@@ -1413,7 +1428,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .settle(any());
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
         changed(running);
         List<JsonNode> answer = linkingAnswer(running, "What do you make of the gap?");
         UUID unshown = ConversationFeedbackRows.claimedBy(
@@ -1456,12 +1471,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 ask(conversations.require(workspace.getId(), running.getConversationId()), "And next?", "100.6");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
         changed(running);
         appendFails(new SlackSendException(workspace.getId(), CHANNEL, "stopped_by_user"));
         clock.advance(SlackMentorProjector.APPEND_INTERVAL);
         List<JsonNode> answer = linkingAnswer(running, "What do you make of the gap?");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw. More"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw. More"));
 
         changed(running);
 
@@ -1490,7 +1505,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
 
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         assertThat(sessionCalls).containsExactly("status:processing");
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
@@ -1510,7 +1525,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 ask(conversations.require(workspace.getId(), running.getConversationId()), "And next?", "100.6");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
 
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
@@ -1530,7 +1545,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 ask(conversations.require(workspace.getId(), first.getConversationId()), "And next?", "100.6");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(first.getId(), first.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(first.getId(), first.getAttempt(), WORKER, partial("Your reviews"));
         changed(first);
         end(first, MentorTurn.Status.DONE, "Your reviews are quick.", "");
         MentorTurn second = turns.claimNext(WORKER, LEASE).orElseThrow();
@@ -1559,7 +1574,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 ask(conversations.require(workspace.getId(), first.getConversationId()), "And next?", "100.6");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(first.getId(), first.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(first.getId(), first.getAttempt(), WORKER, partial("Your reviews"));
         changed(first);
         CountDownLatch inSlack = new CountDownLatch(1);
         CountDownLatch answer = new CountDownLatch(1);
@@ -1766,7 +1781,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
 
         end(running, MentorTurn.Status.DONE, "Your reviews are quick.", "");
@@ -1794,7 +1809,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
         changed(running);
         doThrow(new SlackSendException(workspace.getId(), CHANNEL, "stopped_by_user"))
                 .when(slack)
@@ -1815,7 +1830,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Your reviews"))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Your reviews"));
         changed(running);
         stopStreamFails("message_not_in_streaming_state");
 
@@ -1836,7 +1851,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurnService.Submission asked = askInThread();
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is")).thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is"));
         changed(running);
         stopStreamFails("ratelimited");
 
@@ -1877,7 +1892,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn running = running(asked);
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Here is what I saw."))
                 .thenReturn("300.1");
-        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
+        sendPartial(running.getId(), running.getAttempt(), WORKER, partial("Here is what I saw."));
         changed(running);
         stopStreamFails("silent_mode_engaged");
 
@@ -1904,7 +1919,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenReturn("300.1");
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Second try"))
                 .thenReturn("300.2");
-        turns.updatePartial(first.getId(), first.getAttempt(), WORKER, partial("First try"));
+        sendPartial(first.getId(), first.getAttempt(), WORKER, partial("First try"));
         changed(first);
 
         completion.billLostAttempt(turns.expireLease(first.getId()).orElseThrow());
@@ -1935,7 +1950,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
         when(slack.startStream(workspace.getId(), CHANNEL, "100.1", "Second try"))
                 .thenReturn("300.2");
-        turns.updatePartial(first.getId(), first.getAttempt(), WORKER, partial("First try"));
+        sendPartial(first.getId(), first.getAttempt(), WORKER, partial("First try"));
         changed(first);
 
         completion.billLostAttempt(turns.expireLease(first.getId()).orElseThrow());

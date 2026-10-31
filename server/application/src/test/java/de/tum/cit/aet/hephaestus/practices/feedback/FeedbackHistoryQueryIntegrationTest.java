@@ -450,29 +450,31 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 running.getId(),
                 running.getAttempt(),
                 "worker-history",
-                MentorTurn.Status.DONE,
-                List.of(
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-problem",
-                                "link_problem",
-                                JsonNodeFactory.instance
-                                        .objectNode()
-                                        .put("problemId", problemId.toString())
-                                        .put("text", "The failure case has no test.")),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-problem", "link_problem", "Linked", false),
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-feedback",
-                                "show_feedback",
-                                JsonNodeFactory.instance
-                                        .objectNode()
-                                        .put("feedbackId", shown.getId().toString())
-                                        .put("text", "Say why.")),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-feedback", "show_feedback", "Shown", false)),
-                null);
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-problem",
+                                        "link_problem",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("problemId", problemId.toString())
+                                                .put("text", "The failure case has no test.")),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-problem", "link_problem", "Linked", false),
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-feedback",
+                                        "show_feedback",
+                                        JsonNodeFactory.instance
+                                                .objectNode()
+                                                .put("feedbackId", shown.getId().toString())
+                                                .put("text", "Say why.")),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "call-feedback", "show_feedback", "Shown", false)),
+                        null,
+                        null));
 
         List<MentorLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).entries().stream()
                 .flatMap(entry -> entry.links().stream())

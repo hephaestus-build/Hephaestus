@@ -110,7 +110,11 @@ public class MentorTurnStarter {
     }
 
     private Optional<StartedTurn> decline(MentorTurn turn, String workerId, String reason) {
-        turns.end(turn.getId(), turn.getAttempt(), workerId, MentorTurn.Status.FAILED, List.of(), reason);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                workerId,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.FAILED, List.of(), null, reason));
         log.info(
                 "conversation turn {} attempt {} was declined at its start: {}",
                 turn.getId(),

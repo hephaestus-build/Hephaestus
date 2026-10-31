@@ -122,7 +122,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getAttempt(),
                 WORKER,
                 new MentorTurnCompletion.Ending(
-                        outcome, entries, outcome == MentorTurn.Status.FAILED ? "x" : null, null, null));
+                        outcome, entries, outcome == MentorTurn.Status.FAILED ? "x" : null, null, null, null));
     }
 
     /** The feedback's state, its copy's state, whether a receipt settled the copy, and the answer it names. */
@@ -370,7 +370,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
 
         assertThat(ledger(turn)).singleElement().satisfies(row -> {
             assertThat(row.attempt()).isEqualTo(1);
@@ -394,7 +394,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(MentorTurn.Status.FAILED, List.of(), "broken", null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.FAILED, List.of(), "broken", null, null, null));
 
         assertThat(ledger(turn)).isEmpty();
     }
@@ -413,7 +413,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                         List.of(),
                         "Hephaestus could not finish this reply.",
                         "its Hephaestus host reported ERROR: provider_unavailable",
-                        new MentorTurn.FailedCall("upstream_status", 503)));
+                        new MentorTurn.FailedCall("upstream_status", 503),
+                        null));
 
         MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
         assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
@@ -438,7 +439,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                         List.of(),
                         "Hephaestus could not finish this reply.",
                         "c".repeat(300),
-                        new MentorTurn.FailedCall("k".repeat(100), null)));
+                        new MentorTurn.FailedCall("k".repeat(100), null),
+                        null));
 
         MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
         assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
@@ -459,7 +461,8 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                         List.of(),
                         null,
                         null,
-                        new MentorTurn.FailedCall("upstream_idle", 200)));
+                        new MentorTurn.FailedCall("upstream_idle", 200),
+                        null));
 
         MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
         assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.DONE);

@@ -289,9 +289,11 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                MentorTurn.Status.DONE,
-                List.of(compaction(kept), searchResult(secret.question())),
-                null));
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(compaction(kept), searchResult(secret.question())),
+                        null,
+                        null)));
         CompletableFuture<Void> deletion = CompletableFuture.runAsync(
                 () -> entries.deleteMessage(workspace.getId(), secret.question().getId()));
 
@@ -317,7 +319,11 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
 
     /** Ends the turn with one Pi entry its host appended, and returns that entry as stored. */
     private MentorEntry ended(MentorTurn turn, JsonNode piEntry) {
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(piEntry), null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(piEntry), null, null));
         return MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .getLast();
     }

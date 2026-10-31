@@ -66,7 +66,7 @@ public class MentorTurnCompletion {
     private final ApplicationEventPublisher events;
 
     /**
-     * Stores the host's newest partial answer.
+     * Sends the host's newest partial answer to readers; no row stores it.
      *
      * @param startedAt when the attempt started, for its first partial answer, which times the attempt's first token;
      *     {@code null} for every later one
@@ -91,13 +91,16 @@ public class MentorTurnCompletion {
      *     kinds and classes, never a host's, a provider's or an exception's text.
      * @param lastFailedCall the attempt's last model call that failed, as the worker's LLM proxy saw it; {@code null}
      *     when none did
+     * @param lastPartial the partial answer this worker sent last, which readers may have seen; {@code null} before
+     *     the first
      */
     public record Ending(
             MentorTurn.Status outcome,
             List<JsonNode> entries,
             @Nullable String error,
             @Nullable String cause,
-            MentorTurn.@Nullable FailedCall lastFailedCall) {}
+            MentorTurn.@Nullable FailedCall lastFailedCall,
+            @Nullable JsonNode lastPartial) {}
 
     /**
      * Ends the attempt, bills it, and records and logs why a failed attempt failed. With the end, it records the
@@ -106,8 +109,12 @@ public class MentorTurnCompletion {
      */
     @Transactional
     public MentorTurn end(UUID turnId, int attempt, String workerId, Ending ending) {
-        MentorTurnService.EndedTurn ended =
-                turns.end(turnId, attempt, workerId, ending.outcome(), ending.entries(), ending.error());
+        MentorTurnService.EndedTurn ended = turns.end(
+                turnId,
+                attempt,
+                workerId,
+                new MentorTurnService.AttemptEnd(
+                        ending.outcome(), ending.entries(), ending.lastPartial(), ending.error()));
         MentorTurn turn = ended.turn();
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
             turns.recordFailure(turn, ending.cause(), ending.lastFailedCall());

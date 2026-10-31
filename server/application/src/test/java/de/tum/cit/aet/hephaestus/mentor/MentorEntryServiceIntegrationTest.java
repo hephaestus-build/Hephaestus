@@ -168,9 +168,11 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 running.getId(),
                 running.getAttempt(),
                 WORKER,
-                MentorTurn.Status.DONE,
-                List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")),
-                null);
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")),
+                        null,
+                        null));
 
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId()))
                 .filteredOn(entry -> entry.getKind() != MentorEntry.Kind.USER)
@@ -509,15 +511,21 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                MentorTurn.Status.DONE,
-                List.of(
-                        MentorLedgerFixtures.message(MentorLedgerFixtures.piId(), "assistant", shownContent),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "link-shown", "link_result", "Shown", false),
-                        MentorLedgerFixtures.message(MentorLedgerFixtures.piId(), "assistant", failedContent),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "link-failed", "link_problem", "No such problem", true)),
-                null);
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(
+                                MentorLedgerFixtures.message(MentorLedgerFixtures.piId(), "assistant", shownContent),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(), "link-shown", "link_result", "Shown", false),
+                                MentorLedgerFixtures.message(MentorLedgerFixtures.piId(), "assistant", failedContent),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(),
+                                        "link-failed",
+                                        "link_problem",
+                                        "No such problem",
+                                        true)),
+                        null,
+                        null));
         List<MentorEntry> answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                 workspace.getId(), turn.getId(), MentorEntry.Kind.HEPH);
         assertThat(answers).extracting(MentorEntry::getText).containsExactly("", "");
@@ -562,7 +570,11 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     /** Ends the turn with the Pi entry its host appended, and returns the stored entry. */
     private MentorEntry ended(MentorTurn turn, JsonNode piEntry) {
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(piEntry), null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(piEntry), null, null));
         return MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .getLast();
     }

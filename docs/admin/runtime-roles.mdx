@@ -393,7 +393,7 @@ The local development default outside Helm remains eight.
 Resident turns, model calls and tools Pods use separate resources:
 
 - A turn uses little of the conversation host. In a load test, one host ran 90 turns at once in 364 MiB of memory.
-- Each turn that streams writes its partial answer up to 4 times each second, one short statement each time.
+- Each turn that streams sends its partial answer up to 4 times each second as a database notification. A notification writes no table row. The answer is stored once, when the turn ends.
 - A provider that queues calls past its concurrency limit makes each call slower.
   In the same load test, one provider key answered a single call in 4 seconds.
   With 8 calls at once, each call took 34 seconds.

@@ -53,6 +53,9 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
 
     private static final Logger log = LoggerFactory.getLogger(HephTurnDispatcher.class);
 
+    /** How long an unchanged partial answer waits before it is sent again, for readers that started since. */
+    static final Duration PARTIAL_RESEND = Duration.ofSeconds(10);
+
     static final String TOOK_TOO_LONG = "Hephaestus took too long to reply and stopped. Try again.";
     static final String COULD_NOT_FINISH = "Hephaestus could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
@@ -153,6 +156,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile Instant renewed;
         /** The partial answer this attempt last stored; {@code null} before its first. */
         volatile @Nullable JsonNode partial;
+        /** When this worker last sent the attempt's partial answer. */
+        volatile @Nullable Instant partialSentAt;
         /** The latest host snapshot before a local tools-wait stage is applied. */
         volatile @Nullable JsonNode hostPartial;
 
@@ -342,8 +347,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     /**
-     * Stores the host's newest partial answer of an attempt that runs here. The snapshot the attempt stored last
-     * stores nothing, so a host that reports an unchanged answer costs no write.
+     * Sends the host's newest partial answer of an attempt that runs here to readers. The snapshot the attempt sent
+     * last sends nothing, so a host that reports an unchanged answer costs no notification.
      *
      * @throws MentorLeaseLostException when the attempt does not run here
      */
@@ -370,12 +375,23 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 partial = waiting;
             }
             JsonNode stored = turn.partial;
-            if (partial.equals(stored)) return;
+            Instant now = clock.instant();
+            Instant sentAt = turn.partialSentAt;
+            // An unchanged answer is sent again now and then, so a reader that started since sees it.
+            if (partial.equals(stored) && sentAt != null && now.isBefore(sentAt.plus(PARTIAL_RESEND))) return;
             completion.progress(turn.turnId, turn.attempt, workerId, partial, stored == null ? turn.claimed : null);
             turn.partial = partial;
+            turn.partialSentAt = now;
         } finally {
             turn.progress.unlock();
         }
+    }
+
+    /** The partial answer this worker sent last for an attempt that runs here, or {@code null}. */
+    @Nullable
+    JsonNode sentPartial(UUID turnId, int attempt) {
+        Running turn = running.get(turnId);
+        return turn == null || turn.attempt != attempt ? null : turn.partial;
     }
 
     /** The host ended the attempt through the turn endpoint; its slot is free. */
@@ -612,7 +628,12 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     turn.attempt,
                     workerId,
                     new MentorTurnCompletion.Ending(
-                            outcome, List.of(), error, cause, callsInFlight.lastFailed(turn.turnId, turn.attempt)));
+                            outcome,
+                            List.of(),
+                            error,
+                            cause,
+                            callsInFlight.lastFailed(turn.turnId, turn.attempt),
+                            turn.partial));
             callsInFlight.forgetFailed(turn.turnId, turn.attempt);
         } catch (MentorLeaseLostException alreadyEnded) {
             log.debug("conversation turn {} ended before this worker ended it", turn.turnId);

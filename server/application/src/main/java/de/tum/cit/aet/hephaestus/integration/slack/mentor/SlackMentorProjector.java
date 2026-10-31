@@ -421,7 +421,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             return;
         }
         later(projection, PROGRESS_INTERVAL);
-        String stage = MentorSlackDelivery.stage(turn);
+        String stage = delivery.stage(turn);
         Instant resumes = progressPauses.get(projection.workspaceId);
         if (projection.progressUnknown
                 || stage == null
@@ -687,8 +687,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             stream.attempt = turn.getAttempt();
             showWorking(projection.workspaceId, stream);
         }
-        String text = MentorSlackDelivery.writing(turn);
-        if (stream.end != StreamEnd.SEND_REST) {
+        String text = delivery.writing(turn);
+        if (text == null || stream.end != StreamEnd.SEND_REST) {
             return;
         }
         if (!text.startsWith(stream.sent)) {
