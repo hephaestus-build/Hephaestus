@@ -56,6 +56,7 @@ import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
 import { usePracticeProfileReviews } from "@/hooks/use-practice-profile-reviews";
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
@@ -79,6 +80,8 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
+	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
+	const { isAdmin } = useWorkspaceAccess();
 	const { workspaceSlug } = Route.useParams();
 	const search = Route.useSearch();
 
@@ -240,6 +243,35 @@ function PracticeProfile() {
 												{label}
 											</Link>
 										),
+								adminLinks: isAdmin
+									? {
+											setupSummary: (label) => (
+												<InlineLink
+													render={
+														<Link
+															to="/w/$workspaceSlug/admin/settings"
+															params={{ workspaceSlug }}
+														/>
+													}
+												>
+													{label}
+												</InlineLink>
+											),
+											reviewScope: (label) => (
+												<InlineLink
+													render={
+														<Link
+															to="/w/$workspaceSlug/admin/practices/review"
+															params={{ workspaceSlug }}
+															search={{ section: "automated-review" }}
+														/>
+													}
+												>
+													{label}
+												</InlineLink>
+											),
+										}
+									: undefined,
 							}
 				}
 				state={page}
