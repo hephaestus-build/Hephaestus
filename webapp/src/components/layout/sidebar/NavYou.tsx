@@ -58,7 +58,7 @@ export function NavYou({
 							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/conversation", fuzzy: true }))}
 							render={<Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />}
 						>
-							<HephaestusMark size={16} animated={false} />
+							<HephaestusMark size={16} />
 							<span>{conversationLabel}</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
