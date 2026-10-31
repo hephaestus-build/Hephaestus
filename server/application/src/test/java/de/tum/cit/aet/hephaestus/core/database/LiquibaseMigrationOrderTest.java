@@ -63,6 +63,7 @@ class LiquibaseMigrationOrderTest extends BaseUnitTest {
             assertThat(identities(after.subList(cut + 1, after.size())))
                     .containsSubsequence(
                             "db/changelog/1793058726214_changelog.xml::1793058726214-1::hephaestus",
+                            "db/changelog/1793394316000_changelog.xml::1793394316000-1::hephaestus",
                             "db/changelog/next/" + first + "::first::order-test",
                             "db/changelog/next/" + second + "::second::order-test");
         }
