@@ -355,13 +355,10 @@ hephaestus:
                 client-id: ${OUTLINE_OAUTH_CLIENT_ID:}
                 client-secret: ${OUTLINE_OAUTH_CLIENT_SECRET:}
         # Token-bucket rate limiting for the hot auth endpoints (core.auth.ratelimit).
-        # Buckets are SHARED across replicas via a Postgres ProxyManager (no Redis) when
-        # postgres-backed=true (default) and a DataSource is present; otherwise an in-JVM
-        # PER-REPLICA fallback is used (logged at startup). Each limit: `capacity` requests
-        # per `period` (interval refill — a fresh budget per window).
+        # Buckets are SHARED across replicas via a PostgreSQL ProxyManager (no Redis). Each
+        # limit: `capacity` requests per `period` (interval refill — a fresh budget per window).
         rate-limit:
             enabled: ${HEPHAESTUS_AUTH_RATE_LIMIT_ENABLED:true}
-            postgres-backed: ${HEPHAESTUS_AUTH_RATE_LIMIT_POSTGRES_BACKED:true}
             # GET /oauth2/authorization/* — keyed by client IP
             oauth-authorization:
                 capacity: ${HEPHAESTUS_AUTH_RATE_LIMIT_OAUTH_CAPACITY:20}

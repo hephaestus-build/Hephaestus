@@ -650,7 +650,6 @@ An SMTP attempt already in progress cannot be recalled.
 
 **Capacity.**
 The existing PostgreSQL-backed Bucket4j store shares limits across server replicas.
-Keep `hephaestus.auth.rate-limit.postgres-backed=true` in production.
 An SMTP attempt uses capacity even if the relay rejects it or disconnects.
 A refund after an uncertain failure could exceed the relay limit.
 Withheld mail uses no capacity.
