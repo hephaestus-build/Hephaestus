@@ -60,6 +60,11 @@ A table that belongs to no workspace is a security decision:
 
 The test also lists the tables from before this rule. Do not add to that list.
 
+`consumer_dead_letter` is a mixed-scope exception: installation lifecycle failures can arrive before a workspace exists.
+Its workspace column can be NULL, and it remains under SQL tenancy enforcement.
+The installation repository queries use `@WorkspaceAgnostic`, with an explicit `workspace IS NULL` predicate.
+The test records this decision in `MIXED_SCOPE_TABLES` and requires that the table remains scoped.
+
 ## Native objects the JPA diff does not cover
 
 The JPA diff does not cover native `CHECK` constraints or triggers in this repository. For such a

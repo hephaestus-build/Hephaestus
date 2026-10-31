@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -30,7 +31,8 @@ import org.slf4j.LoggerFactory;
  *   <li>One JetStream consumer (durable or ephemeral) per scope, subscribed to a
  *       wildcard subject filter built from {@link ConsumerSubjectMath}.</li>
  *   <li>Messages flow into an in-process {@link LinkedBlockingQueue}; a dedicated
- *       virtual thread drains it serially. This guarantees per-scope ordering
+ *       virtual thread drains it serially. The durable consumer also enforces
+ *       {@code MaxAckPending=1}, so a retry keeps its place in the stream
  *       without imposing global serialization — sibling scopes drain in parallel
  *       on their own virtual threads.</li>
  *   <li>Lifecycle methods are {@code synchronized} to keep start / stop /
@@ -71,9 +73,11 @@ public final class ScopeConsumer {
 
     /**
      * Sequential dispatch queue. Unbounded by design — the JetStream
-     * {@code max-ack-pending} knob already caps in-flight work upstream.
+     * {@code MaxAckPending=1} setting already caps in-flight work upstream.
      */
     private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>();
+    // MaxAckPending bounds unique sequences, but a slow handler can receive many copies of its current sequence.
+    private final Set<Long> queuedSequences = ConcurrentHashMap.newKeySet();
 
     public ScopeConsumer(
             @Nullable Long scopeId,
@@ -161,9 +165,7 @@ public final class ScopeConsumer {
         if (!wasRunning && thread == null) {
             return;
         }
-        if (wasRunning) {
-            closeSubscriptionQuietly();
-        }
+        closeSubscriptionQuietly();
         if (thread != null) {
             thread.interrupt();
             if (!isCurrentThread(thread)) {
@@ -209,8 +211,13 @@ public final class ScopeConsumer {
                     .build());
             currentSubjects = newSubjects.clone();
         }
-        closeSubscriptionQuietly();
-        subscription = context.consume(this::enqueueMessage);
+        if (running.get()) {
+            closeSubscriptionQuietly();
+            subscription = context.consume(this::enqueueMessage);
+        } else {
+            stop();
+            start();
+        }
         log.debug(
                 "Updated ScopeConsumer subjects: consumerName={}, scopeId={}, subjectCount={}",
                 consumerName,
@@ -245,12 +252,19 @@ public final class ScopeConsumer {
             safeNak(msg);
             return;
         }
+        Long sequence = streamSequence(msg);
+        if (sequence != null && !queuedSequences.add(sequence)) return;
         try {
             messageQueue.put(msg);
         } catch (InterruptedException e) {
+            if (sequence != null) queuedSequences.remove(sequence);
             Thread.currentThread().interrupt();
             safeNak(msg);
         }
+    }
+
+    private static @Nullable Long streamSequence(Message msg) {
+        return msg.isJetStream() ? msg.metaData().streamSequence() : null;
     }
 
     private void processMessagesSequentially() {
@@ -259,16 +273,35 @@ public final class ScopeConsumer {
             try {
                 Message msg = messageQueue.poll(1, TimeUnit.SECONDS);
                 if (msg != null) {
-                    messageHandler.accept(msg);
+                    try {
+                        messageHandler.accept(msg);
+                    } finally {
+                        Long sequence = streamSequence(msg);
+                        if (sequence != null) queuedSequences.remove(sequence);
+                    }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
-            } catch (Exception e) {
+            } catch (Throwable e) {
+                if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) {
+                    running.set(false);
+                    closeSubscriptionQuietly();
+                    log.error(
+                            "Dispatch loop stopped after fatal JVM error: consumerName={}, scopeId={}, error.type={}",
+                            consumerName,
+                            scopeId,
+                            e.getClass().getName());
+                    return;
+                }
                 // Per-message failures must not kill the loop; the handler is responsible
                 // for ACK/NAK and surfaces ITS errors via the poison handler. Anything that
                 // escapes the handler here is an UNEXPECTED bug we log loudly.
-                log.error("Unexpected error in dispatch loop: consumerName={}, scopeId={}", consumerName, scopeId, e);
+                log.error(
+                        "Unexpected error in dispatch loop: consumerName={}, scopeId={}, error.type={}",
+                        consumerName,
+                        scopeId,
+                        e.getClass().getName());
             }
         }
         log.debug("Dispatch loop stopped: consumerName={}, scopeId={}", consumerName, scopeId);
@@ -293,6 +326,8 @@ public final class ScopeConsumer {
     private void drainAndNakQueue() {
         Message msg;
         while ((msg = messageQueue.poll()) != null) {
+            Long sequence = streamSequence(msg);
+            if (sequence != null) queuedSequences.remove(sequence);
             safeNak(msg);
         }
     }

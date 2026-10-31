@@ -34,6 +34,18 @@ public final class ConsumerSubjectMath {
 
     private ConsumerSubjectMath() {}
 
+    /** NATS '*' matches one token; a final '>' matches one or more tokens. */
+    public static boolean matchesFilter(String filter, String subject) {
+        String[] pattern = filter.split("\\.", -1);
+        String[] tokens = subject.split("\\.", -1);
+        for (int index = 0; index < pattern.length; index++) {
+            if (index >= tokens.length) return false;
+            if (">".equals(pattern[index])) return index == pattern.length - 1;
+            if (!"*".equals(pattern[index]) && !pattern[index].equals(tokens[index])) return false;
+        }
+        return pattern.length == tokens.length;
+    }
+
     // Subject prefix construction (publisher-mirror)
 
     /**

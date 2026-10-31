@@ -22,16 +22,25 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class WorkspaceControllerAdvice {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceControllerAdvice.class);
+
+    @ExceptionHandler(ResponseStatusException.class)
+    ResponseEntity<ProblemDetail> handleResponseStatus(ResponseStatusException exception) {
+        return ResponseEntity.status(exception.getStatusCode())
+                .headers(exception.getHeaders())
+                .body(exception.getBody());
+    }
 
     @ExceptionHandler(EntityNotFoundException.class)
     ProblemDetail handleNotFound(EntityNotFoundException exception) {

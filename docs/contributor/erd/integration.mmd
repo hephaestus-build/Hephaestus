@@ -76,6 +76,20 @@ erDiagram
         BIGINT actor_account_id FK
     }
 
+    ConsumerDeadLetter {
+        BIGINT id PK
+        BIGINT workspace_id FK
+        VARCHAR(255) consumer_name UK "NOT NULL"
+        VARCHAR(255) stream_name UK "NOT NULL"
+        BIGINT stream_sequence UK "NOT NULL"
+        TEXT subject "NOT NULL"
+        TIMESTAMPTZ received_at "NOT NULL"
+        BIGINT replayed_by FK
+        VARCHAR(255) error_class "NOT NULL"
+        TIMESTAMPTZ failed_at "NOT NULL"
+        TIMESTAMPTZ replayed_at
+    }
+
     Discussion {
         BIGINT id PK
         TIMESTAMPTZ created_at
@@ -756,6 +770,8 @@ erDiagram
     Workspace ||--o{ Connection : has
     Connection ||--o{ ConnectionAudit : has
     Account ||--o{ ConnectionAudit : has
+    Workspace ||--o{ ConsumerDeadLetter : has
+    Account ||--o{ ConsumerDeadLetter : references
     User ||--o{ Discussion : references
     User ||--o{ Discussion : authored_by
     DiscussionCategory ||--o{ Discussion : has

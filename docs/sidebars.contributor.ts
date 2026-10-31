@@ -57,6 +57,7 @@ const sidebars: SidebarsConfig = {
 			label: "Architecture",
 			items: [
 				"system-design",
+				"ingest-durability",
 				"workspace-context",
 				"sync-lifecycle",
 				"database-schema",

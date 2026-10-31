@@ -14,7 +14,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Owns the {@code hephaestus.sync.nats.*} property block: the connection knobs shared
  * between the JetStream publisher (inbound webhook fan-out) and the consumer fleet. Consumer-side
- * tuning (ack-wait, max-ack-pending, poison handling, …) lives on {@link NatsConsumerProperties}
+ * tuning (ack-wait, poison handling, …) lives on {@link NatsConsumerProperties}
  * under {@code hephaestus.integration.consumer.*}.
  *
  * <p>This connection serves webhook/sync ingest only. The agent job queue runs on PostgreSQL

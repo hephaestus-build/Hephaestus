@@ -29,6 +29,6 @@ final class NatsConsumerPropertiesFixture {
 
     private static NatsConsumerProperties build(
             Duration inactiveThreshold, NatsConsumerProperties.PoisonProperties poison) {
-        return new NatsConsumerProperties(Duration.ofMinutes(5), 500, Duration.ofSeconds(2), inactiveThreshold, poison);
+        return new NatsConsumerProperties(Duration.ofMinutes(5), Duration.ofSeconds(2), inactiveThreshold, poison);
     }
 }

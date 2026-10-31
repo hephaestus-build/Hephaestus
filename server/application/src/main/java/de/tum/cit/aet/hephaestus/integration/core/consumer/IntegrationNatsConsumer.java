@@ -17,8 +17,10 @@ import io.nats.client.Message;
 import io.nats.client.Nats;
 import io.nats.client.Options;
 import io.nats.client.StreamContext;
+import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
+import io.nats.client.api.MessageInfo;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
@@ -40,6 +42,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,6 +102,10 @@ public class IntegrationNatsConsumer {
     private static final int MAX_SCOPE_RECONCILE_ATTEMPTS = 6;
 
     private final Object connectionLock = new Object();
+
+    private record DispatchScope(@Nullable Long workspaceId, String stream) {}
+
+    private final Map<DispatchScope, ReentrantLock> dispatchLocks = new ConcurrentHashMap<>();
     private final Object scopeLifecycleMonitor = new Object();
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
@@ -747,7 +755,12 @@ public class IntegrationNatsConsumer {
                 // until something rewrites it, so reconcile it here rather than only on create.
                 boolean thresholdMatches = Objects.equals(
                         Objects.requireNonNullElse(config.getInactiveThreshold(), Duration.ZERO), desiredThreshold);
-                if (existingSubjects.equals(desiredSubjects) && thresholdMatches) {
+                if (existingSubjects.equals(desiredSubjects)
+                        && thresholdMatches
+                        && config.getMaxDeliver() == -1
+                        && config.getMaxAckPending() == 1
+                        && config.getAckPolicy() == AckPolicy.Explicit
+                        && Objects.equals(config.getAckWait(), consumerProperties.ackWait())) {
                     return existing;
                 }
                 log.info(
@@ -758,6 +771,10 @@ public class IntegrationNatsConsumer {
                         desiredThreshold);
                 return streamContext.createOrUpdateConsumer(ConsumerConfiguration.builder(config)
                         .filterSubjects(subjects)
+                        .ackPolicy(AckPolicy.Explicit)
+                        .maxAckPending(1)
+                        .maxDeliver(-1)
+                        .ackWait(consumerProperties.ackWait())
                         .inactiveThreshold(desiredThreshold)
                         .build());
             } catch (JetStreamApiException e) {
@@ -788,13 +805,9 @@ public class IntegrationNatsConsumer {
                 .filterSubjects(subjects)
                 .deliverPolicy(DeliverPolicy.New)
                 .ackWait(consumerProperties.ackWait())
-                .maxAckPending(consumerProperties.maxAckPending())
-                // Server-side cap on redeliveries. Without this, MaxDeliver=∞ would let a
-                // permanently-failing message NAK forever; the bound is enforced today only
-                // by IntegrationPoisonHandler counting deliveredCount on our side, which
-                // means a JetStream-side observability tool (`nats stream info`) cannot see
-                // the policy. Mirrors the value the poison handler uses to ACK-terminate.
-                .maxDeliver(consumerProperties.poison().maxRedeliver());
+                .ackPolicy(AckPolicy.Explicit)
+                .maxAckPending(1)
+                .maxDeliver(-1);
         if (!isBlank(durableName)) {
             // Only a durable is worth reaping: JetStream already deletes an ephemeral seconds after
             // its last pull, so a threshold here would lengthen that rather than bound it.
@@ -818,17 +831,7 @@ public class IntegrationNatsConsumer {
 
     // Message dispatch
 
-    /**
-     * Single entry point for every queued message across every scope. The dispatcher is
-     * the only resolution path; empty resolutions ACK as no-op (unknown events are not
-     * errors). Exceptions land in {@link IntegrationPoisonHandler#nakWithBackoff} which
-     * NAKs with exponential backoff and ACKs once the redelivery budget is exhausted.
-     *
-     * @param scopeId the workspace scope that owns the {@link ScopeConsumer} which delivered this
-     *                message, or {@code null} for the installation-wide consumer (org-level GitHub
-     *                events aren't tied to a single workspace). Used only to record webhook-liveness
-     *                via {@link ConnectionActivityRecorder} — never affects dispatch/ACK/NAK.
-     */
+    /** ACK after the handler commits; liveness reporting must not repeat a completed handler. */
     void handleMessage(@Nullable Long scopeId, Message msg) {
         if (shuttingDown.get()) {
             safeNak(msg);
@@ -836,29 +839,8 @@ public class IntegrationNatsConsumer {
         }
         String subject = msg.getSubject();
         try {
-            Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(subject);
-            if (handler.isEmpty()) {
-                log.debug("No handler for subject, ACK-as-no-op: route={}", ConsumerSubjectMath.routeLabel(subject));
-                msg.ack();
-                return;
-            }
-            IntegrationMessageHandler resolvedHandler = handler.get();
-            Optional<RouteAdmission> admission = routeAdmissions.stream()
-                    .filter(candidate -> candidate.owns(subject))
-                    .findFirst();
-            if (admission.isEmpty()) {
-                resolvedHandler.onMessage(msg);
-            } else if (!admission.get().admit(scopeId, msg, () -> resolvedHandler.onMessage(msg))) {
-                log.info(
-                        "Skipped message: reason=routeNotAdmitted, route={}, scopeId={}",
-                        ConsumerSubjectMath.routeLabel(subject),
-                        scopeId);
-                msg.ack();
-                return;
-            }
-            msg.ack();
-            stats.recordDispatch(Instant.now());
-            if (scopeId != null) {
+            IntegrationMessageHandler resolvedHandler = dispatch(scopeId, msg);
+            if (scopeId != null && resolvedHandler != null) {
                 // Liveness watermark = "last event received and dispatched", NOT "content was ingested". A handler
                 // may legitimately no-op (dedup, a Slack message dropped by the per-channel consent gate, a filtered
                 // event) and still return normally; that event genuinely arrived, so stamping it is correct. Health
@@ -867,12 +849,19 @@ public class IntegrationNatsConsumer {
                 if (key == null) {
                     throw new IllegalStateException("Integration handler returned a null key");
                 }
-                activityRecorder.recordEventProcessed(scopeId, key.kind(), key.eventType());
+                try {
+                    activityRecorder.recordEventProcessed(scopeId, key.kind(), key.eventType());
+                } catch (Exception failure) {
+                    log.warn(
+                            "Event liveness update failed: scopeId={}, error.type={}",
+                            scopeId,
+                            failure.getClass().getName());
+                }
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            if (e instanceof VirtualMachineError && !(e instanceof StackOverflowError)) throw e;
             if (!shuttingDown.get()) {
-                // The subject names the owner and repository, and the message can quote provider or row text. The
-                // stack is attached on the first delivery only, so a failure that repeats does not repeat it.
+                // Exception messages can contain raw provider payloads. Log only the failure type.
                 long delivery = IntegrationPoisonHandler.readDeliveredCount(msg);
                 var failure = log.atError()
                         .addKeyValue("event.name", "integration.message.failed")
@@ -880,12 +869,89 @@ public class IntegrationNatsConsumer {
                         .addKeyValue("integration.delivery", delivery)
                         .addKeyValue("error.type", e.getClass().getName());
                 if (scopeId != null) failure = failure.addKeyValue("integration.scope.id", scopeId);
-                if (delivery <= 1) failure = failure.setCause(e);
+                if (delivery <= 1) {
+                    Throwable diagnostic = IntegrationPoisonHandler.diagnosticCause(e);
+                    failure = failure.addKeyValue(
+                                    "error.root_type", diagnostic.getClass().getName())
+                            .addKeyValue(
+                                    "error.stack_trace",
+                                    Arrays.stream(diagnostic.getStackTrace())
+                                            .limit(32)
+                                            .map(StackTraceElement::toString)
+                                            .toList());
+                }
                 failure.log("Handler failed");
             }
             stats.recordNak(Instant.now());
+            poisonHandler.handleFailure(scopeId, msg, e);
+            return;
+        }
+        try {
+            msg.ack();
+            stats.recordDispatch(Instant.now());
+        } catch (Exception failure) {
+            log.warn(
+                    "Event acknowledgement failed: error.type={}",
+                    failure.getClass().getName());
+            stats.recordNak(Instant.now());
             poisonHandler.nakWithBackoff(msg);
         }
+    }
+
+    @Nullable
+    IntegrationMessageHandler dispatch(@Nullable Long scopeId, Message msg) {
+        var metadata = msg.isJetStream() ? msg.metaData() : null;
+        String stream =
+                metadata != null ? metadata.getStream() : msg.getSubject().split("\\.", 2)[0];
+        return serialDispatch(scopeId, stream, () -> dispatchAdmitted(scopeId, msg));
+    }
+
+    <T extends @Nullable Object> T serialDispatch(@Nullable Long scopeId, String stream, Supplier<T> work) {
+        // Replay and live delivery share the scope, even though replay is an explicit late event.
+        var lock = dispatchLocks.computeIfAbsent(new DispatchScope(scopeId, stream), ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            return work.get();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private @Nullable IntegrationMessageHandler dispatchAdmitted(@Nullable Long scopeId, Message msg) {
+        Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(msg.getSubject());
+        if (handler.isEmpty()) return null;
+        IntegrationMessageHandler resolved = handler.get();
+        Optional<RouteAdmission> admission = routeAdmissions.stream()
+                .filter(candidate -> candidate.owns(msg.getSubject()))
+                .findFirst();
+        if (admission.isEmpty()) resolved.onMessage(msg);
+        else if (!admission.get().admit(scopeId, msg, () -> resolved.onMessage(msg))) {
+            log.info(
+                    "Skipped message: reason=routeNotAdmitted, scopeId={}, route={}",
+                    scopeId,
+                    ConsumerSubjectMath.routeLabel(msg.getSubject()));
+            return null;
+        }
+        return resolved;
+    }
+
+    boolean isReplayAdmitted(@Nullable Long scopeId, String stream, String subject) {
+        if (scopeId == null) {
+            return "github".equals(stream)
+                    && ConsumerSubjectMath.matchesFilter(
+                            ConsumerSubjectMath.installationAwareSubjectFilter(IntegrationKind.GITHUB), subject);
+        }
+        return subscriptionProvider.getSubscriptionInfo(scopeId).stream()
+                .flatMap(info -> info.streamSubscriptions().stream())
+                .filter(subscription -> subscription.streamName().equals(stream))
+                .flatMap(subscription -> subscription.subjects().stream())
+                .anyMatch(filter -> ConsumerSubjectMath.matchesFilter(filter, subject));
+    }
+
+    MessageInfo readRetainedMessage(String stream, long sequence) throws IOException, JetStreamApiException {
+        Connection connection = natsConnection;
+        if (connection == null) throw new IOException("NATS consumer connection is unavailable");
+        return connection.jetStreamManagement().getMessage(stream, sequence);
     }
 
     // Connection management

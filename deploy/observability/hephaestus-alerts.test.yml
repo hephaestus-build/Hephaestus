@@ -41,7 +41,27 @@ tests:
               severity: warning
               kind: github
             exp_annotations:
-              summary: An integration event reached the poison retry limit
+              summary: An integration event was stored for administrator replay
+
+  - name: sustained retries fire while a brief failure stays quiet
+    interval: 1m
+    input_series:
+      - series: 'integration_consumer_nak_total{job="hephaestus",kind="github"}'
+        values: "0+1x30"
+      - series: 'integration_consumer_nak_total{job="hephaestus",kind="gitlab"}'
+        values: "0 1+0x29"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusConsumerRetryStalled
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusConsumerRetryStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: github
+            exp_annotations:
+              summary: Integration events kept retrying for 15 minutes
 
   - name: a stale or never refreshed poll age fires, a fresh one does not
     interval: 1m

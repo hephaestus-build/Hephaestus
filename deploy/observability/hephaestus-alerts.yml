@@ -18,7 +18,14 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: An integration event reached the poison retry limit
+          summary: An integration event was stored for administrator replay
+      - alert: HephaestusConsumerRetryStalled
+        expr: sum by (kind) (increase(integration_consumer_nak_total{job="hephaestus"}[10m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Integration events kept retrying for 15 minutes
       - alert: HephaestusStreamPollStale
         expr: >-
           webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"} > 180
