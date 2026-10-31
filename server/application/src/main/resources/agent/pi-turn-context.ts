@@ -1,6 +1,6 @@
 import { type AgentSession, estimateTokens } from "@earendil-works/pi-coding-agent";
 
-import { errorText } from "./pi-error-text.ts";
+import { diagnose, errorKind } from "./pi-diagnostics.ts";
 
 function textTokens(text: string): number {
 	return estimateTokens({ role: "user", content: text, timestamp: 0 });
@@ -56,7 +56,7 @@ export async function prepareTurnText(
 			return null;
 		}
 		// Native prompt overflow recovery remains available when the incoming input itself fits.
-		console.error(`[pi-runner] preparatory compaction failed: ${errorText(error)}`);
+		diagnose("compaction.failed", { error: errorKind(error) });
 		return buildText();
 	} finally {
 		unsubscribe();

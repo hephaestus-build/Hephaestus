@@ -19,6 +19,7 @@ import {
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
+import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 import { SUPPORTED_SCHEMA_VERSION } from "../../../main/resources/agent/pi-task-paths.ts";
 import {
 	AUTHENTICATION_PRACTICE,
@@ -267,9 +268,7 @@ export async function runRunner(
 		if (
 			firstCompletion !== undefined &&
 			!released &&
-			["built-in", "custom"].some((kind) =>
-				stderr.includes(`[pi-runner] ${firstCompletion}: ${kind} program `),
-			)
+			stderr.includes(`[pi-runner] practice.program_finished practice=${firstCompletion} `)
 		) {
 			released = true;
 			child.send("first-program-completed");
@@ -296,6 +295,40 @@ export function field(value: unknown, key: string): unknown {
 	}
 	const found: unknown = Reflect.get(value, key);
 	return found;
+}
+
+/** What the runner told the model in its tool replies, accepted or refused: where a refusal says why. */
+export function repliedText(replies: readonly unknown[]): string {
+	return replies
+		.flatMap((entry) => {
+			const reply = isJsonObject(entry) ? entry.reply : undefined;
+			const content = isJsonObject(reply) && Array.isArray(reply.content) ? reply.content : [];
+			return content.flatMap((part: unknown) =>
+				isJsonObject(part) && typeof part.text === "string" ? [part.text] : [],
+			);
+		})
+		.join("\n");
+}
+
+/**
+ * Every tool reply of a run, accepted and refused, as the model read it, with the refusal and tool
+ * error reasons that the runner kept in runner-debug.json for the calls the SDK answered itself.
+ */
+export function toldTheModel(cwd: string): string {
+	const debugPath = nodePath.join(cwd, "out/runner-debug.json");
+	const debug: unknown = existsSync(debugPath) ? parseJson(readFileSync(debugPath, "utf8")) : {};
+	const turns: unknown[] = isJsonObject(debug) && Array.isArray(debug.turns) ? debug.turns : [];
+	const reasons = turns.flatMap((turn: unknown) =>
+		isJsonObject(turn)
+			? [turn.refusalReasons, turn.toolErrorReasons].flatMap((list) =>
+					Array.isArray(list) ? list.filter((reason) => typeof reason === "string") : [],
+				)
+			: [],
+	);
+	return [
+		repliedText([...capturedLines(cwd, "submitted"), ...capturedLines(cwd, "refused")]),
+		...reasons,
+	].join("\n");
 }
 
 export function capturedLines(cwd: string, name: string): unknown[] {
@@ -447,10 +480,8 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 					const reply = await submit.execute(`submit-${session}`, argumentsToSubmit);
 					capture("submitted", { slug, reply });
 				} catch (error) {
-					if (!allowFailure) {
-						throw error;
-					}
-					capture("submitted", {
+					// A refusal throws; the SDK hands its message to the model as the tool's result.
+					capture(allowFailure ? "submitted" : "refused", {
 						slug,
 						reply: {
 							isError: true,
@@ -459,6 +490,9 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 							],
 						},
 					});
+					if (!allowFailure) {
+						throw error;
+					}
 				}
 			};
 

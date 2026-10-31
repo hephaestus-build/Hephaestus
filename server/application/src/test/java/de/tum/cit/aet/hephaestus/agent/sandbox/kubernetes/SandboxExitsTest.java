@@ -8,6 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
@@ -20,6 +23,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class SandboxExitsTest extends BaseUnitTest {
 
@@ -89,22 +93,69 @@ class SandboxExitsTest extends BaseUnitTest {
         verify(pods, never()).tail(anyString(), anyString(), anyInt(), anyInt());
     }
 
+    private static final String CANARY = "sk-canary-7f3a9c";
+
+    /** What an older runtime image wrote: free text after the prefix, which can quote a tool or a provider. */
+    private static final String OLD_RUNTIME_LOG = String.join(
+            "\n",
+            "[pi-runner] review practice-a tool error: bash — cat: .env: API_KEY=" + CANARY,
+            "[pi-runner] review practice-a provider call failed, retrying in 2000ms (attempt 1/3): 401 key " + CANARY,
+            "[pi-runner] result refused for practice-a: the quote \"" + CANARY + "\" is not in src/Auth.java",
+            "println from a reviewed program " + CANARY,
+            "[heph-host 2026-10-26T20:11:30Z] " + CANARY,
+            "[pi-runner] tool.failed turn=review:practice-a tool=bash reason_chars=42",
+            "[pi-runner] review.partial without_result=1 practices=2 not_reached=practice-a");
+
     @Test
-    void shouldKeepOnlyTheRuntimesOwnLastLinesOfStderr() {
+    void shouldKeepOnlyLinesOfTheDiagnosticGrammarAndCountTheRest() {
         String log = IntStream.rangeClosed(1, 30)
-                        .mapToObj(i -> "[heph-host 2026-10-26T20:11:3" + (i % 10) + "Z] line " + i)
+                        .mapToObj(i -> "[pi-runner] tool.called turn=review:practice-a tool=read n=" + i)
                         .collect(Collectors.joining("\n"))
-                + "\nprintln from a reviewed program\n[pi-runner] the last runtime line " + "x".repeat(400);
+                + "\n" + OLD_RUNTIME_LOG + "\n[pi-runner] turn.finished turn=review:practice-a stored="
+                + "1".repeat(90) + " calls=" + "2".repeat(90) + " stopped_by=" + "3".repeat(90) + " refused=0";
 
-        String tail = SandboxExits.stderrTail(log);
+        SandboxExits.Tail tail = SandboxExits.stderrTail(log);
 
-        List<String> lines = tail.lines().toList();
+        List<String> lines = tail.text().lines().toList();
         assertThat(lines).hasSize(SandboxExits.TAIL_LINES_KEPT);
-        assertThat(lines).noneMatch(line -> line.contains("reviewed program"));
-        assertThat(lines.getLast())
-                .startsWith("[pi-runner] the last runtime line")
-                .hasSize(SandboxExits.TAIL_LINE_CHARS);
-        assertThat(tail.length()).isLessThanOrEqualTo(SandboxExits.TAIL_CHARS);
+        assertThat(lines).allMatch(line -> line.startsWith("[pi-runner] "));
+        assertThat(tail.text()).doesNotContain(CANARY).doesNotContain("reviewed program");
+        assertThat(lines.getLast()).hasSize(SandboxExits.TAIL_LINE_CHARS);
+        assertThat(tail.text().length()).isLessThanOrEqualTo(SandboxExits.TAIL_CHARS);
+        assertThat(tail.dropped()).isEqualTo(5);
+    }
+
+    @Test
+    void shouldNeverWriteAToolResultOrAProviderMessageOfAnOlderRuntimeIntoTheLog() {
+        var pods = mock(KubernetesPods.class);
+        when(pods.get("hephaestus-review-2")).thenReturn(pod(null, ended(KubernetesPods.RUNTIME, 1, "Error")));
+        when(pods.tail(anyString(), anyString(), anyInt(), anyInt())).thenReturn(OLD_RUNTIME_LOG);
+        Logger logger = (Logger) LoggerFactory.getLogger(SandboxExits.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            new SandboxExits(pods, new SimpleMeterRegistry()).record(SandboxExits.Kind.REVIEW, "hephaestus-review-2");
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).hasSize(1);
+        ILoggingEvent event = appender.list.getFirst();
+        assertThat(event.getFormattedMessage()).doesNotContain(CANARY);
+        assertThat(event.getKeyValuePairs())
+                .allSatisfy(pair -> assertThat(String.valueOf(pair.value)).doesNotContain(CANARY));
+        assertThat(event.getKeyValuePairs())
+                .anySatisfy(pair -> {
+                    assertThat(pair.key).isEqualTo("sandbox.stderr.dropped");
+                    assertThat(pair.value).isEqualTo(5);
+                })
+                .anySatisfy(pair -> {
+                    assertThat(pair.key).isEqualTo("sandbox.stderr.tail");
+                    assertThat(String.valueOf(pair.value))
+                            .contains("tool.failed")
+                            .contains("review.partial");
+                });
     }
 
     @Test

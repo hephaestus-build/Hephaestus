@@ -25,8 +25,8 @@ import org.slf4j.spi.LoggingEventBuilder;
 /**
  * Why a sandbox Pod ended, read just before it is deleted, because a deleted Pod takes its exit code and log with it.
  * Each removal counts in {@code sandbox.exits} by kind and reason; an exit that is not {@code completed} also logs one
- * {@code sandbox.exited} event. For a review, the event carries the runtime's own last stderr lines, never a line of
- * reviewed code or of a tool.
+ * {@code sandbox.exited} event. For a review, the event carries the runtime's own last diagnostic lines, which hold
+ * event names, codes and counts only, and the number of other lines that it left out.
  */
 public class SandboxExits {
 
@@ -70,8 +70,13 @@ public class SandboxExits {
             "CreateContainerConfigError",
             "CreateContainerError");
 
-    /** Only lines that the runtime itself prefixed; reviewed code and tools never write this prefix through it. */
-    private static final Pattern RUNTIME_LINE = Pattern.compile("^\\[(heph-host|pi-[a-z-]+)[ \\]]");
+    /**
+     * A whole line of the review runtime's diagnostic grammar ({@code pi-diagnostics.ts}): an event name and fields
+     * whose values cannot hold a sentence. Any other line, also one from an older runtime image, can quote reviewed
+     * code, a tool result or a provider's message, so it is dropped and only counted.
+     */
+    static final Pattern DIAGNOSTIC_LINE = Pattern.compile(
+            "\\[pi-(?:runner|provider)\\] [a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)*(?: [a-z][a-z0-9_.]{0,31}=[\\w.,:/+-]{1,128})*");
 
     private static final Pattern DETAIL = Pattern.compile("[A-Za-z]{1,64}");
 
@@ -138,8 +143,9 @@ public class SandboxExits {
             // credential, and the worker never copies it (docs/admin/runtime-roles.mdx); a turn sandbox runs the
             // model's commands; a container that never started wrote nothing.
             if (kind == Kind.REVIEW && exit.reason() != Reason.START_FAILED) {
-                String tail = stderrTail(pods.tail(name, container, TAIL_LINES_READ, TAIL_BYTES_READ));
-                if (!tail.isEmpty()) event = event.addKeyValue("sandbox.stderr.tail", tail);
+                Tail tail = stderrTail(pods.tail(name, container, TAIL_LINES_READ, TAIL_BYTES_READ));
+                if (!tail.text().isEmpty()) event = event.addKeyValue("sandbox.stderr.tail", tail.text());
+                if (tail.dropped() > 0) event = event.addKeyValue("sandbox.stderr.dropped", tail.dropped());
             }
         }
         Integer code = exit.exitCode();
@@ -205,12 +211,21 @@ public class SandboxExits {
         return new Exit(Reason.COMPLETED, null, null, null);
     }
 
-    /** The runtime's own last lines: at most {@link #TAIL_LINES_KEPT}, each cut, all within {@link #TAIL_CHARS}. */
-    static String stderrTail(String log) {
+    /** The last diagnostic lines of a sandbox log, and how many other lines it left out. */
+    record Tail(String text, int dropped) {}
+
+    /**
+     * The runtime's own last diagnostic lines: at most {@link #TAIL_LINES_KEPT}, each cut, all within {@link
+     * #TAIL_CHARS}. A line outside {@link #DIAGNOSTIC_LINE} only counts.
+     */
+    static Tail stderrTail(String log) {
         List<String> kept = new ArrayList<>();
-        for (String line : log.lines().toList())
-            if (RUNTIME_LINE.matcher(line).find())
+        int dropped = 0;
+        for (String line : log.lines().toList()) {
+            if (DIAGNOSTIC_LINE.matcher(line).matches())
                 kept.add(line.length() > TAIL_LINE_CHARS ? line.substring(0, TAIL_LINE_CHARS) : line);
+            else if (!line.isBlank()) dropped++;
+        }
         List<String> last = kept.subList(Math.max(0, kept.size() - TAIL_LINES_KEPT), kept.size());
         StringBuilder tail = new StringBuilder();
         for (int i = last.size() - 1; i >= 0; i--) {
@@ -218,7 +233,7 @@ public class SandboxExits {
             if (tail.length() + line.length() + 1 > TAIL_CHARS) break;
             tail.insert(0, tail.isEmpty() ? line : line + "\n");
         }
-        return tail.toString();
+        return new Tail(tail.toString(), dropped);
     }
 
     private static @Nullable ContainerStateTerminated terminated(ContainerStatus container) {

@@ -1,3 +1,4 @@
+import { diagnose } from "./pi-diagnostics.ts";
 import {
 	EXECUTION_REPORT_SCHEMA_VERSION,
 	type ExecutionEntry,
@@ -92,14 +93,10 @@ export function executionReport(practices: readonly (readonly [string, ProgramOu
 	}
 	const truncated = kept.length < sorted.length;
 	if (truncated) {
-		console.error(
-			`[pi-runner] practice-scripts.json reports ${kept.length} of ${sorted.length} admitted practices; the rest exceed its bounds`,
-		);
+		diagnose("practice_scripts.truncated", { kept: kept.length, admitted: sorted.length });
 	}
 	if (withoutErrors > 0) {
-		console.error(
-			`[pi-runner] practice-scripts.json leaves out the error of ${withoutErrors} failed practices; they exceed its byte bound`,
-		);
+		diagnose("practice_scripts.truncated", { errors_left_out: withoutErrors });
 	}
 	return `{"schemaVersion":${EXECUTION_REPORT_SCHEMA_VERSION},"truncated":${String(truncated)},"practices":[${kept.map((item) => item.text).join(",")}]}`;
 }

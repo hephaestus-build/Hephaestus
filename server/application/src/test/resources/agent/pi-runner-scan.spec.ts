@@ -16,7 +16,13 @@ import { test } from "node:test";
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 import { scan } from "../../../../../../docker/agents/practice-scripts/run-bundled.ts";
 import { PRACTICES_DIR } from "./golden-review-workspace.ts";
-import { capturedLines, field, runRunner, stagePractices } from "./program-host-runner.ts";
+import {
+	capturedLines,
+	field,
+	runRunner,
+	stagePractices,
+	toldTheModel,
+} from "./program-host-runner.ts";
 
 const FILE = "Auth.ts";
 const TEXT = "insecure();\n";
@@ -180,15 +186,16 @@ for (const [basis, explicitCommit, incremental = false] of [
 			});
 			if (basis === "introduced") {
 				assert.equal(exit.status, 1, exit.stderr);
+				// The submission's validation refuses the basis; in an incremental scan the refusal ends the practice.
 				assert.match(
-					exit.stderr,
-					/basis_not_allowed: problems\.0\.basis: a scan needs state basis/u,
+					`${toldTheModel(cwd)}\n${exit.stderr}`,
+					/basis_not_allowed: problems\.0\.basis: a scan needs state basis|practice\.failed turn=\S+ practice=auth-review error=Error/u,
 				);
 				assert.deepEqual(capturedLines(cwd, "admission"), []);
 				return;
 			}
 			assert.equal(exit.status, 0, exit.stderr);
-			assert.match(exit.stderr, /Practice concurrency: configured=3, effective=1/u);
+			assert.match(exit.stderr, /review\.concurrency configured=3 effective=1/u);
 			const [request] = capturedLines(cwd, "admission");
 			const body = field(request, "body");
 			const results = field(body, "results");
@@ -280,10 +287,13 @@ for (const [readContext, collision] of [
 			assert.equal(field(field(field(results[0], "candidate"), "coverage"), "complete"), true);
 		} else {
 			assert.ok(
-				exit.stderr.includes(`read(${JSON.stringify({ path: CONTEXT_FILE })})`),
+				toldTheModel(cwd).includes(`read(${JSON.stringify({ path: CONTEXT_FILE })})`),
 				exit.stderr,
 			);
-			assert.doesNotMatch(exit.stderr, /"path":"Context\.ts","offset"|physical lines|Bash output/u);
+			assert.doesNotMatch(
+				toldTheModel(cwd),
+				/"path":"Context\.ts","offset"|physical lines|Bash output/u,
+			);
 			assert.deepEqual(capturedLines(cwd, "admission"), []);
 		}
 	});
@@ -308,7 +318,9 @@ for (const [fieldName, value] of [
 		assert.equal(exit.status, 2, exit.stderr);
 		assert.match(
 			exit.stderr,
-			value === "HEAD" ? /Invalid string/u : /captured scan item contradicts its assignment/u,
+			value === "HEAD"
+				? /review\.fatal error=ZodError/u
+				: /review\.fatal error=UnratedError\.unavailable/u,
 		);
 		assert.deepEqual(capturedLines(cwd, "prompts"), []);
 		assert.deepEqual(capturedLines(cwd, "admission"), []);

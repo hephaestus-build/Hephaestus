@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
 
+import { DIAGNOSTIC_LINE } from "../../../main/resources/agent/pi-diagnostics.ts";
 import { CANDIDATE_LIMITS } from "../../../main/resources/agent/work/practice-scripts/lib/core/contract.ts";
 
 import type {
@@ -1361,7 +1362,15 @@ if (scenario !== undefined && scenario !== "") {
 										toolCallId: `invalid-${attempt}`,
 										toolName: "submit_result",
 										isError: true,
-										result: { content: [{ type: "text", text: "Invalid native schema" }] },
+										// A tool's result can quote what it read; the runtime's stderr never does.
+										result: {
+											content: [
+												{
+													type: "text",
+													text: "Invalid native schema: API_KEY=sk-orchestration-secret",
+												},
+											],
+										},
 									});
 								}
 								return;
@@ -2423,6 +2432,15 @@ if (scenario !== undefined && scenario !== "") {
 						},
 					);
 					assert.equal(child.error, undefined);
+					// A scenario's runtime lines keep to the diagnostic grammar and never quote a tool, a provider or a
+					// model: some scenarios put the canary in a tool result and in provider errors.
+					assert.deepEqual(
+						child.stderr
+							.split("\n")
+							.filter((line) => line.startsWith("[pi-") && !DIAGNOSTIC_LINE.test(line)),
+						[],
+					);
+					assert.ok(!child.stderr.includes("sk-orchestration-secret"), child.stderr);
 					// Read production output from the native orchestration fixture.
 					if (stage === "scope-native-completion") {
 						const debug: unknown = JSON.parse(
@@ -2618,7 +2636,8 @@ if (scenario !== undefined && scenario !== "") {
 									8,
 								);
 								assert.equal(
-									child.stderr.split(`result refused for ${slug}:`).length - 1,
+									child.stderr.split(`[pi-runner] practice.result_refused practice=${slug} `)
+										.length - 1,
 									corrected ? 7 : 8,
 								);
 							}
@@ -2747,10 +2766,7 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "scope-recording-guard": {
 							assert.equal(child.status, 0, child.stderr);
-							assert.match(
-								child.stderr,
-								/24 recording calls without a record — aborting this turn/u,
-							);
+							assert.match(child.stderr, /turn\.stopped .*reason=loop/u);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 2);
 							assert.deepEqual(
 								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
@@ -2765,7 +2781,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(readResults(nodePath.join(cwd, "out/result.json")).length, 6);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 6);
 							assert.doesNotMatch(child.stderr, /aborting this turn|Finishing/u);
-							assert.match(child.stderr, /calls=6\/12/u);
+							assert.match(child.stderr, /calls=6 call_budget=12/u);
 							break;
 						}
 						case "scope-ownership":
@@ -2801,9 +2817,9 @@ if (scenario !== undefined && scenario !== "") {
 							if (stage === "scope-budget") {
 								assert.match(
 									child.stderr,
-									/calls=6\/6, outputTokens=600\/24000, stoppedBy=budget/u,
+									/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 stopped_by=budget/u,
 								);
-								assert.match(child.stderr, /Measured: .*calls=6/u);
+								assert.match(child.stderr, /measurement\.finished .*calls=6/u);
 								assert.doesNotMatch(child.stderr, /Finishing/u);
 							}
 							break;
@@ -2813,7 +2829,11 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 2, child.stderr);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
 							assert.deepEqual(readResults(nodePath.join(cwd, "out/review-state.json")), []);
-							assert.match(child.stderr, /Native session did not settle/u);
+							// The double's failed stop, or a stop that never settles, ends the run by its class.
+							assert.match(
+								child.stderr,
+								/review\.fatal error=(?:Error at=pi-runner-orchestration\.spec\.ts:\d+|SessionUnsettledError)/u,
+							);
 							if (stage === "scope-stop-hangs") {
 								assert.ok(events.includes("late-record-closed"));
 							}
@@ -2902,11 +2922,8 @@ if (scenario !== undefined && scenario !== "") {
 						}
 						case "cut-off": {
 							assert.equal(child.status, 1, child.stderr);
-							assert.match(child.stderr, /a call ran into the output limit — telling the model/u);
-							assert.match(
-								child.stderr,
-								/2 calls in this session ran into the 16384-token output limit — aborting this turn/u,
-							);
+							assert.match(child.stderr, /\[pi-runner\] turn\.output_limit /u);
+							assert.match(child.stderr, /turn\.stopped .*reason=loop/u);
 							const order = events.filter((event) => ["steer", "abort"].includes(event));
 							assert.ok(order.indexOf("steer") < order.indexOf("abort"));
 							assert.deepEqual(
@@ -2945,13 +2962,13 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								child.stderr,
-								/4 of 6 calls and 400 of 24000 output tokens spent — nudging to record/u,
+								/turn\.nudged .*calls=4 call_budget=6 output_tokens=400 output_token_budget=24000/u,
 							);
+							assert.match(child.stderr, /turn\.stopped .*reason=budget/u);
 							assert.match(
 								child.stderr,
-								/work budget spent \(6 calls, 600 output tokens\) — ending this turn/u,
+								/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 stopped_by=budget/u,
 							);
-							assert.match(child.stderr, /calls=6\/6, outputTokens=600\/24000, stoppedBy=budget/u);
 							reached({ "test-practice": "EVALUATED" });
 							ran({ "test-practice": "ok" });
 							break;
@@ -2982,9 +2999,9 @@ if (scenario !== undefined && scenario !== "") {
 								assert.equal(existsSync(nodePath.join(cwd, "admission.json")), false);
 							}
 							if (unanswered) {
-								assert.match(child.stderr, /UNREACHABLE/u);
+								assert.match(child.stderr, /review\.unreachable/u);
 							} else {
-								assert.doesNotMatch(child.stderr, /UNREACHABLE/u);
+								assert.doesNotMatch(child.stderr, /review\.unreachable/u);
 							}
 							if (stage.includes("refused")) {
 								assert.ok(events.includes("answered-refusal"));
@@ -2994,10 +3011,7 @@ if (scenario !== undefined && scenario !== "") {
 						case "provider-error": {
 							// Exit 76: the server queues the review again instead of recording a failure.
 							assert.equal(child.status, 76, child.stderr);
-							assert.match(
-								child.stderr,
-								/UNREACHABLE: this review reached no practice, and \d+ model call\(s\)/u,
-							);
+							assert.match(child.stderr, /review\.unreachable unanswered_calls=\d+/u);
 							reached({ "test-practice": "NOT_REACHED" });
 							ran({ "test-practice": "failed (unavailable)" });
 							break;
@@ -3009,7 +3023,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.ok(order.indexOf("abort-compaction") < order.indexOf("abort"));
 							assert.ok(events.indexOf("dispose") < events.indexOf("prompt:2"));
-							assert.match(child.stderr, /no model or tool event for 300s — aborting this turn/u);
+							assert.match(child.stderr, /turn\.stopped .*reason=stall/u);
 							assert.doesNotMatch(child.stderr, /already processing/u);
 							assert.deepEqual(
 								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
@@ -3425,7 +3439,7 @@ for (const item of nullableCases) {
 							assert.match(
 								child.stderr,
 								new RegExp(
-									`finish: 1 practice\\(s\\), up to 6 calls and 24000 output tokens \\(${pace} tokens per result so far\\)`,
+									`turn\\.started turn=finish practices=1 call_budget=6 output_token_budget=24000 tokens_per_result=${pace}`,
 									"u",
 								),
 							);
@@ -3455,14 +3469,11 @@ for (const item of nullableCases) {
 							assert.equal(child.status, 1, child.stderr);
 							assert.match(
 								child.stderr,
-								/turn 1\/1 \(code\): the same bash call 3 times — nudging to record/u,
+								/turn\.repeated_call turn=turn_1\/1_code tool=bash repeats=3/u,
 							);
-							assert.match(
-								child.stderr,
-								/turn 1\/1 \(code\): the same bash call 6 times — aborting this turn/u,
-							);
+							assert.match(child.stderr, /turn\.stopped turn=turn_1\/1_code reason=loop/u);
 							assert.doesNotMatch(child.stderr, /the same read call/u);
-							assert.match(child.stderr, /review tool: codemode → read/u);
+							assert.match(child.stderr, /tool\.called turn=review tool=read codemode=true/u);
 							assert.equal(
 								events.filter((event) => event === "steer").length,
 								1,
@@ -3488,10 +3499,7 @@ for (const item of nullableCases) {
 								/identical to a result this turn already refused, so the answer is the same: citation does not match/u,
 							);
 							// The third identical send is a loop, and the circuit breaker ends the turn.
-							assert.match(
-								child.stderr,
-								/the same refused test-practice result sent 3 times — aborting this turn/u,
-							);
+							assert.match(child.stderr, /turn\.stopped .*reason=loop/u);
 							assert.match(refusals[7] ?? "", /refused/u);
 							const afterCap = events.slice(
 								events.findIndex((event) => event.startsWith("refusal-9:")),
@@ -3650,7 +3658,11 @@ for (const item of nullableCases) {
 						case "admission-unknown-outcome":
 						case "admission-null-outcome": {
 							assert.equal(child.status, 2, child.stderr);
-							assert.match(child.stderr, /outcome/u);
+							// The admission answer fails its schema, which names the run's end by its class.
+							assert.match(
+								child.stderr,
+								/review\.fatal error=ZodError at=pi-admitted-results\.ts:\d+/u,
+							);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1"],

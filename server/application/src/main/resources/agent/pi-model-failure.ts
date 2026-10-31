@@ -1,3 +1,4 @@
+import { diagnose } from "./pi-diagnostics.ts";
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 
 /**
@@ -145,7 +146,7 @@ export function stopIfAttemptRefused(
 	exit: (code: number) => void = (code) => process.exit(code),
 ): void {
 	if (stopReason === "error" && refusesAttempt(message)) {
-		console.error("[pi-runner] STOPPED: the gateway refused this attempt; it no longer runs");
+		diagnose("gateway.refused");
 		exit(1);
 	}
 }

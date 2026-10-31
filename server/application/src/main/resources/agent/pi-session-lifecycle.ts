@@ -38,3 +38,8 @@ export function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 	}, timeoutMs);
 	return { elapsed, timer, expired: () => expired };
 }
+
+/** A session that would not stop, so no later session may start. Its class is its diagnostic name. */
+export class SessionUnsettledError extends Error {
+	override name = "SessionUnsettledError";
+}

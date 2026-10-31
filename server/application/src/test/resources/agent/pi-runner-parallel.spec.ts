@@ -110,7 +110,7 @@ void test("three isolated model sessions overlap, retain each candidate and rece
 		const notes = readFileSync(nodePath.join(cwd, "work/notes/review.md"), "utf8");
 		assert.ok(notes.indexOf("a-first:") < notes.indexOf("m-middle:"));
 		assert.ok(notes.indexOf("m-middle:") < notes.indexOf("z-last:"));
-		assert.match(exit.stderr, /Practice concurrency: configured=3, effective=3/u);
+		assert.match(exit.stderr, /review\.concurrency configured=3 effective=3/u);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -188,8 +188,12 @@ for (const ownership of ["opening", "native-read", "sibling-only", "claimed-only
 						status: "COMPLETE",
 					},
 				]);
-				const nativeDone = exit.stderr.indexOf("a-native: built-in program");
-				const siblingDone = exit.stderr.indexOf("b-sibling: custom program");
+				const nativeDone = exit.stderr.indexOf(
+					"practice.program_finished practice=a-native program=built_in",
+				);
+				const siblingDone = exit.stderr.indexOf(
+					"practice.program_finished practice=b-sibling program=custom",
+				);
 				assert.ok(nativeDone !== -1 && siblingDone !== -1);
 				assert.equal(siblingDone < nativeDone, earlier === "sibling");
 				admissions.push({ results, nonResults: field(body, "nonResults") });

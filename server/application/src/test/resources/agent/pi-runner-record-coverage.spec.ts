@@ -9,6 +9,7 @@ import { z } from "../../../../../../docker/agents/practice-scripts/lib/core/pra
 import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
 import {
 	capturedLines,
+	toldTheModel,
 	readJsonFile,
 	runRunner,
 	SESSION_CANDIDATE,
@@ -81,7 +82,7 @@ for (const gap of [false, true]) {
 		const exit = await runRunner(cwd, {}, { PI_HOST_SESSION_CANDIDATE: JSON.stringify(candidate) });
 		assert.equal(exit.status, gap ? 1 : 0, exit.stderr);
 		if (gap) {
-			assert.match(exit.stderr, /unseen\.json/u);
+			assert.match(toldTheModel(cwd), /unseen\.json/u);
 		} else {
 			assert.equal(capturedLines(cwd, "submitted").length, 1);
 		}
@@ -192,12 +193,12 @@ for (const [command, complete, sameBytes] of [
 		} else {
 			// Reading the checkout cannot cover a captured copy with other bytes, so the repair names the copy.
 			assert.ok(
-				exit.stderr.includes(
+				toldTheModel(cwd).includes(
 					`read(${JSON.stringify({ path: stagedPath, offset: 1, limit: text.split("\n").length })})`,
 				),
 				exit.stderr,
 			);
-			assert.doesNotMatch(exit.stderr, /coverage is unknown|bash: head/u);
+			assert.doesNotMatch(toldTheModel(cwd), /coverage is unknown|bash: head/u);
 		}
 	});
 }
@@ -331,11 +332,11 @@ for (const mode of ["supplied", "omitted", "not-in-brief"] as const) {
 				evidenceRefusals: 0,
 				formatRefusals: 0,
 			});
-			assert.doesNotMatch(exit.stderr, /Read the unread file lines/u);
+			assert.doesNotMatch(toldTheModel(cwd), /Read the unread file lines/u);
 		} else {
 			assert.equal(entry.status, "failed");
 			assert.ok((entry.reviewSessions?.evidenceRefusals ?? 0) > 0);
-			assert.ok(exit.stderr.includes(canonical), exit.stderr);
+			assert.ok(toldTheModel(cwd).includes(canonical), exit.stderr);
 		}
 	});
 }
@@ -352,7 +353,7 @@ void test("a session that cites a source its practice does not declare is refuse
 	);
 	assert.equal(exit.status, 1, exit.stderr);
 	assert.match(
-		exit.stderr,
+		toldTheModel(cwd),
 		/cites or consulted `scm\.pull-request\.core`, which test-practice does not declare\. Cite only: scm\.pull-request\.diff, scm\.repository\.tree\./u,
 	);
 	assert.equal(capturedLines(cwd, "submitted").length, 0);

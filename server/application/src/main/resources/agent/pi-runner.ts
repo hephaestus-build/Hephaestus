@@ -35,6 +35,7 @@ import {
 	safeRepositoryPath,
 	writeChangeView,
 } from "./pi-change.ts";
+import { diagnose, errorKind, ms, stackOf, token } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import { OpeningQueue } from "./pi-opening-queue.ts";
 
@@ -103,6 +104,7 @@ import {
 	REVIEW_SESSION_ENTRY,
 	type ReviewSessionBinding,
 	type SessionPhase,
+	SessionUnsettledError,
 	stopSession,
 	scheduleDeadline,
 } from "./pi-session-lifecycle.ts";
@@ -511,7 +513,7 @@ async function steer(session: AgentSession, message: string): Promise<void> {
 	try {
 		await session.steer(message);
 	} catch (error) {
-		console.error(`[pi-runner] steer failed: ${errorText(error)}`);
+		diagnose("session.steer_failed", { error: errorKind(error) });
 	}
 }
 
@@ -524,7 +526,7 @@ async function abortSession(session: AgentSession): Promise<void> {
 	try {
 		await session.abort();
 	} catch (error) {
-		console.error(`[pi-runner] session abort failed: ${errorText(error)}`);
+		diagnose("session.abort_failed", { error: errorKind(error) });
 	}
 }
 
@@ -545,9 +547,7 @@ async function settleSession(
 	// The run flag clears a beat after the prompt resolves; a wait that short is not worth a line.
 	const waitedMs = Date.now() - started;
 	if (!idle || waitedMs >= 1000) {
-		console.error(
-			`[pi-runner] ${label}: waited ${(waitedMs / 1000).toFixed(1)}s for the session to go idle${idle ? "" : " — still busy"}`,
-		);
+		diagnose("session.idle_wait", { turn: token(label), waited_ms: ms(waitedMs), idle });
 	}
 	return idle;
 }
@@ -706,7 +706,7 @@ export async function runReviewJob(): Promise<void> {
 	const PROCESS_START_MS = Date.now();
 
 	setTimeout(() => {
-		console.error(`[pi-runner] Watchdog: ${AGENT_BUDGET_MS + 30_000}ms elapsed, hard-exiting`);
+		diagnose("watchdog.exited", { after_ms: AGENT_BUDGET_MS + 30_000 });
 		// First, because finalizing removes from out/ whatever the session left there — which would
 		// include the marker written next.
 		finalizeOutputQuietly();
@@ -1368,10 +1368,13 @@ export async function runReviewJob(): Promise<void> {
 				if (state.activeReview !== null) {
 					state.activeReview.requireSubmission = true;
 				}
-				console.error(
-					`[pi-runner] ${turn.label}: ${turn.calls} of ${turn.budget.modelCalls} calls and ` +
-						`${turn.outputTokens} of ${turn.budget.outputTokens} output tokens spent — nudging to record`,
-				);
+				diagnose("turn.nudged", {
+					turn: token(turn.label),
+					calls: turn.calls,
+					call_budget: turn.budget.modelCalls,
+					output_tokens: turn.outputTokens,
+					output_token_budget: turn.budget.outputTokens,
+				});
 				if (state.activeSession) {
 					void steer(state.activeSession, state.turnDemand.nudge);
 				}
@@ -1393,10 +1396,7 @@ export async function runReviewJob(): Promise<void> {
 			turn?.stoppedBy === null &&
 			spent({ modelCalls: turn.calls, outputTokens: turn.outputTokens }, turn.budget)
 		) {
-			stopTurn(
-				"budget",
-				`work budget spent (${turn.calls} calls, ${turn.outputTokens} output tokens) — ending this turn`,
-			);
+			stopTurn("budget");
 		}
 	}
 
@@ -1410,15 +1410,10 @@ export async function runReviewJob(): Promise<void> {
 		turn.cutOff += 1;
 		state.sessionGuards.cutOff += 1;
 		if (state.sessionGuards.cutOff >= CUT_OFF_ABORT) {
-			stopTurn(
-				"loop",
-				`${state.sessionGuards.cutOff} calls in this session ran into the ${limit}-token output limit — aborting this turn`,
-			);
+			stopTurn("loop");
 			return;
 		}
-		console.error(
-			`[pi-runner] ${turn.label}: a call ran into the output limit — telling the model`,
-		);
+		diagnose("turn.output_limit", { turn: token(turn.label) });
 		if (state.activeSession) {
 			void steer(
 				state.activeSession,
@@ -1430,10 +1425,10 @@ export async function runReviewJob(): Promise<void> {
 		}
 	}
 
-	function stopTurn(reason: StopReason, why: string): void {
+	function stopTurn(reason: StopReason): void {
 		const state = sessionState();
 		const turn = state.currentTurn;
-		console.error(`[pi-runner] ${turn?.label ?? "review"}: ${why}`);
+		diagnose("turn.stopped", { turn: token(turn?.label ?? "review"), reason });
 		if (turn && turn.stoppedBy === null) {
 			turn.stoppedBy = reason;
 		}
@@ -1516,10 +1511,7 @@ export async function runReviewJob(): Promise<void> {
 			earlier.resent += 1;
 			countRefusal(slug);
 			if (earlier.resent >= IDENTICAL_REFUSAL_ABORT) {
-				stopTurn(
-					"loop",
-					`the same refused ${slug} result sent ${earlier.resent + 1} times — aborting this turn`,
-				);
+				stopTurn("loop");
 			}
 			return {
 				kind: "refused",
@@ -1625,7 +1617,7 @@ export async function runReviewJob(): Promise<void> {
 			mkdirSync(nodePath.dirname(NOTES_PATH), { recursive: true });
 			writeFileSync(NOTES_PATH, `# Current results\n\n${recordedSoFar()}\n`);
 		} catch (error) {
-			console.error(`[pi-runner] notes could not be written: ${errorText(error)}`);
+			diagnose("notes.failed", { error: errorKind(error) });
 		}
 	}
 
@@ -1660,14 +1652,10 @@ export async function runReviewJob(): Promise<void> {
 			.join("\n");
 	}
 
-	const MAX_REFUSAL_LOG_CHARS = 500;
-
 	function logRefusal(slug: string, reason: string): void {
 		const state = sessionState();
-		const line = `[pi-runner] result refused for ${slug}: ${reason}`;
-		console.error(
-			line.length > MAX_REFUSAL_LOG_CHARS ? `${line.slice(0, MAX_REFUSAL_LOG_CHARS)}…` : line,
-		);
+		// The reason quotes the model's result and the reviewed file, so the line names only its length.
+		diagnose("practice.result_refused", { practice: slug, reason_chars: reason.length });
 		if (state.currentTurn) {
 			state.currentTurn.refused += 1;
 			state.currentTurn.refusalReasons.push(
@@ -1863,9 +1851,7 @@ export async function runReviewJob(): Promise<void> {
 		try {
 			return boundModelsSchema.parse(JSON.parse(readFileSync(PRACTICE_SCRIPT_MODELS_PATH, "utf8")));
 		} catch (error) {
-			console.error(
-				`[pi-runner] the bound models do not parse, so none is bound: ${errorText(error)}`,
-			);
+			diagnose("models.unparsable", { error: errorKind(error) });
 			return {};
 		}
 	}
@@ -1887,9 +1873,11 @@ export async function runReviewJob(): Promise<void> {
 		const coverage = persistPracticeCoverage();
 		const ratio =
 			coverage.eligible === 0 ? "n/a" : (coverage.evaluated / coverage.eligible).toFixed(4);
-		console.error(
-			`[pi-runner] Practice coverage: evaluated=${coverage.evaluated}, eligible=${coverage.eligible}, ratio=${ratio}`,
-		);
+		diagnose("coverage.measured", {
+			evaluated: coverage.evaluated,
+			eligible: coverage.eligible,
+			ratio,
+		});
 	}
 
 	const PERSIST_DISCIPLINE =
@@ -1908,22 +1896,23 @@ export async function runReviewJob(): Promise<void> {
 		try {
 			raw = readFileSync(TASK_PATH, "utf8");
 		} catch (error) {
-			console.error(`[pi-runner] Failed to read ${TASK_PATH}: ${errorText(error)}`);
+			diagnose("task.invalid", { reason: "unreadable", error: errorKind(error) });
 			process.exit(ENVELOPE_MISMATCH_EXIT);
 		}
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(raw);
 		} catch (error) {
-			console.error(`[pi-runner] Failed to parse ${TASK_PATH}: ${errorText(error)}`);
+			diagnose("task.invalid", { reason: "unparsable", error: errorKind(error) });
 			process.exit(ENVELOPE_MISMATCH_EXIT);
 		}
 		const envelope: Record<string, unknown> = isRecord(parsed) ? parsed : {};
 		if (envelope.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
-			console.error(
-				`[pi-runner] Unsupported schemaVersion: got ${logValue(envelope.schemaVersion)}, expected ${SUPPORTED_SCHEMA_VERSION}. ` +
-					`Task envelope and staged runner disagree.`,
-			);
+			diagnose("task.invalid", {
+				reason: "schema_version",
+				got: logValue(envelope.schemaVersion),
+				expected: SUPPORTED_SCHEMA_VERSION,
+			});
 			process.exit(ENVELOPE_MISMATCH_EXIT);
 		}
 		if (
@@ -1936,21 +1925,19 @@ export async function runReviewJob(): Promise<void> {
 			envelope.attempt < 0 ||
 			!isDecimalId(envelope.workspaceId)
 		) {
-			console.error(
-				"[pi-runner] task requires reviewId/jobId UUIDs, a nonnegative attempt and a decimal workspaceId",
-			);
+			diagnose("task.invalid", { reason: "identity" });
 			process.exit(ENVELOPE_MISMATCH_EXIT);
 		}
 
 		if (typeof envelope.prompt !== "string" || envelope.prompt.trim() === "") {
-			console.error(`[pi-runner] prompt is missing or blank in ${TASK_PATH}`);
+			diagnose("task.invalid", { reason: "prompt" });
 			process.exit(ENVELOPE_MISMATCH_EXIT);
 		}
 		let paths: ReturnType<typeof taskPaths>;
 		try {
 			paths = taskPaths(envelope);
 		} catch (error) {
-			console.error(`[pi-runner] ${errorText(error)}`);
+			diagnose("task.invalid", { reason: "paths", error: errorKind(error) });
 			process.exit(ENVELOPE_MISMATCH_EXIT);
 		}
 		return {
@@ -1967,12 +1954,18 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const prompt = taskEnvelope.prompt.trim();
-	console.error(
-		`[pi-runner] Task envelope loaded: ` +
-			`jobId=${logValue(taskEnvelope.jobId)}, workspaceId=${logValue(taskEnvelope.workspaceId)}, ` +
-			`repository=${logValue(taskEnvelope.repositoryFullName ?? "?")}, ` +
-			`prNumber=${logValue(taskEnvelope.pullRequestNumber ?? "?")}`,
-	);
+	diagnose("task.loaded", {
+		job: logValue(taskEnvelope.jobId),
+		workspace: logValue(taskEnvelope.workspaceId),
+		repository:
+			taskEnvelope.repositoryFullName === undefined
+				? undefined
+				: logValue(taskEnvelope.repositoryFullName),
+		pull_request:
+			taskEnvelope.pullRequestNumber === undefined
+				? undefined
+				: logValue(taskEnvelope.pullRequestNumber),
+	});
 
 	function noteToolCall(turn: TurnTrace, toolName: string, args: unknown): void {
 		const state = sessionState();
@@ -1986,9 +1979,7 @@ export async function runReviewJob(): Promise<void> {
 		turn.repeatedCalls = Math.max(turn.repeatedCalls, repeats);
 		const recording = toolName === "submit_result";
 		if (repeats === (recording ? REPEATED_RECORDING_NUDGE : REPEATED_CALL_NUDGE)) {
-			console.error(
-				`[pi-runner] ${turn.label}: the same ${toolName} call ${repeats} times — nudging to record`,
-			);
+			diagnose("turn.repeated_call", { turn: token(turn.label), tool: toolName, repeats });
 			// Naming what is still owed matters most when the repeated call is the recording itself: "record"
 			// alone reads as "send that again".
 			const owed = owedPractices();
@@ -2002,7 +1993,7 @@ export async function runReviewJob(): Promise<void> {
 			);
 		}
 		if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
-			stopTurn("loop", `the same ${toolName} call ${repeats} times — aborting this turn`);
+			stopTurn("loop");
 		}
 		// SDK schema refusals bypass tool execution and its per-practice cap; count attempts here too.
 		if (recording) {
@@ -2012,10 +2003,7 @@ export async function runReviewJob(): Promise<void> {
 				state.sessionGuards.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN &&
 				state.sessionGuards.stored === 0
 			) {
-				stopTurn(
-					"loop",
-					`${state.sessionGuards.recordingCalls} recording calls without a record — aborting this turn`,
-				);
+				stopTurn("loop");
 			}
 		}
 	}
@@ -2070,12 +2058,21 @@ export async function runReviewJob(): Promise<void> {
 		sessionState().currentTurn = null;
 		sessionState().turnDemand = null;
 		persistRunnerDebug();
-		console.error(
-			`[pi-runner] ${trace.label}: ${(trace.durationMs / 1000).toFixed(1)}s, calls=${trace.calls}/${trace.budget.modelCalls}, ` +
-				`outputTokens=${trace.outputTokens}/${trace.budget.outputTokens}${trace.stoppedBy ? `, stoppedBy=${trace.stoppedBy}` : ""}, ` +
-				`tools=${JSON.stringify(trace.toolCalls)}, stored=${trace.stored}, refused=${trace.refused}` +
-				`${trace.toolErrors ? `, toolErrors=${trace.toolErrors}` : ""}${trace.compactions ? `, compactions=${trace.compactions}` : ""}${trace.providerRetries ? `, providerRetries=${trace.providerRetries}` : ""}`,
-		);
+		diagnose("turn.finished", {
+			turn: token(trace.label),
+			duration_ms: ms(trace.durationMs),
+			calls: trace.calls,
+			call_budget: trace.budget.modelCalls,
+			output_tokens: trace.outputTokens,
+			output_token_budget: trace.budget.outputTokens,
+			stopped_by: trace.stoppedBy ?? undefined,
+			tool_calls: Object.values(trace.toolCalls).reduce((sum, count) => sum + count, 0),
+			stored: trace.stored,
+			refused: trace.refused,
+			tool_errors: trace.toolErrors || undefined,
+			compactions: trace.compactions || undefined,
+			provider_retries: trace.providerRetries || undefined,
+		});
 	}
 
 	const ABORT_SETTLE_MS = 30_000;
@@ -2224,11 +2221,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 	}
 
 	async function main() {
-		console.error(`[pi-runner] Review: one fresh session per practice`);
-		console.error(
-			`[pi-runner] Work per practice: ${PER_PRACTICE_WORK.modelCalls} model calls, ${PER_PRACTICE_WORK.outputTokens} output tokens; ` +
-				`safety ceiling ${AGENT_BUDGET_MS}ms`,
-		);
+		diagnose("review.planned", {
+			calls_per_practice: PER_PRACTICE_WORK.modelCalls,
+			output_tokens_per_practice: PER_PRACTICE_WORK.outputTokens,
+			ceiling_ms: AGENT_BUDGET_MS,
+		});
 
 		// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
 		// share it.
@@ -2258,14 +2255,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 		const model = registeredModel;
 		outputLimit = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
-		console.error(
-			`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
-				`model=${providerConfig.modelId} contextWindow=${model.contextWindow}`,
-		);
+		diagnose("provider.registered", {
+			api_protocol: providerConfig.apiProtocol,
+			model: providerConfig.modelId,
+			context_window: model.contextWindow,
+			reasoning_effort: providerConfig.reasoningEffort?.toLowerCase() ?? "default",
+		});
 		const { thinkingLevel } = reasoningSetting(providerConfig.reasoningEffort);
-		console.error(
-			`[pi-runner] reasoning effort: ${providerConfig.reasoningEffort?.toLowerCase() ?? "provider default"}`,
-		);
 
 		// SDK custom entries bind debug transcripts without entering the model context.
 		function nativeSessionManager(practiceSlug: string | null) {
@@ -2309,12 +2305,16 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						// guards count only the latter, and the trace keeps the former apart.
 						if (event.parentToolCallId === undefined) {
 							measurementReply.received = true;
-							console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
+							diagnose("tool.called", { turn: token(label), tool: toolOf(event.toolName) });
 							if (scope.currentTurn) {
-								noteToolCall(scope.currentTurn, event.toolName, event.args);
+								noteToolCall(scope.currentTurn, toolOf(event.toolName), event.args);
 							}
 						} else {
-							console.error(`[pi-runner] ${label} tool: codemode → ${event.toolName}`);
+							diagnose("tool.called", {
+								turn: token(label),
+								tool: toolOf(event.toolName),
+								codemode: true,
+							});
 							if (scope.currentTurn) {
 								const key = `codemode.${event.toolName}`;
 								scope.currentTurn.toolCalls[key] = (scope.currentTurn.toolCalls[key] ?? 0) + 1;
@@ -2333,7 +2333,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							event.parentToolCallId === undefined
 								? event.toolName
 								: `codemode → ${event.toolName}`;
-						console.error(`[pi-runner] ${label} tool error: ${tool} — ${reason}`);
+						// The reason is the tool's own result text, which can quote reviewed code or a credential.
+						diagnose("tool.failed", {
+							turn: token(label),
+							tool: toolOf(event.toolName),
+							codemode: event.parentToolCallId === undefined ? undefined : true,
+							reason_chars: reason.length,
+						});
 						noteSchemaRefusal(scope, event.toolName);
 						if (scope.currentTurn) {
 							scope.currentTurn.toolErrors += 1;
@@ -2341,9 +2347,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						}
 					}
 					if (event.type === "compaction_end") {
-						console.error(
-							`[pi-runner] ${label} context compacted (${event.reason})${hasText(event.errorMessage) ? `: ${event.errorMessage}` : ""}`,
-						);
+						diagnose("context.compacted", {
+							turn: token(label),
+							reason: event.reason,
+							failed: hasText(event.errorMessage),
+						});
 						if (!event.aborted && !hasText(event.errorMessage)) {
 							scope.openingInContext = false;
 						}
@@ -2357,21 +2365,21 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						if (scope.currentTurn) {
 							scope.currentTurn.providerRetries += 1;
 						}
-						console.error(
-							`[pi-runner] ${label} provider call failed, retrying in ${event.delayMs}ms ` +
-								`(attempt ${event.attempt}/${event.maxAttempts}): ${event.errorMessage}`,
-						);
+						// The provider's message can quote the request, so the line names only the attempt.
+						diagnose("provider.retrying", {
+							turn: token(label),
+							attempt: event.attempt,
+							attempts: event.maxAttempts,
+							delay_ms: event.delayMs,
+						});
 					}
 					if (event.type === "auto_retry_end" && !event.success) {
 						if (scope.currentTurn) {
 							scope.currentTurn.modelError = true;
 							recordUnsuccessfulRetryEnd(scope.currentTurn);
 						}
-						const finalError = event.finalError ?? "no error given";
 						providerFailures += 1;
-						console.error(
-							`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
-						);
+						diagnose("provider.failed", { turn: token(label), retries: event.attempt });
 					}
 					if (event.type === "message_end" && event.message.role === "assistant") {
 						addAssistantUsage(streamUsage, event.message);
@@ -2400,14 +2408,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						if (stopReason === "error") {
 							providerFailures += 1;
 						}
-						const failure =
-							stopReason === "error" || stopReason === "length"
-								? `, error=${event.message.errorMessage ?? "none given"}${hasText(rawStopReason) ? `, rawStopReason=${rawStopReason}` : ""}`
-								: "";
-						console.error(
-							`[pi-runner] ${label} assistant msg: stopReason=${stopReason}, toolCalls=${toolCalls}, ` +
-								`types=[${types.join(",")}]${failure}`,
-						);
+						diagnose("assistant.message", {
+							turn: token(label),
+							stop_reason: stopReason,
+							raw_stop_reason: hasText(rawStopReason) ? rawStopReason : undefined,
+							tool_calls: toolCalls,
+							types: types.join(","),
+						});
 					}
 				}),
 			);
@@ -2438,19 +2445,18 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			briefs.set(key, built);
 			return built;
 		}
-		console.error(
-			`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); context loop-only=${CONTEXT_IS_LOOP_ONLY}; briefs=${[
-				...new Set(allSlugs.map((slug) => briefOf(slug).text.length)),
-			].join(",")} chars`,
-		);
+		diagnose("review.started", {
+			practices: allSlugs.length,
+			turns: turns.length,
+			context_loop_only: CONTEXT_IS_LOOP_ONLY,
+			brief_chars: [...new Set(allSlugs.map((slug) => briefOf(slug).text.length))].join(","),
+		});
 
 		const measureEnd = PROCESS_START_MS + AGENT_BUDGET_MS;
 		const startMs = Date.now();
 		const tooLate = Date.now() >= measureEnd;
 		if (tooLate) {
-			console.error(
-				`[pi-runner] FAILED: the run reached its safety ceiling before the session could start`,
-			);
+			diagnose("review.failed", { reason: "ceiling_before_start" });
 		}
 
 		if (tooLate) {
@@ -2498,6 +2504,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
+		/** The tools that a session offers. A diagnostic names only these: a model can call a tool by any name. */
+		const registeredTools = new Set<string>();
+		const toolOf = (name: string) => (registeredTools.has(name) ? name : "unknown");
 		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
 			const bash = createBashToolDefinition(CWD);
 			const sessionTools: SessionOptions["customTools"] = tools.includes("bash")
@@ -2512,6 +2521,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						...(customTools ?? []),
 					]
 				: customTools;
+			for (const name of [...tools, ...(sessionTools ?? []).map((tool) => tool.name)]) {
+				registeredTools.add(name);
+			}
 			const { session: fresh, extensionsResult } = await createAgentSession({
 				cwd: CWD,
 				agentDir: AGENT_DIR,
@@ -2554,7 +2566,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				};
 			}
 			for (const error of extensionsResult.errors) {
-				console.error(`[pi-runner] extension error: ${error.path}: ${error.error}`);
+				diagnose("extension.failed", { path: error.path });
 			}
 			resetSessionGuards();
 			sessionState().openingInContext = false;
@@ -2572,7 +2584,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					deadline.elapsed.then(() => false),
 				]);
 				if (!stopped) {
-					throw new Error("Native session did not settle; no later session may start");
+					throw new SessionUnsettledError(
+						"Native session did not settle; no later session may start",
+					);
 				}
 			} catch (error) {
 				measurementClosed = true;
@@ -2599,7 +2613,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			sessionScopes.run(scope, () => {
 				if (scope.currentTurn?.stoppedBy === null && Date.now() - scope.lastEventAt >= STALL_MS) {
 					providerFailures += 1;
-					stopTurn("stall", `no model or tool event for ${STALL_MS / 1000}s — aborting this turn`);
+					stopTurn("stall");
 				}
 			});
 		};
@@ -2626,13 +2640,17 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		): Promise<StopReason | null> {
 			const safetyMs = measureEnd - Date.now();
 			if (safetyMs <= RETURN_MS) {
-				console.error(`[pi-runner] ${label}: the run is near its safety ceiling — skipped`);
+				diagnose("turn.near_ceiling", { turn: token(label), skipped: true });
 				return "safety";
 			}
 			const budget = reservedBudget ?? turnBudget(slugs.length, PER_PRACTICE_WORK);
-			console.error(
-				`[pi-runner] ${label}: ${slugs.length} practice(s), up to ${budget.modelCalls} calls and ${budget.outputTokens} output tokens (${sessionState().tokensPerProblem} tokens per result so far)`,
-			);
+			diagnose("turn.started", {
+				turn: token(label),
+				practices: slugs.length,
+				call_budget: budget.modelCalls,
+				output_token_budget: budget.outputTokens,
+				tokens_per_result: sessionState().tokensPerProblem,
+			});
 			const trace = openTurnTrace(label, budget, {
 				owed: () => owedPractices(slugs).length,
 				nudge: RECORD_NUDGE,
@@ -2640,9 +2658,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			if (reservedBudget !== undefined) {
 				trace.practiceSlug = slugs[0];
 			}
-			const safety = scheduleDeadline(safetyMs, () =>
-				stopTurn("safety", "the run is near its safety ceiling — aborting this turn"),
-			);
+			const safety = scheduleDeadline(safetyMs, () => stopTurn("safety"));
 			// Native events may stop a turn while awaited work settles or another session opens.
 			const stoppedBy = () => trace.stoppedBy;
 			const pastSafety = () => safety.expired() || Date.now() >= measureEnd;
@@ -2662,9 +2678,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				}
 				if (prepared === null) {
 					blockedPractices.set(slug, "too-large");
-					console.error(
-						`[pi-runner] ${label}: essential input for ${slug} exceeds the context window — not reached`,
-					);
+					diagnose("practice.oversized", { turn: token(label), practice: slug });
 					return;
 				}
 				await session.prompt(prepared, {
@@ -2688,9 +2702,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				) {
 					return;
 				}
-				console.error(
-					`[pi-runner] ${label}: the ${slug} session ended without a submitted result — asking once more`,
-				);
+				diagnose("practice.unsubmitted", {
+					turn: token(label),
+					practice: slug,
+					asking_again: true,
+				});
 				if (!(await settleSession(session, label, ABORT_SETTLE_MS))) {
 					throw new Error("the session was still busy when it was asked once more");
 				}
@@ -2703,9 +2719,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				await Promise.race([promptPractice(session, onceMore, slug), safety.elapsed, interrupted]);
 				if (endedUnrecorded(slug)) {
 					blockedPractices.set(slug, "off-format");
-					console.error(
-						`[pi-runner] ${label}: the ${slug} session ended again without a submitted result — not reached`,
-					);
+					diagnose("practice.not_reached", {
+						turn: token(label),
+						practice: slug,
+						reason: "off_format",
+					});
 				}
 			}
 			function noResultReason(slug: string, signal: AbortSignal): UnratedReason {
@@ -2883,7 +2901,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						await askOnceMore(opened.session, text, slug, interrupted.promise);
 					}
 				} catch (error) {
-					console.error(`[pi-runner] ${label} (${slug}) failed: ${errorText(error)}`);
+					diagnose("practice.failed", {
+						turn: token(label),
+						practice: slug,
+						error: errorKind(error),
+					});
 				} finally {
 					signal.removeEventListener("abort", stop);
 					const closed = await closeSession(opened).then(
@@ -2927,7 +2949,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					error: `the host could not read them: ${errorText(error)}`,
 				}));
 				if ("error" in read) {
-					console.error(`[pi-runner] ${slug}: its inputs are not valid: ${read.error}`);
+					diagnose("practice.inputs_invalid", { practice: slug });
 					executions.set(slug, {
 						...notReachedOutcome(program, "unavailable"),
 						status: "failed",
@@ -2974,8 +2996,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),
+						// A practice script can log what it read, so its lines leave the sandbox only as a length.
 						log: (line) => {
-							console.error(`[pi-runner]${line}`);
+							diagnose("practice.program_log", { practice: slug, chars: line.length });
 						},
 						receipts: programReads,
 						requiredSources: requiredSourcesOf(slug),
@@ -2991,10 +3014,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				if (sessionStopFailure !== null) {
 					throw sessionStopFailure;
 				}
-				console.error(
-					`[pi-runner] ${slug}: ${program.script === null ? "built-in" : "custom"} program ${outcome.status}` +
-						`${outcome.stopReason === null ? "" : ` (${outcome.stopReason})`}${outcome.error === undefined ? "" : `: ${firstLine(outcome.error)}`}`,
-				);
+				diagnose("practice.program_finished", {
+					practice: slug,
+					program: program.script === null ? "built_in" : "custom",
+					status: outcome.status,
+					stop_reason: outcome.stopReason ?? undefined,
+					error_chars: outcome.error?.length,
+				});
 				const { candidate } = outcome;
 				if (candidate === undefined) {
 					return;
@@ -3044,9 +3070,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				closeTurnTrace(trace);
 			}
 			if (pastSafety() && stoppedBy() === null) {
-				console.error(
-					`[pi-runner] ${label}: the run is near its safety ceiling — the rest is not reached`,
-				);
+				diagnose("turn.near_ceiling", { turn: token(label), rest_not_reached: true });
 				return "safety";
 			}
 			return stoppedBy();
@@ -3061,9 +3085,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				configured: PRACTICE_CONCURRENCY,
 				effective: serial ? 1 : PRACTICE_CONCURRENCY,
 			};
-			console.error(
-				`[pi-runner] Practice concurrency: configured=${PRACTICE_CONCURRENCY}, effective=${serial ? 1 : PRACTICE_CONCURRENCY}`,
-			);
+			diagnose("review.concurrency", {
+				configured: PRACTICE_CONCURRENCY,
+				effective: serial ? 1 : PRACTICE_CONCURRENCY,
+			});
 			if (serial) {
 				for (const [index, turn] of turns.entries()) {
 					const stop = await runScope(
@@ -3073,9 +3098,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					);
 					stalls = stop === "stall" ? stalls + 1 : 0;
 					if (stop === "safety" || stalls >= 2) {
-						console.error(
-							`[pi-runner] Measuring ends early: ${stop === "safety" ? "safety ceiling" : "the session stalled twice in a row"}`,
-						);
+						diagnose("measurement.ended", { reason: stop === "safety" ? "safety" : "stalled" });
 						break;
 					}
 				}
@@ -3141,9 +3164,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				releaseOpening = undefined;
 				const failure = workers.find((worker) => worker.status === "rejected");
 				if (failure?.status === "rejected") {
-					console.error(
-						`[pi-runner] Measurement stopped: ${errorText(failure.reason)}; retaining completed practices`,
-					);
+					diagnose("measurement.stopped", { error: errorKind(failure.reason) });
 				}
 			}
 
@@ -3151,9 +3172,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				(slug) => !executions.has(slug) && !blockedPractices.has(slug),
 			);
 			if (serial && unfinished.length > 0 && stalls < 2 && Date.now() < measureEnd - RETURN_MS) {
-				console.error(
-					`[pi-runner] Finishing ${unfinished.length} practice(s): ${unfinished.join(", ")}`,
-				);
+				diagnose("review.finishing", { practices: unfinished.join(",") });
 				await runScope(
 					"finish",
 					"## Unfinished practices\nNo turn recorded a result for this practice; evaluate it now.",
@@ -3180,14 +3199,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			});
 			persistRunnerDebug();
 			persistUsage();
-			console.error(
-				`[pi-runner] Measured: ${(measureDurationMs / 1000).toFixed(1)}s, calls=${measureUsage.totalCalls}, ` +
-					`stopped=[${runnerDebug.turns
-						.flatMap((turn) =>
-							turn.stoppedBy === null ? [] : [`${turn.label}: ${turn.stoppedBy}`],
-						)
-						.join("; ")}], results=${reviewState.size}`,
-			);
+			diagnose("measurement.finished", {
+				duration_ms: ms(measureDurationMs),
+				calls: measureUsage.totalCalls,
+				stopped_turns: runnerDebug.turns.filter((turn) => turn.stoppedBy !== null).length,
+				results: reviewState.size,
+			});
 		}
 
 		const notReached = missingSlugs(allSlugs, [...reviewState.keys()]);
@@ -3204,21 +3221,20 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 		logPracticeCoverage();
 		if (notReached.length > 0) {
-			console.error(
-				`[pi-runner] PARTIAL: ${notReached.length} of ${allSlugs.length} practice(s) without a result: ${notReached.join(", ")}`,
-			);
+			diagnose("review.partial", {
+				without_result: notReached.length,
+				practices: allSlugs.length,
+				not_reached: notReached.join(","),
+			});
 		}
 
 		if (!maybeWriteResultFile()) {
 			if (providerFailures > 0 && !measurementReply.received) {
-				console.error(
-					`[pi-runner] UNREACHABLE: this review reached no practice, and ${providerFailures} model call(s) ` +
-						`went unanswered — the provider, not the work, is what this run could not read`,
-				);
+				diagnose("review.unreachable", { unanswered_calls: providerFailures });
 				finalizeOutput();
 				process.exit(PROVIDER_UNREACHABLE_EXIT);
 			}
-			console.error(`[pi-runner] FAILED: this review reached no practice at all`);
+			diagnose("review.failed", { reason: "no_practice" });
 			finalizeOutput();
 			process.exit(1);
 		}
@@ -3236,7 +3252,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				body,
 			}),
 		);
-		console.error(`[pi-runner] SUCCESS: result.json holds ${reviewState.size} result(s)`);
+		diagnose("review.succeeded", { results: reviewState.size });
 		finalizeOutput();
 		process.exit(0);
 	}
@@ -3245,18 +3261,18 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		try {
 			finalizeOutput();
 		} catch (error) {
-			console.error(`[pi-runner] output could not be finalized: ${errorText(error)}`);
+			diagnose("output.failed", { error: errorKind(error) });
 		}
 	}
 
 	process.on("uncaughtException", (err) => {
-		console.error(`[pi-runner] FATAL: ${errorText(err)}`);
+		diagnose("review.fatal", { error: errorKind(err), at: stackOf(err) });
 		finalizeOutputQuietly();
 		process.exit(2);
 	});
 
 	process.on("unhandledRejection", (reason) => {
-		console.error(`[pi-runner] UNHANDLED REJECTION: ${errorText(reason)}`);
+		diagnose("review.unhandled_rejection", { error: errorKind(reason), at: stackOf(reason) });
 		finalizeOutputQuietly();
 		process.exit(2);
 	});
@@ -3265,9 +3281,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		try {
 			await main();
 		} catch (error) {
-			console.error(
-				`[pi-runner] FATAL: ${errorText(error)}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
-			);
+			diagnose("review.fatal", { error: errorKind(error), at: stackOf(error) });
 			unreachedReason = "error";
 			finalizeOutputQuietly();
 			// Preserve the retryable exit code for admission transport failures.

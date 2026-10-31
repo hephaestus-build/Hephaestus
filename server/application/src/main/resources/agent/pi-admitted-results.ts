@@ -1,3 +1,4 @@
+import { diagnose, errorKind } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
 	answerText,
@@ -34,7 +35,7 @@ export const admissionResponseSchema = z.looseObject({
 export function parseAdmission(value: unknown) {
 	const response = admissionResponseSchema.parse(value);
 	for (const withheld of response.withheld) {
-		console.error(`[pi-runner] admission withheld ${withheld.practiceSlug}: ${withheld.reason}`);
+		diagnose("admission.withheld", { practice: withheld.practiceSlug, reason: withheld.reason });
 	}
 	return { results: response.admitted, digest: response.admissionDigest };
 }
@@ -91,10 +92,14 @@ export async function admit(request: unknown, send: AdmissionFetch): Promise<Adm
 		async () => postAdmission(body, send),
 		(error) => error instanceof AdmissionUnreachableError,
 		{ attempts: ADMISSION_ATTEMPTS },
-		(attempt, error, delayMs) =>
-			console.error(
-				`[pi-runner] admission attempt ${attempt}/${ADMISSION_ATTEMPTS} did not arrive (${errorText(error)}); retrying in ${delayMs}ms`,
-			),
+		(attempt, error, delayMs) => {
+			diagnose("admission.retrying", {
+				attempt,
+				attempts: ADMISSION_ATTEMPTS,
+				error: errorKind(error),
+				delay_ms: delayMs,
+			});
+		},
 	);
 	return parseAdmission(response);
 }
