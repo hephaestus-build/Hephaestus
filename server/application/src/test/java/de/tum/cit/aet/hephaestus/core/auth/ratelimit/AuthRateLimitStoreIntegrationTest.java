@@ -50,7 +50,8 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
                 configured.mentorTurns(),
                 configured.reviewRequest(),
                 configured.syncTrigger(),
-                configured.publicActivity());
+                configured.publicActivity(),
+                configured.browserReports());
         var first = new AuthRateLimitFilter(properties, buckets, objectMapper, metrics);
         var second = new AuthRateLimitFilter(properties, buckets, objectMapper, metrics);
         String clientIp = "2001:db8::" + Integer.toHexString(UUID.randomUUID().hashCode() & 0xffff);

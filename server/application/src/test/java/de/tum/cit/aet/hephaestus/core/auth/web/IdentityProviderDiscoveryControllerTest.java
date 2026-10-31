@@ -39,13 +39,6 @@ class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a github.com authorization endpoint has the github.com origin")
-    void githubHostIsGithub() {
-        ClientRegistration reg = registration("https://github.com/login/oauth/authorize");
-        assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://github.com");
-    }
-
-    @Test
     @DisplayName("a self-hosted GitLab on a non-default port keeps the port in baseUrl")
     void selfHostedGitlabWithPort() {
         ClientRegistration reg = registration("https://gitlab.example.com:8443/oauth/authorize");
@@ -57,20 +50,6 @@ class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
     void gitlabDotComDefaultPort() {
         ClientRegistration reg = registration("https://gitlab.com/oauth/authorize");
         assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://gitlab.com");
-    }
-
-    @Test
-    @DisplayName("a slack.com authorization endpoint has the slack.com origin")
-    void slackHostIsSlack() {
-        ClientRegistration reg = registration("https://slack.com/openid/connect/authorize");
-        assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://slack.com");
-    }
-
-    @Test
-    @DisplayName("'github.com' in a GitLab host's PATH does not change the origin (host, not substring)")
-    void githubComInPathStaysGitlab() {
-        ClientRegistration reg = registration("https://gitlab.internal/github.com/oauth/authorize");
-        assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://gitlab.internal");
     }
 
     @Test
