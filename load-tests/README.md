@@ -1,11 +1,11 @@
-# Compose capacity qualification
+# Deployment capacity qualification
 
 For an isolated Kubernetes course benchmark, use the
 [contributor procedure](../docs/contributor/capacity-benchmark.md).
 It reuses these k6 adapters and adds open session arrivals, replay provenance and a stream observer.
 
 These [Grafana k6](https://grafana.com/docs/k6/latest/) scenarios measure the supported single-host
-Compose topology. They spend LLM budget and create durable rows; run them only on an isolated host.
+Helm topology. They spend LLM budget and create durable rows; run them only on an isolated host.
 
 Webhook traffic uses a [constant arrival rate](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/arrival-rate-vu-allocation/).
 Pass/fail uses [k6 thresholds](https://grafana.com/docs/k6/latest/using-k6/thresholds/). Sizing requires
@@ -14,7 +14,7 @@ both service objectives and saturation, following Google's SLO guidance
 
 ## Safety and prerequisites
 
-- Deploy the exact release from `docker/self-host/compose.yaml` on a dedicated Linux host. Run k6
+- Deploy the exact signed Helm release on a dedicated Linux host. Run k6
   elsewhere.
 - Populate a representative workspace before testing. `ARTIFACT_IDS` must contain distinct, reviewable
   pull requests so each request performs work rather than hitting deduplication/cooldown.
@@ -99,7 +99,7 @@ threshold and metric without recomputing k6's verdict. It requires every thresho
 interrupted export with missing evidence is rejected. Any digest-pinned run stays renderable, and
 the document names the k6 image the run used and whether the checkout has moved on since. A passing
 k6 result alone does not qualify a host: supply the companion operator evidence listed in the
-document. Do not commit tokens, environment files or unredacted Compose configuration.
+document. Do not commit tokens, environment files or unredacted deployment configuration.
 
 A mentor VU submits a turn, then polls the conversation page for the status of its question.
 `detection-mentor.js` sets the poll interval. `mentor_turn_duration` measures completion to within that
@@ -107,36 +107,17 @@ interval. It does not measure the time to the first text of the answer.
 
 ## Collect host evidence
 
-Webhook bursts land on the `webhook-server` container and detection+mentor traffic on
-`application-server`, so collect both containers and read the busy one against the scenario you ran.
+Collect the webhook, server, worker and sandbox Pods, and identify the busy role for each scenario.
+Use your cluster monitor to retain timestamped CPU, working-set memory, limits, restart counts and termination reasons for every Pod.
+Retain node `MemAvailable`, CPU, I/O pressure and swap samples too.
+A Pod peak alone cannot qualify a host.
 
-On the **Compose host**, create a fresh evidence directory for each run. From that directory, start
-these collectors in separate terminals before starting k6 on the load-generator host:
-
-```bash
-docker stats --format json > container-stats.jsonl
-```
-
-```bash
-vmstat -y -t 1 > host-vmstat.txt
-```
-
-Collect all containers, including review sandboxes. Docker's Linux CLI memory figure subtracts
-cache; retain the raw samples rather than only a peak percentage
-([`docker stats` semantics](https://docs.docker.com/reference/cli/docker/container/stats/)).
-The [`vmstat` options](https://man7.org/linux/man-pages/man8/vmstat.8.html) timestamp samples and
-omit the since-boot report. Also configure your host monitor to record `MemAvailable` from
-`/proc/meminfo` throughout the run; `vmstat` reports free memory, not available memory. Retain
-timestamped samples so the qualification rule below can be checked.
-
-After load stops, keep the collectors running until the review queue drains or the five-minute
-drain deadline expires.
-Capture `df -h` before and after the run. Retain `docker compose ps`, `docker info`, the release lock,
-provider latency, PostgreSQL size, JetStream state, and application metrics/logs. Copy the evidence
-into its matching k6 run directory; never overwrite another repetition's samples.
-The increase in `webhook.publish{outcome="success"}` must equal accepted
-webhook iterations while the failure counter remains unchanged. Reject a run with a reconciliation
-mismatch, dropped iterations, provider throttling, a container restart/OOM, or swap activity.
+Keep collectors running until the review queue drains or the five-minute drain deadline expires.
+Capture volume free space before and after the run.
+Retain the signed joint lock, chart and site values without secrets, Pod specifications, provider latency, PostgreSQL size, JetStream state and application metrics/logs.
+Copy these into the matching k6 run directory without overwriting another repetition.
+The increase in `webhook.publish{outcome="success"}` must equal accepted webhook iterations while the failure counter stays unchanged.
+Reject a run with a reconciliation mismatch, dropped iterations, provider throttling, a restart or OOM, or swap activity.
 
 ## Qualification matrix and sizing rule
 

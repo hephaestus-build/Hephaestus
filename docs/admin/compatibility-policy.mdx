@@ -19,7 +19,6 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | **Database migration chain** | Liquibase applies changesets in changelog order. A newer release builds on the previous schema. Follow the [database migration instructions](#database-migrations) before an upgrade.                                                                                                                                                                                |
 | **Runtime prerequisites**    | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change.                                                                                                                                                                                                                          |
 | **Configuration keys**       | Environment variables and `hephaestus.*` properties listed in the [Configuration reference](./configuration-reference). Renames and removals are breaking changes.                                                                                                                     |
-| **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published Compose files. This includes the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)). It also includes `docker/compose.app.yaml`, `docker/compose.core.yaml` and `docker/compose.proxy.yaml`, which the self-hosted stack includes. Deprecated in 0.95.0. Until 1.0.0 only: it leaves the contract in 1.0.0, as [Supported deployment](#supported-deployment) states. |
 | **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml). CI checks each change against the previous release: see [API compatibility](../contributor/ci-cd#api-compatibility).                                                                                                                                                                                                                                 |
 | **Helm chart values** | The values of the Helm chart, from the first release that publishes the chart. Removing or renaming a value, or changing its meaning, is a breaking change. A new optional value is a minor change. |
 
@@ -101,19 +100,14 @@ After 1.0.0, removals occur only in major releases.
 
 ## Supported deployment
 
-From 1.0.0, the Helm chart is the only supported deployment.
-A Kubernetes cluster and a single host use the same chart.
-A single host runs k3s.
-Docker Compose stays for local development only.
+The Helm chart is the only supported deployment.
+A Kubernetes cluster and a single k3s host use the same chart.
+Docker Compose remains local development infrastructure only.
 
-The Docker Compose deployment is deprecated in 0.95.0.
-It stays supported for the rest of the 0.x releases.
-
-The Helm chart values are in the [public contract](#the-public-contract) from the first release that publishes the chart.
-In 1.0.0, the Docker Compose interface leaves the public contract.
-A Compose file that is still in the repository after 1.0.0 is not supported.
-Before 1.0.0, a migration guide describes how to move a Compose install to the chart.
-[ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision.
+Before upgrading an existing installation to the chart-only release, complete the [0.95.0 deployment move](./compose-to-kubernetes).
+Apply 0.95.1 and install its reconciler tooling before upgrading to the chart-only release.
+The chart values and signed joint release lock are part of the [public contract](#the-public-contract).
+[ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the deployment decision.
 
 ## Support statement
 

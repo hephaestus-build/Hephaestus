@@ -17,7 +17,7 @@ Private feedback must pass its own evidence, recipient and delivery checks.
 ## Deployment configuration
 
 Server configuration metadata defines property names, types, and defaults.
-The reference Compose files determine which environment variables reach the application.
+The rendered Helm chart determines which configuration reaches each role.
 Agent execution alone does not enable repository collection.
 Each workspace enables practice review and selects its own coverage.
 
@@ -160,7 +160,7 @@ Use the model's recommended sampling or the provider default.
 Before you change an environment variable:
 
 1. Read the [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml).
-2. Read the [reference Compose files](https://github.com/hephaestus-build/Hephaestus/tree/main/docker).
+2. Read the [configuration reference](./configuration-reference) and the rendered chart.
 3. Use a value that the selected model supports.
 4. Confirm that the deployment forwards the setting.
 5. Evaluate changes against representative cases.
@@ -168,7 +168,7 @@ Before you change an environment variable:
 Unknown variables or variables that the deployment does not forward cannot configure the application.
 Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence store.
 Each container keeps bare mirrors under its own `HEPHAESTUS_FABRIC_ROOT`, which defaults to `/data/git-repos`.
-The shipped Compose files mount `git-repos` into the server and `worker-git-repos` into the worker.
+The chart gives the server and worker their own repository-cache storage.
 A missing mirror is cloned again on the next sync or review.
 
 Git runs in-process through JGit, with no `git` binary or second image.
@@ -417,17 +417,17 @@ Two metrics count practice script events on the worker:
 
 The application emits one JSON object per log line.
 Worker logs use correlation keys under `mdc`.
-The shipped Compose stack already has the necessary filter tools.
+Run the filter tools on a protected operator workstation.
 
-1. From your deployment directory, filter the logs:
+1. Filter the logs:
 
 ```bash
 # All log lines for one agent job
-docker compose logs --no-log-prefix application-worker \
+kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers --tail=-1 \
   | jq -cR 'fromjson? | select(.mdc."job.id" == "<job-uuid>")'
 
 # All errors for one workspace
-docker compose logs --no-log-prefix application-worker \
+kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --all-containers --tail=-1 \
   | jq -cR 'fromjson? | select(.mdc."workspace.id" == "<workspace-id>" and .level == "ERROR")'
 ```
 

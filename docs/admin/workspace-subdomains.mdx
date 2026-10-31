@@ -104,110 +104,17 @@ The installer preserves an existing `site.yaml`.
 To turn workspace hosts off, set `workspaceSubdomains.enabled: false` and upgrade.
 Keep the DNS records and certificate while other services need them.
 
-### Compose settings
-
-Use the same settings for the multi-file and single-host Compose stacks.
-The proxy chooses one ACME challenge through these optional variables:
-
-| Variable                            | Default                    | With subdomains                                             |
-| ----------------------------------- | -------------------------- | ----------------------------------------------------------- |
-| `ACME_CHALLENGE`                    | `httpchallenge.entrypoint` | `dnschallenge.provider`                                     |
-| `ACME_CHALLENGE_VALUE`              | `http`                     | Your lego DNS provider, such as `cloudflare`                |
-| `TRAEFIK_DNS_CREDENTIALS_DIRECTORY` | `/etc/hephaestus/dns`      | Absolute path to the proxy-only credential directory        |
-| `TRAEFIK_DNS_CREDENTIAL_VARIABLE`   | `CF_DNS_API_TOKEN_FILE`    | Your provider's credential variable with the `_FILE` suffix |
-| `LEGO_EXPERIMENTAL_DNS_TCP_ONLY`    | `false`                    | Set `true` only when DNS queries need TCP transport         |
-
-For Cloudflare, create the credential directory with mode `0700`.
-Put only the raw zone-scoped token in its `token` file, with mode `0600`.
-Keep the directory outside release trees.
-
-The proxy mounts it read-only at `/run/secrets/dns`.
-lego reads the token through `CF_DNS_API_TOKEN_FILE=/run/secrets/dns/token`.
-Compose output and container environment values contain paths, not the token.
-Never add the token to an environment file, diagnostics, or a release artifact.
-HTTP-01 deployments need no token.
-
-For another provider, use its name and required variables from [lego's provider list](https://go-acme.github.io/lego/dns/).
-Choose a provider that supports certificates for both a wildcard and its apex.
-Set `TRAEFIK_DNS_CREDENTIAL_VARIABLE` to its `_FILE` credential name.
-
-For a provider with multiple credentials, store the other files in the same directory.
-Add its other `_FILE` variables to the proxy environment through a Compose override.
-Each value must point to its file under `/run/secrets/dns`.
-See [lego credential files](https://go-acme.github.io/lego/dns/#configuration-and-credentials).
-Do not disable DNS propagation checks.
-Allow the proxy to reach the provider API and public DNS servers.
-
-If authoritative DNS queries time out over UDP while TCP works, set
-`LEGO_EXPERIMENTAL_DNS_TCP_ONLY=true` in the proxy settings and recreate the proxy.
-This uses [lego's TCP transport](https://github.com/go-acme/lego/blob/v5.5.2/challenge/internal/client.go)
-for DNS queries, including propagation checks.
-It leaves the existing propagation-check settings unchanged.
-The default is `false`.
-Set it back to `false` and recreate the proxy to restore the default transport.
-
-Set these non-secret values alongside `APP_HOSTNAME`:
-
-```dotenv
-APP_HOSTNAME=hephaestus.build
-HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED=false
-HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN=hephaestus.build
-ACME_CHALLENGE=dnschallenge.provider
-ACME_CHALLENGE_VALUE=cloudflare
-TRAEFIK_DNS_CREDENTIALS_DIRECTORY=/etc/hephaestus/dns
-TRAEFIK_DNS_CREDENTIAL_VARIABLE=CF_DNS_API_TOKEN_FILE
-```
-
-In pull-based production deployment, set the switch and base domain in both `app.env` and `proxy.env`.
-Set the ACME variables and credential-directory path in `proxy.env` only.
-The promotion workflow selects a verified release.
-It does not upload or replace host secrets.
-See [pull-based deployment](./pull-based-deployment.mdx).
-
-For the single-host installer, set these values in its one `.env` file.
-
-With DNS-01 and a nonempty base domain, Traefik requests the apex and `*.<base>` certificate
-through its default TLS store, even while workspace subdomains stay off.
-Recreate the proxy and verify both certificate names before enabling workspace routing.
-The base domain must equal `APP_HOSTNAME` during preparation as well as after enablement.
-ACME state stays in the existing persistent volume.
-
-Without these preparation settings, the default remains HTTP-01.
-Keep a working DNS-01 configuration during switch reversal if other services still use the wildcard certificate.
-See [Traefik ACME](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/).
-
 ### Check and turn off
 
-1. Upgrade the app and proxy to this release with the switch off.
-2. Prepare the DNS-only wildcard record. Apply the proxy settings above with the switch off and verify the apex/wildcard certificate.
-3. Register the exact apex OAuth callbacks and verify apex sign-in.
-4. Set the switch and base domain in both app and proxy settings.
-5. Recreate the app and proxy with Compose's `--wait` option.
-6. Verify workspace navigation, public activity, sign-in, and an authenticated change on a workspace host.
+1. Check the apex and wildcard DNS records.
+2. Check that the certificate covers both names.
+3. Apply `site.yaml` with the verified chart package.
+4. Open the apex and a workspace hostname. Both must serve the web app over HTTPS.
+5. If a Pod fails to become ready, inspect its events and logs.
 
-The webapp container receives the same switch and base domain as the server.
-`APPLICATION_CLIENT_URL` is the apex app origin.
-When the switch is on, the web app container refuses to start if this value is missing.
-`APPLICATION_SERVER_URL` is the absolute apex API URL, including `/api`.
-
-The reference Compose configuration supplies these values.
-For another deployment, supply all four values to the webapp container.
-Keep the server, webapp, and proxy settings consistent.
-
-Recreate the app and proxy with Compose's `--wait` option.
-Invalid edge settings stop the proxy with a clear startup error instead of serving a partial configuration.
-Check the container logs if Compose reports a startup failure.
-
-Check that a valid workspace host has a trusted certificate and serves the web app.
-Check that an apex `/w/<slug>` link redirects to the same path and query on its workspace host.
-Apex sign-in, consent, auth, legal, unsubscribe, instance administration, and settings stay on the apex.
-Tenant hosts must not serve API or OAuth paths.
-Do not add tenant hosts or broad wildcard expressions to `APP_HOST_MATCH`.
-That variable is only for the apex and explicit instance aliases.
-
-To turn it off, set the switch to `false` in app and proxy settings and recreate both with `--wait`.
-Apex workspace links then serve the web app without a tenant redirect.
-No DNS record, credential, or ACME-state deletion is needed.
+To turn workspace hostnames off, set `workspaceSubdomains.enabled: false` and upgrade with the same site values.
+Keep the DNS records and certificate while other services need them.
+The apex workspace links then serve the web app without a tenant redirect.
 
 ### Check the same-site precondition
 

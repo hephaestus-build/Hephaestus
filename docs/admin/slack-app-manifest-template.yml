@@ -64,7 +64,7 @@ settings:
   interactivity:
     is_enabled: true
     # Served by the application server, which commits consent before Slack is acknowledged; the
-    # compose stack routes this exact path there on the public host.
+    # Helm chart routes this exact path there on the public host.
     request_url: https://<host>/webhooks/slack/interactivity
   org_deploy_enabled: false
   socket_mode_enabled: false

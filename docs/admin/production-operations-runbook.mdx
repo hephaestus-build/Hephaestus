@@ -8,7 +8,7 @@ description: Safe deployment, incident containment, external feedback removal, a
 
 This runbook is for the **instance operator**.
 
-1. Before changing state, record the instance URL, Compose project, signed release lock, incident owner, and rollback point.
+1. Before changing state, record the instance URL, Helm release, signed release lock, incident owner, and rollback point.
 2. Keep credentials and feedback bodies out of tickets.
 
 :::caution[CAUTION: Before broad or unattended delivery]
@@ -81,23 +81,18 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 13. [Prepare the tested release](./upgrade#upgrade-the-host).
 14. Keep `AGENT_ENABLED=false` on server and worker roles.
 15. Keep Slack disabled and public ingress blocked.
-16. From `/opt/hephaestus/docker/self-host`, run the startup command below.
-
-    The command starts infrastructure and the application server with its required Compose dependencies.
-
-    ```bash
-    docker compose --env-file .env --env-file release-lock.env up -d --wait postgres nats-server application-server
-    ```
+16. Apply the verified chart with public routes disabled, reviews disabled and Slack disabled.
+    If this is a restored database, follow the [restore startup sequence](./kubernetes#restore).
 
 17. Verify migration completion.
 18. Before starting `webhook-server` or enabling reviews, read back silent mode.
 
-    Compose health alone does not verify the brake.
+    Pod readiness alone does not verify the brake.
 
 19. **Prove silence**. After readback, keep silent mode on.
 20. Set `AGENT_ENABLED=true` on the submitting server and claiming worker roles.
 21. Enable the intended review/Slack settings.
-22. Recreate affected containers.
+22. Upgrade the affected chart configuration.
 23. Keep restore-clone network isolation.
 24. Use controlled providers for clone drills.
 25. Run bounded reviews on controlled GitHub/GitLab work and Slack conversations for each enabled lane.
@@ -130,12 +125,12 @@ The silent deployment checklist above owns startup.
 
 ## Backup, restore and PostgreSQL × JetStream
 
-[Backup & restore](./backup-restore) owns the data inventory and logical dump commands. A dump restores
+[Backup & restore](./backup-restore) owns the data inventory and the backup and restore procedures. A dump restores
 one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled backups and WAL archiving
 ([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)). Require off-host
 backup freshness alerts and a verified restore before unattended delivery.
 
-The self-host Compose implementation and its schedule are in [Backup & restore](./backup-restore#automated-off-host-backup-self-host-compose).
+The chart backup implementation and its schedule are in [Backup and restore on Kubernetes](./kubernetes#backup-and-restore).
 The shared redacted backup status required by [Readiness](https://github.com/hephaestus-build/Hephaestus/issues/1547),
 [Operations](https://github.com/hephaestus-build/Hephaestus/issues/1387), and
 [System Information](https://github.com/hephaestus-build/Hephaestus/issues/1548) does not exist yet.
@@ -186,8 +181,7 @@ Snapshots include message payloads and, by default, consumers.
 ### Pre-boot isolation — mandatory for every restore
 
 The supported self-host clone needs a separate host.
-Its Compose project name and network/subnet are fixed.
-A different directory or `-p` alone does not provide isolation.
+A different Helm release name or namespace alone does not provide isolation.
 Silent mode permits model calls and control-plane traffic.
 A disabled Hephaestus row alone is never an isolation boundary.
 
@@ -202,19 +196,19 @@ A disabled Hephaestus row alone is never an isolation boundary.
 9. Set `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on Slack-capable roles.
 10. Withhold SCM write credentials, including app signing keys, PATs, and credentials encrypted **inside the restored database**.
 
-    Removal of `.env` seeds does not remove database-backed credentials.
+    Removal of environment seeds does not remove database-backed credentials.
 
 11. Keep network denial while inspecting those credentials.
 12. Before interactive access, turn off all conversation model rows.
     The restore-clone lockdown does this.
 13. Arrange admin authentication under isolation before the drill.
 14. If admin authentication is unavailable, stop.
-15. Review effective Compose configuration privately because it contains secrets.
-16. Verify that the variables reach the containers.
+15. Review site values and Secret key names through a protected process. Do not print credential values.
+16. Verify the chart renders each value for the role that reads it.
 17. Boot only infrastructure.
-18. Before any application role, run the [restore-clone lockdown](./backup-restore#automated-off-host-backup-self-host-compose) against the recovered database.
+18. Before any application role, run the [restore-clone lockdown](./kubernetes#isolated-restore-drill) against the recovered database.
 
-    The restore overlay refuses direct server, worker, and webhook starts.
+    Keep migration and every application role disabled until lockdown completes.
     Application-health inspection needs an operator-owned isolated override.
     The server submits and recovers reviews.
     The worker runs them.
@@ -240,7 +234,7 @@ Accept and record event loss rather than silently replaying a divergent buffer.
 The self-host broker publishes no host port.
 
 1. Stop publishers and consumers.
-2. Use an authenticated NATS CLI context for the intended instance on its isolated Compose network.
+2. Use an authenticated NATS CLI context for the intended instance on its isolated cluster network.
 3. Record each stream and consumer's configuration, sequence/ACK positions, and pending counts.
 4. Use these commands:
 
@@ -251,23 +245,23 @@ The self-host broker publishes no host port.
    ```
 
 5. Stop NATS.
-6. Identify the **exact** `nats-server` data mount through container inspection and Compose project labels.
+6. Identify the **exact** NATS PersistentVolumeClaim through its StatefulSet specification and Helm release labels.
 7. Preserve a cold snapshot and configuration in restricted incident storage.
 
    :::caution[CAUTION: Remove only confirmed instance storage]
-   Never use `down -v`, a wildcard, or the first volume name ending in `nats-data`.
+   Never delete storage by wildcard or by an unverified name suffix.
    On a shared broker, do not remove the broker volume.
    Have its owner export this instance's streams and consumers first.
    Have the owner delete/recreate only those streams and consumers.
    :::
 
-8. For a dedicated self-host broker, remove only that instance's `nats-server` container and confirmed `nats-data` volume.
+8. For a dedicated self-host broker, remove only that instance's stopped NATS workload and confirmed PersistentVolumeClaim.
 9. For a dedicated self-host broker, recreate NATS with an empty store.
 10. Run the isolated database migration first, then start the application server.
 11. Turn on silent mode and read it back.
 12. Start the isolated webhook role to recreate streams.
 
-    Its Compose dependency requires the completed database migration.
+    Start it only after the migration Job completes.
 
 13. Keep public ingress blocked.
 14. Verify that server consumers attach after streams exist.

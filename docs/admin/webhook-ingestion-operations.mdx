@@ -19,7 +19,7 @@ The reconciliation sync recovers their effect over `MONITORING_TIMEFRAME` days.
 
 ## Durability and availability
 
-The supported Compose topology runs one NATS server and every webhook stream has one replica (R1).
+The supported chart topology runs one NATS server and every webhook stream has one replica (R1).
 The bundled broker sets `sync_interval: always`, so it calls `fsync` for each message before
 acknowledging it. An acknowledged webhook or integration-sync event therefore survives host power
 loss or an unclean shutdown, provided the storage stack honors `fsync`. The
@@ -196,13 +196,9 @@ broker. See [Consumers that outlive their deployment](#consumers-that-outlive-th
 
 ## How long a delivery is actually kept
 
-Two environment files ship, with different numbers:
-
-- `docker/.env.example` (the reference deployment) keeps the application defaults below: `1GB` per
-  stream, `10GB` for GitHub, and a broker cap of `NATS_JS_MAX_FILE_BYTES=17179869184` (16 GiB).
-- `docker/self-host/.env.example` (one small host) sets `512MB` per stream, `6GB` for GitHub,
-  `NATS_JS_MAX_MEM=1G` and `NATS_JS_MAX_FILE_BYTES=10737418240` (10 GiB). At the 7-day age, its
-  GitHub bound fits about 460 MB of deliveries a day.
+The chart's default stream bounds are `1GB` per stream and `10GB` for GitHub.
+`nats.jetstream.maxFileBytes` sets the broker cap, with a default of 16 GiB.
+The selected profile can lower these values. Inspect the values that you deploy.
 
 The four configured stream bounds must fit within
 the broker's file-storage cap. Do not size that cap above the volume's available space.
@@ -257,8 +253,7 @@ The `small` chart profile selects its own [stream limits](./kubernetes#storage-a
 
 ## The storage budget, and why it is not just a number
 
-`NATS_JS_MAX_FILE_BYTES` is 16 GiB in `docker/.env.example` and without an override, and 10 GiB in `docker/self-host/.env.example`.
-It sets the broker's JetStream budget and the total against which the receiver checks per-stream bounds.
+The chart's `nats.jetstream.maxFileBytes` sets both the broker's JetStream budget and the receiver's storage-budget check.
 **The receiver refuses to start if the four bounds sum above that budget:**
 
 ```text
@@ -370,16 +365,15 @@ A wedged broker has these symptoms:
 - `webhook.publish` counts `outcome=failure`, and providers receive `503`.
 - `webhook.stream.poll.age` grows or shows `NaN`.
 - The NATS container logs write errors.
-- `docker compose --env-file .env --env-file release-lock.env ps` shows `nats-server` unhealthy but running.
+- The NATS Pod remains unready or restarts without recovering.
 
-Docker does not act on a failed healthcheck.
-The container therefore remains in that state indefinitely.
+Use the names below for a release named `hephaestus` in namespace `hephaestus`.
 
-1. **Confirm it is the disk.** On the broker host:
+1. **Confirm it is the disk.**
 
    ```bash
-   df -h                                    # free space on the JetStream volume
-   docker compose --env-file .env --env-file release-lock.env logs --tail=100 nats-server
+   kubectl -n hephaestus exec hephaestus-nats-0 -c nats -- df -h /data   # free space on the JetStream volume
+   kubectl -n hephaestus logs hephaestus-nats-0 --tail=100
    ```
 
    `no space left on device` on a JetStream write identifies this failure.
@@ -398,16 +392,18 @@ The container therefore remains in that state indefinitely.
 3. **Restart the broker**, which is the step that clears the wedge:
 
    ```bash
-   docker compose --env-file .env --env-file release-lock.env restart nats-server
+   kubectl -n hephaestus rollout restart statefulset/hephaestus-nats
+   kubectl -n hephaestus rollout status statefulset/hephaestus-nats --timeout=5m
    ```
 
 4. **Restart the receiver** so it re-establishes its connection and re-reconciles the streams:
 
    ```bash
-   docker compose --env-file .env --env-file release-lock.env restart webhook-server
+   kubectl -n hephaestus rollout restart deployment/hephaestus-webhook
+   kubectl -n hephaestus rollout status deployment/hephaestus-webhook --timeout=5m
    ```
 
-5. Before another incident, set `NATS_JS_MAX_FILE_BYTES` below the volume's actual free space.
+5. Before another incident, set `nats.jetstream.maxFileBytes` below the volume's actual free space.
 6. Bring the per-stream bounds under it.
    Startup deliberately refuses to run if they do not fit.
 
@@ -460,19 +456,15 @@ Those messages are not delivered.
 
 ## Who reaches the broker
 
-The Compose files publish the broker's client port 4222 on the host's loopback address only.
-A process on that host, such as an operator's tool, connects to `127.0.0.1:4222`.
-A stack on the same host connects over the Docker network `shared-network` to `nats-server:4222`.
-
-The single-host stack publishes no broker port.
-Reach its broker from a container on its network, or with `docker exec`.
-
-No other host reaches the broker.
+The chart exposes the broker on its private cluster Service.
+The NetworkPolicy admits only the roles that use NATS and the configured administrative clients.
+Do not add an internet Gateway route or a public Service for the broker.
+Use an authenticated NATS CLI context from an allowed administrative Pod.
 
 ## Broker image security scope
 
 The bundled broker uses standalone JetStream with user/password authentication and plain NATS
-with the host port bound to loopback. Its image assessment for CVE-2026-111943 applies to these
+on the private cluster network. Its image assessment for CVE-2026-111943 applies to these
 shipped launches. The certificate-verification code is present but its TLS, HTTPS resolver, OCSP
 and remote-cluster paths are not enabled.
 
@@ -482,35 +474,15 @@ applies to an external broker reached through a `tls://` application connection.
 
 ## Making a change actually reach the broker
 
-**Compose does not recreate NATS when only its config changes.**
-The broker configuration is supplied by a Compose `configs:` block.
-A content change does not change the container spec.
+Change the broker's chart values and upgrade the verified chart with your site values.
+The StatefulSet template includes the broker configuration checksum, so a configuration change restarts the broker.
+Wait for the StatefulSet rollout and check broker readiness before resuming traffic.
 
-:::caution[CAUTION: Restart loses active deliveries]
-Recreation preserves stored messages because JetStream data lives in the volume.
-GitHub deliveries in progress during the restart are redelivered within an hour. See [Failed GitHub deliveries](#failed-github-deliveries).
-For the other providers, reconciliation covers `MONITORING_TIMEFRAME` days afterward.
-:::
-
-1. After a configuration change, recreate the broker from the directory where the stack is deployed.
-2. For the self-host stack, run from `docker/self-host`:
-
-   ```bash
-   docker compose --env-file .env --env-file release-lock.env up -d --force-recreate nats-server
-   docker compose --env-file .env --env-file release-lock.env exec nats-server cat /etc/nats/nats-server.conf
-   ```
-
-3. For the multi-file Compose stack:
-
-```bash
-dc() { docker compose --env-file .env --env-file release-lock.env -p hephaestus-core -f compose.core.yaml "$@"; }
-dc up -d --force-recreate nats-server
-dc exec nats-server cat /etc/nats/nats-server.conf   # confirm the value you set
-```
+A restart preserves the JetStream volume but interrupts active deliveries.
+[Which providers deliver again](#which-providers-deliver-again) describes the recovery limits.
 
 ## Where these settings live
 
 Stream bounds are read by beans that only exist on the **webhook** runtime role. Setting them on the
 `application-server` container configures nothing at all — see [Runtime Roles](./runtime-roles.mdx).
-The reference Compose files put them on `webhook-server`, and a build-time check fails if they drift
-back.
+The chart puts them on the webhook role. `gate:env` checks the rendered configuration.

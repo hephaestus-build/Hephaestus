@@ -26,8 +26,7 @@ vp run --filter webapp export:assets --only extension
 ```
 
 Do not edit generated files under `webapp/public/`, `extension/public/icon/`, `docs/images/readme/`, or `docs/static/img/`.
-The exporter also synchronizes the maintenance-page mark in `webapp/docker/maintenance.html`. CI
-regenerates all of these outputs and fails when the committed result differs.
+CI regenerates all of these outputs and fails when the committed result differs.
 
 The exporter renders every output into a temporary directory.
 Only after all outputs render does it write to the repository.

@@ -75,9 +75,7 @@ Each stream deletes its oldest messages first when it reaches its age limit or i
 
 | Data | Retention | Where to change it |
 | --- | --- | --- |
-| Logs of the webapp, server, worker, PostgreSQL, and volume setup containers | By size only: 5 files of 50 MiB | The `logging` block of the service |
-| Logs of the webhook server, NATS, reverse proxy, and maintenance page | By size only: 3 files of 10 MiB | The `logging` block of the service |
-| Journal logs, with the optional journald overlay | The journal size limit of the host | `SystemMaxUse` in `journald.conf` |
+| Container logs       | The kubelet's configured size and file-count limits                    | The node's kubelet configuration |
 | Logs shipped to Loki | The retention that you set in Loki | Loki |
 | Traces | Off by default. The OTLP recipient keeps them under its own retention. | `TRACING_OTLP_ENABLED` |
 
@@ -87,7 +85,7 @@ No container writes an HTTP access log.
 
 | Data | Retention | Where to change it |
 | --- | --- | --- |
-| pgBackRest backups, with the optional backup overlay | Two full backups, with their differential backups and WAL. [Backup & restore](./backup-restore#automated-off-host-backup-self-host-compose) gives the schedule. | `repo1-retention-full` in `pgbackrest.conf` |
+| pgBackRest backups, when enabled in the chart | Two full backups, with their differential backups and WAL. [Backup & restore](./backup-restore#automated-off-host-backup) gives the schedule. | `postgresql.backup.retentionFull` in site values |
 | A plain `pg_dump` file | No automatic deletion | Delete the file yourself |
 
 A backup contains the whole database, so it also contains data that the instance deleted later.

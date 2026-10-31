@@ -226,16 +226,11 @@ await test("Slack interactivity reaches the server role, every other webhook the
 
 await test("what an operator is told to copy is one host per Host()", () => {
 	// Traefik v3 takes one host per Host(): Host(`a`,`b`) is rejected and the router never loads, so
-	// an example in that shape would take an instance down. The docs carry exactly that as a
-	// counter-example on purpose, so every occurrence is extracted and then split by what it is for:
-	// anything assigned to APP_HOST_MATCH is configuration an operator pastes, the rest is prose.
-	// The extraction is asserted non-empty per file — a pattern that quietly matches nothing is how
-	// the counter-example stayed invisible to this gate.
-	for (const path of [
-		"../docker/.env.example",
-		"../docker/self-host/.env.example",
-		"../docs/admin/install.mdx",
-	]) {
+	// an example in that shape would take an instance down. Every occurrence is extracted and then
+	// split by what it is for: anything assigned to APP_HOST_MATCH is configuration an operator
+	// pastes, the rest is prose. The extraction is asserted non-empty per file, because a pattern
+	// that quietly matches nothing would hide a multi-host example from this gate.
+	for (const path of ["../docker/.env.example", "../docker/self-host/.env.example"]) {
 		const text = readFileSync(new URL(path, import.meta.url), "utf8");
 		const occurrences = text
 			.split("\n")

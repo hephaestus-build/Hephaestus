@@ -46,10 +46,10 @@ Split the worker out when:
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
-The Helm chart runs the server and worker in separate Pods.
+The [Helm chart](./kubernetes) runs the server, worker and webhook roles in separate Pods.
 The server disables the worker role.
-The worker launches sandbox work through the Kubernetes API.
-No application role needs a Docker socket. The environment gate rejects that mount.
+The worker creates sandbox Pods through its Kubernetes service account.
+No application role needs a Docker socket.
 
 Split the webhook receiver out when:
 
@@ -89,14 +89,14 @@ Capability calls receive these responses:
 If the gateway cannot reach the store for rate-limit counts, it serves the call without a limit.
 It counts that failure under `sandbox.gateway.limiter.errors`.
 Thus, a limiter outage never stops a review.
-Traefik never routes to this port.
+The Gateway never routes to this port.
 
 To deploy a worker pod:
 
 1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.
 2. Give it the app pod's database. Workers and the app pod coordinate only through PostgreSQL.
 
-`docker/compose.app.yaml` contains a functional Compose template.
+The chart owns the worker Deployment and its role configuration.
 
 ## Build-only profiles
 
@@ -126,25 +126,14 @@ The wait reads the migration history and writes nothing.
 A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
 
 After `hephaestus.database.migration-wait` (`HEPHAESTUS_DATABASE_MIGRATION_WAIT`, default `10m`), the role stops.
-The bundled Compose stacks do not pass this variable, so the default applies there.
+Size this wait against the migration duration measured on a restored backup.
 Its error names the first change set that has not run.
 
 Run the migration once for each release, before the new roles start:
 
-- **Compose.** The shipped stacks contain a one-shot `database-migration` service.
-  The server and the worker start only after it completes successfully.
-  Run `docker compose run --rm -T --no-deps database-migration` first.
-  `--no-deps` keeps Compose from restarting PostgreSQL under the running roles.
-  The command ends with the exit status of the migration, and the previous roles keep serving until then.
-  If it fails, Compose replaces no role. Follow [Rollouts and rollback](#rollouts-and-rollback).
-  Then run `docker compose up -d` to replace the roles.
-  It stops the previous roles and runs the migration service again, which finds nothing to apply.
-  Then it starts the new roles.
-  A plain `docker compose up -d` alone stops the previous roles for the whole migration.
-  [Pull-based deployment](./pull-based-deployment#how-an-apply-stops-the-worker) runs the migration first.
-- **Kubernetes.** The [Helm chart](./kubernetes#upgrades) runs the migration as a Job of each revision, beside the new roles.
-  The server and worker roles wait for the Job.
-- **Other deployments.** Run the image once with the `migrate` profile, then start the new roles.
+The [Helm chart](./kubernetes#upgrades) runs a migration Job for each revision.
+The server and worker also check that the schema is current before they become ready.
+For a major cutover, [pull-based deployment](./pull-based-deployment#stopped-major-upgrades) stops every application writer before the migration.
 
 ### One migration at a time
 
@@ -176,13 +165,9 @@ Then roll forward to a release that fixes the problem.
 
 A failed migration stops at a change set boundary.
 The previous release can run on that partly migrated schema, but only if the release has no **Stop every role** entry in its migration guide.
-With the bundled Compose stacks, this is the default case:
-
-1. If `docker compose run --rm -T --no-deps database-migration` fails, do not run `docker compose up -d`.
-   The previous roles continue to serve.
-2. Correct the cause that the migration error names.
-3. Run the migration command again. It continues from that boundary.
-4. Run `docker compose up -d` to replace the roles.
+Keep the failed migration Job and its logs for diagnosis.
+Correct the cause and follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) before retrying the verified chart.
+A failed Helm status does not mean that the Job has stopped.
 
 A release whose migration guide entry starts with **Stop every role** is the exception.
 The previous release cannot run on its schema, and also not on a partly migrated one.
@@ -209,10 +194,8 @@ The webapp image runs nginx as an unprivileged user and needs no capabilities.
 | Writable path    | `/tmp/hephaestus-webapp` only. It holds the page shell, the runtime configuration and the nginx files. |
 | Root file system | Can be read-only                                                                            |
 
-The Compose stacks run the container with a read-only root file system, all capabilities dropped and `no-new-privileges`.
-They mount a 16 MiB `tmpfs` at `/tmp/hephaestus-webapp`, owned by UID 101 with mode `0700`.
-The maintenance page uses the same image and the same settings.
-The Helm chart sets the same constraints.
+The chart runs the container with a read-only root file system, all capabilities dropped and privilege escalation disabled.
+It mounts a 16 MiB `emptyDir` at `/tmp/hephaestus-webapp` with `fsGroup: 101`.
 If you run the image on another platform, mount an empty directory at `/tmp/hephaestus-webapp` that UID 101 can write, for example an `emptyDir` with `fsGroup: 101`.
 To mount legal overrides, see [Legal Pages](./legal-pages).
 
@@ -252,7 +235,7 @@ The webhook role reads no connection, so it does not need the allowlist.
 1. Supply the same allowlist to the server and the worker.
 2. After a change, restart both roles.
 
-The reference Compose files supply the allowlist automatically.
+The chart gives both roles the configured allowlist.
 
 Identical rows across the columns are **not** role-specific.
 They are instance-wide defaults, shown per role because operators ask per role.
@@ -306,13 +289,8 @@ The worker application HTTP endpoint binds to loopback. Every role has a separat
 management listener on port **9090**, including a single-JVM topology. Management does not run on
 `SERVER_PORT`. See [Observability](./observability#scrape-metrics) for network restrictions.
 
-One row reads differently from what a bare `docker compose up` produces, because the shipped compose
-file sets the env var the base default leaves off:
-
-- `sync.nats.enabled` is `${NATS_ENABLED:false}` in `application-prod.yml`, but `docker/compose.app.yaml`
-  passes `NATS_ENABLED: ${NATS_ENABLED:-true}` to `application-server` — so the compose server pod runs
-  with NATS **on**. The `webhook` overlay pins it `true` regardless (it needs the shared `Connection`
-  bean). The `worker` overlay pins it `false` (the job queue is PostgreSQL, ADR 0025).
+The chart enables the NATS consumer on the server and the publisher on the webhook role.
+The worker uses the PostgreSQL job queue and does not connect to NATS (ADR 0025).
 
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
 Server maintenance runs independently of this flag:
@@ -639,7 +617,10 @@ The first read of a turn attempt takes one turn sandbox.
 The worker removes it when the attempt ends.
 Each worker also keeps a pool of 2 empty turn sandboxes, so that a turn does not wait for a container start.
 
-Plan for these containers on each worker, beside the review sandboxes and the conversation host:
+[Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes) owns each turn sandbox's requests and limits.
+The [conversation admission budget](./sizing#conversation-turn-admission) counts tools Pods separately from resident turns.
+Turn sandboxes have no network and use the release's agent image.
+Their Pods have the label `hephaestus.kind=heph-sandbox`.
 
 - One turn sandbox for each running conversation turn that reads, at most `hephaestus.worker.capacity.mentor-max`.
 - 2 empty turn sandboxes in the pool.
@@ -700,9 +681,8 @@ A load test that asks more questions as one account must raise the capacity.
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.
-The Compose files forward only the capacity, as `HEPHAESTUS_WORKER_MENTOR_MAX`.
-To change another key, add its environment variable to the services with a Compose override.
-An example is `HEPHAESTUS_MENTOR_TURN_LEASE`.
+Set `worker.conversationTurns` for turn capacity.
+Use the [configuration reference](./configuration-reference) for the chart-owned configuration of the other properties.
 
 [Observability](./observability.mdx#conversation-turn-metrics) lists the conversation turn metrics.
 
@@ -733,14 +713,12 @@ Review capacity then sizes from `Runtime.availableProcessors()`.
 Override them only if the host is noisy.
 
 The JVM binds `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` and `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
-The shorter `HEPHAESTUS_WORKER_REVIEW_MAX` and `HEPHAESTUS_WORKER_MENTOR_MAX` are **Compose-file aliases only**.
-`docker/compose.app.yaml` translates them.
-A Kubernetes or systemd deployment ignores them without a warning.
+Set `worker.reviews` and `worker.conversationTurns` through the chart.
 
 `SANDBOX_MAX_CONCURRENT` also caps review capacity.
 A worker never claims a review when it already runs as many review sandboxes as the host permits.
 A review that only writes its feedback holds no sandbox, so it does not count.
-The single-host self-hosted Compose file sets this limit to 1.
+The selected chart profile owns this limit.
 A higher review capacity there has no effect until you also raise the sandbox limit.
 
 1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.

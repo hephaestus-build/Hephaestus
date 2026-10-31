@@ -4,238 +4,30 @@ description: Move an existing 0.95.0 installation to Kubernetes without changing
 page_type: how-to
 ---
 
-Use this procedure to move an existing installation to the Helm chart.
-
-First upgrade Compose to `0.95.0`.
-Keep that application version during the move.
-
-Complete the move before the upgrade to `1.0`.
+The deployment move uses release `0.95.0` on both sides.
 Do not change the application version and deployment in one step.
-[ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) records the release order.
 
 ## Before you start
 
-You need administration access to the source host, cluster, DNS and backup destination.
-The procedure stops the application. Set its outage budget from the rehearsal.
+Use the signed release assets and instructions of the installed version.
+Do not use files from the current release to run the old deployment.
+Rehearse the move and recovery on an isolated copy before the outage.
 
-- Read the release notes and every migration fragment between your installed release and 0.95.0.
-- Prepare a Kubernetes cluster, or k3s on one host, as [Kubernetes](./kubernetes) describes.
-- Verify the chart, image digests, signatures, provenance, SBOM and vulnerability-policy result for 0.95.0.
-- Record the source images, Compose files, environment files, volume names, owners and restart policies.
-- Record silent mode, delivery status, review triggers and conversation bindings before changing their control settings.
-- Keep the database login, encryption keys, auth keys, provider credentials, webhook keys and signed release locks outside the host.
-- Choose an off-host backup destination and an outage budget.
-- Rehearse the move and a rollback with an isolated copy of your data.
+## Move the installation
 
-:::caution[CAUTION: One owner of the data]
-Never start Compose and Kubernetes against the same data directories at the same time.
-A PVC with `ReadWriteOnce` does not stop a Docker process on the same host.
-Pause reconciliation and automatic restarts before the move.
-Keep the old files, images and volumes until the rollback window ends.
-:::
-
-## Choose how to move the storage
-
-On the same host, static local PVs can adopt the stopped Docker volumes without copying their data.
-Use PVs with `Retain`, required node affinity and prebound PVCs.
-The application Pods mount PVCs, not `hostPath` volumes.
-For a different host, restore a verified backup into separate target volumes instead.
-
-Check these facts before choosing in-place adoption:
-
-| Source | Required target check |
-| --- | --- |
-| PostgreSQL | Same major version, extensions, data layout and database login. The 0.95 chart uses PostgreSQL 18. |
-| PostgreSQL volume | Mount its root at `/var/lib/postgresql`, with PGDATA below `18/docker`. The chart runs user 999. |
-| NATS | Same signed image version and account/store layout. Mount the volume root at `/data`. |
-| NATS ownership | The chart runs user and group 1000. Record the source ownership and rehearse any change. |
-| Free disk | Enough for k3s, images, WAL, compaction and the measured workload, with an emergency reserve. |
-
-The chart's `fsGroupChangePolicy` is `OnRootMismatch`.
-Check the volume root's group and permissions, not only PGDATA.
-Each writable local PV root must match its Pod's fsGroup, with group read, write and execute permissions and the setgid bit.
-After the source stops, prepare only the PostgreSQL mount root as 999:999 with mode 2770.
-
-Preserve PGDATA and its children. Do not apply that mode recursively.
-Rehearse the mount with the same numeric owners and modes.
-PostgreSQL must retain a restrictive PGDATA mode, such as 0700 or 0750.
-Do not recursively chmod its files.
-
-For NATS, verify that user 1000 can read and write every stored file and directory.
-While NATS is stopped, change its adopted tree's ownership to 1000:1000 as rehearsed.
-Set its mount root to mode 2770. Do not recursively chmod the NATS tree.
-
-The examples use the Helm release name and namespace `hephaestus`.
-For another release name, derive each claim name as `data-<statefulset-name>-0` from the rendered StatefulSet names.
-Use the target namespace in each claim and `claimRef`.
-
-For each adopted volume, create a PV with these fields:
-
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: hephaestus-adopted-postgresql
-spec:
-  capacity:
-    storage: 20Gi
-  volumeMode: Filesystem
-  accessModes: [ReadWriteOnce]
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: hephaestus-adopted
-  claimRef:
-    namespace: hephaestus
-    name: data-hephaestus-postgresql-0
-  local:
-    path: /absolute/path/to/the/stopped/postgresql-volume-root
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values: [the-source-node]
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: data-hephaestus-postgresql-0
-  namespace: hephaestus
-spec:
-  accessModes: [ReadWriteOnce]
-  volumeMode: Filesystem
-  storageClassName: hephaestus-adopted
-  volumeName: hephaestus-adopted-postgresql
-  resources:
-    requests:
-      storage: 20Gi
-```
-
-Create the StorageClass with provisioner `kubernetes.io/no-provisioner` and `volumeBindingMode: WaitForFirstConsumer`.
-Use the actual node name and existing directory.
-Create the corresponding NATS PV and `data-hephaestus-nats-0` claim with the NATS volume root.
-Its size must cover the chart's claim: 125% of `nats.jetstream.maxFileBytes`.
-Declared PV capacity does not reserve space on the host filesystem.
-
-Set both persistence `storageClassName` values to `hephaestus-adopted` in `site.yaml`.
-Keep `postgresql.persistence.size` equal to its claim request.
-Precreate both claims before the chart's StatefulSets.
-Verify the bound PV, claim UID, node and source path.
-Stop if dynamic provisioning made an empty replacement volume.
-
-Carry the existing broker file budget, stream age and stream byte bounds into `site.yaml` for the adoption.
-Keep `webhook.stream.allowDestructiveLimitUpdates` false.
-Apply the [small-profile stream limits](./kubernetes#storage-and-retention) only through a separate approved retention change.
-Do not lower the broker budget below its stored data or shrink an existing claim.
-
-## Prepare backups and the target
-
-1. Back up PostgreSQL with the source release's tools.
-2. Take broker-supported JetStream snapshots with consumer state. Do not copy live broker files.
-3. Copy the backups, checksums, signed locks and protected keys off-host.
-4. Restore the pair into isolated staging storage, then verify schema, relationships, encrypted values and broker sequence state.
-5. Follow [Pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) before application code starts.
-6. Prepare the chart Secret with the existing keys, without printing its values.
-7. Prepare PostgreSQL TLS and the backup client certificate as [Kubernetes](./kubernetes#postgresql-tls-secret) describes.
-8. Map the source settings into chart values. Check GitHub, GitLab, Slack, Outline, email and model endpoints separately.
-9. Preserve the public origin and exact OAuth callbacks. Prepare wildcard DNS and DNS-01 TLS if workspace subdomains are enabled.
-10. Prepare Gateway certificates before opening its listeners. Verify both apex and wildcard names privately.
-
-A PostgreSQL dump and separate broker snapshots are not an atomic recovery point.
-Record their recovery fence and the broker recovery strategy before consumers start.
-[Backup and restore](./production-operations-runbook#backup-restore-and-postgresql--jetstream) owns those checks.
-Keep provider egress denied on a restored clone, independently of silent mode.
-
-For an isolated rehearsal clone, apply the verified chart's lockdown SQL before migrations or application roles start.
-The SQL pauses delivery and reviews and disables conversation bindings.
-Do not apply clone lockdown to the adopted source data directories.
-[Restore](./kubernetes#restore) gives the database-only phase and command.
-
-The installer accepts Ubuntu 24.04 with its 6.8 GA kernel as its declared host baseline.
-For an explicitly authorized rehearsal on another family, use `--allow-unqualified-host`.
-This includes Ubuntu 26.04 with kernel 7.
-The override retains the effective kubelet policy and allocatable checks. It does not establish host qualification.
-Complete the [host qualification](./kubernetes#install-on-one-host-k3s) before target-host rollout.
-
-The node policy uses hard emergency eviction thresholds. Soft eviction is disabled.
-Keep this policy during the move. Higher Pod priority alone does not protect PostgreSQL or NATS above their memory requests.
-[The host policy](./kubernetes#install-on-one-host-k3s) owns the limits and pressure checks.
-
-The one-host installer performs a fresh installation, including certificates and application startup.
-It refuses ports 80 and 443 while the old edge owns them.
-Do not run it unchanged against a live Compose stack.
-Prepare its signed platform files and use the rehearsed phases for listener and application startup.
-
-## Stop the source and upgrade it to 0.95.0
-
-1. Pause the deployment reconciler. Wait for an active reconcile to finish.
-2. Record and disable automatic restart policies for the source containers.
-3. Close user traffic and provider reception. Record each provider's retry or reconciliation procedure.
-4. Drain and stop the worker. Wait for every sandbox to stop.
-5. Stop the server and webhook receiver. Verify that no application role remains.
-6. With PostgreSQL and NATS alone, take the final fenced recovery pair. Verify its off-host copy.
-7. Run the signed 0.95 migration image alone, as [Upgrade](./upgrade) describes.
-8. Start and verify Compose 0.95.0 under isolation. No previous-version role may use its new schema.
-9. Take a verified 0.95 recovery pair for the deployment move.
-10. Stop the application roles and sandboxes again. Stop PostgreSQL cleanly, then NATS.
-
-Skip the version upgrade only if the source already runs 0.95.0 and its migrations are verified.
-Do not use an automatic image rollback for this stopped schema upgrade.
-
-## Start the chart at the same version
-
-1. Verify that no source process holds either data directory.
-2. Apply the rehearsed ownership changes while both data services are stopped.
-3. Bind the retained local PVs, or restore into separate target storage. Verify their paths before starting a StatefulSet.
-4. Keep the public listeners closed. Keep server, worker and webhook replicas at zero.
-5. Install the verified chart with your profile and values. Keep `migration.enabled=false` during the data checks.
-   For an isolated restore clone, also complete its lockdown SQL before enabling migration.
-6. Verify PostgreSQL and NATS versions, data paths, counts, TLS and broker limits.
-7. Set `migration.enabled=true`, start the server alone, and wait for the migration Job and readiness.
-8. Verify authenticated reads, encrypted credentials and configuration readiness.
-9. Start the worker. Require its isolation probe before any review or conversation test.
-10. Test an approved practice review and conversation under the rehearsal's isolation policy.
-11. Open traffic only after the health and rollback checks pass.
-12. Start the webhook receiver. Verify reception and the outage recovery procedure for each connected provider.
-13. Restore the recorded control settings only for the live target after its checks pass.
-    Keep rehearsal clones locked down.
-    Restore provider egress and feedback delivery deliberately.
-    Check the reviewed work, practice pages and conversation destinations.
-14. Enable off-host PostgreSQL and JetStream backups, with a tested restore and age alerts.
-
-On the same IP, replacing the edge listener is the traffic switch even when DNS stays unchanged.
-Do not start the new listener before the old listener stops.
-Use [Workspace subdomains](./workspace-subdomains#helm-chart-and-k3s) to check redirects, tenant hosts and the apex API boundary.
-Verify long streams and cancellation through the Gateway.
-
-Keep stream retention changes separate from storage adoption.
-Shrinking a stream can remove messages that a consumer still needs.
-Verify live consumers and a recovery point before an explicitly approved retention change.
+1. Upgrade the Compose installation to `0.95.0` with its versioned upgrade instructions.
+2. Follow the [0.95.0 deployment move](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/compose-to-kubernetes.mdx).
+   That guide owns the backup, writer stop, data move, isolation and rollback sequence.
+3. Apply `0.95.1` after the move succeeds.
+4. Install its reconciler tooling before upgrading to the chart-only release.
+   Use the [0.95.1 tooling instructions](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.1/docs/admin/pull-based-deployment.mdx#follow-a-channel-with-the-chart).
+5. Follow [Upgrade from 0.x to 1.0](./upgrade-to-1-0) for the stopped cutover.
 
 ## Check that it worked
 
-- Every runtime role reports the 0.95.0 commit and the images from its signed lock.
-- PostgreSQL uses the intended data directory. Its migration lock is clear.
-- JetStream has the expected streams, sequences, durable state and retained limits.
-- The worker passes isolation after startup and after the planned reboot test.
-- The apex, workspace hosts, OAuth callbacks and all connected providers work through the new edge.
-- The first off-host backup completes and restores in isolation.
-- Reconciliation uses a verified release-chart path before you resume its timer.
+Before changing the application version, complete the versioned move's acceptance checks.
+Confirm that only the chart deployment owns the data.
+Keep the verified pre-move recovery set until the move passes those checks.
+If the move fails, use that guide's rollback procedure before restoring traffic.
 
-## Undo
-
-Close traffic and provider egress first.
-Stop Kubernetes application roles and sandboxes, then PostgreSQL and NATS.
-Confirm that no target process holds the source directories.
-Interlock k3s against an automatic restart before Compose takes its ports and storage.
-
-For a deployment rollback at 0.95.0, start the preserved Compose 0.95 data services on their original volumes.
-The shared directories retain writes made on Kubernetes.
-Verify schema, sequence state and encrypted values before starting application roles or opening traffic.
-Rehearse the original root NATS container's access after the ownership change.
-
-To return to a version before 0.95.0, restore its matching backup into fresh recovery storage.
-Do not start that version on the 0.95 schema.
-Preserve the failed data for investigation.
-Report the actual recovery point and any lost writes.
-Keep reconciliation paused until its channel and apply mode match the chosen deployment.
+After the move, use [Kubernetes](./kubernetes) for installation and upgrades.

@@ -5,43 +5,28 @@ description: The deployment settings of every optional integration bundle, email
 ---
 
 This page owns the deployment settings of the optional integrations: GitLab, Slack, Outline, practice review, email, and sync.
-[Kubernetes](./kubernetes) and the deprecated [Docker Compose install](./install) own the base installation.
+[Kubernetes](./kubernetes) owns the installation and site values.
 [First steps](./first-steps) owns the GitHub OAuth app and the first admin.
 
 [Integrations](./integrations) owns the workspace connections that a workspace admin makes in the UI.
 [Runtime roles](./runtime-roles#webapp-container) owns the container contract of the webapp image.
 The [Install guide](./install#clocks) owns the clock requirement.
-The [Configuration reference](./configuration-reference) lists every variable with its default.
+The [Configuration reference](./configuration-reference) maps application variables to chart values and Secret keys.
 
 <a id="clocks"></a>
 
 ## Base environment variables
 
-These base values are required.
-On Kubernetes, [Secret custody](./secret-custody#inventory) gives their lifecycle constraints.
-On Docker Compose, the [Install guide](./install#2-configure-env) gives them.
-[First steps](./first-steps) covers the login provider and the first admin.
-
-- `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
-- `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
-- `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`.
-- `WEBHOOK_SECRET` and `WEBHOOK_ROUTING_SECRET`.
-- `POSTGRES_PASSWORD`.
-- One login provider.
-- `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS`.
-
-The self-host installer generates its internal secrets.
-Operators of the multi-file Compose stack must supply equivalent values through their own secret management.
-Rotate integration credential keys with the [credential-key rotation procedure](./credential-key-rotation).
-
-These deployment settings complement the install table. `SECURITY_CONTACT` and
-`HEPHAESTUS_RESEARCH_ORGANIZATION` also ship in the self-host `.env.example`:
+Set non-secret chart values in `site.yaml`.
+Store credentials in the referenced Secret.
+The [Configuration reference](./configuration-reference) gives the binding of each variable below.
+[Secret custody](./secret-custody) owns the required keys and their rotation.
 
 | Variable                                                                                          | Purpose                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED`                                                              | Supplies the public activity instance default (`false`). A stored administrator choice takes precedence. Workspace publication also requires its own setting. See [Public activity pages](./public-activity).                                                                                                                                                                          |
 | `HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE`                                        | Limits public visibility to recent successful repository syncs (`48h`). Use twice your metadata sync interval. See [Public activity pages](./public-activity).                                                                                                                                                                                                                         |
-| `PAGE_EXPERIENCE_METRICS`                                                                         | Lets readers' browsers report how fast pages load and respond (`false`). In the EU, this can require consent or a documented legal basis. See [Page experience](./legal-pages#page-experience).                                                                                                                                                                                        |
+| `config.pageExperienceMetrics`                                                                    | Lets readers' browsers report how fast pages load and respond (`false`). In the EU, this can require consent or a documented legal basis. See [Page experience](./legal-pages#page-experience).                                                                                                                                                                                        |
 | `SECURITY_CONTACT`                                                                                | One `mailto:`, `https://` or `tel:` URI, the security contact of this deployment. With it, the webapp serves `/.well-known/security.txt`. Empty serves none. Canonical is `APPLICATION_CLIENT_URL` only for one `https://` origin without workspace addresses. It expires 364 days after the container start. Every release restarts the webapp.                                       |
 | `HEPHAESTUS_RESEARCH_ORGANIZATION`                                                                | Names the organization that runs optional research on this deployment. With a value, first-login setup asks each account **Allow research use of your data?** and shows this name. Empty by default. With no value, it never asks. A change to the value asks every account again. Read the operator obligations in [Legal Pages](./legal-pages#the-optional-research-question) first. |
 | `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host.                                                                                                                                                                    |
@@ -57,33 +42,6 @@ Generate the spec at build time instead.
 
 :::
 
-:::caution[CAUTION: `docker/.env` does not forward every setting]
-
-The shipped Compose files forward `SECURITY_CONTACT`, so its `docker/.env` value works.
-They do **not** forward these settings:
-
-- **`HEPHAESTUS_AUTH_ISSUER`:** `application-server` fixes it at `https://${APP_HOSTNAME}`.
-- **`SPRINGDOC_API_DOCS_ENABLED` and `SPRINGDOC_SWAGGER_UI_ENABLED`:** Compose does not forward them.
-- **The two OAuth redirect variables:** no Compose file passes them through, so defaults still apply.
-- **`HEPHAESTUS_DEV_SEED_ENABLED`:** a flag for local development only. It adds endpoints that write practice versions and feedback. Never set it in production.
-
-Values for these settings only in `docker/.env` have no effect.
-To change the issuer, change `APP_HOSTNAME`.
-To override any of these settings, add it to the `application-server` service's own `environment:` block.
-Leave the API description endpoints disabled unless you supply an explicit service environment override.
-
-:::
-
-:::caution[CAUTION: `GH_`, not `GITHUB_`]
-
-The GitHub OAuth keys in `docker/.env` are `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
-GitHub Actions reserves the `GITHUB_` prefix.
-Compose maps the keys to `GITHUB_OAUTH_CLIENT_ID` / `_SECRET` on the server.
-A `GITHUB_OAUTH_CLIENT_ID` value directly in `docker/.env` has no effect.
-The provider is skipped, with no sign-in button.
-
-:::
-
 ### Slack app configuration
 
 After you create the app, upload [`slack-app-icon-512.png`](/img/brand/slack-app-icon-512.png) as its icon.
@@ -93,8 +51,8 @@ Do not round the asset before upload.
 | Variable                                              | Purpose                                                                                                                                                                                         |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEPHAESTUS_INTEGRATION_SLACK_ENABLED`                | Enables the Slack OAuth admin surface (per-workspace connect). Off by default.                                                                                                                  |
-| `SLACK_OAUTH_CLIENT_ID` / `SLACK_OAUTH_CLIENT_SECRET` | Seed the Slack account-linking provider. If unset, they fall back to the workspace-install OAuth credentials below. Compose forwards the integration credentials, not these separate overrides. |
-| `SLACK_OAUTH_DISPLAY_NAME`                            | Account-linking button label, default `Slack`. A Compose change requires an explicit application-server environment override.                                                                   |
+| `SLACK_OAUTH_CLIENT_ID` / `SLACK_OAUTH_CLIENT_SECRET` | Seed the Slack account-linking provider. If unset, they fall back to the workspace-install OAuth credentials below. Set the chart values and Secret keys listed in [Integration values](./kubernetes#integration-values). |
+| `SLACK_OAUTH_DISPLAY_NAME`                            | Account-linking button label, default `Slack`. Configure it through the chart.                                                                                                                                            |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID`              | Slack app client ID used by the OAuth flow                                                                                                                                                      |
 | `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET`          | Slack app client secret used by the OAuth flow                                                                                                                                                  |
 | `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI`           | Required whenever Slack is enabled. Use the public application-server callback URL, including any proxy path prefix — e.g. `https://<host>/api/oauth/callback/slack`.                           |
@@ -106,7 +64,7 @@ There is no global bot token.
 
 When Slack is enabled, configure one Slack app.
 OAuth URLs use the public application-server base URL, including any proxy path prefix.
-In the production compose stack, that base is `https://<host>/api`.
+In the Helm chart, that base is `https://<host>/api`.
 
 1. Add `<api-public-base-url>/oauth/callback/slack` to **OAuth redirect URLs** for workspace app installation.
 2. Add `<api-public-base-url>/login/oauth2/code/slack` for member account linking.
@@ -133,7 +91,7 @@ Route this exact path to the application-server role, without stripping its pref
 - `/webhooks/slack/interactivity`.
 
 Its rule must outrank the webhook role's `/webhooks` prefix rule.
-The production compose stack routes it this way on the public host.
+The Helm chart routes it this way on the public host.
 If the webhook receiver has a separate public host, point the **Interactivity request URL** at a host that reaches the application server.
 
 Route OAuth and account-linking paths to the application-server role:
@@ -242,7 +200,7 @@ A workspace admin cannot approve a new operator by entering its URL.
 | `OUTLINE_OAUTH_DISPLAY_NAME`                     | Label shown on the account-linking button (defaults to `Outline`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Set `HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED` on **all three** roles.
-The compose files pass the same value to each:
+The charts pass the same value to each:
 
 - **application-server:** connect/admin API, collection registration, reconcile scheduler, and webhook-subscription registrar.
 - **application-worker:** assembles agent context.
@@ -325,9 +283,9 @@ For a GitLab practice-review rollout, enable this bundle together:
 | `GITLAB_ENABLED`                  | Enables GitLab on the application server and every worker. The webhook receiver does not read it. Without it, a worker cannot check out merge requests. Each claimed GitLab review fails preparation with `SCM Git preparation is unavailable`. It stops before any result.                                                                                                                                           |
 | `GITLAB_WORKSPACE_CREATION`       | Enables GitLab workspace creation in the UI and API                                                                                                                                                                                                                                                                                                                                                                   |
 | `WEBHOOK_SECRET`                  | Instance-wide secret for GitHub webhook verification and operator-created GitLab hooks on shared `POST /webhooks/gitlab` (`X-Gitlab-Token`). Hephaestus group hooks instead use the connection endpoint and signed route credential. See `WEBHOOK_ROUTING_SECRET`. For manually supplied signing tokens on GitLab 19.0 and later, only the signature verifies the hook. This value must then be that `whsec_…` token. |
-| `WEBHOOK_ROUTING_SECRET`          | Signs each Hephaestus-registered GitLab group hook token. Each hook can deliver only for its registered GitLab connection. Requires at least 32 characters. Must differ from `WEBHOOK_SECRET` and every encryption key. Give the application server and webhook receiver the same value. Required for every production deployment, including GitHub-only instances. Compose and readiness reject absent values.       |
+| `WEBHOOK_ROUTING_SECRET`          | Signs each Hephaestus-registered GitLab group hook token. Each hook can deliver only for its registered GitLab connection. Requires at least 32 characters. Must differ from `WEBHOOK_SECRET` and every encryption key. Give the application server and webhook receiver the same value. Required for every production deployment, including GitHub-only instances. The chart and readiness checks reject absent values. |
 | `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Previous value, used only during `WEBHOOK_ROUTING_SECRET` rotation. Its signed hooks keep delivering until registration replaces them with new-value hooks. After replacement, remove it.                                                                                                                                                                                                                             |
-| `WEBHOOK_EXTERNAL_URL`            | Public GitLab webhook base URL. Reference Compose leaves it unset so auto-registration derives it from the application host URL. For an override, add it to the `application-server` service's `environment:` block.                                                                                                                                                                                                  |
+| `WEBHOOK_EXTERNAL_URL`            | Public GitLab webhook base URL. If unset, auto-registration derives it from the application host URL. Use the chart configuration for an override.                                                                                                                                                                                                                                                                       |
 
 The login provider supports gitlab.com by default.
 For self-hosted GitLab, set `GITLAB_OAUTH_BASE_URL` to that instance.
@@ -447,7 +405,7 @@ Each defaults to off or its standard value:
 Conversation turns run in the conversation host of a worker, for both the webapp and Slack DMs.
 The application server keeps the conversation store and makes a first admission check when a question arrives.
 The worker admits the turn again, with the budget check, and builds the turn's context.
-With its worker role disabled, it creates no Docker client.
+With its worker role disabled, it creates no sandbox backend.
 A turn waits in the queue until a worker has free capacity.
 
 [Runtime roles](./runtime-roles.mdx#conversation-turns) owns dispatch, leases, drain, and the conversation host.
