@@ -112,6 +112,45 @@ class BrowserFaultsControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
+    void shouldRecordAFailedRequestWithTheTraceItHit() {
+        var request = new HashMap<String, Object>(fault("HTTP_5XX", "0.95.1", "CRYwA6-M"));
+        request.put("kind", "REQUEST_FAILED");
+        request.put("traceId", "4bf92f3577b34da6a3ce929d0e0e4736");
+        request.put("status", 503);
+        var counter = registry.find("browser.faults")
+                .tags("kind", "request_failed", "page", "other", "error_type", "http_5xx")
+                .counter();
+        double before = counter == null ? 0 : counter.count();
+
+        anonymously(Map.of("faults", List.of(request)), "same-origin")
+                .expectStatus()
+                .isNoContent();
+
+        assertThat(registry.get("browser.faults")
+                        .tags("kind", "request_failed", "page", "other", "error_type", "http_5xx")
+                        .counter()
+                        .count())
+                .isEqualTo(before + 2);
+    }
+
+    @Test
+    void shouldRefuseAnErrorTypeThatDoesNotFitItsKindOrATraceOutsideAFailedRequest() {
+        var chunkAsScript = new HashMap<String, Object>(fault("TYPE_ERROR", "0.95.1", "CRYwA6-M"));
+        chunkAsScript.put("kind", "CHUNK_LOAD_FAILED");
+        var traceOnScript = new HashMap<String, Object>(fault("TYPE_ERROR", "0.95.1", "CRYwA6-M"));
+        traceOnScript.put("traceId", "4bf92f3577b34da6a3ce929d0e0e4736");
+        var statusOnNetwork = new HashMap<String, Object>(fault("NETWORK", "0.95.1", "CRYwA6-M"));
+        statusOnNetwork.put("kind", "REQUEST_FAILED");
+        statusOnNetwork.put("status", 502);
+
+        for (Map<String, Object> inconsistent : List.of(chunkAsScript, traceOnScript, statusOnNetwork)) {
+            anonymously(Map.of("faults", List.of(inconsistent)), "same-origin")
+                    .expectStatus()
+                    .isBadRequest();
+        }
+    }
+
+    @Test
     void shouldRefuseAReportThatAnotherSiteSentOrThatIsTooLarge() {
         double before = faults("type_error");
         var report = Map.of("faults", List.of(fault("TYPE_ERROR", "0.95.1", "CRYwA6-M")));

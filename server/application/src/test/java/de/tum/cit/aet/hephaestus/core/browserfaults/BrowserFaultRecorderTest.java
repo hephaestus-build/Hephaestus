@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.browserfaults.BrowserFaultsDTOs.Kind;
 import de.tum.cit.aet.hephaestus.core.webvitals.WebVitalsDTOs.Page;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,7 +28,10 @@ class BrowserFaultRecorderTest extends BaseUnitTest {
     void shouldExposeEverySeriesAtZeroBeforeTheFirstFault() {
         var counters = registry.find("browser.faults").counters();
 
-        assertThat(counters).hasSize(Kind.values().length * Page.values().length * ErrorType.values().length);
+        int combinations = Arrays.stream(Kind.values())
+                .mapToInt(kind -> kind.errorTypes().size() * Page.values().length)
+                .sum();
+        assertThat(counters).hasSize(combinations);
         assertThat(counters).allSatisfy(counter -> assertThat(counter.count()).isZero());
     }
 
@@ -45,7 +49,9 @@ class BrowserFaultRecorderTest extends BaseUnitTest {
                             ErrorType.TYPE_ERROR,
                             "0.95.1",
                             List.of(new FrameDTO("CRYwA6-M", 1, 2345), new FrameDTO("DqCAn3iK", 3, 17)),
-                            3),
+                            3,
+                            null,
+                            null),
                     false);
 
             assertThat(registry.get("browser.faults")
@@ -64,7 +70,8 @@ class BrowserFaultRecorderTest extends BaseUnitTest {
                     .containsEntry("browser.release", "0.95.1")
                     .containsEntry("browser.fault.count", 3)
                     .containsEntry("browser.fault.frames", "CRYwA6-M:1:2345 DqCAn3iK:3:17")
-                    .containsEntry("browser.signed_in", false);
+                    .containsEntry("browser.signed_in", false)
+                    .doesNotContainKey("browser.request.trace_id");
         } finally {
             logger.detachAppender(appender);
         }

@@ -1,9 +1,12 @@
 import { noop } from "@tanstack/react-query";
 import type { AnyRouter } from "@tanstack/react-router";
+import type { RootOptions } from "react-dom/client";
 
+import type { Client } from "@/api/client";
 import { reportBrowserFaults } from "@/api/sdk.gen";
 import type { BrowserFault, Frame } from "@/api/types.gen";
 import environment from "@/environment";
+import { problemStatusOf } from "@/lib/problem-detail";
 import { journeyPageOf } from "@/runtime/web-vitals";
 
 /** The most distinct faults that one document reports. A page that keeps failing adds counts, not reports. */
@@ -58,19 +61,36 @@ export function framesOf(error: unknown, origin = location.origin): Frame[] {
 	return frames;
 }
 
+/** What a failure adds to its fault, beyond its error. */
+interface Failure {
+	errorType?: BrowserFault["errorType"];
+	traceId?: string;
+	status?: number;
+}
+
+/** The page's fault reporter. `report` does nothing while the operator's switch is off. */
+export interface BrowserFaults {
+	report: (kind: BrowserFault["kind"], error: unknown, failure?: Failure) => void;
+	uninstall: () => void;
+}
+
+const OFF: BrowserFaults = { report: noop, uninstall: noop };
+
 /**
  * Reports the failures that a reader meets on this page to the server, when the operator turned
  * browser fault reports on. A report names the kind of failure, the journey page, the class of the
- * error, the release and frame positions. It never carries the error's message, the page address or
- * who the reader is. A failure to send is dropped: a fault about a fault would only repeat it.
- * Returns the function that removes the reporting.
+ * error, the release and frame positions, and for a failed request its trace id and status. It never
+ * carries the error's message, the page address or who the reader is. An error that two surfaces see,
+ * such as a failed request that a route then shows, is reported once. A failure to send is dropped:
+ * a fault about a fault would only repeat it.
  */
-export function installBrowserFaults(router: AnyRouter): () => void {
+export function installBrowserFaults(router: AnyRouter): BrowserFaults {
 	if (!environment.browserFaultReports) {
-		return noop;
+		return OFF;
 	}
 	const seen = new Set<string>();
 	const queued = new Map<string, BrowserFault>();
+	const reportedErrors = new WeakSet();
 	let idle: ReturnType<typeof setTimeout> | undefined;
 	let sending = false;
 	let reports = 0;
@@ -92,17 +112,33 @@ export function installBrowserFaults(router: AnyRouter): () => void {
 		};
 		reportBrowserFaults({ body: { faults }, keepalive: true }).finally(sent).catch(noop);
 	};
-	const report = (kind: BrowserFault["kind"], error: unknown) => {
+	const report = (kind: BrowserFault["kind"], error: unknown, failure: Failure = {}) => {
+		if (typeof error === "object" && error !== null) {
+			if (reportedErrors.has(error)) {
+				return;
+			}
+			reportedErrors.add(error);
+		}
 		const fault: BrowserFault = {
 			kind,
 			page: journeyPageOf(router.state.matches.map(({ routeId }) => routeId)),
-			errorType: errorTypeOf(error),
+			errorType: failure.errorType ?? errorTypeOf(error),
 			// The build commit tells two builds of one version apart, such as a stale tab after a deploy.
 			release: environment.buildInfo.commit || environment.version,
 			frames: framesOf(error),
 			count: 1,
+			traceId: failure.traceId,
+			status: failure.status,
 		};
-		const fingerprint = JSON.stringify([fault.kind, fault.page, fault.errorType, fault.frames[0]]);
+		// A failed request has no stack of its own, so its trace and status tell two failures apart.
+		const fingerprint = JSON.stringify([
+			fault.kind,
+			fault.page,
+			fault.errorType,
+			fault.frames[0],
+			fault.status,
+			fault.traceId,
+		]);
 		const same = queued.get(fingerprint);
 		if (same !== undefined) {
 			same.count = Math.min(same.count + 1, MAX_COUNT);
@@ -127,10 +163,74 @@ export function installBrowserFaults(router: AnyRouter): () => void {
 	addEventListener("error", uncaught);
 	addEventListener("unhandledrejection", unhandled);
 	document.addEventListener("visibilitychange", hidden);
-	return () => {
-		clearTimeout(idle);
-		removeEventListener("error", uncaught);
-		removeEventListener("unhandledrejection", unhandled);
-		document.removeEventListener("visibilitychange", hidden);
+	return {
+		report,
+		uninstall: () => {
+			clearTimeout(idle);
+			removeEventListener("error", uncaught);
+			removeEventListener("unhandledrejection", unhandled);
+			document.removeEventListener("visibilitychange", hidden);
+		},
 	};
 }
+
+/**
+ * React's root error handlers, which see every error that a component throws: one that no boundary
+ * caught, one that a boundary caught and showed, the router's boundaries included, and one that React
+ * recovered from. A caught error with an HTTP status is a failed request, which the request's own
+ * report names; a 404 or 403 view is a state, not a failure.
+ */
+export function rootErrorHandlers(faults: BrowserFaults): RootOptions {
+	return {
+		onUncaughtError: (error, errorInfo) => {
+			faults.report("UNCAUGHT_ERROR", error);
+			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.
+			console.warn("Uncaught error", error, errorInfo.componentStack);
+		},
+		onCaughtError: (error, errorInfo) => {
+			if (problemStatusOf(error) === undefined) {
+				faults.report("RENDER_ERROR", error);
+			}
+			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.
+			console.warn("Caught error", error, errorInfo.componentStack);
+		},
+		onRecoverableError: (error, errorInfo) => {
+			faults.report("RECOVERED_ERROR", error);
+			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.
+			console.warn("Recovered error", error, errorInfo.componentStack);
+		},
+	};
+}
+
+/** The paths of the reports themselves: a failed report is never reported. */
+const REPORTS = /\/(?:browser-faults|web-vitals)$/u;
+
+/**
+ * Reports each request of the generated client that failed with a 5xx status, with the trace id that
+ * the server returned as `X-Request-Id`, and each one that never reached the server. An aborted
+ * request is the reader moving on, not a failure. Returns the function that removes the reporting.
+ */
+export function reportFailedRequests(client: Client, faults: BrowserFaults): () => void {
+	const id = client.interceptors.error.use((failure, response, request) => {
+		if (request !== undefined && !REPORTS.test(new URL(request.url).pathname)) {
+			if (response !== undefined && response.status >= 500) {
+				faults.report("REQUEST_FAILED", failure, {
+					errorType: "HTTP_5XX",
+					traceId: TRACE_ID.exec(response.headers.get("X-Request-Id") ?? "")?.[0],
+					status: response.status,
+				});
+			} else if (
+				response === undefined &&
+				!(failure instanceof DOMException && failure.name === "AbortError")
+			) {
+				faults.report("REQUEST_FAILED", failure, { errorType: "NETWORK" });
+			}
+		}
+		return failure;
+	});
+	return () => {
+		client.interceptors.error.eject(id);
+	};
+}
+
+const TRACE_ID = /^[0-9a-f]{32}$/u;

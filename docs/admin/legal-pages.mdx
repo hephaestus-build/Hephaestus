@@ -442,6 +442,7 @@ the server with your IP address and browser information, which the server logs k
 **`BROWSER_FAULT_REPORTS`** is off by default.
 When it is on, the browser of each reader reports the failures that it meets on a page, also before sign-in.
 A report names the kind of failure, the page type, the class of the error, the release and positions in the web app's scripts.
+For a failed request, it also names the request's trace id, which joins the report to the server's log records of that request.
 It names no person, workspace, page address or error message ([Browser faults](./observability.mdx#browser-faults)).
 
 The server writes each failure to its log and counts it. It keeps no other record.
@@ -464,7 +465,8 @@ Before you turn it on:
 ### Error reports
 
 When a page fails in your browser, your browser sends a short report to [example.org]: the kind of
-failure, the type of page and where in our scripts it happened. The report contains no name,
+failure, the type of page and where in our scripts it happened. For a failed request, it also sends
+the reference of that request. The report contains no name,
 workspace, page address or error text. Like every request, it reaches the server with your IP
 address and browser information, which the server logs keep for [retention]. Purpose: [purpose].
 Legal basis: [legal basis].

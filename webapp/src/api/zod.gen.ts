@@ -1420,10 +1420,20 @@ export const zBrowserFault = z.object({
         'REFERENCE_ERROR',
         'SYNTAX_ERROR',
         'RANGE_ERROR',
-        'OTHER'
+        'OTHER',
+        'CHUNK',
+        'HTTP_5XX',
+        'NETWORK'
     ]),
     frames: z.array(zFrame).min(0).max(10),
-    kind: z.enum(['UNCAUGHT_ERROR', 'UNHANDLED_REJECTION']),
+    kind: z.enum([
+        'UNCAUGHT_ERROR',
+        'UNHANDLED_REJECTION',
+        'RENDER_ERROR',
+        'RECOVERED_ERROR',
+        'CHUNK_LOAD_FAILED',
+        'REQUEST_FAILED'
+    ]),
     page: z.enum([
         'PRACTICE_PROFILE',
         'ASK_HEPHAESTUS',
@@ -1432,7 +1442,9 @@ export const zBrowserFault = z.object({
         'ACTIVITY',
         'OTHER'
     ]),
-    release: z.string().regex(/[0-9a-f]{7,40}|\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,4})?|DEV/)
+    release: z.string().regex(/[0-9a-f]{7,40}|\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,4})?|DEV/),
+    status: z.int().gte(500).lte(599).optional(),
+    traceId: z.string().regex(/[0-9a-f]{32}/).optional()
 });
 
 /**

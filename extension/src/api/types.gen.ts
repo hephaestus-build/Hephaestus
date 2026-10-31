@@ -475,14 +475,22 @@ export type BrowserFault = {
      * How often the same failure happened, at most 100
      */
     count: number;
-    errorType: 'TYPE_ERROR' | 'REFERENCE_ERROR' | 'SYNTAX_ERROR' | 'RANGE_ERROR' | 'OTHER';
+    errorType: 'TYPE_ERROR' | 'REFERENCE_ERROR' | 'SYNTAX_ERROR' | 'RANGE_ERROR' | 'OTHER' | 'CHUNK' | 'HTTP_5XX' | 'NETWORK';
     frames: Array<Frame>;
-    kind: 'UNCAUGHT_ERROR' | 'UNHANDLED_REJECTION';
+    kind: 'UNCAUGHT_ERROR' | 'UNHANDLED_REJECTION' | 'RENDER_ERROR' | 'RECOVERED_ERROR' | 'CHUNK_LOAD_FAILED' | 'REQUEST_FAILED';
     page: 'PRACTICE_PROFILE' | 'ASK_HEPHAESTUS' | 'FEEDBACK' | 'FEEDBACK_APPROVAL' | 'ACTIVITY' | 'OTHER';
     /**
      * The web app's release: a version or a commit
      */
     release: string;
+    /**
+     * For a failed request: its 5xx status
+     */
+    status?: number;
+    /**
+     * For a failed request: the trace id that the server returned as X-Request-Id
+     */
+    traceId?: string;
 };
 
 /**

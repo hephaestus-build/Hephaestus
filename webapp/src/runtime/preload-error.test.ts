@@ -35,6 +35,7 @@ function staleRouter() {
 
 describe("installPreloadErrorReload", () => {
 	const reload = vi.fn();
+	const report = vi.fn();
 	let uninstall: () => void;
 	let router: AnyRouter;
 
@@ -44,21 +45,26 @@ describe("installPreloadErrorReload", () => {
 		vi.stubGlobal("location", { reload });
 		router = staleRouter();
 		await router.load();
-		uninstall = installPreloadErrorReload(router);
+		uninstall = installPreloadErrorReload(router, { report });
 	});
 
 	afterEach(() => {
 		uninstall();
 		reload.mockClear();
+		report.mockClear();
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
 	});
 
-	it("does not reload for a preload on hover, and keeps the reload for the click", async () => {
+	it("does not reload or report for a preload on hover, and keeps both for the click", async () => {
 		await router.preloadRoute({ to: "/about" });
 		expect(reload).not.toHaveBeenCalled();
+		expect(report).not.toHaveBeenCalled();
 		await router.navigate({ to: "/about" });
 		expect(reload).toHaveBeenCalledOnce();
+		expect(report).toHaveBeenCalledExactlyOnceWith("CHUNK_LOAD_FAILED", events[1], {
+			errorType: "CHUNK",
+		});
 	});
 
 	it("reloads once for a navigation, then lets the error show", async () => {
@@ -67,6 +73,7 @@ describe("installPreloadErrorReload", () => {
 		await router.navigate({ to: "/about" });
 		expect(reload).toHaveBeenCalledOnce();
 		expect(events.map((event) => event.defaultPrevented)).toStrictEqual([true, false]);
+		expect(report).toHaveBeenCalledTimes(2);
 	});
 
 	it("keeps the error when the browser refuses storage", async () => {

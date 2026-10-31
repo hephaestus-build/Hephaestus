@@ -22,7 +22,11 @@ import { AuthProvider, useAuth } from "@/runtime/auth/AuthContext";
 import { installPasskeyChallenge } from "@/runtime/auth/passkey-challenge";
 import { handlePossibleSessionExpiry } from "@/runtime/auth/session-expiry";
 import { SessionKeepAlive } from "@/runtime/auth/use-session-keep-alive";
-import { installBrowserFaults } from "@/runtime/browser-faults";
+import {
+	installBrowserFaults,
+	reportFailedRequests,
+	rootErrorHandlers,
+} from "@/runtime/browser-faults";
 import { TanstackDevtools } from "@/runtime/devtools/TanstackDevtools";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 import { applyUserViewHeaders } from "@/runtime/user-view/session";
@@ -65,10 +69,11 @@ const router = createRouter({
 	defaultPendingComponent: PageSkeleton,
 });
 
-installBrowserFaults(router);
+const faults = installBrowserFaults(router);
+reportFailedRequests(client, faults);
 installPasskeyChallenge(router);
 reportVisitVitals(router, TanstackQuery.getContext().queryClient);
-installPreloadErrorReload(router);
+installPreloadErrorReload(router, faults);
 
 client.interceptors.response.use((response) => {
 	handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);
@@ -104,12 +109,7 @@ function Root() {
 
 const rootElement = document.querySelector("#app");
 if (rootElement && !rootElement.innerHTML) {
-	const root = ReactDOM.createRoot(rootElement, {
-		onUncaughtError: (uncaught, errorInfo) => {
-			// oxlint-disable-next-line no-console -- The custom handler replaces React's console report.
-			console.warn("Uncaught error", uncaught, errorInfo.componentStack);
-		},
-	});
+	const root = ReactDOM.createRoot(rootElement, rootErrorHandlers(faults));
 	root.render(
 		<StrictMode>
 			<Root />
