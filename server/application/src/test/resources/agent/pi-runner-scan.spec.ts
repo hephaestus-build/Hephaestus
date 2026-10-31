@@ -186,10 +186,10 @@ for (const [basis, explicitCommit, incremental = false] of [
 			});
 			if (basis === "introduced") {
 				assert.equal(exit.status, 1, exit.stderr);
-				// The submission's validation refuses the basis; in an incremental scan the refusal ends the practice.
+				// The submission's validation, or in an incremental scan the draft's, refuses the basis.
 				assert.match(
-					`${toldTheModel(cwd)}\n${exit.stderr}`,
-					/basis_not_allowed: problems\.0\.basis: a scan needs state basis|practice\.failed turn=\S+ practice=auth-review error=Error/u,
+					toldTheModel(cwd),
+					/basis_not_allowed: problems\.0\.basis: a scan needs state basis/u,
 				);
 				assert.deepEqual(capturedLines(cwd, "admission"), []);
 				return;

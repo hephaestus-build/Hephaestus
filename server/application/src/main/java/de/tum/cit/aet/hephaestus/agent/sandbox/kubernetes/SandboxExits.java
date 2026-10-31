@@ -26,7 +26,8 @@ import org.slf4j.spi.LoggingEventBuilder;
  * Why a sandbox Pod ended, read just before it is deleted, because a deleted Pod takes its exit code and log with it.
  * Each removal counts in {@code sandbox.exits} by kind and reason; an exit that is not {@code completed} also logs one
  * {@code sandbox.exited} event. For a review, the event carries the runtime's own last diagnostic lines, which hold
- * event names, codes and counts only, and the number of other lines that it left out.
+ * the event names, counts, flags and closed codes of {@link DiagnosticVocabulary} only, and the number of other lines
+ * that it left out.
  */
 public class SandboxExits {
 
@@ -70,13 +71,8 @@ public class SandboxExits {
             "CreateContainerConfigError",
             "CreateContainerError");
 
-    /**
-     * A whole line of the review runtime's diagnostic grammar ({@code pi-diagnostics.ts}): an event name and fields
-     * whose values cannot hold a sentence. Any other line, also one from an older runtime image, can quote reviewed
-     * code, a tool result or a provider's message, so it is dropped and only counted.
-     */
-    static final Pattern DIAGNOSTIC_LINE = Pattern.compile(
-            "\\[pi-(?:runner|provider)\\] [a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)*(?: [a-z][a-z0-9_.]{0,31}=[\\w.,:/+-]{1,128})*");
+    /** The lines of a review's log that the worker keeps; any other line is dropped and only counted. */
+    private static final DiagnosticVocabulary DIAGNOSTICS = DiagnosticVocabulary.load();
 
     private static final Pattern DETAIL = Pattern.compile("[A-Za-z]{1,64}");
 
@@ -216,13 +212,13 @@ public class SandboxExits {
 
     /**
      * The runtime's own last diagnostic lines: at most {@link #TAIL_LINES_KEPT}, each cut, all within {@link
-     * #TAIL_CHARS}. A line outside {@link #DIAGNOSTIC_LINE} only counts.
+     * #TAIL_CHARS}. A line that the {@link DiagnosticVocabulary} does not allow only counts.
      */
     static Tail stderrTail(String log) {
         List<String> kept = new ArrayList<>();
         int dropped = 0;
         for (String line : log.lines().toList()) {
-            if (DIAGNOSTIC_LINE.matcher(line).matches())
+            if (DIAGNOSTICS.keeps(line))
                 kept.add(line.length() > TAIL_LINE_CHARS ? line.substring(0, TAIL_LINE_CHARS) : line);
             else if (!line.isBlank()) dropped++;
         }

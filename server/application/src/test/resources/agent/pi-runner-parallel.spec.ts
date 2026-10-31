@@ -11,6 +11,7 @@ import {
 	directProgram,
 	SESSION_CANDIDATE,
 	field,
+	practiceIndexOf,
 	readJsonFile,
 	runRunner,
 	stagePractices,
@@ -188,11 +189,12 @@ for (const ownership of ["opening", "native-read", "sibling-only", "claimed-only
 						status: "COMPLETE",
 					},
 				]);
+				const practices = practiceIndexOf(cwd);
 				const nativeDone = exit.stderr.indexOf(
-					"practice.program_finished practice=a-native program=built_in",
+					`practice.program_finished practice=${practices.indexOf("a-native")} program=built_in`,
 				);
 				const siblingDone = exit.stderr.indexOf(
-					"practice.program_finished practice=b-sibling program=custom",
+					`practice.program_finished practice=${practices.indexOf("b-sibling")} program=custom`,
 				);
 				assert.ok(nativeDone !== -1 && siblingDone !== -1);
 				assert.equal(siblingDone < nativeDone, earlier === "sibling");

@@ -82,7 +82,7 @@ void test("a practice cut off by a crash is reported not reached, without sessio
 	stagePractices(cwd, [{ slug: "test-practice" }]);
 	const exit = await runRunner(cwd, { "test-practice": "crash" });
 	assert.equal(exit.status, 2, exit.stderr);
-	assert.match(exit.stderr, /review\.fatal error=Error at=program-host-runner\.ts:\d+/u);
+	assert.match(exit.stderr, /review\.fatal error=Error$/mu);
 	const report = executionReportSchema.parse(readJsonFile(cwd, "out/practice-scripts.json"));
 	const [entry] = report.practices;
 	assert.equal(entry?.status, "not-reached");

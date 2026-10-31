@@ -624,9 +624,12 @@ It does not copy the host's output into its own log, because that output can hol
 
 When a sandbox ends abnormally, the worker logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
 Only for a practice review does that line also carry the review runtime's own last diagnostic lines, as `sandbox.stderr.tail`.
-Each kept line names one runtime event with codes, counts and identifiers, such as `[pi-runner] tool.failed tool=bash reason_chars=42`.
-It never holds a tool result, a provider's error message, model output or reviewed code.
-The worker keeps only lines in that form, also from an older runtime image.
+Each kept line names one runtime event with counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`.
+A turn and a practice are named by their positions in the review's practice index, not by their names.
+The line never holds a tool result, a provider's error message, model output, reviewed code, a name, a path or an identifier.
+
+The worker keeps a line only when its event, fields and values are in the runtime's diagnostic vocabulary.
+This rule also applies to a line from an older runtime image.
 It counts every other line in `sandbox.stderr.dropped`.
 
 When a host cannot start, the worker logs the cause that it knows.

@@ -34,8 +34,8 @@ export const admissionResponseSchema = z.looseObject({
 
 export function parseAdmission(value: unknown) {
 	const response = admissionResponseSchema.parse(value);
-	for (const withheld of response.withheld) {
-		diagnose("admission.withheld", { practice: withheld.practiceSlug, reason: withheld.reason });
+	if (response.withheld.length > 0) {
+		diagnose("admission.withheld", { withheld: response.withheld.length });
 	}
 	return { results: response.admitted, digest: response.admissionDigest };
 }

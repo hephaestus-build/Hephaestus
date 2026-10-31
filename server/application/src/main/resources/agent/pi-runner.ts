@@ -35,7 +35,7 @@ import {
 	safeRepositoryPath,
 	writeChangeView,
 } from "./pi-change.ts";
-import { diagnose, errorKind, ms, stackOf, token } from "./pi-diagnostics.ts";
+import { type DiagnosticValue, diagnose, errorKind, ms, stackOf } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import { OpeningQueue } from "./pi-opening-queue.ts";
 
@@ -165,16 +165,6 @@ import {
 } from "./work/practice-scripts/lib/core/runtime-inputs.ts";
 import { InputReader } from "./work/practice-scripts/lib/core/script-inputs.ts";
 import { abortReasonOf, RETURN_MS } from "./work/practice-scripts/lib/core/script-run.ts";
-
-function logValue(value: unknown): string {
-	if (typeof value === "string") {
-		return value;
-	}
-	if (value === undefined) {
-		return "undefined";
-	}
-	return JSON.stringify(value);
-}
 
 /** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
@@ -530,6 +520,21 @@ async function abortSession(session: AgentSession): Promise<void> {
 	}
 }
 
+/**
+ * Where a diagnostic happened, by the label that the runner gave the work: the phase, the turn's
+ * number and the practice's position in the practice index. A label holds a slug, and a diagnostic
+ * never writes one.
+ */
+const PLACES = new Map<string, Record<string, DiagnosticValue>>([
+	["measure", { phase: "measure" }],
+	["review", { phase: "review" }],
+	["finish", { phase: "finish" }],
+]);
+
+function placeOf(label: string): Record<string, DiagnosticValue> {
+	return PLACES.get(label) ?? {};
+}
+
 async function settleSession(
 	session: AgentSession,
 	label: string,
@@ -547,7 +552,7 @@ async function settleSession(
 	// The run flag clears a beat after the prompt resolves; a wait that short is not worth a line.
 	const waitedMs = Date.now() - started;
 	if (!idle || waitedMs >= 1000) {
-		diagnose("session.idle_wait", { turn: token(label), waited_ms: ms(waitedMs), idle });
+		diagnose("session.idle_wait", { ...placeOf(label), waited_ms: ms(waitedMs), idle });
 	}
 	return idle;
 }
@@ -737,6 +742,11 @@ export async function runReviewJob(): Promise<void> {
 	const capturedTexts = citableTextIndex(folderIndex);
 	const availableSourceKindValues = [...availableSourceKinds].toSorted();
 	const practiceIndex = readPracticeIndex();
+	/** A practice's position in the practice index: what a diagnostic names it by. */
+	function practiceAt(slug: string): number | undefined {
+		const position = practiceIndex.findIndex((practice) => practice.slug === slug);
+		return position === -1 ? undefined : position;
+	}
 
 	/** The one declared set of a practice: its brief shows it, and its guard and citations follow it. */
 	function declaredOf(slug: string | null): Set<string> {
@@ -1329,7 +1339,12 @@ export async function runReviewJob(): Promise<void> {
 	// SDK error headings can be followed by the refused content; retain only a bounded reason.
 	function practiceLogLabel(): string {
 		const slug = sessionState().currentTurn?.practiceSlug;
-		return slug === undefined ? "review" : `review ${slug}`;
+		if (slug === undefined) {
+			return "review";
+		}
+		const label = `review ${slug}`;
+		PLACES.set(label, { phase: "review", practice: practiceAt(slug) });
+		return label;
 	}
 
 	function firstLine(text: string): string {
@@ -1369,7 +1384,7 @@ export async function runReviewJob(): Promise<void> {
 					state.activeReview.requireSubmission = true;
 				}
 				diagnose("turn.nudged", {
-					turn: token(turn.label),
+					...placeOf(turn.label),
 					calls: turn.calls,
 					call_budget: turn.budget.modelCalls,
 					output_tokens: turn.outputTokens,
@@ -1413,7 +1428,7 @@ export async function runReviewJob(): Promise<void> {
 			stopTurn("loop");
 			return;
 		}
-		diagnose("turn.output_limit", { turn: token(turn.label) });
+		diagnose("turn.output_limit", placeOf(turn.label));
 		if (state.activeSession) {
 			void steer(
 				state.activeSession,
@@ -1428,7 +1443,7 @@ export async function runReviewJob(): Promise<void> {
 	function stopTurn(reason: StopReason): void {
 		const state = sessionState();
 		const turn = state.currentTurn;
-		diagnose("turn.stopped", { turn: token(turn?.label ?? "review"), reason });
+		diagnose("turn.stopped", { ...placeOf(turn?.label ?? "review"), stopped_by: reason });
 		if (turn && turn.stoppedBy === null) {
 			turn.stoppedBy = reason;
 		}
@@ -1655,7 +1670,10 @@ export async function runReviewJob(): Promise<void> {
 	function logRefusal(slug: string, reason: string): void {
 		const state = sessionState();
 		// The reason quotes the model's result and the reviewed file, so the line names only its length.
-		diagnose("practice.result_refused", { practice: slug, reason_chars: reason.length });
+		diagnose("practice.result_refused", {
+			practice: practiceAt(slug),
+			reason_chars: reason.length,
+		});
 		if (state.currentTurn) {
 			state.currentTurn.refused += 1;
 			state.currentTurn.refusalReasons.push(
@@ -1871,8 +1889,7 @@ export async function runReviewJob(): Promise<void> {
 
 	function logPracticeCoverage() {
 		const coverage = persistPracticeCoverage();
-		const ratio =
-			coverage.eligible === 0 ? "n/a" : (coverage.evaluated / coverage.eligible).toFixed(4);
+		const ratio = coverage.eligible === 0 ? undefined : coverage.evaluated / coverage.eligible;
 		diagnose("coverage.measured", {
 			evaluated: coverage.evaluated,
 			eligible: coverage.eligible,
@@ -1910,7 +1927,7 @@ export async function runReviewJob(): Promise<void> {
 		if (envelope.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
 			diagnose("task.invalid", {
 				reason: "schema_version",
-				got: logValue(envelope.schemaVersion),
+				got: typeof envelope.schemaVersion === "number" ? envelope.schemaVersion : undefined,
 				expected: SUPPORTED_SCHEMA_VERSION,
 			});
 			process.exit(ENVELOPE_MISMATCH_EXIT);
@@ -1954,18 +1971,7 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const prompt = taskEnvelope.prompt.trim();
-	diagnose("task.loaded", {
-		job: logValue(taskEnvelope.jobId),
-		workspace: logValue(taskEnvelope.workspaceId),
-		repository:
-			taskEnvelope.repositoryFullName === undefined
-				? undefined
-				: logValue(taskEnvelope.repositoryFullName),
-		pull_request:
-			taskEnvelope.pullRequestNumber === undefined
-				? undefined
-				: logValue(taskEnvelope.pullRequestNumber),
-	});
+	diagnose("task.loaded", { pull_request: taskEnvelope.pullRequestNumber !== undefined });
 
 	function noteToolCall(turn: TurnTrace, toolName: string, args: unknown): void {
 		const state = sessionState();
@@ -1979,7 +1985,7 @@ export async function runReviewJob(): Promise<void> {
 		turn.repeatedCalls = Math.max(turn.repeatedCalls, repeats);
 		const recording = toolName === "submit_result";
 		if (repeats === (recording ? REPEATED_RECORDING_NUDGE : REPEATED_CALL_NUDGE)) {
-			diagnose("turn.repeated_call", { turn: token(turn.label), tool: toolName, repeats });
+			diagnose("turn.repeated_call", { ...placeOf(turn.label), tool: toolName, repeats });
 			// Naming what is still owed matters most when the repeated call is the recording itself: "record"
 			// alone reads as "send that again".
 			const owed = owedPractices();
@@ -2059,7 +2065,7 @@ export async function runReviewJob(): Promise<void> {
 		sessionState().turnDemand = null;
 		persistRunnerDebug();
 		diagnose("turn.finished", {
-			turn: token(trace.label),
+			...placeOf(trace.label),
 			duration_ms: ms(trace.durationMs),
 			calls: trace.calls,
 			call_budget: trace.budget.modelCalls,
@@ -2257,7 +2263,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		outputLimit = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
 		diagnose("provider.registered", {
 			api_protocol: providerConfig.apiProtocol,
-			model: providerConfig.modelId,
 			context_window: model.contextWindow,
 			reasoning_effort: providerConfig.reasoningEffort?.toLowerCase() ?? "default",
 		});
@@ -2305,13 +2310,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						// guards count only the latter, and the trace keeps the former apart.
 						if (event.parentToolCallId === undefined) {
 							measurementReply.received = true;
-							diagnose("tool.called", { turn: token(label), tool: toolOf(event.toolName) });
+							diagnose("tool.called", { ...placeOf(label), tool: toolOf(event.toolName) });
 							if (scope.currentTurn) {
 								noteToolCall(scope.currentTurn, toolOf(event.toolName), event.args);
 							}
 						} else {
 							diagnose("tool.called", {
-								turn: token(label),
+								...placeOf(label),
 								tool: toolOf(event.toolName),
 								codemode: true,
 							});
@@ -2335,7 +2340,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 								: `codemode → ${event.toolName}`;
 						// The reason is the tool's own result text, which can quote reviewed code or a credential.
 						diagnose("tool.failed", {
-							turn: token(label),
+							...placeOf(label),
 							tool: toolOf(event.toolName),
 							codemode: event.parentToolCallId === undefined ? undefined : true,
 							reason_chars: reason.length,
@@ -2348,8 +2353,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					}
 					if (event.type === "compaction_end") {
 						diagnose("context.compacted", {
-							turn: token(label),
-							reason: event.reason,
+							...placeOf(label),
+							trigger: event.reason,
 							failed: hasText(event.errorMessage),
 						});
 						if (!event.aborted && !hasText(event.errorMessage)) {
@@ -2367,7 +2372,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						}
 						// The provider's message can quote the request, so the line names only the attempt.
 						diagnose("provider.retrying", {
-							turn: token(label),
+							...placeOf(label),
 							attempt: event.attempt,
 							attempts: event.maxAttempts,
 							delay_ms: event.delayMs,
@@ -2379,7 +2384,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							recordUnsuccessfulRetryEnd(scope.currentTurn);
 						}
 						providerFailures += 1;
-						diagnose("provider.failed", { turn: token(label), retries: event.attempt });
+						diagnose("provider.failed", { ...placeOf(label), retries: event.attempt });
 					}
 					if (event.type === "message_end" && event.message.role === "assistant") {
 						addAssistantUsage(streamUsage, event.message);
@@ -2403,17 +2408,16 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						}
 						const types = listOrEmpty(event.message.content).map((c) => c.type);
 						const toolCalls = types.filter((t) => t === "toolCall").length;
-						const { rawStopReason } = event.message;
 						// An error can leave a review unanswered even when the SDK does not retry it.
 						if (stopReason === "error") {
 							providerFailures += 1;
 						}
 						diagnose("assistant.message", {
-							turn: token(label),
+							...placeOf(label),
 							stop_reason: stopReason,
-							raw_stop_reason: hasText(rawStopReason) ? rawStopReason : undefined,
 							tool_calls: toolCalls,
-							types: types.join(","),
+							text: types.includes("text"),
+							thinking: types.includes("thinking"),
 						});
 					}
 				}),
@@ -2449,7 +2453,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			practices: allSlugs.length,
 			turns: turns.length,
 			context_loop_only: CONTEXT_IS_LOOP_ONLY,
-			brief_chars: [...new Set(allSlugs.map((slug) => briefOf(slug).text.length))].join(","),
+			brief_chars_max: Math.max(0, ...allSlugs.map((slug) => briefOf(slug).text.length)),
 		});
 
 		const measureEnd = PROCESS_START_MS + AGENT_BUDGET_MS;
@@ -2506,7 +2510,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
 		/** The tools that a session offers. A diagnostic names only these: a model can call a tool by any name. */
 		const registeredTools = new Set<string>();
-		const toolOf = (name: string) => (registeredTools.has(name) ? name : "unknown");
+		const toolOf = (name: string) => (registeredTools.has(name) ? name : "other");
 		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
 			const bash = createBashToolDefinition(CWD);
 			const sessionTools: SessionOptions["customTools"] = tools.includes("bash")
@@ -2565,8 +2569,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					return stream(requestModel, context, { ...options, maxTokens: scope.callOutputLimit });
 				};
 			}
-			for (const error of extensionsResult.errors) {
-				diagnose("extension.failed", { path: error.path });
+			if (extensionsResult.errors.length > 0) {
+				diagnose("extension.failed", { extensions: extensionsResult.errors.length });
 			}
 			resetSessionGuards();
 			sessionState().openingInContext = false;
@@ -2640,12 +2644,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		): Promise<StopReason | null> {
 			const safetyMs = measureEnd - Date.now();
 			if (safetyMs <= RETURN_MS) {
-				diagnose("turn.near_ceiling", { turn: token(label), skipped: true });
+				diagnose("turn.near_ceiling", { ...placeOf(label), skipped: true });
 				return "safety";
 			}
 			const budget = reservedBudget ?? turnBudget(slugs.length, PER_PRACTICE_WORK);
 			diagnose("turn.started", {
-				turn: token(label),
+				...placeOf(label),
 				practices: slugs.length,
 				call_budget: budget.modelCalls,
 				output_token_budget: budget.outputTokens,
@@ -2678,7 +2682,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				}
 				if (prepared === null) {
 					blockedPractices.set(slug, "too-large");
-					diagnose("practice.oversized", { turn: token(label), practice: slug });
+					diagnose("practice.oversized", { ...placeOf(label), practice: practiceAt(slug) });
 					return;
 				}
 				await session.prompt(prepared, {
@@ -2703,8 +2707,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					return;
 				}
 				diagnose("practice.unsubmitted", {
-					turn: token(label),
-					practice: slug,
+					...placeOf(label),
+					practice: practiceAt(slug),
 					asking_again: true,
 				});
 				if (!(await settleSession(session, label, ABORT_SETTLE_MS))) {
@@ -2720,8 +2724,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				if (endedUnrecorded(slug)) {
 					blockedPractices.set(slug, "off-format");
 					diagnose("practice.not_reached", {
-						turn: token(label),
-						practice: slug,
+						...placeOf(label),
+						practice: practiceAt(slug),
 						reason: "off_format",
 					});
 				}
@@ -2902,8 +2906,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					}
 				} catch (error) {
 					diagnose("practice.failed", {
-						turn: token(label),
-						practice: slug,
+						...placeOf(label),
+						practice: practiceAt(slug),
 						error: errorKind(error),
 					});
 				} finally {
@@ -2949,7 +2953,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					error: `the host could not read them: ${errorText(error)}`,
 				}));
 				if ("error" in read) {
-					diagnose("practice.inputs_invalid", { practice: slug });
+					diagnose("practice.inputs_invalid", { practice: practiceAt(slug) });
 					executions.set(slug, {
 						...notReachedOutcome(program, "unavailable"),
 						status: "failed",
@@ -2998,7 +3002,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),
 						// A practice script can log what it read, so its lines leave the sandbox only as a length.
 						log: (line) => {
-							diagnose("practice.program_log", { practice: slug, chars: line.length });
+							diagnose("practice.program_log", { practice: practiceAt(slug), chars: line.length });
 						},
 						receipts: programReads,
 						requiredSources: requiredSourcesOf(slug),
@@ -3015,10 +3019,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					throw sessionStopFailure;
 				}
 				diagnose("practice.program_finished", {
-					practice: slug,
+					practice: practiceAt(slug),
 					program: program.script === null ? "built_in" : "custom",
 					status: outcome.status,
-					stop_reason: outcome.stopReason ?? undefined,
+					program_stop: outcome.stopReason ?? undefined,
 					error_chars: outcome.error?.length,
 				});
 				const { candidate } = outcome;
@@ -3070,7 +3074,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				closeTurnTrace(trace);
 			}
 			if (pastSafety() && stoppedBy() === null) {
-				diagnose("turn.near_ceiling", { turn: token(label), rest_not_reached: true });
+				diagnose("turn.near_ceiling", { ...placeOf(label), rest_not_reached: true });
 				return "safety";
 			}
 			return stoppedBy();
@@ -3091,8 +3095,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			});
 			if (serial) {
 				for (const [index, turn] of turns.entries()) {
+					const label = `turn ${index + 1}/${turns.length} (${turn.id})`;
+					PLACES.set(label, { phase: "review", turn: index + 1 });
 					const stop = await runScope(
-						`turn ${index + 1}/${turns.length} (${turn.id})`,
+						label,
 						`## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
 						turn.slugs,
 					);
@@ -3105,13 +3111,17 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			} else {
 				const planned = turns.flatMap((turn, index) => {
 					const budget = turnBudget(turn.slugs.length, PER_PRACTICE_WORK);
-					return turn.slugs.map((slug, position) => ({
-						slug,
-						label: `turn ${index + 1}/${turns.length} (${turn.id}) / ${slug}`,
-						heading: `## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
-						budget: partitionBudget(budget, turn.slugs.length, position),
-						position: { index: position, count: turn.slugs.length },
-					}));
+					return turn.slugs.map((slug, position) => {
+						const label = `turn ${index + 1}/${turns.length} (${turn.id}) / ${slug}`;
+						PLACES.set(label, { phase: "review", turn: index + 1, practice: practiceAt(slug) });
+						return {
+							slug,
+							label,
+							heading: `## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
+							budget: partitionBudget(budget, turn.slugs.length, position),
+							position: { index: position, count: turn.slugs.length },
+						};
+					});
 				});
 				// Turns partition budgets; the server's index still owns the start order across groups.
 				const order = new Map(practiceIndex.map((practice, index) => [practice.slug, index]));
@@ -3172,7 +3182,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				(slug) => !executions.has(slug) && !blockedPractices.has(slug),
 			);
 			if (serial && unfinished.length > 0 && stalls < 2 && Date.now() < measureEnd - RETURN_MS) {
-				diagnose("review.finishing", { practices: unfinished.join(",") });
+				diagnose("review.finishing", { unfinished: unfinished.length });
 				await runScope(
 					"finish",
 					"## Unfinished practices\nNo turn recorded a result for this practice; evaluate it now.",
@@ -3224,7 +3234,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			diagnose("review.partial", {
 				without_result: notReached.length,
 				practices: allSlugs.length,
-				not_reached: notReached.join(","),
 			});
 		}
 

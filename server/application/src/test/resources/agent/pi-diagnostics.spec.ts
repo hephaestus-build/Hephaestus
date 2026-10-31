@@ -1,81 +1,157 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
+import vocabulary from "../../../main/resources/agent/pi-diagnostics.json" with { type: "json" };
 import {
-	DIAGNOSTIC_LINE,
 	errorKind,
 	formatDiagnostic,
+	isDiagnosticLine,
+	SCALAR_TEXT,
 	stackOf,
-	token,
 } from "../../../main/resources/agent/pi-diagnostics.ts";
+import { REASONING_EFFORTS } from "../../../main/resources/agent/pi-provider.ts";
+import {
+	REASONS,
+	RUN_STATUSES,
+	STOP_REASONS,
+} from "../../../main/resources/agent/work/practice-scripts/lib/core/contract.ts";
 import { UnratedError } from "../../../main/resources/agent/work/practice-scripts/lib/core/practice-script.ts";
 
 const CANARY = "sk-diagnostics-canary";
+const AGENT = new URL("../../../main/resources/agent/", import.meta.url);
 
-void test("a diagnostic line holds codes, counts and labels, and a text becomes invalid", () => {
+void test("a diagnostic line holds counts, flags and codes, and a field it does not allow is left out and counted", () => {
 	const line = formatDiagnostic("tool.failed", {
-		turn: token("turn 1/3 (security) / auth-review"),
+		phase: "review",
+		turn: 1,
+		practice: 0,
 		tool: "bash",
 		reason_chars: 42,
 		codemode: true,
 		reason: `cat: .env: API_KEY=${CANARY}`,
+		raw_stop_reason: CANARY,
+		turn_label: "turn 1/3 (security) / auth-review",
 		missing: undefined,
-		empty: "",
 	});
 
 	assert.equal(
 		line,
-		"[pi-runner] tool.failed turn=turn_1/3_security_/_auth-review tool=bash reason_chars=42 codemode=true reason=invalid",
+		"[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42 codemode=true invalid=3",
 	);
-	assert.match(line, DIAGNOSTIC_LINE);
+	assert.ok(isDiagnosticLine(line));
+	assert.equal(
+		formatDiagnostic("stop_reason.leaked", { stop_reason: CANARY }),
+		"[pi-runner] diagnostic.invalid invalid=1",
+	);
 	assert.equal(
 		formatDiagnostic("provider.parse_failed", {}, "provider"),
 		"[pi-provider] provider.parse_failed",
 	);
 });
 
-void test("an error is named by its class and closed reason, and placed by its own frames, never by its message", () => {
-	const failure = new TypeError(`could not read ${CANARY}`);
-	failure.stack = `TypeError: could not read ${CANARY}\n    at read (file:///app/agent/pi-runner.ts:2586:6)\n    at main (file:///app/agent/pi-runner.ts:3247:3)`;
-
-	assert.equal(errorKind(failure), "TypeError");
-	assert.equal(errorKind(new UnratedError("unavailable", CANARY)), "UnratedError.unavailable");
-	assert.equal(errorKind(CANARY), "string");
-	assert.equal(stackOf(failure), "pi-runner.ts:2586,pi-runner.ts:3247");
-	assert.equal(stackOf(CANARY), undefined);
-	const line = formatDiagnostic("review.fatal", {
-		error: errorKind(failure),
-		at: stackOf(failure),
-	});
-	assert.ok(!line.includes(CANARY));
-	assert.match(line, DIAGNOSTIC_LINE);
-});
-
-void test("an older runtime's free-text line does not match the grammar", () => {
+void test("the worker keeps only lines of the vocabulary, also when they have the shape of one", () => {
 	for (const line of [
 		`[pi-runner] review practice-a tool error: bash — cat: .env: API_KEY=${CANARY}`,
 		`[pi-runner] review provider call failed for good after 3 retries: 401 ${CANARY}`,
-		`[pi-runner] result refused for practice-a: the quote "${CANARY}" is not in src/Auth.java`,
-		`[pi-runner] practice.failed reason=${"x".repeat(129)}`,
 		`[heph-host 2026-10-31T00:00:00Z] ${CANARY}`,
+		`[pi-runner] assistant.message raw_stop_reason=${CANARY}`,
+		`[pi-runner] session.leaked secret=${CANARY}`,
+		`[pi-runner] assistant.message stop_reason=${CANARY}`,
+		`[pi-runner] tool.failed tool=${CANARY}`,
+		`[pi-runner] tool.failed turn=${CANARY}`,
+		`[pi-runner] review.fatal at=${CANARY}`,
+		"[pi-runner] turn.finished turn=1 turn=2",
+		"[pi-runner] turn.finished  turn=1",
+		"[pi-runner] turn.finished turn=1 ",
+		"[pi-runner] turn.finished =1",
 	]) {
-		assert.doesNotMatch(line, DIAGNOSTIC_LINE, line);
+		assert.ok(!isDiagnosticLine(line), line);
 	}
+	assert.ok(isDiagnosticLine("[pi-runner] review.fatal error=TypeError at=2586,3247"));
+	assert.ok(isDiagnosticLine("[pi-runner] coverage.measured evaluated=2 eligible=3 ratio=0.667"));
 });
 
-void test("the worker keeps the same grammar that the runtime writes", () => {
+void test("an error is named by its class and closed reason from the vocabulary, never by its message", () => {
+	const named = new Error(CANARY);
+	named.name = "SkDiagnosticsCanary";
+	const reasoned = Object.assign(new TypeError(CANARY), { reason: "sk_canary" });
+
+	assert.equal(errorKind(new TypeError(`could not read ${CANARY}`)), "TypeError");
+	assert.equal(errorKind(new UnratedError("unavailable", CANARY)), "UnratedError.unavailable");
+	assert.equal(errorKind(named), "other");
+	assert.equal(errorKind(reasoned), "TypeError");
+	assert.equal(errorKind(CANARY), "not_an_error");
+});
+
+void test("a stack is reduced to the runner's own line numbers, so a message cannot add a name", () => {
+	const failure = new TypeError(`failed at ${CANARY}.ts:123:4`);
+	failure.stack = [
+		`TypeError: failed at ${CANARY}.ts:123:4 and /app/${CANARY}/pi-runner.ts:77:1`,
+		`    at read (file:///workspace/${CANARY}.ts:9:6)`,
+		"    at read (file:///workspace/.run-pi.ts:2586:6)",
+		"    at main (file:///app/agent/pi-runner.ts:3247:3)",
+	].join("\n");
+
+	assert.equal(stackOf(new Error(`failed at ${CANARY}.ts:123:4`)), undefined);
+	const at = stackOf(failure);
+	assert.equal(at, "77,2586,3247");
+	const line = formatDiagnostic("review.fatal", { error: errorKind(failure), at });
+	assert.ok(!line.includes(CANARY));
+	assert.ok(isDiagnosticLine(line));
+});
+
+void test("the vocabulary's closed lists are the runtime's own", () => {
+	const { fields } = vocabulary;
+	assert.deepEqual(
+		fields.error.filter((code) => code.startsWith("UnratedError.")).toSorted(),
+		[...REASONS, "cancelled"].map((reason) => `UnratedError.${reason}`).toSorted(),
+	);
+	assert.deepEqual(fields.program_stop.toSorted(), [...STOP_REASONS].toSorted());
+	assert.deepEqual(fields.status.toSorted(), [...RUN_STATUSES].toSorted());
+	assert.deepEqual(
+		fields.reasoning_effort.toSorted(),
+		[...REASONING_EFFORTS.map((effort) => effort.toLowerCase()), "default"].toSorted(),
+	);
+});
+
+void test("every event that the runtime writes is in the vocabulary", () => {
+	const written = readdirSync(AGENT)
+		.filter((file) => file.endsWith(".ts"))
+		.flatMap((file) => [
+			...readFileSync(new URL(file, AGENT), "utf8").matchAll(/\bdiagnose\(\s*"(?<event>[^"]+)"/gu),
+		])
+		.map((match) => match.groups?.event ?? "");
+
+	assert.ok(written.length > 50);
+	assert.deepEqual(
+		written.filter((event) => !vocabulary.events.includes(event)),
+		[],
+	);
+});
+
+void test("the worker reads the same vocabulary with the same scalar patterns", () => {
 	const java = readFileSync(
 		new URL(
-			"../../../main/java/de/tum/cit/aet/hephaestus/agent/sandbox/kubernetes/SandboxExits.java",
+			"../../../main/java/de/tum/cit/aet/hephaestus/agent/sandbox/kubernetes/DiagnosticVocabulary.java",
 			import.meta.url,
 		),
 		"utf8",
 	);
-	const compiled = /DIAGNOSTIC_LINE = Pattern\.compile\(\s*"(?<pattern>(?:[^"\\]|\\.)*)"\);/u.exec(
-		java,
-	)?.groups?.pattern;
-	assert.ok(compiled !== undefined, "SandboxExits declares DIAGNOSTIC_LINE");
-	// Java's Matcher.matches() anchors the whole line; the runtime's pattern anchors it with ^ and $.
-	assert.equal(`^${compiled.replaceAll(String.raw`\\`, "\\")}$`, DIAGNOSTIC_LINE.source);
+	assert.match(java, /RESOURCE = "agent\/pi-diagnostics\.json";/u);
+	const patterns = Object.fromEntries(
+		[
+			...java.matchAll(/"(?<type>[a-z]+)", Pattern\.compile\("(?<pattern>(?:[^"\\]|\\.)*)"\)/gu),
+		].map(({ groups }): [string, string] => [
+			groups?.type ?? "",
+			groups?.pattern?.replaceAll(String.raw`\\`, "\\") ?? "",
+		]),
+	);
+	// Java's Matcher.matches() anchors the whole text; the runtime's patterns anchor it with ^ and $.
+	assert.deepEqual(
+		patterns,
+		Object.fromEntries(
+			Object.entries(SCALAR_TEXT).map(([type, pattern]) => [type, pattern.source.slice(1, -1)]),
+		),
+	);
 });

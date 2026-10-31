@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
 
-import { DIAGNOSTIC_LINE } from "../../../main/resources/agent/pi-diagnostics.ts";
+import { isDiagnosticLine } from "../../../main/resources/agent/pi-diagnostics.ts";
 import { CANDIDATE_LIMITS } from "../../../main/resources/agent/work/practice-scripts/lib/core/contract.ts";
 
 import type {
@@ -36,7 +36,7 @@ import { GOLDEN_INPUTS, PRACTICES_DIR } from "./golden-review-workspace.ts";
 
 // Each child process mocks the SDK and drives one isolated review through runReviewJob.
 
-import { mockChange, mockPiCodingAgent } from "./program-host-runner.ts";
+import { mockChange, mockPiCodingAgent, practiceIndexOf } from "./program-host-runner.ts";
 
 const LIB = nodePath.resolve(
 	import.meta.dirname,
@@ -2432,12 +2432,16 @@ if (scenario !== undefined && scenario !== "") {
 						},
 					);
 					assert.equal(child.error, undefined);
-					// A scenario's runtime lines keep to the diagnostic grammar and never quote a tool, a provider or a
-					// model: some scenarios put the canary in a tool result and in provider errors.
+					// A scenario's runtime lines are all ones the worker keeps, with no field left out, and never quote a
+					// tool, a provider or a model: some scenarios put the canary in a tool result and in provider errors.
 					assert.deepEqual(
 						child.stderr
 							.split("\n")
-							.filter((line) => line.startsWith("[pi-") && !DIAGNOSTIC_LINE.test(line)),
+							.filter(
+								(line) =>
+									line.startsWith("[pi-") &&
+									(!isDiagnosticLine(line) || line.includes(" invalid=")),
+							),
 						[],
 					);
 					assert.ok(!child.stderr.includes("sk-orchestration-secret"), child.stderr);
@@ -2636,8 +2640,9 @@ if (scenario !== undefined && scenario !== "") {
 									8,
 								);
 								assert.equal(
-									child.stderr.split(`[pi-runner] practice.result_refused practice=${slug} `)
-										.length - 1,
+									child.stderr.split(
+										`[pi-runner] practice.result_refused practice=${practiceIndexOf(cwd).indexOf(slug)} `,
+									).length - 1,
 									corrected ? 7 : 8,
 								);
 							}
@@ -2760,13 +2765,13 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 0, child.stderr);
 							assert.equal(readResults(nodePath.join(cwd, "out/result.json")).length, 2);
 							assert.equal(events.filter((event) => event === "steer").length, 2);
-							assert.doesNotMatch(child.stderr, /2 calls in this session ran into/u);
+							assert.doesNotMatch(child.stderr, /turn\.stopped/u);
 							ran({ "second-practice": "ok", "test-practice": "ok" });
 							break;
 						}
 						case "scope-recording-guard": {
 							assert.equal(child.status, 0, child.stderr);
-							assert.match(child.stderr, /turn\.stopped .*reason=loop/u);
+							assert.match(child.stderr, /turn\.stopped .*stopped_by=loop/u);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 2);
 							assert.deepEqual(
 								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
@@ -2780,7 +2785,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 0, child.stderr);
 							assert.equal(readResults(nodePath.join(cwd, "out/result.json")).length, 6);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 6);
-							assert.doesNotMatch(child.stderr, /aborting this turn|Finishing/u);
+							assert.doesNotMatch(child.stderr, /turn\.stopped|review\.finishing/u);
 							assert.match(child.stderr, /calls=6 call_budget=12/u);
 							break;
 						}
@@ -2820,7 +2825,7 @@ if (scenario !== undefined && scenario !== "") {
 									/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 stopped_by=budget/u,
 								);
 								assert.match(child.stderr, /measurement\.finished .*calls=6/u);
-								assert.doesNotMatch(child.stderr, /Finishing/u);
+								assert.doesNotMatch(child.stderr, /review\.finishing/u);
 							}
 							break;
 						}
@@ -2832,7 +2837,7 @@ if (scenario !== undefined && scenario !== "") {
 							// The double's failed stop, or a stop that never settles, ends the run by its class.
 							assert.match(
 								child.stderr,
-								/review\.fatal error=(?:Error at=pi-runner-orchestration\.spec\.ts:\d+|SessionUnsettledError)/u,
+								/review\.fatal error=(?:Error|SessionUnsettledError)(?: at=[\d,]+)?$/mu,
 							);
 							if (stage === "scope-stop-hangs") {
 								assert.ok(events.includes("late-record-closed"));
@@ -2923,7 +2928,7 @@ if (scenario !== undefined && scenario !== "") {
 						case "cut-off": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.match(child.stderr, /\[pi-runner\] turn\.output_limit /u);
-							assert.match(child.stderr, /turn\.stopped .*reason=loop/u);
+							assert.match(child.stderr, /turn\.stopped .*stopped_by=loop/u);
 							const order = events.filter((event) => ["steer", "abort"].includes(event));
 							assert.ok(order.indexOf("steer") < order.indexOf("abort"));
 							assert.deepEqual(
@@ -2964,7 +2969,7 @@ if (scenario !== undefined && scenario !== "") {
 								child.stderr,
 								/turn\.nudged .*calls=4 call_budget=6 output_tokens=400 output_token_budget=24000/u,
 							);
-							assert.match(child.stderr, /turn\.stopped .*reason=budget/u);
+							assert.match(child.stderr, /turn\.stopped .*stopped_by=budget/u);
 							assert.match(
 								child.stderr,
 								/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 stopped_by=budget/u,
@@ -3023,7 +3028,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.ok(order.indexOf("abort-compaction") < order.indexOf("abort"));
 							assert.ok(events.indexOf("dispose") < events.indexOf("prompt:2"));
-							assert.match(child.stderr, /turn\.stopped .*reason=stall/u);
+							assert.match(child.stderr, /turn\.stopped .*stopped_by=stall/u);
 							assert.doesNotMatch(child.stderr, /already processing/u);
 							assert.deepEqual(
 								[...candidatesIn(nodePath.join(cwd, "out/result.json")).keys()],
@@ -3439,7 +3444,7 @@ for (const item of nullableCases) {
 							assert.match(
 								child.stderr,
 								new RegExp(
-									`turn\\.started turn=finish practices=1 call_budget=6 output_token_budget=24000 tokens_per_result=${pace}`,
+									`turn\\.started phase=finish practices=1 call_budget=6 output_token_budget=24000 tokens_per_result=${pace}`,
 									"u",
 								),
 							);
@@ -3469,11 +3474,13 @@ for (const item of nullableCases) {
 							assert.equal(child.status, 1, child.stderr);
 							assert.match(
 								child.stderr,
-								/turn\.repeated_call turn=turn_1\/1_code tool=bash repeats=3/u,
+								/turn\.repeated_call phase=review turn=1 (?:practice=0 )?tool=bash repeats=3/u,
 							);
-							assert.match(child.stderr, /turn\.stopped turn=turn_1\/1_code reason=loop/u);
-							assert.doesNotMatch(child.stderr, /the same read call/u);
-							assert.match(child.stderr, /tool\.called turn=review tool=read codemode=true/u);
+							assert.match(
+								child.stderr,
+								/turn\.stopped phase=review turn=1 (?:practice=0 )?stopped_by=loop/u,
+							);
+							assert.match(child.stderr, /tool\.called phase=review tool=read codemode=true/u);
 							assert.equal(
 								events.filter((event) => event === "steer").length,
 								1,
@@ -3499,7 +3506,7 @@ for (const item of nullableCases) {
 								/identical to a result this turn already refused, so the answer is the same: citation does not match/u,
 							);
 							// The third identical send is a loop, and the circuit breaker ends the turn.
-							assert.match(child.stderr, /turn\.stopped .*reason=loop/u);
+							assert.match(child.stderr, /turn\.stopped .*stopped_by=loop/u);
 							assert.match(refusals[7] ?? "", /refused/u);
 							const afterCap = events.slice(
 								events.findIndex((event) => event.startsWith("refusal-9:")),
@@ -3552,7 +3559,7 @@ for (const item of nullableCases) {
 								["natural-prompt:1:session-1", "natural-prompt:2:session-1"],
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:session")).length, 1);
-							assert.doesNotMatch(child.stderr, /Finishing 1 practice/u);
+							assert.doesNotMatch(child.stderr, /review\.finishing/u);
 							assert.deepEqual(readResults(nodePath.join(cwd, "out/review-state.json")), []);
 							assert.equal(existsSync(nodePath.join(cwd, "out/result.json")), false);
 							reached({ "test-practice": "NOT_REACHED" });
@@ -3659,10 +3666,7 @@ for (const item of nullableCases) {
 						case "admission-null-outcome": {
 							assert.equal(child.status, 2, child.stderr);
 							// The admission answer fails its schema, which names the run's end by its class.
-							assert.match(
-								child.stderr,
-								/review\.fatal error=ZodError at=pi-admitted-results\.ts:\d+/u,
-							);
+							assert.match(child.stderr, /review\.fatal error=ZodError at=[\d,]+$/mu);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1"],

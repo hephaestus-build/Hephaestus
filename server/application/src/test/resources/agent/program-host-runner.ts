@@ -20,7 +20,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
-import { SUPPORTED_SCHEMA_VERSION } from "../../../main/resources/agent/pi-task-paths.ts";
+import {
+	resolveTaskPaths,
+	SUPPORTED_SCHEMA_VERSION,
+} from "../../../main/resources/agent/pi-task-paths.ts";
 import {
 	AUTHENTICATION_PRACTICE,
 	GOLDEN_INPUTS,
@@ -233,6 +236,9 @@ export async function runRunner(
 	env: Record<string, string> = {},
 ): Promise<RunnerExit> {
 	const firstCompletion = env.PI_HOST_FIRST_COMPLETION;
+	// A diagnostic names a practice by its position in the practice index.
+	const firstCompletionAt =
+		firstCompletion === undefined ? undefined : practiceIndexOf(cwd).indexOf(firstCompletion);
 	const child = spawn(
 		process.execPath,
 		["--experimental-test-module-mocks", import.meta.filename],
@@ -266,9 +272,9 @@ export async function runRunner(
 	child.stderr.on("data", (chunk: string) => {
 		stderr += chunk;
 		if (
-			firstCompletion !== undefined &&
+			firstCompletionAt !== undefined &&
 			!released &&
-			stderr.includes(`[pi-runner] practice.program_finished practice=${firstCompletion} `)
+			stderr.includes(`[pi-runner] practice.program_finished practice=${firstCompletionAt} `)
 		) {
 			released = true;
 			child.send("first-program-completed");
@@ -329,6 +335,17 @@ export function toldTheModel(cwd: string): string {
 		repliedText([...capturedLines(cwd, "submitted"), ...capturedLines(cwd, "refused")]),
 		...reasons,
 	].join("\n");
+}
+
+/** The slugs of the task's practice index, in its order. */
+export function practiceIndexOf(cwd: string): string[] {
+	const task: unknown = parseJson(readFileSync(nodePath.join(cwd, "task.json"), "utf8"));
+	const index: unknown = parseJson(readFileSync(resolveTaskPaths(cwd, task).practiceIndex, "utf8"));
+	return Array.isArray(index)
+		? index.flatMap((entry: unknown) =>
+				isJsonObject(entry) && typeof entry.slug === "string" ? [entry.slug] : [],
+			)
+		: [];
 }
 
 export function capturedLines(cwd: string, name: string): unknown[] {
@@ -509,11 +526,25 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 					const upsert = options.customTools.find((tool) => tool.name === "upsert_problem");
 					assert.ok(upsert);
 					for (const problem of problems) {
-						const reply = await upsert.execute(
-							"draft",
-							upsert.prepareArguments?.(problem) ?? problem,
-						);
-						capture("problem-drafts", { slug, reply });
+						try {
+							const reply = await upsert.execute(
+								"draft",
+								upsert.prepareArguments?.(problem) ?? problem,
+							);
+							capture("problem-drafts", { slug, reply });
+						} catch (error) {
+							// As for a submission, the SDK hands a refused draft's message to the model.
+							capture("refused", {
+								slug,
+								reply: {
+									isError: true,
+									content: [
+										{ type: "text", text: error instanceof Error ? error.message : String(error) },
+									],
+								},
+							});
+							throw error;
+						}
 					}
 					const keyed = Object.fromEntries(
 						Object.entries(candidate).filter(([key]) => key !== "problems"),

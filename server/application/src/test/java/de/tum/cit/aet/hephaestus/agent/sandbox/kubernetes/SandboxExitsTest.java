@@ -21,6 +21,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -95,7 +96,11 @@ class SandboxExitsTest extends BaseUnitTest {
 
     private static final String CANARY = "sk-canary-7f3a9c";
 
-    /** What an older runtime image wrote: free text after the prefix, which can quote a tool or a provider. */
+    /**
+     * What a runtime image can write that the vocabulary does not allow: an older image's free text after the prefix,
+     * and lines in the shape of a diagnostic whose event, field or value is not in the vocabulary, as content that
+     * imitates the runtime could write them.
+     */
     private static final String OLD_RUNTIME_LOG = String.join(
             "\n",
             "[pi-runner] review practice-a tool error: bash — cat: .env: API_KEY=" + CANARY,
@@ -103,26 +108,49 @@ class SandboxExitsTest extends BaseUnitTest {
             "[pi-runner] result refused for practice-a: the quote \"" + CANARY + "\" is not in src/Auth.java",
             "println from a reviewed program " + CANARY,
             "[heph-host 2026-10-26T20:11:30Z] " + CANARY,
-            "[pi-runner] tool.failed turn=review:practice-a tool=bash reason_chars=42",
-            "[pi-runner] review.partial without_result=1 practices=2 not_reached=practice-a");
+            "[pi-runner] assistant.message raw_stop_reason=" + CANARY,
+            "[pi-runner] session.leaked secret=" + CANARY,
+            "[pi-runner] assistant.message stop_reason=" + CANARY,
+            "[pi-runner] tool.failed turn=" + CANARY,
+            "[pi-runner] turn.finished turn=1 turn=2",
+            "[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42",
+            "[pi-runner] review.partial without_result=1 practices=2");
+
+    private static final int NOT_ALLOWED = 10;
 
     @Test
-    void shouldKeepOnlyLinesOfTheDiagnosticGrammarAndCountTheRest() {
+    void shouldKeepOnlyLinesThatTheVocabularyAllowsAndCountTheRest() {
+        String counts = Stream.of(
+                        "duration_ms",
+                        "calls",
+                        "call_budget",
+                        "output_tokens",
+                        "output_token_budget",
+                        "tool_calls",
+                        "stored",
+                        "refused",
+                        "tool_errors",
+                        "compactions",
+                        "provider_retries")
+                .map(key -> key + "=" + "9".repeat(16))
+                .collect(Collectors.joining(" "));
         String log = IntStream.rangeClosed(1, 30)
-                        .mapToObj(i -> "[pi-runner] tool.called turn=review:practice-a tool=read n=" + i)
+                        .mapToObj(i -> "[pi-runner] tool.called phase=review turn=" + i + " practice=0 tool=read")
                         .collect(Collectors.joining("\n"))
-                + "\n" + OLD_RUNTIME_LOG + "\n[pi-runner] turn.finished turn=review:practice-a stored="
-                + "1".repeat(90) + " calls=" + "2".repeat(90) + " stopped_by=" + "3".repeat(90) + " refused=0";
+                + "\n" + OLD_RUNTIME_LOG + "\n[pi-runner] turn.finished phase=review turn=1 practice=0 " + counts;
 
         SandboxExits.Tail tail = SandboxExits.stderrTail(log);
 
         List<String> lines = tail.text().lines().toList();
         assertThat(lines).hasSize(SandboxExits.TAIL_LINES_KEPT);
         assertThat(lines).allMatch(line -> line.startsWith("[pi-runner] "));
-        assertThat(tail.text()).doesNotContain(CANARY).doesNotContain("reviewed program");
+        assertThat(tail.text())
+                .doesNotContain(CANARY)
+                .doesNotContain("reviewed program")
+                .doesNotContain("turn=1 turn=2");
         assertThat(lines.getLast()).hasSize(SandboxExits.TAIL_LINE_CHARS);
         assertThat(tail.text().length()).isLessThanOrEqualTo(SandboxExits.TAIL_CHARS);
-        assertThat(tail.dropped()).isEqualTo(5);
+        assertThat(tail.dropped()).isEqualTo(NOT_ALLOWED);
     }
 
     @Test
@@ -148,7 +176,7 @@ class SandboxExitsTest extends BaseUnitTest {
         assertThat(event.getKeyValuePairs())
                 .anySatisfy(pair -> {
                     assertThat(pair.key).isEqualTo("sandbox.stderr.dropped");
-                    assertThat(pair.value).isEqualTo(5);
+                    assertThat(pair.value).isEqualTo(NOT_ALLOWED);
                 })
                 .anySatisfy(pair -> {
                     assertThat(pair.key).isEqualTo("sandbox.stderr.tail");
