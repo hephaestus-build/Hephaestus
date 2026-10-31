@@ -1,4 +1,6 @@
-import type * as Preset from "@docusaurus/preset-classic";
+import type { Options as SitemapOptions } from "@docusaurus/plugin-sitemap";
+import type { Options as ThemeOptions } from "@docusaurus/theme-classic";
+import type { UserThemeConfig } from "@docusaurus/theme-common";
 import type { Config, LoadContext, Plugin } from "@docusaurus/types";
 import { themes as prismThemes } from "prism-react-renderer";
 
@@ -170,26 +172,23 @@ const config: Config = {
 
 	themes: ["@docusaurus/theme-mermaid"],
 
-	presets: [
-		[
-			"classic",
-			{
-				docs: false,
-				blog: false,
-				theme: {
-					customCss: "./src/css/custom.css",
-				},
-				sitemap: {
-					lastmod: "datetime",
-					changefreq: "weekly",
-					priority: 0.5,
-					filename: "sitemap.xml",
-				},
-			} satisfies Preset.Options,
-		],
-	],
-
+	// The plugins and theme of `@docusaurus/preset-classic` that the site uses, in the order the preset
+	// loads them and before the site's own plugins, without its search, analytics, blog and debug
+	// plugins. `future.v4` turns on CSS cascade layers.
 	plugins: [
+		"@docusaurus/plugin-css-cascade-layers",
+		"@docusaurus/plugin-content-pages",
+		[
+			"@docusaurus/plugin-sitemap",
+			{
+				lastmod: "datetime",
+				changefreq: "weekly",
+				priority: 0.5,
+				filename: "sitemap.xml",
+			} satisfies SitemapOptions,
+		],
+		"@docusaurus/plugin-svgr",
+		["@docusaurus/theme-classic", { customCss: "./src/css/custom.css" } satisfies ThemeOptions],
 		rawMermaidSourcePlugin,
 		themeCookiePlugin,
 		[
@@ -435,7 +434,7 @@ const config: Config = {
 			darkTheme: prismThemes.vsDark,
 			additionalLanguages: ["bash", "json", "yaml", "java"],
 		},
-	} satisfies Preset.ThemeConfig,
+	} satisfies UserThemeConfig,
 };
 
 export default config;
