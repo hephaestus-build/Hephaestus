@@ -340,19 +340,25 @@ The [labelling guide](./label-feedback-quality.md) gives the independent human r
 
 ### Hephaestus voice eval
 
-`server/application/src/test/resources/agent/heph-voice.live.ts` sends questions to a real model through the conversation host.
+The eval in `server/application/src/test/resources/agent/heph-voice/` sends questions to a real model through the conversation host.
 The eval composes the prompt as `HephHostSpec` does, from `system.md` and the writing guide, and a fake worker serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 
-The file name does not match `*.spec.ts`, so `vp run test:agents` and `vp run check` do not run it.
-It reads the `@LiveLlmTest` credentials in the [meta-annotation cheat sheet](#meta-annotation-cheat-sheet).
-Without them, every case skips.
+The case file names do not match `*.spec.ts`, so `vp run test:agents` and `vp run check` do not run them.
+The eval reads the `@LiveLlmTest` credentials in the [meta-annotation cheat sheet](#meta-annotation-cheat-sheet).
+Without them, every case that asks the model skips.
+The oracle checks still run.
 From the repository root:
 
 ```bash
 HEPHAESTUS_LIVE_LLM_BASE_URL=… HEPHAESTUS_LIVE_LLM_API_KEY=… HEPHAESTUS_LIVE_LLM_MODEL=… \
-  node --test server/application/src/test/resources/agent/heph-voice.live.ts
+  node --test 'server/application/src/test/resources/agent/heph-voice/*.live.ts'
 ```
+
+Each case, or each group of cases for one finding, is its own `<id>.live.ts` file.
+`harness.ts` holds the model setup, the shared context folders and the oracles.
+To add a case, add a file. Do not append it to the file of another case.
+The glob in the command above finds each case file, so no list of cases needs an update.
 
 To compare another prompt, set `HEPHAESTUS_LIVE_HEPH_SYSTEM_PROMPT_FILE` to a file with the whole system prompt. It replaces `system.md` and the writing guide.
 
