@@ -12,7 +12,6 @@ import {
 import nodePath from "node:path";
 import { mock } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { isJsonObject } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
 
 import {
 	createBashToolDefinition,
