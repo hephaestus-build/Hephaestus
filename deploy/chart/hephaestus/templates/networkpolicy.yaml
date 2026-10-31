@@ -66,6 +66,7 @@ spec:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
+    {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.modelEgress" . | nindent 4 }}
     {{- if .Values.config.email.host }}
     # Mail submission, only when email is configured. Notifications are sent from this role.
@@ -103,6 +104,7 @@ spec:
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
+    {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
