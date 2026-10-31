@@ -2,13 +2,13 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
@@ -497,7 +497,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRollBackTheParentAndJobWhenTheLeaseCannotBeCreated() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
-        var failing = spy(jobs);
+        // Spring Data's repository proxy cannot be spied on, so a mock delegates every other call to it.
+        var failing = mock(ReviewJobRepository.class, delegatesTo(jobs));
         doReturn(0).when(failing).lease(eq(job.getId()), anyLong());
 
         assertThatThrownBy(() -> claimService(failing).claimJob(job.getId(), () -> true))
