@@ -77,7 +77,7 @@ Entries exist only for releases that need operator action. Everything else is in
 |-----------|-----|-------|
 | Database cutover | Follow the target release's migration entry | Complete any required procedure before starting the new runtime roles |
 | Environment variables | Check release notes | New config may be required |
-| Docker compose | Check `docker/` files | Image versions may change |
+| Helm chart | Check the chart values of the target release | Values may be added or renamed |
 
 ---
 
