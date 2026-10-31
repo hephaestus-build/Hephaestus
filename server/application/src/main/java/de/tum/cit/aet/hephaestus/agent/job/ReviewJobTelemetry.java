@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import io.micrometer.core.instrument.Counter;
@@ -61,9 +62,17 @@ final class ReviewJobTelemetry {
     private final Map<ResultOutcome, Counter> terminalCounters = new EnumMap<>(ResultOutcome.class);
 
     private final Tracer tracer;
+    private final MeterRegistry registry;
+    private final Counter concurrencyRejected;
+    private final Timer claimLatency;
 
     ReviewJobTelemetry(MeterRegistry registry, Tracer tracer) {
         this.tracer = tracer;
+        this.registry = registry;
+        concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
+                .description("Jobs rejected due to concurrency limits").register(registry);
+        claimLatency = Timer.builder(AgentMetrics.AGENT_JOB_CLAIM_LATENCY)
+                .description("Time between job submission and its claim").register(registry);
         for (Phase phase : Phase.values()) {
             durations.put(
                     phase,
@@ -83,6 +92,30 @@ final class ReviewJobTelemetry {
                             .tag("outcome", outcome.tag)
                             .register(registry));
         }
+    }
+
+    void claimRejected() {
+        concurrencyRejected.increment();
+    }
+
+    void claimWait(Duration duration) {
+        claimLatency.record(duration);
+    }
+
+    void claimRefused(String reason) {
+        ReviewRefusalRecorder.record(registry, "execution", reason);
+    }
+
+    void budgetHeld() {
+        registry.counter(AgentMetrics.AGENT_JOB_BUDGET_HELD).increment();
+    }
+
+    void budgetRefused() {
+        registry.counter(AgentMetrics.AGENT_JOB_BUDGET_REFUSED).increment();
+    }
+
+    void modelRefused() {
+        registry.counter(AgentMetrics.AGENT_JOB_MODEL_REFUSED).increment();
     }
 
     Span startExecution(ReviewJob job) {

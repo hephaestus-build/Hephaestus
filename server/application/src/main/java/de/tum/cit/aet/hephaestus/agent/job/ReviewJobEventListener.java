@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Queues item execution before the request transaction commits. */
+/** Queues item execution before the request transaction commits. The parent starts when a worker claims its job. */
 @Component
 @ConditionalOnServerRole
 @ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
@@ -32,7 +32,6 @@ public class ReviewJobEventListener {
         var review = reviews.find(event.workspaceId(), event.reviewId())
                 .orElseThrow(() -> new IllegalStateException("The requested review is unavailable"));
         if (review.kind() == ReviewKind.ITEM) {
-            if (!reviews.start(review.workspaceId(), review.id())) return;
             var selected = assignments.executable(
                     review.workspaceId(), review.id(), review.item().itemId());
             if (selected.isEmpty()) {

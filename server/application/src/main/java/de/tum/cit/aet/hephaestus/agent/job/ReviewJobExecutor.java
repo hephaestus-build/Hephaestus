@@ -552,11 +552,7 @@ public class ReviewJobExecutor {
         if (free <= 0) {
             return 0;
         }
-        // A review whose sandbox the runtime cannot hold now waits in the queue; claimed, it would spend an attempt.
-        // The
-        // runtime counts a sandbox once it launched, so the claims that still prepare theirs take room too.
-        long room = sandboxManager.roomFor(reviewLimits.forAttempt(ResourceLimits.MAX_RUNTIME));
-        free = Math.min(free, room - preparingJobs.size());
+        // Review quota is checked at claim, so compositions remain eligible when that quota is full.
         return (int) Math.min(Math.max(0, free), agentProperties.claimBatchSize());
     }
 
@@ -582,16 +578,8 @@ public class ReviewJobExecutor {
     }
 
     private StartOutcome processJob(UUID jobId, Set<Long> blockedPools, Set<UUID> seen) {
-        UUID selected = jobId;
-        while (seen.add(selected)) {
-            var attempt = tryClaim(selected);
-            if (attempt instanceof ReviewJobClaimService.ClaimTurn next) {
-                selected = next.jobId();
-                continue;
-            }
-            return processClaim(selected, attempt, blockedPools);
-        }
-        return StartOutcome.SKIPPED;
+        if (!seen.add(jobId)) return StartOutcome.SKIPPED;
+        return processClaim(jobId, tryClaim(jobId), blockedPools);
     }
 
     private ReviewJobClaimService.@Nullable ClaimAttempt tryClaim(UUID jobId) {
@@ -602,7 +590,10 @@ public class ReviewJobExecutor {
             return null;
         }
         try {
-            return claims.claimJob(jobId);
+            return claims.claimJob(
+                    jobId,
+                    () -> sandboxManager.roomFor(reviewLimits.forAttempt(ResourceLimits.MAX_RUNTIME))
+                            > preparingJobs.size());
         } catch (CannotAcquireLockException e) {
             log.debug("Lock timeout during claim for job {}, will retry on next poll", jobId);
             return null;
@@ -1491,7 +1482,7 @@ public class ReviewJobExecutor {
             cancelQueuedForRoom(now, CANNOT_FIT, SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
             return;
         }
-        if (sandboxManager.roomFor(limits) > 0
+        if (sandboxManager.roomFor(limits) != 0
                 || sandboxManager.reviewsRunning()
                 || !jobRepository.existsQueuedForRoom()) {
             starvedSince.set(null);

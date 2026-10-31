@@ -504,30 +504,29 @@ At most one drafting call can be active in each pool, and it cannot use the inte
 A later call does not revoke an active draft: it can wait for that draft's transport to close.
 
 A fair queue gives workspaces, composition, and individual attempts turns before repeated grants to a busy peer.
-Retry and backfill origins receive no extra priority.
-A review claim reserves its first grant before capture or Pod creation.
-A saturated pool leaves the review queued.
-The first call consumes only its exact attempt and worker reservation.
-
-A script can call another pool before its primary model.
-The worker first releases its unused reservation.
-That release commits before another pool lock or capacity wait.
-Active calls retain their grants until their transports close.
-
-Unused reservations expire when their owner stops renewing them for a full permit lease.
-Any worker can reclaim these reservations under the pool lock, with an atomic state fence against activation.
-Active grants never use that expiry path.
-The fair queue counts grants even when unused provider debits are refunded.
-
-A review that cannot claim records its demand in the same fair queue as background calls.
-It stays queued and creates no Pod.
-After a capacity refusal, the same poll scans other endpoint pools before it sleeps.
-The job retains its original readiness time.
-
-If another claim owns the next turn, the poll dispatches that claim.
-A budget hold or workspace limit withdraws ineligible claim demand.
-A paused workspace or future readiness time also withdraws that demand.
 Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
+Every physical call joins this queue, including composition and direct script calls.
+
+Before a review starts capture or creates a Pod, its claim checks the review quota and its model's endpoint pool.
+The parent review and its job start in one transaction after those checks pass.
+The claim stays queued while the quota has no room or the pool has a live background call waiting.
+Background classes are requested reviews, event reviews, scheduled reviews, backfill, and composition.
+Conversation and product feedback waiters do not block a review claim.
+An unavailable observation leaves the review queued.
+The Kubernetes readiness check also fails while a namespace informer cannot list or watch its resources.
+
+This check takes no provider grant and adds no pool waiter.
+A pool whose calls are all active can admit a review when it has no background waiter.
+The review's actual calls join the pool queue when they run.
+A new waiter or another worker can use room after the observation.
+The Kubernetes quota and the pool enforce capacity when the Pod and call start.
+
+After a backlog refusal, the same poll scans other endpoint pools before it sleeps.
+The job retains its original readiness time.
+Claims prefer started work, then workspaces with fewer running reviews.
+Each batch also counts the positions already offered to a workspace.
+Within that order, requested reviews precede event, scheduled, and backfill reviews.
+Each ten minutes of waiting offsets one origin priority step, so old backfill can pass new requests.
 
 The pool also accounts for request and token rates across workers.
 Each physical request, including a protocol retry, consumes a rate debit.
