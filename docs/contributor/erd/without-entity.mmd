@@ -9,6 +9,10 @@ erDiagram
 
     direction LR
 
+    AccountPublicActivityHiddenByDefault {
+        BIGINT account_id PK,FK
+    }
+
     AuthRateLimitBucket {
         VARCHAR(255) id PK
         BYTEA state
@@ -34,10 +38,16 @@ erDiagram
         VARCHAR(255) locked_by "NOT NULL"
     }
 
+    Account["Account · Core"]
+
     %% Relationships
+    %% One-to-One relationships
+    Account ||--|| AccountPublicActivityHiddenByDefault : has
+
     %% Styling
     classDef primaryEntity stroke:#0288d1,stroke-width:2px
     classDef associationEntity stroke:#8e24aa,stroke-width:2px
     classDef metadataEntity stroke:#43a047,stroke-width:2px
     classDef referenceEntity stroke-dasharray:5 5
 
+    class Account referenceEntity
