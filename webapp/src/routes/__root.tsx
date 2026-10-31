@@ -197,8 +197,19 @@ function RootRoute() {
 	);
 }
 
+/**
+ * The page a report is sent from, as its route: `/w/$workspaceSlug/practices`, never `/w/acme/practices`.
+ * The route names the screen without the workspace, ids or search that the address carries.
+ */
+function routeOf(fullPath: string | undefined): string {
+	if (fullPath === undefined || fullPath === "/") {
+		return "/";
+	}
+	return fullPath.endsWith("/") ? fullPath.slice(0, -1) : fullPath;
+}
+
 function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
-	const { pathname } = useLocation();
+	const route = useMatches({ select: (matches) => routeOf(matches.at(-1)?.fullPath) });
 	const feedback = useSubmitProductFeedback(workspaceSlug);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
@@ -221,7 +232,7 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 				kind={feedbackKind}
 				onKindChange={setFeedbackKind}
 				context={{
-					pagePath: pathname.slice(0, PAGE_PATH_MAX_LENGTH),
+					pagePath: route.slice(0, PAGE_PATH_MAX_LENGTH),
 					userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
 				}}
 				isSubmitting={feedback.isPending}
