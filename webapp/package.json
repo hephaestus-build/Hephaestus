@@ -61,6 +61,7 @@
 		"streamdown": "2.6.0",
 		"use-sync-external-store": "1.6.0",
 		"usehooks-ts": "3.1.1",
+		"web-vitals": "6.2.3",
 		"zod": "4.6.6"
 	},
 	"devDependencies": {

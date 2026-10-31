@@ -337,6 +337,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
   The notice must name the relay operator as a recipient.
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated practice results.
 - **Server logs** — IP address and request metadata.
+- **Page experience** — if you turn it on, read [Page experience](#page-experience) first.
 - **Log collection** — you can ship container logs to a log store such as Loki ([Collecting logs](./observability.mdx#collecting-logs)).
   Name the store's operator and retention in the notice.
   Hephaestus ships no error telemetry service.
@@ -385,6 +386,43 @@ copy. Responses can be cached for up to 60 seconds.
 **Show me on public activity pages** in User settings, or select **Hide me** when a workspace with a
 public activity page asks. Without an account, contact [privacy contact]. We stop at once, and you
 also leave every total on the page.
+```
+
+### Page experience
+
+**`PAGE_EXPERIENCE_METRICS`** is off by default.
+When it is on, the browser of each signed-in reader measures how fast each visit loaded and responded.
+It sends the measurements to your server at most once for each page load.
+The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./observability.mdx#page-experience-metrics)).
+It keeps no record of the report.
+The report is a request, so it carries the same request metadata as every other request.
+
+In the EU, turning it on can require consent or a documented legal basis.
+The browser reads these timings from the reader's device.
+[Art. 5(3) of the ePrivacy Directive](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02002L0058-20091219) and its national laws, such as [§ 25 TDDDG](https://www.gesetze-im-internet.de/ttdsg/__25.html) in Germany, cover such access.
+Some regulators exempt narrow performance measurement under conditions, and others do not.
+Whether an exemption applies depends on your national law, its regulator and how you run the instance.
+
+For the processing of the report, Art. 6(1)(f) GDPR (legitimate interest in the performance of the service) is one possible basis.
+Hephaestus shows no consent prompt.
+
+You decide with your data-protection adviser, and you record the decision in your privacy notice.
+Before you turn it on:
+
+1. Determine with your data-protection adviser whether your national ePrivacy law permits the access without consent.
+2. If it requires consent, keep the setting off.
+3. Determine and record a lawful basis for the processing of the report.
+4. Add the text below to your privacy notice.
+5. Set `PAGE_EXPERIENCE_METRICS=true`, or `config.pageExperienceMetrics: true` in the Helm chart.
+
+```md
+### Page experience
+
+Your browser measures how fast each page loads and responds, and how much the layout moves. At most
+once for each page load, it sends these timings to [example.org]. They are counted without your name,
+workspace or page address, and no copy of the report is kept. Like every request, the report reaches
+the server with your IP address and browser information, which the server logs keep for
+[retention]. Purpose: [purpose]. Legal basis: [legal basis].
 ```
 
 ### Workspace addresses

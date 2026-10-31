@@ -1093,7 +1093,8 @@ export const zExternalDelivery = z.object({
 export const zFeatureFlags = z.object({
     ADMIN: z.boolean().optional(),
     GITLAB_WORKSPACE_CREATION: z.boolean().optional(),
-    NOTIFICATION_ACCESS: z.boolean().optional()
+    NOTIFICATION_ACCESS: z.boolean().optional(),
+    PAGE_EXPERIENCE_METRICS: z.boolean().optional()
 });
 
 /**
@@ -6259,6 +6260,40 @@ export const zPracticeDefinitionOptions = z.object({
 export const zVerifyPasskeyRequest = z.object({
     challengeId: z.uuid(),
     credentialJson: z.string().min(0).max(65536)
+});
+
+/**
+ * One measurement of a page visit
+ */
+export const zWebVital = z.object({
+    page: z.enum([
+        'PRACTICE_PROFILE',
+        'ASK_HEPHAESTUS',
+        'FEEDBACK',
+        'FEEDBACK_APPROVAL',
+        'ACTIVITY',
+        'OTHER'
+    ]),
+    region: z.enum([
+        'SIDEBAR',
+        'HEADER',
+        'PAGE',
+        'OTHER'
+    ]),
+    value: z.number().gte(0).lte(600000),
+    vital: z.enum([
+        'LCP',
+        'INP',
+        'CLS',
+        'TTFB'
+    ])
+});
+
+/**
+ * The measurements of one page visit, one of each vital, sent once when the reader leaves it
+ */
+export const zWebVitalsReport = z.object({
+    vitals: z.array(zWebVital).min(1).max(4)
 });
 
 /**

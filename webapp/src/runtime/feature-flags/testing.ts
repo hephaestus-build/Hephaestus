@@ -23,6 +23,7 @@ export function mockFeatureFlags(overrides?: Partial<FeatureFlags>): FeatureFlag
 		NOTIFICATION_ACCESS: false,
 		ADMIN: false,
 		GITLAB_WORKSPACE_CREATION: false,
+		PAGE_EXPERIENCE_METRICS: false,
 		...overrides,
 	};
 }

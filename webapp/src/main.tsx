@@ -24,6 +24,7 @@ import { SessionKeepAlive } from "@/runtime/auth/use-session-keep-alive";
 import { TanstackDevtools } from "@/runtime/devtools/TanstackDevtools";
 import { ThemeProvider } from "@/runtime/theme/ThemeContext";
 import { applyUserViewHeaders } from "@/runtime/user-view/session";
+import { reportVisitVitals } from "@/runtime/web-vitals";
 
 import { routeTree } from "./routeTree.gen";
 import * as TanstackQuery from "./runtime/tanstack-query/root-provider";
@@ -59,6 +60,7 @@ const router = createRouter({
 });
 
 installPasskeyChallenge(router);
+reportVisitVitals(router, TanstackQuery.getContext().queryClient);
 installPreloadErrorReload(router);
 
 client.interceptors.response.use((response) => {

@@ -665,6 +665,7 @@
 				"llmPrivateHostsAllowHttp",
 				"researchOrganization",
 				"publicActivity",
+				"pageExperienceMetrics",
 				"monitoring",
 				"credentialKey",
 				"auth",
@@ -699,6 +700,7 @@
 						"repositoryVisibilityMaxAge": { "$ref": "#/definitions/duration" }
 					}
 				},
+				"pageExperienceMetrics": { "type": "boolean" },
 				"monitoring": {
 					"type": "object",
 					"additionalProperties": false,

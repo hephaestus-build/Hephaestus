@@ -41,6 +41,14 @@ class FeatureFlagEnvBindingTest extends BaseUnitTest {
         FeatureProperties properties = bindWith(Map.of());
 
         assertThat(properties.isEnabled("gitlab-workspace-creation")).isFalse();
+        assertThat(properties.isEnabled("page-experience-metrics")).isFalse();
+    }
+
+    @Test
+    void pageExperienceMetricsIsSettableByItsDocumentedEnvVar() throws Exception {
+        FeatureProperties properties = bindWith(Map.of("PAGE_EXPERIENCE_METRICS", "true"));
+
+        assertThat(properties.isEnabled("page-experience-metrics")).isTrue();
     }
 
     /**

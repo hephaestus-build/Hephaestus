@@ -1454,6 +1454,10 @@ export type FeatureFlags = {
      * User can receive notifications
      */
     NOTIFICATION_ACCESS?: boolean;
+    /**
+     * The browser measures and reports how page visits feel to the reader
+     */
+    PAGE_EXPERIENCE_METRICS?: boolean;
 };
 
 /**
@@ -6576,6 +6580,26 @@ export type VerifyPasskeyRequest = {
 };
 
 /**
+ * One measurement of a page visit
+ */
+export type WebVital = {
+    page: 'PRACTICE_PROFILE' | 'ASK_HEPHAESTUS' | 'FEEDBACK' | 'FEEDBACK_APPROVAL' | 'ACTIVITY' | 'OTHER';
+    region: 'SIDEBAR' | 'HEADER' | 'PAGE' | 'OTHER';
+    /**
+     * Milliseconds for LCP, INP and TTFB; the unitless layout-shift score for CLS, at most 100
+     */
+    value: number;
+    vital: 'LCP' | 'INP' | 'CLS' | 'TTFB';
+};
+
+/**
+ * The measurements of one page visit, one of each vital, sent once when the reader leaves it
+ */
+export type WebVitalsReport = {
+    vitals: Array<WebVital>;
+};
+
+/**
  * A weekly digest as it reads now, from the live facts
  */
 export type WeeklyDigest = {
@@ -10040,6 +10064,33 @@ export type GetSlackUserPreferencesResponses = {
 };
 
 export type GetSlackUserPreferencesResponse = GetSlackUserPreferencesResponses[keyof GetSlackUserPreferencesResponses];
+
+export type ReportWebVitalsData = {
+    body: WebVitalsReport;
+    path?: never;
+    query?: never;
+    url: '/web-vitals';
+};
+
+export type ReportWebVitalsErrors = {
+    /**
+     * A measurement names an unknown vital, page or region, or names a vital twice, or is out of range
+     */
+    400: unknown;
+    /**
+     * Not signed in
+     */
+    401: unknown;
+};
+
+export type ReportWebVitalsResponses = {
+    /**
+     * Measurements recorded
+     */
+    204: void;
+};
+
+export type ReportWebVitalsResponse = ReportWebVitalsResponses[keyof ReportWebVitalsResponses];
 
 export type ListWorkspacesData = {
     body?: never;

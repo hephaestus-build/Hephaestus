@@ -627,10 +627,64 @@ Concrete IDs or URLs in `uri` tags indicate a tagging defect.
 2. Fix a tagging defect before considering a larger budget.
 3. Do not turn off the bound.
 
+## Page experience metrics
+
+The web app can report how each visit felt to the reader.
+**`PAGE_EXPERIENCE_METRICS`** turns it on, and it is off by default.
+In the EU, turning it on can require consent or a documented legal basis.
+Read [Page experience](./legal-pages.mdx#page-experience) before you turn it on.
+When it is off, the browser does not load the measurement library, and the server has no `POST /web-vitals` endpoint and none of these metrics.
+
+When it is on, the web app measures with the [`web-vitals`](https://github.com/GoogleChrome/web-vitals) library.
+It loads the library only for a visit that started on a signed-in page, after it reads the setting.
+The library then reads the timings that the browser recorded since the page opened.
+When the reader first leaves the page after that, the web app sends one request to `POST /web-vitals`.
+A visit is the page load until then.
+A page that the browser shows again from its back-forward cache reports nothing more.
+
+A report names no person, workspace or page address.
+The server keeps no record of it.
+It only updates these metrics:
+
+| Metric | Tags | What it measures |
+| --- | --- | --- |
+| `web_vital_duration_seconds` | `vital`, `page`, `region` | `lcp`: the largest contentful paint. `inp`: the slowest interaction to its next paint. `ttfb`: the time to the first byte of the page. |
+| `web_vital_layout_shift_thousandths` | `page`, `region` | The cumulative layout shift of the visit, in thousandths of the score. A score of 0.1 is 100. |
+
+`page` is the page the visit started on: `practice_profile`, `ask_hephaestus`, `feedback`, `feedback_approval`, `activity` or `other`.
+INP and layout shift cover the whole visit, including the pages that the reader opened after the first one.
+Thus, they describe a visit that started on `page`, not `page` alone.
+`region` is the landmark of the element that the measurement names: `sidebar`, `header`, `page` or `other`.
+TTFB measures the whole document, so its region is always `other`.
+
+The server accepts only these values, so the number of series stays small.
+`web_vital_duration_seconds` has at most 54 tag combinations: LCP and INP for each page and region, and TTFB for each page.
+`web_vital_layout_shift_thousandths` has at most 24 combinations.
+Each combination exports its finite buckets, a `+Inf` bucket, a count, a sum and a maximum.
+That is 13 series for each duration combination and 6 for each layout shift combination, 846 series in total.
+
+The finite bucket bounds include the [Core Web Vitals thresholds](https://web.dev/articles/vitals):
+
+- LCP: 2.5 s and 4 s.
+- INP: 200 ms and 500 ms.
+- TTFB: 0.8 s and 1.8 s.
+- Layout shift: 100 and 250 (0.1 and 0.25).
+
+The other duration bounds are 100 ms, 1.2 s and 8 s.
+Thus, a percentile from these buckets is an estimate.
+A percentile above 8 s shows as 8 s.
+
+To separate the reader's time from the server's time, compare `web_vital_duration_seconds` with `http_server_requests_seconds` for the routes the page reads.
+For example, the 75th percentile of LCP on the practice profile:
+
+```promql
+histogram_quantile(0.75, sum by (le) (rate(web_vital_duration_seconds_bucket{vital="lcp", page="practice_profile"}[1h])))
+```
+
 ## Collecting logs
 
 Hephaestus sends no logs and no error reports to any service.
-The browser app reports nothing either.
+The browser app sends only its [page experience metrics](#page-experience-metrics), and only to your server.
 
 ### What the host keeps by default
 

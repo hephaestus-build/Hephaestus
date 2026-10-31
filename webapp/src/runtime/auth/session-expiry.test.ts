@@ -87,6 +87,19 @@ async function settled(): Promise<void> {
 }
 
 describe("handlePossibleSessionExpiry", () => {
+	it("leaves a refused page-timing report alone, so a hidden tab keeps its session", async () => {
+		const calls = serveSession({ user: 401, refresh: 401 });
+		const { assigned } = stubLocation("/w/acme/practice-profile", "");
+
+		expect(
+			handlePossibleSessionExpiry(res(401, "http://localhost:8080/web-vitals"), makeQueryClient()),
+		).toBe(false);
+		await settled();
+
+		expect(calls).toStrictEqual({ user: 0, refresh: 0 });
+		expect(assigned).toHaveLength(0);
+	});
+
 	it("keeps a session whose identity still holds without rotating its cookie", async () => {
 		const calls = serveSession();
 		const { assigned } = stubLocation("/w/acme/overview", "?tab=prs");
