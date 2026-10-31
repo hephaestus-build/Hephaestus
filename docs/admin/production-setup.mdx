@@ -538,7 +538,7 @@ A second reasoning rate would count the same work twice.
 
 Hephaestus uses one SMTP relay for the whole instance.
 Account-security and deletion confirmations are essential mail.
-New product feedback emails, connection alerts, and survey invitations are separate opt-in subscriptions in personal settings.
+New product feedback emails and connection alerts are separate opt-in subscriptions in personal settings.
 Email stays off until a relay host is set.
 There is no per-workspace mail configuration or connection authorization.
 Spring Boot's `spring.mail.*` is the transport, so each variable is the uppercase property path.
@@ -553,7 +553,7 @@ For no-email operation:
 1. Leave `SPRING_MAIL_HOST` blank.
 2. Leave `HEPHAESTUS_EMAIL_FROM` blank.
 
-Startup, sign-in, account management, product feedback, and in-app surveys require no SMTP service.
+Startup, sign-in, account management, and product feedback require no SMTP service.
 Account-security and deletion emails are withheld, but their operations complete.
 Do not promise email confirmation as the only action record.
 
@@ -562,9 +562,7 @@ After previous activation, only retained subscriptions remain visible so people 
 New opt-ins stay hidden.
 Users see no SMTP setup warning.
 Instance admins retain **Instance settings → Email** for setup and verification.
-Survey administration keeps results and request history but replaces the send action with a setup link.
 
-A direct invitation request returns `503` without email request records.
 Removal of SMTP configuration does not erase preferences.
 Attempts without configuration complete as `NOT_CONFIGURED` rather than waiting for reactivation.
 Existing subscriptions apply to future events after reconfiguration.
@@ -690,11 +688,10 @@ For example, this instance might have 200 total and 150 optional attempts from a
 This operating budget does not guarantee compliance with a rolling-window relay quota.
 Application interval refills can permit bursts across a boundary.
 
-For a larger research campaign, obtain an approved higher limit or suitable relay.
+For a larger email volume, obtain an approved higher limit or suitable relay.
 Do not increase only the application budget.
 Five reports to two subscribed admins need ten attempts.
 A daily digest is unnecessary at that volume.
-Survey invitations and reminders need separate capacity planning.
 
 **Privacy.**
 The relay operator receives personal data: an address and the fact that its owner has an account.

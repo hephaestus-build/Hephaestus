@@ -525,7 +525,6 @@ export const handlers = (role: WorkspaceMembership["role"]) => [
 	http.get(`${ws}/practices/reviews/feedback`, () => HttpResponse.json(noReviewFeedback)),
 	http.get(`${ws}/members/me`, () => HttpResponse.json(membership(role))),
 	http.get(`${ws}/onboarding/me`, () => HttpResponse.json(onboarding)),
-	http.get(`${ws}/product-feedback/surveys`, () => HttpResponse.json([])),
 	http.get(`${ws}/practices/reviewed`, () => HttpResponse.json(reviewedPractices)),
 	http.get(`${ws}/practices/standings`, () => HttpResponse.json(practiceStandings)),
 	http.get(`${ws}/practice-groups/standings`, () => HttpResponse.json(groupStandings)),

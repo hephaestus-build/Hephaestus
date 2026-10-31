@@ -263,7 +263,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         var current = subscriptions.get(id);
         subscriptions.update(
                 id,
-                new UpdateNotificationPreferencesDTO(enabled, false, false, false, false, false),
+                new UpdateNotificationPreferencesDTO(enabled, false, false),
                 EntityTagPrecondition.parse(current.etag()),
                 true);
     }

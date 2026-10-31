@@ -239,14 +239,11 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     class DataCleanup {
 
         @Test
-        void purgeRemovesTheProductRowsTheWorkspaceOwnsAndKeepsInstanceWideSurveys() {
+        void purgeRemovesProductFeedbackFromTheWorkspace() {
             Workspace workspace = createGitLabWorkspaceWithData("product-rows");
             Long workspaceId = workspace.getId();
             long accountId = Objects.requireNonNull(
                     accountRepository.save(new Account("Product purge")).getId());
-            UUID targeted = seedSurvey(workspaceId);
-            UUID instanceWide = seedSurvey(null);
-            UUID targetedParticipation = seedParticipation(targeted, accountId, workspaceId);
             UUID feedback = UUID.randomUUID();
             jdbcTemplate.update(
                     "INSERT INTO product_feedback (id, account_id, workspace_id, kind, message,"
@@ -258,40 +255,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
             workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
 
-            assertThat(jdbcTemplate.queryForList(
-                            "SELECT id FROM product_survey WHERE id IN (?, ?)", UUID.class, targeted, instanceWide))
-                    .containsExactly(instanceWide);
-            assertThat(jdbcTemplate.queryForList(
-                            "SELECT id FROM product_survey_participation WHERE id = ?",
-                            UUID.class,
-                            targetedParticipation))
-                    .isEmpty();
             assertThat(jdbcTemplate.queryForList("SELECT id FROM product_feedback WHERE id = ?", UUID.class, feedback))
                     .isEmpty();
-        }
-
-        private UUID seedSurvey(@Nullable Long workspaceId) {
-            UUID id = UUID.randomUUID();
-            jdbcTemplate.update(
-                    "INSERT INTO product_survey (id, title, description, questions_json,"
-                            + " workspace_id, starts_at, active, created_at) VALUES (?, 'Survey',"
-                            + " 'Description', CAST('[]' AS jsonb), ?, now(), true, now())",
-                    id,
-                    workspaceId);
-            return id;
-        }
-
-        private UUID seedParticipation(UUID surveyId, long accountId, Long workspaceId) {
-            UUID id = UUID.randomUUID();
-            jdbcTemplate.update(
-                    "INSERT INTO product_survey_participation (id, survey_id, account_id,"
-                            + " workspace_id, status, invited_at) VALUES (?, ?, ?, ?, 'INVITED',"
-                            + " now())",
-                    id,
-                    surveyId,
-                    accountId,
-                    workspaceId);
-            return id;
         }
 
         @Test

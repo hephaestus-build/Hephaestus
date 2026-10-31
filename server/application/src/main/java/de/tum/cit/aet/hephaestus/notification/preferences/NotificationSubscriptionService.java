@@ -94,10 +94,6 @@ public class NotificationSubscriptionService {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN, "Only an instance admin can turn on product feedback notifications.");
         }
-        if (update.surveySummaries() && !admin && !enabled(rows, NotificationSubscriptionKind.SURVEY_SUMMARIES)) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Only an instance admin can turn on survey summaries.");
-        }
         if (!precondition.matches(version(rows))) {
             throw new ResponseStatusException(
                     HttpStatus.PRECONDITION_FAILED,
@@ -119,11 +115,8 @@ public class NotificationSubscriptionService {
     private NotificationPreferencesDTO view(long accountId, List<NotificationSubscription> rows) {
         return new NotificationPreferencesDTO(
                 enabled(rows, NotificationSubscriptionKind.PRODUCT_FEEDBACK),
-                enabled(rows, NotificationSubscriptionKind.PRODUCT_SURVEYS),
-                enabled(rows, NotificationSubscriptionKind.RESEARCH_SURVEYS),
                 contacts.activeVerifiedPrimaryEmail(accountId).isPresent(),
                 gateway.configured(),
-                enabled(rows, NotificationSubscriptionKind.SURVEY_SUMMARIES),
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
                 enabled(rows, NotificationSubscriptionKind.MENTOR_DIGEST),
                 weeklyDigests.availableFor(accountId),
@@ -136,10 +129,7 @@ public class NotificationSubscriptionService {
             NotificationSubscriptionKind kind) {
         return switch (kind) {
             case PRODUCT_FEEDBACK -> update.productFeedback();
-            case PRODUCT_SURVEYS -> update.productSurveys();
-            case RESEARCH_SURVEYS -> update.researchSurveys();
             case WORKSPACE_ALERTS -> update.workspaceAlerts();
-            case SURVEY_SUMMARIES -> update.surveySummaries();
             case MENTOR_DIGEST -> {
                 Boolean weeklyDigest = update.weeklyDigest();
                 yield weeklyDigest == null ? enabled(rows, kind) : weeklyDigest;

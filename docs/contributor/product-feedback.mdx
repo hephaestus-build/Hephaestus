@@ -4,29 +4,20 @@ title: Product feedback boundaries
 
 # Product feedback boundaries
 
-Product feedback collects identified submissions for instance administrators. It is separate from
-practice feedback and never leaves the instance. What administrators and members see is in the
-[operator guidance](/admin/product-feedback) and the [user guide](/user/product-feedback).
-The [personal-data map](/admin/dsms/personal-data-map) defines erasure ownership. The code is
-`server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/`.
-`Survey`,
-`SurveyParticipation` and `SurveyQuestions` carry the model's rules in their Javadoc.
+Product feedback collects identified submissions for instance administrators.
+It is separate from practice feedback and stays on the instance.
+The [admin guide](/admin/product-feedback) and [user guide](/user/product-feedback) describe the controls.
+The [personal-data map](/admin/dsms/personal-data-map) defines erasure ownership.
+The code is `server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/`.
 
 ## Boundaries
 
-- Workspace endpoints require membership.
-  They derive the account from authentication.
-  They check availability and workspace targeting on every write.
-  Instance administrator endpoints own authoring, lifecycle, results, export, and the inbox.
-- Drafts live in the root route's feedback controls (`__root.tsx`).
+- Workspace endpoints require membership and derive the account from authentication.
+  Instance endpoints also accept submissions from accounts without a workspace.
+  Instance admins own inbox access and can resolve or reopen a submission.
+- Drafts live in the root route’s product feedback controls (`__root.tsx`).
   A reload, workspace switch, or sign-out removes them.
-  The invitation cache is `use-product-feedback.ts`.
-  The generated client is the only HTTP boundary.
-  The system handles a response or decline once per account, not once per workspace.
-- Feedback is rate-limited by the unique constraint on `(account_id, submission_minute)`.
-- A survey's purpose is fixed at publication.
-  `RESEARCH` surveys snapshot the organization for which they were published.
-  `ResearchParticipationQuery`, implemented by `ConsentService`, must name that same organization and report a current grant for the account.
-  Only while both conditions hold does the system offer these surveys.
-  The system checks these conditions when it lists surveys and on every member write.
-  Thus, a withdrawal takes effect at once.
+  `use-product-feedback.ts` submits through the generated client.
+- The unique constraint on `(account_id, submission_minute)` limits product feedback to one submission per minute.
+- Research consent belongs to `ConsentService` and `ResearchParticipationQuery`.
+  Practice research uses it independently of product feedback.

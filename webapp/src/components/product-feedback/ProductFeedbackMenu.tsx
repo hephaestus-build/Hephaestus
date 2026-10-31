@@ -1,15 +1,6 @@
-import { cn } from "cn";
-import {
-	Bug,
-	ClipboardList,
-	ExternalLink,
-	Lightbulb,
-	MessageSquare,
-	MessageSquarePlus,
-} from "lucide-react";
+import { Bug, ExternalLink, Lightbulb, MessageSquare, MessageSquarePlus } from "lucide-react";
 import { useId } from "react";
 
-import type { SurveyInvitation } from "@/api/types.gen";
 import { GitHubIcon } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,23 +8,18 @@ import {
 	DropdownMenuContent,
 	DropdownMenuGroup,
 	DropdownMenuItem,
-	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 import { FEEDBACK_KIND_COPY, type FeedbackKind, READERS } from "./feedback-copy";
-import { SURVEY_PURPOSE_DEFS } from "./survey-purpose-defs";
-import { surveyEstimate } from "./survey-questions";
 
 /** The public issue tracker, for anyone who would rather talk in the open. */
 export const HEPHAESTUS_GITHUB_ISSUES_URL =
 	"https://github.com/hephaestus-build/Hephaestus/issues/new/choose";
 
 export interface ProductFeedbackMenuProps {
-	invitations: SurveyInvitation[];
 	onSendFeedback: (kind: FeedbackKind) => void;
-	onOpenSurvey: (surveyId: string) => void;
 }
 
 const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
@@ -42,48 +28,16 @@ const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
 	{ kind: "FEEDBACK", icon: MessageSquare },
 ];
 
-/**
- * The one place to contact your instance administrators. The trigger is a labelled pill rather than a bare
- * icon so the door is visible; survey invitations wait behind it, counted on the trigger, and
- * nothing opens until the member chooses.
- */
-export function ProductFeedbackMenu({
-	invitations,
-	onSendFeedback,
-	onOpenSurvey,
-}: ProductFeedbackMenuProps) {
+export function ProductFeedbackMenu({ onSendFeedback }: ProductFeedbackMenuProps) {
 	const id = useId();
-	const count = invitations.length;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
-				aria-label={
-					count > 0
-						? `Product feedback, ${count} ${count === 1 ? "survey" : "surveys"} waiting`
-						: "Product feedback"
-				}
-				render={
-					<Button
-						variant="outline"
-						shape="pill"
-						className={cn(
-							// A 32px square on a phone, where the header is already full; a labelled pill from `sm`.
-							"relative w-8 sm:w-auto",
-							count > 0 && "border-primary/40 bg-primary/5 hover:bg-primary/10",
-						)}
-					/>
-				}
+				aria-label="Product feedback"
+				render={<Button variant="outline" shape="pill" className="w-8 sm:w-auto" />}
 			>
 				<MessageSquarePlus data-icon="inline-start" aria-hidden />
 				<span className="hidden sm:inline">Product feedback</span>
-				{count > 0 && (
-					<span
-						aria-hidden
-						className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary px-1.5 text-2xs font-semibold text-primary-foreground tabular-nums sm:static"
-					>
-						{count}
-					</span>
-				)}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-80" align="end">
 				<div className="px-2 pt-1.5 pb-2">
@@ -111,32 +65,6 @@ export function ProductFeedbackMenu({
 						</DropdownMenuItem>
 					))}
 				</DropdownMenuGroup>
-				{count > 0 && (
-					<>
-						<DropdownMenuSeparator />
-						<DropdownMenuGroup>
-							<DropdownMenuLabel>Surveys waiting for you</DropdownMenuLabel>
-							{invitations.map((survey) => (
-								<DropdownMenuItem
-									key={survey.id}
-									className="items-start"
-									aria-label={survey.title}
-									aria-describedby={`${id}-${survey.id}`}
-									onClick={() => onOpenSurvey(survey.id)}
-								>
-									<ClipboardList className="mt-0.5" />
-									<span className="flex min-w-0 flex-col">
-										<span className="truncate">{survey.title}</span>
-										<span id={`${id}-${survey.id}`} className="text-xs text-muted-foreground">
-											{survey.purpose === "RESEARCH" && `${SURVEY_PURPOSE_DEFS.RESEARCH.label} · `}
-											{surveyEstimate(survey.questions)}
-										</span>
-									</span>
-								</DropdownMenuItem>
-							))}
-						</DropdownMenuGroup>
-					</>
-				)}
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
 					<DropdownMenuItem

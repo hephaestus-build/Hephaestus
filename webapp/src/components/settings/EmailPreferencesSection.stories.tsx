@@ -12,9 +12,6 @@ const ready = {
 	preferences: {
 		productFeedback: false,
 		workspaceAlerts: false,
-		surveySummaries: false,
-		productSurveys: false,
-		researchSurveys: false,
 		emailAvailable: true,
 		deliveryConfigured: true,
 		weeklyDigest: false,
@@ -27,7 +24,7 @@ const ready = {
 const meta = {
 	component: EmailPreferencesSection,
 	tags: ["autodocs"],
-	args: { state: ready, isAppAdmin: false, researchAvailable: true },
+	args: { state: ready, isAppAdmin: false },
 	render: (args) => {
 		const { state } = args;
 		if (state.status !== "ready") {
@@ -58,13 +55,11 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const product = canvas.getByRole("switch", { name: "Product survey invitations" });
-		const research = canvas.getByRole("switch", { name: "Research survey invitations" });
+		const product = canvas.getByRole("switch", { name: "Workspace connection alerts" });
 		await expect(product).not.toBeChecked();
-		await expect(research).not.toBeChecked();
 		await userEvent.click(product);
 		await expect(product).toBeChecked();
-		await expect(research).not.toBeChecked();
+		await expect(ready.onChange).toHaveBeenCalledWith({ workspaceAlerts: true });
 		await userEvent.click(product);
 		await expect(product).not.toBeChecked();
 	},
@@ -91,14 +86,12 @@ export const FormerInstanceAdmin: Story = {
 				...ready.preferences,
 				emailAvailable: false,
 				productFeedback: true,
-				surveySummaries: true,
 			},
 		},
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("switch", { name: "New product feedback" }));
 		await expect(canvas.queryByRole("switch", { name: "New product feedback" })).toBeNull();
-		await expect(canvas.getByRole("switch", { name: "Survey summaries" })).toBeChecked();
 	},
 };
 
@@ -106,7 +99,7 @@ export const Subscribed: Story = {
 	args: {
 		state: {
 			...ready,
-			preferences: { ...ready.preferences, productSurveys: true, researchSurveys: true },
+			preferences: { ...ready.preferences, workspaceAlerts: true },
 		},
 	},
 };
@@ -118,18 +111,14 @@ export const NoVerifiedAddress: Story = {
 			preferences: {
 				...ready.preferences,
 				emailAvailable: false,
-				productSurveys: true,
-				researchSurveys: true,
 			},
 		},
 	},
 	play: async ({ canvas }) => {
-		const product = canvas.getByRole("switch", { name: "Product survey invitations" });
-		await expectUnavailable(canvas.getByRole("switch", { name: "Workspace connection alerts" }));
+		const product = canvas.getByRole("switch", { name: "Workspace connection alerts" });
 		await userEvent.click(product);
 		await expect(product).not.toBeChecked();
 		await expectUnavailable(product);
-		await expect(canvas.getByRole("switch", { name: "Research survey invitations" })).toBeChecked();
 	},
 };
 
@@ -155,7 +144,7 @@ export const RetainedSubscriptions: Story = {
 export const Saving: Story = {
 	args: { state: { ...ready, isPending: true } },
 	play: async ({ canvas }) => {
-		await expectUnavailable(canvas.getByRole("switch", { name: "Product survey invitations" }));
+		await expectUnavailable(canvas.getByRole("switch", { name: "Workspace connection alerts" }));
 		await expect(
 			await canvas.findByText("Saving email choices…", {}, { timeout: 2000 }),
 		).toHaveAttribute("role", "status");
@@ -176,12 +165,4 @@ export const NarrowDark: Story = {
 		state: { ...ready, preferences: { ...ready.preferences, emailAvailable: false } },
 	},
 	globals: { viewport: { value: "reflow" }, theme: "dark" },
-};
-
-export const ResearchUnavailable: Story = { args: { researchAvailable: false } };
-export const RetainedResearch: Story = {
-	args: {
-		researchAvailable: false,
-		state: { ...ready, preferences: { ...ready.preferences, researchSurveys: true } },
-	},
 };

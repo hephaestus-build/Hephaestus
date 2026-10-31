@@ -10,9 +10,6 @@ import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 const preferences = {
 	productFeedback: false,
 	workspaceAlerts: false,
-	surveySummaries: false,
-	productSurveys: false,
-	researchSurveys: false,
 	emailAvailable: false,
 	deliveryConfigured: true,
 	weeklyDigest: false,
@@ -56,10 +53,7 @@ describe("weekly digest in User settings", () => {
 			expect(preferenceWrites).toStrictEqual([
 				{
 					productFeedback: false,
-					productSurveys: false,
-					researchSurveys: false,
 					workspaceAlerts: false,
-					surveySummaries: false,
 					weeklyDigest: true,
 				},
 			]),
@@ -180,9 +174,6 @@ describe("weekly digest in User settings", () => {
 			ifMatch: '"1"',
 			body: {
 				productFeedback: false,
-				productSurveys: false,
-				researchSurveys: false,
-				surveySummaries: false,
 				weeklyDigest: true,
 				workspaceAlerts: true,
 			},

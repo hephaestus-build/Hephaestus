@@ -66,7 +66,6 @@ import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPr
 import type { WeeklyDigestSectionProps } from "@/components/settings/WeeklyDigestSection";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
-import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
 import { browserTimeZone, TIME_ZONES } from "@/lib/dates";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
@@ -146,21 +145,11 @@ function RouteComponent() {
 		if (current === undefined || preferencesMutation.isPending) {
 			return;
 		}
-		const {
-			productFeedback,
-			productSurveys,
-			researchSurveys,
-			surveySummaries,
-			weeklyDigest,
-			workspaceAlerts,
-		} = current;
+		const { productFeedback, weeklyDigest, workspaceAlerts } = current;
 		preferencesMutation.mutate({
 			headers: { "If-Match": current.etag },
 			body: {
 				productFeedback,
-				productSurveys,
-				researchSurveys,
-				surveySummaries,
 				weeklyDigest,
 				workspaceAlerts,
 				...patch,
@@ -186,7 +175,6 @@ function RouteComponent() {
 		};
 	}
 	const emailPreferencesProps: EmailPreferencesSectionProps = {
-		researchAvailable: hasText(accountConsent?.researchOrganization),
 		isAppAdmin,
 		state: emailPreferencesState,
 	};
@@ -269,8 +257,6 @@ function RouteComponent() {
 		...updateResearchConsentMutation(),
 		onSuccess: (status) => {
 			queryClient.setQueryData(getConsentStatusQueryKey({}), status);
-			// Research surveys are offered on the strength of this answer, so the menu must follow it.
-			void queryClient.invalidateQueries({ queryKey: productSurveyQueryScope() });
 		},
 		onError: (error) => {
 			// The refusal may be the notice moving on — a renamed research organisation, or setup owed

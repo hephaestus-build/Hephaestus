@@ -102,6 +102,5 @@ Activation of an integration that the latest review does not cover also requires
 Record a controller or DPO determination in your DPIA before a material source expansion.
 The amendment triggers are in `processor-checklist.md` and `item-source-governance.md`.
 
-A change to the research wording needs a new notice version.
-Every account then answers once more, because an earlier yes to narrower wording does not carry over.
+[Legal pages](../legal-pages.mdx#when-a-new-decision-is-required) owns the policy for research wording changes and renewed decisions.
 Update the records in this package in the same change.

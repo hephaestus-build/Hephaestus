@@ -14,9 +14,6 @@ import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 const preferences = {
 	productFeedback: false,
 	workspaceAlerts: false,
-	surveySummaries: false,
-	productSurveys: false,
-	researchSurveys: false,
 	emailAvailable: true,
 	deliveryConfigured: true,
 	weeklyDigest: false,
@@ -38,32 +35,6 @@ describe("account email choices", () => {
 		);
 	});
 
-	it("hides research invitations without a study but lets a retained subscription be turned off", async () => {
-		const user = userEvent.setup();
-		server.use(
-			http.get("*/user/consent", () =>
-				HttpResponse.json({
-					completed: true,
-					noticeVersion: WORDING_VERSION,
-					participateInResearch: false,
-				}),
-			),
-			http.get("*/user/notification-preferences", () =>
-				HttpResponse.json({ ...preferences, researchSurveys: true }),
-			),
-			http.put("*/user/notification-preferences", () =>
-				HttpResponse.json({ ...preferences, etag: '"1"' }),
-			),
-		);
-		renderRouteAt("/settings");
-		await user.click(
-			await screen.findByRole("switch", { name: "Research survey invitations" }, ROUTE_RENDER_WAIT),
-		);
-		await waitFor(() =>
-			expect(screen.queryByRole("switch", { name: "Research survey invitations" })).toBeNull(),
-		);
-		expect(screen.getByRole("switch", { name: "Product survey invitations" })).not.toBeNull();
-	});
 	it("sends the confirmed revision and keeps consent off until the server accepts it", async () => {
 		const user = userEvent.setup();
 		const response = deferred();
@@ -75,23 +46,20 @@ describe("account email choices", () => {
 				body = await request.json();
 				etag = request.headers.get("If-Match");
 				await response.promise;
-				return HttpResponse.json({ ...preferences, productSurveys: true, etag: '"0-1-0"' });
+				return HttpResponse.json({ ...preferences, workspaceAlerts: true, etag: '"0-1-0"' });
 			}),
 		);
 		renderRouteAt("/settings");
 		const product = await screen.findByRole(
 			"switch",
-			{ name: "Product survey invitations" },
+			{ name: "Workspace connection alerts" },
 			ROUTE_RENDER_WAIT,
 		);
 		await user.click(product);
 		await waitFor(() => expect(etag).toBe('"0-0-0"'));
 		expect(body).toStrictEqual({
 			productFeedback: false,
-			workspaceAlerts: false,
-			surveySummaries: false,
-			productSurveys: true,
-			researchSurveys: false,
+			workspaceAlerts: true,
 			weeklyDigest: false,
 		});
 		expect(product.getAttribute("aria-checked")).toBe("false");
@@ -106,11 +74,6 @@ describe("account email choices", () => {
 		await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("true"));
 		await waitFor(() => expect(screen.queryByText("Saving email choices…")).toBeNull());
 		expect(product.getAttribute("aria-disabled")).not.toBe("true");
-		expect(
-			screen
-				.getByRole("switch", { name: "Research survey invitations" })
-				.getAttribute("aria-checked"),
-		).toBe("false");
 	});
 
 	it("cancels stale reads before and during a save so confirmed consent and its revision stay current", async () => {
@@ -131,13 +94,13 @@ describe("account email choices", () => {
 			http.put("*/user/notification-preferences", async ({ request }) => {
 				revisions.push(request.headers.get("If-Match"));
 				await heldWrite.promise;
-				return HttpResponse.json({ ...preferences, productSurveys: true, etag: '"2"' });
+				return HttpResponse.json({ ...preferences, workspaceAlerts: true, etag: '"2"' });
 			}),
 		);
 		const queryClient = renderRouteAt("/settings");
 		const product = await screen.findByRole(
 			"switch",
-			{ name: "Product survey invitations" },
+			{ name: "Workspace connection alerts" },
 			ROUTE_RENDER_WAIT,
 		);
 		try {
@@ -240,7 +203,7 @@ describe("account email choices", () => {
 				{ name: "New product feedback" },
 				ROUTE_RENDER_WAIT,
 			);
-			expect(screen.queryByRole("switch", { name: "Product survey invitations" })).toBeNull();
+			expect(screen.queryByRole("switch", { name: "Workspace connection alerts" })).toBeNull();
 			expect(screen.queryByText(/Email delivery is not configured/u)).toBeNull();
 			await user.click(feedback);
 			await waitFor(() =>
@@ -250,9 +213,6 @@ describe("account email choices", () => {
 				{
 					productFeedback: false,
 					workspaceAlerts: false,
-					surveySummaries: false,
-					productSurveys: false,
-					researchSurveys: false,
 					weeklyDigest: false,
 				},
 			]);
@@ -266,7 +226,6 @@ describe("account email choices", () => {
 			...preferences,
 			emailAvailable: false,
 			productFeedback: true,
-			surveySummaries: true,
 		};
 		server.use(
 			http.get("*/user", () =>
@@ -289,16 +248,10 @@ describe("account email choices", () => {
 		await waitFor(() =>
 			expect(screen.queryByRole("switch", { name: "New product feedback" })).toBeNull(),
 		);
-		expect(
-			screen.getByRole("switch", { name: "Survey summaries" }).getAttribute("aria-checked"),
-		).toBe("true");
 		expect(writes).toStrictEqual([
 			{
 				productFeedback: false,
-				productSurveys: false,
-				researchSurveys: false,
 				workspaceAlerts: false,
-				surveySummaries: true,
 				weeklyDigest: false,
 			},
 		]);
@@ -318,7 +271,7 @@ describe("account email choices", () => {
 		);
 		renderRouteAt("/settings");
 		await user.click(
-			await screen.findByRole("switch", { name: "Product survey invitations" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("switch", { name: "Workspace connection alerts" }, ROUTE_RENDER_WAIT),
 		);
 		await screen.findByText(
 			"Your choices changed elsewhere. Review the updated choices and try again.",
@@ -326,57 +279,9 @@ describe("account email choices", () => {
 		expect(reads).toBe(2);
 		expect(
 			screen
-				.getByRole("switch", { name: "Product survey invitations" })
+				.getByRole("switch", { name: "Workspace connection alerts" })
 				.getAttribute("aria-checked"),
 		).toBe("false");
-	});
-
-	it("allows turning off a retained subscription without verified contact, but blocks new opt-ins", async () => {
-		const user = userEvent.setup();
-		const writes: unknown[] = [];
-		const retained = {
-			...preferences,
-			emailAvailable: false,
-			productSurveys: true,
-			researchSurveys: true,
-		};
-		server.use(
-			http.get("*/user/notification-preferences", () => HttpResponse.json(retained)),
-			http.put("*/user/notification-preferences", async ({ request }) => {
-				writes.push(await request.json());
-				return HttpResponse.json({ ...retained, productSurveys: false, etag: '"2"' });
-			}),
-		);
-		renderRouteAt("/settings");
-		const product = await screen.findByRole(
-			"switch",
-			{ name: "Product survey invitations" },
-			ROUTE_RENDER_WAIT,
-		);
-		const workspace = screen.getByRole("switch", { name: "Workspace connection alerts" });
-		expect(workspace.getAttribute("aria-disabled")).toBe("true");
-		await user.click(workspace);
-		expect(writes).toHaveLength(0);
-		await user.click(product);
-		await waitFor(() =>
-			expect(writes).toStrictEqual([
-				{
-					productFeedback: false,
-					workspaceAlerts: false,
-					surveySummaries: false,
-					productSurveys: false,
-					researchSurveys: true,
-					weeklyDigest: false,
-				},
-			]),
-		);
-		await waitFor(() => expect(product.getAttribute("aria-checked")).toBe("false"));
-		expect(product.getAttribute("aria-disabled")).toBe("true");
-		expect(
-			screen
-				.getByRole("switch", { name: "Research survey invitations" })
-				.getAttribute("aria-checked"),
-		).toBe("true");
 	});
 
 	it.each(["MEMBER", "ADMIN"] as const)(
@@ -397,9 +302,8 @@ describe("account email choices", () => {
 				),
 			);
 			renderRouteAt("/settings");
-			await screen.findByRole("switch", { name: "Product survey invitations" }, ROUTE_RENDER_WAIT);
+			await screen.findByRole("switch", { name: "Workspace connection alerts" }, ROUTE_RENDER_WAIT);
 			expect(screen.queryByRole("switch", { name: "New product feedback" })).toBeNull();
-			expect(screen.queryByRole("switch", { name: "Survey summaries" })).toBeNull();
 			expect(
 				screen
 					.getByRole("switch", { name: "Workspace connection alerts" })

@@ -30,32 +30,14 @@ type EmailPreferencesState =
 export interface EmailPreferencesSectionProps {
 	state: EmailPreferencesState;
 	isAppAdmin: boolean;
-	researchAvailable: boolean;
 }
 
 const choices = [
-	{
-		key: "surveySummaries",
-		label: "Survey summaries",
-		description:
-			"Get an email with the participation summary when a survey ends. It never includes individual answers.",
-	},
 	{
 		key: "workspaceAlerts",
 		label: "Workspace connection alerts",
 		description:
 			"Get an email when Slack access is revoked or GitHub access is suspended in a workspace you administer, and when access recovers.",
-	},
-	{
-		key: "productSurveys",
-		label: "Product survey invitations",
-		description: "Get email invitations to product surveys that help improve Hephaestus.",
-	},
-	{
-		key: "researchSurveys",
-		label: "Research survey invitations",
-		description:
-			"Get research survey invitations by email if you also take part in research. Turning this off stops the emails. It does not end your research participation.",
 	},
 	{
 		key: "productFeedback",
@@ -73,11 +55,7 @@ export function hasEmailPreferences(state: EmailPreferencesState) {
 	);
 }
 
-export function EmailPreferencesSection({
-	state,
-	isAppAdmin,
-	researchAvailable,
-}: EmailPreferencesSectionProps) {
+export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesSectionProps) {
 	const id = useId();
 	const showSpinner = useSpinDelay(state.status === "ready" && state.isPending, {
 		delay: 1000,
@@ -89,11 +67,8 @@ export function EmailPreferencesSection({
 		if (optOutOnly) {
 			return state.preferences[choice.key];
 		}
-		if (choice.key === "researchSurveys") {
-			return researchAvailable || (state.status === "ready" && state.preferences.researchSurveys);
-		}
 		return (
-			(choice.key !== "productFeedback" && choice.key !== "surveySummaries") ||
+			choice.key !== "productFeedback" ||
 			isAppAdmin ||
 			(state.status === "ready" && state.preferences[choice.key])
 		);
@@ -154,14 +129,12 @@ export function EmailPreferencesSection({
 			)}
 			{state.status === "ready" && (
 				<>
-					{!optOutOnly &&
-						!isAppAdmin &&
-						(state.preferences.productFeedback || state.preferences.surveySummaries) && (
-							<p className="text-sm text-muted-foreground">
-								You can turn off your previous instance admin subscriptions here. They do not send
-								while you lack instance admin access.
-							</p>
-						)}
+					{!optOutOnly && !isAppAdmin && state.preferences.productFeedback && (
+						<p className="text-sm text-muted-foreground">
+							You can turn off your previous instance admin subscriptions here. They do not send
+							while you lack instance admin access.
+						</p>
+					)}
 					{!optOutOnly && !state.preferences.emailAvailable && (
 						<p className="text-sm text-muted-foreground">
 							Your account has no verified email address. A connected sign-in provider must supply

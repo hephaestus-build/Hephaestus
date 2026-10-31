@@ -28,7 +28,7 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
 
     private static final String MIRROR =
             "a provider mirror that reaches its workspace through its repository or" + " organization";
-    private static final String OPTIONAL = "workspace_id is NULL for feedback or a survey outside a workspace";
+    private static final String OPTIONAL = "workspace_id is NULL for product feedback outside a workspace";
 
     /** Tables from before this rule, with how they reach their workspace. Do not add to this list. */
     private static final Map<String, String> BEFORE_THE_RULE = Map.ofEntries(
@@ -66,9 +66,6 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             Map.entry("team_repository_permission", MIRROR),
             Map.entry("config_audit_event", "workspace_id is NULL only for a curated practice change"),
             Map.entry("product_feedback", OPTIONAL),
-            Map.entry("product_survey", OPTIONAL),
-            Map.entry("product_survey_email_invitation", OPTIONAL),
-            Map.entry("product_survey_participation", OPTIONAL),
             Map.entry("connection_audit", "reaches its workspace through its connection"),
             Map.entry("event_publication", "the Spring Modulith event registry; a payload can name a workspace"));
 

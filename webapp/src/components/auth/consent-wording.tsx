@@ -19,15 +19,15 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 /**
  * The version of every consent string in this file. This bundle is the archive: what an account
- * accepted is whichever release published these words, and `ConsentService.WORDING_VERSION` holds the
- * same string.
+ * accepted is whichever release published the version on their ledger row.
+ * `ConsentService.WORDING_VERSION` holds the version currently shown for new decisions.
  *
  * The consent page refuses to render the form when the server reports a different one, and the
  * settings switch submits this one, because words on screen that the server does not know cannot
  * be truthfully accepted. Change any string below, or the strings of the consent page and the
  * research section in User settings, and this moves, in the same commit as the server's.
  */
-export const WORDING_VERSION = "2026-10-04";
+export const WORDING_VERSION = "2026-10-31";
 
 /**
  * What the reader needs before accepting, and nothing else. It names no operator: who runs this
@@ -104,9 +104,7 @@ export function ResearchSummary({ organization, id }: { organization: string; id
 				<li>your work in the tools your project connects</li>
 				<li>Hephaestus’s observations and feedback about that work</li>
 				<li>your responses to that feedback</li>
-				{/* oxlint-disable-next-line hephaestus/ui-text-voice -- This wording is versioned and stays until the next consent revision. */}
-				<li>how you use Hephaestus, including your conversations with Heph</li>
-				<li>your answers to research surveys</li>
+				<li>how you use Hephaestus, including your conversations with Hephaestus</li>
 			</ul>
 			<p>
 				The research team replaces your name with a code before analysis. Only the team and its AI

@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/** Shared attempt budgets leave capacity for essential mail even during a survey campaign. */
+/** Shared attempt budgets reserve capacity for essential mail. */
 @Component
 @ConditionalOnServerRole
 public class EmailRateLimiter {
