@@ -349,7 +349,7 @@ describe("Activity", () => {
 
 		await screen.findByRole("heading", { name: "No connected account" }, ROUTE_RENDER_WAIT);
 		expect(screen.getByRole("link", { name: "Connect an account" }).getAttribute("href")).toBe(
-			"/settings#linked-accounts-heading",
+			"/settings#connected-accounts",
 		);
 		expect(readsOf("/activity/me")).toStrictEqual([]);
 	});

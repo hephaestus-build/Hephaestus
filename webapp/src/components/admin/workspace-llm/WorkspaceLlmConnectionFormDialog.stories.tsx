@@ -39,10 +39,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Connect: Story = {};
+/** The panel's "Add provider" opens this dialog, so its title and submit say the same. */
+export const Connect: Story = {
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Add provider" });
+		await expect(within(dialog).getByRole("button", { name: "Add provider" })).toBeEnabled();
+	},
+};
 
 export const Edit: Story = {
 	args: { editing: mockConnection },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Edit provider" });
+		await expect(within(dialog).getByRole("button", { name: "Save changes" })).toBeEnabled();
+	},
 };
 
 export const ConnectEmbeddings: Story = {
@@ -50,7 +60,7 @@ export const ConnectEmbeddings: Story = {
 		await userEvent.type(await screen.findByLabelText("Display name"), "Embeddings");
 		await userEvent.click(screen.getByRole("combobox", { name: "API" }));
 		await userEvent.click(await screen.findByRole("option", { name: "Embeddings API" }));
-		await userEvent.click(screen.getByRole("button", { name: "Add connection" }));
+		await userEvent.click(screen.getByRole("button", { name: "Add provider" }));
 		await expect(args.onCreate).toHaveBeenCalledWith(
 			expect.objectContaining({ displayName: "Embeddings", apiProtocol: "openai-embeddings" }),
 		);
@@ -136,14 +146,14 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320, 375, 768] },
 	},
 	play: async () => {
-		await screen.findByRole("button", { name: "Add connection" });
+		await screen.findByRole("button", { name: "Add provider" });
 		await expectDialogFitsViewport();
 	},
 };
 
 export const ValidationError: Story = {
 	play: async () => {
-		await userEvent.click(await screen.findByRole("button", { name: "Add connection" }));
+		await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
 		await expectSettledVisible(await screen.findByText(/enter a display name/iu));
 	},
 };

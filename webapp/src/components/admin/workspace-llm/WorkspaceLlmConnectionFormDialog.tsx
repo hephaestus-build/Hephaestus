@@ -73,7 +73,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 	onUpdate,
 }: WorkspaceLlmConnectionFormDialogContentProps) {
 	const isEdit = editing !== null;
-	const submitLabel = isEdit ? "Save changes" : "Add connection";
+	const submitLabel = isEdit ? "Save changes" : "Add provider";
 	const [fields, setFields] = useState<LlmConnectionFieldsValue>(() =>
 		connectionFieldsValueOf(editing),
 	);
@@ -124,7 +124,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 		<DialogContent className="sm:max-w-lg">
 			<DialogForm onSubmit={handleSubmit}>
 				<DialogHeader>
-					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
+					<DialogTitle>{isEdit ? "Edit provider" : "Add provider"}</DialogTitle>
 					<DialogDescription>
 						Connect an AI endpoint. Add and price its models next.
 					</DialogDescription>

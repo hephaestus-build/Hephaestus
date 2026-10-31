@@ -1272,7 +1272,7 @@ it("keeps another provider's edit open and savable while an earlier provider's u
 			ROUTE_RENDER_WAIT,
 		);
 		await user.click(editFirst);
-		const first = within(await screen.findByRole("dialog", { name: "Edit connection" }));
+		const first = within(await screen.findByRole("dialog", { name: "Edit provider" }));
 		await user.click(first.getByRole("button", { name: "Save changes" }));
 		await waitFor(() => expect(updates).toStrictEqual([{ id: 7, displayName: "Own OpenAI" }]));
 		// The save has no timeout, so its dialog may still close; the provider it saves stays fenced.
@@ -1281,7 +1281,7 @@ it("keeps another provider's edit open and savable while an earlier provider's u
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
 		await user.click(screen.getByRole("button", { name: "Edit Second provider" }));
-		const secondDialog = await screen.findByRole("dialog", { name: "Edit connection" });
+		const secondDialog = await screen.findByRole("dialog", { name: "Edit provider" });
 		const name = within(secondDialog).getByLabelText<HTMLInputElement>("Display name");
 		expect(name.value).toBe("Second provider");
 		await user.clear(name);
@@ -1299,7 +1299,7 @@ it("keeps another provider's edit open and savable while an earlier provider's u
 		await waitFor(() => expect(connectionReads).toBeGreaterThan(readsBefore));
 		expect({
 			savableWhileFirstSaves,
-			stillOpen: screen.queryByRole("dialog", { name: "Edit connection" }) === secondDialog,
+			stillOpen: screen.queryByRole("dialog", { name: "Edit provider" }) === secondDialog,
 			draft: name.value,
 		}).toStrictEqual({
 			savableWhileFirstSaves: true,
