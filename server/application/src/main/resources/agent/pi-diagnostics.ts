@@ -1,6 +1,6 @@
 /**
  * The review runtime's diagnostics on stderr. Each line names one event of `pi-diagnostics.json`, with
- * fields of that vocabulary only: counts, flags, line numbers and closed codes. A text that a tool, a
+ * fields of that vocabulary only: counts, flags and closed codes. A text that a tool, a
  * model, a provider or reviewed code wrote has no field to go in, and neither has a label, a slug, a
  * path or an id: such text can hold reviewed code, a credential or a person's words, and the worker
  * copies these lines into its own log. A practice and a turn are named by their positions.
@@ -13,10 +13,10 @@ import vocabulary from "./pi-diagnostics.json" with { type: "json" };
 
 export type DiagnosticValue = string | number | boolean | undefined;
 
-type FieldType = "count" | "ratio" | "flag" | "lines" | readonly string[];
+type FieldType = "count" | "ratio" | "flag" | readonly string[];
 
 const EVENTS: ReadonlySet<string> = new Set(vocabulary.events);
-const SCALARS = ["count", "ratio", "flag", "lines"] as const;
+const SCALARS = ["count", "ratio", "flag"] as const;
 const FIELDS: ReadonlyMap<string, FieldType> = new Map(
 	Object.entries(vocabulary.fields).map(([key, type]): [string, FieldType] => {
 		const scalar = SCALARS.find((candidate) => candidate === type);
@@ -31,13 +31,11 @@ const FIELDS: ReadonlyMap<string, FieldType> = new Map(
 );
 const ERRORS: ReadonlySet<string> = new Set(vocabulary.fields.error);
 
-/** The text each scalar type allows. `SandboxExits.java` holds the same four patterns. */
+/** The text each scalar type allows. `DiagnosticVocabulary.java` holds the same three patterns. */
 export const SCALAR_TEXT = {
 	count: /^\d{1,16}$/u,
 	ratio: /^\d{1,6}(?:\.\d{1,6})?$/u,
 	flag: /^(?:true|false)$/u,
-	// Up to four line numbers of the runner: where an error was thrown, never what it said.
-	lines: /^\d{1,6}(?:,\d{1,6}){0,3}$/u,
 } as const;
 
 function textAllowed(type: FieldType, text: string): boolean {
@@ -138,21 +136,6 @@ export function errorKind(error: unknown): string {
 		return withReason;
 	}
 	return ERRORS.has(error.name) ? error.name : "other";
-}
-
-/**
- * The runner's own line numbers in an error's stack, at most four. Only frames of the runner script
- * count (`pi-runner.ts`, staged as `.run-pi.ts`), and a frame is reduced to its number, so a message
- * that imitates a frame can add a number and nothing else.
- */
-export function stackOf(error: unknown): string | undefined {
-	if (!(error instanceof Error) || error.stack === undefined) {
-		return undefined;
-	}
-	const lines = [...error.stack.matchAll(/(?:\/pi-runner|\/\.run-pi)\.ts:(?<line>\d{1,6}):\d+/gu)]
-		.flatMap(({ groups }) => (groups?.line === undefined ? [] : [groups.line]))
-		.slice(0, 4);
-	return lines.length === 0 ? undefined : lines.join(",");
 }
 
 /** Milliseconds as whole numbers, so a duration is a count and never a formatted text. */

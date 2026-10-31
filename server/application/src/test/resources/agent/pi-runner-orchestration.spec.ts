@@ -2835,10 +2835,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 1);
 							assert.deepEqual(readResults(nodePath.join(cwd, "out/review-state.json")), []);
 							// The double's failed stop, or a stop that never settles, ends the run by its class.
-							assert.match(
-								child.stderr,
-								/review\.fatal error=(?:Error|SessionUnsettledError)(?: at=[\d,]+)?$/mu,
-							);
+							assert.match(child.stderr, /review\.fatal error=(?:Error|SessionUnsettledError)$/mu);
 							if (stage === "scope-stop-hangs") {
 								assert.ok(events.includes("late-record-closed"));
 							}
@@ -3666,7 +3663,7 @@ for (const item of nullableCases) {
 						case "admission-null-outcome": {
 							assert.equal(child.status, 2, child.stderr);
 							// The admission answer fails its schema, which names the run's end by its class.
-							assert.match(child.stderr, /review\.fatal error=ZodError at=[\d,]+$/mu);
+							assert.match(child.stderr, /review\.fatal error=ZodError$/mu);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1"],

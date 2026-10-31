@@ -8,7 +8,6 @@ import {
 	formatDiagnostic,
 	isDiagnosticLine,
 	SCALAR_TEXT,
-	stackOf,
 } from "../../../main/resources/agent/pi-diagnostics.ts";
 import { REASONING_EFFORTS } from "../../../main/resources/agent/pi-provider.ts";
 import {
@@ -61,6 +60,7 @@ void test("the worker keeps only lines of the vocabulary, also when they have th
 		`[pi-runner] tool.failed tool=${CANARY}`,
 		`[pi-runner] tool.failed turn=${CANARY}`,
 		`[pi-runner] review.fatal at=${CANARY}`,
+		"[pi-runner] review.fatal error=Error at=654321",
 		"[pi-runner] turn.finished turn=1 turn=2",
 		"[pi-runner] turn.finished  turn=1",
 		"[pi-runner] turn.finished turn=1 ",
@@ -68,7 +68,7 @@ void test("the worker keeps only lines of the vocabulary, also when they have th
 	]) {
 		assert.ok(!isDiagnosticLine(line), line);
 	}
-	assert.ok(isDiagnosticLine("[pi-runner] review.fatal error=TypeError at=2586,3247"));
+	assert.ok(isDiagnosticLine("[pi-runner] review.fatal error=TypeError"));
 	assert.ok(isDiagnosticLine("[pi-runner] coverage.measured evaluated=2 eligible=3 ratio=0.667"));
 });
 
@@ -84,21 +84,13 @@ void test("an error is named by its class and closed reason from the vocabulary,
 	assert.equal(errorKind(CANARY), "not_an_error");
 });
 
-void test("a stack is reduced to the runner's own line numbers, so a message cannot add a name", () => {
-	const failure = new TypeError(`failed at ${CANARY}.ts:123:4`);
-	failure.stack = [
-		`TypeError: failed at ${CANARY}.ts:123:4 and /app/${CANARY}/pi-runner.ts:77:1`,
-		`    at read (file:///workspace/${CANARY}.ts:9:6)`,
-		"    at read (file:///workspace/.run-pi.ts:2586:6)",
-		"    at main (file:///app/agent/pi-runner.ts:3247:3)",
-	].join("\n");
+void test("a fatal error is named by its class alone: no field takes text or digits from its message or stack", () => {
+	const failure = new Error("authentication failed /pi-runner.ts:654321:1 pin 482913");
 
-	assert.equal(stackOf(new Error(`failed at ${CANARY}.ts:123:4`)), undefined);
-	const at = stackOf(failure);
-	assert.equal(at, "77,2586,3247");
-	const line = formatDiagnostic("review.fatal", { error: errorKind(failure), at });
-	assert.ok(!line.includes(CANARY));
-	assert.ok(isDiagnosticLine(line));
+	const line = formatDiagnostic("review.fatal", { error: errorKind(failure) });
+
+	assert.equal(line, "[pi-runner] review.fatal error=Error");
+	assert.ok(!isDiagnosticLine("[pi-runner] review.fatal error=Error at=654321"));
 });
 
 void test("the vocabulary's closed lists are the runtime's own", () => {

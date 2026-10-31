@@ -35,7 +35,7 @@ import {
 	safeRepositoryPath,
 	writeChangeView,
 } from "./pi-change.ts";
-import { type DiagnosticValue, diagnose, errorKind, ms, stackOf } from "./pi-diagnostics.ts";
+import { type DiagnosticValue, diagnose, errorKind, ms } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import { OpeningQueue } from "./pi-opening-queue.ts";
 
@@ -3275,13 +3275,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 	}
 
 	process.on("uncaughtException", (err) => {
-		diagnose("review.fatal", { error: errorKind(err), at: stackOf(err) });
+		diagnose("review.fatal", { error: errorKind(err) });
 		finalizeOutputQuietly();
 		process.exit(2);
 	});
 
 	process.on("unhandledRejection", (reason) => {
-		diagnose("review.unhandled_rejection", { error: errorKind(reason), at: stackOf(reason) });
+		diagnose("review.unhandled_rejection", { error: errorKind(reason) });
 		finalizeOutputQuietly();
 		process.exit(2);
 	});
@@ -3290,7 +3290,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		try {
 			await main();
 		} catch (error) {
-			diagnose("review.fatal", { error: errorKind(error), at: stackOf(error) });
+			diagnose("review.fatal", { error: errorKind(error) });
 			unreachedReason = "error";
 			finalizeOutputQuietly();
 			// Preserve the retryable exit code for admission transport failures.

@@ -113,10 +113,11 @@ class SandboxExitsTest extends BaseUnitTest {
             "[pi-runner] assistant.message stop_reason=" + CANARY,
             "[pi-runner] tool.failed turn=" + CANARY,
             "[pi-runner] turn.finished turn=1 turn=2",
+            "[pi-runner] review.fatal error=Error at=654321",
             "[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42",
             "[pi-runner] review.partial without_result=1 practices=2");
 
-    private static final int NOT_ALLOWED = 10;
+    private static final int NOT_ALLOWED = 11;
 
     @Test
     void shouldKeepOnlyLinesThatTheVocabularyAllowsAndCountTheRest() {
@@ -147,7 +148,8 @@ class SandboxExitsTest extends BaseUnitTest {
         assertThat(tail.text())
                 .doesNotContain(CANARY)
                 .doesNotContain("reviewed program")
-                .doesNotContain("turn=1 turn=2");
+                .doesNotContain("turn=1 turn=2")
+                .doesNotContain("654321");
         assertThat(lines.getLast()).hasSize(SandboxExits.TAIL_LINE_CHARS);
         assertThat(tail.text().length()).isLessThanOrEqualTo(SandboxExits.TAIL_CHARS);
         assertThat(tail.dropped()).isEqualTo(NOT_ALLOWED);

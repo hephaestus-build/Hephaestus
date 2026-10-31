@@ -20,12 +20,11 @@ final class DiagnosticVocabulary {
 
     static final String RESOURCE = "agent/pi-diagnostics.json";
 
-    /** The text that each scalar type allows. {@code pi-diagnostics.ts} holds the same four patterns. */
+    /** The text that each scalar type allows. {@code pi-diagnostics.ts} holds the same three patterns. */
     static final Map<String, Pattern> SCALAR_TEXT = Map.of(
             "count", Pattern.compile("\\d{1,16}"),
             "ratio", Pattern.compile("\\d{1,6}(?:\\.\\d{1,6})?"),
-            "flag", Pattern.compile("(?:true|false)"),
-            "lines", Pattern.compile("\\d{1,6}(?:,\\d{1,6}){0,3}"));
+            "flag", Pattern.compile("(?:true|false)"));
 
     private static final Pattern LINE = Pattern.compile("\\[pi-(?:runner|provider)\\] (\\S.*)");
 
