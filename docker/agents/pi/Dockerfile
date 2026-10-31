@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.27@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 # renovate: datasource=node-version depName=node
-ARG NODE_VERSION=24.20.0
+ARG NODE_VERSION=24.22.1
 FROM ghcr.io/pnpm/pnpm:12.3.4@sha256:b81d53184f670fe19d1a33f9d5041907d314b31d596838e8133cbd83d45be043 AS dependencies
 ARG NODE_VERSION
 WORKDIR /opt/pi-sdk
@@ -21,7 +21,7 @@ COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gat
 RUN pnpm exec tsc -p tsconfig.build.json
 
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
-FROM node:${NODE_VERSION}-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0 AS os-packages
+FROM node:${NODE_VERSION}-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
     apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils tree jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*

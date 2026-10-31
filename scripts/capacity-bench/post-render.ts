@@ -126,7 +126,7 @@ for (const resource of resources) {
 					{
 						name: "driver",
 						image:
-							"node:24.20.0-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0",
+							"node:24.22.1-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a",
 						command: ["node", "-e", "setInterval(() => {}, 2147483647)"],
 						securityContext: {
 							runAsUser: 1000,
