@@ -19,8 +19,10 @@ minimumReleaseAge: 4320
 # every locked entry needs each package's full registry metadata, more memory than Renovate's
 # hosted job has. The setup-toolchain install in CI still verifies every entry (--no-trust-lockfile).
 trustLockfile: true
-# Initial, explicitly requested adoption; keep the age policy for every other package/version.
+# Explicitly requested versions; keep the age policy for every other package/version.
 minimumReleaseAgeExclude:
+  # CVE-2026-118772.
+  - "joi@17.13.9"
   - "@shadcn/lint@0.1.0"
   - "@earendil-works/chord@1.0.0"
   - "@earendil-works/pi-agent-core@1.0.0"
@@ -63,6 +65,10 @@ packageExtensions:
       "@docusaurus/utils-validation": ^3
 
 overrides:
+  # CVE-2026-116689.
+  "follow-redirects@>=1.16.0 <1.16.2": 1.16.2
+  # CVE-2026-118772.
+  "joi@>=17.1.1 <17.13.9": 17.13.9
   "get-uri>basic-ftp": 6.2.1
   "@docusaurus/core>tinypool": 2.1.2
   mermaid: 11.17.2
