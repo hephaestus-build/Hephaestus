@@ -132,7 +132,8 @@ Product feedback is filed in GitHub automatically, and it is worked on there.
 
    A security disposition, any blocking redaction finding, or a report about a named person sets the risk latch.
    No edit and no retry clears it.
-   Every public write checks this gate at dispatch: the first filing, a filing after an edit, a retry and a promotion.
+   Every public write checks this gate at dispatch.
+   These writes are the first filing, a filing after an edit, a retry and a promotion.
    A private issue opens with the reason it is private.
 6. **The hold.** A public report waits 5 minutes before it is filed.
    During that time, the person can keep it private or edit it. An edit restarts the hold.
