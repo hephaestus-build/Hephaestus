@@ -28,6 +28,12 @@ class PublicActivityMigrationTest {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
+            // This fixture resumes a deliberately partial history before the production entry boundary.
+            liquibase
+                    .getDatabaseChangeLog()
+                    .getPreconditions()
+                    .getNestedPreconditions()
+                    .clear();
             var contexts = new Contexts("prod");
             var labels = new LabelExpression();
             var pending = liquibase.listUnrunChangeSets(contexts, labels);

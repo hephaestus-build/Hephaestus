@@ -29,6 +29,12 @@ class AchievementRemovalMigrationTest {
             var database =
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (var liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
+                // This fixture resumes a deliberately partial history before the production entry boundary.
+                liquibase
+                        .getDatabaseChangeLog()
+                        .getPreconditions()
+                        .getNestedPreconditions()
+                        .clear();
                 var pending = liquibase.listUnrunChangeSets(contexts, labels);
                 int beforeRemoval = IntStream.range(0, pending.size())
                         .filter(index -> pending.get(index).getFilePath().endsWith(REMOVAL))

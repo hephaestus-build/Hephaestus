@@ -290,10 +290,17 @@ class RepositoryMonitorIdentityMigrationTest {
         }
 
         private static Liquibase liquibase(Connection connection) throws Exception {
-            return new Liquibase(
+            var liquibase = new Liquibase(
                     "db/master.xml",
                     new ClassLoaderResourceAccessor(),
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection)));
+            // This fixture resumes a deliberately partial history before the production entry boundary.
+            liquibase
+                    .getDatabaseChangeLog()
+                    .getPreconditions()
+                    .getNestedPreconditions()
+                    .clear();
+            return liquibase;
         }
     }
 }

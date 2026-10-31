@@ -128,6 +128,12 @@ public final class PostgreSQLTestContainer {
             Database database =
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
             try (Liquibase liquibase = new Liquibase("db/master.xml", new ClassLoaderResourceAccessor(), database)) {
+                // Fixtures can seed a pre-cut-point history before completing the current schema.
+                liquibase
+                        .getDatabaseChangeLog()
+                        .getPreconditions()
+                        .getNestedPreconditions()
+                        .clear();
                 liquibase.update(new Contexts(contexts));
             }
         } catch (Exception exception) {
