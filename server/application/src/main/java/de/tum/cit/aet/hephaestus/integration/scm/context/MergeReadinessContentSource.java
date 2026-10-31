@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
@@ -293,7 +294,7 @@ public class MergeReadinessContentSource implements ContentSource {
         Boolean mergeable = pr.getMergeable();
         node.put("mergeable", mergeable == null ? "UNKNOWN" : mergeable ? "YES" : "NO");
         node.put("mergeStateStatus", nameOrUnknown(pr.getMergeStateStatus()));
-        node.put("reviewDecision", nameOrUnknown(pr.getReviewDecision()));
+        node.put("reviewDecision", approval(pr.getReviewDecision()));
         node.put("headSha", pr.getHeadRefOid());
         node.put("checks", nameOrUnknown(pr.getHeadCheckState()));
         node.put("checksFor", checksFor(pr));
@@ -664,6 +665,21 @@ public class MergeReadinessContentSource implements ContentSource {
             case SKIPPED -> "SKIPPED_PIPELINE_REPORTED";
             case NONE -> "NONE_REPORTED";
             case SUCCESS, FAILURE, PENDING, CANCELLED -> "STATUS_REPORTED";
+        };
+    }
+
+    /**
+     * The provider's approval state in the words a developer reads: a conversation answer repeats this field to them.
+     * {@code REVIEW_REQUIRED} says only that the approvals do not meet the requirement, not how many people approved.
+     */
+    private static String approval(@Nullable ReviewDecision decision) {
+        if (decision == null) {
+            return "UNKNOWN";
+        }
+        return switch (decision) {
+            case APPROVED -> "approved";
+            case CHANGES_REQUESTED -> "changes requested";
+            case REVIEW_REQUIRED -> "not approved yet";
         };
     }
 
