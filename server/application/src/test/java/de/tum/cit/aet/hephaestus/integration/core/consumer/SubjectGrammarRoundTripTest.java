@@ -2,9 +2,13 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectParser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -40,6 +44,9 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
     private static final GitHubSubjectKeyDeriver GITHUB = new GitHubSubjectKeyDeriver();
     private static final GitLabSubjectKeyDeriver GITLAB = new GitLabSubjectKeyDeriver();
     private static final OutlineSubjectKeyDeriver OUTLINE = new OutlineSubjectKeyDeriver(MAPPER);
+    private static final GitHubSubjectParser GITHUB_PARSER = new GitHubSubjectParser();
+    private static final GitLabSubjectParser GITLAB_PARSER = new GitLabSubjectParser();
+    private static final OutlineSubjectParser OUTLINE_PARSER = new OutlineSubjectParser();
 
     static Stream<Path> gitlabFixtures() throws IOException {
         return listJson(GITLAB_DIR);
@@ -76,6 +83,7 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
                 .isTrue();
         assertThat(subjectMatchesFilter(publisherSubject, ConsumerSubjectMath.connectionFilter("gitlab", 8L)))
                 .isFalse();
+        assertThat(GITLAB_PARSER.parse(publisherSubject).kind()).isEqualTo(IntegrationKind.GITLAB);
     }
 
     /**
@@ -117,6 +125,7 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
         }
         String publisherSubject =
                 GITHUB.deriveSubject(payload, Map.of("X-GitHub-Event", eventTypeFromFilename(fixture)));
+        assertThat(GITHUB_PARSER.parse(publisherSubject).kind()).isEqualTo(IntegrationKind.GITHUB);
         // Repository-lifecycle events (repository.renamed/.transferred/…) are ORG-scoped for the same
         // reason as group-tier events: the repo-name token is unstable across a
         // rename/transfer, so the subject carries the '?' placeholder in the repo slot and must route
@@ -176,6 +185,7 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
             return;
         }
         String publisherSubject = OUTLINE.deriveSubject(payload, Map.of());
+        assertThat(OUTLINE_PARSER.parse(publisherSubject).kind()).isEqualTo(IntegrationKind.OUTLINE);
         String consumerPrefix = consumerSubscriptionPrefix(subscriptionId);
         assertThat(publisherSubject)
                 .as("publisher %s should start with consumer prefix '%s'", fixture.getFileName(), consumerPrefix)

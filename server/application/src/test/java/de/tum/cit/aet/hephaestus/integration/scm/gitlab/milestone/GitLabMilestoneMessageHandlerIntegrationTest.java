@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -19,6 +20,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone.dto.GitLabMilestoneEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -30,6 +33,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Set;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -37,11 +42,23 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 @Tag("integration")
 @DisplayName("GitLab Milestone Message Handler")
 class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ConnectionService routeConnectionService;
+
+    @Autowired
+    private GitLabProjectAdmission routeAdmissionReads;
+
+    @Autowired
+    private TransactionTemplate routeTransactions;
+
+    private Workspace savedWorkspace;
 
     // Fixture values from milestone.create.json
     private static final long NATIVE_MILESTONE_ID = 18066L;
@@ -115,7 +132,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
         void shouldPersistMilestoneOnCreateEvent() throws Exception {
             GitLabMilestoneEventDTO event = loadPayload("milestone.create");
 
-            handler.handleEvent(event);
+            handleOnRoute(event);
 
             Milestone milestone = milestoneRepository
                     .findByNumberAndRepositoryId(MILESTONE_IID, savedRepo.getId())
@@ -137,11 +154,11 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
         @Test
         void shouldCloseMilestoneOnCloseEvent() throws Exception {
             // Create first
-            handler.handleEvent(loadPayload("milestone.create"));
+            handleOnRoute(loadPayload("milestone.create"));
             eventListener.clear();
 
             // Close
-            handler.handleEvent(loadPayload("milestone.close"));
+            handleOnRoute(loadPayload("milestone.close"));
 
             Milestone milestone = milestoneRepository
                     .findByNumberAndRepositoryId(MILESTONE_IID, savedRepo.getId())
@@ -157,12 +174,12 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
         @Test
         void shouldReopenMilestoneOnReopenEvent() throws Exception {
             // Create and close
-            handler.handleEvent(loadPayload("milestone.create"));
-            handler.handleEvent(loadPayload("milestone.close"));
+            handleOnRoute(loadPayload("milestone.create"));
+            handleOnRoute(loadPayload("milestone.close"));
             eventListener.clear();
 
             // Reopen
-            handler.handleEvent(loadPayload("milestone.reopen"));
+            handleOnRoute(loadPayload("milestone.reopen"));
 
             Milestone milestone = milestoneRepository
                     .findByNumberAndRepositoryId(MILESTONE_IID, savedRepo.getId())
@@ -187,7 +204,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             GitLabMilestoneEventDTO event = loadPayload("milestone.create");
 
-            assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();
+            assertThatCode(() -> handleOnRoute(event)).doesNotThrowAnyException();
             assertThat(milestoneRepository.count()).isZero();
         }
 
@@ -196,31 +213,31 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
         void shouldBeIdempotent() throws Exception {
             GitLabMilestoneEventDTO event = loadPayload("milestone.create");
 
-            handler.handleEvent(event);
+            handleOnRoute(event);
             long countAfterFirst = milestoneRepository.count();
 
-            handler.handleEvent(event);
+            handleOnRoute(event);
 
             assertThat(milestoneRepository.count()).isEqualTo(countAfterFirst);
         }
 
         @Test
         void shouldHandleFullLifecycle() throws Exception {
-            handler.handleEvent(loadPayload("milestone.create"));
+            handleOnRoute(loadPayload("milestone.create"));
             assertThat(milestoneRepository
                             .findByNumberAndRepositoryId(MILESTONE_IID, savedRepo.getId())
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Milestone.State.OPEN);
 
-            handler.handleEvent(loadPayload("milestone.close"));
+            handleOnRoute(loadPayload("milestone.close"));
             assertThat(milestoneRepository
                             .findByNumberAndRepositoryId(MILESTONE_IID, savedRepo.getId())
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Milestone.State.CLOSED);
 
-            handler.handleEvent(loadPayload("milestone.reopen"));
+            handleOnRoute(loadPayload("milestone.reopen"));
             assertThat(milestoneRepository
                             .findByNumberAndRepositoryId(MILESTONE_IID, savedRepo.getId())
                             .orElseThrow()
@@ -279,6 +296,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setAccountLogin(FIXTURE_ORG_LOGIN);
         workspace.setAccountType(AccountType.ORG);
         workspace = workspaceRepository.save(workspace);
+        savedWorkspace = workspace;
         var connection = new Connection(
                 workspace,
                 IntegrationKind.GITLAB,
@@ -291,5 +309,25 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
         monitor.setNameWithOwner(savedRepo.getNameWithOwner());
         monitor.setNativeId(savedRepo.getNativeId());
         monitors.saveAndFlush(monitor);
+    }
+
+    /** Delivers {@code event} on the connection route of the fixture workspace, as admission would. */
+    private <T> @Nullable T onRoute(Object event, Supplier<@Nullable T> handling) {
+        return new GitLabRouteTestFixtures.Deliveries(
+                        connections,
+                        routeConnectionService,
+                        routeAdmissionReads,
+                        objectMapper,
+                        routeTransactions,
+                        "https://gitlab.lrz.de")
+                .call(savedWorkspace, savedRepo, event, handling);
+    }
+
+    private void handleOnRoute(GitLabMilestoneEventDTO event) {
+        // As dispatchEvent does in production: the handler runs in one transaction.
+        onRoute(event, () -> {
+            routeTransactions.executeWithoutResult(status -> handler.handleEvent(event));
+            return null;
+        });
     }
 }

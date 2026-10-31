@@ -168,7 +168,7 @@ public record WebhookProperties(
             // Replay-defense invariant: the JetStream dedup window MUST be >= the largest per-vendor
             // timestamp replay tolerance, otherwise a captured-but-still-timestamp-valid request can be
             // replayed once its dedup entry has expired (the 2-5 min band). The widest vendor tolerance
-            // is 5m (GitLab whsec TIMESTAMP_TOLERANCE, Slack v0 MAX_DRIFT_SECONDS). GitHub has NO timestamp,
+            // is 5m (Slack v0 MAX_DRIFT_SECONDS). GitHub has NO timestamp,
             // so the dedup window keyed on X-GitHub-Delivery is its ONLY replay defense, and 3h outlasts the
             // 2h look-back of GitHubWebhookRedelivery. See REPLAY_TOLERANCE_FLOOR.
             @DefaultValue("3h") Duration duplicateWindow,
@@ -182,7 +182,7 @@ public record WebhookProperties(
             @DefaultValue("60s") Duration monitorInterval) {
         /**
          * Lower bound for {@link #duplicateWindow}: the maximum per-vendor timestamp replay
-         * tolerance across all webhook verifiers (GitLab whsec + Slack v0 both use 5 minutes).
+         * tolerance across all webhook verifiers (Slack v0 uses 5 minutes).
          * The dedup window must be at least this large so a request can never outlive its dedup
          * entry while still being timestamp-valid. GitHub deliveries carry no timestamp at all,
          * so for them the dedup window is the sole replay defense and a larger value is safer.

@@ -749,7 +749,7 @@ hephaestus:
             deadline: 8s
             retry-base-delay: 200ms
         stream:
-            # Must be >= the max vendor replay tolerance (5m: GitLab whsec + Slack v0). GitHub has
+            # Must be >= the max vendor replay tolerance (5m: Slack v0). GitHub has
             # no timestamp, so this dedup window keyed on X-GitHub-Delivery is its only replay
             # defense. It also outlasts the 2h look-back of the GitHub redelivery job, so a delivery
             # that was stored but answered late is not stored again when the job redelivers it. The

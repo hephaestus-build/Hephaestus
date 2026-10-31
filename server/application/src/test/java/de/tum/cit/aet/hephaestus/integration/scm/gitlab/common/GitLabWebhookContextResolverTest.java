@@ -1,52 +1,48 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissionTestFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * A delivery that came through no connection route rechecks, before its second write, the repository as stored now
- * against the same scope filter and workspace resolution it was resolved with. The connection route's recheck needs an
- * admitted delivery and is proven end to end in {@code GitLabWorkspaceEventRoutingIntegrationTest}.
+ * A delivery resolves only on the route admission confirmed, and rechecks, before its second write, the repository as
+ * stored now against that route. Without an admitted route it resolves nothing and writes nothing.
  */
 @Tag("unit")
 class GitLabWebhookContextResolverTest {
 
-    private final GitLabProjectAdmission projectAdmission = mock(GitLabProjectAdmission.class);
-
     private static final long REPOSITORY_ID = 7L;
     private static final long WORKSPACE_ID = 3L;
+    private static final long PROVIDER_ID = 2L;
     private static final String PATH = "course/project";
+    private static final GitLabRouteAdmission.AdmittedRoute ROUTE =
+            new GitLabRouteAdmission.AdmittedRoute(1L, WORKSPACE_ID, PROVIDER_ID, 42L, "course");
 
+    private final GitLabProjectAdmission projectAdmission = mock(GitLabProjectAdmission.class);
     private final RepositoryRepository repositories = mock(RepositoryRepository.class);
-    private final IdentityProviderRepository providers = mock(IdentityProviderRepository.class);
-    private final GitLabProperties properties = mock(GitLabProperties.class);
-    private final RepositoryScopeFilter scopeFilter = mock(RepositoryScopeFilter.class);
-    private final ScopeIdResolver scopes = mock(ScopeIdResolver.class);
-    private final GitLabWebhookContextResolver resolver = new GitLabWebhookContextResolver(
-            repositories,
-            providers,
-            properties,
-            scopeFilter,
-            scopes,
-            mock(GitLabRouteAdmission.class),
-            projectAdmission);
+    private final GitLabRouteAdmission routeAdmission = mock(GitLabRouteAdmission.class);
+    private final GitLabWebhookContextResolver resolver =
+            new GitLabWebhookContextResolver(repositories, routeAdmission, projectAdmission);
 
     private final ProcessingContext resolved = ProcessingContext.forWebhook(WORKSPACE_ID, repository(PATH), "update");
 
@@ -55,52 +51,72 @@ class GitLabWebhookContextResolverTest {
     @BeforeEach
     void storeTheRepositoryAsResolved() {
         originalPermit = GitLabAdmissionTestFixtures.permit(projectAdmission, WORKSPACE_ID, repository(PATH), 11L);
+        when(repositories.findByNameWithOwnerAndProviderId(PATH, PROVIDER_ID))
+                .thenReturn(Optional.of(repository(PATH)));
         when(repositories.findById(REPOSITORY_ID)).thenReturn(Optional.of(repository(PATH)));
-        when(scopeFilter.isRepositoryAllowed(PATH)).thenReturn(true);
-        when(scopes.findScopeIdByRepositoryName(PATH)).thenReturn(Optional.of(WORKSPACE_ID));
+        when(routeAdmission.holdActive(ROUTE)).thenReturn(true);
+        when(routeAdmission.admitRepository(eq(ROUTE), any()))
+                .thenAnswer(invocation ->
+                        PATH.equals(invocation.<Repository>getArgument(1).getNameWithOwner()));
     }
 
     @Test
-    void shouldLetTheDeliveryWriteWhileItsRepositoryIsStillInScopeForTheSameWorkspace() {
-        assertThat(resolver.mayStillWrite(resolved, originalPermit)).isTrue();
+    void shouldResolveTheAdmittedRoutesWorkspace() {
+        ProcessingContext context = onRoute(() -> resolver.resolve(PATH, "update", "issue"));
+
+        assertThat(context).isNotNull();
+        assertThat(context.scopeId()).isEqualTo(WORKSPACE_ID);
+    }
+
+    @Test
+    void shouldResolveNothingWithoutAnAdmittedRoute() {
+        assertThat(resolver.resolve(PATH, "update", "issue")).isNull();
+        assertThat(resolver.mayStillWrite(resolved, originalPermit)).isFalse();
+    }
+
+    @Test
+    void shouldLetTheDeliveryWriteWhileItsRepositoryIsStillAdmitted() {
+        assertThat(onRoute(() -> resolver.mayStillWrite(resolved, originalPermit)))
+                .isTrue();
     }
 
     @Test
     void shouldNotLetTheDeliveryWriteOnceItsRepositoryIsGone() {
         when(repositories.findById(REPOSITORY_ID)).thenReturn(Optional.empty());
 
-        assertThat(resolver.mayStillWrite(resolved, originalPermit)).isFalse();
+        assertThat(onRoute(() -> resolver.mayStillWrite(resolved, originalPermit)))
+                .isFalse();
     }
 
     @Test
-    void shouldNotLetTheDeliveryWriteOnceItsRepositoryMovedOutOfScope() {
+    void shouldNotLetTheDeliveryWriteOnceItsRepositoryMovedOutOfTheGroup() {
         when(repositories.findById(REPOSITORY_ID)).thenReturn(Optional.of(repository("elsewhere/project")));
 
-        assertThat(resolver.mayStillWrite(resolved, originalPermit)).isFalse();
+        assertThat(onRoute(() -> resolver.mayStillWrite(resolved, originalPermit)))
+                .isFalse();
     }
 
     @Test
-    void shouldNotLetTheDeliveryWriteOnceItsRepositoryBelongsToAnotherWorkspace() {
-        when(scopes.findScopeIdByRepositoryName(PATH)).thenReturn(Optional.of(WORKSPACE_ID + 1));
+    void shouldNotLetTheDeliveryWriteOnceTheConnectionIsNoLongerActive() {
+        when(routeAdmission.holdActive(ROUTE)).thenReturn(false);
 
-        assertThat(resolver.mayStillWrite(resolved, originalPermit)).isFalse();
+        assertThat(onRoute(() -> resolver.mayStillWrite(resolved, originalPermit)))
+                .isFalse();
     }
 
-    @Test
-    void shouldRefuseASharedDeliveryWhenTheConfiguredGitLabProviderIsUnavailable() {
-        String serverUrl = "https://gitlab.example.com";
-        when(properties.defaultServerUrl()).thenReturn(serverUrl);
-        when(providers.findByTypeAndServerUrl(IdentityProviderType.GITLAB, serverUrl))
-                .thenReturn(Optional.empty());
-
-        assertThat(resolver.resolve(PATH, "update", "issue")).isNull();
+    private static <T> @Nullable T onRoute(Supplier<@Nullable T> call) {
+        AtomicReference<@Nullable T> result = new AtomicReference<>();
+        GitLabRouteTestFixtures.handle(ROUTE, Map.of(), null, () -> result.set(call.get()));
+        return result.get();
     }
 
     private static Repository repository(String nameWithOwner) {
         Repository repository = new Repository();
         repository.setId(REPOSITORY_ID);
         repository.setNameWithOwner(nameWithOwner);
-        repository.setProvider(new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example.com"));
+        IdentityProvider provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example.com");
+        provider.setId(PROVIDER_ID);
+        repository.setProvider(provider);
         return repository;
     }
 }

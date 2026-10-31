@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -27,6 +28,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmReviewFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
@@ -40,6 +43,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -57,6 +62,12 @@ import tools.jackson.databind.ObjectMapper;
 @Tag("integration")
 @DisplayName("GitLab Issue Message Handler")
 class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ConnectionService routeConnectionService;
+
+    @Autowired
+    private GitLabProjectAdmission routeAdmissionReads;
 
     // Native IDs from GitLab fixtures (positive, raw values)
     private static final long NATIVE_ISSUE_ID = 422296L;
@@ -225,7 +236,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldAdvanceTheContentVersionWhenSyncChangesAnOpenIssue() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
             Issue before = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                     .orElseThrow();
@@ -271,7 +282,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         void shouldPersistIssueOnOpenEvent() throws Exception {
             GitLabIssueEventDTO event = loadPayload("issue.open");
 
-            handler.handleEvent(event);
+            handleOnRoute(event);
 
             transactionTemplate.executeWithoutResult(status -> {
                 Issue issue = issueRepository
@@ -313,11 +324,11 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCloseIssueOnCloseEvent() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
             eventListener.clear();
 
             // Close
-            handler.handleEvent(loadPayload("issue.close"));
+            handleOnRoute(loadPayload("issue.close"));
 
             Issue issue = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
@@ -330,12 +341,12 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReopenIssueOnReopenEvent() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
-            handler.handleEvent(loadPayload("issue.close"));
+            handleOnRoute(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.close"));
             eventListener.clear();
 
             // Reopen
-            handler.handleEvent(loadPayload("issue.reopen"));
+            handleOnRoute(loadPayload("issue.reopen"));
 
             Issue issue = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
@@ -348,12 +359,12 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldKeepTheReopenedIssueOpenWhenTheCloseHookIsRedelivered() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
-            handler.handleEvent(loadPayload("issue.close"));
-            handler.handleEvent(loadPayload("issue.reopen"));
+            handleOnRoute(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.close"));
+            handleOnRoute(loadPayload("issue.reopen"));
             eventListener.clear();
 
-            handler.handleEvent(loadPayload("issue.close"));
+            handleOnRoute(loadPayload("issue.close"));
 
             assertThat(issueRepository
                             .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
@@ -365,11 +376,11 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateIssueOnUpdateEvent() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
             eventListener.clear();
 
             // Update
-            handler.handleEvent(loadPayload("issue.update"));
+            handleOnRoute(loadPayload("issue.update"));
 
             assertThat(issueRepository.count()).isEqualTo(1);
             Issue issue = issueRepository
@@ -380,11 +391,11 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldPreserveAnEditorWhoIsNotTheIssueAuthor() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
             eventListener.clear();
             GitLabIssueEventDTO edit = loadPayload("issue.update");
             var editor = new GitLabWebhookUser(987654321L, "different-editor", "Different Editor", null, null);
-            handler.handleEvent(new GitLabIssueEventDTO(
+            handleOnRoute(new GitLabIssueEventDTO(
                     edit.objectKind(),
                     edit.eventType(),
                     editor,
@@ -410,12 +421,12 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldPreserveTheActorOnReopen() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
-            handler.handleEvent(loadPayload("issue.close"));
+            handleOnRoute(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.close"));
             eventListener.clear();
             GitLabIssueEventDTO reopened = loadPayload("issue.reopen");
             var editor = new GitLabWebhookUser(987654321L, "different-editor", "Different Editor", null, null);
-            handler.handleEvent(new GitLabIssueEventDTO(
+            handleOnRoute(new GitLabIssueEventDTO(
                     reopened.objectKind(),
                     reopened.eventType(),
                     editor,
@@ -452,8 +463,8 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         @ValueSource(strings = {"content", "relationship"})
         void shouldKeepTheReviewCurrentUntilSyncBringsARealChange(String change) throws Exception {
             seedIssueType("Issue");
-            handler.handleEvent(loadPayload("issue.open"));
-            handler.handleEvent(edited(loadPayload("issue.open"), REVIEWED_BODY));
+            handleOnRoute(loadPayload("issue.open"));
+            handleOnRoute(edited(loadPayload("issue.open"), REVIEWED_BODY));
             Issue reviewed = currentIssue();
             String reviewedRevision = reviewRevision();
             UUID practiceResultId = recordResult(reviewed);
@@ -590,7 +601,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldSkipConfidentialOpen() throws Exception {
-            handler.handleEvent(loadPayload("issue.confidential.open"));
+            handleOnRoute(loadPayload("issue.confidential.open"));
 
             assertThat(issueRepository.count()).isZero();
             assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).isEmpty();
@@ -598,14 +609,14 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldSkipConfidentialUpdate() throws Exception {
-            handler.handleEvent(loadPayload("issue.confidential.update"));
+            handleOnRoute(loadPayload("issue.confidential.update"));
 
             assertThat(issueRepository.count()).isZero();
         }
 
         @Test
         void shouldSkipConfidentialClose() throws Exception {
-            handler.handleEvent(loadPayload("issue.confidential.close"));
+            handleOnRoute(loadPayload("issue.confidential.close"));
 
             assertThat(issueRepository.count()).isZero();
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
@@ -620,7 +631,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         void shouldCreateAuthorWithCorrectFields() throws Exception {
             assertThat(userRepository.count()).isZero();
 
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
 
             // Wrap in transaction to avoid LazyInitializationException when accessing provider
             transactionTemplate.executeWithoutResult(status -> {
@@ -635,7 +646,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateLabelWithCorrectFields() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 var label = labelRepository
@@ -656,7 +667,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             GitLabIssueEventDTO event = loadPayload("issue.open");
 
-            assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();
+            assertThatCode(() -> handleOnRoute(event)).doesNotThrowAnyException();
             assertThat(issueRepository.count()).isZero();
         }
 
@@ -665,38 +676,38 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         void shouldBeIdempotent() throws Exception {
             GitLabIssueEventDTO event = loadPayload("issue.open");
 
-            handler.handleEvent(event);
+            handleOnRoute(event);
             long countAfterFirst = issueRepository.count();
 
-            handler.handleEvent(event);
+            handleOnRoute(event);
 
             assertThat(issueRepository.count()).isEqualTo(countAfterFirst);
         }
 
         @Test
         void shouldHandleFullLifecycle() throws Exception {
-            handler.handleEvent(loadPayload("issue.open"));
+            handleOnRoute(loadPayload("issue.open"));
             assertThat(issueRepository
                             .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Issue.State.OPEN);
 
-            handler.handleEvent(loadPayload("issue.close"));
+            handleOnRoute(loadPayload("issue.close"));
             assertThat(issueRepository
                             .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Issue.State.CLOSED);
 
-            handler.handleEvent(loadPayload("issue.reopen"));
+            handleOnRoute(loadPayload("issue.reopen"));
             assertThat(issueRepository
                             .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
                             .orElseThrow()
                             .getState())
                     .isEqualTo(Issue.State.OPEN);
 
-            handler.handleEvent(loadPayload("issue.update"));
+            handleOnRoute(loadPayload("issue.update"));
             assertThat(issueRepository.findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID))
                     .isPresent();
 
@@ -707,7 +718,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     /** GitLab leaves {@code assignees} out of an issue hook when there are none. */
     @Test
     void shouldUnassignEveryoneWhenTheHookLeavesTheAssigneesOut() throws Exception {
-        handler.handleEvent(loadPayload("issue.open"));
+        handleOnRoute(loadPayload("issue.open"));
         transactionTemplate.executeWithoutResult(status -> {
             Issue issue = issueRepository
                     .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
@@ -724,7 +735,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             issueRepository.save(issue);
         });
 
-        handler.handleEvent(loadPayload("issue.update"));
+        handleOnRoute(loadPayload("issue.update"));
 
         Boolean assigned = transactionTemplate.execute(status -> !issueRepository
                 .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
@@ -785,5 +796,25 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         Long id = provider.getId();
         assertNotNull(id);
         return id;
+    }
+
+    /** Delivers {@code event} on the connection route of the fixture workspace, as admission would. */
+    private <T> @Nullable T onRoute(Object event, Supplier<@Nullable T> handling) {
+        return new GitLabRouteTestFixtures.Deliveries(
+                        connectionRepository,
+                        routeConnectionService,
+                        routeAdmissionReads,
+                        objectMapper,
+                        transactionTemplate,
+                        "https://gitlab.lrz.de")
+                .call(savedWorkspace, savedRepo, event, handling);
+    }
+
+    private void handleOnRoute(GitLabIssueEventDTO event) {
+        // As dispatchEvent does in production: the handler runs in one transaction.
+        onRoute(event, () -> {
+            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+            return null;
+        });
     }
 }

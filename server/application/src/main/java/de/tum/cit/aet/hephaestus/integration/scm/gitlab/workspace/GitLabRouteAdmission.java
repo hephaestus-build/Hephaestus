@@ -225,13 +225,28 @@ public class GitLabRouteAdmission implements RouteAdmission {
             group = teamSyncService.fetchGroup(route.workspaceId(), groupId).orElse(null);
         }
         Map<Long, GitLabUserLookup> users = userService.fetchCanonicalUsers(route.workspaceId(), userIds(payload));
-        CURRENT.set(new Delivery(route, users, membership, group, projectRead));
+        handleAdmitted(route, users, membership, group, projectRead, handling);
+        return true;
+    }
+
+    /**
+     * Runs {@code handling} as the delivery admitted for {@code route}, with what GitLab reported for it. A handler
+     * reads it through {@link #current()} and its siblings and writes nothing without it. {@link #admit} is the only
+     * production caller; tests in this package call it to stand in for a delivery that admission confirmed.
+     */
+    static void handleAdmitted(
+            AdmittedRoute route,
+            Map<Long, GitLabUserLookup> users,
+            @Nullable ReportedMembership membership,
+            @Nullable GitLabDescendantGroupResponse group,
+            GitLabProjectAdmission.@Nullable ProjectRead project,
+            Runnable handling) {
+        CURRENT.set(new Delivery(route, users, membership, group, project));
         try {
             handling.run();
         } finally {
             CURRENT.remove();
         }
-        return true;
     }
 
     /**

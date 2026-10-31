@@ -62,9 +62,9 @@ public class GitHubSubjectKeyDeriver implements SubjectKeyDeriver {
             }
         }
 
-        // Repository-lifecycle events (created/deleted/renamed/transferred/archived/…) are ORG-scoped,
-        // mirroring GitLabSubjectKeyDeriver#isGroupTierEvent for `project`. The repo-name token is
-        // UNSTABLE across rename/transfer: the payload carries the NEW name, so a repo-tier subject
+        // Repository-lifecycle events (created/deleted/renamed/transferred/archived/…) are ORG-scoped.
+        // The repo-name token is UNSTABLE across rename/transfer: the payload carries the NEW name, so a repo-tier
+        // subject
         // built from it matches neither the monitored-repo filter `github.<owner>.<OLDrepo>.>` nor the
         // org filter, and the event (and every later event for that repo) is silently ACK-dropped while
         // the repo's data freezes. The workspace organization filter `github.<owner>.?.>`, keyed on the

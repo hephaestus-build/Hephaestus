@@ -573,7 +573,7 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
     }
 
     @Test
-    void shouldKeepAnInheritedStudentWhenAnEventOffAConnectionRouteRemovesTheirDirectGrant() {
+    void shouldChangeNothingWhenAMemberEventArrivesWithoutAnAdmittedRoute() {
         answer("GetGroupMembers " + COURSE, page(false, member(STUDENT, "student", 30)));
         memberSync.syncGroupMemberships(workspace.getId(), COURSE, course);
 

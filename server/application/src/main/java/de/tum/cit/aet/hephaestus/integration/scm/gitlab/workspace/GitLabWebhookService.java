@@ -481,11 +481,21 @@ public class GitLabWebhookService {
 
                 boolean missing = existing.isEmpty();
                 boolean disabled = existing.isPresent() && existing.get().isDisabled();
-                if (!missing && !disabled) {
-                    continue; // hook exists and is still delivering — nothing to do
+                boolean own = existing.isPresent()
+                        && existing.get().url().startsWith(connectionWebhookUrl(candidate.connectionId()));
+                if (own && !disabled) {
+                    continue; // this connection's hook exists and is still delivering — nothing to do
                 }
 
-                if (disabled && existing.get().url().startsWith(connectionWebhookUrl(candidate.connectionId()))) {
+                if (!missing && !own) {
+                    // The stored id names a hook that does not post to this connection's route, such as one on the
+                    // removed shared endpoint: it delivers nothing Hephaestus accepts. registerWebhook adopts or
+                    // creates the connection's own hook and leaves the foreign one alone.
+                    log.warn(
+                            "Webhook is not the connection's own, re-registering: workspaceId={}, webhookId={}",
+                            workspace.getId(),
+                            candidate.webhookId());
+                } else if (disabled) {
                     // GitLab auto-disabled the hook after repeated delivery failures: the row still
                     // exists (so getGroupWebhook returns it) but it delivers nothing. A fresh register
                     // adopts by URL, which would re-adopt this same disabled hook — so delete it first,
@@ -505,7 +515,7 @@ public class GitLabWebhookService {
                     }
                 } else {
                     log.warn(
-                            "Webhook missing or disabled, re-registering: workspaceId={}, webhookId={}",
+                            "Webhook missing, re-registering: workspaceId={}, webhookId={}",
                             workspace.getId(),
                             candidate.webhookId());
                 }

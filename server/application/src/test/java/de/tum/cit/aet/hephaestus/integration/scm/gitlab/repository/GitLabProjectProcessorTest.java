@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.Optional;
@@ -306,109 +305,6 @@ class GitLabProjectProcessorTest extends BaseUnitTest {
     }
 
     @Nested
-    class ProcessPushEvent {
-
-        @BeforeEach
-        void stubSave() {
-            // Lenient: null/invalid input tests return early before reaching save()
-            lenient().when(repositoryRepository.save(any(Repository.class))).thenAnswer(inv -> inv.getArgument(0));
-        }
-
-        @Test
-        void validPushEvent_createsRepository() {
-            var projectInfo = new GitLabPushEventDTO.ProjectInfo(
-                    246765L,
-                    "demo-repository",
-                    "Demo repo",
-                    "https://gitlab.lrz.de/hephaestustest/demo-repository",
-                    "HephaestusTest",
-                    "hephaestustest/demo-repository",
-                    "main",
-                    0 // private
-                    );
-
-            when(repositoryRepository.findByNativeIdAndProviderId(246765L, PROVIDER_ID))
-                    .thenReturn(Optional.empty());
-
-            Repository result = processor.processPushEvent(projectInfo, gitLabProvider);
-
-            assertThat(result).isNotNull();
-            assertNotNull(result);
-            assertThat(result.getNativeId()).isEqualTo(246765L);
-            assertThat(result.getName()).isEqualTo("demo-repository");
-            assertThat(result.getNameWithOwner()).isEqualTo("hephaestustest/demo-repository");
-            assertThat(result.getHtmlUrl()).isEqualTo("https://gitlab.lrz.de/hephaestustest/demo-repository");
-            assertNotNull(result);
-            assertThat(result.getVisibility()).isEqualTo(Repository.Visibility.PRIVATE);
-            assertThat(result.isPrivate()).isTrue();
-            assertThat(result.getDefaultBranch()).isEqualTo("main");
-            assertThat(result.getPushedAt()).isNotNull();
-        }
-
-        @Test
-        void publicVisibilityLevel_mapsCorrectly() {
-            var projectInfo = new GitLabPushEventDTO.ProjectInfo(
-                    1L, "proj", null, "https://gitlab.com/org/proj", null, "org/proj", "main", 20);
-            when(repositoryRepository.findByNativeIdAndProviderId(1L, PROVIDER_ID))
-                    .thenReturn(Optional.empty());
-
-            Repository result = processor.processPushEvent(projectInfo, gitLabProvider);
-
-            assertNotNull(result);
-            assertThat(result.getVisibility()).isEqualTo(Repository.Visibility.PUBLIC);
-            assertThat(result.isPrivate()).isFalse();
-        }
-
-        @Test
-        void nullProjectInfo_returnsNull() {
-            assertThat(processor.processPushEvent(null, gitLabProvider)).isNull();
-            verify(repositoryRepository, never()).save(any());
-        }
-
-        @Test
-        void nullWebUrl_returnsNull() {
-            var projectInfo = new GitLabPushEventDTO.ProjectInfo(1L, "proj", null, null, null, "org/proj", "main", 0);
-            assertThat(processor.processPushEvent(projectInfo, gitLabProvider)).isNull();
-            verify(repositoryRepository, never()).save(any());
-        }
-
-        @Test
-        void nullId_returnsNull() {
-            var projectInfo = new GitLabPushEventDTO.ProjectInfo(
-                    null, "proj", null, "https://gitlab.com/org/proj", null, "org/proj", "main", 0);
-            assertThat(processor.processPushEvent(projectInfo, gitLabProvider)).isNull();
-            verify(repositoryRepository, never()).save(any());
-        }
-
-        @Test
-        void nullPathWithNamespace_returnsNull() {
-            var projectInfo = new GitLabPushEventDTO.ProjectInfo(
-                    1L, "proj", null, "https://gitlab.com/org/proj", null, null, "main", 0);
-            assertThat(processor.processPushEvent(projectInfo, gitLabProvider)).isNull();
-            verify(repositoryRepository, never()).save(any());
-        }
-
-        @Test
-        void existingRepository_isUpdated() {
-            var projectInfo = new GitLabPushEventDTO.ProjectInfo(
-                    1L, "new-name", null, "https://gitlab.com/org/new-name", null, "org/new-name", "develop", 20);
-            Repository existing = new Repository();
-            existing.setNativeId(1L);
-            existing.setName("old-name");
-            existing.setArchived(true); // should be preserved
-            when(repositoryRepository.findByNativeIdAndProviderId(1L, PROVIDER_ID))
-                    .thenReturn(Optional.of(existing));
-
-            Repository result = processor.processPushEvent(projectInfo, gitLabProvider);
-
-            assertNotNull(result);
-            assertThat(result.getName()).isEqualTo("new-name");
-            assertThat(result.getDefaultBranch()).isEqualTo("develop");
-            assertThat(result.isArchived()).isTrue(); // preserved from existing entity
-        }
-    }
-
-    @Nested
     class MapVisibility {
 
         @Test
@@ -419,18 +315,6 @@ class GitLabProjectProcessorTest extends BaseUnitTest {
             assertThat(GitLabProjectProcessor.mapVisibility("PUBLIC")).isEqualTo(Repository.Visibility.PUBLIC);
             assertThat(GitLabProjectProcessor.mapVisibility(null)).isEqualTo(Repository.Visibility.UNKNOWN);
             assertThat(GitLabProjectProcessor.mapVisibility("unknown-value")).isEqualTo(Repository.Visibility.UNKNOWN);
-        }
-    }
-
-    @Nested
-    class MapVisibilityLevel {
-
-        @Test
-        void allVisibilityLevels() {
-            assertThat(GitLabProjectProcessor.mapVisibilityLevel(0)).isEqualTo(Repository.Visibility.PRIVATE);
-            assertThat(GitLabProjectProcessor.mapVisibilityLevel(10)).isEqualTo(Repository.Visibility.INTERNAL);
-            assertThat(GitLabProjectProcessor.mapVisibilityLevel(20)).isEqualTo(Repository.Visibility.PUBLIC);
-            assertThat(GitLabProjectProcessor.mapVisibilityLevel(99)).isEqualTo(Repository.Visibility.UNKNOWN);
         }
     }
 }

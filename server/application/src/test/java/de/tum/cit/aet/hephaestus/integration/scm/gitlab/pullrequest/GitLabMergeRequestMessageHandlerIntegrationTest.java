@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -43,6 +44,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
@@ -89,6 +91,10 @@ import tools.jackson.databind.node.ObjectNode;
 @Tag("integration")
 @DisplayName("GitLab Merge Request Message Handler")
 class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ConnectionService routeConnectionService;
+
     @Autowired
     private GitLabProjectAdmission projectAdmission;
 
@@ -552,7 +558,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         @ParameterizedTest
         @EnumSource(Order.class)
         void shouldApplyASyncPageUnlessItWasReadBeforeTheStoredWebhook(Order page) throws Exception {
-            handler.handle(loadPayload("merge_request.update.reviewers.derived"), STORED_AT);
+            handleOnRoute(loadPayload("merge_request.update.reviewers.derived"), STORED_AT);
 
             sync(page.observedAt(), syncedReviewer(6L, "user1", "UNREVIEWED"));
             sync(page.observedAt(), syncedReviewer(6L, "user1", "UNREVIEWED"));
@@ -566,8 +572,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             sync(STORED_AT, syncedReviewer(6L, "user1", "UNREVIEWED"));
             GitLabMergeRequestEventDTO webhook = at("merge_request.update.reviewers.derived", SYNCED_UPDATED_AT);
 
-            handler.handle(webhook, arrival.observedAt());
-            handler.handle(webhook, arrival.observedAt());
+            handleOnRoute(webhook, arrival.observedAt());
+            handleOnRoute(webhook, arrival.observedAt());
 
             assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(arrival == Order.OLDER ? SYNCED : REVIEWED);
         }
@@ -588,7 +594,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 }));
                 assertThat(syncWritten.await(30, TimeUnit.SECONDS)).isTrue();
 
-                Future<?> webhook = threads.submit(() -> handler.handle(webhookPayload, STORED_AT));
+                Future<?> webhook = threads.submit(() -> handleOnRoute(webhookPayload, STORED_AT));
                 String waitedOn = lockAnotherBackendWaitsOn();
                 releaseSync.countDown();
                 sync.get(30, TimeUnit.SECONDS);
@@ -818,7 +824,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             eventListener.clear();
 
             // The recorded approval names the fixture head and an older version, delivered late.
-            handler.handle(loadPayload("merge_request.approved"), Instant.now());
+            handleOnRoute(loadPayload("merge_request.approved"), Instant.now());
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
             assertThat(storedHead()).isEqualTo(NEXT_HEAD);
@@ -871,7 +877,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             receive(approvalEvent("merge_request.unapproved", NEXT_HEAD, "2026-01-31 22:30:00 +0100"));
             eventListener.clear();
 
-            handler.handle(
+            handleOnRoute(
                     approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:20:00 +0100"), Instant.now());
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
@@ -889,7 +895,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             setReviewDecision(ReviewDecision.APPROVED);
             eventListener.clear();
 
-            handler.handle(
+            handleOnRoute(
                     system
                             ? systemReset(NEXT_HEAD, "2026-01-31 22:20:00 +0100", "approvals_reset_on_push")
                             : approvalEvent("merge_request.unapproved", NEXT_HEAD, "2026-01-31 22:20:00 +0100"),
@@ -976,8 +982,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         void shouldRecordNoApprovalsFromTwoHooksReceivedAtTheSameInstant() throws Exception {
             Instant receivedAt = Instant.parse("2026-09-30T10:00:00.000001Z");
 
-            handler.handle(loadPayload("merge_request.approved"), receivedAt);
-            handler.handle(asTutor(loadPayload("merge_request.approved")), receivedAt);
+            handleOnRoute(loadPayload("merge_request.approved"), receivedAt);
+            handleOnRoute(asTutor(loadPayload("merge_request.approved")), receivedAt);
 
             assertThat(approval(NATIVE_APPROVER_ID)).isNull();
             assertThat(approval(NATIVE_TUTOR_ID)).isNull();
@@ -1376,7 +1382,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"),
                     List.of(approver()));
             Instant readBegun = Instant.now();
-            handler.handle(
+            handleOnRoute(
                     approvalEvent("merge_request.unapproved", NEXT_HEAD, "2026-01-31 22:32:00 +0100"),
                     readBegun.plusSeconds(1));
 
@@ -1943,7 +1949,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldRecordTheResolutionAnUpdateWithoutChangesLeftUnsaid() throws Exception {
-            handlerReadingDiscussions(() -> discussions(true)).dispatchEvent(unchangedUpdate(), Instant.now());
+            dispatchOnRoute(handlerReadingDiscussions(() -> discussions(true)), unchangedUpdate(), Instant.now());
 
             PullRequestReviewThread thread = thread();
             assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
@@ -1957,9 +1963,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldKeepTheResolutionWhenGitLabCouldNotBeRead() throws Exception {
-            handlerReadingDiscussions(
-                            () -> GraphQlResponses.of(null, List.of(GraphQlResponses.error("Internal server error"))))
-                    .dispatchEvent(unchangedUpdate(), Instant.now());
+            dispatchOnRoute(
+                    handlerReadingDiscussions(
+                            () -> GraphQlResponses.of(null, List.of(GraphQlResponses.error("Internal server error")))),
+                    unchangedUpdate(),
+                    Instant.now());
 
             PullRequestReviewThread thread = thread();
             assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
@@ -1968,13 +1976,15 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
         @Test
         void shouldRecordNoResolutionOnceTheProjectLeftTheWorkspaceDuringTheRead() throws Exception {
-            handlerReadingDiscussions(() -> {
+            dispatchOnRoute(
+                    handlerReadingDiscussions(() -> {
                         transactionTemplate.executeWithoutResult(status -> repositoryMonitors.delete(repositoryMonitors
                                 .findByWorkspaceIdAndNameWithOwner(savedWorkspace.getId(), FIXTURE_REPO_FULL_NAME)
                                 .orElseThrow()));
                         return discussions(true);
-                    })
-                    .dispatchEvent(unchangedUpdate(), Instant.now());
+                    }),
+                    unchangedUpdate(),
+                    Instant.now());
 
             PullRequestReviewThread thread = thread();
             assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
@@ -2309,12 +2319,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     /** Delivers {@code event} as the stream does: stored, then read from GitLab, then offered for review. */
     private void deliver(GitLabMergeRequestEventDTO event) {
-        handler.dispatchEvent(event, Instant.now());
+        dispatchOnRoute(event, Instant.now());
     }
 
     /** Handles {@code event} as a delivery that reached the stream now. */
     private void receive(GitLabMergeRequestEventDTO event) {
-        handler.handle(event, Instant.now());
+        handleOnRoute(event, Instant.now());
     }
 
     /** MR !2's update hook at {@code updatedAt}, carrying {@code description} where one is given. */
@@ -2377,5 +2387,34 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     private static long persistedId(IdentityProvider provider) {
         return Objects.requireNonNull(provider.getId());
+    }
+
+    /** Delivers {@code event} on the connection route of the fixture workspace, as admission would. */
+    private <T> @Nullable T onRoute(Object event, Supplier<@Nullable T> handling) {
+        return new GitLabRouteTestFixtures.Deliveries(
+                        connectionRepository,
+                        routeConnectionService,
+                        projectAdmission,
+                        objectMapper,
+                        transactionTemplate,
+                        "https://gitlab.lrz.de")
+                .call(savedWorkspace, savedRepo, event, handling);
+    }
+
+    private @Nullable ProcessingContext handleOnRoute(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
+        // As dispatchEvent does in production: the stored part runs in one transaction.
+        return onRoute(event, () -> transactionTemplate.execute(status -> handler.handle(event, arrivedAt)));
+    }
+
+    private void dispatchOnRoute(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
+        dispatchOnRoute(handler, event, arrivedAt);
+    }
+
+    private void dispatchOnRoute(
+            GitLabMergeRequestMessageHandler receiver, GitLabMergeRequestEventDTO event, Instant arrivedAt) {
+        onRoute(event, () -> {
+            receiver.dispatchEvent(event, arrivedAt);
+            return null;
+        });
     }
 }
