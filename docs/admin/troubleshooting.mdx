@@ -17,6 +17,7 @@ Do not print Secret objects or credentials while collecting diagnostics.
 | The login page has no sign-in button.                         | Configure a complete GitHub or GitLab login provider. [First steps](./first-steps#1-configure-a-login-provider) owns the initial setup. Change an existing provider in instance administration. |
 | Sign-in succeeds but the user is not an admin.                | Check `config.auth.bootstrapAdmins` against the provider's stable account identifier. [Instance admin](./instance-admin#bootstrap-and-recovery) owns recovery.                                  |
 | Helm reports `failed` or a Pod waits for a pending changeset. | Check the migration Job. A Helm failure does not prove that the Job stopped. Follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).                             |
+| Every path returns `404`. | Check the route conditions: `kubectl --namespace hephaestus describe httproute`. For `NotAllowedByListeners`, see [Gateway routes](./kubernetes#gateway-routes). |
 | The browser reports a certificate error.                      | Check DNS, the Gateway certificate and the cert-manager Certificate status. [Certificate renewal](./kubernetes#certificate-renewal) gives the one-host checks.                                  |
 
 ## Provider events
