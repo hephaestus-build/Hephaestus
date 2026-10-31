@@ -71,8 +71,9 @@ public class MentorTurnCompletion {
      * @param startedAt when the attempt started, for its first partial answer, which times the attempt's first token;
      *     {@code null} for every later one
      */
-    public void progress(UUID turnId, int attempt, String workerId, JsonNode partial, @Nullable Instant startedAt) {
-        turns.updatePartial(turnId, attempt, workerId, partial);
+    public void progress(
+            long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial, @Nullable Instant startedAt) {
+        turns.updatePartial(workspaceId, turnId, attempt, leaseId, partial);
         if (startedAt != null) {
             Timer.builder(AgentMetrics.MENTOR_TURN_FIRST_TOKEN)
                     .publishPercentileHistogram()
@@ -105,9 +106,13 @@ public class MentorTurnCompletion {
      * shows settles that one.
      */
     @Transactional
-    public MentorTurn end(UUID turnId, int attempt, String workerId, Ending ending) {
-        MentorTurnService.EndedTurn ended =
-                turns.end(turnId, attempt, workerId, ending.outcome(), ending.entries(), ending.error());
+    public MentorTurn end(long workspaceId, UUID turnId, int attempt, UUID leaseId, Ending ending) {
+        MentorTurnService.EndedTurn ended = turns.end(
+                workspaceId,
+                turnId,
+                attempt,
+                leaseId,
+                new MentorTurnService.Ending(ending.outcome(), ending.entries(), ending.error()));
         MentorTurn turn = ended.turn();
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
             turns.recordFailure(turn, ending.cause(), ending.lastFailedCall());

@@ -113,6 +113,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmProxyServiceTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+    private static final UUID OTHER_LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -883,7 +885,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     8L,
                     9L,
                     new ProxyRouting.BilledAttempt(
-                            UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker"),
+                            UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE),
                     null,
                     null,
                     null);
@@ -1360,7 +1362,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         @DisplayName("a call that the turn's end cancelled does not replace the failure the turn ended on")
         void aCancelledCallDoesNotReplaceTheFailure() {
             var attempt = new ProxyRouting.BilledAttempt(
-                    UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker");
+                    UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
             try (var call = streamingCalls.begin(attempt)) {
                 call.failed(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
                 call.failed(new MentorTurn.FailedCall("upstream_idle", 503));
@@ -2418,7 +2420,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
             0,
             BigDecimal.ZERO,
-            "worker-1");
+            OTHER_LEASE);
 
     // A work deadline no test reaches, for job routes whose test is not about it.
     private static Instant laterThanAnyTest() {
@@ -2486,12 +2488,13 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 routing.sourceId(),
                 9L,
                 0,
+                UUID.randomUUID(),
                 Set.of(),
                 "test",
                 now,
                 now.plusSeconds(60),
                 now.plusSeconds(60));
-        var identity = ProxyIdentity.of(job, "worker-1");
+        var identity = ProxyIdentity.of(job);
         lenient().when(routingService.resolve(eq(identity), any())).thenReturn(routing);
         SecurityContextHolder.getContext().setAuthentication(new JobTokenAuthentication(identity, Set.of(), null));
     }

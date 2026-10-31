@@ -87,9 +87,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     private UUID runningTurn(UUID conversation) {
         UUID id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,worker_id,"
+                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,lease_id,"
                         + "leased_until,started_at,created_at)"
-                        + " VALUES (?,?,?,?,'RUNNING','APP',1,'worker',now()+interval '5 minutes',now(),now())",
+                        + " VALUES (?,?,?,?,'RUNNING','APP',1,gen_random_uuid(),now()+interval '5 minutes',now(),now())",
                 id,
                 workspace.getId(),
                 conversation,

@@ -33,7 +33,7 @@ public class ReviewModelGateway {
     }
 
     /** The attempt a call bills to, and the end of the work time it may use. */
-    public record Attempt(UUID jobId, long workspaceId, int attempt, String workerId, Instant deadline) {}
+    public record Attempt(UUID jobId, long workspaceId, int attempt, UUID leaseId, Instant deadline) {}
 
     /** Which of the proxy's own rules refused a call. */
     public enum Refusal {
@@ -72,8 +72,8 @@ public class ReviewModelGateway {
     public Answer call(Attempt attempt, byte[] body) {
         ProxyRouting route;
         try {
-            route = routing.workerRouting(
-                    attempt.jobId(), attempt.workspaceId(), attempt.attempt(), attempt.workerId(), attempt.deadline());
+            route = routing.attemptRouting(
+                    attempt.jobId(), attempt.workspaceId(), attempt.attempt(), attempt.leaseId(), attempt.deadline());
         } catch (ResponseStatusException unavailable) {
             return new Answer(unavailable.getStatusCode().value(), new byte[0], false, null);
         }

@@ -88,14 +88,14 @@ public class MentorAttemptUsageService {
      *     admitted then
      */
     @Transactional
-    public boolean admit(UUID turnId, int attempt, String workerId, MentorTurnAdmission admitted) {
-        MentorTurn found = turnRows.findById(turnId).orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
-        long workspaceId = found.getWorkspaceId();
+    public boolean admit(long workspaceId, UUID turnId, int attempt, UUID leaseId, MentorTurnAdmission admitted) {
+        if (turnRows.findByIdAndWorkspaceId(turnId, workspaceId).isEmpty())
+            throw new MentorLeaseLostException(turnId, attempt);
         boolean writable = turnRows.findAccountIdByIdAndWorkspaceId(turnId, workspaceId)
                 .map(writeFence::holdForAccountWrite)
                 .orElse(false);
         if (!writable) return false;
-        turns.admit(turnId, attempt, workerId, admitted.toJson());
+        turns.admit(workspaceId, turnId, attempt, leaseId, admitted.toJson());
         attempts.register(turnId, attempt, workspaceId, admitted.model(), admitted.price());
         return true;
     }

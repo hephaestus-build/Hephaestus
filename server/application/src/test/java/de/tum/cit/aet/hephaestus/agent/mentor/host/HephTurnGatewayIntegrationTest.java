@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
@@ -44,6 +43,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -77,9 +77,6 @@ import org.springframework.core.io.ClassPathResource;
  * application of its own, wired from the test context's beans.
  */
 class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
-
-    /** The worker id of {@link WorkerPropertiesFixtures#minimal}. */
-    private static final String WORKER = "test-worker";
 
     @Autowired
     private ApplicationContext beans;
@@ -124,16 +121,11 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         developer = accountId(developerUser);
         conversation = conversations.findOrCreateMain(workspace.getId(), developer);
         turn = MentorTurnStarts.askAndStart(
-                turns, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?", WORKER);
+                turns, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
 
         HephTurnDispatcher dispatcher = runningHere();
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans);
-        var controller = new HephTurnController(
-                contexts,
-                completion,
-                dispatcher,
-                new ProxyCallsInFlight(3),
-                WorkerPropertiesFixtures.minimal("1", "4"));
+        var controller = new HephTurnController(contexts, completion, dispatcher, new ProxyCallsInFlight(3));
         var sandboxController = new HephTurnSandboxController(
                 contexts,
                 dispatcher,
@@ -252,7 +244,12 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         HephTurnDispatcher dispatcher = mock(HephTurnDispatcher.class);
         when(dispatcher.running(turn.getId(), turn.getAttempt()))
                 .thenReturn(Optional.of(new TurnAttempt(
-                        turn.getId(), workspace.getId(), developer, conversation.getId(), turn.getAttempt())));
+                        turn.getId(),
+                        workspace.getId(),
+                        developer,
+                        conversation.getId(),
+                        turn.getAttempt(),
+                        Objects.requireNonNull(turn.getLeaseId()))));
         when(dispatcher.deadline(turn.getId(), turn.getAttempt()))
                 .thenReturn(Instant.now().plusSeconds(300));
         return dispatcher;
@@ -266,12 +263,11 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The signed credential the worker issues for this attempt of the turn. */
     private String credential() {
-        return issuer.issueForAttempt(
-                AttemptJwt.Kind.TURN,
+        return issuer.issueForTurn(
                 turn.getId(),
                 workspace.getId(),
                 turn.getAttempt(),
-                null,
+                Objects.requireNonNull(turn.getLeaseId()),
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 

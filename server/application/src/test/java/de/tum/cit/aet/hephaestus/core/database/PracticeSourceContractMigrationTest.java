@@ -184,15 +184,15 @@ class PracticeSourceContractMigrationTest {
         oldScan(jdbc);
         seedScan(database);
         PracticeMigrationFixture.execute(database, """
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,input,config_snapshot,capture,trace_id,submitted_at,worker_id)
-            VALUES('00000000-0000-0000-0000-000000999824','00000000-0000-0000-0000-000000999811',978001,'RUNNING',2,'{}','{}','{}',repeat('f',32),now(),'stopped-worker');
+            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,input,config_snapshot,capture,trace_id,submitted_at,lease_id)
+            VALUES('00000000-0000-0000-0000-000000999824','00000000-0000-0000-0000-000000999811',978001,'RUNNING',2,'{}','{}','{}',repeat('f',32),now(),gen_random_uuid());
             """);
         migrate(database);
         assertThat(
                         text(
                                 jdbc,
-                                "SELECT status||'|'||attempt||'|'||(capture IS NULL)||'|'||(worker_id IS NULL) FROM review_job WHERE id='00000000-0000-0000-0000-000000999824' AND workspace_id=978001"))
-                .isEqualTo("QUEUED|2|true|true");
+                                "SELECT status||'|'||attempt||'|'||(capture IS NULL) FROM review_job WHERE id='00000000-0000-0000-0000-000000999824' AND workspace_id=978001"))
+                .isEqualTo("QUEUED|2|true");
         assertThat(
                         text(
                                 jdbc,
@@ -397,8 +397,11 @@ class PracticeSourceContractMigrationTest {
         return Objects.requireNonNull(jdbc.queryForObject(sql, String.class));
     }
 
+    // The released changelog ran while review_job still had the worker column that a later changelog drops.
     private static void migrate(TestDatabase database) throws Exception {
+        PracticeMigrationFixture.execute(database, "ALTER TABLE review_job ADD COLUMN worker_id varchar(255)");
         PracticeMigrationFixture.execute(database, resource("db/changelog/source-contract-3.sql"));
+        PracticeMigrationFixture.execute(database, "ALTER TABLE review_job DROP COLUMN worker_id");
     }
 
     private static String resource(String path) throws Exception {

@@ -14,9 +14,9 @@ public final class SandboxGatewayFixtures {
 
     private SandboxGatewayFixtures() {}
 
-    /** Authenticates a job or turn credential as the gateway does on a worker named {@code workerId}. */
+    /** Authenticates a job or turn credential as the gateway does: by the attempt's live lease. */
     public static Filter credentialFilter(
-            ReviewJobRepository jobs, MentorTurnRepository turns, AttemptTokenVerifier verifier, String workerId) {
-        return new JobTokenAuthenticationFilter(jobs, turns, new SandboxGatewaySessions(), verifier, workerId);
+            ReviewJobRepository jobs, MentorTurnRepository turns, AttemptTokenVerifier verifier) {
+        return new JobTokenAuthenticationFilter(jobs, turns, new SandboxGatewaySessions(), verifier);
     }
 }

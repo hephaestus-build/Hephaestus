@@ -394,7 +394,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
 
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
-        job.setWorkerId("some-worker");
+        job.setLeaseId(UUID.randomUUID());
         job.setConfigSnapshot(snapshot(tier));
         return jobRepository
                 .saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job))

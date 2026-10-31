@@ -36,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -191,13 +192,13 @@ public class ReviewOutputService {
         if (submission.results().isEmpty() && admitted.isEmpty())
             throw new ResultsRefusedException("no_admissible_results", "The submission contains no practice results");
         int attempt = job.getAttempt();
-        String worker = job.getWorkerId();
+        UUID lease = job.getLeaseId();
         JsonNode capture = Objects.requireNonNull(job.getCapture()).deepCopy();
         var retainedManifest = resolvedManifest;
         return owned -> {
             if (!job.getId().equals(owned.getId())
                     || attempt != owned.getAttempt()
-                    || !Objects.equals(worker, owned.getWorkerId())
+                    || !Objects.equals(lease, owned.getLeaseId())
                     || !capture.equals(owned.getCapture())) {
                 throw new ResultAdmissionService.StaleAttemptException();
             }

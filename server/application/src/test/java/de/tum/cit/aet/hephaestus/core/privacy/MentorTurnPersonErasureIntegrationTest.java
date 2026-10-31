@@ -66,8 +66,6 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
-    private static final String WORKER = "worker-erasure";
-
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -282,7 +280,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 main.getId(),
                 new MentorTurnService.Question(
                         MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
-        return turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        return turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
     }
 
     /** Ends the turn as a host does after a {@code fetch_context} read that copied the person's data. */
@@ -296,7 +294,12 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 MentorLedgerFixtures.toolResult(
                         MentorLedgerFixtures.piId(), "fetch-1", "fetch_context", "Target's open review", false),
                 MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), answer));
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, appended, null);
+        turns.end(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, appended, null));
     }
 
     /** A source step that fails on its first run, before the last step, so the erasure fails and resumes. */

@@ -58,8 +58,8 @@ public class MentorTurnStarter {
      *
      * @return empty when no turn is waiting, or when admission declined the claimed one
      */
-    public Optional<StartedTurn> startNext(String workerId, Duration lease) {
-        Optional<MentorTurn> claimed = turns.claimNext(workerId, lease);
+    public Optional<StartedTurn> startNext(Duration lease) {
+        Optional<MentorTurn> claimed = turns.claimNext(lease);
         if (claimed.isEmpty()) {
             return Optional.empty();
         }
@@ -79,38 +79,44 @@ public class MentorTurnStarter {
         try {
             llm = admission.admit(turn.getWorkspaceId(), accountId);
         } catch (MentorRefusedException refused) {
-            return decline(turn, workerId, refused.reason().userMessage());
+            return decline(turn, refused.reason().userMessage());
         } catch (LlmBudgetExhaustedException | LlmUnpricedUsageBlockedException blocked) {
-            return decline(turn, workerId, Objects.requireNonNullElse(blocked.getMessage(), PERSON_DATA_HELD));
+            return decline(turn, Objects.requireNonNullElse(blocked.getMessage(), PERSON_DATA_HELD));
         }
         if (connections.isOpen(llm.connectionScope(), llm.connectionId())) {
             log.info(
                     "conversation turn {} was not started: its provider connection is paused after failures",
                     turn.getId());
-            return decline(turn, workerId, PROVIDER_PAUSED);
+            return decline(turn, PROVIDER_PAUSED);
         }
         Optional<String> tooSmall = AgentBindingLimits.tooSmallForHeph(llm.contextWindow(), llm.maxOutputTokens());
         if (tooSmall.isPresent()) {
             log.warn("conversation turn {} cannot run on its model: {}", turn.getId(), tooSmall.get());
-            return decline(turn, workerId, MODEL_TOO_SMALL);
+            return decline(turn, MODEL_TOO_SMALL);
         }
         // With the admission, the attempt's usage measurement: no call of the attempt is routed before both exist. An
         // erasure that suppressed the account after the eligibility read above refuses both.
         boolean admitted = attemptUsage.admit(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                workerId,
+                Objects.requireNonNull(turn.getLeaseId()),
                 MentorTurnAdmission.of(
                         llm,
                         Objects.requireNonNull(llm.priceSnapshot(), "A conversation turn needs an admitted price")));
         if (!admitted) {
-            return decline(turn, workerId, PERSON_DATA_HELD);
+            return decline(turn, PERSON_DATA_HELD);
         }
         return Optional.of(new StartedTurn(turn, accountId, llm));
     }
 
-    private Optional<StartedTurn> decline(MentorTurn turn, String workerId, String reason) {
-        turns.end(turn.getId(), turn.getAttempt(), workerId, MentorTurn.Status.FAILED, List.of(), reason);
+    private Optional<StartedTurn> decline(MentorTurn turn, String reason) {
+        turns.end(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.FAILED, List.of(), reason));
         log.info(
                 "conversation turn {} attempt {} was declined at its start: {}",
                 turn.getId(),

@@ -66,13 +66,13 @@ erDiagram
         TIMESTAMPTZ started_at
         VARCHAR(16) status "NOT NULL"
         VARCHAR(8) surface "NOT NULL"
-        VARCHAR(128) worker_id
         BIGINT workspace_id FK,UK "NOT NULL"
         VARCHAR(500) page_context
         VARCHAR(64) failed_call
         INTEGER failed_call_status
         VARCHAR(200) failure_cause
         TIMESTAMPTZ queued_at "NOT NULL"
+        UUID lease_id
     }
 
     Account["Account · Core"]

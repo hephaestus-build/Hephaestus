@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,8 +50,8 @@ public class ReviewCompositionContinuation {
      * permit: the new attempt checks them before it stages anything, and withholds what they no longer permit.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public int requeue(ReviewJob job, String workerId, ReviewJobRepository.CompositionRequeue request) {
-        return jobs.requeueAdmittedForComposition(job.getId(), workerId, request);
+    public int requeue(ReviewJob job, UUID leaseId, ReviewJobRepository.CompositionRequeue request) {
+        return jobs.requeueAdmittedForComposition(job.getId(), leaseId, request);
     }
 
     /**

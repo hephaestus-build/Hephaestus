@@ -44,13 +44,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * A Heph turn's credential on the worker's gateway: it acts for its own attempt only, and only while this worker
- * holds the attempt's lease. The filter and the routing are built by hand because the worker role is off in the test
+ * A Heph turn's credential on the worker's gateway: it acts for its own attempt only, and only while it names
+ * the attempt's live lease. The filter and the routing are built by hand because the worker role is off in the test
  * context; {@code LlmProxySecurityConfigTest} runs the whole chain.
  */
 class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegrationTest {
-
-    private static final String WORKER = "worker-turn-auth";
 
     @Autowired
     private ReviewJobRepository jobRepository;
@@ -99,8 +97,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         workspace = createWorkspace("turn-auth-" + suffix, "Turn Auth", "turn-auth-org", AccountType.ORG, developer);
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
-        turn = MentorTurnStarts.askAndStart(
-                turns, metrics, workspace.getId(), conversation.getId(), "Question", WORKER);
+        turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), "Question");
     }
 
     @AfterEach
@@ -109,22 +106,21 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private String token(UUID turnId, long workspaceId, int attempt) {
-        return jwtIssuer.issueForAttempt(
-                AttemptJwt.Kind.TURN,
-                turnId,
-                workspaceId,
-                attempt,
-                null,
-                Instant.now().plus(Duration.ofMinutes(5)));
+        return token(turnId, workspaceId, attempt, Objects.requireNonNull(turn.getLeaseId()));
+    }
+
+    private String token(UUID turnId, long workspaceId, int attempt, UUID leaseId) {
+        return jwtIssuer.issueForTurn(
+                turnId, workspaceId, attempt, leaseId, Instant.now().plus(Duration.ofMinutes(5)));
     }
 
     private String token() {
         return token(turn.getId(), workspace.getId(), turn.getAttempt());
     }
 
-    private Result call(String worker, String method, String path, String token) throws Exception {
+    private Result call(String method, String path, String token) throws Exception {
         var filter = new JobTokenAuthenticationFilter(
-                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier, worker);
+                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier);
         var request = new MockHttpServletRequest(method, path);
         request.setRemoteAddr("10.0.0.2");
         request.addHeader("Authorization", "Bearer " + token);
@@ -142,7 +138,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         transactions.executeWithoutResult(tx -> turnRepository.accumulateUsage(
                 turn.getId(), turn.getAttempt(), new MentorTurnUsage(100_000, 0, 0, 0, 0, 1)));
 
-        Result result = call(WORKER, "POST", "/internal/llm/responses", token());
+        Result result = call("POST", "/internal/llm/responses", token());
 
         assertThat(result.status()).isEqualTo(200);
         Authentication authentication = Objects.requireNonNull(result.authentication());
@@ -167,26 +163,29 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldAuthenticateTheTurnOnItsOwnEndpointsOnlyWhenItCallsThem() throws Exception {
-        assertThat(call(WORKER, "GET", "/internal/llm/turn/" + turn.getId() + "/context", token())
+        assertThat(call("GET", "/internal/llm/turn/" + turn.getId() + "/context", token())
                         .status())
                 .isEqualTo(200);
-        assertThat(call(WORKER, "GET", "/internal/llm/turn/" + UUID.randomUUID() + "/context", token())
+        assertThat(call("GET", "/internal/llm/turn/" + UUID.randomUUID() + "/context", token())
                         .status())
                 .isEqualTo(401);
-        assertThat(call(WORKER, "GET", "/internal/llm/runtime/" + turn.getId() + "/workspace", token())
+        assertThat(call("GET", "/internal/llm/runtime/" + turn.getId() + "/workspace", token())
                         .status())
                 .isEqualTo(401);
     }
 
     @Test
-    void shouldRefuseAModelCallWhenAnotherWorkerOrAttemptOrWorkspaceHoldsTheTurn() throws Exception {
+    void shouldRefuseAModelCallWhenAnotherLeaseOrAttemptOrWorkspaceHoldsTheTurn() throws Exception {
         String path = "/internal/llm/responses";
 
-        assertThat(call("worker-other", "GET", path, token()).status()).isEqualTo(409);
-        assertThat(call(WORKER, "GET", path, token(turn.getId(), workspace.getId(), turn.getAttempt() + 1))
+        assertThat(call("GET", path, token(turn.getId(), workspace.getId(), turn.getAttempt(), UUID.randomUUID()))
+                        .status())
+                .as("a credential of another lease of the same attempt")
+                .isEqualTo(409);
+        assertThat(call("GET", path, token(turn.getId(), workspace.getId(), turn.getAttempt() + 1))
                         .status())
                 .isEqualTo(409);
-        assertThat(call(WORKER, "GET", path, token(turn.getId(), workspace.getId() + 1, turn.getAttempt()))
+        assertThat(call("GET", path, token(turn.getId(), workspace.getId() + 1, turn.getAttempt()))
                         .status())
                 .as("the turn is not one of that workspace's")
                 .isEqualTo(401);
@@ -194,9 +193,14 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldLeaveTheAttemptCheckToTheTurnEndpointWhenTheTurnCallsOne() throws Exception {
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+        turns.end(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
 
-        Result result = call(WORKER, "PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
+        Result result = call("PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
 
         assertThat(result.status()).isEqualTo(200);
         assertThat(Objects.requireNonNull(result.authentication()).getDetails()).isInstanceOf(AttemptJwt.class);
@@ -204,9 +208,14 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldRefuseTheTurnWhenItsAttemptEnded() throws Exception {
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+        turns.end(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
 
-        Result result = call(WORKER, "POST", "/internal/llm/responses", token());
+        Result result = call("POST", "/internal/llm/responses", token());
 
         assertThat(result.status()).isEqualTo(409);
         assertThat(result.authentication()).isNull();

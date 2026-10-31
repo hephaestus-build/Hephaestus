@@ -353,7 +353,7 @@ public class DefaultReviewExecutionHandler {
     public void completeWithoutExecution(ReviewJob job) {
         admission.admit(
                 new ResultAdmissionService.AdmissionIdentity(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId())),
+                        job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId())),
                 new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), job.getAttempt(), List.of(), List.of()));
     }
 

@@ -60,6 +60,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Tag("integration")
 class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String PRACTICE = "comment-quality";
@@ -161,7 +162,8 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker-1");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setExecutionStartedAt(executionStarted ? Instant.now() : null);
         job.setConfigSnapshot(MAPPER.createObjectNode());
         job.prePersist();
@@ -169,7 +171,7 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private void register(ReviewJob job, int attempt, ModelKind kind, FrozenCharge charge) {
-        assertThat(attemptUsage.registerCall(job.getId(), job.getWorkspaceId(), attempt, "worker-1", kind, charge))
+        assertThat(attemptUsage.registerCall(job.getId(), job.getWorkspaceId(), attempt, LEASE, kind, charge))
                 .isTrue();
     }
 
@@ -178,8 +180,7 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private static ProxyRouting.BilledAttempt billed(ReviewJob job, int attempt, UsageSourceType type, long workspace) {
-        return new ProxyRouting.BilledAttempt(
-                type, job.getId(), attempt, BigDecimal.ZERO, "worker-1", 0L, 0L, workspace);
+        return new ProxyRouting.BilledAttempt(type, job.getId(), attempt, BigDecimal.ZERO, LEASE, 0L, 0L, workspace);
     }
 
     private void call(ReviewJob job, int attempt, int input, int output) {
@@ -298,12 +299,14 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
                     job,
                     Map.of(ModelKind.CHAT, INSTANCE_CHAT),
                     jobs.findLlmUsageById(job.getId()).orElse(null));
-            assertThat(jobs.requeueOrphan(job.getId(), "worker-1", 5, Instant.now()))
-                    .isEqualTo(1);
+            assertThat(jobs.requeueOrphan(job.getId(), LEASE, 5, Instant.now())).isEqualTo(1);
             attemptUsage.settleAttempt(job, Map.of(ModelKind.CHAT, INSTANCE_CHAT), null, null);
         });
         // The next claim: attempt 1 runs with another configuration.
-        jdbc.update("UPDATE review_job SET status = 'RUNNING', worker_id = 'worker-1' WHERE id = ?", job.getId());
+        jdbc.update(
+                "UPDATE review_job SET status = 'RUNNING', lease_id = '508d958c-100e-594f-8b4e-6d5c60e59470',"
+                        + " leased_until = now() + interval '10 minutes' WHERE id = ?",
+                job.getId());
         register(job, 1, ModelKind.CHAT, WORKSPACE_CHAT);
 
         call(job, 0, 40, 4);
@@ -328,9 +331,9 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
     void shouldBillTheLockedAttemptWhenAnExecutorRetriesWithItsDetachedPreExecutionClaim() {
         ReviewJob claim = runningJob("late-detached-retry", false, false);
         assertThat(claim.getExecutionStartedAt()).isNull();
-        transactions.executeWithoutResult(tx -> assertThat(
-                        jobs.markExecutionStarted(claim.getId(), "worker-1", claim.getAttempt(), Instant.now()))
-                .isEqualTo(1));
+        transactions.executeWithoutResult(
+                tx -> assertThat(jobs.markExecutionStarted(claim.getId(), LEASE, claim.getAttempt(), Instant.now()))
+                        .isEqualTo(1));
         assertThat(claim.getExecutionStartedAt()).isNull();
         assertThat(jobs.findById(claim.getId()).orElseThrow().getExecutionStartedAt())
                 .isNotNull();
@@ -338,7 +341,7 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
         call(claim, 0, 100, 10);
         assertThat(ledgerRow(claim, 0, UsageSourceType.REVIEW_JOB)).isNull();
 
-        var requeued = transactions.execute(tx -> recovery.retryUnadmitted(claim, "worker-1", true));
+        var requeued = transactions.execute(tx -> recovery.retryUnadmitted(claim, LEASE, true));
         assertThat(requeued).isTrue();
 
         ReviewJob next = jobs.findById(claim.getId()).orElseThrow();
@@ -620,8 +623,7 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(chargesBefore).hasSize(1);
         assertThat(ledgerRow(job, 0, UsageSourceType.REVIEW_JOB)).isNull();
 
-        assertThat(attemptUsage.registerCall(
-                        job.getId(), job.getWorkspaceId(), 0, "worker-1", ModelKind.DECISION, DECISION))
+        assertThat(attemptUsage.registerCall(job.getId(), job.getWorkspaceId(), 0, LEASE, ModelKind.DECISION, DECISION))
                 .isFalse();
 
         assertThat(jdbc.queryForList(

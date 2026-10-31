@@ -161,7 +161,7 @@ public class ReviewJobZombieSweeper {
         ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
         if (lockedJob == null || lockedJob.getStatus() != ReviewJobStatus.RUNNING) return null;
         boolean cutover =
-                lockedJob.getLeasedUntil() == null && lockedJob.getWorkerId() != null && lockedJob.getDrainCount() > 0;
+                lockedJob.getLeasedUntil() == null && lockedJob.getLeaseId() != null && lockedJob.getDrainCount() > 0;
         int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
         Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
         // Give lease recovery a fresh timeout after this server starts, rather than the old claim's spent timeout.
@@ -228,12 +228,12 @@ public class ReviewJobZombieSweeper {
         if (orphans.isEmpty()) {
             return;
         }
-        log.warn("Found {} orphaned RUNNING job(s) (owning worker lost); recovering", orphans.size());
+        log.warn("Found {} orphaned RUNNING job(s) (lease expired); recovering", orphans.size());
         for (OrphanedJobRef orphan : orphans) {
             try {
                 ReviewJobRecovery.Outcome outcome =
                         transactionTemplate.execute(s -> stillExpired(orphan.getJobId(), cutoff)
-                                ? recovery.recover(orphan.getJobId(), orphan.getWorkerId(), orphan.getAttempt(), null)
+                                ? recovery.recover(orphan.getJobId(), orphan.getLeaseId(), orphan.getAttempt(), null)
                                 : ReviewJobRecovery.Outcome.NONE);
                 if (outcome == ReviewJobRecovery.Outcome.REQUEUED) {
                     orphanRequeued.increment();

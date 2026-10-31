@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,7 +40,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final JobTokenAuthenticationFilter filter =
-            new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier, "worker-1");
+            new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier);
 
     @AfterEach
     void clearContext() {
@@ -54,6 +53,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId()))
+                .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         var response = new MockHttpServletResponse();
         var principal = new AtomicReference<Authentication>();
@@ -68,15 +69,17 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 .isEqualTo(jwt);
         assertThat(job.getConfigSnapshot()).isNull();
         verify(jobs).findById(job.getId());
+        verify(jobs).hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId());
         verifyNoMoreInteractions(jobs);
     }
 
     @Test
-    void turnModelCallAuthenticatesWhileItsAttemptHoldsTheLeaseOnThisWorker() throws Exception {
+    void turnModelCallAuthenticatesWhileItsAttemptHoldsItsLease() throws Exception {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
-        var turn = leased(jwt);
-        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(turn));
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(mock(MentorTurn.class)));
+        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+                .thenReturn(true);
         var principal = new AtomicReference<Authentication>();
         var response = new MockHttpServletResponse();
         filter.doFilter(
@@ -92,16 +95,14 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         verifyNoInteractions(jobs);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"attempt", "worker", "released"})
-    void turnModelCallOfAnAttemptThatLostItsLeaseGetsConflict(String mismatch) throws Exception {
+    @Test
+    void turnModelCallOfAnAttemptThatLostItsLeaseGetsConflict() throws Exception {
+        // The database decides which lease is live (ConversationAttemptLeaseDatabaseTest); here the turn holds none.
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
-        var turn = leased(jwt);
-        if (mismatch.equals("attempt")) when(turn.getAttempt()).thenReturn(jwt.attempt() + 1);
-        if (mismatch.equals("worker")) when(turn.getWorkerId()).thenReturn("other-worker");
-        if (mismatch.equals("released")) when(turn.isLeased()).thenReturn(false);
-        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(turn));
+        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(mock(MentorTurn.class)));
+        when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+                .thenReturn(false);
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer turn-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Lost attempt served");
@@ -256,17 +257,16 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private static AttemptJwt turnJwt(UUID id, long workspace) {
         var now = Instant.now();
         return new AttemptJwt(
-                AttemptJwt.Kind.TURN, id, workspace, 2, Set.of("llm_proxy"), "jti", now, now.plusSeconds(60), null);
-    }
-
-    /** The turn row as this worker's attempt holds it. */
-    private static MentorTurn leased(AttemptJwt jwt) {
-        var turn = mock(MentorTurn.class);
-        // The check stops at the first mismatch, so a case reads only some of these.
-        lenient().when(turn.isLeased()).thenReturn(true);
-        lenient().when(turn.getAttempt()).thenReturn(jwt.attempt());
-        lenient().when(turn.getWorkerId()).thenReturn("worker-1");
-        return turn;
+                AttemptJwt.Kind.TURN,
+                id,
+                workspace,
+                2,
+                UUID.randomUUID(),
+                Set.of("llm_proxy"),
+                "jti",
+                now,
+                now.plusSeconds(60),
+                null);
     }
 
     @ParameterizedTest
@@ -288,15 +288,16 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"requeued", "worker", "terminal"})
-    void modelCallOfAnAttemptThatNoLongerRunsHereGetsTheAttemptEndedConflict(String mismatch) throws Exception {
+    @Test
+    void modelCallOfAnAttemptThatNoLongerHoldsItsLeaseGetsTheAttemptEndedConflict() throws Exception {
+        // A requeue, another lease or a terminal status all leave no live lease for this credential
+        // (ReviewJobLeaseIntegrationTest); the gateway asks only that.
         var job = running();
-        when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
-        if (mismatch.equals("requeued")) job.setAttempt(job.getAttempt() + 1);
-        if (mismatch.equals("worker")) job.setWorkerId("other-worker");
-        if (mismatch.equals("terminal")) job.setStatus(ReviewJobStatus.COMPLETED);
+        var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
+        when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId()))
+                .thenReturn(false);
         var response = new MockHttpServletResponse();
         filter.doFilter(request("/internal/llm/responses", "Bearer valid-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Lost attempt served");
@@ -308,8 +309,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
     @Test
     void nonOwnerResultUploadReportsConflictOnlyForItsOwnRuntimeUrl() throws Exception {
+        // The job runs, but no longer under this credential's lease.
         var job = running();
-        job.setWorkerId("other-worker");
         when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         for (var id : new UUID[] {job.getId(), UUID.randomUUID()}) {
@@ -352,8 +353,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @ValueSource(strings = {"fc00::1", "fd12:3456:789a::2"})
     void shouldAuthenticateAnIpv6PrivateGateway(String address) throws Exception {
         var job = running();
-        when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
+        var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
+        when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.hasLiveLease(job.getId(), job.getWorkspaceId(), job.getAttempt(), jwt.leaseId()))
+                .thenReturn(true);
         var request = request("/internal/llm/admit-results", "Bearer valid-token");
         request.setRemoteAddr(address);
         var response = new MockHttpServletResponse();
@@ -368,7 +372,6 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         job.setId(UUID.randomUUID());
         RuntimeJobTestData.initialize(job, 7L);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker-1");
         job.setAttempt(3);
         return job;
     }
@@ -380,6 +383,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 id,
                 workspace,
                 attempt,
+                UUID.randomUUID(),
                 Set.of("llm_proxy"),
                 UUID.randomUUID().toString(),
                 now,

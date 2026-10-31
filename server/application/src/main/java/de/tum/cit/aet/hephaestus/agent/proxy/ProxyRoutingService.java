@@ -16,10 +16,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
@@ -74,31 +72,19 @@ class ProxyRoutingService {
 
     boolean ownsAttempt(ProxyRouting routing) {
         var attempt = routing.attempt();
-        if (routing.hephTurn())
-            return mentorTurns
-                    .findByIdAndWorkspaceId(attempt.sourceId(), Objects.requireNonNull(routing.workspaceId()))
-                    .filter(turn -> turn.getAttempt() == attempt.number()
-                            && turn.getStatus() == MentorTurn.Status.RUNNING
-                            && Objects.equals(turn.getWorkerId(), attempt.workerId())
-                            && turn.getLeasedUntil() != null
-                            && turn.getLeasedUntil().isAfter(Instant.now()))
-                    .isPresent();
-        return agentJobRepository
-                .findById(attempt.sourceId())
-                .filter(job -> Objects.equals(job.getWorkspaceId(), routing.workspaceId())
-                        && job.getStatus() == ReviewJobStatus.RUNNING
-                        && job.getAttempt() == attempt.number()
-                        && Objects.equals(job.getWorkerId(), attempt.workerId())
-                        && job.getLeasedUntil() != null
-                        && job.getLeasedUntil().isAfter(Instant.now()))
-                .isPresent();
+        UUID lease = attempt.leaseId();
+        Long workspace = routing.workspaceId();
+        if (lease == null || workspace == null) return false;
+        return routing.hephTurn()
+                ? mentorTurns.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease)
+                : agentJobRepository.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease);
     }
 
     ProxyRouting resolve(ProxyIdentity identity, HttpServletRequest request) {
         if (identity.turn() != null) {
             if (request.getRequestURI().startsWith(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review job credential required");
-            return turnRouting(identity.turn(), Objects.requireNonNull(identity.workerId()));
+            return turnRouting(identity.turn());
         }
         var jwt = identity.job();
         if (jwt == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Model credential required");
@@ -107,22 +93,21 @@ class ProxyRoutingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         if (job.getWorkspaceId() != jwt.workspaceId())
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
-        if (job.getStatus() != ReviewJobStatus.RUNNING
-                || job.getAttempt() != jwt.attempt()
-                || !Objects.equals(job.getWorkerId(), identity.workerId())) throw attemptEnded();
+        if (!agentJobRepository.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+            throw attemptEnded();
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         // The live checks above decide whether this attempt may call at all; the signed deadline decides until when.
         Instant workDeadline = Objects.requireNonNull(jwt.workDeadline(), "a review attempt has a work deadline");
         if (!request.getRequestURI().startsWith(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH)) {
-            register(job, identity.workerId(), ModelKind.CHAT, snapshot.model());
-            return reviewRouting(job, snapshot, workDeadline);
+            register(job, jwt.leaseId(), ModelKind.CHAT, snapshot.model());
+            return reviewRouting(job, jwt.leaseId(), snapshot, workDeadline);
         }
         var slot = practiceScriptSlot(request.getRequestURI());
         if (slot == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        ProxyRouting routing = practiceScriptRouting(job, snapshot, slot, workDeadline)
+        ProxyRouting routing = practiceScriptRouting(job, jwt.leaseId(), snapshot, slot, workDeadline)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
-        register(job, identity.workerId(), slot, model);
+        register(job, jwt.leaseId(), slot, model);
         return routing;
     }
 
@@ -130,19 +115,16 @@ class ProxyRoutingService {
      * The routing of a chat call that the worker makes for a review attempt it runs: the same live checks as a
      * sandbox's credential, with the worker's own deadline. Anything else, and the call does not start.
      *
-     * @throws ResponseStatusException 401 when the attempt is no longer running on this worker
+     * @throws ResponseStatusException 401 when the attempt no longer holds this lease
      */
-    ProxyRouting workerRouting(UUID jobId, long workspaceId, int attempt, String workerId, Instant workDeadline) {
+    ProxyRouting attemptRouting(UUID jobId, long workspaceId, int attempt, UUID leaseId, Instant workDeadline) {
         var job = agentJobRepository
                 .findById(jobId)
-                .filter(found -> found.getStatus() == ReviewJobStatus.RUNNING
-                        && found.getAttempt() == attempt
-                        && found.getWorkspaceId() == workspaceId
-                        && workerId.equals(found.getWorkerId()))
+                .filter(found -> agentJobRepository.hasLiveLease(jobId, workspaceId, attempt, leaseId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-        register(job, workerId, ModelKind.CHAT, snapshot.model());
-        return reviewRouting(job, snapshot, workDeadline);
+        register(job, leaseId, ModelKind.CHAT, snapshot.model());
+        return reviewRouting(job, leaseId, snapshot, workDeadline);
     }
 
     /**
@@ -150,12 +132,12 @@ class ProxyRoutingService {
      * later claim freezes a new configuration onto the row, so a call that returns after a hand-off is priced from
      * this registration. The attempt must still run on this worker; otherwise the call does not start.
      */
-    private void register(ReviewJob job, @Nullable String workerId, ModelKind kind, @Nullable FrozenModel model) {
+    private void register(ReviewJob job, UUID leaseId, ModelKind kind, @Nullable FrozenModel model) {
         boolean running = attemptUsage.registerCall(
                 job.getId(),
                 job.getWorkspaceId(),
                 job.getAttempt(),
-                workerId,
+                leaseId,
                 kind,
                 model == null ? FrozenCharge.UNKNOWN : FrozenCharge.of(model));
         if (!running) throw attemptEnded();
@@ -171,11 +153,10 @@ class ProxyRoutingService {
      * attempt has spent so far, priced at the admitted rates. An attempt that ended or moved on gets {@code 409}, so its
      * host stops.
      */
-    private ProxyRouting turnRouting(AttemptJwt jwt, String workerId) {
+    private ProxyRouting turnRouting(AttemptJwt jwt) {
         var turn = mentorTurns
                 .findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())
-                .filter(found ->
-                        found.isLeased() && found.getAttempt() == jwt.attempt() && workerId.equals(found.getWorkerId()))
+                .filter(found -> mentorTurns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "This turn attempt no longer holds its lease"));
         var admitted = MentorTurnAdmission.read(turn.getAdmission())
@@ -201,16 +182,17 @@ class ProxyRoutingService {
                         turn.getId(),
                         turn.getAttempt(),
                         spent != null ? spent : BigDecimal.ZERO,
-                        workerId),
+                        jwt.leaseId()),
                 null,
                 null,
                 null);
     }
 
-    private ProxyRouting reviewRouting(ReviewJob job, ConfigSnapshot snapshot, Instant workDeadline) {
+    private ProxyRouting reviewRouting(ReviewJob job, UUID leaseId, ConfigSnapshot snapshot, Instant workDeadline) {
         return routing(
                 "job:" + job.getId(),
                 job,
+                leaseId,
                 snapshot.model(),
                 UsageSourceType.REVIEW_JOB,
                 spentSoFarUsd(job, snapshot),
@@ -222,7 +204,7 @@ class ProxyRoutingService {
 
     // Include all direct models' in-flight spend until their ledger rows exist; only the same funding source counts.
     private Optional<ProxyRouting> practiceScriptRouting(
-            ReviewJob job, ConfigSnapshot snapshot, ModelKind slot, Instant workDeadline) {
+            ReviewJob job, UUID leaseId, ConfigSnapshot snapshot, ModelKind slot, Instant workDeadline) {
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
         if (model == null) {
             return Optional.empty();
@@ -232,6 +214,7 @@ class ProxyRoutingService {
         return Optional.of(routing(
                 "job:" + job.getId() + ":practice-script",
                 job,
+                leaseId,
                 model,
                 ScriptUsage.ledgerSourceType(slot),
                 practiceScriptSpentUsd(job, snapshot, used, model.connectionScope()),
@@ -244,6 +227,7 @@ class ProxyRoutingService {
     private static ProxyRouting routing(
             String principal,
             ReviewJob job,
+            UUID leaseId,
             FrozenModel model,
             UsageSourceType sourceType,
             BigDecimal spentUsd,
@@ -264,7 +248,7 @@ class ProxyRoutingService {
                         job.getId(),
                         job.getAttempt(),
                         spentUsd,
-                        job.getWorkerId(),
+                        leaseId,
                         directModelTokens,
                         directModelSearchUnits,
                         job.getWorkspaceId()),

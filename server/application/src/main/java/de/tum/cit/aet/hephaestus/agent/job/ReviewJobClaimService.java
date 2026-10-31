@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
@@ -58,7 +57,6 @@ public class ReviewJobClaimService {
     private final LlmBudgetService llmBudgetService;
     private final @Nullable LlmAdmissionService llmAdmissionService;
     private final ReviewJobTelemetry jobTelemetry;
-    private final @Nullable String workerId;
     private final LlmCallPermits callPermits;
 
     public ReviewJobClaimService(
@@ -72,7 +70,6 @@ public class ReviewJobClaimService {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
-            Optional<WorkerProperties> workerProperties,
             LlmCallPermits callPermits) {
         this.jobRepository = jobRepository;
         this.callPermits = callPermits;
@@ -85,7 +82,6 @@ public class ReviewJobClaimService {
         this.llmBudgetService = llmBudgetService;
         this.llmAdmissionService = llmAdmissionService;
         this.jobTelemetry = jobTelemetry;
-        this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
     }
 
     sealed interface ClaimAttempt {}
@@ -149,7 +145,7 @@ public class ReviewJobClaimService {
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        job.getWorkerId(),
+                        job.getLeaseId(),
                         objectMapper.writeValueAsString(diagnosis));
                 jobTelemetry.preparationFailed(job, preparation, "FAILED");
                 return new TerminalClaim(job, ReviewJobStatus.FAILED);
@@ -257,7 +253,8 @@ public class ReviewJobClaimService {
         job.setExecutionStartedAt(null);
         // Clear the budget hold marker so a crash requeue cannot inherit an expired hold.
         job.setHoldReason(null);
-        job.setWorkerId(workerId);
+        // A fresh lease names this attempt to the gateway and every fenced write, on any worker.
+        job.setLeaseId(UUID.randomUUID());
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
         lease(job);
@@ -286,7 +283,7 @@ public class ReviewJobClaimService {
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(null);
         job.setHoldReason(null);
-        job.setWorkerId(workerId);
+        job.setLeaseId(UUID.randomUUID());
         jobRepository.save(job);
         lease(job);
         return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);

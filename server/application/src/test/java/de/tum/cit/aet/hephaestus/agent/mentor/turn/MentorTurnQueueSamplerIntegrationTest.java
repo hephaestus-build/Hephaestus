@@ -39,7 +39,7 @@ class MentorTurnQueueSamplerIntegrationTest extends AbstractWorkspaceIntegration
         sampler.sample();
         double before = queued();
 
-        MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), main.getId(), "First", "worker-queue");
+        MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), main.getId(), "First");
         ask(workspace, main, "Second");
         ask(workspace, main, "Third");
         sampler.sample();
