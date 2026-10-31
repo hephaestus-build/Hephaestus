@@ -109,5 +109,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0068](0068-reviews-and-heph-run-on-one-agent-runtime.md) | Reviews and Heph run on one agent runtime | Accepted (2026-10-28). Supersedes 0057 § The Heph host and § Context folder and turn sandbox, and the WSS control channel of 0009. Amends 0005, 0007, 0041, 0058 and 0060. |
 | [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted (2026-10-28). Amends 0056, 0061, 0062 and 0063. |
 | [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted (2026-10-28; amended 2026-10-28 — lease recovery requeues the claimed reviews). Amends 0005, 0041, 0042 and 0058. |
+| [0073](0073-product-feedback-is-worked-on-in-github.md) | Product feedback is worked on in GitHub | Accepted (2026-10-31). Relates to 0025, 0026 and 0068. |
 
 Template: [0000-template.md](0000-template.md).
