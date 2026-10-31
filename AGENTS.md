@@ -43,7 +43,7 @@ Then choose the smallest model that makes the correct behavior unsurprising.
 - Make the simplest maintainable change.
   Add no abstraction, configuration, or future-proofing that the current task does not need.
   Add no compatibility shim for a caller that does not exist.
-- A framework or library feature over a hand-rolled one, every time it fits.
+- A framework feature over a hand-rolled one, and a few owned lines over a new package for a sliver (`docs/contributor/dependencies.md`).
 - Root causes over workarounds. A comment that documents a workaround is a flag that the fix is
   not done.
 - Give each fact one home.

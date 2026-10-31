@@ -48,8 +48,8 @@ are not here: write code that reads like the file you are editing.
 **Always** — run the unit baseline and every affected tier before committing · tag every test (`@Tag("unit")`,
 `@Tag("integration")`, `@Tag("live")`) · declare a new endpoint's permission explicitly.
 
-**Ask first** — schema changes · security configuration · a new Gradle dependency · workspace
-authorization logic.
+**Ask first** — schema changes · security configuration · a new Gradle dependency
+(`docs/contributor/dependencies.md`) · workspace authorization logic.
 
 **Never** — commit credentials · `System.out.println` (log through SLF4J with `{}` placeholders, and
 never log a token) · `@Transactional` on a controller (service layer only) · expose an entity from a
