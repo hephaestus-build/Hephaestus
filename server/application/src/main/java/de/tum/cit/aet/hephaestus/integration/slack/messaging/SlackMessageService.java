@@ -649,7 +649,7 @@ public class SlackMessageService {
     }
 
     /**
-     * One page of {@code conversations.history} for the nightly reconciliation. {@code oldest}/{@code latest} are
+     * One page of {@code conversations.history}, with each message's metadata. {@code oldest}/{@code latest} are
      * EXCLUSIVE Slack ts bounds (matching the forward-only "strictly after" invariant); results are newest-first and
      * contain thread parents only (replies live behind {@code conversations.replies}). Throws
      * {@link SlackSendException} on any failure so the sync can abandon the channel without advancing its watermark.
@@ -666,6 +666,7 @@ public class SlackMessageService {
                                     .oldest(oldest)
                                     .latest(latest)
                                     .cursor(cursor == null || cursor.isBlank() ? null : cursor)
+                                    .includeAllMetadata(true)
                                     .limit(limit)));
             if (!response.isOk()) {
                 throw new SlackSendException(

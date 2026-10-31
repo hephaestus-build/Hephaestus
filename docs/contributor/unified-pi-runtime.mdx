@@ -314,7 +314,7 @@ Thus, only a stream that no server ended is a Hephaestus message without metadat
 
 | Where the developer asked | While the turn runs | When the turn ends |
 | --- | --- | --- |
-| The top level of the direct message | Hephaestus reacts with 👀. | One post with the reply, then Hephaestus removes 👀. Slack shows at most 12,000 characters. A longer reply is cut and ends with "… The full answer is in Hephaestus." |
+| The top level of the direct message | Hephaestus reacts with 👀. After 5 seconds, one notice says what Hephaestus does, such as "Reading your pull requests…", and changes with the stage (`SlackMentorProjector.PROGRESS_NOTICE_AFTER`). | One post with the reply, then Hephaestus deletes the notice and removes 👀. Slack shows at most 12,000 characters. A longer reply is cut and ends with "… The full answer is in Hephaestus." |
 | A Slack thread | Hephaestus reacts with 👀 and sets the thread's agent session to `processing` (`agents.sessions.setStatus`), so Slack shows its Stop. The partial answer streams (`chat.startStream`, then `chat.appendStream`). The question's `slack_stream_ts` holds the stream's `ts`. | The rest of the answer, then `chat.stopStream` with the Helpful and Not helpful buttons, then the session's status, then Hephaestus removes 👀. |
 
 A question whose turn has not run 10 seconds after it was asked gets one notice where it was asked (`SlackMentorProjector.WAITING_NOTICE`).
@@ -322,6 +322,12 @@ Earlier turns hold the worker's turn slots, and without the notice Slack shows n
 The server deletes the notice when the turn runs or ends.
 A turn that ran and waits again gets no notice.
 If the turn waits for a free Hephaestus (`MentorTurnWaits`), the notice says that Hephaestus answers other questions (`WAITING_FOR_HEPH_NOTICE`).
+
+The progress notice of a top-level question carries its turn id in its metadata.
+A retried attempt deletes it, and the next run posts a new one.
+A rate limit pauses it for the time that Slack asks.
+Sometimes Slack did not answer its post, or another server posted it.
+Then the end of the reply finds it in the DM history and deletes it.
 
 The notice does not claim the reply.
 A claim before the turn runs would lose the answer if the server restarted during the wait.

@@ -9,11 +9,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -32,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService.HistoryPage;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -83,6 +86,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -160,6 +164,11 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @BeforeEach
     void setUpProjector() {
+        // The clock starts with the test instance, which can precede the context's start; turns record real time.
+        Duration behind = Duration.between(clock.instant(), Instant.now());
+        if (behind.isPositive()) {
+            clock.advance(behind);
+        }
         developer = persistUser("slack-projector-developer");
         workspace =
                 createWorkspace("slack-projector", "Slack Projector", "slack-projector", AccountType.ORG, developer);
@@ -301,6 +310,14 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         ConversationReceipts.awaitSettled(jdbc);
         return FeedbackState.valueOf(Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT state FROM feedback WHERE id=?", String.class, Objects.requireNonNull(shownFeedback))));
+    }
+
+    /** A snapshot of a running turn that runs a tool, with the stage the host names for it. */
+    private static ObjectNode staged(String stage) {
+        ObjectNode snapshot =
+                NODES.objectNode().put("activity", "tool").put("tool", "read").put("stage", stage);
+        snapshot.putArray("messages");
+        return snapshot;
     }
 
     private static ObjectNode partial(String text) {
@@ -562,6 +579,250 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
         verify(slack, never())
                 .postMessage(anyLong(), anyString(), any(), anyList(), eq(SlackMentorProjector.WAITING_NOTICE), any());
+    }
+
+    /** A wake-up the projector scheduled: it runs once, when the test's clock reaches it, unless it was cancelled. */
+    private static final class Due {
+        final Runnable task;
+        final Instant at;
+        boolean ran;
+        boolean cancelled;
+
+        Due(Runnable task, Instant at) {
+            this.task = task;
+            this.at = at;
+        }
+    }
+
+    private final List<Due> due = new ArrayList<>();
+
+    /** A projector whose timer keeps each wake-up's time, so a test sees when the projector looks again. */
+    private SlackMentorProjector timedProjector() {
+        ScheduledExecutorService dueTimer = mock(ScheduledExecutorService.class);
+        doAnswer(call -> {
+                    Due wakeUp = new Due(call.getArgument(0), clock.instant().plusMillis(call.<Long>getArgument(1)));
+                    due.add(wakeUp);
+                    ScheduledFuture<?> future = mock(ScheduledFuture.class);
+                    when(future.isDone()).thenAnswer(done -> wakeUp.ran || wakeUp.cancelled);
+                    when(future.cancel(anyBoolean())).thenAnswer(cancel -> {
+                        wakeUp.cancelled = true;
+                        return true;
+                    });
+                    return future;
+                })
+                .when(dueTimer)
+                .schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+        return new SlackMentorProjector(
+                notifications,
+                delivery,
+                turns,
+                new MentorTurnWaits(turnRepository, events, null),
+                completion,
+                slack,
+                new SlackMentorPoster(slack, delivery),
+                clock,
+                meters,
+                new OnTheCallersThread(),
+                dueTimer);
+    }
+
+    /** Moves the clock by {@code by} and runs each wake-up that is then due, once. */
+    private void advance(Duration by) {
+        clock.advance(by);
+        for (Due wakeUp : List.copyOf(due)) {
+            if (!wakeUp.ran && !wakeUp.cancelled && !wakeUp.at.isAfter(clock.instant())) {
+                wakeUp.ran = true;
+                wakeUp.task.run();
+            }
+        }
+    }
+
+    private void progressPostsAt(String stage, String ts) {
+        when(slack.postMessage(eq(workspace.getId()), eq(CHANNEL), isNull(), eq(List.of()), eq(stage), any()))
+                .thenReturn(new SlackMessageService.Posted(CHANNEL, ts));
+    }
+
+    @Test
+    void shouldSayWhatHephaestusDoesOnARunningTopLevelQuestionAndRemoveItWhenTheReplyPosts() {
+        projector = timedProjector();
+        progressPostsAt("Reading your pull requests…", "500.1");
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER.minusSeconds(1));
+        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        advance(Duration.ofSeconds(1));
+        verify(slack, times(1))
+                .postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), eq("Reading your pull requests…"), any());
+
+        advance(SlackMentorProjector.PROGRESS_INTERVAL);
+        verify(slack, never()).updateMessage(anyLong(), anyString(), anyString(), anyList(), anyString(), any());
+
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        advance(SlackMentorProjector.PROGRESS_INTERVAL);
+        verify(slack)
+                .updateMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        eq("500.1"),
+                        eq(List.of()),
+                        eq("Loading the repository…"),
+                        any());
+
+        when(slack.postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any()))
+                .thenReturn(new SlackMessageService.Posted(CHANNEL, "200.1"));
+        end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
+        changed(running);
+        changed(running);
+
+        InOrder order = inOrder(slack);
+        order.verify(slack)
+                .postMessage(anyLong(), eq(CHANNEL), isNull(), anyList(), startsWith("Here is what I saw."), any());
+        order.verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+        advance(SlackMentorProjector.PROGRESS_INTERVAL.multipliedBy(3));
+        verify(slack, times(1)).updateMessage(anyLong(), anyString(), anyString(), anyList(), anyString(), any());
+    }
+
+    @Test
+    void shouldShowProgressOnTimeWhenTheQuestionWaitedBeforeItsTurnRan() {
+        projector = timedProjector();
+        progressPostsAt("Thinking…", "500.1");
+        MentorTurn queued = ask(main, "How are my reviews?", "100.1").turn();
+        changed(queued);
+        advance(Duration.ofSeconds(1));
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Thinking…"));
+        changed(running);
+
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+
+        verify(slack).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), eq("Thinking…"), any());
+    }
+
+    @Test
+    void shouldRemoveTheProgressOfALostAttemptAndShowItAgainWhenTheRetryRuns() {
+        projector = timedProjector();
+        progressPostsAt("Reading your pull requests…", "500.1");
+        MentorTurn asked =
+                ask(main, "Is anything of mine waiting for a review?", "100.1").turn();
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+
+        turns.renewLease(running.getId(), running.getAttempt(), WORKER, Duration.ofSeconds(-1));
+        assertThat(turns.expireLease(running.getId())).isPresent();
+        changed(turns.require(workspace.getId(), asked.getId()));
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+
+        progressPostsAt("Reading your pull requests…", "500.2");
+        MentorTurn retried = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(retried.getId(), retried.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(retried);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+
+        verify(slack, times(2))
+                .postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), eq("Reading your pull requests…"), any());
+    }
+
+    @Test
+    void shouldPostProgressOnceAndFindItInTheHistoryWhenSlackDidNotAnswerThePost() {
+        projector = timedProjector();
+        when(slack.postMessage(
+                        anyLong(), eq(CHANNEL), isNull(), eq(List.of()), eq("Reading your pull requests…"), any()))
+                .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "transport_failure"));
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        advance(SlackMentorProjector.PROGRESS_INTERVAL);
+        verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+
+        postsAt("200.1");
+        when(slack.fetchHistoryPage(anyLong(), eq(CHANNEL), anyString(), anyString(), isNull(), anyInt()))
+                .thenReturn(new HistoryPage(
+                        List.of(
+                                botMessage("500.8", null),
+                                botMessage("500.9", SlackMentorPosts.progressMetadata(running.getId()))),
+                        null));
+        end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
+        changed(running);
+        changed(running);
+
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.9");
+        verify(slack, never()).deleteMessage(workspace.getId(), CHANNEL, "500.8");
+    }
+
+    @Test
+    void shouldNotPostProgressAgainWhenSlackAcceptedThePostWithoutAReceipt() {
+        projector = timedProjector();
+        when(slack.postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any()))
+                .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "invalid_receipt"));
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        advance(SlackMentorProjector.PROGRESS_INTERVAL);
+
+        verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+    }
+
+    @Test
+    void shouldWaitTheWholeRateLimitFromWhenSlackAnsweredBeforeShowingProgressAgain() {
+        projector = timedProjector();
+        doAnswer(call -> {
+                    // The call itself takes five seconds before Slack answers with a 30 second limit.
+                    clock.advance(Duration.ofSeconds(5));
+                    throw new SlackSendException(workspace.getId(), CHANNEL, "ratelimited", 30_000);
+                })
+                .doReturn(new SlackMessageService.Posted(CHANNEL, "500.1"))
+                .when(slack)
+                .postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+
+        for (int seconds = 0; seconds < 28; seconds += 2) {
+            advance(SlackMentorProjector.PROGRESS_INTERVAL);
+        }
+        verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+        advance(SlackMentorProjector.PROGRESS_INTERVAL.multipliedBy(2));
+        verify(slack, times(2)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+    }
+
+    @Test
+    void shouldFindTheProgressOfAnEarlierAttemptAfterARestartWhenTheRetryWasShort() {
+        MentorTurn asked =
+                ask(main, "Is anything of mine waiting for a review?", "100.1").turn();
+        MentorTurn first = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.renewLease(first.getId(), first.getAttempt(), WORKER, Duration.ofSeconds(-1));
+        assertThat(turns.expireLease(first.getId())).isPresent();
+        MentorTurn retried = turns.claimNext(WORKER, LEASE).orElseThrow();
+        // A new process: it holds no receipt of the notice that the first attempt's server posted.
+        projector = timedProjector();
+        changed(retried);
+        // Slack may end a page before the history ends: the notice is on the second page.
+        when(slack.fetchHistoryPage(anyLong(), eq(CHANNEL), anyString(), anyString(), isNull(), anyInt()))
+                .thenReturn(new HistoryPage(List.of(botMessage("500.8", null)), "page-2"));
+        when(slack.fetchHistoryPage(anyLong(), eq(CHANNEL), anyString(), anyString(), eq("page-2"), anyInt()))
+                .thenReturn(new HistoryPage(
+                        List.of(botMessage("500.9", SlackMentorPosts.progressMetadata(retried.getId()))), null));
+        postsAt("200.1");
+
+        end(retried, MentorTurn.Status.DONE, linkingAnswer(retried, "What do you make of the gap?"), "");
+        changed(turns.require(workspace.getId(), asked.getId()));
+        changed(turns.require(workspace.getId(), asked.getId()));
+
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.9");
+        verify(slack, never()).deleteMessage(workspace.getId(), CHANNEL, "500.8");
     }
 
     @Test
