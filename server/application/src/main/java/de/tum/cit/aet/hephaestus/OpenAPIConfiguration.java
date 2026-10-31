@@ -53,7 +53,11 @@ import org.springframework.data.web.PagedModel;
                                 + "server-computed totals and budget decisions. Provider mirror ids retain "
                                 + "their numeric contract. Required nullable response fields are present with null.",
                         version = "0.0.0-development",
-                        contact = @Contact(name = "Felix T.J. Dietrich", email = "felixtj.dietrich@tum.de"),
+                        contact =
+                                @Contact(
+                                        name = "Hephaestus",
+                                        url = "https://github.com/hephaestus-build/Hephaestus",
+                                        email = "security@hephaestus.build"),
                         license =
                                 @License(
                                         name = "MIT License",
