@@ -4,21 +4,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery.GrantStanding;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** A new wording version reaches every account, once, against the real ledger and its SQL. */
+/** Widening needs a new decision; removing surveys preserves decisions that cover the retained scope. */
 class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
 
     private static final String NARROWER_WORDING = "2026-09-11";
+    private static final String WIDER_WORDING = "2026-10-04";
 
     @Autowired
     private ConsentDecisionRepository decisions;
@@ -42,8 +48,11 @@ class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
 
     // The service is not a bean here, so the transaction its Spring proxy would open is opened by hand.
     private ConsentService.ConsentStatusDTO complete(long accountId, ConsentService.FirstLoginConsentDTO request) {
-        return Objects.requireNonNull(new TransactionTemplate(transactionManager)
-                .execute(status -> service.completeFirstLogin(accountId, request)));
+        return inTransaction(() -> service.completeFirstLogin(accountId, request));
+    }
+
+    private <T> T inTransaction(Supplier<T> work) {
+        return Objects.requireNonNull(new TransactionTemplate(transactionManager).execute(status -> work.get()));
     }
 
     @Test
@@ -80,6 +89,81 @@ class ConsentRewordingIntegrationTest extends BaseIntegrationTest {
                         ConsentService.WORDING_VERSION,
                         ConsentService.WORDING_VERSION,
                         ConsentService.WORDING_VERSION);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldKeepAnExistingDecisionWithoutAskingAgainWhenTheWordingNarrows(boolean granted) {
+        long id = recordWiderConsent(granted);
+        long decisionId = latestResearchId(id);
+
+        assertThat(service.hasCompletedCurrentNotice(id)).isTrue();
+        assertThat(service.status(id).completed()).isTrue();
+        assertThat(service.status(id).participateInResearch()).isEqualTo(granted);
+        assertThat(service.participates(id)).isEqualTo(granted);
+        Map<Long, Long> expected = granted ? Map.of(id, decisionId) : Map.of();
+        assertThat(inTransaction(() -> service.currentGrants(List.of(id)))).isEqualTo(expected);
+        assertThat(inTransaction(() -> service.lockCurrentGrants(List.of(id)))).isEqualTo(expected);
+
+        complete(id, new ConsentService.FirstLoginConsentDTO(ConsentService.WORDING_VERSION, true, granted, "AET"));
+
+        assertThat(latestResearchId(id)).isEqualTo(decisionId);
+        assertThat(versionsOf(id)).containsExactlyInAnyOrder(WIDER_WORDING, WIDER_WORDING, WIDER_WORDING);
+    }
+
+    @Test
+    void shouldRecordWithdrawalAndANewGrantWithCurrentWordingWithoutRevivingTheOldGrant() {
+        long id = recordWiderConsent(true);
+        long originalGrant = latestResearchId(id);
+        assertThat(inTransaction(() -> service.grantStandings(Map.of(id, originalGrant))))
+                .containsEntry(id, GrantStanding.CURRENT);
+
+        inTransaction(() -> service.setResearchParticipation(
+                id, new ConsentService.ResearchConsentDTO(ConsentService.WORDING_VERSION, false, "AET")));
+
+        assertThat(service.participates(id)).isFalse();
+        assertThat(inTransaction(() -> service.currentGrants(List.of(id)))).isEmpty();
+        assertThat(inTransaction(() -> service.grantStandings(Map.of(id, originalGrant))))
+                .containsEntry(id, GrantStanding.WITHDRAWN);
+
+        inTransaction(() -> service.setResearchParticipation(
+                id, new ConsentService.ResearchConsentDTO(ConsentService.WORDING_VERSION, true, "AET")));
+
+        long newGrant = latestResearchId(id);
+        assertThat(newGrant).isNotEqualTo(originalGrant);
+        assertThat(inTransaction(() -> service.currentGrants(List.of(id))))
+                .containsExactlyInAnyOrderEntriesOf(Map.of(id, newGrant));
+        assertThat(inTransaction(() -> service.grantStandings(Map.of(id, originalGrant))))
+                .containsEntry(id, GrantStanding.WITHDRAWN);
+        assertThat(versionsOf(id))
+                .containsExactlyInAnyOrder(
+                        WIDER_WORDING,
+                        WIDER_WORDING,
+                        WIDER_WORDING,
+                        ConsentService.WORDING_VERSION,
+                        ConsentService.WORDING_VERSION);
+    }
+
+    private long recordWiderConsent(boolean granted) {
+        Account account = accounts.save(new Account("Participant before survey removal"));
+        for (ConsentDecision.Purpose purpose : ConsentDecision.Purpose.values()) {
+            decisions.save(new ConsentDecision(
+                    account,
+                    purpose,
+                    purpose != ConsentDecision.Purpose.RESEARCH_PARTICIPATION || granted,
+                    ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL,
+                    WIDER_WORDING,
+                    purpose == ConsentDecision.Purpose.RESEARCH_PARTICIPATION ? "AET" : null));
+        }
+        return Objects.requireNonNull(account.getId());
+    }
+
+    private long latestResearchId(long accountId) {
+        return Objects.requireNonNull(decisions
+                .findFirstByAccountIdAndPurposeOrderByOccurredAtDescIdDesc(
+                        accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION)
+                .orElseThrow()
+                .getId());
     }
 
     private List<@Nullable String> versionsOf(long accountId) {

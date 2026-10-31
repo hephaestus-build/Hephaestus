@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.consent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -192,7 +193,6 @@ class ConsentServiceTest extends BaseUnitTest {
                 .containsExactly(
                         ConsentDecision.Purpose.TERMS_ACCEPTANCE,
                         ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT);
-        verify(decisionRepository).hasAcceptedNotice(42L, VERSION);
     }
 
     @Test
@@ -291,7 +291,7 @@ class ConsentServiceTest extends BaseUnitTest {
      */
     @Test
     void shouldSendTheAccountBackToSetupWhenTheAnswerOnRecordNamedAnotherOrganisation() {
-        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        when(decisionRepository.hasAcceptedNotice(eq(42L), anyCollection())).thenReturn(true);
         researchOnRecord(researchDecision(true, VERSION, "Another lab"));
 
         assertThatThrownBy(() -> serviceWithResearch()
@@ -305,7 +305,7 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRecordAWithdrawalFromSettings() {
-        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        when(decisionRepository.hasAcceptedNotice(eq(42L), anyCollection())).thenReturn(true);
         researchOnRecord(researchDecision(true, VERSION, ORG));
 
         serviceWithResearch().setResearchParticipation(42L, new ConsentService.ResearchConsentDTO(VERSION, false, ORG));
@@ -320,7 +320,7 @@ class ConsentServiceTest extends BaseUnitTest {
     /** A → B → A: the A row is superseded by the B one, so the question is open again. */
     @Test
     void shouldNotTreatASupersededAnswerAsCompletionWhenTheOrganisationReturns() {
-        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        when(decisionRepository.hasAcceptedNotice(eq(42L), anyCollection())).thenReturn(true);
         researchOnRecord(researchDecision(false, VERSION, "Another lab"));
 
         assertThat(serviceWithResearch().status(42L).completed()).isFalse();
@@ -329,7 +329,7 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldTreatARefusalAsAnAnswer() {
-        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        when(decisionRepository.hasAcceptedNotice(eq(42L), anyCollection())).thenReturn(true);
         researchOnRecord(researchDecision(false, VERSION, ORG));
 
         assertThat(serviceWithResearch().status(42L).completed()).isTrue();
@@ -338,7 +338,7 @@ class ConsentServiceTest extends BaseUnitTest {
 
     @Test
     void shouldReportTheConfiguredResearchOrganisation() {
-        when(decisionRepository.hasAcceptedNotice(eq(42L), eq(VERSION))).thenReturn(true);
+        when(decisionRepository.hasAcceptedNotice(eq(42L), anyCollection())).thenReturn(true);
 
         assertThat(serviceWithResearch().status(42L).researchOrganization()).isEqualTo("AET");
         assertThat(serviceWithoutResearch().status(42L).researchOrganization()).isNull();

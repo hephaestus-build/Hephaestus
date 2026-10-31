@@ -34,9 +34,14 @@ public class ConsentService implements ResearchParticipationQuery {
      * The version of the wording on the first-login screen. That screen is in the webapp, published in
      * a signed release and immutable in git, so this is a pointer into that history rather than a row
      * anyone could edit afterwards. The webapp holds the same constant beside the words and refuses to
-     * render the form when the two disagree; bump both in the commit that changes any of them.
+     * render the form when the two disagree. A wording change must update both constants and review
+     * {@link #ACCEPTED_NOTICE_VERSIONS}, including the current version.
      */
     static final String WORDING_VERSION = "2026-10-31";
+
+    // Removing survey answers narrows the 2026-10-04 scope. Only wordings reviewed to cover the
+    // retained purposes belong here; a later version must not automatically inherit these grants.
+    private static final Set<String> ACCEPTED_NOTICE_VERSIONS = Set.of("2026-10-04", "2026-10-31");
 
     private final ConsentDecisionRepository decisionRepository;
     private final AccountRepository accountRepository;
@@ -70,8 +75,8 @@ public class ConsentService implements ResearchParticipationQuery {
     }
 
     /**
-     * Setup is done when the terms are accepted for this wording and, where a study is configured, the
-     * research question has an answer — granted or refused — for the organisation currently named.
+     * Setup is done when the accepted wording covers the current scope and, where a study is configured,
+     * the research question has an answer — granted or refused — for the organisation currently named.
      *
      * <p>The research half reads the same latest decision as {@link #researchAuthorised(Long)} rather
      * than asking whether such a row exists anywhere: an account that answered A, then B, then found
@@ -79,14 +84,14 @@ public class ConsentService implements ResearchParticipationQuery {
      * reads the latest, said the opposite.
      */
     private boolean isCurrentNoticeCompleted(Long accountId) {
-        if (!decisionRepository.hasAcceptedNotice(accountId, WORDING_VERSION)) {
+        if (!decisionRepository.hasAcceptedNotice(accountId, ACCEPTED_NOTICE_VERSIONS)) {
             return false;
         }
         if (properties.researchProgramme() == null) {
             return true;
         }
         ConsentDecision latest = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        return latest != null && isForCurrentQuestion(latest);
+        return latest != null && coversCurrentResearchScope(latest);
     }
 
     @Transactional
@@ -103,14 +108,14 @@ public class ConsentService implements ResearchParticipationQuery {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This instance does not run a research program.");
         }
         Account account = requireAccountForUpdate(accountId);
-        if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.TERMS_ACCEPTANCE)) {
+        if (!hasGrantForCurrentScope(accountId, ConsentDecision.Purpose.TERMS_ACCEPTANCE)) {
             append(
                     account,
                     ConsentDecision.Purpose.TERMS_ACCEPTANCE,
                     true,
                     ConsentDecision.Mechanism.FIRST_LOGIN_INTERSTITIAL);
         }
-        if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT)) {
+        if (!hasGrantForCurrentScope(accountId, ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT)) {
             append(
                     account,
                     ConsentDecision.Purpose.PRIVACY_NOTICE_ACKNOWLEDGEMENT,
@@ -154,7 +159,7 @@ public class ConsentService implements ResearchParticipationQuery {
     /**
      * Whether research processing is authorised right now. A grant given to a study that has since
      * been switched off, or handed to a different organisation, is history rather than permission:
-     * both change the notice version, and only the current one authorises anything.
+     * the latest decision must cover the retained scope and name the current organisation.
      */
     @Override
     @Transactional(readOnly = true)
@@ -201,7 +206,7 @@ public class ConsentService implements ResearchParticipationQuery {
         Map<Long, Long> grants = new HashMap<>();
         history(ids).forEach((accountId, decisions) -> {
             ConsentDecision latest = decisions.getFirst();
-            if (active.contains(accountId) && latest.isGranted() && isForCurrentQuestion(latest)) {
+            if (active.contains(accountId) && latest.isGranted() && coversCurrentResearchScope(latest)) {
                 grants.put(accountId, Objects.requireNonNull(latest.getId()));
             }
         });
@@ -255,7 +260,7 @@ public class ConsentService implements ResearchParticipationQuery {
         if (!later.isEmpty()) {
             return GrantStanding.SUPERSEDED;
         }
-        if (!isForCurrentQuestion(newestFirst.get(position))) {
+        if (!coversCurrentResearchScope(newestFirst.get(position))) {
             return GrantStanding.QUESTION_CHANGED;
         }
         return Account.Status.ACTIVE.name().equals(status) ? GrantStanding.CURRENT : GrantStanding.ACCOUNT_INACTIVE;
@@ -281,13 +286,12 @@ public class ConsentService implements ResearchParticipationQuery {
             return false;
         }
         ConsentDecision latest = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        return latest != null && latest.isGranted() && isForCurrentQuestion(latest);
+        return latest != null && latest.isGranted() && coversCurrentResearchScope(latest);
     }
 
     /**
-     * Appends unless the answer on record already says this, for this notice. A resubmitted form
-     * writes nothing; a changed answer, or one given against a notice that has since moved, is a
-     * decision — including when its boolean happens to match, because the question was not the same.
+     * Appends when the answer or covered scope changes. Repeating an answer that already covers the
+     * retained scope writes nothing, including when the displayed wording has narrowed.
      */
     private void appendResearchIfChanged(
             Account account,
@@ -296,7 +300,7 @@ public class ConsentService implements ResearchParticipationQuery {
             String organisation,
             ConsentDecision.Mechanism mechanism) {
         ConsentDecision current = latest(accountId, ConsentDecision.Purpose.RESEARCH_PARTICIPATION);
-        if (current == null || !isForCurrentQuestion(current) || current.isGranted() != granted) {
+        if (current == null || !coversCurrentResearchScope(current) || current.isGranted() != granted) {
             decisionRepository.save(new ConsentDecision(
                     account,
                     ConsentDecision.Purpose.RESEARCH_PARTICIPATION,
@@ -322,18 +326,18 @@ public class ConsentService implements ResearchParticipationQuery {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The account was not found."));
     }
 
-    private boolean hasCurrentGrant(Long accountId, ConsentDecision.Purpose purpose) {
+    private boolean hasGrantForCurrentScope(Long accountId, ConsentDecision.Purpose purpose) {
         ConsentDecision decision = latest(accountId, purpose);
-        return decision != null && decision.isGranted() && isForCurrentNotice(decision);
+        return decision != null && decision.isGranted() && coversCurrentScope(decision);
     }
 
-    private boolean isForCurrentNotice(ConsentDecision decision) {
-        return WORDING_VERSION.equals(decision.getNoticeVersion());
+    private boolean coversCurrentScope(ConsentDecision decision) {
+        return ACCEPTED_NOTICE_VERSIONS.contains(decision.getNoticeVersion());
     }
 
-    /** The same wording, and the same organisation named — a rename asks a different question. */
-    private boolean isForCurrentQuestion(ConsentDecision decision) {
-        return isForCurrentNotice(decision)
+    /** The wording covers the retained scope and names the same organisation. */
+    private boolean coversCurrentResearchScope(ConsentDecision decision) {
+        return coversCurrentScope(decision)
                 && Objects.equals(properties.researchProgramme(), decision.getResearchOrganization());
     }
 

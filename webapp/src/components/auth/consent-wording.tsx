@@ -19,8 +19,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 /**
  * The version of every consent string in this file. This bundle is the archive: what an account
- * accepted is whichever release published these words, and `ConsentService.WORDING_VERSION` holds the
- * same string.
+ * accepted is whichever release published the version on their ledger row.
+ * `ConsentService.WORDING_VERSION` holds the version currently shown for new decisions.
  *
  * The consent page refuses to render the form when the server reports a different one, and the
  * settings switch submits this one, because words on screen that the server does not know cannot

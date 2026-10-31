@@ -130,8 +130,8 @@ The disclosure header keeps the releasing administrator's account until that acc
 An open disclosure blocks workspace purge.
 Before any further analysis, the research team checks the removal list. Hephaestus cannot revoke a downloaded copy.
 
-A decision authorizes research only for the current notice version and the current research organization (`consent_decision.research_organization`).
-An earlier yes to narrower wording authorizes nothing. Every account answers once more when the wording changes.
+A research decision must cover the retained scope and name the current research organization (`consent_decision.research_organization`).
+[Legal pages](../legal-pages.mdx#when-a-new-decision-is-required) defines when changed wording requires a new decision.
 
 The research can use this data of a participant who allowed it:
 
