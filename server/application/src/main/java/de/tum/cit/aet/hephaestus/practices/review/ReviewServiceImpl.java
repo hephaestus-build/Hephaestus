@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
@@ -61,6 +62,7 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviews;
+    private final ReviewStart starts;
     private final ReviewPracticeRepository assignments;
     private final ReviewItemRepository memberships;
     private final PracticeRepository practices;
@@ -366,14 +368,7 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public boolean start(long workspaceId, UUID reviewId) {
-        var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId).orElseThrow();
-        if (review.getStatus() != ReviewStatus.QUEUED
-                || review.getChecks().path("cancellationRequested").asBoolean()) return false;
-        review.setStatus(ReviewStatus.RUNNING);
-        var checks = (ObjectNode) review.getChecks().deepCopy();
-        checks.put("startedAt", clock.instant().toString());
-        review.setChecks(checks);
-        return true;
+        return starts.start(workspaceId, reviewId);
     }
 
     @Override
