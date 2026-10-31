@@ -217,8 +217,15 @@ TanStack Router Vite plugin regenerates it when the dev server runs.
 **With the router plugin's default groupings, only a route's `component`, `errorComponent` and `notFoundComponent` are code-split.**
 `validateSearch`, `beforeLoad`, `loader`, `pendingComponent` and everything they import load with the entry chunk, on every page's cold load.
 Thus, keep a search schema, its constants and a skeleton in a light module of their own, never in a component module.
-The build fails when the entry's static JavaScript passes its ceiling or contains a route-only package (`tools/entry-chunk/entry-chunk-budget.ts`).
-When a change lowers it, lower the ceiling with it.
+
+The build holds two gzip sizes to a committed baseline (`tools/bundle-budget/`): the entry's static JavaScript, and what each lazy chunk adds.
+It is a one-way ratchet.
+It fails when a size grows by more than 1 KiB, a new lazy chunk counting from zero.
+It also fails when the entry holds a route-only package, or when a lazy chunk is gone while the entry grew.
+
+For intended growth, run `BUNDLE_BUDGET=update vp run build:webapp` and commit `tools/bundle-budget/baseline.json`.
+A saving passes with a notice that the baseline can be lowered.
+Do not add a baseline commit only for a saving: the next pull request that touches the baseline lowers it in passing.
 
 The route's `workspaceSlug` is the only source for workspace-scoped data. There is no store.
 

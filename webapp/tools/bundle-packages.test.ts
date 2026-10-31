@@ -5,10 +5,28 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { build } from "vite-plus";
-import { it } from "vitest";
+import { expect, it } from "vitest";
 import { z } from "zod";
 
-import { BUNDLE_LICENSE_FILE, BUNDLE_METADATA_FILE, bundlePackages } from "./bundle-packages.ts";
+import {
+	BUNDLE_LICENSE_FILE,
+	BUNDLE_METADATA_FILE,
+	bundlePackages,
+	packageOf,
+} from "./bundle-packages.ts";
+
+it.each([
+	["/repo/node_modules/.pnpm/recharts@3.8.0_x/node_modules/recharts/es6/index.js", "recharts"],
+	[
+		"/repo/node_modules/.pnpm/@tanstack+table-core@9.2.4/node_modules/@tanstack/table-core/build/index.js",
+		"@tanstack/table-core",
+	],
+	[String.raw`C:\repo\node_modules\react-dom\index.js`, "react-dom"],
+	["/repo/webapp/src/routes/__root.tsx", undefined],
+	["\0rolldown/runtime.js", undefined],
+])("reads module %s as package %s", (moduleId, name) => {
+	expect(packageOf(moduleId)).toBe(name);
+});
 
 it("the bundle carries used and lazy package identities, without unused build dependencies", async () => {
 	const root = await mkdtemp(path.join(os.tmpdir(), "bundle-packages-"));
