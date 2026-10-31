@@ -1782,6 +1782,32 @@ describe("practice profile pattern label and folds", () => {
 	});
 });
 
+/** The reader's own membership in the workspace, with the given role. */
+const ownMembership = (role: WorkspaceMembership["role"]) =>
+	http.get("*/workspaces/:workspaceSlug/members/me", () =>
+		HttpResponse.json({ ...membership, role }),
+	);
+
+/** The paths a blocked profile asks for until its reason shows, for a reader with the given role. */
+async function pathsOfBlockedProfile(role: WorkspaceMembership["role"]): Promise<Set<string>> {
+	const paths = new Set<string>();
+	const record = ({ request }: { request: Request }) => {
+		paths.add(new URL(request.url).pathname);
+	};
+	server.use(
+		dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }),
+		ownMembership(role),
+	);
+	server.events.on("request:start", record);
+	try {
+		await renderProfile();
+		await screen.findByText("Practice reviews are off here", undefined, ROUTE_RENDER_WAIT);
+	} finally {
+		server.events.removeListener("request:start", record);
+	}
+	return paths;
+}
+
 /** The overview of a member who has no recorded review yet, with the server's word on readiness. */
 const dayOneOverview = (reviewReadiness: PracticeProfileOverview["reviewReadiness"]) =>
 	http.get("*/workspaces/:workspaceSlug/practice-profile/overview", () =>
@@ -1808,5 +1834,61 @@ describe("a profile without feedback", () => {
 		expect(href.pathname).toBe("/w/acme/onboarding");
 		expect(href.searchParams.get("returnTo")).toBe("/w/acme/practice-profile");
 		expect(screen.queryByText("No review of your work yet")).toBeNull();
+	});
+
+	it("shows a workspace admin the way to the setup summary, from their own membership", async () => {
+		server.use(
+			dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }),
+			ownMembership("ADMIN"),
+		);
+		await renderProfile();
+		const link = await screen.findByRole("link", { name: "setup summary" }, ROUTE_RENDER_WAIT);
+		expect(link.getAttribute("href")).toBe("/w/acme/admin/settings");
+		expect(screen.queryByText(/Ask a workspace admin/u)).toBeNull();
+	});
+
+	// An admin read on a member page asks an admin without a recent confirmation for a passkey step-up.
+	it("asks nothing for a workspace admin that it does not ask for a member", async () => {
+		const memberPaths = await pathsOfBlockedProfile("MEMBER");
+		cleanup();
+		const adminPaths = await pathsOfBlockedProfile("ADMIN");
+		screen.getByRole("link", { name: "setup summary" });
+
+		expect([...adminPaths].filter((path) => !memberPaths.has(path))).toStrictEqual([]);
+	});
+
+	it("shows no admin page in a user view, even of a workspace admin", async () => {
+		storeUserView({ workspaceSlug: "acme" });
+		try {
+			server.use(
+				dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }),
+				ownMembership("ADMIN"),
+			);
+			await renderProfile();
+			await screen.findByText("Practice reviews are off here", undefined, ROUTE_RENDER_WAIT);
+			expect(screen.queryByRole("link", { name: "setup summary" })).toBeNull();
+		} finally {
+			clearUserView();
+		}
+	});
+
+	it("sends a workspace admin whose work is outside the scope to the review scope", async () => {
+		server.use(
+			dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "OUTSIDE_REVIEW_SCOPE" }),
+			ownMembership("ADMIN"),
+		);
+		await renderProfile();
+		const link = await screen.findByRole("link", { name: "review scope" }, ROUTE_RENDER_WAIT);
+		expect(link.getAttribute("href")).toBe(
+			"/w/acme/admin/practices/review?section=automated-review",
+		);
+	});
+
+	it("offers a member no admin page for a reason only an admin can change", async () => {
+		server.use(dayOneOverview({ ...READY_REVIEW_READINESS, blocker: "REVIEWS_OFF" }));
+		await renderProfile();
+		await screen.findByText("Practice reviews are off here", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("link", { name: "setup summary" })).toBeNull();
+		screen.getByText(/Ask a workspace admin if you expected them\./u);
 	});
 });

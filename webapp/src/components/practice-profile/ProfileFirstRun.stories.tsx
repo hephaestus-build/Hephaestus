@@ -25,6 +25,12 @@ const blocked = (blocker: MemberReviewReadiness["blocker"]): MemberReviewReadine
 	blocker,
 });
 
+/** What the route passes a reader who administers the workspace. */
+const ADMIN_LINKS = {
+	setupSummary: (label: string) => <a href="#settings">{label}</a>,
+	reviewScope: (label: string) => <a href="#review-scope">{label}</a>,
+};
+
 /**
  * What the Practice profile says while the reader has no feedback, chosen from the server's word:
  * why no review can run, a first review under way, or what starts one.
@@ -82,7 +88,7 @@ export const ApprovalBeforePosting: Story = {
 export const UnknownEventsOnly: Story = {
 	args: { readiness: { ...READY, events: ["scm.release.published"] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("A review starts when:")).toBeNull();
+		await expect(canvas.queryByText("A review of your work can start when:")).toBeNull();
 		await expect(canvas.queryByText(/scm\./u)).toBeNull();
 	},
 };
@@ -240,12 +246,75 @@ export const NoAiInUserView: Story = {
 	},
 };
 
-/** A reason only a workspace admin can change names them and offers no button. */
+/** A reason only a workspace admin can change names them and offers a member no button or link. */
 export const ReviewsOff: Story = {
 	args: { readiness: blocked("REVIEWS_OFF") },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Practice reviews are off here")).toBeVisible();
+		await expect(canvas.getByText(/Ask a workspace admin if you expected them\./u)).toBeVisible();
 		await expect(canvas.queryByRole("button")).toBeNull();
+		await expect(canvas.queryByRole("link")).toBeNull();
+	},
+};
+
+/** A reader who administers the workspace gets the way to the setup summary, where they can change it. */
+export const ReviewsOffForAdmin: Story = {
+	args: { readiness: blocked("REVIEWS_OFF"), adminLinks: ADMIN_LINKS },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/You can change this in the/u)).toBeVisible();
+		await expect(canvas.queryByText(/Ask a workspace admin/u)).toBeNull();
+		await expect(canvas.getByRole("link", { name: "setup summary" })).toHaveAttribute(
+			"href",
+			"#settings",
+		);
+	},
+};
+
+/** An admin gets both ways: asking for a review now, and the setup summary to start reviews by themselves. */
+export const OnRequestOnlyForAdmin: Story = {
+	args: {
+		readiness: blocked("ON_REQUEST_ONLY"),
+		requestReviewLink: <a href="#activity">Request a review on Activity</a>,
+		adminLinks: ADMIN_LINKS,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Request a review on Activity" })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "setup summary" })).toHaveAttribute(
+			"href",
+			"#settings",
+		);
+	},
+};
+
+/** An admin without a model for their AI choice can add one from the setup summary, or change the choice. */
+export const NoModelForChoiceForAdmin: Story = {
+	args: { readiness: blocked("NO_MODEL"), adminLinks: ADMIN_LINKS },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/until a workspace admin adds one/u)).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Your AI choice" })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "setup summary" })).toHaveAttribute(
+			"href",
+			"#settings",
+		);
+	},
+};
+
+export const NoPracticeForAdmin: Story = {
+	args: { readiness: blocked("NO_PRACTICE"), adminLinks: ADMIN_LINKS },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "setup summary" })).toHaveAttribute(
+			"href",
+			"#settings",
+		);
+	},
+};
+
+/** The setup summary does not make a workspace active again, so an admin gets no link for it. */
+export const WorkspaceInactiveForAdmin: Story = {
+	args: { readiness: blocked("WORKSPACE_INACTIVE"), adminLinks: ADMIN_LINKS },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Reviews are paused in this workspace")).toBeVisible();
+		await expect(canvas.queryByRole("link")).toBeNull();
 	},
 };
 
@@ -268,6 +337,17 @@ export const OutsideReviewScope: Story = {
 	},
 };
 
+/** The setup summary does not show the review scope, so an admin goes to the scope itself. */
+export const OutsideReviewScopeForAdmin: Story = {
+	args: { readiness: blocked("OUTSIDE_REVIEW_SCOPE"), adminLinks: ADMIN_LINKS },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "review scope" })).toHaveAttribute(
+			"href",
+			"#review-scope",
+		);
+	},
+};
+
 export const NoPractice: Story = {
 	args: { readiness: blocked("NO_PRACTICE") },
 	play: async ({ canvas }) => {
@@ -279,6 +359,15 @@ export const WorkspaceInactive: Story = {
 	args: { readiness: blocked("WORKSPACE_INACTIVE") },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Reviews are paused in this workspace")).toBeVisible();
+	},
+};
+
+/** A reason that only the reader can change gives an admin no admin link: their own AI choice comes first. */
+export const NoAiForAdmin: Story = {
+	args: { readiness: blocked("NO_AI"), adminLinks: ADMIN_LINKS },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Change your AI choice" })).toBeVisible();
+		await expect(canvas.queryByRole("link")).toBeNull();
 	},
 };
 

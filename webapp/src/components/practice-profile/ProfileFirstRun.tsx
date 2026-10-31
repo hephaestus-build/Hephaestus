@@ -34,13 +34,25 @@ export interface ProfileFirstRunProps {
 	aiChoiceLink?: (label: string) => ReactElement;
 	/** The way to ask for a review of the reader's work; absent where they cannot ask, such as in a user view. */
 	requestReviewLink?: ReactElement;
+	/**
+	 * The ways to the admin pages that remove a blocker; present only for a reader who administers the
+	 * workspace, so the member page itself makes no admin read.
+	 */
+	adminLinks?: Record<AdminFix, (label: string) => ReactElement>;
 }
+
+/** The admin page that removes a blocker: the setup summary, or the review scope it does not show. */
+type AdminFix = "setupSummary" | "reviewScope";
 
 interface BlockerCopy {
 	title: string;
 	description: (workspaceName: string) => string;
 	/** The label of the way to the AI choice, for a reason the reader can change there. */
 	aiChoice?: string;
+	/** Where a workspace admin removes this reason, and the link's label in "You can change this in …". */
+	adminFix?: { page: AdminFix; label: string };
+	/** What a reader who cannot remove the reason does instead; an admin gets the link in its place. */
+	askAdmin?: string;
 }
 
 /** Why no review runs on the reader's work, in the order the server picks the first that applies. */
@@ -53,17 +65,21 @@ const BLOCKERS: Record<Exclude<Blocker, "PERSON_ERASED">, BlockerCopy> = {
 	REVIEWS_OFF: {
 		title: "Practice reviews are off here",
 		description: (name) =>
-			`${name} has practice reviews turned off, so no review runs on your work. Ask a workspace admin if you expected them.`,
+			`${name} has practice reviews turned off, so no review runs on your work.`,
+		adminFix: { page: "setupSummary", label: "setup summary" },
+		askAdmin: "Ask a workspace admin if you expected them.",
 	},
 	ON_REQUEST_ONLY: {
 		title: "Reviews here start only on request",
 		description: (name) =>
 			`${name} does not review work by itself. You or a workspace admin can ask for a review of eligible work.`,
+		adminFix: { page: "setupSummary", label: "setup summary" },
 	},
 	OUTSIDE_REVIEW_SCOPE: {
 		title: "Your work is outside the review scope",
 		description: (name) =>
 			`A workspace admin chose whose work ${name} reviews. Yours is not part of it yet.`,
+		adminFix: { page: "reviewScope", label: "review scope" },
 	},
 	NOT_ELIGIBLE: {
 		title: "Hephaestus cannot match your work to you here yet",
@@ -85,13 +101,15 @@ const BLOCKERS: Record<Exclude<Blocker, "PERSON_ERASED">, BlockerCopy> = {
 	NO_MODEL: {
 		title: "Practice reviews are not set up for your AI choice yet",
 		description: (name) =>
-			`${name} has no review model that fits your choice. You get no reviews here until a workspace owner adds one. Your choice still counts.`,
+			`${name} has no review model that fits your choice. You get no reviews here until a workspace admin adds one. Your choice still counts.`,
 		aiChoice: "Your AI choice",
+		adminFix: { page: "setupSummary", label: "setup summary" },
 	},
 	NO_PRACTICE: {
 		title: "No practice here reviews your work yet",
 		description: () =>
 			"A workspace admin has not chosen a practice that reviews the work of the person who did it.",
+		adminFix: { page: "setupSummary", label: "setup summary" },
 	},
 };
 
@@ -121,6 +139,7 @@ export function ProfileFirstRun({
 	reviewed,
 	aiChoiceLink,
 	requestReviewLink,
+	adminLinks,
 }: ProfileFirstRunProps) {
 	const provider = useWorkProvider();
 	const approval = readiness.approvalBeforePosting
@@ -161,15 +180,24 @@ export function ProfileFirstRun({
 
 	if (blocker !== null && blocker !== "PERSON_ERASED") {
 		const copy = BLOCKERS[blocker];
+		const adminLink =
+			copy.adminFix === undefined
+				? undefined
+				: adminLinks?.[copy.adminFix.page](copy.adminFix.label);
 		return (
 			<FirstRunEmpty
 				icon={<CircleSlashIcon />}
 				title={copy.title}
-				description={copy.description(workspaceName)}
+				description={
+					adminLink === undefined && copy.askAdmin !== undefined
+						? `${copy.description(workspaceName)} ${copy.askAdmin}`
+						: copy.description(workspaceName)
+				}
 				action={blockerAction(blocker, copy, { aiChoiceLink, requestReviewLink })}
 			>
 				{/* A review that someone asks for here can still end in feedback that waits for approval. */}
 				{blocker === "ON_REQUEST_ONLY" && approval !== undefined && <p>{approval}</p>}
+				{adminLink !== undefined && <p>You can change this in the {adminLink}.</p>}
 			</FirstRunEmpty>
 		);
 	}
