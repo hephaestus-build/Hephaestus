@@ -971,7 +971,7 @@ async function assertPartialMigration(
 	console.log("The candidate's migration completed when it ran again.");
 }
 
-function startWebhookReceiver(name: string, image: string): number {
+function startWebhookReceiver(name: string, image: string, database: string): number {
 	docker(
 		"run",
 		"--detach",
@@ -983,7 +983,7 @@ function startWebhookReceiver(name: string, image: string): number {
 		"127.0.0.1::8080",
 		"--env",
 		"SPRING_PROFILES_ACTIVE=e2e,webhook",
-		...databaseEnvironment("hephaestus"),
+		...databaseEnvironment(database),
 		"--env",
 		"HEPHAESTUS_SYNC_NATS_SERVER=nats://nats:4222",
 		"--env",
@@ -1036,7 +1036,7 @@ const WEBHOOK_DELIVERIES = [
  * messages must have the same subject and body, and the candidate must keep every header of the previous release. It
  * may add one. Each release tests its own receiver against its own consumer, so the server of either release reads
  * the messages of the other receiver, unless the candidate's server needs a header it added. The previous receiver
- * also starts on the candidate's schema.
+ * uses the pre-upgrade database copy, so this protocol check does not require schema compatibility.
  */
 async function assertWebhookContract(): Promise<void> {
 	const nats = `${runId}-nats`;
@@ -1076,8 +1076,14 @@ async function assertWebhookContract(): Promise<void> {
 		);
 		// In stream order: the previous receiver publishes first.
 		const targets = [
-			{ name: receivers[0], port: startWebhookReceiver(receivers[0], previousImage) },
-			{ name: receivers[1], port: startWebhookReceiver(receivers[1], candidateImage) },
+			{
+				name: receivers[0],
+				port: startWebhookReceiver(receivers[0], previousImage, PARTIAL_DATABASE),
+			},
+			{
+				name: receivers[1],
+				port: startWebhookReceiver(receivers[1], candidateImage, "hephaestus"),
+			},
 		].map((target) => ({ ...target, delivery: randomUUID() }));
 		await Promise.all(
 			targets.map(async ({ name, port }) =>
@@ -1138,7 +1144,7 @@ async function assertWebhookContract(): Promise<void> {
 					);
 				}
 				console.log(
-					`The previous release reads the candidate's ${delivery.stream} delivery: ${JSON.stringify(candidate)}.`,
+					`Webhook NATS protocol passed (${previousVersion} receiver -> candidate, ${delivery.stream}): ${JSON.stringify(candidate)}.`,
 				);
 			}
 		} finally {
@@ -1274,12 +1280,12 @@ try {
 	if (stopEveryRole.length === 0) {
 		docker("pull", "--quiet", previousAgentImage);
 		await assertPreviousReleaseRuns("hephaestus", "the candidate's schema");
-		await assertWebhookContract();
 	} else {
 		summarize(
-			`Mechanical N-on-N+1 coverage is off for this release, because it stops every role: ${stopEveryRole.join("; ")}`,
+			`Previous application/schema boot coverage is off for this release, because it stops every role: ${stopEveryRole.join("; ")}`,
 		);
 	}
+	await assertWebhookContract();
 	await assertPartialMigration(
 		PARTIAL_DATABASE,
 		previousChanges,

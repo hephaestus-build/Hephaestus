@@ -14,13 +14,9 @@ import {
 
 const identities = loadReleaseIdentities();
 
-await test("the committed identity map pins the pre-transfer namespace and identity", () => {
-	const first = identities[0];
-	assert.deepEqual(first, {
-		firstVersion: "0.0.0",
-		namespace: "ghcr.io/ls1intum/hephaestus",
-		certificateIdentityRepository: "ls1intum/Hephaestus",
-	});
+await test("the committed identity map contains only the supported namespace", () => {
+	assert.equal(identities.length, 1);
+	assert.equal(identities[0]?.firstVersion, "0.75.0");
 	assert.deepEqual(currentReleaseIdentity(identities), {
 		firstVersion: identities.at(-1)?.firstVersion,
 		namespace: "ghcr.io/hephaestus-build",
@@ -31,24 +27,13 @@ await test("the committed identity map pins the pre-transfer namespace and ident
 await test("versions resolve to the identity they were published under", () => {
 	const boundary = currentReleaseIdentity(identities).firstVersion;
 	for (const old of ["0.1.0", "v0.74.0", "0.74.99"]) {
-		assert.equal(releaseIdentityFor(old, identities).namespace, "ghcr.io/ls1intum/hephaestus");
+		assert.throws(() => releaseIdentityFor(old, identities), /no release identity/u);
 	}
 	for (const current of [boundary, `v${boundary}`, "1.0.0", "12.0.3"]) {
 		assert.equal(releaseIdentityFor(current, identities).namespace, "ghcr.io/hephaestus-build");
 	}
 	assert.throws(() => releaseIdentityFor("latest", identities), /not a release version/u);
 	assert.throws(() => releaseIdentityFor("v1.2", identities), /not a release version/u);
-});
-
-await test("historical certificate identities stay pinned even inside CI", () => {
-	assert.equal(
-		releaseCertificateIdentity(
-			"v0.74.0",
-			{ GITHUB_SERVER_URL: "https://github.com", GITHUB_REPOSITORY: "hephaestus-build/Hephaestus" },
-			identities,
-		),
-		"https://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main",
-	);
 });
 
 await test("the current certificate identity follows the run context, with the map as fallback", () => {
@@ -83,10 +68,6 @@ await test("the map rejects malformed or unordered entries", () => {
 	assert.throws(
 		() => parseReleaseIdentities({ schemaVersion: 1, identities: [] }),
 		/at least one entry/u,
-	);
-	assert.throws(
-		() => parseReleaseIdentities({ schemaVersion: 1, identities: [entry("0.1.0")] }),
-		/start at 0\.0\.0/u,
 	);
 	assert.throws(
 		() =>
@@ -125,20 +106,14 @@ await test("a misconfigured CI environment fails instead of using the map fallba
 		() => releaseCertificateIdentity(`v${boundary}`, { CI: "true" }, identities),
 		/GITHUB_REPOSITORY/u,
 	);
-	assert.equal(releaseRepository("v0.74.0", { CI: "true" }, identities), "ls1intum/Hephaestus");
 });
 
 await test("image-index signatures resolve the building repository, owner and workflow", () => {
 	const currentRun = { GITHUB_REPOSITORY: "hephaestus-build/Hephaestus" };
-	assert.equal(releaseOwner("v0.74.0", currentRun, identities), "ls1intum");
 	assert.equal(releaseOwner("v1.0.0", currentRun, identities), "hephaestus-build");
 	assert.equal(
-		releaseCertificateIdentity("v0.74.0", currentRun, identities, "reusable-docker-build.yml"),
-		"https://github.com/ls1intum/Hephaestus/.github/workflows/reusable-docker-build.yml@refs/heads/main",
-	);
-	assert.equal(
-		releaseCertificateIdentity("v0.74.0", currentRun, identities),
-		"https://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main",
+		releaseCertificateIdentity("v1.0.0", currentRun, identities, "reusable-docker-build.yml"),
+		"https://github.com/hephaestus-build/Hephaestus/.github/workflows/reusable-docker-build.yml@refs/heads/main",
 	);
 });
 

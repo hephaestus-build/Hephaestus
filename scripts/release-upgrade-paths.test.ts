@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
+import { asArray } from "./lib/json.ts";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
 await test("release and weekly runs use the supported seeded upgrade", () => {
@@ -102,9 +103,8 @@ mock.module("node:child_process", { exports: {
 	}
 }
 
-// A required seed must run on the previous release before the upgrade starts. The stubs model a previous release with
-// or without Heph chat history and stop the run when the candidate starts, so each case ends at a known point.
-// The seed and its assertions themselves run against PostgreSQL only in a real release upgrade.
+// Seed cases stop when the candidate starts. Protocol cases continue through both receivers with a
+// stopped-upgrade waiver. These stubs prove orchestration; CI runs the PostgreSQL and NATS operations.
 for (const [scenario, args, previousKeepsChat, expectedError, seeded] of [
 	["required-admitted", ["--require-seed=heph-chat"], true, "candidate start stubbed", true],
 	[
@@ -117,8 +117,11 @@ for (const [scenario, args, previousKeepsChat, expectedError, seeded] of [
 	["optional-admitted", [], true, "candidate start stubbed", true],
 	["optional-missing", [], false, "candidate start stubbed", false],
 	["unknown-seed", ["--require-seed=chat"], true, "Unknown option: --require-seed=chat", false],
+	["stopped-protocol-pass", [], false, "", false],
+	["stopped-protocol-refused", [], false, "the body changed", false],
 ] as const) {
-	await test(`required seed: ${scenario}`, () => {
+	const protocol = scenario.startsWith("stopped-protocol-");
+	await test(`upgrade qualification: ${scenario}`, () => {
 		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-seed-"));
 		try {
 			const commands = path.join(directory, "commands");
@@ -132,6 +135,25 @@ import * as childProcess from "node:child_process";
 const commands = ${JSON.stringify(commands)};
 const fixtures = ${JSON.stringify(fixtures)};
 const previousKeepsChat = ${JSON.stringify(previousKeepsChat)};
+const protocol = ${JSON.stringify(protocol)};
+const mismatch = ${JSON.stringify(scenario === "stopped-protocol-refused")};
+const deliveries = new Map();
+if (protocol) {
+  mock.module(${JSON.stringify(new URL("lib/migration-guide.ts", import.meta.url).href)}, {
+    exports: { stopEveryRoleEntries: () => ["#### 🔴 Stop every role for the upgrade"] }
+  });
+  mock.module(${JSON.stringify(import.meta.resolve("@nats-io/transport-node"))}, { exports: { connect: async () => ({ close: async () => {} }) } });
+  mock.module(${JSON.stringify(import.meta.resolve("@nats-io/jetstream"))}, { exports: {
+    jetstreamManager: async () => ({ streams: { getMessage: async (stream, { seq }) => {
+      const delivery = deliveries.get(stream)[seq - 1];
+      return {
+        subject: stream + ".upgrade.issues",
+        header: { keys: () => Object.keys(delivery.headers), get: key => delivery.headers[key] },
+        string: () => mismatch && seq === 2 ? "changed" : delivery.body
+      };
+    } } })
+  } });
+}
 globalThis.fetch = async (input, init) => {
   const url = String(input);
   if (url.endsWith("/auth/dev-login")) {
@@ -143,6 +165,16 @@ globalThis.fetch = async (input, init) => {
   if (url.endsWith("/workspaces")) return Response.json([{ workspaceSlug: "upgrade-fixture" }]);
   if (url.endsWith("/user")) return Response.json({ displayName: "Upgrade alice" });
   if (url.endsWith("/readyz")) return Response.json({ status: "UP" });
+  if (protocol && url.includes("/webhooks/")) {
+    const stream = url.split("/").at(-1);
+    deliveries.set(stream, [...(deliveries.get(stream) ?? []), init]);
+    appendFileSync(commands, JSON.stringify(["delivery", stream]) + "\\n");
+    return Response.json({ status: "ok" }, { status: 202 });
+  }
+  if (protocol && url.endsWith("/admin/practice-catalog")) {
+    return Response.json({ practices: [{ slug: "fixture", offered: true }] });
+  }
+  if (protocol && url.endsWith("/practices")) return Response.json([{ slug: "fixture" }]);
   throw new Error("Unexpected HTTP request: " + url);
 };
 mock.module("node:child_process", { exports: {
@@ -152,7 +184,7 @@ mock.module("node:child_process", { exports: {
     appendFileSync(commands, JSON.stringify(args) + "\\n");
     if (args.includes("--file=-")) appendFileSync(fixtures, options.input + "\\n");
     let stdout = "", stderr = "", status = 0;
-    if (args[0] === "run" && args.includes("target-image")) { status = 1; stderr = "candidate start stubbed"; }
+    if (!protocol && args[0] === "run" && args.includes("target-image")) { status = 1; stderr = "candidate start stubbed"; }
     else if (args[0] === "port") stdout = "127.0.0.1:18080";
     else if (args[0] === "inspect") stdout = "running";
     else if (args.includes("--command")) {
@@ -162,6 +194,7 @@ mock.module("node:child_process", { exports: {
       else if (sql.includes("SELECT kind ||")) {
         stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
       }
+      else if (protocol && sql.includes("LEFT JOIN practice_version")) stdout = "0";
       else if (sql.includes("count(*)")) stdout = "1";
     }
     return { status, stdout, stderr };
@@ -186,22 +219,62 @@ mock.module("node:child_process", { exports: {
 					timeout: 15_000,
 					env: {
 						...process.env,
-						PREVIOUS_VERSION: "0.94.7",
+						PREVIOUS_VERSION: protocol ? "0.95.1" : "0.94.7",
 						PREVIOUS_AGENT_IMAGE: "agent-image",
 					},
 				},
 			);
-			assert.equal(result.status, 1, result.stdout + result.stderr);
-			assert.ok(result.stderr.includes(expectedError), result.stderr);
+			assert.equal(
+				result.status,
+				protocol && expectedError === "" ? 0 : 1,
+				result.stdout + result.stderr,
+			);
+			if (expectedError !== "") assert.ok(result.stderr.includes(expectedError), result.stderr);
 			const executed = existsSync(fixtures) ? readFileSync(fixtures, "utf8") : "";
 			assert.equal(executed.includes("INSERT INTO mentor_slack_thread"), seeded, executed);
 			const invocations = existsSync(commands) ? readFileSync(commands, "utf8") : "";
 			// A refused requirement stops the run before the candidate starts.
 			assert.equal(
 				invocations.includes('"target-image"'),
-				expectedError === "candidate start stubbed",
+				protocol || expectedError === "candidate start stubbed",
 				invocations,
 			);
+			if (protocol) {
+				assert.match(result.stdout, /Previous application\/schema boot coverage is off/u);
+				const calls = invocations
+					.trim()
+					.split("\n")
+					.map((line) => asArray(JSON.parse(line), "command"));
+				const receivers = calls.filter(
+					(call) => call[0] === "run" && call.includes("SPRING_PROFILES_ACTIVE=e2e,webhook"),
+				);
+				assert.equal(receivers.length, 2);
+				assert.ok(receivers[0]?.includes("old-image"));
+				assert.ok(
+					receivers[0]?.includes(
+						"SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus_partial",
+					),
+				);
+				assert.ok(receivers[1]?.includes("target-image"));
+				assert.ok(
+					receivers[1]?.includes(
+						"SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus",
+					),
+				);
+				assert.equal(calls.filter((call) => call[0] === "delivery").length, 4);
+				assert.ok(!calls.some((call) => call[0] === "pull" && call.includes("agent-image")));
+				if (expectedError === "") {
+					for (const provider of ["github", "gitlab"]) {
+						assert.ok(
+							result.stdout.includes(
+								`Webhook NATS protocol passed (0.95.1 receiver -> candidate, ${provider})`,
+							),
+						);
+					}
+				} else {
+					assert.doesNotMatch(result.stdout, /Webhook NATS protocol passed/u);
+				}
+			}
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

@@ -1,12 +1,7 @@
 {
-	"comment": "Maps release versions to the GHCR namespace their images live in and the repository whose release workflow signed them. GHCR packages do not transfer between organizations and Fulcio certificates are immutable, so every release cut under ls1intum keeps its images and signing identity forever (issue #1599). Entries are ordered by firstVersion ascending; a version resolves to the last entry whose firstVersion is not greater than it. The final entry is the current identity: CI consumers derive its certificate identity from the run context and fall back to certificateIdentityRepository outside CI. firstVersion of the hephaestus-build entry must equal the first release cut after the transfer — verify it against the released history before merging.",
+	"comment": "Maps supported release versions to their image namespace and signing repository. Entries are ordered by firstVersion. CI derives the current signing repository from the run context; local verification uses certificateIdentityRepository.",
 	"schemaVersion": 1,
 	"identities": [
-		{
-			"firstVersion": "0.0.0",
-			"namespace": "ghcr.io/ls1intum/hephaestus",
-			"certificateIdentityRepository": "ls1intum/Hephaestus"
-		},
 		{
 			"firstVersion": "0.75.0",
 			"namespace": "ghcr.io/hephaestus-build",

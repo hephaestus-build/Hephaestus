@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -36,8 +36,18 @@ async function fixture(tag = release) {
 	);
 	const manifest = { schemaVersion: 1, release: tag, commit: "b".repeat(40), subjects };
 	await writeFile(
-		path.join(evidence, `release-${tag}.json`),
-		JSON.stringify({ schemaVersion: 1, release: tag, commit: manifest.commit, images }),
+		path.join(evidence, `release-${tag}.chart.json`),
+		JSON.stringify({
+			schemaVersion: 2,
+			release: tag,
+			commit: manifest.commit,
+			images,
+			chart: {
+				repository: "ghcr.io/hephaestus-build/charts/hephaestus",
+				version: tag.slice(1),
+				digest,
+			},
+		}),
 	);
 	await writeFile(path.join(evidence, "manifest.json"), JSON.stringify(manifest));
 	await writeFile(
@@ -165,12 +175,22 @@ void test(
 	},
 );
 
-for (const failure of ["cosign", "manifest"] as const) {
+for (const failure of ["cosign", "manifest", "legacy-schema", "legacy-asset"] as const) {
 	void test(
 		`${failure} authentication failure starts no registry scan`,
 		{ skip: process.platform === "win32" },
 		async () => {
 			const f = await fixture();
+			const lockPath = path.join(f.evidence, `release-${f.release}.chart.json`);
+			if (failure === "legacy-schema") {
+				const lock: unknown = JSON.parse(await readFile(lockPath, "utf8"));
+				assert.ok(isRecord(lock));
+				const { chart: _chart, ...images } = lock;
+				await writeFile(lockPath, JSON.stringify({ ...images, schemaVersion: 1 }));
+			}
+			if (failure === "legacy-asset") {
+				await rename(lockPath, path.join(f.evidence, `release-${f.release}.json`));
+			}
 			if (failure === "manifest") {
 				await writeFile(
 					path.join(f.evidence, "manifest.json"),
@@ -184,6 +204,12 @@ for (const failure of ["cosign", "manifest"] as const) {
 			assert.deepEqual(value.outcomes, []);
 			assert.ok(isRecord(value.authentication));
 			assert.equal(value.authentication.status, "fail");
+			if (failure === "legacy-schema") {
+				assert.match(String(value.authentication.error), /expected a joint lock/u);
+			}
+			if (failure === "legacy-asset") {
+				assert.match(String(value.authentication.error), /ENOENT.*\.chart\.json/u);
+			}
 		},
 	);
 }

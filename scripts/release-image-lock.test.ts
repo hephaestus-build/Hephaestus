@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -10,24 +9,9 @@ import {
 	chartVersion,
 	jointLockAsset,
 	jointLockFromEvidence,
-	legacyLock,
-	lockEnvironment,
-	lockFromEvidence,
 	parseReleaseImageLock,
-	verifyLegacyProjection,
 	verifyLockAgainstEvidence,
 } from "./release-image-lock.ts";
-
-/**
- * scripts/release-image-lock.ts as tagged v0.94.7 (commit 97bdc0dd532a0cbe0fe761c166cb6a7f03964b09,
- * blob 1b73a820414bed90435dab60f65779ac87cb0254), byte for byte. A host one release behind verifies
- * a new release with this reader before it adopts any new tooling. It is a baseline, never a helper.
- */
-const previousReader = path.join(
-	import.meta.dirname,
-	"fixtures/release-v0.94.7/release-image-lock.ts",
-);
-const previousReaderSha256 = "f8b58a8345bd9c93a57d909c148ce529e4223bbf6b8bafa082915c95fe91802c";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 const rawLock = {
@@ -55,12 +39,9 @@ const evidence = {
 	].map(({ platforms: _platforms, ...subject }) => subject),
 };
 
-await test("accepts a complete lock and emits only digest references", () => {
+await test("accepts a complete lock that matches the evidence", () => {
 	const lock = parseReleaseImageLock(rawLock, "v1.2.3");
 	verifyLockAgainstEvidence(lock, evidence);
-	const environment = lockEnvironment(lock);
-	assert.match(environment, /^IMAGE_TAG=1\.2\.3$/mu);
-	assert.match(environment, /HEPHAESTUS_IMAGE_WEBAPP=.+@sha256:[a-f0-9]{64}/u);
 });
 
 await test("refuses malformed and ambiguous locks", () => {
@@ -98,13 +79,14 @@ const chart = {
 };
 const jointLock = { ...rawLock, schemaVersion: 2, chart };
 
-await test("reads a joint lock with the same images, source and environment as schema 1", () => {
+await test("reads the joint lock with its chart, images and source", () => {
 	const lock = parseReleaseImageLock(jointLock, "v1.2.3");
 	// assert.equal narrows the lock to schema 2, so its chart is read with its own type.
 	assert.equal(lock.schemaVersion, 2);
 	assert.deepEqual(lock.chart, chart);
 	verifyLockAgainstEvidence(lock, evidence);
-	assert.equal(lockEnvironment(lock), lockEnvironment(parseReleaseImageLock(rawLock, "v1.2.3")));
+	assert.deepEqual(lock.images, rawLock.images);
+	assert.equal(lock.commit, rawLock.commit);
 	assert.equal(chartVersion("v1.2.3-rc.1"), "1.2.3-rc.1");
 });
 
@@ -196,28 +178,10 @@ await test("refuses evidence that is not exactly represented by the lock", () =>
 	);
 });
 
-await test("one producer writes the joint lock, and the schema 1 lock is exactly its projection", () => {
+await test("the producer writes one joint lock from release evidence and chart metadata", () => {
 	const joint = jointLockFromEvidence(evidence, chart, "v1.2.3");
 	assert.deepEqual(joint, parseReleaseImageLock(jointLock, "v1.2.3"));
-	const legacy = legacyLock(joint);
-	assert.deepEqual(legacy, parseReleaseImageLock(rawLock, "v1.2.3"));
-	// The chart's values are made from the same lock, before the chart exists.
-	assert.deepEqual(lockFromEvidence(evidence, "v1.2.3"), legacy);
-	verifyLegacyProjection(joint, parseReleaseImageLock(structuredClone(legacy), "v1.2.3"));
-	assert.equal(lockEnvironment(legacy), lockEnvironment(joint));
 	assert.equal(jointLockAsset("v1.2.3"), "release-v1.2.3.chart.json");
-	// A schema 1 lock that names other images, another commit, or a joint lock is refused.
-	for (const other of [
-		{ ...rawLock, commit: "f".repeat(40) },
-		{ ...rawLock, images: [{ ...rawLock.images[0], indexDigest: digest("9") }] },
-	]) {
-		assert.throws(
-			() => verifyLegacyProjection(joint, parseReleaseImageLock(other, "v1.2.3")),
-			/not the projection of the joint lock/u,
-		);
-	}
-	assert.throws(() => verifyLegacyProjection(joint, joint), /not the projection/u);
-	assert.throws(() => verifyLegacyProjection(legacy, legacy), /not the projection/u);
 });
 
 await test("the producer refuses evidence it cannot turn into one strict joint lock", () => {
@@ -256,42 +220,55 @@ await test("the producer refuses evidence it cannot turn into one strict joint l
 	);
 });
 
-await test("the v0.94.7 reader accepts the produced schema 1 lock and refuses the joint lock", async (t) => {
-	// The old parser and its CLI only: this is not a run of the old reconciler or of a Docker host.
-	assert.equal(
-		createHash("sha256")
-			.update(await readFile(previousReader))
-			.digest("hex"),
-		previousReaderSha256,
-		"the archived reader must stay byte-exact",
-	);
-	const directory = await mkdtemp(path.join(tmpdir(), "previous-reader-"));
+await test("the CLI writes and verifies one joint lock and refuses legacy commands", async (t) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "release-lock-cli-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
-	const joint = jointLockFromEvidence(evidence, chart, "v1.2.3");
-	const files = {
-		manifest: path.join(directory, "manifest.json"),
-		legacy: path.join(directory, "release-v1.2.3.json"),
-		joint: path.join(directory, jointLockAsset("v1.2.3")),
-	};
-	await writeFile(files.manifest, JSON.stringify(evidence));
-	await writeFile(files.legacy, JSON.stringify(legacyLock(joint)));
-	await writeFile(files.joint, JSON.stringify(joint));
-	const previous = (lock: string, output: string) =>
+	const manifest = path.join(directory, "manifest.json");
+	const metadata = path.join(directory, "chart.json");
+	const output = path.join(directory, jointLockAsset("v1.2.3"));
+	const legacy = path.join(directory, "release-v1.2.3.json");
+	const environment = path.join(directory, "release-lock.env");
+	await writeFile(manifest, JSON.stringify(evidence));
+	await writeFile(metadata, JSON.stringify(chart));
+	const execute = (...args: string[]) =>
 		spawnSync(
 			process.execPath,
-			[previousReader, lock, files.manifest, "v1.2.3", path.join(directory, output)],
+			[new URL("release-image-lock.ts", import.meta.url).pathname, ...args],
 			{
 				encoding: "utf8",
 				timeout: 30_000,
 			},
 		);
-	const accepted = previous(files.legacy, "previous.env");
-	assert.equal(accepted.status, 0, accepted.stderr);
-	assert.equal(
-		await readFile(path.join(directory, "previous.env"), "utf8"),
-		lockEnvironment(joint),
+	const produced = execute("write", manifest, metadata, "v1.2.3", output);
+	assert.equal(produced.status, 0, produced.stderr);
+	const original = await readFile(output, "utf8");
+	assert.deepEqual(JSON.parse(original), jointLock);
+	assert.deepEqual(
+		(await readdir(directory)).sort(),
+		["chart.json", "manifest.json", path.basename(output)].sort(),
 	);
-	const refused = previous(files.joint, "joint.env");
-	assert.notEqual(refused.status, 0);
-	assert.match(refused.stderr, /lock has missing or extra fields/u);
+	const verified = execute("verify", output, manifest, "v1.2.3");
+	assert.equal(verified.status, 0, verified.stderr);
+	assert.notEqual(execute("write", manifest, metadata, "v1.2.3", output).status, 0);
+	assert.equal(await readFile(output, "utf8"), original);
+	for (const args of [
+		["write", manifest, metadata, "v1.2.3", output, legacy],
+		["projection", output, legacy, "v1.2.3"],
+		[output, manifest, "v1.2.3", environment],
+	]) {
+		const refused = execute(...args);
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /usage: release-image-lock/u);
+	}
+	await assert.rejects(readFile(legacy), { code: "ENOENT" });
+	await assert.rejects(readFile(environment), { code: "ENOENT" });
+	await writeFile(output, JSON.stringify(rawLock));
+	const refusedSchema = execute("verify", output, manifest, "v1.2.3");
+	assert.notEqual(refusedSchema.status, 0);
+	assert.match(refusedSchema.stderr, /expected a joint lock/u);
+	await writeFile(output, original);
+	await writeFile(manifest, JSON.stringify({ ...evidence, commit: "f".repeat(40) }));
+	const refusedEvidence = execute("verify", output, manifest, "v1.2.3");
+	assert.notEqual(refusedEvidence.status, 0);
+	assert.match(refusedEvidence.stderr, /does not match the evidence manifest/u);
 });

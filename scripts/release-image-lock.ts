@@ -30,8 +30,7 @@ interface LockIdentity {
 }
 
 /**
- * Schema 1: every release before the chart, and from then on the legacy projection of the joint
- * lock that each release still publishes under its old name for existing strict schema 1 readers.
+ * Image identities before chart packaging. This shape is not a published release lock.
  */
 export interface ReleaseImageLockV1 extends LockIdentity {
 	schemaVersion: 1;
@@ -234,33 +233,14 @@ export function verifyLockAgainstEvidence(lock: ReleaseImageLock, evidenceValue:
 	}
 }
 
-export function lockEnvironment(lock: ReleaseImageLock): string {
-	const lines = [
-		`IMAGE_TAG=${lock.release.slice(1)}`,
-		`HEPHAESTUS_RELEASE=${lock.release}`,
-		`HEPHAESTUS_RELEASE_COMMIT=${lock.commit}`,
-	];
-	for (const image of lock.images.toSorted((left, right) =>
-		left.image.localeCompare(right.image),
-	)) {
-		const key = image.image.toUpperCase().replaceAll("-", "_");
-		lines.push(`HEPHAESTUS_IMAGE_${key}=${image.repository}@${image.indexDigest}`);
-	}
-	return `${lines.join("\n")}\n`;
-}
-
-/**
- * The release asset of the joint lock. `release-<tag>.json` stays the schema 1 lock: hosts on an
- * earlier release verify a new release with their own strict schema 1 reader before they adopt
- * the new tooling, so that asset never changes shape.
- */
+/** The signed release lock covers the chart, its images and source commit. */
 export function jointLockAsset(release: string): string {
 	return `release-${release}.chart.json`;
 }
 
 /**
  * The images and source of a release, built once from the evidence manifest that the release
- * verified. The chart's image values, the schema 1 lock and the joint lock all come from this
+ * verified. The chart's image values and the joint lock come from this
  * object, so no two of them can name different images.
  */
 export function lockFromEvidence(evidenceValue: unknown, release: string): ReleaseImageLockV1 {
@@ -332,61 +312,39 @@ export function jointLockFromEvidence(
 	return lock;
 }
 
-/** The schema 1 lock that hosts on earlier releases read: exactly the joint lock without its chart. */
-export function legacyLock(lock: ReleaseImageLockV2): ReleaseImageLockV1 {
-	return { schemaVersion: 1, release: lock.release, commit: lock.commit, images: lock.images };
-}
-
-/** Refuse a schema 1 lock that is not exactly the projection of the joint lock. */
-export function verifyLegacyProjection(joint: ReleaseImageLock, legacy: ReleaseImageLock): void {
-	if (
-		joint.schemaVersion !== 2 ||
-		legacy.schemaVersion !== 1 ||
-		JSON.stringify(legacy) !== JSON.stringify(legacyLock(joint))
-	) {
-		throw new Error("the schema 1 lock is not the projection of the joint lock");
-	}
-}
-
 const lockJson = (lock: ReleaseImageLock) => `${JSON.stringify(lock, null, 2)}\n`;
 const parseJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
 
 if (import.meta.main && process.argv[2] === "write") {
-	const [manifestPath = "", chartPath = "", release = "", jointPath = "", legacyPath = ""] =
-		process.argv.slice(3);
+	const [manifestPath = "", chartPath = "", release = "", jointPath = ""] = process.argv.slice(3);
 	if (
+		process.argv.length !== 7 ||
 		manifestPath === "" ||
 		chartPath === "" ||
 		release === "" ||
-		jointPath === "" ||
-		legacyPath === ""
+		jointPath === ""
 	) {
 		throw new Error(
-			"usage: release-image-lock write <manifest.json> <chart.json> <release> <joint-output> <lock-output>",
+			"usage: release-image-lock write <manifest.json> <chart.json> <release> <joint-output>",
 		);
 	}
 	const joint = jointLockFromEvidence(parseJson(manifestPath), parseJson(chartPath), release);
 	writeFileSync(jointPath, lockJson(joint), { flag: "wx" });
-	writeFileSync(legacyPath, lockJson(legacyLock(joint)), { flag: "wx" });
-} else if (import.meta.main && process.argv[2] === "projection") {
-	const [jointPath = "", legacyPath = "", release = ""] = process.argv.slice(3);
-	if (jointPath === "" || legacyPath === "" || release === "") {
-		throw new Error("usage: release-image-lock projection <joint.json> <lock.json> <release>");
+} else if (import.meta.main && process.argv[2] === "verify") {
+	const [lockPath = "", evidencePath = "", expectedRelease = ""] = process.argv.slice(3);
+	if (
+		process.argv.length !== 6 ||
+		lockPath === "" ||
+		evidencePath === "" ||
+		expectedRelease === ""
+	) {
+		throw new Error("usage: release-image-lock verify <lock.json> <manifest.json> <release>");
 	}
-	verifyLegacyProjection(
-		parseReleaseImageLock(parseJson(jointPath), release),
-		parseReleaseImageLock(parseJson(legacyPath), release),
-	);
+	const lock = parseReleaseImageLock(parseJson(lockPath), expectedRelease);
+	if (lock.schemaVersion !== 2) {
+		throw new Error("expected a joint lock");
+	}
+	verifyLockAgainstEvidence(lock, parseJson(evidencePath));
 } else if (import.meta.main) {
-	const [lockPath = "", evidencePath = "", expectedRelease = "", outputPath = ""] =
-		process.argv.slice(2);
-	if (lockPath === "" || evidencePath === "" || expectedRelease === "" || outputPath === "") {
-		throw new Error("usage: release-image-lock <lock.json> <manifest.json> <release> <env-output>");
-	}
-	const lock = parseReleaseImageLock(
-		JSON.parse(readFileSync(lockPath, "utf8")) as unknown,
-		expectedRelease,
-	);
-	verifyLockAgainstEvidence(lock, JSON.parse(readFileSync(evidencePath, "utf8")) as unknown);
-	writeFileSync(outputPath, lockEnvironment(lock), { flag: "wx", mode: 0o600 });
+	throw new Error("usage: release-image-lock <write|verify> ...");
 }
