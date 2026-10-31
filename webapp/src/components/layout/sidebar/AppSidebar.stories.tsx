@@ -334,6 +334,23 @@ export const PracticesOff: Story = {
 	},
 };
 
+/**
+ * An admin keeps the Practices section when practices are off: Review settings is where they are
+ * turned on, Practice setup is where the workspace adopts practices first, and past reviews stay
+ * readable.
+ */
+export const PracticesOffAdmin: Story = {
+	args: { isAdmin: true, activeWorkspace: { ...mockWorkspace, practicesEnabled: false } },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("link", { name: "Practice profile" })).not.toBeInTheDocument();
+		await userEvent.click(canvas.getByRole("button", { name: "Practices" }));
+		await expect(canvas.getByRole("link", { name: "Review settings" })).toHaveAttribute(
+			"href",
+			"/w/aet/admin/practices/review",
+		);
+	},
+};
+
 export const CollapsedWorkspaceAdmin: Story = {
 	args: WorkspaceAdminUser.args,
 	decorators: Collapsed.decorators,

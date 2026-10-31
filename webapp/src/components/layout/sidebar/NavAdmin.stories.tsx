@@ -163,6 +163,46 @@ export const OwnerNavigationFolded: Story = {
 	},
 };
 
+/** On a page inside a section, its entry is the one current page. */
+export const CurrentPageInSection: Story = {
+	parameters: { router: { initialUrl: "/w/aet/admin/practices/scans" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Scans" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		await expect(canvas.getAllByRole("link", { current: "page" })).toHaveLength(1);
+	},
+};
+
+/** Closing the section hides the current entry, so the section itself becomes the current page. */
+export const CurrentPageInClosedSection: Story = {
+	parameters: { router: { initialUrl: "/w/aet/admin/practices/scans" } },
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Practices" }));
+
+		await waitFor(async () =>
+			expect(canvas.queryByRole("link", { name: "Scans" })).not.toBeInTheDocument(),
+		);
+		await expect(canvas.getByRole("button", { name: "Practices" })).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
+		await expect(canvas.queryAllByRole("link", { current: "page" })).toHaveLength(0);
+	},
+};
+
+/** Folded to icons, the section's link is the current page on every page inside it. */
+export const CurrentPageInSectionFolded: Story = {
+	parameters: { router: { initialUrl: "/w/aet/admin/practices/scans" } },
+	decorators: FeedbackAwaitingApprovalFolded.decorators,
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByRole("link", { current: "page" })).toStrictEqual([
+			canvas.getByRole("link", { name: "Practices" }),
+		]);
+	},
+};
+
 /** One awaiting: the name counts it in the singular. */
 export const OnePieceAwaitingApproval: Story = {
 	args: { awaitingApproval: 1 },
