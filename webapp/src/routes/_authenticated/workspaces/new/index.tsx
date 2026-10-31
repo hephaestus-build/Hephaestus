@@ -8,6 +8,7 @@ import { type BrandIcon, GitHubIcon, GitLabIcon } from "@/components/icons/brand
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { workspaceCreationOf } from "@/hooks/use-workspace-creation";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -40,10 +41,9 @@ function ProviderSelectionPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 
-	// Mirror the server gate (hephaestus.workspace.creation-policy): under ADMIN_ONLY, a non-admin
-	// would get a 403 on submit, so surface that up front instead of letting them fill out the wizard.
-	const adminOnly = workspaceProviders?.creationPolicy === "ADMIN_ONLY";
-	const blockedForNonAdmin = adminOnly && !isAppAdmin;
+	// A non-admin under ADMIN_ONLY would get a 403 on submit, so say so before the wizard.
+	const blockedForNonAdmin =
+		workspaceCreationOf(workspaceProviders?.creationPolicy, isAppAdmin) === "instance-admin-only";
 
 	const providers: Provider[] = [];
 	// The GitHub card leads to a page whose only action is the installation link, so a provider

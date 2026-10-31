@@ -6,6 +6,7 @@ import {
 	availableReviewBinding,
 	reviewModelRunnable,
 	reviewReadinessDescription,
+	unservedReviewTiers,
 } from "./review-readiness";
 
 const undeclared: AgentBinding = {
@@ -70,5 +71,26 @@ describe("workspace review model readiness", () => {
 		expect(reviewReadinessDescription({ enabled: true, model: { status: "ready" } })).toMatch(
 			/no review model is ready/u,
 		);
+	});
+});
+
+describe("member tiers without a review model", () => {
+	it("names each AI choice that no review binding serves, by the server's served tiers", () => {
+		expect(unservedReviewTiers([undeclared, inHouse], false)).toStrictEqual([
+			"CLOUD",
+			"UNDECLARED",
+		]);
+		expect(unservedReviewTiers([inHouse, cloud], false)).toStrictEqual(["UNDECLARED"]);
+	});
+
+	it("leaves out the members who have not chosen once the workspace requires the choice", () => {
+		expect(unservedReviewTiers([inHouse, cloud], true)).toStrictEqual([]);
+	});
+
+	it("counts no other purpose as a review model", () => {
+		expect(unservedReviewTiers([{ ...cloud, purpose: "MENTOR" }], true)).toStrictEqual([
+			"IN_HOUSE",
+			"CLOUD",
+		]);
 	});
 });

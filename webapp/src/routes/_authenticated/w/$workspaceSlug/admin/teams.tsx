@@ -18,12 +18,12 @@ import type {
 	UpdateTeamVisibilityData,
 } from "@/api/types.gen";
 import { WorkspaceTeamsTable } from "@/components/admin/teams/WorkspaceTeamsTable";
-import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
+import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/teams")({
@@ -229,7 +229,7 @@ function AdminTeamsContainer() {
 	};
 
 	if (!hasWorkspace && !isWorkspaceLoading && workspaceError === undefined) {
-		return <NoWorkspace />;
+		return <NoWorkspaceContainer />;
 	}
 
 	const retry = () => {

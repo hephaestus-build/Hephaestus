@@ -77,6 +77,7 @@ import { useLoginNavigation } from "@/hooks/use-login-navigation";
 import { useProductSurveys, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
+import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
 import { useWorkspaceSwitcher } from "@/hooks/use-workspace-switcher";
 import { isConversationOutOfReach } from "@/lib/conversation-availability";
 import { stepUpChallengeOf } from "@/lib/problem-detail";
@@ -613,6 +614,11 @@ function AppSidebarContainer() {
 		(Boolean(userView) ||
 			(onboarding.data !== undefined && !isConversationOutOfReach(onboarding.data)));
 
+	// Read only where the sidebar says "No workspace".
+	const workspaceCreation = useWorkspaceCreation({
+		enabled: isAuthenticated && !workspaceAccess.isLoading && workspaces.length === 0,
+	});
+
 	if (!isAuthenticated || username === undefined) {
 		return null;
 	}
@@ -650,6 +656,7 @@ function AppSidebarContainer() {
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}
+			workspaceCreation={workspaceCreation}
 		/>
 	);
 }

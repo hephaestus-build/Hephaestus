@@ -13,6 +13,7 @@ import type {
 	WorkspaceLlmUsageReport,
 } from "@/api/types.gen";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
+import { memberTiers } from "@/components/admin/practices/review/review-readiness";
 import { purseCap } from "@/components/admin/usage/usage-utils";
 import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
@@ -117,9 +118,8 @@ const TIER_COLUMNS: readonly TierColumn[] = [
 ];
 
 function tierColumns(aiChoiceRequired: boolean): readonly TierColumn[] {
-	return aiChoiceRequired
-		? TIER_COLUMNS.filter((column) => column.tier !== "UNDECLARED")
-		: TIER_COLUMNS;
+	const tiers = memberTiers(aiChoiceRequired);
+	return TIER_COLUMNS.filter((column) => tiers.includes(column.tier));
 }
 
 const ROW_GRID = {

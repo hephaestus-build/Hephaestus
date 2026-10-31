@@ -10,6 +10,7 @@ import type { StatusDefs } from "@/components/common/status-def";
 import {
 	DATA_HANDLING_DEFS,
 	DATA_HANDLING_TIERS,
+	type DataHandlingTier,
 } from "@/components/practice-vocabulary/data-handling-defs";
 
 export type ReviewModelState =
@@ -106,4 +107,25 @@ export function availableReviewBinding(bindings: AgentBinding[]): AgentBinding |
 				DATA_HANDLING_TIERS.indexOf(b.dataHandlingTier),
 		);
 	return ready[0] ?? reviews[0];
+}
+
+/**
+ * The tiers of the members a review model must serve: both AI choices, and the members who have not
+ * chosen while the workspace lets them leave the choice open.
+ */
+export function memberTiers(aiChoiceRequired: boolean): DataHandlingTier[] {
+	return DATA_HANDLING_TIERS.filter((tier) => !aiChoiceRequired || tier !== "UNDECLARED");
+}
+
+/** The member tiers that no practice review binding serves, judged by the server's served tiers. */
+export function unservedReviewTiers(
+	bindings: readonly AgentBinding[],
+	aiChoiceRequired: boolean,
+): DataHandlingTier[] {
+	const served = new Set(
+		bindings
+			.filter((binding) => binding.purpose === "PRACTICE_REVIEW")
+			.flatMap((binding) => binding.servedTiers),
+	);
+	return memberTiers(aiChoiceRequired).filter((tier) => !served.has(tier));
 }
