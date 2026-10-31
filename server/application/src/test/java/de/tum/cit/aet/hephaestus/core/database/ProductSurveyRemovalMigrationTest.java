@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 @Tag("database")
 class ProductSurveyRemovalMigrationTest {
-    private static final String CHANGELOG = "20261031102939-refactor-remove-product-surveys.xml";
+    private static final String CHANGELOG = "20261031175448-refactor-remove-product-surveys.xml";
 
     @Test
     void shouldDropPopulatedSurveysAndTheirNotificationsAndKeepProductFeedbackAndResearchConsent() throws Exception {

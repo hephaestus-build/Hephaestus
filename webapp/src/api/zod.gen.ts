@@ -236,16 +236,6 @@ export const zAiChoiceRequest = z.object({
     ])
 });
 
-/**
- * One answer; exactly the field matching the question's type is set.
- */
-export const zAnswer = z.object({
-    choices: z.array(z.string().min(0).max(200)).min(0).max(20).optional(),
-    questionId: z.string().min(0).max(80),
-    rating: z.int().gte(0).lte(10).optional(),
-    text: z.string().min(0).max(4000).optional()
-});
-
 export const zAppliesWhenClause = z.object({
     changedPath: z.array(z.string()).optional(),
     diffContains: z.array(z.string()).optional(),
@@ -2301,9 +2291,6 @@ export const zNotificationPreferences = z.object({
     emailAvailable: z.boolean(),
     etag: z.string(),
     productFeedback: z.boolean(),
-    productSurveys: z.boolean(),
-    researchSurveys: z.boolean(),
-    surveySummaries: z.boolean(),
     weeklyDigest: z.boolean(),
     weeklyDigestAvailable: z.boolean(),
     workspaceAlerts: z.boolean()
@@ -2313,11 +2300,6 @@ export const zOpenQuestion = z.object({
     citation: zEvidenceCitation.nullable(),
     openQuestion: z.string(),
     wouldSettleIt: z.string()
-});
-
-export const zOptionCount = z.object({
-    count: z.int(),
-    value: z.string()
 });
 
 export const zOutcomeVector = z.object({
@@ -2427,12 +2409,6 @@ export const zPageMetadata = z.object({
 export const zPagedModelFeedbackItem = z.object({
     content: z.array(zFeedbackItem).optional(),
     page: zPageMetadata.optional()
-});
-
-export const zParticipationCounts = z.object({
-    declined: z.int(),
-    invited: z.int(),
-    responded: z.int()
 });
 
 export const zPasskeyCredential = z.object({
@@ -3093,42 +3069,6 @@ export const zPublicActivityWorkPage = z.object({
 export const zPublicActivityWorkspaceSettings = z.object({
     allowSearchEngines: z.boolean(),
     enabled: z.boolean()
-});
-
-export const zQuestion = z.object({
-    allowOther: z.boolean(),
-    highLabel: z.string().min(0).max(60).optional(),
-    id: z.string().min(0).max(80).regex(/[A-Za-z0-9_-]+/),
-    lowLabel: z.string().min(0).max(60).optional(),
-    options: z.array(z.string().min(0).max(200)).min(0).max(20),
-    prompt: z.string().min(0).max(300),
-    required: z.boolean(),
-    type: z.enum([
-        'TEXT',
-        'SINGLE_CHOICE',
-        'MULTIPLE_CHOICE',
-        'RATING',
-        'NPS'
-    ])
-});
-
-export const zCreateSurvey = z.object({
-    description: z.string().min(0).max(500),
-    endsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-    purpose: z.enum(['PRODUCT', 'RESEARCH']),
-    questions: z.array(zQuestion).min(0).max(20),
-    startsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    title: z.string().min(0).max(160),
-    workspaceId: z.int().optional()
-});
-
-export const zQuestionSummary = z.object({
-    answered: z.int(),
-    average: z.number().optional(),
-    counts: z.array(zOptionCount),
-    other: z.int().optional(),
-    questionId: z.string(),
-    score: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional()
 });
 
 /**
@@ -5360,10 +5300,6 @@ export const zStateBasis = zClaimBasis.and(z.object({
     type: z.literal('StateBasis')
 }));
 
-export const zSubmitSurvey = z.object({
-    answers: z.array(zAnswer).min(0).max(20)
-});
-
 export const zSubmittedResult = z.object({
     candidate: zJsonNode.optional(),
     itemId: z.string().optional(),
@@ -5470,85 +5406,6 @@ export const zPracticePageSupport = z.discriminatedUnion('state', [
     zClosedPracticePageSupport.extend({ state: z.literal('REFUSED') }),
     zClosedPracticePageSupport.extend({ state: z.literal('UNAVAILABLE') })
 ]);
-
-export const zSurvey = z.object({
-    active: z.boolean(),
-    createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    createdBy: zFeedbackAccountRef.optional(),
-    description: z.string(),
-    endsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-    id: z.uuid(),
-    participation: zParticipationCounts,
-    purpose: z.enum(['PRODUCT', 'RESEARCH']),
-    questions: z.array(zQuestion),
-    researchOrganization: z.string().optional(),
-    startsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    title: z.string(),
-    workspace: zFeedbackWorkspaceRef.optional()
-});
-
-export const zPagedModelSurvey = z.object({
-    content: z.array(zSurvey).optional(),
-    page: zPageMetadata.optional()
-});
-
-export const zSurveyEdit = z.object({
-    active: z.boolean(),
-    description: z.string().min(0).max(500),
-    endsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-    startsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    title: z.string().min(0).max(160)
-});
-
-export const zSurveyEmailInvitationRequest = z.object({
-    sendReminder: z.boolean().optional()
-});
-
-/**
- * Counts refer to email requests, not in-app invitations or responses. Accepted means SMTP relay acceptance.
- */
-export const zSurveyEmailInvitationSummary = z.object({
-    accepted: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    alreadyRequested: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    deliveryConfigured: z.boolean(),
-    eligible: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    queued: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    remaining: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-export const zSurveyInvitation = z.object({
-    description: z.string(),
-    endsAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-    id: z.uuid(),
-    purpose: z.enum(['PRODUCT', 'RESEARCH']),
-    questions: z.array(zQuestion),
-    researchOrganization: z.string().optional(),
-    seen: z.boolean(),
-    title: z.string()
-});
-
-export const zSurveyResponse = z.object({
-    account: zFeedbackAccountRef.optional(),
-    answers: z.array(zAnswer).optional(),
-    decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    id: z.uuid(),
-    status: z.enum([
-        'INVITED',
-        'RESPONDED',
-        'DECLINED'
-    ]),
-    workspace: zFeedbackWorkspaceRef.optional()
-});
-
-export const zPagedModelSurveyResponse = z.object({
-    content: z.array(zSurveyResponse).optional(),
-    page: zPageMetadata.optional()
-});
-
-export const zSurveySummary = z.object({
-    participation: zParticipationCounts,
-    questions: z.array(zQuestionSummary)
-});
 
 /**
  * One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection
@@ -5939,9 +5796,6 @@ export const zUpdateLoginProviderRequest = z.object({
 
 export const zUpdateNotificationPreferences = z.object({
     productFeedback: z.boolean(),
-    productSurveys: z.boolean(),
-    researchSurveys: z.boolean(),
-    surveySummaries: z.boolean(),
     weeklyDigest: z.boolean().optional(),
     workspaceAlerts: z.boolean()
 });
