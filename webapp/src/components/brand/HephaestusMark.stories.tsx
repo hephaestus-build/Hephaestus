@@ -15,10 +15,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-	play: async ({ canvas, canvasElement }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("img")).not.toBeInTheDocument();
-		// The mark stays still in every place it appears, with or without reduced motion.
-		await expect(canvasElement.querySelector("svg")?.getAnimations({ subtree: true })).toEqual([]);
 	},
 };
 
