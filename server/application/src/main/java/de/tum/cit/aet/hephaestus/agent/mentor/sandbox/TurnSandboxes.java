@@ -2,10 +2,15 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.io.Serial;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -24,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiPredicate;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -110,6 +116,8 @@ public class TurnSandboxes implements AutoCloseable {
 
     private final ExecSandboxes sandboxes;
     private final int poolSize;
+    private final MeterRegistry meters;
+    private final Map<Attempt, Integer> quotaWaiting = new ConcurrentHashMap<>();
 
     /**
      * The lifecycle fence: creation's end, assignment, release, discard and close change {@link #pool},
@@ -132,9 +140,10 @@ public class TurnSandboxes implements AutoCloseable {
     private volatile boolean lastStartFailed;
     private boolean closed;
 
-    public TurnSandboxes(ExecSandboxes sandboxes, int poolSize) {
+    public TurnSandboxes(ExecSandboxes sandboxes, int poolSize, MeterRegistry meters) {
         this.sandboxes = sandboxes;
         this.poolSize = poolSize;
+        this.meters = meters;
     }
 
     /**
@@ -158,36 +167,89 @@ public class TurnSandboxes implements AutoCloseable {
      * @throws ContextChanged once after the attempt's sandbox was released because its workspace's data changed
      * @throws SandboxException when no sandbox can start, or the attempt ended
      */
-    public Sandbox acquire(Attempt attempt, long workspaceId) {
-        synchronized (lifecycle) {
-            Sandbox held = admitted(attempt);
-            if (held != null) return held;
-            Sandbox pooled = pool.pollFirst();
-            if (pooled != null) {
-                assign(attempt, workspaceId, pooled);
+    public Sandbox acquire(Attempt attempt, long workspaceId, BooleanSupplier expired) {
+        Timer.Sample wait = null;
+        boolean ready = false;
+        try {
+            while (true) {
+                if (expired.getAsBoolean() || Thread.currentThread().isInterrupted())
+                    throw new SandboxCancelledException("The tools request ended while waiting for tools");
+                synchronized (lifecycle) {
+                    Sandbox held = admitted(attempt);
+                    if (held != null) {
+                        ready = true;
+                        return held;
+                    }
+                    Sandbox pooled = pool.pollFirst();
+                    if (pooled != null) {
+                        assign(attempt, workspaceId, pooled);
+                        refill();
+                        ready = true;
+                        return pooled;
+                    }
+                }
+                Sandbox started;
+                try {
+                    started = start();
+                } catch (SandboxCapacityException full) {
+                    if (full.reason() != SandboxCapacityException.Reason.QUOTA_EXCEEDED) throw full;
+                    started = null;
+                }
+                if (started == null) {
+                    if (wait == null) {
+                        wait = Timer.start(meters);
+                        quotaWaiting.merge(attempt, 1, Integer::sum);
+                    }
+                    synchronized (lifecycle) {
+                        if (admitted(attempt) != null || !pool.isEmpty()) continue;
+                        try {
+                            // A local release wakes this wait; the timeout also sees room freed by another worker.
+                            lifecycle.wait(1000);
+                        } catch (InterruptedException cancelled) {
+                            Thread.currentThread().interrupt();
+                            throw new SandboxException("The turn stopped while waiting for tools", cancelled);
+                        }
+                    }
+                    continue;
+                }
+                synchronized (lifecycle) {
+                    Sandbox held;
+                    try {
+                        held = admitted(attempt);
+                        if (expired.getAsBoolean())
+                            throw new SandboxCancelledException("The tools request ended while tools started");
+                    } catch (RuntimeException ended) {
+                        // Release or context change won while the Pod started.
+                        removeLater(started);
+                        throw ended;
+                    }
+                    if (held != null) {
+                        // A parallel call of this attempt was first; keep this empty Pod in the warm pool.
+                        pool.addLast(started);
+                        ready = true;
+                        return held;
+                    }
+                    assign(attempt, workspaceId, started);
+                }
                 refill();
-                return pooled;
+                ready = true;
+                return started;
+            }
+        } finally {
+            if (wait != null) {
+                quotaWaiting.computeIfPresent(attempt, (key, count) -> count == 1 ? null : count - 1);
+                wait.stop(Timer.builder(AgentMetrics.MENTOR_TURN_TOOLS_WAIT)
+                        .description("Wait after tools quota refusal until tools are ready, including Pod start")
+                        .tag("outcome", ready ? "ready" : "abandoned")
+                        .publishPercentileHistogram()
+                        .register(meters));
             }
         }
-        Sandbox started = start();
-        synchronized (lifecycle) {
-            Sandbox held;
-            try {
-                held = admitted(attempt);
-            } catch (RuntimeException ended) {
-                // The attempt ended, or its context changed, while the sandbox started: the release wins.
-                removeLater(started);
-                throw ended;
-            }
-            if (held != null) {
-                // A parallel call of the same attempt was first; this empty sandbox waits in the pool.
-                pool.addLast(started);
-                return held;
-            }
-            assign(attempt, workspaceId, started);
-        }
-        refill();
-        return started;
+    }
+
+    /** Whether this attempt waits for tools after the resource quota refused a Pod. */
+    public boolean waitingForQuota(Attempt attempt) {
+        return quotaWaiting.containsKey(attempt);
     }
 
     /** The attempt's live sandbox, or null when it may take one. Holds {@link #lifecycle}. */
@@ -207,6 +269,7 @@ public class TurnSandboxes implements AutoCloseable {
         sandbox.attempt = attempt;
         sandbox.workspaceId = workspaceId;
         assigned.put(attempt, sandbox);
+        lifecycle.notifyAll();
     }
 
     /** Whether the attempt holds a sandbox that is not removed. A load stops waiting when this turns false. */
@@ -228,6 +291,7 @@ public class TurnSandboxes implements AutoCloseable {
             ended.put(attempt, Boolean.TRUE);
             changed.remove(attempt);
             sandbox = assigned.remove(attempt);
+            lifecycle.notifyAll();
         }
         if (sandbox != null) {
             removeLater(sandbox);
@@ -341,6 +405,12 @@ public class TurnSandboxes implements AutoCloseable {
                         pool.addLast(sandbox);
                     }
                 }
+            } catch (SandboxCapacityException full) {
+                if (full.reason() == SandboxCapacityException.Reason.QUOTA_EXCEEDED) {
+                    log.debug("Turn tools pool waits for quota");
+                } else {
+                    log.warn("The tools quota cannot hold one tools Pod");
+                }
             } catch (SandboxException e) {
                 log.warn(
                         "Could not fill the turn sandbox pool: {}", e.getClass().getSimpleName());
@@ -365,7 +435,7 @@ public class TurnSandboxes implements AutoCloseable {
             sandbox.containerId = sandboxes.create(sandbox.sandboxId, LIMITS);
             lastStartFailed = false;
         } catch (RuntimeException e) {
-            lastStartFailed = true;
+            lastStartFailed = !(e instanceof SandboxCapacityException);
             known.remove(sandbox.sandboxId);
             throw e instanceof SandboxException failed
                     ? failed
@@ -399,6 +469,9 @@ public class TurnSandboxes implements AutoCloseable {
             sandboxes.remove(id);
         }
         known.remove(sandbox.sandboxId);
+        synchronized (lifecycle) {
+            lifecycle.notifyAll();
+        }
     }
 
     /** The sandboxes this worker holds now, pooled and assigned. */
@@ -422,6 +495,7 @@ public class TurnSandboxes implements AutoCloseable {
             closed = true;
             pool.clear();
             assigned.clear();
+            lifecycle.notifyAll();
         }
         List.copyOf(known.values()).forEach(this::removeNow);
         background.shutdown();

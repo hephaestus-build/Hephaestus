@@ -249,3 +249,25 @@ On a host with [pull-based deployment](./pull-based-deployment.mdx#images-and-fr
 
 On a small disk, lower `HEPHAESTUS_MIN_FREE_GIB`.
 `docker system df -v` shows what each image, container and volume uses on disk.
+
+## Conversation turn admission
+
+Both single-node Kubernetes profiles admit 32 resident conversation turns from the declared CPU budget.
+The formula subtracts resident role and fixed tools-tier requests, plus the review-tier CPU reservation, then divides the remaining millicores by 50.
+It caps the total at 32 and divides it across workers. An explicit `worker.conversationTurns` overrides the automatic count.
+The chart and its fit gate read the same `turn-admission.json` declaration.
+The provider pool admits each physical model call independently.
+
+Tools memory is a separate resource.
+The unchanged conversation quota holds ten tools Pods per worker, including a warm pool of up to two.
+A turn requests tools only when it calls a tool. A full quota makes that turn wait with visible progress.
+The resident-turn count does not enlarge this quota or reduce any Pod's request.
+
+The approved model-only sweep supports the 50m planning coefficient and the 32-turn ceiling.
+Tool-heavy and 80-user qualification precede any increase to 48.
+[ADR 0068 G](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md#g-review-pod-admission-checks-quota-and-provider-demand) owns the evidence and its limits.
+
+The single-node workers use `Recreate`: the old worker drains before its replacement starts.
+Reviews and conversation turns pause during that drain and start.
+The server remains one replica with `Recreate`. Measure this deployment outage against the 99.5% availability budget.
+A 32-turn admission is not a zero-downtime upgrade claim.

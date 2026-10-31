@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +39,7 @@ public final class FakeExecSandboxes implements ExecSandboxes {
     public final List<Listed> others = new CopyOnWriteArrayList<>();
 
     public volatile boolean failCreate;
+    public volatile boolean quotaFull;
 
     /** When set, a create waits for it: a test runs a release or a close while a sandbox starts. */
     public volatile @Nullable CountDownLatch createGate;
@@ -63,6 +65,8 @@ public final class FakeExecSandboxes implements ExecSandboxes {
 
     @Override
     public String create(String sandboxId, ResourceLimits limits) {
+        if (quotaFull)
+            throw new SandboxCapacityException("Tools quota full", SandboxCapacityException.Reason.QUOTA_EXCEEDED);
         if (failCreate) {
             throw new SandboxException("no Docker here");
         }

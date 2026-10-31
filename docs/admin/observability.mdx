@@ -424,6 +424,7 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `mentor_turn_retried_total`                | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
 | `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a worker, sampled by the server every 30 seconds    |
 | `mentor_turn_queue_wait_seconds`           | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
+| `mentor_turn_tools_wait_seconds` | Histogram | `outcome` | From a tools-quota refusal until tools are ready or the attempt ends, including Pod start |
 | `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |

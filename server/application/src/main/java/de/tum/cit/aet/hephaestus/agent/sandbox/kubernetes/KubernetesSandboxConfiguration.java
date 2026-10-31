@@ -118,14 +118,13 @@ public class KubernetesSandboxConfiguration {
 
     @Bean(destroyMethod = "close")
     public KubernetesExecSandboxes kubernetesExecSandboxes(
-            KubernetesClient sandboxKubernetesClient,
             KubernetesPods pods,
             KubernetesWorker worker,
             AgentImageProperties agentImageProperties,
             KubernetesLiveWorkers liveWorkers,
-            SandboxExits exits) {
-        return new KubernetesExecSandboxes(
-                sandboxKubernetesClient, pods, worker, agentImageProperties.reference(), liveWorkers, exits);
+            SandboxExits exits,
+            KubernetesSandboxCache cache) {
+        return new KubernetesExecSandboxes(pods, worker, agentImageProperties.reference(), liveWorkers, exits, cache);
     }
 
     @Bean

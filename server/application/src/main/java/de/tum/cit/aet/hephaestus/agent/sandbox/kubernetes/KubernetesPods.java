@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.BoundedTranscript;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import io.fabric8.kubernetes.api.model.Container;
@@ -28,6 +29,7 @@ import io.fabric8.kubernetes.api.model.VolumeMountBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
+import io.fabric8.kubernetes.client.RequestConfigBuilder;
 import java.io.IOException;
 import java.io.Reader;
 import java.time.Duration;
@@ -628,6 +630,15 @@ public class KubernetesPods {
 
     // --- API calls ---
 
+    /** A view of the shared transports with a bounded request and no retry. */
+    KubernetesClient boundedClient(int timeoutMillis) {
+        var requests = new RequestConfigBuilder(client.getConfiguration().getRequestConfig())
+                .withRequestTimeout(timeoutMillis)
+                .withRequestRetryBackoffLimit(0)
+                .build();
+        return client.newClient(requests).adapt(KubernetesClient.class);
+    }
+
     /**
      * @throws SandboxException when a Pod of the name exists: an attempt runs once
      * @throws SandboxInfrastructureException when the API refuses or fails
@@ -638,6 +649,13 @@ public class KubernetesPods {
         } catch (KubernetesClientException e) {
             if (e.getCode() == 409) {
                 throw new SandboxException("A sandbox Pod of this name already exists", e);
+            }
+            if (e.getCode() == 403 && e.getMessage() != null && e.getMessage().contains("exceeded quota")) {
+                var full = new SandboxCapacityException(
+                        "The sandbox quota has no room for another Pod",
+                        SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+                full.initCause(e);
+                throw full;
             }
             throw failure("Could not create a sandbox Pod", e);
         }

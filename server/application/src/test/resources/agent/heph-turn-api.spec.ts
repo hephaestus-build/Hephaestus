@@ -103,6 +103,42 @@ const LOAD_ANSWER = {
 	note: "Staged pull request #42 of acme/api.",
 };
 
+void test("a tools quota wait ends when its turn is stopped", async () => {
+	const received = Promise.withResolvers<undefined>();
+	const server = createServer(() => received.resolve(undefined));
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	assert.ok(address !== null && typeof address !== "string");
+	const stop = new AbortController();
+	const api = httpTurnApi(`http://127.0.0.1:${address.port}`, "turn-1", "turn-token");
+	const waiting = api.read({ path: "INDEX.md" }, stop.signal);
+	try {
+		await received.promise;
+		stop.abort(new Error("turn stopped"));
+		await assert.rejects(waiting, /turn stopped/u);
+	} finally {
+		stop.abort();
+		server.closeAllConnections();
+		server.close();
+	}
+});
+
+void test("tools wait for their turn budget instead of the shorter worker-request timeout", async (context) => {
+	const worker = await fakeWorker([
+		{ status: 200, body: { ok: false, error: "NOT_FOUND", detail: "No such file." } },
+	]);
+	context.mock.method(AbortSignal, "timeout", () =>
+		AbortSignal.abort(new Error("request timeout")),
+	);
+	try {
+		const answer = await worker.api.read({ path: "INDEX.md" }, new AbortController().signal);
+		assert.deepEqual(answer, { ok: false, error: "NOT_FOUND", detail: "No such file." });
+	} finally {
+		worker.close();
+	}
+});
+
 void test("the host sends its partial answer, searches, sandbox calls and end in the shape the worker binds", async () => {
 	const worker = await fakeWorker([
 		{ status: 204 },

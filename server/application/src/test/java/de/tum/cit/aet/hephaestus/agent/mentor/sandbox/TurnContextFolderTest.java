@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -44,7 +45,7 @@ class TurnContextFolderTest extends BaseUnitTest {
     Path temp;
 
     private final FakeExecSandboxes runtime = new FakeExecSandboxes();
-    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0);
+    private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0, new SimpleMeterRegistry());
     private final List<List<String>> staged = new ArrayList<>();
     private final Map<String, String> stagedFiles = new LinkedHashMap<>();
     private final DefaultListableBeanFactory beans = new DefaultListableBeanFactory();
@@ -525,7 +526,8 @@ class TurnContextFolderTest extends BaseUnitTest {
             }
         });
         TurnAttempt turn = turn();
-        TurnSandboxes.Sandbox sandbox = sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), 1L);
+        TurnSandboxes.Sandbox sandbox =
+                sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), 1L, () -> false);
         var answers = runtime.answer;
         List<Boolean> lockedDuringSummary = new ArrayList<>();
         runtime.answer = command -> {
@@ -559,7 +561,8 @@ class TurnContextFolderTest extends BaseUnitTest {
         sandboxAnswers("0 0 0 0\n");
         TurnAttempt turn = turn();
         folder.exec(turn, DEADLINE, documents(), "true", null);
-        TurnSandboxes.Sandbox sandbox = sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), 1L);
+        TurnSandboxes.Sandbox sandbox =
+                sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), 1L, () -> false);
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(1);
         Thread loading = Thread.ofVirtual().start(() -> {

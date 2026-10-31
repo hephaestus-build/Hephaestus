@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration;
 import de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostSpec;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
@@ -93,14 +92,11 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the turn sandbox pool and the automatic conversation turns are the worker's")
-    void shouldMatchTheWorkerWhenTheTableCountsPooledSandboxesAndAutomaticTurns() throws IOException {
+    @DisplayName("the turn sandbox pool matches the worker")
+    void shouldMatchTheWorkerWhenTheTableCountsPooledSandboxes() throws IOException {
         JsonNode table = table();
 
         assertThat(table.path("pooledTurnSandboxes").asInt()).isEqualTo(HephHostConfiguration.SANDBOX_POOL);
-        assertThat(table.path("autoConversationTurns").asInt())
-                .isEqualTo(
-                        new WorkerProperties.Capacity(WorkerProperties.AUTO, WorkerProperties.AUTO).resolveMentorMax());
     }
 
     private void assertCounts(String entry, List<Pod> counted) throws IOException {

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.testconfig.LiveDockerTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -97,7 +98,7 @@ class TurnSandboxLiveTest {
                 IMAGE,
                 owner,
                 8080);
-        sandboxes = new TurnSandboxes(runtime, 1);
+        sandboxes = new TurnSandboxes(runtime, 1, new SimpleMeterRegistry());
         repository = repository(temp.resolve("api"));
         var beans = new DefaultListableBeanFactory();
         beans.registerSingleton("loader", new FixedLoader(repository));
@@ -263,9 +264,9 @@ class TurnSandboxLiveTest {
 
     /** The attempt's sandbox, which its first call took. */
     private String held() {
-        return Objects.requireNonNull(
-                sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), turn.workspaceId())
-                        .containerId);
+        return Objects.requireNonNull(sandboxes.acquire(
+                        new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), turn.workspaceId(), () -> false)
+                .containerId);
     }
 
     private void awaitGone(String container) throws InterruptedException {

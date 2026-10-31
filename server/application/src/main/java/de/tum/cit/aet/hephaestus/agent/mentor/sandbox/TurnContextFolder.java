@@ -423,7 +423,8 @@ public class TurnContextFolder {
     private TurnSandboxes.Sandbox folder(TurnAttempt turn, Instant deadline, TurnDocuments documents)
             throws IOException {
         long started = System.nanoTime();
-        TurnSandboxes.Sandbox sandbox = sandboxes.acquire(attempt(turn), turn.workspaceId());
+        TurnSandboxes.Sandbox sandbox = sandboxes.acquire(
+                attempt(turn), turn.workspaceId(), () -> !clock.instant().isBefore(deadline));
         if (sandbox.staged) {
             return sandbox;
         }

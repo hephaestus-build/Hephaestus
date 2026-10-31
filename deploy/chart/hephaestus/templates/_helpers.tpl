@@ -566,14 +566,66 @@ PostgreSQL volume.
 {{- and .Values.postgresql.bundled .Values.postgresql.backup.enabled .Values.postgresql.backup.restore.enabled -}}
 {{- end -}}
 
+{{/* CPU quantities in millicores, for resident role reservations. */}}
+{{- define "hephaestus.cpuMillis" -}}
+{{- $cpu := toString . -}}
+{{- if not (regexMatch "^[0-9]+([.][0-9]+)?m?$" $cpu) -}}
+{{- fail "Automatic turn admission requires CPU requests in cores or millicores" -}}
+{{- end -}}
+{{- if hasSuffix "m" $cpu -}}
+{{- trimSuffix "m" $cpu | float64 | ceil | int -}}
+{{- else -}}
+{{- mulf (float64 $cpu) 1000 | ceil | int -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The existing review tier CPU reservation, including each running worker's probe and Pod overhead. */}}
+{{- define "hephaestus.reviewCpuMillis" -}}
+{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
+{{- $replicas := int .Values.worker.replicas -}}
+{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
+{{- $reviews := mul $replicas (int .Values.worker.reviews) -}}
+{{- $pods := add (mul $reviews (int $table.review.pods)) (mul $running (int $table.isolationProbe.pods)) -}}
+{{- add (mul $reviews (int $table.review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $pods (int .Values.worker.runtime.podOverhead.cpuMillis)) -}}
+{{- end -}}
+
 {{/*
-The conversation turns that one worker runs at once, as a number: worker.conversationTurns, where auto is
-the autoConversationTurns of sandbox-pod-requests.json, the number that the worker itself resolves auto to. The worker's capacity, the server's
-capacity and the sandbox quotas all read it here.
+Turn admission uses the same declared CPU budget as the fit gate. Model calls and tools Pods have
+independent pool and quota admission. The ceiling is the qualified model-only replay, not provider capacity.
 */}}
 {{- define "hephaestus.conversationTurns" -}}
 {{- if eq (toString .Values.worker.conversationTurns) "auto" -}}
-{{- (.Files.Get "sandbox-pod-requests.json" | fromJson).autoConversationTurns | int -}}
+{{- $budget := .Files.Get "turn-admission.json" | fromJson -}}
+{{- $replicas := int .Values.worker.replicas -}}
+{{- $roles := 0 -}}
+{{- range $component := list "server" "webhook" "webapp" "worker" -}}
+{{- $role := get $.Values $component -}}
+{{- if or (ne $component "worker") $role.enabled -}}
+{{- $roles = add $roles (mul (int $role.replicas) (int (include "hephaestus.cpuMillis" $role.resources.requests.cpu))) -}}
+{{- end -}}
+{{- end -}}
+{{- range $component := list "postgresql" "nats" -}}
+{{- $role := get $.Values $component -}}
+{{- if $role.bundled -}}
+{{- $roles = add $roles (int (include "hephaestus.cpuMillis" $role.resources.requests.cpu)) -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
+{{- $roles = add $roles (int (include "hephaestus.cpuMillis" .Values.postgresql.backup.resources.requests.cpu)) -}}
+{{- end -}}
+{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
+{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
+{{- $tools := add (int $table.activeTurnSandboxes) (int $table.pooledTurnSandboxes) -}}
+{{- $conversationPods := add (int $table.hephHost.pods) (mul $tools (int $table.turnSandbox.pods)) -}}
+{{- $roles = add $roles (mul $running (add (int $table.hephHost.cpuMillis) (mul $tools (int $table.turnSandbox.cpuMillis)) (mul $conversationPods (int .Values.worker.runtime.podOverhead.cpuMillis)))) -}}
+{{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
+{{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
+{{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}
+{{- $perWorker := div $turns (max 1 $replicas) -}}
+{{- if and .Values.worker.enabled (gt $replicas 0) (lt $perWorker 1) -}}
+{{- fail "Automatic turn admission has no CPU room; reduce reservations or set worker.conversationTurns to 0 to disable turns" -}}
+{{- end -}}
+{{- $perWorker -}}
 {{- else -}}
 {{- .Values.worker.conversationTurns | int -}}
 {{- end -}}

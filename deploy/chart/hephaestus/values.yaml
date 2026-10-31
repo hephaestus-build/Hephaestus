@@ -247,12 +247,12 @@ worker:
   # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
   # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes). The reviews tier's quota follows it.
   reviews: 5
-  # The conversation turns that one worker runs at once: auto, or a number. Each running turn holds a turn
-  # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones. The conversations tier's quota
-  # follows it. The server gets replicas times this as the conversation capacity. While every worker runs
-  # that many turns, a question that could start next says that Hephaestus answers other questions.
-  # docs/admin/runtime-roles.mdx § Conversation turn capacity.
-  conversationTurns: auto
+  # Resident turns per worker. Unprofiled clusters keep eight; the single-node profiles select auto.
+  # Auto divides the declared CPU budget across workers,
+  # less resident role requests and review reservations, at 50m per turn and at most 32 in total.
+  # An explicit count overrides auto. Provider calls still need pool grants; the tools quota stays
+  # at eight assigned plus two warm Pods per worker, independent of resident turns.
+  conversationTurns: 8
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
   # that is still running stops: it is tried again on another worker and spends one of its attempts.

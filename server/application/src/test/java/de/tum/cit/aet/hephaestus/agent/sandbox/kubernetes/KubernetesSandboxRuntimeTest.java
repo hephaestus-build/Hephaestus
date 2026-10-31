@@ -471,7 +471,12 @@ class KubernetesSandboxRuntimeTest {
     @Test
     void shouldStartListAndRemoveTurnSandbox() throws Exception {
         var sandboxes = new KubernetesExecSandboxes(
-                api(), pods, worker, IMAGE, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()));
+                pods,
+                worker,
+                IMAGE,
+                liveWorkers,
+                new SandboxExits(pods, new SimpleMeterRegistry()),
+                mock(KubernetesSandboxCache.class));
         String sandboxId = UUID.randomUUID().toString();
         CompletableFuture<String> created =
                 CompletableFuture.supplyAsync(() -> sandboxes.create(sandboxId, LIMITS), background);
@@ -949,12 +954,12 @@ class KubernetesSandboxRuntimeTest {
                 .isInstanceOf(SandboxInfrastructureException.class)
                 .hasMessageContaining("isolation probe");
         try (var turns = new KubernetesExecSandboxes(
-                api(),
                 unprovedPods,
                 unproved,
                 IMAGE,
                 liveWorkers,
-                new SandboxExits(unprovedPods, new SimpleMeterRegistry()))) {
+                new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
+                mock(KubernetesSandboxCache.class))) {
             assertThatThrownBy(() -> turns.create("turn", LIMITS)).isInstanceOf(SandboxInfrastructureException.class);
         }
         assertThat(api().batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
@@ -1118,7 +1123,12 @@ class KubernetesSandboxRuntimeTest {
         createSandbox("turn-here", KubernetesWorker.KIND_TURN, labels -> labels);
         createSandbox("turn-of-gone-worker", KubernetesWorker.KIND_TURN, KubernetesSandboxRuntimeTest::gone);
         try (var sandboxes = new KubernetesExecSandboxes(
-                api(), pods, worker, IMAGE, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()))) {
+                pods,
+                worker,
+                IMAGE,
+                liveWorkers,
+                new SandboxExits(pods, new SimpleMeterRegistry()),
+                mock(KubernetesSandboxCache.class))) {
             assertThat(sandboxes.list())
                     .extracting(ExecSandboxes.Listed::id, ExecSandboxes.Listed::workerGone)
                     .containsExactlyInAnyOrder(tuple("turn-here", false), tuple("turn-of-gone-worker", true));
