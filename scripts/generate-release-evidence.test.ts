@@ -62,17 +62,15 @@ void describe("the release evidence generator", () => {
 		const images = await evidenceImages();
 		assert.deepEqual(images.map(({ image }) => image).toSorted(), [
 			"agent-pi",
-			"alpine",
 			"application-server",
 			"nats",
 			"postgres",
-			"traefik",
 			"webapp",
 		]);
 		// The upstream half keeps the digest the inventory pins rather than one resolved from a tag:
 		// the release promotes that artefact, and a tag names whatever it points at today.
 		const upstream = images.filter(({ provenance }) => provenance === "upstream");
-		assert.equal(upstream.length, 3);
+		assert.equal(upstream.length, 1);
 		for (const image of upstream) {
 			assert.match(image.indexDigest, /^sha256:[a-f0-9]{64}$/u);
 		}

@@ -26,11 +26,10 @@ void describe("planUpstreamSubjects", () => {
 	void test("covers every upstream image in the committed inventory", async () => {
 		const inventory: unknown = JSON.parse(await readFile("security/release-images.json", "utf8"));
 		const subjects = planUpstreamSubjects(inventory);
-		assert.deepEqual(subjects.map((subject) => subject.image).toSorted(), [
-			"alpine",
-			"nats",
-			"traefik",
-		]);
+		assert.deepEqual(
+			subjects.map((subject) => subject.image),
+			["nats"],
+		);
 		// A tag would resolve to whatever it points at today rather than to the artefact the release
 		// promotes, which is the whole reason the inventory pins digests.
 		for (const subject of subjects) {
