@@ -121,8 +121,8 @@ public class ReviewJobClaimService {
     @Nullable
     ClaimAttempt claimJob(UUID jobId, BooleanSupplier reviewRoom) {
         return transactionTemplate.execute(status -> {
-            // Cancellation and recovery take the parent before its jobs. Locking without starting it keeps a
-            // refused claim from committing a speculative parent transition.
+            // The review service locks the parent before it changes the review, so the claim takes the parent before
+            // the job. Locking without starting it keeps a refused claim from committing a speculative parent transition.
             if (jobRepository.lockParentForQueuedClaim(jobId).isEmpty()) return ClaimOutcome.ALREADY_CLAIMED;
             Optional<ReviewJob> locked = jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now());
             if (locked.isEmpty()) {
@@ -246,7 +246,7 @@ public class ReviewJobClaimService {
             if (poolId != null && callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(poolId);
         }
 
-        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return ClaimOutcome.ALREADY_CLAIMED;
+        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
         Instant claimedAt = Instant.now();
         // The first claim only: a requeued review would sample its submission again, later each time.
         if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
@@ -265,10 +265,23 @@ public class ReviewJobClaimService {
         return new ClaimResult(job, snapshot, itemKind);
     }
 
+    /**
+     * The review was cancelled or has ended, and its cancellation has not reached this job, for example after a
+     * restart. Left queued, the job would come first in every poll and never run.
+     */
+    private TerminalClaim cancelWithParent(ReviewJob job) {
+        job.setStatus(ReviewJobStatus.CANCELLED);
+        job.setCompletedAt(Instant.now());
+        job.setErrorMessage("Its review was cancelled or has ended.");
+        job.setCancellationReason(ReviewJobCancellationReason.CANCELLED_BY_REQUESTER);
+        jobRepository.save(job);
+        return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
+    }
+
     /** Claims an attempt that makes no model call: it withholds what its review still has open, with this cause. */
     private ClaimAttempt claimToWithhold(ReviewJob job, CompositionStop cause) {
         String itemKind = assignments.load(job).getFirst().item().kind().value();
-        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return ClaimOutcome.ALREADY_CLAIMED;
+        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(null);

@@ -504,16 +504,24 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldLeaveTheJobQueuedWhenItsParentWasCancelled() {
+    void shouldCancelTheJobWhenItsParentWasCancelledBeforeTheClaim() {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        // The review's own cancellation never reached this job, as after a restart between its commit and listener.
         jdbc.update("UPDATE review SET status='CANCELLED',completed_at=clock_timestamp(),stop_reason='CANCELLED' WHERE workspace_id=? AND id=?",
                 job.getWorkspaceId(), job.getReviewId());
 
         assertThat(claimService(jobs).claimJob(job.getId(), () -> true))
-                .isEqualTo(ReviewJobClaimService.ClaimOutcome.ALREADY_CLAIMED);
+                .isInstanceOfSatisfying(ReviewJobClaimService.TerminalClaim.class,
+                        terminal -> assertThat(terminal.status()).isEqualTo(ReviewJobStatus.CANCELLED));
 
-        assertUnclaimed(job);
+        var cancelled = jobs.findById(job.getId()).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.CANCELLED_BY_REQUESTER);
+        assertThat(cancelled.getStartedAt()).isNull();
+        assertThat(cancelled.getWorkerId()).isNull();
+        assertThat(cancelled.getLeasedUntil()).isNull();
         assertThat(parentStatus(job)).isEqualTo("CANCELLED");
+        assertThat(jobs.findQueuedIdsStartedFirst(10)).doesNotContain(job.getId());
     }
 
     @Test

@@ -33,6 +33,7 @@ public class KubernetesSandboxQuota {
     private final String runtimeClassName;
     private final String reviewPriorityClass;
     private final AtomicBoolean unreadable = new AtomicBoolean();
+    private final AtomicBoolean unobserved = new AtomicBoolean();
     private final AtomicBoolean full = new AtomicBoolean();
     private final AtomicBoolean tooSmall = new AtomicBoolean();
 
@@ -67,6 +68,13 @@ public class KubernetesSandboxQuota {
         }
         unreadable.set(false);
         int room = fits(quotas, footprint(limits, overhead()), reviewPriorityClass);
+        if (room == SandboxRoom.UNKNOWN_ROOM) {
+            if (unobserved.compareAndSet(false, true)) {
+                log.warn("Sandbox quota reports no usage yet, so reviews wait: namespace={}", namespace);
+            }
+            return room;
+        }
+        unobserved.set(false);
         if (room == 0 && full.compareAndSet(false, true)) {
             log.info("Reviews wait for room in the sandbox quota: namespace={}", namespace);
         } else if (room > 0 && full.compareAndSet(true, false)) {
