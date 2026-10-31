@@ -202,7 +202,14 @@
 		"networkPolicy": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["dns", "gateway", "metrics", "externalEgress", "kubernetesApi"],
+			"required": [
+				"dns",
+				"gateway",
+				"metrics",
+				"traceCollector",
+				"externalEgress",
+				"kubernetesApi"
+			],
 			"properties": {
 				"kubernetesApi": {
 					"type": "object",
@@ -241,6 +248,7 @@
 					}
 				},
 				"metrics": { "$ref": "#/definitions/peer" },
+				"traceCollector": { "$ref": "#/definitions/peer" },
 				"externalEgress": {
 					"type": "object",
 					"additionalProperties": false,

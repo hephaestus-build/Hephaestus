@@ -57,6 +57,13 @@ networkPolicy:
   metrics:
     namespace: ""
     podLabels: {}
+  # The OTLP trace collector in this cluster that the server, worker and webhook send to when
+  # `config.tracing.otlpEnabled` is on, on the port of `config.tracing.otlpEndpoint`. An empty
+  # namespace opens no path. Outside the cluster, only the server and the worker reach a collector,
+  # and only on 443 (externalEgress), so run the collector in the cluster.
+  traceCollector:
+    namespace: ""
+    podLabels: {}
   # Internet egress for the server and the worker: Git providers, OAuth, AI providers.
   externalEgress:
     cidr: 0.0.0.0/0

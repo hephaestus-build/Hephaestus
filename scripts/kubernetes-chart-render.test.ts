@@ -2676,6 +2676,14 @@ await test("values that the chart does not accept fail the render", () => {
 			/networkPolicy\.metrics\.podLabels needs at least one label/u,
 		],
 		[
+			"a whole trace collector namespace",
+			[
+				...layersFor("small"),
+				{ networkPolicy: { traceCollector: { namespace: "observability", podLabels: {} } } },
+			],
+			/networkPolicy\.traceCollector\.podLabels needs at least one label/u,
+		],
+		[
 			"a zero CPU limit",
 			[...layersFor("small"), { server: { resources: { limits: { cpu: "0" } } } }],
 			/cpu/u,
@@ -2849,6 +2857,75 @@ await test("a model endpoint on a private network reaches the server and the wor
 		]);
 		assert.equal(result.ok, false, `${refused.cidr} ${JSON.stringify(refused.ports)} rendered`);
 		assert.match(result.stderr, /modelEndpoints/u, refused.cidr);
+	}
+});
+
+await test("traces reach an in-cluster collector on the endpoint's port, only while tracing is on", () => {
+	const collector = {
+		namespace: "observability",
+		podLabels: { "app.kubernetes.io/name": "otel-collector" },
+	};
+	const layers = (tracing: object, traceCollector: object = collector) => [
+		...layersFor("small"),
+		{ config: { tracing }, networkPolicy: { traceCollector } },
+	];
+	/** The components whose NetworkPolicy opens the collector on `port`, across every policy. */
+	const opened = (tracing: object, port: number, traceCollector?: object) => {
+		const resources = rendered(layers(tracing, traceCollector));
+		const rule = {
+			to: [
+				{
+					namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "observability" } },
+					podSelector: { matchLabels: collector.podLabels },
+				},
+			],
+			ports: [{ port, protocol: "TCP" }],
+		};
+		return resources
+			.filter((resource) => kindOf(resource) === "NetworkPolicy")
+			.filter((policy) =>
+				list(get(policy, "spec", "egress")).some((egress) => isDeepStrictEqual(egress, rule)),
+			)
+			.map((policy) =>
+				["server", "worker", "webhook"].find((component) =>
+					isDeepStrictEqual(
+						get(policy, "spec", "podSelector", "matchLabels"),
+						get(workload(resources, component), "spec", "selector", "matchLabels"),
+					),
+				),
+			)
+			.toSorted((left = "", right = "") => left.localeCompare(right));
+	};
+	const exporters = ["server", "webhook", "worker"];
+	for (const [endpoint, port] of [
+		["http://otel-collector.observability.svc:4318/v1/traces", 4318],
+		["http://otel-collector.observability.svc:04318/v1/traces", 4318],
+		["http://otel-collector.observability.svc/v1/traces", 80],
+		["https://otel-collector.observability.svc/v1/traces", 443],
+		["http://[fd00::1]:4318/v1/traces", 4318],
+		["http://[fd00::1]/v1/traces", 80],
+	] as const) {
+		assert.deepEqual(
+			opened({ otlpEnabled: true, otlpEndpoint: endpoint }, port),
+			exporters,
+			endpoint,
+		);
+	}
+	const endpoint = "http://otel-collector.observability.svc:4318/v1/traces";
+	assert.deepEqual(opened({ otlpEnabled: false, otlpEndpoint: endpoint }, 4318), []);
+	assert.deepEqual(
+		opened({ otlpEnabled: true, otlpEndpoint: endpoint }, 4318, { namespace: "", podLabels: {} }),
+		[],
+	);
+	for (const port of ["0", "65536"]) {
+		const result = render(
+			layers({
+				otlpEnabled: true,
+				otlpEndpoint: `http://otel-collector.observability.svc:${port}/v1/traces`,
+			}),
+		);
+		assert.equal(result.ok, false, port);
+		assert.match(result.stderr, /otlpEndpoint names a port outside 1-65535/u);
 	}
 });
 

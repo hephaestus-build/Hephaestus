@@ -372,6 +372,26 @@ readinessProbe:
 {{- end -}}
 {{- end -}}
 
+{{/* OTLP traces to an in-cluster collector, on the port that the endpoint names. */}}
+{{- define "hephaestus.policy.traceEgress" -}}
+{{- $collector := .Values.networkPolicy.traceCollector -}}
+{{- if and $collector.namespace (not $collector.podLabels) -}}
+{{- fail "networkPolicy.traceCollector.podLabels needs at least one label: a namespace alone would admit every pod in it." -}}
+{{- end -}}
+{{- if and $collector.namespace .Values.config.tracing.otlpEnabled -}}
+{{- $endpoint := urlParse .Values.config.tracing.otlpEndpoint -}}
+{{- $port := regexFind ":[0-9]+$" $endpoint.host | trimPrefix ":" | default (ternary "443" "80" (eq $endpoint.scheme "https")) | atoi -}}
+{{- if or (lt $port 1) (gt $port 65535) -}}
+{{- fail "config.tracing.otlpEndpoint names a port outside 1-65535." -}}
+{{- end -}}
+- to:
+    {{- include "hephaestus.peer" $collector | nindent 4 }}
+  ports:
+    - port: {{ $port }}
+      protocol: TCP
+{{- end -}}
+{{- end -}}
+
 {{/* Model calls go out from the server (connection test) and the worker (LLM proxy); both must agree. */}}
 {{- define "hephaestus.env.modelEgress" -}}
 - name: HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS

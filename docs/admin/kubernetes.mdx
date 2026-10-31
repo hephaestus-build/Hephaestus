@@ -240,6 +240,7 @@ The chart then opens only these paths:
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
 | All pods | `networkPolicy.dns` pods | 53 |
 | `networkPolicy.metrics` pods | All application roles | 9090 |
+| `server`, `worker`, `webhook`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
 Turn sandboxes get no other path.
@@ -250,7 +251,7 @@ Set `networkPolicy.workerGatewayPorts` to the container ports of the Gateway Pod
 
 `networkPolicy.gateway` must name the namespace and at least one pod label of the Gateway data plane.
 A namespace without labels would admit every pod in it, so the chart refuses it.
-The same rule applies to `networkPolicy.metrics` when you set its namespace.
+The same rule applies to `networkPolicy.metrics` and `networkPolicy.traceCollector` when you set their namespace.
 
 ### A model endpoint on the cluster's own ingress
 

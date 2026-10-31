@@ -763,7 +763,15 @@ roles whose spans you want to collect:
 | `TRACING_OTLP_ENDPOINT`        | `http://localhost:4318/v1/traces` | Full OTLP HTTP receiver URL, reachable from the application container.         |
 | `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled. Use `1.0` for a dedicated evaluation instance. |
 
-The supported Compose stack forwards these settings to server, worker and webhook containers.
+The chart sets them on the server, worker and webhook from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
+The chart's network policy blocks a collector inside the cluster.
+Set `networkPolicy.traceCollector` to the namespace and pod labels of that collector ([Network policy](./kubernetes.mdx#network-policy)).
+The roles can then reach it on the port that `config.tracing.otlpEndpoint` names.
+
+Run the collector in the cluster.
+Outside the cluster, only the server and the worker reach a collector, and only on port 443, through `networkPolicy.externalEgress`.
+The webhook has no path to an external collector, so its traces are lost.
+
 Each span carries the running version as `service.version` and the deployment environment as `deployment.environment.name`.
 For authenticated collectors, configure Spring Boot's
 `management.opentelemetry.tracing.export.otlp.headers` through protected deployment configuration.
