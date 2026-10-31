@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -32,10 +33,16 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             long poolId,
             String workerId,
             String callClass,
-            long workspaceId,
+            @Nullable Long workspaceId,
             UUID sourceId,
             int attempt,
             String state) {}
+
+    @Query(
+            value =
+                    "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state='ACTIVE' AND call_class='PRODUCT_FEEDBACK'",
+            nativeQuery = true)
+    long countActiveProductFeedback(@Param("poolId") long poolId);
 
     @Modifying
     @Query(value = """
@@ -75,7 +82,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     Optional<UUID> waitingClaim(
             @Param("poolId") long poolId,
             @Param("sourceId") UUID sourceId,
-            @Param("workspaceId") long workspaceId,
+            @Param("workspaceId") @Nullable Long workspaceId,
             @Param("attempt") int attempt);
 
     @Modifying
@@ -92,6 +99,9 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Query(value = """
             SELECT q.id FROM llm_call_permit q
             WHERE q.pool_id=:poolId AND q.state IN ('WAITING','CLAIM_WAITING') AND (q.call_class='TURN')=:interactive
+              AND (q.call_class<>'PRODUCT_FEEDBACK' OR NOT EXISTS (
+                SELECT 1 FROM llm_call_permit h WHERE h.pool_id=q.pool_id
+                  AND h.state IN ('WAITING','CLAIM_WAITING') AND h.call_class<>'PRODUCT_FEEDBACK'))
             ORDER BY
               (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive) NULLS FIRST,
               (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive AND (g.call_class='COMPOSITION')=(q.call_class='COMPOSITION')) NULLS FIRST,
@@ -109,7 +119,9 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
               AND attempt=:attempt AND state='CLAIM_WAITING'
             """, nativeQuery = true)
     void withdrawClaim(
-            @Param("workspaceId") long workspaceId, @Param("sourceId") UUID sourceId, @Param("attempt") int attempt);
+            @Param("workspaceId") @Nullable Long workspaceId,
+            @Param("sourceId") UUID sourceId,
+            @Param("attempt") int attempt);
 
     @Modifying
     @Query(
@@ -131,7 +143,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             @Param("sourceId") UUID sourceId,
             @Param("attempt") int attempt,
             @Param("workerId") String workerId,
-            @Param("workspaceId") long workspaceId);
+            @Param("workspaceId") @Nullable Long workspaceId);
 
     @Modifying
     @Query(
@@ -179,7 +191,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     List<UUID> releaseOtherReservations(
             @Param("requestedPool") long requestedPool,
             @Param("workerId") String workerId,
-            @Param("workspaceId") long workspaceId,
+            @Param("workspaceId") @Nullable Long workspaceId,
             @Param("sourceId") UUID sourceId,
             @Param("attempt") int attempt);
 

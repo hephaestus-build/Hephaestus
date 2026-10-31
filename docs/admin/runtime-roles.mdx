@@ -520,6 +520,11 @@ The reserve is never lent to background work.
 Both the total limit and the background limit apply independently.
 A finite pool must leave background capacity above zero.
 
+Product feedback uses the lowest call class, `PRODUCT_FEEDBACK`.
+It starts only when no other class waits in that endpoint pool.
+At most one drafting call can be active in each pool, and it cannot use the interactive reserve.
+A later call does not revoke an active draft: it can wait for that draft's transport to close.
+
 A fair queue gives workspaces, composition, and individual attempts turns before repeated grants to a busy peer.
 Retry and backfill origins receive no extra priority.
 A review claim reserves its first grant before capture or Pod creation.

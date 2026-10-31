@@ -91,7 +91,7 @@ public class LlmCallPermits {
 
     /** The exact attempt fence, including its tenant, for a pending call or claim reservation. */
     public record Caller(
-            long workspaceId, UUID sourceId, int attempt, LlmModelResolver.@Nullable ConnectionRef model) {}
+            @Nullable Long workspaceId, UUID sourceId, int attempt, LlmModelResolver.@Nullable ConnectionRef model) {}
 
     // Artifact profiles expose controllers without a migrated database or worker activity.
     @EventListener(
@@ -119,6 +119,8 @@ public class LlmCallPermits {
     /** No provider call starts without a committed grant, and an ended caller never receives one. */
     public @Nullable Permit acquire(
             long poolId, LlmCallClass callClass, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
+        if ((caller.workspaceId() == null) != (callClass == LlmCallClass.PRODUCT_FEEDBACK))
+            throw new IllegalArgumentException("Product feedback calls have no workspace; all other calls require one");
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Model calls must acquire capacity outside a database transaction");
         if (ended.getAsBoolean() || expired(deadline)) return null;
@@ -234,11 +236,14 @@ public class LlmCallPermits {
 
     /** A claim held by another admission check must not strand the pool's fair queue. */
     public void withdrawClaim(Caller caller) {
+        if (caller.workspaceId() == null) throw new IllegalArgumentException("Review claims require a workspace");
         rows.withdrawClaim(caller.workspaceId(), caller.sourceId(), caller.attempt());
     }
 
     /** Called inside the review claim transaction, before any Pod can be created. */
     public ClaimReservation reserve(long poolId, LlmCallClass callClass, Caller caller) {
+        if (caller.workspaceId() == null || callClass == LlmCallClass.PRODUCT_FEEDBACK)
+            throw new IllegalArgumentException("Only workspace review calls can reserve capacity");
         LlmCallPoolRepository.Admission pool = pools.lockAdmission(poolId).orElseThrow();
         if (!samePool(poolId, caller)) return new ClaimReservation(false, null);
         rows.prune(poolId, properties.permitLease().toSeconds());
@@ -315,6 +320,7 @@ public class LlmCallPermits {
 
     private boolean room(long poolId, LlmCallPoolRepository.Admission pool, LlmCallClass callClass) {
         if (pool.getCooldownMillis() > 0) return false;
+        if (callClass == LlmCallClass.PRODUCT_FEEDBACK && rows.countActiveProductFeedback(poolId) >= 1) return false;
         Integer maximum = pool.getMaxConcurrentCalls();
         if (maximum != null
                 && (rows.countActive(poolId) >= maximum

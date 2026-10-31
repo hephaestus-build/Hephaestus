@@ -115,7 +115,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 try (var replacement = Objects.requireNonNull(survivor.acquire(
                         poolId,
                         LlmCallClass.EVENT,
-                        new LlmCallPermits.Caller(2, UUID.randomUUID(), 0, null),
+                        new LlmCallPermits.Caller(2L, UUID.randomUUID(), 0, null),
                         () -> false,
                         Instant.now().plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
                     Duration age = Duration.between(lastRenewal, databaseNow());
@@ -181,7 +181,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 try (var permit = Objects.requireNonNull(permits.acquire(
                                 Long.parseLong(args[0]),
                                 LlmCallClass.EVENT,
-                                new LlmCallPermits.Caller(1, UUID.randomUUID(), 0, null),
+                                new LlmCallPermits.Caller(1L, UUID.randomUUID(), 0, null),
                                 () -> false,
                                 Instant.now().plusSeconds(10)));
                         var call = new Socket(InetAddress.getLoopbackAddress(), Integer.parseInt(args[1]))) {

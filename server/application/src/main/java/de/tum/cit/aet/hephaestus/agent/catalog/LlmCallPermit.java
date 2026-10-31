@@ -45,8 +45,8 @@ public class LlmCallPermit {
     @Column(name = "renewed_at", nullable = false)
     private Instant renewedAt;
 
-    @Column(name = "workspace_id", nullable = false)
-    private long workspaceId;
+    @Column(name = "workspace_id")
+    private @Nullable Long workspaceId;
 
     @Column(name = "source_id", nullable = false)
     private UUID sourceId;
