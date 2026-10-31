@@ -117,7 +117,7 @@ void test("diagnostics cannot change or delay the required workflow verdict", ()
 	const gate = workflow.getIn(["jobs", "all-ci-passed"]);
 	assert.ok(isMap(gate));
 	assert.equal(gate.get("continue-on-error"), undefined);
-	assert.deepEqual(jsonOf(gate.get("permissions")), { statuses: "write" });
+	assert.deepEqual(jsonOf(gate.get("permissions")), { actions: "read", statuses: "write" });
 	const gateSteps = gate.get("steps");
 	assert.ok(isSeq(gateSteps));
 	assert.deepEqual(

@@ -286,10 +286,11 @@ function* cases(): Generator<Case> {
  */
 function digestSource(output: string): string {
 	const called = String(docker.getIn(["on", "workflow_call", "outputs", output, "value"]));
-	const inner = /^\$\{\{ jobs\.images\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(called)?.groups?.name;
+	const inner = /^\$\{\{ jobs\.manifests\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(called)?.groups
+		?.name;
 	assert.ok(
 		inner !== undefined,
-		`ci-docker-build.yml's ${output} is not an output of its images job: ${called}`,
+		`ci-docker-build.yml's ${output} is not an output of its manifests job: ${called}`,
 	);
 	const value = String(reusableBuild.getIn(["on", "workflow_call", "outputs", inner, "value"]));
 	const job = /^\$\{\{ jobs\.(?<job>[\w-]+)\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(value)?.groups;
@@ -328,8 +329,8 @@ const CONSUMERS = ["Kubernetes", "Supported-host-smoke", "Release-preflight"];
 // The detect-changes outputs that these jobs read; evaluating only those keeps the test fast.
 const READ = new Set(
 	[
-		...["server-package", "vulnerability-database", "Docker", ...CONSUMERS].map((name) =>
-			String(cicd.getIn(["jobs", name, "if"])),
+		...["server-package", "vulnerability-database", "Docker", "Kubernetes-chart", ...CONSUMERS].map(
+			(name) => String(cicd.getIn(["jobs", name, "if"])),
 		),
 		JSON.stringify(cicd.getIn(["jobs", "Docker", "with"])),
 	]
@@ -477,7 +478,14 @@ function run(entry: Case) {
 		evaluate(
 			reusableBuild.getIn(["jobs", "build", "if"]),
 			["inputs", "github"],
-			dictionary({ inputs: { ...selected, "reuse-images": reuseImages }, github }),
+			dictionary({
+				inputs: {
+					...selected,
+					"reuse-images": reuseImages,
+					phase: docker.getIn(["jobs", "images", "with", "phase"]),
+				},
+				github,
+			}),
 		) === "true";
 	const reuseList: unknown = JSON.parse(reuseImages);
 	assert.ok(Array.isArray(reuseList));
@@ -518,6 +526,7 @@ function run(entry: Case) {
 			]),
 		),
 	};
+	needs["Kubernetes-chart"] = { result: job("Kubernetes-chart") ? "success" : "skipped" };
 	return {
 		present,
 		published,

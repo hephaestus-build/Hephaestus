@@ -66,7 +66,8 @@ void test("artifact checks have no registry publishing permissions", async () =>
 	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const permissions = workflow.getIn(["jobs", "Build", "permissions"]);
 	assert.ok(isMap(permissions));
-	assert.deepEqual(permissions.toJSON(), { contents: "read", checks: "write" });
+	// This call forwards cancellation permission; the artifact workers keep their own narrow scopes.
+	assert.deepEqual(permissions.toJSON(), { actions: "write", contents: "read", checks: "write" });
 });
 
 const repository = "hephaestus-build/Hephaestus";
@@ -836,10 +837,13 @@ void test("a reused image skips only building, merging and attesting", async () 
 			name,
 		);
 	}
-	assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");
+	const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+	const dependencies = caller.getIn(["jobs", "manifests", "needs"]);
+	assert.ok(isSeq(dependencies));
+	assert.deepEqual(dependencies.toJSON(), ["images"]);
 	assert.equal(
 		workflow.getIn(["jobs", "merge", "if"]),
-		`\${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}`,
+		`\${{ inputs.phase == 'merge' && inputs.publish && !cancelled() }}`,
 	);
 	// The queue run already scanned the image it built, in the build this skips, and its verdict
 	// gated the merge.
