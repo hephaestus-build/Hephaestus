@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+	failedJobNames,
 	isFastTier,
 	isFullVerification,
 	isLatencySample,
@@ -15,6 +16,21 @@ import {
 	renderLatencyBudget,
 	selectLatencyRuns,
 } from "./report-ci-latency.ts";
+
+void test("a cancelled integration sibling does not turn a unit failure into a queue-tier catch", () => {
+	const failedJobs = failedJobNames([
+		{ name: "Test (unit) / App Server: Unit and architecture", conclusion: "failure" },
+		{ name: "Test (providers) / App Server: Integration (providers)", conclusion: "cancelled" },
+	]);
+	assert.equal(queueTierFailures([{ conclusion: "failure", failedJobs }]).queueTierFailed, 0);
+	const integrationFailure = failedJobNames([
+		{ name: "Test (providers) / App Server: Integration (providers)", conclusion: "failure" },
+	]);
+	assert.equal(
+		queueTierFailures([{ conclusion: "failure", failedJobs: integrationFailure }]).queueTierFailed,
+		1,
+	);
+});
 
 void test("sampling takes first-attempt successful merge groups inside the window", () => {
 	const now = Date.parse("2026-01-30T00:00:00Z");

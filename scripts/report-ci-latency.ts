@@ -227,10 +227,10 @@ async function jobsOf(repository: string, run: Record<string, unknown>, attempt:
 	};
 }
 
-function failedJobNames(jobs: readonly unknown[]): string[] {
+export function failedJobNames(jobs: readonly unknown[]): string[] {
 	return jobs
 		.map((entry) => asRecord(entry, "job"))
-		.filter((job) => job.conclusion === "failure" || job.conclusion === "cancelled")
+		.filter((job) => job.conclusion === "failure")
 		.map((job) => asString(job.name, "job name"));
 }
 
