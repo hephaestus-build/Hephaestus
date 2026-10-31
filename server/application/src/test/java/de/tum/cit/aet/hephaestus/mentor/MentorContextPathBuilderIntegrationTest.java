@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,6 @@ import tools.jackson.databind.node.ObjectNode;
 
 class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    private static final String WORKER = "worker-path";
     private static final Duration LEASE = Duration.ofMinutes(5);
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
 
@@ -54,7 +54,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
 
     /** Runs one turn to its end: the host's user entry, then {@code answers}, ended as {@code outcome}. */
     private MentorTurn run(MentorTurnService.Submission submission, MentorTurn.Status outcome, String... answers) {
-        MentorTurn turn = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn turn = turns.claimNext(LEASE).orElseThrow();
         assertThat(turn.getId()).isEqualTo(submission.turn().getId());
         List<JsonNode> appended = new ArrayList<>();
         appended.add(MentorLedgerFixtures.user(
@@ -64,10 +64,11 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
             appended.add(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), answer));
         }
         turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(outcome, appended, null, null));
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(outcome, appended, null, null));
         return turn;
     }
 
@@ -86,7 +87,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
 
     private MentorTurn nextTurn() {
         MentorTurnService.Submission next = ask(main, "Next question");
-        MentorTurn turn = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn turn = turns.claimNext(LEASE).orElseThrow();
         assertThat(turn.getId()).isEqualTo(next.turn().getId());
         return turn;
     }
@@ -149,7 +150,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                 workspace.getId(),
                 main.getId(),
                 new MentorTurnService.Question(MentorTurn.Surface.SLACK, "From Slack", "slack:T:D:9.0", "9.0", null));
-        MentorTurn turn = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn turn = turns.claimNext(LEASE).orElseThrow();
 
         MentorContextPathBuilder.TurnContext context = paths.forTurn(workspace.getId(), turn.getId(), BERLIN);
 
@@ -218,7 +219,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                 main.getId(),
                 summary("Main so far", MentorLedgerFixtures.piIdOf(laterQuestion), laterTurn.getId()));
         MentorTurnService.Submission inThread = ask(thread, "Thread question");
-        MentorTurn threadTurn = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn threadTurn = turns.claimNext(LEASE).orElseThrow();
 
         MentorContextPathBuilder.TurnContext context = paths.forTurn(workspace.getId(), threadTurn.getId(), BERLIN);
 
@@ -261,12 +262,13 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
     @Test
     void shouldOmitADeletedQuestionButKeepAnErasedToolResultAsASkeletonWhenEntriesAreRedacted() {
         MentorTurnService.Submission submission = ask(main, "Secret question");
-        MentorTurn turn = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn turn = turns.claimNext(LEASE).orElseThrow();
         turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
                                 MentorLedgerFixtures.toolCall(
@@ -279,8 +281,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                                         "call-1",
                                         "fetch_context",
                                         "colleague data",
-                                        false)),
-                        null,
+                                        false)), null,
                         null));
         MentorEntry toolResult = entryRepository
                 .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(

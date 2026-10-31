@@ -14,9 +14,8 @@ public interface OrphanedJobRef {
     int getAttempt();
 
     /**
-     * The worker the job is RUNNING-owned by. Threaded back into the requeue CAS so the sweeper reclaims
-     * the row only while it is still owned by the worker it judged dead, never a sibling that has since
-     * legitimately re-claimed it.
+     * The lease of the expired attempt. Threaded back into the requeue CAS so the sweeper reclaims the row only while
+     * it still carries the lease it judged expired, never a later claim of the same job.
      */
-    String getWorkerId();
+    UUID getLeaseId();
 }

@@ -8,7 +8,10 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,8 +27,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // Heartbeats must come from the executing JVM. Every worker beats, also one that runs no practice reviews: the
-// Kubernetes sandboxes of a worker that no longer beats are removed. Each beat also renews the lease of every review
-// attempt that this worker runs, and stops each local attempt whose row this worker no longer runs.
+// Kubernetes sandboxes of a worker that no longer beats are removed. Each beat also renews the lease of each review
+// attempt that runs here, by the attempt's own lease, and stops each local attempt whose lease is gone.
 @Component
 @ConditionalOnWorkerRole
 @WorkspaceAgnostic("Fleet-wide worker liveness; not workspace-scoped.")
@@ -34,7 +37,6 @@ public class WorkerLivenessReporter {
     private static final Logger log = LoggerFactory.getLogger(WorkerLivenessReporter.class);
 
     private final WorkerRegistryRepository repository;
-    private final ReviewJobRepository jobs;
     private final TransactionTemplate transactionTemplate;
     private final Optional<ReviewJobExecutor> executor;
     private final Duration interval;
@@ -55,14 +57,12 @@ public class WorkerLivenessReporter {
 
     public WorkerLivenessReporter(
             WorkerRegistryRepository repository,
-            ReviewJobRepository jobs,
             TransactionTemplate transactionTemplate,
             Optional<ReviewJobExecutor> executor,
             AgentProperties agentProperties,
             WorkerProperties workerProperties,
             MeterRegistry meterRegistry) {
         this.repository = repository;
-        this.jobs = jobs;
         this.transactionTemplate = transactionTemplate;
         this.executor = executor;
         this.interval = agentProperties.heartbeatInterval();
@@ -90,16 +90,17 @@ public class WorkerLivenessReporter {
     }
 
     /**
-     * One heartbeat: this worker's registry row, and the leases of the review attempts that it runs. A cancel, a
+     * One heartbeat: this worker's registry row, and the lease of each review attempt that runs here. A cancel, a
      * requeue or a reap ends an attempt on its row alone; the proxy refuses its calls at once, and this beat then stops
-     * its sandbox.
+     * its sandbox. A beat that fails stops nothing: it does not know which leases are gone.
      */
     void beat() {
+        Map<UUID, ReviewJobExecutor.LocalAttempt> ended = Map.of();
         try {
-            transactionTemplate.executeWithoutResult(s -> {
+            ended = Objects.requireNonNull(transactionTemplate.execute(s -> {
                 repository.heartbeat(workerId);
-                jobs.renewLeases(workerId, AgentProperties.WORKER_LEASE_TTL.toSeconds());
-            });
+                return executor.map(ReviewJobExecutor::renewLeases).orElse(Map.of());
+            }));
             if (consecutiveFailures > 0) {
                 log.info(
                         "Worker liveness heartbeat recovered after {} failure(s): workerId={}",
@@ -118,7 +119,9 @@ public class WorkerLivenessReporter {
                     workerId,
                     e.getClass().getSimpleName());
         }
-        executor.ifPresent(this::stopEndedAttempts);
+        if (ended.isEmpty()) return;
+        Map<UUID, ReviewJobExecutor.LocalAttempt> lost = ended;
+        executor.ifPresent(running -> stopEndedAttempts(running, lost));
     }
 
     /**
@@ -126,11 +129,11 @@ public class WorkerLivenessReporter {
      * and a slow backend must neither delay the next lease renewal nor count as a failed heartbeat. A sweep still
      * running skips this beat's.
      */
-    private void stopEndedAttempts(ReviewJobExecutor executor) {
+    private void stopEndedAttempts(ReviewJobExecutor executor, Map<UUID, ReviewJobExecutor.LocalAttempt> ended) {
         if (!stopping.compareAndSet(false, true)) return;
         stopper.execute(() -> {
             try {
-                executor.stopEndedAttempts();
+                executor.stopEndedAttempts(ended);
             } catch (RuntimeException e) {
                 log.warn(
                         "Stopping the sandboxes of ended attempts failed: workerId={}, error={}",

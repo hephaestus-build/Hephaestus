@@ -477,7 +477,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             ReviewJob job = recorded.get();
             if (!ResultAdmissionService.isAdmitted(job)
                     || job.getAttempt() != identity.attempt()
-                    || !identity.workerId().equals(job.getWorkerId())) return;
+                    || !identity.leaseId().equals(job.getLeaseId())) return;
             // Removed now under the runtime's shared lease, or a new exclusive one. A sweep or an erasure that
             // holds the job exclusively removes admitted bytes itself.
             Path root = directory(job);
@@ -501,7 +501,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * unreadable file, leaves nothing to retain rather than a part.
      */
     public Optional<Map<String, byte[]>> originalCompositionInputs(ResultAdmissionService.AdmissionIdentity identity) {
-        Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.workerId());
+        Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.leaseId());
         try {
             var files = new TreeMap<String, byte[]>();
             byte[] index = Files.readAllBytes(regularFile(root, SandboxLayout.MANIFEST_PATH));
@@ -624,7 +624,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
             long workspaceId,
             UUID jobId,
             int attempt,
-            String workerId,
+            UUID leaseId,
             String image,
             @Nullable String model,
             @Nullable String promptDigest,
@@ -640,12 +640,12 @@ public class JobEvidenceFiles implements SandboxResultListener {
         var launched = jobs.findById(jobId)
                 .filter(job -> job.getStatus() == ReviewJobStatus.RUNNING
                         && job.getAttempt() == attempt
-                        && job.getWorkerId() != null)
+                        && job.getLeaseId() != null)
                 .map(job -> new LaunchedAttempt(
                         job.getWorkspaceId(),
                         jobId,
                         attempt,
-                        Objects.requireNonNull(job.getWorkerId()),
+                        Objects.requireNonNull(job.getLeaseId()),
                         image,
                         job.getConfigSnapshot() == null
                                 ? null
@@ -692,10 +692,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
             // A delayed upload of an earlier attempt finds the job requeued under another attempt or owner.
             boolean owned = jobs.findByIdAndWorkspaceId(launched.jobId(), launched.workspaceId())
                     .filter(job -> job.getAttempt() == launched.attempt()
-                            && launched.workerId().equals(job.getWorkerId()))
+                            && launched.leaseId().equals(job.getLeaseId()))
                     .isPresent();
             if (!owned) return;
-            Path root = directory(launched.workspaceId(), launched.jobId(), launched.attempt(), launched.workerId());
+            Path root = directory(launched.workspaceId(), launched.jobId(), launched.attempt(), launched.leaseId());
             Path trace = root.resolveSibling(root.getFileName() + TRACE_SUFFIX);
             EvidenceFolderLease.writeAsRuntime(layout.root(), launched.workspaceId(), launched.jobId(), () -> {
                 var custody = personCopies.traceCustody(launched.jobId(), launched.workspaceId(), launched.attempt());
@@ -922,7 +922,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
         if (recorded.isEmpty() || !matches(root, recorded.get())) return;
         ReviewJob job = recorded.get();
         jobs.expireCaptureInventory(
-                job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId()));
+                job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId()));
     }
 
     private void cleanStaleGitSpool() {
@@ -964,7 +964,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     private boolean matches(Path root, ReviewJob job) {
-        return job.getWorkerId() != null && directory(job).equals(root);
+        return job.getLeaseId() != null && directory(job).equals(root);
     }
 
     private static boolean admitted(ReviewJob job) {
@@ -1003,15 +1003,16 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     private Path directory(ReviewJob job) {
-        String worker = Objects.requireNonNull(job.getWorkerId(), "Attempt has no owning worker");
-        return directory(job.getWorkspaceId(), job.getId(), job.getAttempt(), worker);
+        UUID lease = Objects.requireNonNull(job.getLeaseId(), "Attempt has no lease");
+        return directory(job.getWorkspaceId(), job.getId(), job.getAttempt(), lease);
     }
 
-    private Path directory(long workspaceId, UUID jobId, int attempt, String worker) {
+    private Path directory(long workspaceId, UUID jobId, int attempt, UUID lease) {
         return layout.jobsRoot()
                 .resolve(Long.toString(workspaceId))
                 .resolve(jobId.toString())
-                .resolve(attempt + "-" + ProvenanceDigest.sha256Hex(worker.getBytes(StandardCharsets.UTF_8)));
+                .resolve(attempt + "-"
+                        + ProvenanceDigest.sha256Hex(lease.toString().getBytes(StandardCharsets.UTF_8)));
     }
 
     /**

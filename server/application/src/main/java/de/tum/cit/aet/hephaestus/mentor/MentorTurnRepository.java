@@ -76,6 +76,20 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<MentorTurn> findActiveByWorkspaceIdAndSurface(
             @Param("workspaceId") Long workspaceId, @Param("surface") MentorTurn.Surface surface);
 
+    /** One database-clock read of the token's complete live attempt fence. */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM mentor_turn
+                WHERE id = :id AND workspace_id = :workspaceId AND attempt = :attempt
+                  AND lease_id = :leaseId AND status = 'RUNNING' AND leased_until > clock_timestamp()
+            )
+            """, nativeQuery = true)
+    boolean hasLiveLease(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("leaseId") UUID leaseId);
+
     /** Locks the row, so a state change reads the proxy's latest totals and the proxy waits for it. */
     @WorkspaceAgnostic("Locks by primary key; callers hold the id from a workspace-scoped read or a lease")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -245,20 +259,23 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     }
 
     /**
-     * The running attempt that this worker holds, read without a lock or a write: a partial answer only checks the
+     * The running attempt that holds this live lease, read without a lock or a write: a partial answer only checks the
      * lease, because memory alone keeps it ({@link MentorTurnProgress}).
      *
-     * @return the attempt, or empty when it no longer runs on {@code workerId}
+     * @return the attempt, or empty when the attempt no longer holds its live lease
      */
     @WorkspaceAgnostic("The worker holds the attempt's lease; the statement returns the turn's workspace")
     @Query(value = """
             SELECT workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
               FROM mentor_turn
-             WHERE id = :id AND attempt = :attempt AND worker_id = :workerId
-               AND status = 'RUNNING' AND leased_until IS NOT NULL
+             WHERE workspace_id = :workspaceId AND id = :id AND attempt = :attempt AND lease_id = :leaseId
+               AND status = 'RUNNING' AND leased_until > clock_timestamp()
             """, nativeQuery = true)
     Optional<RunningAttempt> findRunningAttempt(
-            @Param("id") UUID id, @Param("attempt") int attempt, @Param("workerId") String workerId);
+            @Param("workspaceId") long workspaceId,
+            @Param("id") UUID id,
+            @Param("attempt") int attempt,
+            @Param("leaseId") UUID leaseId);
 
     /**
      * Adds one proxied call to the attempt that made it. The fence drops a call that arrives after the attempt
@@ -276,7 +293,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                    t.reasoningTokens = t.reasoningTokens + :#{#call.reasoningTokens()},
                    t.cachedTokens = t.cachedTokens + :#{#call.cacheReadTokens()},
                    t.cacheWriteTokens = t.cacheWriteTokens + :#{#call.cacheWriteTokens()}
-             WHERE t.id = :id AND t.attempt = :attempt AND t.leasedUntil IS NOT NULL
+             WHERE t.id = :id AND t.attempt = :attempt AND t.leasedUntil > CURRENT_TIMESTAMP
                AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
                                 de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED)
             """)

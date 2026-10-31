@@ -220,8 +220,7 @@ class MentorLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
             awaitListening();
             // The suite's deployment has one Hephaestus slot (application-test.yml), and a started turn takes it.
             submit(colleague, "A colleague's question");
-            assertThat(turns.claimNext("worker-heph-live", Duration.ofMinutes(5)))
-                    .isPresent();
+            assertThat(turns.claimNext(Duration.ofMinutes(5))).isPresent();
 
             MentorTurnService.Submission waiting = submit(developer, "Is Hephaestus free?");
             MentorTurnService.Submission followUp = submit(developer, "And after that?");

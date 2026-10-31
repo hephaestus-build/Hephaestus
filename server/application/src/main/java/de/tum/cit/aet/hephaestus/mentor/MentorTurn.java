@@ -123,8 +123,8 @@ public class MentorTurn implements Persistable<UUID> {
     private int attempt;
 
     @Nullable
-    @Column(name = "worker_id", length = 128)
-    private String workerId;
+    @Column(name = "lease_id")
+    private UUID leaseId;
 
     @Nullable
     @Column(name = "leased_until")
@@ -236,10 +236,10 @@ public class MentorTurn implements Persistable<UUID> {
         return leasedUntil != null && (status == Status.RUNNING || status == Status.STOPPED);
     }
 
-    void start(String worker, Instant now, Instant leaseEnd) {
+    void start(Instant now, Instant leaseEnd) {
         this.status = Status.RUNNING;
         this.attempt++;
-        this.workerId = worker;
+        this.leaseId = UUID.randomUUID();
         this.leasedUntil = leaseEnd;
         this.startedAt = now;
         this.admission = null;
@@ -290,6 +290,7 @@ public class MentorTurn implements Persistable<UUID> {
         }
         this.error = status == Status.FAILED ? reason : null;
         this.leasedUntil = null;
+        this.leaseId = null;
     }
 
     /** Records why a {@code FAILED} turn failed, for the operator; a turn in any other state records nothing. */
@@ -309,7 +310,7 @@ public class MentorTurn implements Persistable<UUID> {
     void requeue(Instant now) {
         this.status = Status.QUEUED;
         this.queuedAt = now;
-        this.workerId = null;
+        this.leaseId = null;
         this.leasedUntil = null;
         this.startedAt = null;
         this.admission = null;

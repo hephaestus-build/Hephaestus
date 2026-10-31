@@ -123,7 +123,7 @@ The renewal tick has a thread of its own (`HephHostConfiguration.hephTurnTicks`)
 No sandbox call runs on that thread, so a stalled Kubernetes API cannot expire the lease of a turn that runs well.
 Each host call checks that the attempt runs on this worker (`MentorLeaseLostException`).
 The worker knows that without a read: a lost lease, the end, and a lost host remove the attempt.
-Each write of the attempt is also conditional on the lease, the attempt, and the worker.
+Each write of the attempt is also conditional on the attempt and its lease.
 
 The end is the only write of the turn's entries.
 An attempt that crashes or loses its lease stores no entries.

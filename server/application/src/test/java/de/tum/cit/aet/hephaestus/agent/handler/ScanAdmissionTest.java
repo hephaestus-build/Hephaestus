@@ -47,9 +47,12 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +67,8 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class ScanAdmissionTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private static final SourceKind SOURCE = new SourceKind("scm.repository.tree");
     private static final ItemKind KIND = new ItemKind("scm.file");
     private static final String COMMIT = "c".repeat(40);
@@ -133,7 +138,8 @@ class ScanAdmissionTest extends BaseUnitTest {
 
     @BeforeEach
     void setup() {
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         when(copies.finishCapture(job)).thenReturn(() -> {});
         var assigned = assignment();
         when(assignments.admissible(job)).thenReturn(List.of(assigned));

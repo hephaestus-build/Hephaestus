@@ -25,11 +25,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,6 +43,8 @@ import org.mockito.Answers;
 import tools.jackson.databind.json.JsonMapper;
 
 class JobEvidenceReadReceiptsTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private static final SourceKind SOURCE = new SourceKind("scm.repository.tree");
     private static final String WITNESS = "repository/HEAD";
     private static final byte[] BYTES = "Captured text\n".getBytes(StandardCharsets.UTF_8);
@@ -64,7 +69,8 @@ class JobEvidenceReadReceiptsTest extends BaseUnitTest {
 
     private ReviewJob job() {
         var job = RuntimeReviewTestData.job();
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         return job;
     }
 

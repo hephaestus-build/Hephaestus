@@ -53,7 +53,7 @@ public record ProxyRouting(
      *     reaper can requeue a row — zeroing its per-attempt accumulators — while a call this credential
      *     authenticated is still out, so a late call is settled on this attempt's own measurement, never on whoever
      *     owns the row now.
-     * @param workerId worker owning the authenticated job attempt or Heph turn attempt
+     * @param leaseId the lease that authenticated this attempt
      * @param spentUsd priced with the rates frozen onto the execution at admission
      * @param directModelTokens the tokens that the attempt's direct model calls used on every slot, read with
      *     {@code spentUsd}; 0 for every other call
@@ -67,14 +67,14 @@ public record ProxyRouting(
             UUID sourceId,
             int number,
             BigDecimal spentUsd,
-            @Nullable String workerId,
+            @Nullable UUID leaseId,
             long directModelTokens,
             long directModelSearchUnits,
             @Nullable Long workspaceId) {
 
         public BilledAttempt(
-                UsageSourceType sourceType, UUID sourceId, int number, BigDecimal spentUsd, @Nullable String workerId) {
-            this(sourceType, sourceId, number, spentUsd, workerId, 0L, 0L, null);
+                UsageSourceType sourceType, UUID sourceId, int number, BigDecimal spentUsd, @Nullable UUID leaseId) {
+            this(sourceType, sourceId, number, spentUsd, leaseId, 0L, 0L, null);
         }
 
         public BilledAttempt(
@@ -82,10 +82,10 @@ public record ProxyRouting(
                 UUID sourceId,
                 int number,
                 BigDecimal spentUsd,
-                @Nullable String workerId,
+                @Nullable UUID leaseId,
                 long directModelTokens,
                 long directModelSearchUnits) {
-            this(sourceType, sourceId, number, spentUsd, workerId, directModelTokens, directModelSearchUnits, null);
+            this(sourceType, sourceId, number, spentUsd, leaseId, directModelTokens, directModelSearchUnits, null);
         }
     }
 

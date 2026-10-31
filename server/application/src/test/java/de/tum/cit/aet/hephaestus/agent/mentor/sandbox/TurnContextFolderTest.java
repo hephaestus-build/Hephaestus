@@ -58,7 +58,7 @@ class TurnContextFolderTest extends BaseUnitTest {
     }
 
     private static TurnAttempt turn() {
-        return new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
+        return new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, UUID.randomUUID());
     }
 
     private static TurnDocuments documents() {

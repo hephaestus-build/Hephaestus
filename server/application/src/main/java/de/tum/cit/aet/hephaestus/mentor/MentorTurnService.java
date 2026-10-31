@@ -33,6 +33,7 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class MentorTurnService {
 
+
     /** One automatic retry after a lost lease. */
     static final int MAX_ATTEMPTS = 2;
 
@@ -98,7 +99,7 @@ public class MentorTurnService {
      *     first
      * @param error what the developer reads about a failed turn
      */
-    public record AttemptEnd(
+    public record Ending(
             MentorTurn.Status outcome,
             List<JsonNode> appended,
             @Nullable JsonNode lastPartial,
@@ -178,27 +179,27 @@ public class MentorTurnService {
 
     /** Starts the oldest turn a worker may run, if there is one. */
     @Transactional
-    public Optional<MentorTurn> claimNext(String workerId, Duration lease) {
+    public Optional<MentorTurn> claimNext(Duration lease) {
         return turns.lockClaimable().map(turn -> {
             // The lease ends on the database clock, the clock the server's reaper judges it by (expireLease).
             Instant now = turns.databaseNow();
-            turn.start(workerId, now, now.plus(lease));
+            turn.start(now, turns.databaseClock().plus(lease));
             changed(turn, true);
             return turn;
         });
     }
 
     @Transactional
-    public MentorTurn renewLease(UUID turnId, int attempt, String workerId, Duration lease) {
-        MentorTurn turn = held(turnId, attempt, workerId);
-        turn.renew(turns.databaseNow().plus(lease));
+    public MentorTurn renewLease(long workspaceId, UUID turnId, int attempt, UUID leaseId, Duration lease) {
+        MentorTurn turn = held(workspaceId, turnId, attempt, leaseId);
+        turn.renew(turns.databaseClock().plus(lease));
         return turn;
     }
 
     /** Freezes the model and rates the attempt runs with, so even a lost attempt is billed at them. */
     @Transactional
-    public void admit(UUID turnId, int attempt, String workerId, JsonNode admission) {
-        held(turnId, attempt, workerId).admit(admission);
+    public void admit(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode admission) {
+        held(workspaceId, turnId, attempt, leaseId).admit(admission);
     }
 
     /**
@@ -206,14 +207,13 @@ public class MentorTurnService {
      * writes no row: the attempt's end stores the answer once ({@link #end}), and memory alone keeps the partial
      * answer meanwhile ({@link MentorTurnProgress}). A stopped attempt takes no partial answer.
      *
-     * @throws MentorLeaseLostException when the attempt no longer runs on {@code workerId}
+     * @throws MentorLeaseLostException when the attempt no longer holds its lease
      */
     @Transactional
-    public void updatePartial(UUID turnId, int attempt, String workerId, JsonNode partial) {
+    public void updatePartial(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial) {
         turns.commitWithoutFlushWait();
-        MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(turnId, attempt, workerId)
+        MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, attempt, leaseId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
-        long workspaceId = running.getWorkspaceId();
         progress.next(workspaceId, turnId, attempt, partial.toString(), clock.instant())
                 .ifPresent(update -> progress.frames(
                                 workspaceId,
@@ -235,12 +235,11 @@ public class MentorTurnService {
      * ends after the developer's erasure was requested stores nothing either, because the erasure would not find it.
      */
     @Transactional
-    public EndedTurn end(UUID turnId, int attempt, String workerId, AttemptEnd end) {
-        MentorTurn.Status outcome = end.outcome();
-        List<JsonNode> appended = end.appended();
+    public EndedTurn end(long workspaceId, UUID turnId, int attempt, UUID leaseId, Ending ending) {
+        MentorTurn.Status outcome = ending.outcome();
+        List<JsonNode> appended = ending.appended();
         // Before any row lock: a person erasure holds this fence while it deletes the ledger.
-        boolean writable = turns.findById(turnId)
-                .flatMap(found -> turns.findAccountIdByIdAndWorkspaceId(turnId, found.getWorkspaceId()))
+        boolean writable = turns.findAccountIdByIdAndWorkspaceId(turnId, workspaceId)
                 .map(writeFence::holdForAccountWrite)
                 .orElse(false);
         List<JsonNode> stored = !writable
@@ -255,11 +254,11 @@ public class MentorTurnService {
             // Before any row lock: a person erasure holds this fence while it locks ledger rows.
             copies.holdForCapture();
         }
-        MentorTurn turn = held(turnId, attempt, workerId);
-        Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, end.lastPartial());
+        MentorTurn turn = held(workspaceId, turnId, attempt, leaseId);
+        Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, ending.lastPartial());
         append(turn, stored, copiesData);
         Instant endedAt = clock.instant();
-        turn.end(outcome, end.error(), endedAt);
+        turn.end(outcome, ending.error(), endedAt);
         turns.flush();
         events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turnId, attempt, endedAt));
         changed(turn, true);
@@ -498,11 +497,18 @@ public class MentorTurnService {
                 fenced && copies.erasedSince(MentorEntryRepository.COPIES_PERSON_DATA_STORE, attemptStart));
     }
 
-    /** The turn, locked, if this attempt of this worker still holds it. */
-    private MentorTurn held(UUID turnId, int attempt, String workerId) {
-        return turns.lockById(turnId)
-                .filter(turn -> turn.isLeased() && turn.getAttempt() == attempt && workerId.equals(turn.getWorkerId()))
+    private MentorTurn held(long workspaceId, UUID turnId, int attempt, UUID leaseId) {
+        MentorTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
+        Instant expires = turn.getLeasedUntil();
+        if (!turn.isLeased()
+                || turn.getAttempt() != attempt
+                || !leaseId.equals(turn.getLeaseId())
+                || expires == null
+                || !expires.isAfter(turns.databaseClock())) {
+            throw new MentorLeaseLostException(turnId, attempt);
+        }
+        return turn;
     }
 
     /** The account the turn answers: its conversation's owner. */

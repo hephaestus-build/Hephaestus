@@ -1,12 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The credential of one attempt: of a review job, or of a Heph turn. It names only the attempt and its workspace. The
+ * The credential of one attempt: of a review job, or of a Heph turn. It names the attempt, its lease and its workspace. The
  * attempt's row holds everything else, such as a turn's conversation and account, so a credential cannot claim them.
  *
  * @param id the {@code review_job} id, or the {@code mentor_turn} id
@@ -18,6 +19,7 @@ public record AttemptJwt(
         UUID id,
         Long workspaceId,
         int attempt,
+        UUID leaseId,
         Set<String> scopes,
         String jti,
         Instant issuedAt,
@@ -31,6 +33,7 @@ public record AttemptJwt(
     }
 
     public AttemptJwt {
+        Objects.requireNonNull(leaseId, "leaseId");
         scopes = Set.copyOf(scopes);
         switch (kind) {
             case REVIEW -> {

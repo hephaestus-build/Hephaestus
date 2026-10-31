@@ -121,7 +121,7 @@ import tools.jackson.databind.node.ObjectNode;
  * transport is scripted.
  */
 class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
-    private static final String WORKER = "review-to-delivery-worker";
+    private static final UUID WORKER_LEASE = UUID.fromString("3e9b7c41-58d2-4a6f-b0e1-7c2d9a4f6b18");
     private static final String RECORD = "context/pull-request.md";
     private static final String QUOTE = "The export handler now catches the failure and returns without its cause.";
     private static final String SUMMARY = "Keep the failure cause when the export handler gives up.";
@@ -626,7 +626,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     meters,
                     mapper,
                     new CompositionCapacity(4));
-            composer.composeAfterMeasurement(job, WORKER, Instant.now());
+            composer.composeAfterMeasurement(job, WORKER_LEASE, Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                             review.workspaceId(), review.reviewId()))
@@ -639,7 +639,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .contains(FeedbackDestination.ON_WORK);
             // The composition left the attempt running and owned, so the worker's terminal write completes it.
             Integer completed = transactions.execute(status -> jobs.transitionStatusOwnedBy(
-                    job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, WORKER, job.getAttempt()));
+                    job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, WORKER_LEASE, job.getAttempt()));
             assertThat(completed).isOne();
             assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
         }
@@ -777,7 +777,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    /** A running attempt of one ITEM review of a GitHub pull request, claimed by {@link #WORKER}, with its capture. */
+    /** A running attempt of one ITEM review of a GitHub pull request, claimed by {@link #WORKER_LEASE}, with its capture. */
     private ClaimedReview claimedReview(FeedbackMode mode) {
         return claimedReview(mode, DefinitionTestFixtures.definition());
     }
@@ -876,8 +876,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 workspace.getId(),
                 pending.review().getId());
         jdbc.update(
-                "UPDATE review_job SET worker_id=? WHERE workspace_id=? AND id=?",
-                WORKER,
+                "UPDATE review_job SET lease_id=?, leased_until=now() + interval '10 minutes' WHERE workspace_id=? AND id=?",
+                WORKER_LEASE,
                 workspace.getId(),
                 pending.jobId());
 
@@ -890,7 +890,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         job.setCapture(capture(ProvenanceDigest.sha256Hex(record)));
         jobs.saveAndFlush(job);
         return new ClaimedReview(
-                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, WORKER),
+                new ResultAdmissionService.AdmissionIdentity(job.getId(), workspace.getId(), 0, WORKER_LEASE),
                 pending.review().getId(),
                 scenario.practice().getId(),
                 scenario.practice().getSlug(),

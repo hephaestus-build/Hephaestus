@@ -1,12 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import com.auth0.jwt.JWT;
+import com.auth0.jwt.JWTCreator;
 import com.auth0.jwt.algorithms.Algorithm;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 
 /** Issues the attempt tokens of this worker's sandboxes; {@link AttemptTokenVerifier} checks them. */
 public class AttemptTokenIssuer {
@@ -16,6 +17,7 @@ public class AttemptTokenIssuer {
     static final String ATTEMPT_TOKEN_TYPE = "attempt+jwt";
     static final String KIND_CLAIM = "attempt_kind";
     static final String ID_CLAIM = "attempt_id";
+    static final String LEASE_CLAIM = "lease_id";
     static final String WORK_DEADLINE_CLAIM = "work_deadline";
 
     /**
@@ -31,24 +33,30 @@ public class AttemptTokenIssuer {
     }
 
     /**
-     * An attempt's credential that stays valid until {@code expiresAt}. A review attempt's names {@code workDeadline},
-     * the end of its work; both are whole seconds when signed, and the deadline must not be later than the expiry. A
-     * turn attempt's has none: the caller derives its expiry from the turn's deadline.
+     * A review attempt's credential that stays valid until {@code expiresAt}. It names {@code workDeadline}, the end of
+     * its work; both are whole seconds when signed, and the deadline must not be later than the expiry.
      */
-    public String issueForAttempt(
-            AttemptJwt.Kind kind,
-            UUID id,
-            Long workspaceId,
-            int attempt,
-            @Nullable Instant workDeadline,
-            Instant expiresAt) {
+    public String issueForReview(
+            UUID id, Long workspaceId, int attempt, UUID leaseId, Instant workDeadline, Instant expiresAt) {
+        if (!workDeadline.isAfter(Instant.now()) || workDeadline.isAfter(expiresAt))
+            throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
+        return claims(AttemptJwt.Kind.REVIEW, id, workspaceId, attempt, leaseId, expiresAt)
+                .withClaim(WORK_DEADLINE_CLAIM, workDeadline)
+                .sign(Algorithm.RSA256(key.publicKey(), key.privateKey()));
+    }
+
+    /** A turn attempt's credential that stays valid until {@code expiresAt}, which the caller derives from the turn. */
+    public String issueForTurn(UUID id, Long workspaceId, int attempt, UUID leaseId, Instant expiresAt) {
+        return claims(AttemptJwt.Kind.TURN, id, workspaceId, attempt, leaseId, expiresAt)
+                .sign(Algorithm.RSA256(key.publicKey(), key.privateKey()));
+    }
+
+    private JWTCreator.Builder claims(
+            AttemptJwt.Kind kind, UUID id, Long workspaceId, int attempt, UUID leaseId, Instant expiresAt) {
+        Objects.requireNonNull(leaseId, "leaseId");
         Instant now = Instant.now();
         if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
-        if ((kind == AttemptJwt.Kind.REVIEW) != (workDeadline != null))
-            throw new IllegalArgumentException("only a review attempt has a work deadline");
-        if (workDeadline != null && (!workDeadline.isAfter(now) || workDeadline.isAfter(expiresAt)))
-            throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
-        var token = JWT.create()
+        return JWT.create()
                 .withHeader(Map.of("kid", key.kid(), "typ", ATTEMPT_TOKEN_TYPE))
                 .withIssuer(ISSUER)
                 .withAudience(AUDIENCE)
@@ -56,12 +64,11 @@ public class AttemptTokenIssuer {
                 .withClaim(ID_CLAIM, id.toString())
                 .withClaim("workspace_id", workspaceId)
                 .withClaim("attempt", attempt)
+                .withClaim(LEASE_CLAIM, leaseId.toString())
                 .withClaim("scope", List.of(LLM_PROXY_SCOPE))
                 .withJWTId(UUID.randomUUID().toString())
                 .withIssuedAt(now)
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt);
-        if (workDeadline != null) token = token.withClaim(WORK_DEADLINE_CLAIM, workDeadline);
-        return token.sign(Algorithm.RSA256(key.publicKey(), key.privateKey()));
     }
 }

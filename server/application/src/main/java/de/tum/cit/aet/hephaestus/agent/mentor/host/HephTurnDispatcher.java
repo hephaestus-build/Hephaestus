@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import static de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion.COULD_NOT_START;
 
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
@@ -25,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -84,7 +84,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private final AttemptTokenIssuer issuer;
     private final ObjectMapper mapper;
     private final Clock clock;
-    private final String workerId;
     private final int capacity;
     private final Duration lease;
     private final Duration stopGrace;
@@ -112,7 +111,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             ObjectMapper mapper,
             Clock clock,
             MeterRegistry meters,
-            String workerId,
             int capacity,
             Duration lease,
             Duration stopGrace,
@@ -127,7 +125,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         this.issuer = issuer;
         this.mapper = mapper;
         this.clock = clock;
-        this.workerId = workerId;
         this.capacity = capacity;
         this.lease = lease;
         this.stopGrace = stopGrace;
@@ -172,7 +169,13 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             this.turnId = turn.getId();
             this.workspaceId = turn.getWorkspaceId();
             this.attempt = turn.getAttempt();
-            this.identity = new TurnAttempt(turnId, workspaceId, accountId, turn.getConversationId(), attempt);
+            this.identity = new TurnAttempt(
+                    turnId,
+                    workspaceId,
+                    accountId,
+                    turn.getConversationId(),
+                    attempt,
+                    Objects.requireNonNull(turn.getLeaseId()));
             this.deadline = deadline;
             this.claimed = now;
             this.renewed = now;
@@ -379,7 +382,13 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             Instant sentAt = turn.partialSentAt;
             // An unchanged answer is sent again now and then, so a reader that started since sees it.
             if (partial.equals(stored) && sentAt != null && now.isBefore(sentAt.plus(PARTIAL_RESEND))) return;
-            completion.progress(turn.turnId, turn.attempt, workerId, partial, stored == null ? turn.claimed : null);
+            completion.progress(
+                    turn.workspaceId,
+                    turn.turnId,
+                    turn.attempt,
+                    turn.identity.leaseId(),
+                    partial,
+                    stored == null ? turn.claimed : null);
             turn.partial = partial;
             turn.partialSentAt = now;
         } finally {
@@ -417,7 +426,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     if (!prepareHost() || !active) {
                         break;
                     }
-                    started = starter.startNext(workerId, lease);
+                    started = starter.startNext(lease);
                 } catch (RuntimeException e) {
                     claimFailures.increment();
                     log.warn(
@@ -500,12 +509,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             finish(attempt, MentorTurn.Status.STOPPED, null, null);
             return;
         }
-        String token = issuer.issueForAttempt(
-                AttemptJwt.Kind.TURN,
+        String token = issuer.issueForTurn(
                 attempt.turnId,
                 attempt.workspaceId,
                 attempt.attempt,
-                null,
+                attempt.identity.leaseId(),
                 attempt.deadline.plus(stopGrace).plus(stopGrace));
         send(
                 attempt,
@@ -580,7 +588,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     stop(turn, "deadline");
                 }
                 if (Duration.between(turn.renewed, now).compareTo(lease.dividedBy(3)) >= 0) {
-                    turns.renewLease(turn.turnId, turn.attempt, workerId, lease);
+                    turns.renewLease(turn.workspaceId, turn.turnId, turn.attempt, turn.identity.leaseId(), lease);
                     turn.renewed = now;
                 }
                 reportPartial(turn);
@@ -624,9 +632,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         }
         try {
             completion.end(
+                    turn.workspaceId,
                     turn.turnId,
                     turn.attempt,
-                    workerId,
+                    turn.identity.leaseId(),
                     new MentorTurnCompletion.Ending(
                             outcome,
                             List.of(),

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import io.fabric8.kubernetes.api.model.StatusBuilder;
@@ -193,6 +194,59 @@ class KubernetesIsolationProbeTest {
                 .isFalse();
         assertThat(failed.failures()).anySatisfy(failure -> assertThat(failure).contains("admits a Pod"));
         assertThat(worker.isolated()).isFalse();
+    }
+
+    @Test
+    void shouldLeaveTheWorkerWithoutAProofAtItsStartWhileTheProbeCannotStartItsPods() {
+        KubernetesMockServer api = Objects.requireNonNull(server);
+        var unavailable = new StatusBuilder()
+                .withCode(503)
+                .withReason("ServiceUnavailable")
+                .withMessage("the server is currently unable to handle the request")
+                .build();
+        var restricted = new StatusBuilder()
+                .withCode(403)
+                .withReason("Forbidden")
+                .withMessage("pods \"probe\" is forbidden: violates PodSecurity \"restricted:latest\"")
+                .build();
+        api.expect().post().withPath(PODS).andReturn(403, restricted).always();
+        api.expect()
+                .post()
+                .withPath("/apis/batch/v1/namespaces/" + SANDBOXES + "/jobs")
+                .andReturn(503, unavailable)
+                .always();
+        var worker = KubernetesFixtures.worker(SANDBOXES);
+        KubernetesClient client = Objects.requireNonNull(this.client);
+        var probe = new KubernetesIsolationProbe(
+                client,
+                new KubernetesPods(client, worker, 10, ImagePullPolicy.IF_NOT_PRESENT),
+                new KubernetesSandboxJobs(client, worker),
+                worker,
+                "agent",
+                9090);
+        assertThat(probe.probe(true))
+                .as("at the worker's start, Pods that could not run prove nothing either way, so prove() tries again")
+                .isNull();
+        assertThat(worker.proof())
+                .as("the worker has no proof, so it stays not ready and starts no sandbox")
+                .isNull();
+        assertThat(worker.isolated()).isFalse();
+    }
+
+    @Test
+    void shouldStopTheWorkerAtItsStartWhenAGateThatRanFailed() {
+        KubernetesMockServer api = Objects.requireNonNull(server);
+        // The dry run admits a Pod that Restricted Pod Security refuses: a gate that ran and failed.
+        api.expect().post().withPath(PODS).andReturn(201, "{}").always();
+        api.expect()
+                .post()
+                .withPath("/apis/batch/v1/namespaces/" + SANDBOXES + "/jobs")
+                .andReturn(503, new StatusBuilder().withCode(503).build())
+                .always();
+
+        assertThatThrownBy(() -> probe().prove())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("admits a Pod");
     }
 
     private KubernetesIsolationProbe probe() {

@@ -23,7 +23,7 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
      * The body of the {@code 409} for an attempt that no longer runs. No provider sends it, so a runner that reads it
      * knows its attempt ended rather than that a provider refused a call; {@code pi-model-failure.ts} holds the same.
      */
-    static final String ATTEMPT_ENDED = "This attempt no longer runs on this worker.";
+    static final String ATTEMPT_ENDED = "This attempt no longer holds its lease.";
 
     private static final String RUNTIME_PATH = "/internal/llm/runtime/";
     private static final String TURN_PATH = "/internal/llm/turn/";
@@ -44,14 +44,13 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             ReviewJobRepository jobs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
-            AttemptTokenVerifier verifier,
-            String workerId) {
+            AttemptTokenVerifier verifier) {
         super(
-                new ProviderManager(new JobTokenAuthenticationProvider(jobs, turns, sessions, verifier, workerId)),
+                new ProviderManager(new JobTokenAuthenticationProvider(jobs, turns, sessions, verifier)),
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {});
         setFailureHandler((request, response, failure) -> {
-            if (failure instanceof JobTokenAuthenticationProvider.WorkerOwnershipConflict) {
+            if (failure instanceof JobTokenAuthenticationProvider.AttemptLeaseConflict) {
                 response.setStatus(HttpServletResponse.SC_CONFLICT);
                 response.setContentType(MediaType.TEXT_PLAIN_VALUE);
                 response.getWriter().write(ATTEMPT_ENDED);

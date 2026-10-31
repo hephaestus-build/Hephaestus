@@ -106,7 +106,6 @@ public class HephHostConfiguration {
                 mapper,
                 clock,
                 meters,
-                worker.resolvedWorkerId(),
                 worker.capacity().resolveMentorMax(),
                 lease,
                 HephTurnDispatcher.STOP_GRACE,

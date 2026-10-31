@@ -20,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ProxyCallsInFlightTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
     /** 2 × (3 + 1) + 4 at practice concurrency 3. */
     private static final int REVIEW_CALLS = 12;
@@ -45,7 +46,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
         ProxyRouting.BilledAttempt chat = attempt(UsageSourceType.REVIEW_JOB);
         begin(chat, REVIEW_CALLS - 1);
         ProxyRouting.BilledAttempt script = new ProxyRouting.BilledAttempt(
-                UsageSourceType.PRACTICE_SCRIPT_DECISION, chat.sourceId(), chat.number(), BigDecimal.ZERO, "worker-1");
+                UsageSourceType.PRACTICE_SCRIPT_DECISION, chat.sourceId(), chat.number(), BigDecimal.ZERO, LEASE);
 
         assertThat(calls.begin(script).isOverCap()).isFalse();
         assertThat(calls.begin(script).isOverCap()).isTrue();
@@ -89,7 +90,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     void shouldCountEachAttemptApartWhenAnotherAttemptIsFull() {
         ProxyRouting.BilledAttempt first = attempt(UsageSourceType.MENTOR_TURN);
         ProxyRouting.BilledAttempt next = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, first.sourceId(), first.number() + 1, BigDecimal.ZERO, "worker-1");
+                UsageSourceType.MENTOR_TURN, first.sourceId(), first.number() + 1, BigDecimal.ZERO, LEASE);
         begin(first, ProxyCallsInFlight.TURN_CALLS);
 
         assertThat(calls.begin(attempt(UsageSourceType.MENTOR_TURN)).isOverCap())
@@ -166,6 +167,6 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     }
 
     private static ProxyRouting.BilledAttempt attempt(UsageSourceType sourceType) {
-        return new ProxyRouting.BilledAttempt(sourceType, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker-1");
+        return new ProxyRouting.BilledAttempt(sourceType, UUID.randomUUID(), 1, BigDecimal.ZERO, LEASE);
     }
 }

@@ -18,6 +18,7 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,8 +38,6 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
 
     /** Signs in as the user with login {@code mentor}. */
     private static final String MEMBER = "mock-jwt-token-for-mentor-user";
-
-    private static final String WORKER = "worker-heph-api";
 
     @Autowired
     private WebTestClient client;
@@ -284,7 +283,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     void shouldSayInEveryReadOfATurnWhetherItWaitsForAFreeHeph() {
         // The suite's deployment has one Hephaestus slot (application-test.yml), and the started turn takes it.
         MentorTurnService.Submission first = submit(main(), "What did the review say?");
-        assertThat(turns.claimNext(WORKER, Duration.ofMinutes(5))).isPresent();
+        assertThat(turns.claimNext(Duration.ofMinutes(5))).isPresent();
         UUID parent = first.question().getId();
         UUID waits = UUID.randomUUID();
         UUID followsUp = UUID.randomUUID();
@@ -397,7 +396,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     @Test
     void shouldShowHephsMessagesWithTheFeedbackTheyShowedWhenToolResultsWereStored() {
         MentorTurnService.Submission question = submit(main(), "What did the review say?");
-        MentorTurn running = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn running = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         UUID shown = UUID.randomUUID();
         UUID refused = UUID.randomUUID();
         ObjectNode shownCall = JsonNodeFactory.instance
@@ -409,10 +408,11 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .put("feedbackId", refused.toString())
                 .put("text", "Not admitted.");
         turns.end(
+                running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
                                 MentorLedgerFixtures.toolCall(
@@ -430,8 +430,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                                         JsonNodeFactory.instance.objectNode().put("path", "results.json")),
                                 MentorLedgerFixtures.toolResult(
                                         MentorLedgerFixtures.piId(), "call-fetch", "fetch_context", "{}", false),
-                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "That is all I saw.")),
-                        null,
+                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "That is all I saw.")), null,
                         null));
 
         get("/entries")
@@ -472,7 +471,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     /** Claims turns until the submitted one starts; a turn of another test that starts first is left running. */
     private MentorTurn started(MentorTurnService.Submission submitted) {
         while (true) {
-            MentorTurn claimed = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+            MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
             if (claimed.getId().equals(submitted.turn().getId())) {
                 return claimed;
             }
@@ -482,10 +481,11 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     /** Ends the turn with one {@code show_feedback} call named {@code call-1}, whose result is an error or not. */
     private void endWithFeedbackCall(MentorTurn running, String text, boolean refused) {
         turns.end(
+                running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
                                 MentorLedgerFixtures.toolCall(
@@ -499,8 +499,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                                                         UUID.randomUUID().toString())
                                                 .put("text", text)),
                                 MentorLedgerFixtures.toolResult(
-                                        MentorLedgerFixtures.piId(), "call-1", "show_feedback", "Result", refused)),
-                        null,
+                                        MentorLedgerFixtures.piId(), "call-1", "show_feedback", "Result", refused)), null,
                         null));
     }
 
@@ -533,16 +532,14 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     @Test
     void shouldCarryTheOutcomeOfItsTurnOnTheQuestionWhenTheTurnFailed() {
         MentorTurnService.Submission question = submit(main(), "Explain my review.");
-        MentorTurn running = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn running = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         turns.end(
+                running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
-                        MentorTurn.Status.FAILED,
-                        List.of(),
-                        null,
-                        "Hephaestus could not finish this reply. Try again."));
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
+                        MentorTurn.Status.FAILED, List.of(), null, "Hephaestus could not finish this reply. Try again."));
 
         get("/entries")
                 .jsonPath("$.entries[0].id")

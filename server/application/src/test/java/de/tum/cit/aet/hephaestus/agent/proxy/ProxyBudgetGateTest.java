@@ -33,6 +33,8 @@ import org.mockito.Mock;
  * ledger, and what refuses a call is the attempt's own completed spend counted on top of it.
  */
 class ProxyBudgetGateTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
+    private static final UUID OTHER_LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
 
     private static final long WORKSPACE_ID = 42L;
     private static final BigDecimal ONE_DOLLAR = new BigDecimal("1.00");
@@ -58,8 +60,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     }
 
     private static ProxyRouting.BilledAttempt attempt(BigDecimal spentSoFarUsd) {
-        return new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, spentSoFarUsd, "worker-1");
+        return new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, spentSoFarUsd, LEASE);
     }
 
     private static ProxyRouting routing(@Nullable UsageFundingSource scope, String spentSoFarUsd) {
@@ -171,8 +172,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                     7L,
                     8L,
                     WORKSPACE_ID,
-                    new ProxyRouting.BilledAttempt(
-                            UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, spent, "worker-1"),
+                    new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, spent, LEASE),
                     null,
                     null,
                     null);
@@ -228,7 +228,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                     UUID.randomUUID(),
                     0,
                     BigDecimal.ZERO,
-                    "worker",
+                    OTHER_LEASE,
                     tokens,
                     searchUnits);
 

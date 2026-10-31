@@ -87,7 +87,7 @@ import tools.jackson.databind.ObjectMapper;
 
 class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
     private static final Path FABRIC_ROOT = temporaryDirectory();
-    private static final String WORKER = "private-history-worker";
+    private static final UUID WORKER_LEASE = UUID.fromString("3e9b7c41-58d2-4a6f-b0e1-7c2d9a4f6b18");
     private static final String ADMISSION_DIGEST = "a".repeat(64);
     private static final String ITEM_VERSION = "history-work-v1";
     private final Set<Long> unavailableItems = new HashSet<>();
@@ -601,8 +601,8 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
 
     private ReviewJob ownedPending(ReviewAdmissionData.Pending pending) {
         jdbc.update(
-                "UPDATE review_job SET worker_id=? WHERE workspace_id=? AND id=?",
-                WORKER,
+                "UPDATE review_job SET lease_id=?, leased_until=now() + interval '10 minutes' WHERE workspace_id=? AND id=?",
+                WORKER_LEASE,
                 pending.review().getWorkspaceId(),
                 pending.jobId());
         return jobs.findById(pending.jobId()).orElseThrow();
