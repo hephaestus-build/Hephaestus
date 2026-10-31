@@ -112,6 +112,8 @@ Helm validates the complete schema, including conditions on parent objects.
 | `networkPolicy.metrics.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `networkPolicy.metrics.podLabels` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
 | `networkPolicy.modelEndpoints` | array | `[]` |  | `maxItems: 16` |
+| `networkPolicy.traceCollector.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `networkPolicy.traceCollector.podLabels` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
 | `networkPolicy.workerGatewayPorts` | array | `[]` |  | `maxItems: 4` |
 | `postgresql.backup.clientTlsSecret` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `postgresql.backup.enabled` | boolean | `false` | yes | — |
