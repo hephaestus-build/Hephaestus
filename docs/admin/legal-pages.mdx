@@ -442,34 +442,42 @@ the server with your IP address and browser information, which the server logs k
 **`BROWSER_FAULT_REPORTS`** is off by default.
 When it is on, the browser of each reader reports the failures that it meets on a page, also before sign-in.
 A report names the kind of failure, the page type, the class of the error, the release and positions in the web app's scripts.
-For a failed request, it also names the request's trace id, which joins the report to the server's log records of that request.
+For a failed request, it also names the request's reference and its status code.
 It names no person, workspace, page address or error message ([Browser faults](./observability.mdx#browser-faults)).
+The browser stores nothing on the device for it.
 
 The server writes each failure to its log and counts it. It keeps no other record.
 The report is a request, so it carries the same request metadata as every other request.
 
-In the EU, turning it on can require consent or a documented legal basis.
-The browser reads these failures on the reader's device, so the same rules apply as for [Page experience](#page-experience).
-Error reports serve the operation of the service, not the measurement of its audience.
-Some regulators treat that purpose differently, so decide it on its own.
+The browser reads these failures on the reader's device, so the same ePrivacy rules apply as for [Page experience](#page-experience).
+Error reports serve the operation and security of the service that the reader uses, not the measurement of its audience.
+Many operators rely on the exemption for what is strictly necessary to provide that service, such as § 25(2) no. 2 TDDDG in Germany.
+Regulators do not all read that exemption the same way, so decide it for your jurisdiction.
 
 Before you turn it on:
 
 1. Determine with your data-protection adviser whether your national ePrivacy law permits the access without consent.
 2. If it requires consent, keep the setting off.
-3. Determine and record a lawful basis for the processing of the report.
-4. Add the text below to your privacy notice.
+3. Record your lawful basis for the processing of the report. A common choice is a legitimate interest in a service that works and is secure (Art. 6(1)(f) GDPR), with the balancing test on file.
+4. Add the text below to your privacy notice. Replace each bracketed part.
 5. Set `BROWSER_FAULT_REPORTS=true`, or `config.browserFaultReports: true` in the Helm chart.
 
 ```md
 ### Error reports
 
-When a page fails in your browser, your browser sends a short report to [example.org]: the kind of
-failure, the type of page and where in our scripts it happened. For a failed request, it also sends
-the reference of that request. The report contains no name,
-workspace, page address or error text. Like every request, it reaches the server with your IP
-address and browser information, which the server logs keep for [retention]. Purpose: [purpose].
-Legal basis: [legal basis].
+When a page of [example.org] fails in your browser, your browser sends us a short report: the kind
+of failure, the type of page, the version of the app and where in our scripts the failure happened.
+If a request to our server failed, the report also contains the reference of that request and its
+status code. The report contains no name, workspace, page address or error text, and nothing is
+stored on your device for it.
+
+Like every request, the report reaches our server with your IP address and browser information.
+Our server logs keep them for [retention, for example 14 days]. We use the reports only to find
+and fix failures of the service, and we do not combine them with other data about you.
+
+Legal basis: our legitimate interest in a service that works and is secure (Art. 6(1)(f) GDPR).
+[Access to your device: name your ePrivacy basis, for example § 25(2) no. 2 TDDDG.]
+You can object to this processing at any time: [contact].
 ```
 
 ### Workspace addresses
