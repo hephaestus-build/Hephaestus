@@ -133,7 +133,6 @@ class WorkerFeedbackComposerTest {
                         200_000,
                         4_000,
                         600,
-                        false,
                         null)
                 .toJson(mapper));
         when(assignments.review(job))

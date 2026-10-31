@@ -11,21 +11,15 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * Frozen non-secret runtime configuration. Credentials and their target URL resolve together live.
- *
- * @param allowInternet always {@code false}: no sandbox reaches the Internet. The field stays in the stored format, so
- *     snapshots written before the setting was removed keep schema version 8 and stay reusable.
- */
+/** Frozen non-secret runtime configuration. Credentials and their target URL resolve together live. */
 public record ConfigSnapshot(
         int schemaVersion,
         FrozenModel model,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
         int timeoutSeconds,
-        boolean allowInternet,
         @Nullable Map<ModelKind, FrozenModel> practiceScript) {
-    public static final int SCHEMA_VERSION = 8;
+    public static final int SCHEMA_VERSION = 9;
 
     public ConfigSnapshot {
         Objects.requireNonNull(model, "model");
@@ -43,7 +37,6 @@ public record ConfigSnapshot(
                 resolved.contextWindow(),
                 resolved.maxOutputTokens(),
                 source.getTimeoutSeconds(),
-                false,
                 null);
     }
 
@@ -54,13 +47,11 @@ public record ConfigSnapshot(
                 contextWindow,
                 maxOutputTokens,
                 timeoutSeconds,
-                allowInternet,
                 practiceScript);
     }
 
     public ConfigSnapshot withPracticeScript(@Nullable Map<ModelKind, FrozenModel> slots) {
-        return new ConfigSnapshot(
-                schemaVersion, model, contextWindow, maxOutputTokens, timeoutSeconds, allowInternet, slots);
+        return new ConfigSnapshot(schemaVersion, model, contextWindow, maxOutputTokens, timeoutSeconds, slots);
     }
 
     public Map<ModelKind, FrozenModel> practiceScriptModels() {

@@ -105,7 +105,7 @@ To test webhook ingestion too, configure `hephaestus.webhook.external-url` and a
 characters, then expose the webhook receiver through a trusted tunnel. GitLab group-hook registration
 requires the appropriate group role and license.
 
-The agent runs in a Docker sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
+The agent runs in a Kubernetes sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
 the in-app proxy, so provider keys never enter the sandbox.
 
 A practice review always runs on an internal Docker network.

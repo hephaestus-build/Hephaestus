@@ -76,7 +76,6 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 16000,
                 1000,
                 600,
-                false,
                 Map.of(ModelKind.EMBEDDING, model(LlmApiProtocol.OPENAI_EMBEDDINGS, UsageFundingSource.WORKSPACE)));
         job.setConfigSnapshot(snapshot.toJson(mapper));
         var now = Instant.now();

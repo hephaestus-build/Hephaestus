@@ -61,7 +61,7 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 	for (const flag of [
 		"all-images",
 		"application-server-image",
-		"supported-host-smoke",
+		"kubernetes",
 		"webapp-image",
 		"agent-images",
 		"postgres-image",

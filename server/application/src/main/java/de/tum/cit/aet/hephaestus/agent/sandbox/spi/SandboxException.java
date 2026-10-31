@@ -2,12 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
 import java.io.Serial;
 
-/**
- * Unchecked exception for sandbox infrastructure failures.
- *
- * <p>Wraps docker-java exceptions and other infrastructure errors so that callers of {@link
- * SandboxManager} do not depend on Docker-specific types.
- */
+/** Unchecked exception for sandbox infrastructure failures. */
 public class SandboxException extends RuntimeException {
 
     @Serial

@@ -420,7 +420,6 @@ public class ReviewJobExecutor {
         return outcome != ReviewJobRecovery.Outcome.NONE;
     }
 
-    // docker-java blocking I/O pins virtual threads; use a separate platform-thread pool.
     // Native stops may ignore interruption; settled custody and daemon threads permit shutdown.
     private boolean stopContainers(List<UUID> jobIds, Duration timeout) {
         if (jobIds.isEmpty()) return true;

@@ -6,7 +6,7 @@ name: Release / Host smoke
 # its reviews, the configured shutdown budget, and requests through the Gateway, and it runs the
 # installer a second time and an upgrade.
 # Let's Encrypt cannot reach a runner, so a local CA issues the Gateway certificate in its place.
-# release.yml runs it beside the Compose host smoke before publication; a dispatch runs it again for
+# release.yml requires it before publication; a dispatch runs it again for
 # a release, a draft included, that has the k3s assets.
 
 on:
@@ -104,7 +104,15 @@ jobs:
         run: |
           node scripts/kubernetes-cluster.ts release-smoke --work "$RUNNER_TEMP/release-smoke" \
             --assets "$RUNNER_TEMP/k3s-assets" --lock "$RUNNER_TEMP/release-$TAG.chart.json" \
-            --release "$TAG" --architecture "$ARCHITECTURE"
+            --release "$TAG" --architecture "$ARCHITECTURE" \
+            --receipt "$RUNNER_TEMP/host-smoke-k3s-$ARCHITECTURE.json"
+
+      - name: Upload the k3s qualification receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: host-smoke-k3s-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/host-smoke-k3s-${{ matrix.architecture }}.json
+          if-no-files-found: error
 
       - name: Record the cluster state
         if: ${{ failure() }}

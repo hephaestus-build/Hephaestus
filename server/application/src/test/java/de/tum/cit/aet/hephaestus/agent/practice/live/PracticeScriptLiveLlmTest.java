@@ -48,6 +48,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
+import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
@@ -97,6 +99,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -132,6 +135,7 @@ import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.FileSystemUtils;
 import tools.jackson.databind.JsonNode;
@@ -194,13 +198,24 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     @DynamicPropertySource
     static void workerRole(DynamicPropertyRegistry registry) {
         registry.add("hephaestus.runtime.worker.enabled", () -> "true");
-        registry.add("hephaestus.sandbox.gateway.port", () -> "0");
-        // Cleanup is scoped to this worker owner and root; other checkouts share the host.
-        registry.add("hephaestus.sandbox.docker.owner", () -> "practice-script-live-test");
+        registry.add("hephaestus.sandbox.gateway.port", () -> "8081");
+        registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "practice-script-live");
+        registry.add("hephaestus.sandbox.kubernetes.pod-name", () -> "practice-script-live");
+        registry.add("hephaestus.sandbox.kubernetes.pod-ip", () -> "127.0.0.1");
         registry.add("hephaestus.fabric.root", FABRIC_ROOT::toString);
         // No sandbox runs here, so the worker does not pull the agent image.
         registry.add("hephaestus.agent.image.pull-policy", () -> "NEVER");
     }
+
+    // This suite runs scripts on the host and exercises the real proxy; it launches no sandbox Pod.
+    @MockitoBean(name = "sandboxKubernetesClient", enforceOverride = true)
+    private KubernetesClient kubernetesClient;
+
+    @MockitoBean(enforceOverride = true)
+    private KubernetesSandboxCache sandboxCache;
+
+    @MockitoBean(enforceOverride = true)
+    private KubernetesIsolationProbe isolationProbe;
 
     @Autowired
     private InstanceLlmSettingsRepository instanceLlmSettings;

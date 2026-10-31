@@ -171,7 +171,6 @@ class ScanCallGuardTest extends BaseUnitTest {
                 1000,
                 100,
                 60,
-                false,
                 null)));
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         var old = RuntimeReviewTestData.assignment(null, null).practice();

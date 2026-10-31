@@ -7,7 +7,6 @@ import { parseDocument } from "yaml";
 
 import { asArray, asRecord, asString, asStringArray, at } from "./lib/json.ts";
 import { releaseSignerIdentity, releaseSignerRepository } from "./lib/release-signer.ts";
-import { SMOKE_HOSTNAME } from "./prepare-host-smoke-env.ts";
 import { parseStacks, POSTGRES_IMAGE_INPUTS } from "./reconcile-deployment.ts";
 
 const release = readFileSync(".github/workflows/release.yml", "utf8");
@@ -38,7 +37,7 @@ const upgrade = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
 await test("release publication requires the seeded upgrade gate", () => {
 	assert.match(
 		release,
-		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, supported-host-smoke, k3s-host-smoke\]/u,
+		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, k3s-host-smoke\]/u,
 	);
 	assert.match(release, /previous-version: \$\{\{ needs\.release\.outputs\.previous_version \}\}/u);
 	assert.match(upgrade, /INPUT_PREVIOUS_VERSION: \$\{\{ inputs\.previous-version \}\}/u);
@@ -56,8 +55,7 @@ await test("release publication requires the seeded upgrade gate", () => {
 		upgrade,
 		/ref: \$\{\{ inputs\.candidate-source-sha \|\| inputs\.candidate-sha \|\| github\.sha \}\}/u,
 	);
-	const upgradeGate =
-		/ {2}upgrade-test:[\s\S]*?\n {2}supported-host-smoke:/u.exec(release)?.[0] ?? "";
+	const upgradeGate = / {2}upgrade-test:[\s\S]*?\n {2}k3s-host-smoke:/u.exec(release)?.[0] ?? "";
 	assert.doesNotMatch(upgradeGate, /secrets: inherit/u);
 });
 
@@ -233,16 +231,15 @@ await test("derives the canonical signer identity and refuses missing CI identit
 	assert.throws(() => releaseSignerRepository({ CI: "true" }), /GITHUB_REPOSITORY/u);
 });
 
-await test("release publication requires native smoke tests for every supported host", () => {
-	const smokeGate =
-		/ {2}supported-host-smoke:[\s\S]*?\n {2}publish-release:/u.exec(release)?.[0] ?? "";
-
-	assert.match(smokeGate, /architecture: amd64\n\s+runner: ubuntu-24\.04/u);
-	assert.match(smokeGate, /architecture: arm64\n\s+runner: ubuntu-24\.04-arm/u);
-	assert.match(smokeGate, /up -d --wait --wait-timeout 600/u);
-	assert.match(smokeGate, /prepare-release-lock\.ts/u);
-	assert.match(smokeGate, /contents: write/u);
-	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke\/\*\.json/u);
+await test("release publication requires native k3s smokes and receipts for both architectures", () => {
+	const smoke = readFileSync(".github/workflows/release-host-smoke.yml", "utf8");
+	assert.match(smoke, /architecture: amd64\n\s+runner: ubuntu-24\.04/u);
+	assert.match(smoke, /architecture: arm64\n\s+runner: ubuntu-24\.04-arm/u);
+	assert.match(smoke, /kubernetes-cluster\.ts release-smoke/u);
+	assert.match(smoke, /--receipt "\$RUNNER_TEMP\/host-smoke-k3s-\$ARCHITECTURE\.json"/u);
+	assert.match(release, /needs: \[release, tag-images, upgrade-test, k3s-host-smoke\]/u);
+	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke-k3s\/\*\.json/u);
+	assert.doesNotMatch(release, /docker compose|supported-host-smoke:|sandbox-isolation-probe\.ts/u);
 });
 
 await test("release evidence waits for the digest-bound sandbox check", () => {
@@ -269,23 +266,10 @@ await test("release evidence waits for the digest-bound sandbox check", () => {
 		steps.filter((step) => step.background === true).map((step) => step.id),
 		["sandbox-contract"],
 	);
-	for (const name of ["supported-host-smoke", "publish-release"]) {
+	for (const name of ["publish-release"]) {
 		const preparation = asArray(at(workflow, ["jobs", name, "steps"], name), name);
 		assert.ok(preparation.every((value) => asRecord(value, name).background !== true));
 	}
-});
-
-await test("the release smoke reaches the installation by the name the installer answers with", () => {
-	// Traefik routes on the hostname the installer answered with, so a rename in the script has to
-	// reach this curl or the ingress check fails for the first time at a release.
-	assert.ok(
-		release.includes(`--resolve ${SMOKE_HOSTNAME}:443:127.0.0.1`),
-		`release.yml must resolve ${SMOKE_HOSTNAME} to the loopback`,
-	);
-	assert.ok(
-		release.includes(`https://${SMOKE_HOSTNAME}/`),
-		`release.yml must request the installation at ${SMOKE_HOSTNAME}`,
-	);
 });
 
 /** A step's `if` as GitHub would evaluate it, for a condition that uses no status function. */

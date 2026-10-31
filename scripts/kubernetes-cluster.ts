@@ -18,7 +18,8 @@
  *            shutdown budget, requests through the Gateway, a second run and an upgrade
  *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, the three
  *            steps above, and a Gateway on https://hephaestus.localhost; a second run reuses the cluster
- *   down     stops the dev cluster and keeps its data
+ *   live     runs the credential-free sandbox suite in a Pod from the chart worker template
+ *   down     removes the qualification release and keeps its data and the shared cluster
  *   reset    deletes the dev cluster, its data, its registry and the work directory
  *
  * The cluster is the caller's: the script creates none, except `dev` and `release-smoke`. Every
@@ -27,15 +28,27 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	access,
+	chmod,
+	mkdir,
+	mkdtemp,
+	open,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { BlockList, connect, isIP } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { isDeepStrictEqual, parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs, parseEnv } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
+import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namespace.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
@@ -52,7 +65,7 @@ const HOST = "hephaestus.cluster.test";
 /** The cluster and the host of `dev`. Browsers resolve every `*.localhost` name to the loopback address. */
 export const DEV_CLUSTER = "hephaestus";
 export const DEV_HOST = "hephaestus.localhost";
-const DEV_WORK = path.join(ROOT, ".context", "kubernetes-cluster");
+const DEV_WORK = path.join(homedir(), ".hephaestus", "kubernetes-cluster");
 
 /** The Gateway API resource definitions that the route needs, at a pinned release and checksum. */
 const GATEWAY_API = {
@@ -691,6 +704,227 @@ export async function install(
 		"--timeout",
 		"20m",
 	]);
+}
+
+/** A one-shot worker Pod: retain its authority and networking; replace only its image and restart policy. */
+export function livePod(deployment: unknown, image: string, name: string): Record<string, unknown> {
+	const root = asRecord(deployment, "worker Deployment");
+	const metadata = asRecord(root.metadata, "worker metadata");
+	const template = asRecord(asRecord(root.spec, "worker spec").template, "worker template");
+	const spec = asRecord(template.spec, "worker Pod spec");
+	const containers = asArray(spec.containers, "worker containers");
+	if (containers.length !== 1) {
+		throw new Error("the qualification needs the chart's single-container worker template");
+	}
+	const container = asRecord(containers[0], "worker container");
+	if (
+		container.command !== undefined ||
+		container.args !== undefined ||
+		container.imagePullPolicy === "Always"
+	) {
+		throw new Error(
+			"the qualification needs the chart worker's image entrypoint and IfNotPresent pull policy",
+		);
+	}
+	return {
+		apiVersion: "v1",
+		kind: "Pod",
+		metadata: {
+			...asRecord(template.metadata, "worker template metadata"),
+			name,
+			namespace: metadata.namespace,
+		},
+		spec: { ...spec, restartPolicy: "Never", containers: [{ ...container, image }] },
+	};
+}
+
+/**
+ * Run the package job's compiled main/test classpath on the installed server image and chart worker authority.
+ * This adapter suite has its own health listener; install/verify separately qualifies application readiness.
+ */
+export async function qualifySandboxes(
+	packaged: boolean,
+	selectedNamespace?: string,
+): Promise<void> {
+	const namespaceName = selectedNamespace ?? NAMESPACE;
+	if (!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/u.test(namespaceName)) {
+		throw new Error("live qualification requires a valid namespace");
+	}
+	if (process.env.CI !== "true" && selectedNamespace === undefined) {
+		throw new Error(
+			"local live qualification requires --namespace to name the reserved shared qualification release",
+		);
+	}
+	const selectedContext = await output("kubectl", ["config", "current-context"]);
+	const context = selectedContext.trim();
+	if (context !== `k3d-${DEV_CLUSTER}`) {
+		throw new Error(`live qualification requires context k3d-${DEV_CLUSTER}`);
+	}
+	let reservation: Awaited<ReturnType<typeof open>> | undefined;
+	const lock = path.join(DEV_WORK, "live.lock");
+	if (process.env.CI !== "true") {
+		const admin = process.env.KUBECONFIG ?? (await requireDevCluster());
+		if (!(await ownsDevNamespace(admin, namespaceName, ROOT))) {
+			throw new Error("Start the qualification release from this worktree before running live");
+		}
+		await mkdir(DEV_WORK, { recursive: true, mode: 0o700 });
+		reservation = await open(lock, "wx", 0o600).catch(() => {
+			throw new Error(
+				`The shared live qualification is busy; check the owner before removing ${lock}`,
+			);
+		});
+	}
+	try {
+		await runSandboxQualification(packaged, namespaceName);
+	} finally {
+		if (reservation !== undefined) {
+			await reservation.close();
+			await rm(lock);
+		}
+	}
+}
+
+async function runSandboxQualification(packaged: boolean, namespaceName: string): Promise<void> {
+	const started = performance.now();
+	const worker = `${RELEASE}-worker`;
+	const deployment = asRecord(
+		parseJson(await kubectl(["-n", namespaceName, "get", "deployment", worker, "-o", "json"])),
+		"worker Deployment",
+	);
+	const deploymentSpec = asRecord(deployment.spec, "worker spec");
+	const { replicas } = deploymentSpec;
+	if (typeof replicas !== "number" || !Number.isSafeInteger(replicas) || replicas < 0) {
+		throw new Error("the worker Deployment has no replica count");
+	}
+	const template = asRecord(deploymentSpec.template, "worker template");
+	const containers = asArray(
+		asRecord(template.spec, "worker Pod spec").containers,
+		"worker containers",
+	);
+	const base = asString(asRecord(containers[0], "worker container").image, "worker image");
+	if (!/@sha256:[a-f0-9]{64}$/u.test(base)) {
+		throw new Error("the qualification requires the installed worker image by digest");
+	}
+	await run(
+		path.join(ROOT, "server", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
+		[
+			":application:kubernetesLiveBundle",
+			...(packaged ? ["-PpackagedServer=true"] : []),
+			"--console=plain",
+		],
+		{ cwd: path.join(ROOT, "server") },
+	);
+	const bundle = path.join(ROOT, "server", "application", "build", "kubernetes-live");
+	await writeFile(
+		path.join(bundle, "Dockerfile"),
+		[
+			`FROM ${process.env.CI === "true" ? base : base.replace("ghcr.io/", "localhost:5111/")}`,
+			"COPY --chown=1000:1000 . /workspace/live/",
+			"ENV HEPHAESTUS_KUBERNETES_LIVE=true",
+			"ENV BPL_JAVA_NMT_ENABLED=false",
+			'ENTRYPOINT ["/cnb/lifecycle/launcher"]',
+			'CMD ["--", "java", "-cp", "/workspace/live/test:/workspace/live/main:/workspace/live/lib/*", "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesLiveSuite"]',
+			"",
+		].join("\n"),
+	);
+	const suffix = randomBytes(5).toString("hex");
+	const image = `hephaestus-sandbox-live:${suffix}`;
+	const name = `${RELEASE}-sandbox-live-${suffix}`;
+	// Validate the worker template before any scale or image mutation.
+	const pod = livePod(deployment, image, name);
+	await run("docker", ["build", "--tag", image, bundle]);
+	let scaled = false;
+	let created = false;
+	try {
+		await run("k3d", ["image", "import", "--cluster", DEV_CLUSTER, image]);
+		await kubectl(["-n", namespaceName, "scale", `deployment/${worker}`, "--replicas=0"]);
+		scaled = true;
+		await kubectl([
+			"-n",
+			namespaceName,
+			"wait",
+			"--for=delete",
+			"pod",
+			"-l",
+			`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=worker`,
+			"--timeout=9m",
+		]);
+		await apply(pod);
+		created = true;
+		// logs --follow can return ContainerCreating before the first container starts.
+		await kubectl([
+			"-n",
+			namespaceName,
+			"wait",
+			"--for=jsonpath={.status.phase}=Running",
+			`pod/${name}`,
+			"--timeout=5m",
+		]);
+		await run("kubectl", [
+			"-n",
+			namespaceName,
+			"logs",
+			"--follow",
+			name,
+			"--pod-running-timeout=5m",
+			"--request-timeout=25m",
+		]);
+		await kubectl([
+			"-n",
+			namespaceName,
+			"wait",
+			"--for=jsonpath={.status.containerStatuses[0].state.terminated}",
+			`pod/${name}`,
+			"--timeout=30s",
+		]);
+		const ended = asRecord(
+			parseJson(await kubectl(["-n", namespaceName, "get", "pod", name, "-o", "json"])),
+			"qualification Pod",
+		);
+		const status = asRecord(ended.status, "qualification status");
+		const statuses = asArray(status.containerStatuses, "qualification container statuses");
+		const terminated = asRecord(
+			asRecord(asRecord(statuses[0], "qualification container").state, "qualification state")
+				.terminated,
+			"qualification exit",
+		);
+		if (terminated.exitCode !== 0) {
+			throw new Error(
+				`Kubernetes live qualification failed with exit ${String(terminated.exitCode)}`,
+			);
+		}
+		process.stdout.write(
+			`Kubernetes live qualification passed in ${Math.round((performance.now() - started) / 1000)} seconds; kernel evidence is in the qualification log.\n`,
+		);
+	} finally {
+		try {
+			if (created) {
+				await kubectl(["-n", namespaceName, "delete", "pod", name, "--wait=true", "--timeout=2m"]);
+			}
+		} finally {
+			try {
+				if (scaled) {
+					await kubectl([
+						"-n",
+						namespaceName,
+						"scale",
+						`deployment/${worker}`,
+						`--replicas=${replicas}`,
+					]);
+					await kubectl([
+						"-n",
+						namespaceName,
+						"rollout",
+						"status",
+						`deployment/${worker}`,
+						"--timeout=10m",
+					]);
+				}
+			} finally {
+				await succeeds("docker", ["image", "rm", image]);
+			}
+		}
+	}
 }
 
 const STATEFUL = new Set(["postgresql", "nats"]);
@@ -1350,6 +1584,8 @@ interface SmokeOptions {
 	release: string;
 	/** The architecture of this runner, which the node must report: amd64 or arm64. */
 	architecture: string;
+	/** Public qualification evidence, written only after every install/upgrade check passes. */
+	receipt?: string;
 }
 
 /** A digest of the release Secret's data, so that two runs compare it without printing a value. */
@@ -1416,6 +1652,12 @@ async function reviewsOn(): Promise<void> {
  * nothing, and an upgrade that rolls every role except PostgreSQL and NATS.
  */
 export async function releaseSmoke(options: SmokeOptions): Promise<void> {
+	const lock = asRecord(parseJson(await readFile(options.lock, "utf8")), "release lock");
+	const commit = asString(lock.commit, "release commit");
+	const source = await output("git", ["rev-parse", "HEAD"], { cwd: ROOT });
+	if (source.trim() !== commit || lock.release !== options.release) {
+		throw new Error("The k3s qualification source and release must match the locked artifact");
+	}
 	await mkdir(options.work, { recursive: true, mode: 0o700 });
 	await chmod(options.work, 0o700);
 	const version = options.release.replace(/^v/u, "");
@@ -1505,6 +1747,41 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	await reviewsOn();
 	await gatewayRequests(options.work, nodeAddress, gatewayTls);
 
+	if (options.receipt !== undefined) {
+		const host = parseEnv(await readFile("/etc/os-release", "utf8"));
+		await writeFile(
+			options.receipt,
+			`${JSON.stringify(
+				{
+					schemaVersion: 1,
+					release: options.release,
+					commit,
+					testedAt: new Date().toISOString(),
+					host: {
+						architecture,
+						os: `${asString(host.NAME, "host OS")} ${asString(host.VERSION_ID, "host OS version")}`,
+						kernel: asString(info.kernelVersion, "node kernel"),
+						kubeletVersion: asString(info.kubeletVersion, "kubelet version"),
+					},
+					workers,
+					checks: {
+						install: true,
+						secondInstall: true,
+						upgrade: true,
+						workloadsReady: true,
+						isolation: true,
+						reviewsEnabled: true,
+						gateway: true,
+						shutdownBudget: true,
+						statefulPodsPreserved: true,
+						secretsPreserved: true,
+					},
+				},
+				null,
+				2,
+			)}\n`,
+		);
+	}
 	process.stdout.write(
 		`k3s ${asString(info.kubeletVersion, "kubelet version")} on ${architecture}: the release ${options.release} serves through the Gateway after an install, a second run and an upgrade; ${workers} workers passed the isolation probe\n`,
 	);
@@ -1588,7 +1865,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		}
 		return { image, repository, indexDigest: digest };
 	};
-	const tag = "dev";
+	const tag = `dev-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`;
 	const build = async (image: string, context: string, dockerfile?: string) => {
 		await run(
 			"docker",
@@ -2069,20 +2346,53 @@ export function devClusterArguments(mirrors: string): string[] {
 	];
 }
 
-async function dev(work: string): Promise<void> {
-	await preflight();
-	const savedFile = path.join(work, "sign-in.json");
-	const signIn = devSignIn(process.env, await savedSignIn(savedFile));
-	const registryPort = "5111";
+/** Publish credentials atomically, only when this cluster's identity or endpoint changed. */
+async function devKubeconfig(work: string): Promise<string> {
 	await mkdir(work, { recursive: true, mode: 0o700 });
+	await chmod(work, 0o700);
+	const kubeconfig = path.join(work, "kubeconfig");
+	const content = await output("k3d", ["kubeconfig", "get", DEV_CLUSTER]).catch(() => {
+		throw new Error("The local cluster kubeconfig could not be read");
+	});
+	const saved = await readFile(kubeconfig, "utf8").catch(() => "");
+	if (content !== saved) {
+		const pending = path.join(work, `kubeconfig-${randomBytes(8).toString("hex")}`);
+		await writeFile(pending, content, { mode: 0o600 });
+		await rename(pending, kubeconfig);
+	}
+	await chmod(kubeconfig, 0o600);
+	process.env.KUBECONFIG = kubeconfig;
+	return kubeconfig;
+}
+
+/** Cleanup never creates or starts a cluster. */
+export async function requireDevCluster(work = DEV_WORK): Promise<string> {
+	const state = clusterState(parseJson(await output("k3d", ["cluster", "list", "-o", "json"])));
+	if (state !== "running") {
+		throw new Error(`The shared cluster is ${state}; cleanup requires the running local cluster`);
+	}
+	return devKubeconfig(work);
+}
+
+/** Shared infrastructure only: host edit loops install no chart release. */
+export async function ensureDevCluster(work = DEV_WORK): Promise<string> {
+	await preflight();
+	await mkdir(work, { recursive: true, mode: 0o700 });
+	await chmod(work, 0o700);
 	if (!(await k3dHasRegistry(DEV_REGISTRY))) {
-		await run("k3d", [
-			"registry",
-			"create",
-			"hephaestus-registry.localhost",
-			"--port",
-			`127.0.0.1:${registryPort}`,
-		]);
+		try {
+			await run("k3d", [
+				"registry",
+				"create",
+				"hephaestus-registry.localhost",
+				"--port",
+				"127.0.0.1:5111",
+			]);
+		} catch {
+			if (!(await k3dHasRegistry(DEV_REGISTRY))) {
+				throw new Error("The shared k3d registry could not be created");
+			}
+		}
 	}
 	const state = clusterState(parseJson(await output("k3d", ["cluster", "list", "-o", "json"])));
 	if (state === "without-port" || state === "needs-reset") {
@@ -2094,8 +2404,7 @@ async function dev(work: string): Promise<void> {
 		await run("k3d", ["cluster", "start", DEV_CLUSTER]);
 	}
 	if (state === "absent") {
-		// The chart takes only ghcr.io and docker.io references, as a release lock has them. The nodes
-		// pull ghcr.io from the local registry, which serves this checkout's builds by digest.
+		// All checkouts use the same mirror; a failed concurrent create must never delete the winner's cluster.
 		const mirrors = path.join(work, "registries.yaml");
 		await writeFile(
 			mirrors,
@@ -2103,18 +2412,34 @@ async function dev(work: string): Promise<void> {
 		);
 		try {
 			await run("k3d", devClusterArguments(mirrors));
-		} catch (error) {
-			// A failed create can leave a half-made cluster that blocks the next one.
-			await succeeds("k3d", ["cluster", "delete", DEV_CLUSTER]);
-			throw new Error("k3d could not create the cluster", { cause: error });
+		} catch {
+			let running = false;
+			for (let tries = 0; tries < 60; tries += 1) {
+				if (
+					clusterState(parseJson(await output("k3d", ["cluster", "list", "-o", "json"]))) ===
+					"running"
+				) {
+					running = true;
+					break;
+				}
+				await sleep(1000);
+			}
+			if (!running) {
+				throw new Error(
+					"k3d could not create the shared cluster; check the other dev commands before resetting",
+				);
+			}
 		}
 	}
-	// Every kubectl and helm call below talks to this cluster, whatever the current context is.
-	const kubeconfig = path.join(work, "kubeconfig");
-	await run("k3d", ["kubeconfig", "write", DEV_CLUSTER, "--output", kubeconfig], {
-		stdout: "ignore",
-	});
-	process.env.KUBECONFIG = kubeconfig;
+	return devKubeconfig(work);
+}
+
+async function dev(work: string): Promise<void> {
+	const admin = await ensureDevCluster(work);
+	await claimDevNamespace(admin, NAMESPACE, ROOT, restricted);
+	const savedFile = path.join(work, "sign-in.json");
+	const signIn = devSignIn(process.env, await savedSignIn(savedFile));
+	const registryPort = "5111";
 	// Before the builds, which take minutes.
 	if (await lostCa(work)) {
 		throw new Error(
@@ -2156,6 +2481,30 @@ async function dev(work: string): Promise<void> {
 
 /** Deletes the dev cluster, its registry and the work directory, and says what it removed. */
 async function reset(work: string): Promise<void> {
+	const state = clusterState(parseJson(await output("k3d", ["cluster", "list", "-o", "json"])));
+	if (state !== "absent") {
+		if (state === "stopped") {
+			await run("k3d", ["cluster", "start", DEV_CLUSTER]);
+		}
+		await mkdir(work, { recursive: true, mode: 0o700 });
+		const kubeconfig = path.join(work, "kubeconfig");
+		await run("k3d", ["kubeconfig", "write", DEV_CLUSTER, "--output", kubeconfig], {
+			stdout: "ignore",
+		});
+		await chmod(kubeconfig, 0o600);
+		process.env.KUBECONFIG = kubeconfig;
+		const namespaces = asRecord(
+			parseJson(
+				await kubectl(["get", "namespaces", "-l", "hephaestus.build/dev-host=true", "-o", "json"]),
+			),
+			"namespace list",
+		);
+		if (asArray(namespaces.items, "namespaces").length > 0) {
+			throw new Error(
+				"Other host edit loops own namespaces in this shared cluster. Stop each JVM and run dev:kubernetes:worktree:reset in each worktree before resetting the cluster.",
+			);
+		}
+	}
 	await run("k3d", ["cluster", "delete", DEV_CLUSTER]);
 	await run("k3d", ["registry", "delete", DEV_REGISTRY]).catch(() => undefined);
 	await rm(work, { recursive: true, force: true });
@@ -2174,6 +2523,8 @@ if (import.meta.main) {
 		allowPositionals: true,
 		options: {
 			work: { type: "string", default: DEV_WORK },
+			packaged: { type: "boolean", default: false },
+			namespace: { type: "string" },
 			images: { type: "string" },
 			commit: { type: "string" },
 			"external-postgresql-cidr": { type: "string" },
@@ -2185,6 +2536,7 @@ if (import.meta.main) {
 			lock: { type: "string" },
 			release: { type: "string" },
 			architecture: { type: "string" },
+			receipt: { type: "string" },
 		},
 	});
 	const [command = ""] = positionals;
@@ -2217,6 +2569,10 @@ if (import.meta.main) {
 			await (command === "upgrade" ? keepsStatefulPods(upgrade) : upgrade());
 			break;
 		}
+		case "live": {
+			await qualifySandboxes(values.packaged, values.namespace);
+			break;
+		}
 		case "verify": {
 			await verify();
 			break;
@@ -2234,7 +2590,56 @@ if (import.meta.main) {
 			break;
 		}
 		case "down": {
-			await run("k3d", ["cluster", "stop", DEV_CLUSTER]);
+			process.env.KUBECONFIG = await requireDevCluster(work);
+			if (!(await ownsDevNamespace(process.env.KUBECONFIG, NAMESPACE, ROOT))) {
+				break;
+			}
+			// Keep the database available until the worker's drain has ended.
+			const worker = await kubectl([
+				"-n",
+				NAMESPACE,
+				"get",
+				"deployment",
+				`${RELEASE}-worker`,
+				"--ignore-not-found",
+				"-o",
+				"name",
+			]);
+			if (worker.trim() !== "") {
+				await kubectl(["-n", NAMESPACE, "scale", `deployment/${RELEASE}-worker`, "--replicas=0"]);
+				const listed = await kubectl([
+					"-n",
+					NAMESPACE,
+					"get",
+					"pods",
+					"-l",
+					`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=worker`,
+					"-o",
+					"name",
+				]);
+				const pods = listed.trim().split("\n").filter(Boolean);
+				if (pods.length > 0) {
+					await kubectl(["-n", NAMESPACE, "wait", "--for=delete", ...pods, "--timeout=15m"]);
+				}
+			}
+			await kubectl([
+				"delete",
+				"namespace",
+				SANDBOXES,
+				"--ignore-not-found",
+				"--wait=true",
+				"--timeout=5m",
+			]);
+			await run("helm", [
+				"uninstall",
+				RELEASE,
+				"-n",
+				NAMESPACE,
+				"--ignore-not-found",
+				"--wait",
+				"--timeout=5m",
+			]);
+			await kubectl(["annotate", "namespace", NAMESPACE, `${DEV_OWNER}-`]);
 			break;
 		}
 		case "reset": {
@@ -2270,12 +2675,19 @@ if (import.meta.main) {
 					"release-smoke needs --assets <directory of k3s-* assets> --lock <joint lock> --release <vX.Y.Z> --architecture <amd64|arm64>",
 				);
 			}
-			await releaseSmoke({ work, assets, lock, release, architecture });
+			await releaseSmoke({
+				work,
+				assets,
+				lock,
+				release,
+				architecture,
+				...(values.receipt === undefined ? {} : { receipt: values.receipt }),
+			});
 			break;
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|render|dev|down|reset|release-smoke> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|render|live|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}

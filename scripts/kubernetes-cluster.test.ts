@@ -22,6 +22,7 @@ import {
 	devSummary,
 	trustSteps,
 	mergeSecret,
+	livePod,
 	NAMESPACE,
 	operatorValues,
 	RELEASE,
@@ -383,4 +384,94 @@ await test("an upgrade check names each PostgreSQL or NATS Pod that it replaced 
 		],
 	});
 	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0", "heph-nats-0"]);
+});
+
+await test("the live Pod keeps the chart worker's UID, groups, capabilities, mounts, metadata and network labels", () => {
+	const template = {
+		metadata: {
+			labels: { "app.kubernetes.io/component": "worker", "app.kubernetes.io/instance": "heph" },
+		},
+		spec: {
+			serviceAccountName: "heph-worker",
+			securityContext: {
+				runAsUser: 1000,
+				runAsGroup: 1000,
+				fsGroup: 1000,
+				seccompProfile: { type: "RuntimeDefault" },
+			},
+			containers: [
+				{
+					name: "worker",
+					image: "server@sha256:original",
+					imagePullPolicy: "IfNotPresent",
+					securityContext: {
+						allowPrivilegeEscalation: false,
+						capabilities: { drop: ["ALL"] },
+						readOnlyRootFilesystem: true,
+					},
+					env: [{ name: "POD_NAME", valueFrom: { fieldRef: { fieldPath: "metadata.name" } } }],
+					volumeMounts: [{ name: "git-cache", mountPath: "/data/git-repos" }],
+					readinessProbe: { httpGet: { path: "/actuator/health/readiness", port: "management" } },
+				},
+			],
+			volumes: [{ name: "git-cache", emptyDir: { sizeLimit: "2Gi" } }],
+		},
+	};
+	const deployment = { metadata: { namespace: "heph-checkout" }, spec: { template } };
+	const before = structuredClone(deployment);
+	const pod = livePod(deployment, "test-image:qualified", "heph-live");
+	assert.deepEqual(pod, {
+		apiVersion: "v1",
+		kind: "Pod",
+		metadata: { ...template.metadata, name: "heph-live", namespace: "heph-checkout" },
+		spec: {
+			...template.spec,
+			restartPolicy: "Never",
+			containers: [{ ...template.spec.containers[0], image: "test-image:qualified" }],
+		},
+	});
+	assert.deepEqual(deployment, before);
+});
+
+await test("live qualification refuses a worker shape that would bypass the image entrypoint", () => {
+	for (const containers of [
+		[],
+		[{ command: ["unexpected"] }],
+		[{ imagePullPolicy: "Always" }],
+		[{}, {}],
+	]) {
+		assert.throws(
+			() =>
+				livePod(
+					{
+						metadata: { namespace: "heph" },
+						spec: { template: { metadata: {}, spec: { containers } } },
+					},
+					"test-image",
+					"live",
+				),
+			/qualification/u,
+		);
+	}
+});
+
+await test("local live qualification requires an explicit namespace before invoking cluster tools", () => {
+	const emptyPath = mkdtempSync(path.join(tmpdir(), "heph-live-no-tools-"));
+	try {
+		const result = spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("kubernetes-cluster.ts", import.meta.url)), "live"],
+			{
+				encoding: "utf8",
+				env: { ...process.env, CI: "false", PATH: emptyPath },
+			},
+		);
+		assert.equal(result.status, 1);
+		assert.match(
+			result.stderr,
+			/requires --namespace to name the reserved shared qualification release/u,
+		);
+	} finally {
+		rmSync(emptyPath, { recursive: true, force: true });
+	}
 });

@@ -1175,7 +1175,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .withPracticeScript(slots);
 
@@ -1269,7 +1268,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         null,
                         null,
                         600,
-                        false,
                         null)
                 .toJson(objectMapper);
 

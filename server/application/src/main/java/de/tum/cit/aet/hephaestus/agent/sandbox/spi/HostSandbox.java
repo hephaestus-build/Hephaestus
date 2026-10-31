@@ -7,10 +7,8 @@ import java.util.UUID;
 
 /**
  * Runs a long-lived host: one sandboxed process that serves many requests through this worker's gateway, as the Heph
- * host does. A host gets the same isolation as a practice review: a network of its own that only this worker joins, a
- * workspace filled from its files through a gateway session, and the hardened container configuration. On an internal
- * network it reaches nothing but this worker's gateway; a worker outside Docker gives it a network with internet
- * access instead. It gets no review workspace.
+ * host does. A host gets the same restricted Pod policy as a practice review, a workspace filled through a gateway
+ * session, and NetworkPolicy that permits only its worker's gateway. It gets no review workspace.
  *
  * <p>The sandbox sets the gateway variables {@code LLM_PROXY_URL}, {@code SANDBOX_RUNTIME_URL} and
  * {@code LLM_PROXY_TOKEN}. The token opens the host's gateway session.
@@ -21,7 +19,7 @@ public interface HostSandbox {
      * @param files the workspace, by path relative to the workspace root
      * @param environment the variables besides the gateway's
      * @param command the container command
-     * @param limits the container's memory, CPU and process limits. A host runs until it is removed, so
+     * @param limits the container's CPU limit. A host runs until it is removed, so
      *     {@code maxRuntime} bounds only how long filling its workspace may take
      */
     record HostSpec(

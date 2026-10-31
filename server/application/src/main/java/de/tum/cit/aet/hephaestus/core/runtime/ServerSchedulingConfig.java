@@ -24,7 +24,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>Worker-side sandbox and evidence-store maintenance is registered independently by
  * {@code SandboxMaintenanceConfiguration} and {@code JobEvidenceMaintenanceConfiguration}. Worker-only
- * deployments do not enable this server-wide scheduler; the stalled-write watchdog has its own thread so Docker cleanup cannot delay it.
+ * deployments do not enable this server-wide scheduler; the stalled-write watchdog has its own thread so sandbox cleanup cannot delay it.
  *
  * <p>On shutdown, closing the scheduler waits for running scheduled jobs
  * ({@code spring.task.scheduling.shutdown.await-termination}). A job has ended only when its

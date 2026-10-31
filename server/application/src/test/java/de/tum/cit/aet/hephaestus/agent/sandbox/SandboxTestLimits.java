@@ -6,7 +6,7 @@ import java.time.Duration;
 /** Valid sandbox limits for tests that assert nothing about their values. */
 public final class SandboxTestLimits {
     public static final SandboxProperties.DefaultResourceLimits REVIEW =
-            new SandboxProperties.DefaultResourceLimits(4L * 1024 * 1024 * 1024, 2.0, 512);
+            new SandboxProperties.DefaultResourceLimits(2.0);
 
     public static final ResourceLimits ATTEMPT = REVIEW.forAttempt(Duration.ofMinutes(10));
 

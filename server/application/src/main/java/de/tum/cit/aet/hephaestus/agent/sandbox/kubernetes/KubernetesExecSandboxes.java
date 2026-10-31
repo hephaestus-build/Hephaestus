@@ -242,6 +242,9 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
                         KubernetesPods.WORKSPACE + "/" + replace.directory()));
         }
         Execution staged = run(sandbox, KubernetesPods.STAGER, argv, staging, staging.timeout(), STAGING_OUTPUT_LIMIT);
+        if (staged.timedOut()) {
+            throw new SandboxException("Staging into the turn sandbox timed out");
+        }
         Integer exit = staged.exitCode();
         if (exit == null || exit != 0) {
             // The exit is the classification; the sandbox's stderr can name the staged files and stays out.

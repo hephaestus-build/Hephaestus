@@ -333,8 +333,6 @@ spec:
             - name: HEPHAESTUS_WORKER_DRAIN_TIMEOUT
               value: {{ printf "%ds" $drain | quote }}
             # The review-ledger worker identity stays per process: no HEPHAESTUS_WORKER_ID here.
-            - name: HEPHAESTUS_SANDBOX_RUNTIME
-              value: kubernetes
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE
               value: {{ $sandboxes | quote }}
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME

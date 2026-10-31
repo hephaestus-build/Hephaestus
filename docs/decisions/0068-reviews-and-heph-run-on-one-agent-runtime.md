@@ -460,14 +460,14 @@ The second step starts a real Pod with `hostUsers: false`, so it decides on the 
 
 **Decided by the maintainer on 2026-10-27.** Self-hosting in 1.0 is the Helm chart on k3s or Kubernetes only.
 
-The Docker sandbox backend goes in one layer with its replacement. Local development then runs sandboxes on kind or k3d, and the live suites run on kind.
+The Docker sandbox backend goes in one layer with its replacement. Local development then runs sandboxes on kind or k3d, and the live suites run on the CI k3s and kind clusters.
 That layer comes before the review's tools sidecar and the Heph tools Pods, so the new Pod shapes are built once, for Kubernetes.
 This amends [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) § Supported deployment, which kept the driver until a decision after 1.0.
 
 The layer must meet these requirements:
 
 - 5 parallel worktrees on a laptop of 16–32 GiB.
-- The live suites on kind within the CI time budget.
+- The live suites on the CI clusters within the CI time budget.
 - Inner-loop times against the local Kubernetes baseline.
 
 **Consequence:** the worker in development tests the production NetworkPolicy, which it does not today. The contributor loop needs a local cluster.
@@ -706,7 +706,8 @@ This update amends § The review agent Pod and § Tool placement for the layer t
 - The runner knows the layout from its build, not from a setting.
   `SandboxLayout.CONTEXT_IS_LOOP_ONLY` and the runner's `CONTEXT_IS_LOOP_ONLY` start as false.
   ADR 0069's freshness layer or the review agent Pod layer adds them, whichever comes first.
-  They become true in the decision D layer, which removes the last backend that shares captured context.
+  They become true only in the layer that mounts captured context into the trusted loop alone.
+  Removing the Docker backend does not establish that physical boundary.
   A test pins the two constants to each other.
   The runner reads its constant to know which captured kinds a session could read.
 
