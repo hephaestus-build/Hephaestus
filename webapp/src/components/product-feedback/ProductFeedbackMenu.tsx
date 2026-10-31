@@ -68,17 +68,13 @@ export function ProductFeedbackMenu({
 						shape="pill"
 						className={cn(
 							// A 32px square on a phone, where the header is already full; a labelled pill from `sm`.
-							"group relative w-8 sm:w-auto",
+							"relative w-8 sm:w-auto",
 							count > 0 && "border-primary/40 bg-primary/5 hover:bg-primary/10",
 						)}
 					/>
 				}
 			>
-				<MessageSquarePlus
-					data-icon="inline-start"
-					aria-hidden
-					className="transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-12 motion-reduce:transition-none motion-reduce:group-hover:transform-none"
-				/>
+				<MessageSquarePlus data-icon="inline-start" aria-hidden />
 				<span className="hidden sm:inline">Product feedback</span>
 				{count > 0 && (
 					<span

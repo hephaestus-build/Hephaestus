@@ -278,7 +278,7 @@ A spinner standing alone for a region opts in with those same plain attributes.
 280ms in, 200ms out. Enter is the longer half — it is the reader orienting. Exit is getting out of
 the way ([Material](https://m2.material.io/design/motion/speed.html): 225/195 and "transitions that
 exceed 400ms may feel too slow"). Split the curve by direction: decelerate in
-(`cubic-bezier(0.05,0.7,0.1,1)`), standard out (`cubic-bezier(0.2,0,0.38,0.9)`). A dismissible side
+(`cubic-bezier(0.05,0.7,0.1,1)`), standard out (`cubic-bezier(0.2,0,0.38,0.9)`). In Tailwind classes they are `ease-enter` and `ease-exit`. A dismissible side
 panel takes standard out, not accelerate — it can come back.
 
 Under `prefers-reduced-motion`, remove what triggers symptoms and keep what carries meaning.
