@@ -19,6 +19,7 @@ import { isSet } from "./lib/env.ts";
 import { isImageIndex, selectPlatformDigest } from "./lib/image-scan.ts";
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
+import { captureReleaseSourceSbom } from "./release-source-sbom.ts";
 import { parseResolvedImages, type ResolvedImage } from "./resolve-release-images.ts";
 import { planUpstreamSubjects } from "./scan-upstream-images.ts";
 import type { Subject } from "./verify-release-evidence.ts";
@@ -50,6 +51,7 @@ export interface ManifestMetadata {
 export interface EvidenceManifest extends ManifestMetadata {
 	readonly schemaVersion: 1;
 	readonly bundledNpmSbom: 1;
+	readonly sourceSbom: 1;
 	readonly subjects: readonly Subject[];
 }
 
@@ -112,6 +114,7 @@ export function buildManifest(
 		schemaVersion: 1,
 		release: metadata.release,
 		commit: metadata.commit,
+		sourceSbom: 1,
 		generatedAt: metadata.generatedAt,
 		durationSeconds: metadata.durationSeconds,
 		bundledNpmSbom: 1,
@@ -260,6 +263,7 @@ export async function generateReleaseEvidence(options: {
 	const startedAt = Date.now();
 	const { commit, digestsPath, directory, release } = options;
 	await mkdir(directory, { recursive: true });
+	await captureReleaseSourceSbom(directory, commit, release);
 	await writeFile(
 		path.join(directory, "tool-versions.json"),
 		`${JSON.stringify(await toolVersions(), null, 2)}\n`,

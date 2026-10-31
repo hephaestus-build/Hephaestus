@@ -55,6 +55,7 @@ void describe("the release evidence generator", () => {
 		assert.doesNotThrow(() => validateManifest(manifest, document, NAMESPACE));
 		assert.equal(manifest.schemaVersion, 1);
 		assert.equal(manifest.bundledNpmSbom, 1);
+		assert.equal(manifest.sourceSbom, 1);
 	});
 
 	void test("evidences both platforms of every image, first-party and upstream alike", async () => {

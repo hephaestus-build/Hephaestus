@@ -26,6 +26,7 @@ import {
 } from "./lib/release-identities.ts";
 import { requiresSbomInventory } from "./lib/release-sbom-contract.ts";
 import { isRelease } from "./release-image-lock.ts";
+import { SOURCE_SBOM_FORMATS, validateReleaseSourceBundle } from "./release-source-sbom.ts";
 
 /** One platform of one image, as the manifest records it. `generate-release-evidence.ts` emits
  * these and this file is the only thing that decides whether they are acceptable. */
@@ -388,6 +389,22 @@ export function verifyReleaseEvidence(
 		covered === undefined,
 	);
 
+	if (requiresSbomInventory(manifestValue, "sourceSbom", covered === undefined)) {
+		requireChecksumCoverage(
+			covered,
+			SOURCE_SBOM_FORMATS.map(([, file]) => file),
+		);
+		const [syft, spdx, cycloneDx] = SOURCE_SBOM_FORMATS.map(([, file]) =>
+			readJsonFileSync(path.join(directory, file)),
+		);
+		validateReleaseSourceBundle(
+			syft,
+			spdx,
+			cycloneDx,
+			manifestValue.commit,
+			releaseRepository(release, process.env),
+		);
+	}
 	requireChecksumCoverage(covered, [
 		"manifest.json",
 		"release-images.json",

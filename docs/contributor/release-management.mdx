@@ -219,6 +219,21 @@ An incompatible field change requires a new schema version.
 The runtime image retains the artifact so its full license notices remain available.
 The artifact covers JavaScript chunks, not emitted worker assets or CSS.
 
+`source.syft.json`, `source.spdx.json` and `source.cdx.json` list the release source's npm, Gradle and GitHub Actions inputs, including development dependencies and build plugins.
+This source inventory is separate from the packages installed in each image.
+It covers inputs such as CSS, fonts and worker packages whose identities can disappear from browser assets.
+The generator scans a Git archive of the exact release commit, not the installed checkout.
+
+Syft's native Gradle cataloger recognizes only the `gradle.lockfile` basename.
+The archive therefore includes exact copies of the native buildscript and settings locks under `gradle-inputs/<kind>/gradle.lockfile`.
+The generator reads those copies from the same commit.
+
+New captures declare `sourceSbom: 1` in the signed manifest.
+Verification requires all three source files when that declaration is present.
+Archived releases that predate it keep their original contract.
+Verification checks the repository and commit labels, catalogers, ecosystem coverage, buildscript-lock coverage and remote Action pins.
+It requires both standard formats to preserve every native package identity.
+
 One native Trivy `vuln,license` scan supplies both vulnerability and license report paths.
 This avoids duplicate image analysis and binds both evidence consumers to the same subject.
 `scripts/verify-release-evidence.ts` checks every document's platform repository, digest, and architecture.
