@@ -64,6 +64,8 @@ tags:
   name: Practice reviews
 - description: GDPR Art. 20 self-service data export
   name: Account
+- description: The scopes of the workspace's Slack connection
+  name: Slack connection
 - description: Instance-administrator access and erasure requests
   name: Person Data
 - description: Workspace-scoped history of admin configuration changes
@@ -11174,6 +11176,30 @@ paths:
       summary: Update current user's Slack workspace preferences
       tags:
       - Slack User Preferences
+  /workspaces/{workspaceSlug}/slack/scopes:
+    get:
+      operationId: getSlackScopes
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlackScopes"
+          description: OK
+      summary: List the Slack scopes that Hephaestus requests and the workspace's
+        Slack token does not hold
+      tags:
+      - Slack connection
   /workspaces/{workspaceSlug}/status:
     patch:
       operationId: updateStatus
@@ -25589,6 +25615,19 @@ components:
       - optedOutMemberCount
       - slackChannelId
       - slackTeamId
+    SlackScopes:
+      type: object
+      description: The Slack scopes that Hephaestus requests and the workspace's Slack
+        token does not hold
+      properties:
+        missingScopes:
+          type: array
+          description: "Missing bot scopes, sorted; empty when the token holds every\
+            \ scope"
+          items:
+            type: string
+      required:
+      - missingScopes
     SlackUserPreferences:
       type: object
       properties:
