@@ -1,4 +1,4 @@
-import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -7,6 +7,7 @@ import { parseArgs } from "node:util";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import { migrationFilename, NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { isSet, positivePort, readEnvFile } from "./lib/env.ts";
 import { asArray, asRecord } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
@@ -14,8 +15,7 @@ import { output, run, succeeds } from "./lib/process.ts";
 const root = path.join(import.meta.dirname, "..");
 const server = path.join(root, "server");
 const dataDirectory = path.join(server, "postgres-data");
-const changelogDirectory = "server/application/src/main/resources/db/changelog";
-const master = "server/application/src/main/resources/db/master.xml";
+const changelogDirectory = NEXT_CHANGELOG_DIRECTORY;
 // liquibaseDiff produces no file when the schema matches.
 const draft = path.join(server, "application/build/changelog_new.xml");
 
@@ -225,15 +225,6 @@ export function validateDraft(draftXml: string): void {
 	}
 }
 
-/** Appends the include for `fileName` unless master.xml already lists it; the list is append-only. */
-export function appendInclude(masterXml: string, fileName: string): string {
-	const include = `    <include file="./changelog/${fileName}" relativeToChangelogFile="true"/>\n`;
-	if (masterXml.includes(include)) {
-		return masterXml;
-	}
-	return masterXml.replace(closingTag, `${include}${closingTag}`);
-}
-
 /** The changelog this layer added and its base does not have, if there is exactly one. */
 async function branchChangelog(repository: string, baseRef: string): Promise<string | undefined> {
 	const fallback = baseRef.startsWith("origin/")
@@ -263,7 +254,7 @@ async function branchChangelog(repository: string, baseRef: string): Promise<str
 	const files = `${added}\n${staged}\n${untracked}`
 		.split("\n")
 		.map((line) => line.trim())
-		.filter((line) => line.endsWith("_changelog.xml"));
+		.filter((line) => line.endsWith(".xml"));
 	const unique = [...new Set(files)];
 	if (unique.length > 1) {
 		throw new Error(`This branch adds several changelogs: ${unique.join(", ")}`);
@@ -271,7 +262,7 @@ async function branchChangelog(repository: string, baseRef: string): Promise<str
 	return unique[0] === undefined ? undefined : path.join(repository, unique[0]);
 }
 
-/** Writes the drift into this branch's changelog and wires it; returns the file it wrote. */
+/** Writes this branch's drift; includeAll discovers the file without a master.xml edit. */
 export async function promote(
 	draftXml: string,
 	repository = root,
@@ -279,21 +270,22 @@ export async function promote(
 ): Promise<string> {
 	const existing = await branchChangelog(repository, baseRef);
 	if (existing !== undefined) {
-		await writeFile(
-			existing,
-			promoteDraft(
-				draftXml,
-				Number(/(?<timestamp>\d+)_changelog\.xml$/u.exec(existing)?.groups?.timestamp),
-				await readFile(existing, "utf8"),
-			),
-		);
+		const xml = await readFile(existing, "utf8");
+		const timestamp = /<changeSet id="(?<timestamp>\d+)-/u.exec(xml)?.groups?.timestamp;
+		if (timestamp === undefined) {
+			throw new Error(`Existing migration has no generated timestamp id: ${existing}`);
+		}
+		await writeFile(existing, promoteDraft(draftXml, Number(timestamp), xml));
 		return existing;
 	}
-	const fileName = `${Date.now()}_changelog.xml`;
-	const target = path.join(repository, changelogDirectory, fileName);
-	const masterFile = path.join(repository, master);
-	await writeFile(target, promoteDraft(draftXml, Number(fileName.split("_")[0])));
-	await writeFile(masterFile, appendInclude(await readFile(masterFile, "utf8"), fileName));
+
+	const directory = path.join(repository, changelogDirectory);
+	await mkdir(directory, { recursive: true });
+	const branchName = await output("git", ["branch", "--show-current"], { cwd: repository });
+	const branch = branchName.trim();
+	const fileName = migrationFilename(branch, await readdir(directory));
+	const target = path.join(directory, fileName);
+	await writeFile(target, promoteDraft(draftXml, Date.now()));
 	return target;
 }
 

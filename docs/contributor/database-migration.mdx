@@ -22,12 +22,14 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 
    The command applies the whole chain to a disposable database.
    It compares the result with the JPA model.
-   It writes the difference as change sets into `server/application/src/main/resources/db/changelog/<timestamp>_changelog.xml`.
-   These use ids `<timestamp>-1`, `-2`, … and author `hephaestus`.
+   It writes the difference as change sets into `server/application/src/main/resources/db/changelog/next/YYYYMMDDHHMMSS-<branch-slug>.xml`.
+   The filename uses UTC. Change set ids keep the millisecond timestamp, numbered `-1`, `-2`, …, and author `hephaestus`.
 
-   A branch gets one such file: the first run
-   creates it and appends its `<include>` to `master.xml`. Later runs add change sets to it. It then
-   refreshes the ERD. With no drift it writes nothing.
+   A branch gets one such file. The first run creates it after the latest existing timestamp.
+   Later runs add change sets to it.
+
+   Liquibase discovers it through `includeAll`. The command does not edit `master.xml`.
+   It then refreshes the ERD. With no drift it writes nothing.
 
 3. **Review the change sets.** Keep the real deltas and remove what the diff only inferred. Prefer `renameColumn` to a drop-and-add pair.
    Unless there is a data migration plan, start new sequences at `1`.
@@ -44,7 +46,7 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    (`.changeset/README.md`). A Liquibase `<changeSet>` and a release changeset are different things
    and a schema change needs both. `verify-changesets` fails a PR that touches `db/changelog/`
    without one. Keep the summary user-facing. The release notes flag the migration automatically.
-5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/`.
+5. Commit the changelog, the changeset, and `docs/contributor/erd/`.
 
 ## Workspace column
 
@@ -108,10 +110,16 @@ if history never changes underneath an instance that already ran part of it.
    Fresh installs silently get a different schema. Fix mistakes **forward** with a new changelog file. Liquibase [excludes preconditions, contexts and labels from checksums](https://www.liquibase.com/blog/what-affects-changeset-checksums).
    It ignores deleted changesets.
    Thus, those edits make installed instances inconsistent without an error.
-2. **`master.xml` is append-only.** Never remove or reorder existing `<include>` entries.
-   New changelogs go at the end. The maintainer-approved cut-point guard is a
-   changelog-level precondition at the head, not a change to released changesets. It protects
-   both startup and `changeLogSyncToTag` without changing checksums or include order.
+2. **Keep released includes fixed.** Never change their files, paths, or order.
+   This includes the migration released in 0.95.1 after the 0.95.0 cut-point.
+   One `includeAll` follows that prefix and reads XML files directly from `db/changelog/next` in filename order.
+   Name new files `YYYYMMDDHHMMSS-<slug>.xml` in UTC.
+   A new file must sort after every migration already on the base branch.
+   The generator chooses the next timestamp when the current second is already used.
+   After a rebase, rename an out-of-order unreleased file to a later timestamp.
+   Reset a local database that applied the moved file with `vp run dev:reset`.
+   Do not add explicit includes or nested directories. The immutability guard rejects invalid filenames and insertion before existing history.
+   The changelog-level cut-point precondition protects startup and synchronization without changing released changesets.
 3. **Release *N* runs correctly on the schema of release *N+1*.** A single
    release must stay bootable against the schema left behind by the previous one.
    The [migrate run mode](../admin/runtime-roles#database-migrations) migrates before the rollout, so the old roles run on the new schema until they stop.
@@ -201,7 +209,8 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    Pull requests and merge groups both run it.
    A pull request run does not repeat when its base advances.
    Thus, the merge group judges migrations that reached `main` after that run.
-   No file under `db/changelog/` can have a modification, rename, or deletion.
+   No file under `db/changelog/` can have a modification, rename, or deletion after it reaches the base branch.
+   New migration files must have a valid UTC timestamp and sort after that branch’s existing migrations.
    No existing `<include>` in `master.xml` can have a removal, order change, or attribute change.
    Either prohibited change fails the check.
 3. **Changelog compatibility** — Security workflow, same job, step *Changelog compatibility guard*.

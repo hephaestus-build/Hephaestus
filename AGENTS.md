@@ -223,7 +223,8 @@ Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/
 `generate:api:client` empties both `src/api/` directories first.
 A branch has one changelog, written by `db:draft-changelog`.
 Never edit, rename, or delete a file under `db/changelog/` that reached `main`.
-`master.xml` is append-only.
+
+`master.xml` keeps its released include prefix fixed. New migrations use timestamped XML files in `db/changelog/next/`, discovered by its one `includeAll`.
 Wipe an older local database with `vp run dev:reset`.
 
 ## Command caveats

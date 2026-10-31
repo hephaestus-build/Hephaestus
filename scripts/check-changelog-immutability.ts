@@ -2,20 +2,33 @@ import { execFileSync } from "node:child_process";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import nodePath from "node:path";
+
+import { CHANGELOG_DIRECTORY, NEXT_CHANGELOG_DIRECTORY, migrationTime } from "./lib/changelog.ts";
 import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
-const directory = "server/application/src/main/resources/db/changelog/";
+const directory = `${CHANGELOG_DIRECTORY}/`;
 const master = "server/application/src/main/resources/db/master.xml";
 export interface ChangelogSnapshot {
 	blobs: ReadonlyMap<string, string>;
 	master: string;
 }
 
-const parser = new XMLParser({ ignoreAttributes: false, isArray: (name) => name === "include" });
+const parser = new XMLParser({
+	ignoreAttributes: false,
+	isArray: (name) => name === "include" || name === "includeAll",
+});
 
-function includes(xml: string): string[] {
+const canonical = (value: unknown) =>
+	JSON.stringify(
+		Object.entries(asRecord(value, "includeAll attributes")).toSorted(([a], [b]) =>
+			a.localeCompare(b),
+		),
+	);
+
+function includes(xml: string, requireAutomatic = false): string[] {
 	if (!xml) {
 		return [];
 	}
@@ -26,8 +39,28 @@ function includes(xml: string): string[] {
 		return [];
 	}
 	const changelog = asRecord(root, "databaseChangeLog");
-	if (changelog.includeAll !== undefined) {
-		throw new Error("Use explicit includes, not includeAll.");
+	if (changelog.changeSet !== undefined) {
+		throw new Error("Keep change sets in timestamped files, not master.xml");
+	}
+	const automatic = asArray(changelog.includeAll ?? [], "automatic includes");
+	if (automatic.length > 0 || requireAutomatic) {
+		const expected = {
+			"@_path": "./changelog/next",
+			"@_relativeToChangelogFile": "true",
+			"@_errorIfMissingOrEmpty": "false",
+			"@_endsWithFilter": ".xml",
+			"@_maxDepth": "1",
+		};
+
+		if (
+			automatic.length !== 1 ||
+			canonical(automatic[0]) !== canonical(expected) ||
+			!/<includeAll\b[^>]*\/>\s*<\/databaseChangeLog>\s*$/u.test(
+				xml.replaceAll(/<!--[\s\S]*?-->/gu, ""),
+			)
+		) {
+			throw new Error("End master.xml with the one flat XML includeAll for ./changelog/next");
+		}
 	}
 	return asArray(changelog.include ?? [], "changelog includes").map((value) => {
 		const attributes = asRecord(value, "include attributes");
@@ -42,7 +75,7 @@ export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot):
 	let newIncludes: string[];
 	try {
 		oldIncludes = includes(before.master);
-		newIncludes = includes(after.master);
+		newIncludes = includes(after.master, true);
 	} catch (error) {
 		return [`Invalid changelog: ${error instanceof Error ? error.message : String(error)}`];
 	}
@@ -51,9 +84,35 @@ export function violations(before: ChangelogSnapshot, after: ChangelogSnapshot):
 			errors.push(`Released migration changed: ${path}`);
 		}
 	}
-	if (oldIncludes.some((include, index) => newIncludes[index] !== include)) {
-		errors.push("master.xml is append-only; existing includes must not change or move.");
+	if (
+		newIncludes.length !== oldIncludes.length ||
+		oldIncludes.some((include, index) => newIncludes[index] !== include)
+	) {
+		errors.push(
+			"The released explicit include prefix must not change; add migrations through includeAll.",
+		);
 	}
+	const previous = [...before.blobs.keys()]
+		.filter((file) => file.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`))
+		.toSorted()
+		.at(-1);
+	for (const file of after.blobs.keys()) {
+		if (!file.startsWith(directory) || before.blobs.has(file)) {
+			continue;
+		}
+		try {
+			if (nodePath.posix.dirname(file) !== NEXT_CHANGELOG_DIRECTORY) {
+				throw new Error(`New migrations belong in ${NEXT_CHANGELOG_DIRECTORY}: ${file}`);
+			}
+			migrationTime(file);
+			if (previous !== undefined && file <= previous) {
+				throw new Error(`New migration sorts before existing history: ${file} <= ${previous}`);
+			}
+		} catch (error) {
+			errors.push(error instanceof Error ? error.message : String(error));
+		}
+	}
+
 	return errors;
 }
 
