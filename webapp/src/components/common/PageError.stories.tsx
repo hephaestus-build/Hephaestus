@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
+import { toast } from "@/lib/toast";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { PageError } from "./PageError";
@@ -14,6 +15,12 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
 	args: { cause: "failed", onRetry: fn() },
+	// The preview's Toaster and the page's navigator outlive a story: a message left open or a stubbed
+	// clipboard would reach the next story in the same page.
+	beforeEach: () => () => {
+		toast.dismiss();
+		Reflect.deleteProperty(navigator, "clipboard");
+	},
 } satisfies Meta<typeof PageError>;
 
 export default meta;
