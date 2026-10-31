@@ -25,11 +25,9 @@ export const Default: Story = {
 		const examples = canvas.getByRole("list", { name: "Example questions" });
 		await expect(examples).toBeVisible();
 		await userEvent.click(
-			canvas.getByRole("button", { name: "Which practices does this workspace review?" }),
+			canvas.getByRole("button", { name: "Which practices apply in this workspace?" }),
 		);
-		await expect(args.onAsk).toHaveBeenLastCalledWith(
-			"Which practices does this workspace review?",
-		);
+		await expect(args.onAsk).toHaveBeenLastCalledWith("Which practices apply in this workspace?");
 	},
 };
 
@@ -45,7 +43,7 @@ export const GitLabWork: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("button", {
-				name: "What would a merge request that meets these practices look like?",
+				name: "What does a merge request that meets this workspace’s practices look like?",
 			}),
 		).toBeVisible();
 	},

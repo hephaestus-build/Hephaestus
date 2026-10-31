@@ -12,14 +12,15 @@ export interface GreetingProps {
 }
 
 /**
- * Questions about the workspace's practices and the product, which Hephaestus can answer before any
- * review of the developer's work: an example never presumes feedback that may not exist yet.
+ * Questions that the workspace's practice catalog answers before any review of the developer's work:
+ * an example never presumes feedback that may not exist yet. None asks how a review works: no
+ * document that the conversation reads describes it.
  */
 function exampleQuestions(provider?: ItemProvider): string[] {
 	return [
-		"Which practices does this workspace review?",
-		`What would a ${itemKindNoun(ITEM_KIND.pullRequest, 1, provider)} that meets these practices look like?`,
-		"How does a practice review work?",
+		"Which practices apply in this workspace?",
+		`What does a ${itemKindNoun(ITEM_KIND.pullRequest, 1, provider)} that meets this workspace’s practices look like?`,
+		"Why do this workspace’s practices matter?",
 	];
 }
 

@@ -1526,13 +1526,13 @@ it("puts an example question into the composer of an empty conversation without 
 	await userEvent.click(
 		await screen.findByRole(
 			"button",
-			{ name: "Which practices does this workspace review?" },
+			{ name: "Which practices apply in this workspace?" },
 			ROUTE_RENDER_WAIT,
 		),
 	);
 
 	const composer = await screen.findByRole("textbox", { name: "Message Hephaestus" });
-	expect(composer).toHaveProperty("value", "Which practices does this workspace review?");
+	expect(composer).toHaveProperty("value", "Which practices apply in this workspace?");
 	expect(document.activeElement).toBe(composer);
 	expect(fake.submissions).toStrictEqual([]);
 });
