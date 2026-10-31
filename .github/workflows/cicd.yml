@@ -519,6 +519,7 @@ jobs:
               - 'deploy/chart/**'
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
+              - 'scripts/prepare-kubernetes-runner.ts'
               - 'scripts/resolve-release-images.ts'
               - 'server/application/src/main/java/**/agent/sandbox/**'
               - 'server/application/src/main/java/**/agent/gateway/**'

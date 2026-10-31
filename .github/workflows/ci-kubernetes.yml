@@ -95,6 +95,8 @@ jobs:
         env:
           COMMIT: ${{ inputs.commit }}
         run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+      - name: Free disk space for the cluster
+        run: node scripts/prepare-kubernetes-runner.ts
       # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
       - name: Create a server and an agent node
         env:
@@ -170,6 +172,8 @@ jobs:
         env:
           COMMIT: ${{ inputs.commit }}
         run: node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+      - name: Free disk space for the cluster
+        run: node scripts/prepare-kubernetes-runner.ts
       - name: Create three nodes with Calico
         run: |
           set -euo pipefail
