@@ -1,0 +1,316 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://hephaestus.aet.cit.tum.de/schemas/feedback-eval/compositions.json",
+	"title": "Labelled composition set",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["version", "cases"],
+	"properties": {
+		"version": { "const": 1 },
+		"cases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/case" } }
+	},
+	"$defs": {
+		"id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+		"text": { "type": "string", "minLength": 1 },
+		"disposition": { "enum": ["RAISE", "BELOW_BAR", "ALREADY_SAID", "NO_MATERIAL_CHANGE"] },
+		"code": {
+			"enum": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "D1", "D2", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9"]
+		},
+		"citation": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["path", "startLine", "endLine"],
+			"properties": {
+				"path": { "$ref": "#/$defs/text" },
+				"startLine": { "type": "integer", "minimum": 1 },
+				"endLine": { "type": "integer", "minimum": 1 },
+				"anchorable": { "type": "boolean" }
+			}
+		},
+		"review": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["decisions", "summary"],
+			"properties": {
+				"decisions": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["resultId", "disposition"],
+						"properties": {
+							"resultId": { "type": "string" },
+							"disposition": { "type": "string" },
+							"witnessIds": { "type": ["array", "null"], "items": { "type": "string" } }
+						}
+					}
+				},
+				"summary": {
+					"oneOf": [
+						{ "type": "null" },
+						{
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["body", "basedOn"],
+							"properties": {
+								"body": { "type": "string" },
+								"basedOn": { "type": "array", "items": { "type": "string" } }
+							}
+						}
+					]
+				},
+				"inline": {
+					"type": ["array", "null"],
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["body", "basedOn", "anchor"],
+						"properties": {
+							"body": { "type": "string" },
+							"basedOn": { "type": "array", "items": { "type": "string" } },
+							"anchor": {
+								"type": "object",
+								"additionalProperties": false,
+								"required": ["problemId", "citationIndex"],
+								"properties": {
+									"problemId": { "type": "string" },
+									"citationIndex": { "type": "integer", "minimum": 0 }
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"label": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["good", "codes", "why"],
+			"properties": {
+				"good": { "type": "boolean" },
+				"codes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/code" } },
+				"why": { "$ref": "#/$defs/text" }
+			}
+		},
+		"case": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"id",
+				"provider",
+				"theme",
+				"work",
+				"files",
+				"results",
+				"limits",
+				"notReached",
+				"alreadySaid",
+				"discussion",
+				"discussionCapture",
+				"expected",
+				"expectedWhy",
+				"compositions",
+				"criteriaQuestion"
+			],
+			"properties": {
+				"id": { "$ref": "#/$defs/id" },
+				"provider": { "enum": ["github", "gitlab"] },
+				"theme": { "$ref": "#/$defs/id" },
+				"work": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["repository", "number", "title", "description", "state", "draft", "sourceBranch", "targetBranch", "author"],
+					"properties": {
+						"repository": { "type": "string", "pattern": "^[\\w.-]+/[\\w.-]+$" },
+						"number": { "type": "integer", "minimum": 1 },
+						"title": { "$ref": "#/$defs/text" },
+						"description": { "type": "string" },
+						"state": { "enum": ["open", "closed", "merged"] },
+						"draft": { "type": "boolean" },
+						"sourceBranch": { "$ref": "#/$defs/text" },
+						"targetBranch": { "$ref": "#/$defs/text" },
+						"author": { "$ref": "#/$defs/text" }
+					}
+				},
+				"files": { "type": "object", "additionalProperties": { "type": "string" } },
+				"results": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["id", "practice", "summary", "explanation", "summaryOnly", "citations", "problems"],
+						"properties": {
+							"id": { "$ref": "#/$defs/id" },
+							"practice": { "$ref": "#/$defs/id" },
+							"summary": { "$ref": "#/$defs/text" },
+							"explanation": { "$ref": "#/$defs/text" },
+							"summaryOnly": { "type": "boolean" },
+							"citations": { "type": "array", "items": { "$ref": "#/$defs/citation" } },
+							"problems": {
+								"type": "array",
+								"minItems": 1,
+								"items": {
+									"type": "object",
+									"additionalProperties": false,
+									"required": ["id", "summary", "explanation", "severity", "nextStep", "citations"],
+									"properties": {
+										"id": { "$ref": "#/$defs/id" },
+										"summary": { "$ref": "#/$defs/text" },
+										"explanation": { "$ref": "#/$defs/text" },
+										"severity": { "enum": ["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"] },
+										"nextStep": { "type": ["string", "null"] },
+										"citations": { "type": "array", "items": { "$ref": "#/$defs/citation" } }
+									}
+								}
+							}
+						}
+					}
+				},
+				"limits": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["practice", "outcome"],
+						"properties": {
+							"practice": { "$ref": "#/$defs/id" },
+							"outcome": { "enum": ["COULD_NOT_DETERMINE", "DOES_NOT_APPLY"] },
+							"openQuestions": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+							"inapplicability": { "$ref": "#/$defs/text" }
+						}
+					}
+				},
+				"notReached": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+				"alreadySaid": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["id", "practice", "deliveredAt", "body", "notes", "currentness", "sameVersion"],
+						"properties": {
+							"id": { "$ref": "#/$defs/id" },
+							"practice": { "$ref": "#/$defs/id" },
+							"deliveredAt": { "type": "string" },
+							"body": { "type": ["string", "null"] },
+							"notes": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"additionalProperties": false,
+									"required": ["path", "line", "body"],
+									"properties": {
+										"path": { "$ref": "#/$defs/text" },
+										"line": { "type": "integer", "minimum": 1 },
+										"body": { "$ref": "#/$defs/text" }
+									}
+								}
+							},
+							"currentness": { "enum": ["CURRENT", "STALE"] },
+							"sameVersion": { "type": "boolean" }
+						}
+					}
+				},
+				"discussion": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["id", "author", "body", "statedAt", "path", "line"],
+						"properties": {
+							"id": { "$ref": "#/$defs/id" },
+							"author": { "$ref": "#/$defs/text" },
+							"body": { "$ref": "#/$defs/text" },
+							"statedAt": { "type": "string" },
+							"path": { "type": ["string", "null"] },
+							"line": { "type": ["integer", "null"] }
+						}
+					}
+				},
+				"discussionCapture": { "enum": ["COMPLETE", "UNAVAILABLE"] },
+				"expected": { "type": "object", "additionalProperties": { "$ref": "#/$defs/disposition" } },
+				"unsettled": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+				"expectedWhy": { "$ref": "#/$defs/text" },
+				"compositions": {
+					"type": "array",
+					"minItems": 2,
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["id", "review", "label"],
+						"properties": {
+							"id": { "$ref": "#/$defs/id" },
+							"review": { "$ref": "#/$defs/review" },
+							"label": { "$ref": "#/$defs/label" }
+						}
+					}
+				},
+				"criteriaQuestion": { "type": ["string", "null"] }
+			}
+		},
+		"gate": {
+			"type": "object",
+			"required": ["version", "checks"],
+			"properties": {
+				"version": { "const": 1 },
+				"checks": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["caseId", "compositionId", "accepted", "errors"],
+						"properties": {
+							"caseId": { "type": "string" },
+							"compositionId": { "type": "string" },
+							"accepted": { "type": "boolean" },
+							"errors": { "type": "array", "items": { "type": "string" } }
+						}
+					}
+				}
+			}
+		},
+		"run": {
+			"type": "object",
+			"required": ["version", "cases"],
+			"properties": {
+				"version": { "const": 1 },
+				"cases": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["id", "accepted", "errors", "review"],
+						"properties": {
+							"id": { "type": "string" },
+							"accepted": { "type": "boolean" },
+							"firstAccepted": { "type": ["boolean", "null"] },
+							"failure": { "type": ["string", "null"] },
+							"errors": { "type": "array", "items": { "type": "string" } },
+							"review": { "type": ["object", "null"] }
+						}
+					}
+				}
+			}
+		},
+		"runLabels": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "labels"],
+			"properties": {
+				"version": { "const": 1 },
+				"labels": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["caseId", "good", "codes", "why"],
+						"properties": {
+							"caseId": { "type": "string" },
+							"good": { "type": "boolean" },
+							"codes": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/code" } },
+							"why": { "$ref": "#/$defs/text" }
+						}
+					}
+				}
+			}
+		}
+	}
+}

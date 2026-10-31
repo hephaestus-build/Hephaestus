@@ -172,3 +172,83 @@ Every report says `releaseDecision: not-assessed` and `judgeUse: advisory-only`.
 There is no precision-drop gate or paired release comparison in this harness.
 The three seed cases cannot close the broader correctness issues.
 The [provenance contract](./evaluation-provenance.md) owns the interpretation of review and delivery records.
+
+## Composition set
+
+The composition set measures the review on the work that the composer writes from admitted results.
+`scripts/feedback-eval/compositions.json` holds 60 synthetic pull request and merge request cases.
+The cases use fictional repositories and people, and they hold no personal data.
+The [composition label rubric](./composition-label-rubric.md) owns the labels and the measures.
+
+Each case holds the captured work, the cited files, the admitted Not met results and their problems, and the recorded limits.
+It also holds what Hephaestus and reviewers already said on the work.
+Each case gives the expected decision for every Not met result, a reference composition, and labelled alternatives.
+The criteria come from the shipped catalog, so a criteria change applies to the set without an edit.
+
+`CompositionEvalTest` turns each case into a scenario in the layout of the golden pull-request scenario.
+Then it renders the case through main's composer: the system prompt, the opening turn and the `report_review` tool.
+Main's check is `ReviewOnWork.read` and then the text policy that preparation applies to links, mentions, HTML, images and hidden characters.
+It does not read what the words claim.
+The test fails when main's check refuses a reference composition.
+
+The loader fails when a label is inconsistent. A good label must have no code. Words over a length target or with a link, mention or HTML must carry that code.
+
+The cases are hand-authored, not a random sample.
+The report gives descriptive counts and rates, with no confidence interval.
+The set is public, so a prompt change can overfit it. Report a prompt change against the set before and after.
+
+### Run the composition set
+
+These commands run from the repository root.
+The first one writes the model requests and the check of every labelled composition:
+
+```bash
+(cd server && COMPOSITION_EVAL_REQUESTS=/tmp/ev/requests.json COMPOSITION_EVAL_GATE=/tmp/ev/gate.json \
+  ./gradlew :application:test --tests CompositionEvalTest)
+```
+
+A live run composes every case with the model that the three `HEPHAESTUS_LIVE_LLM_*` variables name.
+It uses main's `ModelSession` and the `OPENAI_COMPLETIONS` protocol.
+The session follows the composer's review session: its call bound, one finish reminder, the nudge, and its answer to a refused review:
+
+```bash
+(cd server && COMPOSITION_EVAL_CHECKED=/tmp/ev/in-house.json \
+  ./gradlew :application:liveTest --tests CompositionEvalLiveTest)
+```
+
+`COMPOSITION_EVAL_REASONING_EFFORT` sets the reasoning effort. The default is `MEDIUM`.
+`COMPOSITION_EVAL_MAX_OUTPUT_TOKENS` sets the output allowance. The default is 32,768.
+`COMPOSITION_EVAL_CASES` selects case IDs, separated by commas.
+
+The `liveTest` task stops after 20 minutes. The run writes its file after each case, and a rerun composes only the cases that the file does not hold yet.
+A rerun refuses a file from another model, other settings or other rendered requests.
+The run sends requests directly to the endpoint, without the proxy that fences and bills them in production.
+
+A run from another runner writes one `report_review` argument object for each case into a file such as `outputs.json`.
+`COMPOSITION_EVAL_OUTPUTS` and `COMPOSITION_EVAL_CHECKED` then apply main's check to that file.
+
+The report puts the runs side by side:
+
+```bash
+node scripts/feedback-eval.ts --compositions scripts/feedback-eval/compositions.json --gate /tmp/ev/gate.json \
+  --run in-house=/tmp/ev/in-house.json --run-labels in-house=/tmp/ev/in-house-labels.json
+```
+
+Each `--run` and `--run-labels` pair has the form `name=file`.
+The labels file holds one human label for each composed review, with the rubric codes.
+The good rate needs a label for every composed review. With fewer labels, the report lists the unlabelled cases and gives no rate.
+Without a labels file, the report gives only the raise decisions, main's acceptance and the mechanical codes.
+
+## Practice outcome cases
+
+`server/application/src/test/resources/practices/criteria-cases.json` holds 20 labelled outcome cases for each of ten practices.
+Their IDs start with `ev-`.
+The [criteria tests](./testing.mdx#live-external-service-tests) run them with a live model:
+
+```bash
+(cd server && ./gradlew :application:liveTest \
+  -PcriteriaCases="$(node -e 'const c=require("./application/src/test/resources/practices/criteria-cases.json");console.log(c.filter(x=>x.id.startsWith("ev-")).map(x=>x.id).join(","))')")
+```
+
+A failed case is a mismatch with the label, not a harness failure.
+The JUnit report gives the mismatches.
