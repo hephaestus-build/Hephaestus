@@ -122,11 +122,15 @@ export async function consentIsPending(queryClient: QueryClient): Promise<boolea
 	if (!(await resolveCurrentUser(queryClient))) {
 		return false;
 	}
+	const options = getConsentStatusOptions({});
 	try {
-		const status = await queryClient.query({ ...getConsentStatusOptions({}), retry: false });
+		const status = await queryClient.query({ ...options, retry: false });
 		return !status.completed;
 	} catch {
-		// Fail closed: `/consent` offers retry and sign-out, so holding the loader back is recoverable.
-		return true;
+		// A consent this session already read as complete stays complete through an outage: the
+		// server still refuses gated reads with 428 until consent is recorded, so the app only keeps
+		// a reader who has consented. Without that answer, fail closed: `/consent` offers retry and
+		// sign-out, so holding the loader back is recoverable.
+		return queryClient.getQueryData(options.queryKey)?.completed !== true;
 	}
 }

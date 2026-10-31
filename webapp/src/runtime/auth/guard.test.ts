@@ -2,6 +2,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import { getConsentStatusQueryKey } from "@/api/@tanstack/react-query.gen";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -295,6 +296,21 @@ describe("consentIsPending with the application's client", () => {
 		try {
 			await expect(consentIsPending(queryClient)).resolves.toBe(true);
 			expect(consent.asked).toBe(1);
+		} finally {
+			queryClient.clear();
+		}
+	});
+
+	it("keeps a consent it already read as complete when a later read fails", async () => {
+		const { queryClient } = getContext();
+		serve(asAppRole("APP_USER"));
+		try {
+			// The default handler answers that consent is complete.
+			await expect(consentIsPending(queryClient)).resolves.toBe(false);
+			server.use(http.get("*/user/consent", () => HttpResponse.error()));
+			await queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+
+			await expect(consentIsPending(queryClient)).resolves.toBe(false);
 		} finally {
 			queryClient.clear();
 		}
