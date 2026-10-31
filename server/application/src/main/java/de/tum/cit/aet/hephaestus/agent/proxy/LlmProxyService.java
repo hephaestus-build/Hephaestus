@@ -60,7 +60,14 @@ class LlmProxyService {
 
     private static final Logger log = LoggerFactory.getLogger(LlmProxyService.class);
     private static final Duration BLOCK_TIMEOUT = Duration.ofSeconds(310);
-    private static final Duration HEPH_CALL_CEILING = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+    /**
+     * A conversation call's own bound, a minute past its turn's ceiling. The dispatcher checks the deadline every few
+     * seconds, stops the turn and cancels the call; it gives the host 30 seconds to end the turn. A bound at the ceiling
+     * could cut the call first, as a plain timeout that Pi retries, instead of a deadline.
+     */
+    private static final Duration HEPH_CALL_CEILING =
+            Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS).plusMinutes(1);
+
     private static final String PROXY_PATH_PREFIX = "/internal/llm";
 
     /** The refusal of a model call after its review attempt's work deadline. */
@@ -738,8 +745,8 @@ class LlmProxyService {
     }
 
     /**
-     * How long one exchange may wait. A conversation turn's call, which has no work deadline, waits up to the turn ceiling. The
-     * call starts after its turn, so the turn's own deadline stop always comes first and names the cause. A review's
+     * How long one exchange may wait. A conversation turn's call, which has no work deadline, waits until a minute past
+     * the turn ceiling, so the turn's own deadline stop comes first and names the cause. A review's
      * stream gets the attempt's remaining work time, however long; every other call of the attempt the shorter of
      * that and the proxy's own ceiling.
      */

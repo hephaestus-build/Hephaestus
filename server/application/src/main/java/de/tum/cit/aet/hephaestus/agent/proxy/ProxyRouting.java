@@ -20,7 +20,7 @@ import org.jspecify.annotations.Nullable;
  * @param practiceScriptTier the data handling tier of that model, as the attempt froze it; {@code null} without a
  *     practice script slot or when the attempt froze no tier for that model
  * @param workDeadline the signed end of the job attempt's work: every model call of the attempt ends by then. {@code
- *     null} for a Heph turn, whose calls its turn ceiling bounds instead
+ *     null} for a conversation turn, whose calls its turn ceiling bounds instead
  */
 public record ProxyRouting(
         String principalDescription,

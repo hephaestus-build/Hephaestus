@@ -2320,13 +2320,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a Heph call may run as long as its turn, past the proxy's own ceiling")
-    void shouldBoundAHephCallByTheTurnCeilingOnly() {
+    @DisplayName("a conversation call outlasts its turn's deadline stop, so the turn ends as a deadline")
+    void shouldBoundAConversationCallPastTheTurnCeilingAndItsStopGrace() {
         Duration turnCeiling = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+        // The dispatcher's tick (5 s) and the host's stop grace (30 s) end the turn before the call's own bound.
+        Duration stopped = turnCeiling.plusSeconds(5).plusSeconds(30);
 
-        // A Heph turn has no work deadline; streaming or not, its call waits as long as the turn may run.
-        assertThat(LlmProxyService.exchangeWait(null, true)).isEqualTo(turnCeiling);
-        assertThat(LlmProxyService.exchangeWait(null, false)).isEqualTo(turnCeiling);
+        assertThat(LlmProxyService.exchangeWait(null, true)).isGreaterThan(stopped);
+        assertThat(LlmProxyService.exchangeWait(null, false)).isGreaterThan(stopped);
     }
 
     @Nested
