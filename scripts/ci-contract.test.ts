@@ -75,6 +75,23 @@ async function posixGlob(pattern: string): Promise<string[]> {
 	return files.map((file) => file.split(path.sep).join("/")).toSorted();
 }
 
+void test("checkouts never retain Git credentials", async () => {
+	for (const file of await posixGlob(".github/{workflows/*.yml,actions/*/action.yml}")) {
+		visit(parseDocument(await readFile(file, "utf8")), {
+			Map(_key, node) {
+				const uses = node.get("uses");
+				if (typeof uses === "string" && uses.startsWith("actions/checkout@")) {
+					assert.equal(
+						node.getIn(["with", "persist-credentials"]),
+						false,
+						`${file}: checkout credential persistence must be explicit`,
+					);
+				}
+			},
+		});
+	}
+});
+
 /** The `paths` filter of a workflow's `pull_request` trigger. */
 async function pullRequestPaths(file: string): Promise<string[]> {
 	const workflow = parseDocument(await readFile(file, "utf8"));
