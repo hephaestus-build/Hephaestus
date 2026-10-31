@@ -35,13 +35,14 @@ function enteringAnimationsOf(element: Element): Animation[] {
 /**
  * `toBeVisible()` on something inside a just-opened overlay, once the overlay has actually arrived.
  *
- * Base UI stamps `data-starting-style` on a popup for the frame it mounts in and clears it on the
- * next one; the enter styles it selects hold the popup at `opacity: 0` and `scale: .95`. Assert
- * inside that frame and `toBeVisible()` reads the transparent ancestor and fails — which is why the
- * weaker `toBeInTheDocument()` was reached for instead. It is not animation *duration*: reduced
- * motion is on in this suite and forcing `1ms !important` durations does not help, because the
- * attribute is a lifecycle marker rather than a timing one. Waiting for the attribute to clear is,
- * so this waits for that and then for whatever transition it handed off to.
+ * The story tests give every animation zero time (`.storybook/vitest.setup.ts`), so a keyframe fade
+ * has no transparent frame there. Two cases remain. Base UI stamps `data-starting-style` on a popup
+ * for the frame it mounts in and clears it on the next one. Where the styles it selects hold the popup
+ * at `opacity: 0`, as the drawer's do under reduced motion, an assertion inside that frame reads the
+ * transparent ancestor and fails. The attribute is a lifecycle marker, not a duration, so zero time
+ * does not remove it. A story that opts back into real time with `withAnimationTime` also has running
+ * enter animations. This waits for the attribute to clear and then for whatever animation it handed
+ * off to.
  *
  * For the popup element itself rather than its contents, see `settledPopup`.
  */
