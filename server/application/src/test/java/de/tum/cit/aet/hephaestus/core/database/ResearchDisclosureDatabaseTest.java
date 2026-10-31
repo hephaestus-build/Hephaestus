@@ -144,12 +144,14 @@ class ResearchDisclosureDatabaseTest {
     void shouldPreserveExistingAuditRowsAndAcceptResearchEventsOnCurrentAndFuturePartitions(String context)
             throws Exception {
         var database = beforeResearch(context);
+        // Rows of every type the schema before the research migration admits; later migrations add other types.
+        String admitted = String.valueOf(auditConstraint(database));
         int id = 978100;
         for (AuthEvent.EventType type : AuthEvent.EventType.values()) {
-            if (type == AuthEvent.EventType.RESEARCH_DATASET_RELEASED
-                    || type == AuthEvent.EventType.RESEARCH_REMOVAL_RECORDED) continue;
+            if (!admitted.contains("'" + type.name() + "'")) continue;
             PracticeMigrationFixture.execute(database, audit(id++, type.name(), "now()"));
         }
+        assertThat(admitted).doesNotContain("'RESEARCH_DATASET_RELEASED'", "'RESEARCH_REMOVAL_RECORDED'");
         var before = PracticeMigrationFixture.column(
                 database, "SELECT to_jsonb(e)::text FROM auth_event e WHERE id>=978100 AND id<978200 ORDER BY id");
         var history = PracticeMigrationFixture.column(
