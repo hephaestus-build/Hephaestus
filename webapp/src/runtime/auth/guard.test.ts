@@ -307,10 +307,28 @@ describe("consentIsPending with the application's client", () => {
 		try {
 			// The default handler answers that consent is complete.
 			await expect(consentIsPending(queryClient)).resolves.toBe(false);
-			server.use(http.get("*/user/consent", () => HttpResponse.error()));
+			server.use(
+				http.get("*/user/consent", () => HttpResponse.json({ status: 503 }, { status: 503 })),
+			);
 			await queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
 
 			await expect(consentIsPending(queryClient)).resolves.toBe(false);
+		} finally {
+			queryClient.clear();
+		}
+	});
+
+	it("still holds the route back when the server refuses the consent read", async () => {
+		const { queryClient } = getContext();
+		serve(asAppRole("APP_USER"));
+		try {
+			await expect(consentIsPending(queryClient)).resolves.toBe(false);
+			server.use(
+				http.get("*/user/consent", () => HttpResponse.json({ status: 403 }, { status: 403 })),
+			);
+			await queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+
+			await expect(consentIsPending(queryClient)).resolves.toBe(true);
 		} finally {
 			queryClient.clear();
 		}

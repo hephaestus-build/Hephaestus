@@ -126,11 +126,13 @@ export async function consentIsPending(queryClient: QueryClient): Promise<boolea
 	try {
 		const status = await queryClient.query({ ...options, retry: false });
 		return !status.completed;
-	} catch {
-		// A consent this session already read as complete stays complete through an outage: the
-		// server still refuses gated reads with 428 until consent is recorded, so the app only keeps
-		// a reader who has consented. Without that answer, fail closed: `/consent` offers retry and
-		// sign-out, so holding the loader back is recoverable.
-		return queryClient.getQueryData(options.queryKey)?.completed !== true;
+	} catch (error) {
+		// An outage keeps a reader whose last read showed consent in the app, as their pages then say
+		// what they could not load. The server still refuses gated reads with 428 until the current
+		// notice is accepted, so this keeps no data open. A refusal, or no answer yet, fails closed:
+		// `/consent` offers retry and sign-out, so holding the loader back is recoverable.
+		return !(
+			serverUnreachable(error) && queryClient.getQueryData(options.queryKey)?.completed === true
+		);
 	}
 }
