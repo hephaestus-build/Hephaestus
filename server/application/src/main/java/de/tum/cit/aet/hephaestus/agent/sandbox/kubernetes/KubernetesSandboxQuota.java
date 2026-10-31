@@ -222,7 +222,8 @@ public class KubernetesSandboxQuota {
         for (ResourceQuota quota : quotas) {
             if (!countsReviews(quota, reviewClass)) continue;
             var status = quota.getStatus();
-            if (status == null || status.getHard() == null || status.getHard().isEmpty()) return SandboxRoom.UNKNOWN_ROOM;
+            if (status == null || status.getHard() == null || status.getHard().isEmpty())
+                return SandboxRoom.UNKNOWN_ROOM;
             Map<String, Quantity> used = status.getUsed();
             for (var hard : status.getHard().entrySet()) {
                 Quantity need = footprint.get(hard.getKey());
