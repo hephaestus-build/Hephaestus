@@ -139,7 +139,10 @@ if (import.meta.main) {
 	if (!isSet(base) || process.argv.length > 4) {
 		throw new Error("Usage: node scripts/check-changelog-immutability.ts <base> [head]");
 	}
-	const errors = violations(snapshot(base), snapshot(head));
+	const before = snapshot(base);
+	// The includeAll cutover moves unreleased files; its fixed prefix ends at the last published release.
+	const baseline = before.master.includes("<includeAll") ? before : snapshot("v0.95.1");
+	const errors = violations(baseline, snapshot(head));
 	for (const error of errors) {
 		console.error(`::error::${error}`);
 	}
