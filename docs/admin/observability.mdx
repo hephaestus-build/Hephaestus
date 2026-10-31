@@ -686,70 +686,85 @@ histogram_quantile(0.75, sum by (le) (rate(web_vital_duration_seconds_bucket{vit
 Hephaestus sends no logs and no error reports to any service.
 The browser app sends only its [page experience metrics](#page-experience-metrics), and only to your server.
 
-### What the host keeps by default
+### What the cluster keeps by default
 
-The supported Compose stacks use Docker's `json-file` driver with a size limit for each container:
+Each runtime role writes its log records to standard output.
+The kubelet writes them to files below `/var/log/pods` on the node and rotates them.
+It keeps at most `containerLogMaxFiles` files of `containerLogMaxSize` for each container, by default 5 files of 10 MiB.
+When the kubelet deletes a Pod, it also deletes that Pod's log files.
+A replaced Pod, such as after an upgrade or a crash, therefore takes its lines with it, unless a collector shipped them before.
 
-| Containers                                                                   | Limit                |
-| ---------------------------------------------------------------------------- | -------------------- |
-| `application-server`, `application-worker`, `webapp`, `postgres`, `volume-init` | 5 files of 50 MB |
-| `webhook-server`, `nats-server`                                              | 3 files of 10 MB     |
-
-Docker writes these files in its default blocking mode.
-An application thread waits for the write, so no line is lost while the disk accepts writes.
-When a container reaches its limit, Docker deletes its oldest file.
-A line that no collector read before that deletion is lost.
-Sandbox containers use the host's default Docker logging configuration, which Hephaestus does not change.
-
-### Ship logs to Loki
+### Ship logs to a log store
 
 This is optional.
-[Grafana Alloy](https://grafana.com/docs/alloy/latest/) reads the host journal and sends the lines to a Loki that you operate.
-Grafana then queries that Loki.
-The repository ships an example only.
-It does not start Alloy, and it names no destination.
+A collector on each node reads the Pods' log files.
+It sends the records to a log store that you operate, such as Loki or VictoriaLogs.
+The [OpenTelemetry Collector Helm chart](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-collector) runs one as a DaemonSet.
+Hephaestus ships no collector and names no destination.
 
-1. Upgrade to a release with this log format first.
-   Lines written by an earlier release are not redacted after the fact, and nothing in this setup collects them.
-2. Add [`docker/observability/compose.journald.yaml`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/observability/compose.journald.yaml) after the single-host stack's compose files.
-   It needs Compose 2.24.4 or later.
-   It moves the three Java runtime roles, `application-server`, `application-worker` and `webhook-server`, to the `journald` driver and tags their entries `hephaestus-runtime`.
-   The tag is new, so journal entries written before the overlay never match it.
-   The webapp keeps its local `json-file` log: nginx error lines can name a client address and a request with its query.
-   PostgreSQL keeps `json-file`, because its error lines can quote rejected row values.
-   Sandbox containers, NATS and the proxy are not tagged.
-3. The multi-file Compose stack renders each stack as its own Compose project.
-   Give each of the three Java services the same `logging` block in that stack's override.
-4. Run Alloy with [`docker/observability/config.alloy`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/observability/config.alloy).
-   Set `LOKI_PUSH_URL` to your Loki push endpoint and `DEPLOYMENT_ENVIRONMENT` to the instance's name.
-   The label reads `unset` when the variable is empty.
-   Give Alloy read access to the journal through the `systemd-journal` group.
-   That group can read the whole host journal, including `sshd` and `sudo` entries.
-   The `matches` filter limits what Alloy ships, not what it can read, so treat the Alloy host account as privileged.
-   Do not give it the Docker socket.
-   The socket gives full control of the Docker daemon, also when you mount it read-only.
-5. Set Loki's retention to the period in your record of processing.
+Read only the server, worker, webhook and migration Pods, and NATS.
+Their records hold no content.
 
-The example reads only entries with the `hephaestus-runtime` tag.
-It sets two index labels, `service_name` and `deployment_environment`.
-Both come from a small fixed set.
+Do not read the webapp, PostgreSQL or any Pod of the sandbox namespace:
 
-The trace ID goes to [structured metadata](https://grafana.com/docs/loki/latest/get-started/labels/structured-metadata/), so `| trace_id="<id>"` finds a request without a label per request.
-Workspace, job, user and repository identifiers stay in the line.
-Read them with `| json`.
-Do not make them labels: each value becomes its own stream ([Loki label best practices](https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/)).
+- The webapp's nginx lines can name a client address and a request with its query.
+- PostgreSQL's error lines can quote row values.
+- A sandbox's output can hold reviewed code, a tool result, a provider's error message, the conversation or a credential.
+  This includes the lines that the review runtime writes itself.
+
+The example below is a `values.yaml` for the collector chart.
+It reads the release `hephaestus` in the namespace `hephaestus`.
+The `k8s` distribution of the collector includes the `filelog` receiver.
+Replace the exporter with your log store's OTLP endpoint:
+
+```yaml
+mode: daemonset
+image:
+  repository: otel/opentelemetry-collector-k8s
+presets:
+  logsCollection:
+    enabled: true
+config:
+  receivers:
+    filelog:
+      include:
+        - /var/log/pods/hephaestus_hephaestus-server-*/*/*.log
+        - /var/log/pods/hephaestus_hephaestus-worker-*/*/*.log
+        - /var/log/pods/hephaestus_hephaestus-webhook-*/*/*.log
+        - /var/log/pods/hephaestus_hephaestus-migration-*/*/*.log
+        - /var/log/pods/hephaestus_hephaestus-nats-*/*/*.log
+      exclude: []
+      operators:
+        - type: container
+        - type: json_parser
+          if: 'body matches "^\\{"'
+          parse_to: attributes
+          on_error: send_quiet
+        - type: move
+          if: "attributes.message != nil"
+          from: attributes.message
+          to: body
+  exporters:
+    otlphttp:
+      logs_endpoint: https://logs.example.org/insert/opentelemetry/v1/logs
+  service:
+    pipelines:
+      logs:
+        exporters: [otlphttp]
+```
+
+A record's fields become log attributes, for example `context.traceId` and `event.name`.
+Index only labels from a small fixed set, such as the namespace and the container.
+Keep workspace, job, user and repository identifiers and the trace ID out of the index: each value becomes its own stream ([Loki label best practices](https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/)).
+Set the store's retention to the period in your record of processing.
 
 Each stage has a bound, and each bound can lose lines:
 
-| Stage                       | Bound                                                    | When it is reached                     |
-| --------------------------- | -------------------------------------------------------- | -------------------------------------- |
-| Docker to journald          | 4 MiB buffer, non-blocking                               | Docker drops new lines. The app does not wait |
-| journald                    | The host's `RateLimitBurst` and `SystemMaxUse`           | journald drops or deletes old entries  |
-| Alloy start or long outage  | `max_age = "12h"`                                        | Older entries are not sent             |
-| Alloy to Loki               | 10 retries, at most 5 minutes apart                      | Alloy drops the batch                  |
-
-Hephaestus does not change `journald.conf`.
-Check its limits on the host before you rely on the journal as a buffer.
+| Stage | Bound | When it is reached |
+| --- | --- | --- |
+| The kubelet's log files | `containerLogMaxFiles` × `containerLogMaxSize` for each container, and the Pod's life | The kubelet deletes the oldest file, or all files with the Pod |
+| Collector start or restart | The chart's `filelog` receiver starts at the end of each file and keeps no read position | Lines written while no collector ran are not sent, also when their file still exists |
+| Collector to the log store | The exporter's retry and queue settings | The collector drops the batch |
 
 ## Exporting OpenTelemetry traces
 
