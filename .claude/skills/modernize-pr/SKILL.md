@@ -75,10 +75,17 @@ Effort already spent is not a reason to keep a pull request.
 
 ## 4. Rebase without losing intent
 
-1. Start a branch at the recorded head, and rebase it onto `origin/main`.
+1. Check out the branch at the recorded head.
+   Ask the queue owner to dequeue it before you rewrite it.
+   For a branch in this repository that targets `main`, run `vp run pr:rebase-generated <n>`.
+   It aborts on handwritten conflicts and regenerates the spec, both clients, and configuration reference after a successful rebase.
+   Review and commit its generated diff.
+   See [Rebase generated artifacts](../../../docs/contributor/local-verification.mdx#rebase-generated-artifacts) for preconditions and failure recovery.
+   For other branches, or if handwritten conflicts need a decision, rebase manually onto the fetched base.
 2. Resolve each conflict for the pull request's intent and `main`'s newer rules.
    If a conflict shows a product or architecture disagreement, stop and choose the disposition again.
-3. Do not resolve a conflict in a generated file. Take `main`'s version, then run its generator again.
+3. Do not hand-merge a generated file.
+   During a manual rebase, take the updated base's version, then run its generator again after the rebase.
 4. `db/changelog/**` that reached `main` never changes. Keep the released include prefix fixed and follow the migration guide for new timestamped files.
    Keep the branch's one changelog last.
    If it conflicts, run `vp run db:draft-changelog` again, which also refreshes the ERD.

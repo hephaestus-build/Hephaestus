@@ -34,6 +34,47 @@ The native package manager reconciles the installed graph and checks declared pa
 A frozen install preserves the lockfile.
 See [Local development](./local-development.mdx#prerequisites) for the pinned toolchain.
 
+## Rebase generated artifacts
+
+For a pull request in this repository that targets `main`, use:
+
+```sh
+vp run pr:rebase-generated <pr-number>
+```
+
+Use Git 2.38 or later.
+Get the branch owner's consent before you rewrite their branch.
+Ask the queue owner to dequeue the pull request first.
+Check out its branch at the remote head, with a clean worktree and index.
+Install its dependencies first with the frozen command above.
+Unset `HEPHAESTUS_APPLICATION_JAR`.
+
+The command refuses an existing Git operation, merge commits, a queued pull request, or a different local head.
+If an older branch does not have this command, run its script from a current checkout:
+
+```sh
+node /path/to/current-checkout/scripts/rebase-generated.ts <pr-number>
+```
+
+Run that command from the pull request's worktree.
+The build and generators use the rebased worktree's code and dependencies.
+
+The command fetches `main` and records its commit.
+It rebases onto that commit and restores the original branch if a handwritten file conflicts.
+It resolves conflicts only in `server/openapi.yaml`, both generated API client directories, and the configuration reference.
+Then it reconciles dependencies with a frozen install and builds one fresh server JAR.
+That JAR supplies the spec and configuration metadata, and both clients are regenerated from the spec.
+The command does not push or change the merge queue.
+
+Review the regenerated diff and compare the commits with `git range-diff`.
+The command reports any generated-only commit it drops during conflict resolution.
+Commit the regenerated files, then run `format`, `check`, and the tests for the affected paths.
+Use the original head that the command prints as the explicit push lease.
+
+If generation fails, the branch stays rebased and partial output stays available for diagnosis.
+Fix the failure and unset `HEPHAESTUS_APPLICATION_JAR`.
+Run `vp run generate:api` and `vp run generate:configuration-reference` before you commit or push.
+
 ## Affected selection
 
 The command compares committed, staged, unstaged, untracked, and deleted paths with the merge base of
