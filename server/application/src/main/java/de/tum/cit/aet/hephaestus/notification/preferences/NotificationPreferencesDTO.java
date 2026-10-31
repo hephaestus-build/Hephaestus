@@ -26,4 +26,6 @@ public record NotificationPreferencesDTO(
                         "Hephaestus can answer in at least one of your workspaces, so a weekly digest can be written")
         boolean weeklyDigestAvailable,
 
-        @NonNull String etag) {}
+        @NonNull String etag,
+
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean productFeedbackUpdates) {}

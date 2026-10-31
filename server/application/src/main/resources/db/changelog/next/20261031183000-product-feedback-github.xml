@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793471400000-1" author="hephaestus">
+        <comment>Product feedback is filed in GitHub (ADR 0073): the destination, each report's filing, the sharing choices and the cleanup after erasure.</comment>
+        <createTable tableName="product_feedback_destination">
+            <column name="id" type="SMALLINT"><constraints nullable="false" primaryKey="true" primaryKeyName="product_feedback_destinationPK"/></column>
+            <column name="public_repository" type="VARCHAR(200)"/>
+            <column name="private_repository" type="VARCHAR(200)"/>
+            <column name="llm_model_id" type="BIGINT"/>
+            <column name="daily_draft_limit" type="INTEGER"><constraints nullable="false"/></column>
+            <column name="paused" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="notice_version" type="INTEGER"><constraints nullable="false"/></column>
+            <column name="snapshot" type="TEXT"/>
+            <column name="snapshot_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="updated_by_account_id" type="BIGINT"/>
+        </createTable>
+        <createTable tableName="product_feedback_filing">
+            <column name="feedback_id" type="UUID"><constraints nullable="false" primaryKey="true" primaryKeyName="product_feedback_filingPK"/></column>
+            <column name="state" type="VARCHAR(16)"><constraints nullable="false"/></column>
+            <column name="route" type="VARCHAR(16)"/>
+            <column name="reason" type="VARCHAR(32)"/>
+            <column name="allow_public" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="mention_login" type="VARCHAR(39)"/>
+            <column name="consent_id" type="UUID"/>
+            <column name="risk_latch" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="attempt" type="INTEGER"><constraints nullable="false"/></column>
+            <column name="claimed_by" type="VARCHAR(100)"/>
+            <column name="lease_until" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="next_attempt_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="filed_after" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="failures" type="INTEGER"><constraints nullable="false"/></column>
+            <column name="prompt_input" type="TEXT"/>
+            <column name="answer" type="TEXT"/>
+            <column name="publish_requested_by" type="VARCHAR(39)"/>
+            <column name="publish_requested_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="promotion_repository" type="VARCHAR(200)"/>
+            <column name="promotion_repository_id" type="BIGINT"/>
+            <column name="promotion_installation_id" type="BIGINT"/>
+            <column name="promotion_repository_node_id" type="VARCHAR(100)"/>
+            <column name="page_route" type="VARCHAR(500)"/>
+            <column name="draft" type="TEXT"/>
+            <column name="removed" type="VARCHAR(200)"/>
+            <column name="drafted_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="input_tokens" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="output_tokens" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="repository" type="VARCHAR(200)"/>
+            <column name="repository_id" type="BIGINT"/>
+            <column name="repository_node_id" type="VARCHAR(100)"/>
+            <column name="installation_id" type="BIGINT"/>
+            <column name="payload_hash" type="VARCHAR(64)"/>
+            <column name="first_attempt_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="issue_number" type="BIGINT"/>
+            <column name="issue_node_id" type="VARCHAR(100)"/>
+            <column name="issue_url" type="VARCHAR(300)"/>
+            <column name="issue_open" type="BOOLEAN"/>
+            <column name="issue_state_reason" type="VARCHAR(32)"/>
+            <column name="last_comment_id" type="BIGINT"/>
+            <column name="followed_at" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="updated_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="product_feedback_filing" baseColumnNames="feedback_id" constraintName="sfk_product_feedback_filing_feedback" referencedTableName="product_feedback" referencedColumnNames="id" onDelete="CASCADE" validate="true"/>
+        <createIndex indexName="idx_product_feedback_filing_state" tableName="product_feedback_filing">
+            <column name="state"/>
+            <column name="next_attempt_at"/>
+        </createIndex>
+        <createTable tableName="product_feedback_consent">
+            <column name="id" type="UUID"><constraints nullable="false" primaryKey="true" primaryKeyName="product_feedback_consentPK"/></column>
+            <column name="account_id" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="allow_public" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="mention" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="notice_version" type="INTEGER"><constraints nullable="false"/></column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex indexName="idx_product_feedback_consent_account" tableName="product_feedback_consent">
+            <column name="account_id"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createTable tableName="product_feedback_cleanup">
+            <column name="id" type="UUID"><constraints nullable="false" primaryKey="true" primaryKeyName="product_feedback_cleanupPK"/></column>
+            <column name="repository" type="VARCHAR(200)"><constraints nullable="false"/></column>
+            <column name="repository_id" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="installation_id" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="marker" type="UUID"><constraints nullable="false"/></column>
+            <column name="issue_number" type="BIGINT"/>
+            <column name="issue_node_id" type="VARCHAR(100)"/>
+            <column name="public_issue" type="BOOLEAN"><constraints nullable="false"/></column>
+            <column name="since" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="next_attempt_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="attempts" type="INTEGER"><constraints nullable="false"/></column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1793471400000-2" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'</sqlCheck>
+        </preConditions>
+        <comment>Preserve every existing audit event type and admit the product feedback destination change.</comment>
+        <sql><![CDATA[
+ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED'));
+        ]]></sql>
+        <rollback><sql splitStatements="false"><![CDATA[
+DO $product_feedback_audit_rollback$
+BEGIN
+    IF EXISTS (SELECT 1 FROM auth_event WHERE event_type = 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED') THEN
+        RAISE EXCEPTION 'Product feedback audit rows exist; retain the widened audit constraint';
+    END IF;
+    ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+    ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED'));
+END
+$product_feedback_audit_rollback$;
+        ]]></sql></rollback>
+    </changeSet>
+</databaseChangeLog>

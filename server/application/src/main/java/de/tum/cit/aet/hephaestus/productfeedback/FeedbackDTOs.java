@@ -28,11 +28,16 @@ final class FeedbackDTOs {
             @NotNull ProductFeedback.@NonNull Kind kind,
             @NotBlank @Size(max = 5000) @NonNull String message,
 
-            @Size(max = 500) @Pattern(regexp = "/(?!/)[^?#\\p{Cc}]*") @Nullable
+            /* The page as its route template, such as /w/$workspaceSlug/activity: no query, no address. */
+            @Size(max = 500) @Pattern(regexp = "/|(/(?:[a-z0-9][a-z0-9-]*|\\$[A-Za-z]*))+") @Nullable
             String pagePath,
 
             @Size(max = 500) @Pattern(regexp = "[^\\p{Cc}]*") @Nullable
-            String userAgent) {}
+            String userAgent,
+
+            /* The composer's switch: may this report become a public issue? Null keeps the remembered choice; the
+            first report on an instance with a public repository must give it. */
+            @Nullable Boolean share) {}
 
     record FeedbackTriageDTO(
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean resolved) {}

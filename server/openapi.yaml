@@ -25,6 +25,9 @@ tags:
   name: Practice feedback
 - description: Per-workspace LLM spend rollup and budget status
   name: LLM Usage
+- description: "Where the instance files product feedback, its health, and the reports\
+    \ that failed to file."
+  name: product-feedback-destinations-controller
 - description: Running release identity and update checks
   name: Instance Release
 - description: The current developer's standing in each practice
@@ -33,8 +36,6 @@ tags:
   name: Feedback Response
 - description: "User account management (settings, deletion)"
   name: Account
-- description: GitLab-specific REST endpoints used during the workspace creation wizard.
-  name: git-lab-preflight-controller
 - description: Instance-admin account management
   name: Admin
 - description: Current user's Slack privacy preferences
@@ -116,6 +117,13 @@ tags:
   name: Workspace LLM
 - description: Active sessions
   name: Account
+- description: |-
+    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
+     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
+  name: git-lab-preflight-controller
+- description: A person's own product feedback reports and their choice about public
+    issues.
+  name: my-product-feedback-controller
 - description: Instance-admin LLM connection and settings management
   name: Admin LLM
 - description: Public JWK set for verifying Hephaestus session JWTs
@@ -201,7 +209,6 @@ paths:
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
-            - INSTALLATION_EVENT_REPLAYED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -216,6 +223,7 @@ paths:
             - LOGIN_PROVIDER_DELETED
             - SILENT_MODE_CHANGED
             - PUBLIC_ACTIVITY_CHANGED
+            - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -294,7 +302,6 @@ paths:
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
-            - INSTALLATION_EVENT_REPLAYED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -309,6 +316,7 @@ paths:
             - LOGIN_PROVIDER_DELETED
             - SILENT_MODE_CHANGED
             - PUBLIC_ACTIVITY_CHANGED
+            - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -491,50 +499,6 @@ paths:
       summary: Send a test email
       tags:
       - Instance Email
-  /admin/integration/dead-letters:
-    get:
-      operationId: listInstallationDeadLetters
-      parameters:
-      - in: query
-        name: after
-        required: false
-        schema:
-          type: integer
-          format: int64
-          default: 0
-          minimum: 0
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ConsumerDeadLetter"
-          description: OK
-      summary: List unassigned installation dead letters
-      tags:
-      - installation-dead-letter
-  /admin/integration/dead-letters/{id}/replays:
-    post:
-      operationId: replayInstallationDeadLetter
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConsumerDeadLetter"
-          description: OK
-      summary: Replay an unassigned installation dead letter
-      tags:
-      - installation-dead-letter
   /admin/llm/call-pools:
     get:
       operationId: adminListLlmCallPools
@@ -1654,6 +1618,50 @@ paths:
       summary: "List product feedback, newest first"
       tags:
       - feedback-admin
+  /admin/product-feedback/destinations:
+    get:
+      operationId: getProductFeedbackDestinations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFeedbackDestinations"
+          description: OK
+      summary: Get the product feedback destinations and their health
+      tags:
+      - product-feedback-destinations
+    put:
+      operationId: updateProductFeedbackDestinations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductFeedbackDestinations"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFeedbackDestinations"
+          description: OK
+      summary: Set where product feedback is filed
+      tags:
+      - product-feedback-destinations
+  /admin/product-feedback/needs-action:
+    get:
+      operationId: listProductFeedbackNeedsAction
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFeedbackNeedsActionList"
+          description: OK
+      summary: List reports that failed to file
+      tags:
+      - product-feedback-destinations
   /admin/product-feedback/{feedbackId}:
     patch:
       operationId: adminTriageProductFeedback
@@ -1680,6 +1688,22 @@ paths:
       summary: Mark product feedback as resolved or reopen it
       tags:
       - feedback-admin
+  /admin/product-feedback/{feedbackId}/retry:
+    post:
+      operationId: retryProductFeedbackFiling
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+      summary: File a stopped report again
+      tags:
+      - product-feedback-destinations
   /admin/release:
     get:
       operationId: adminGetRelease
@@ -2335,10 +2359,172 @@ paths:
         required: true
       responses:
         "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackReceipt"
           description: OK
       summary: Send instance-scoped product feedback
       tags:
       - instance-feedback
+  /product-feedback/mine:
+    get:
+      operationId: listMyProductFeedback
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MyProductFeedback"
+          description: OK
+      summary: "List the current account's product feedback, newest first"
+      tags:
+      - my-product-feedback
+  /product-feedback/sharing:
+    get:
+      operationId: getProductFeedbackSharing
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFeedbackSharing"
+          description: OK
+      summary: Get the current account's choice about public issues
+      tags:
+      - my-product-feedback
+    put:
+      operationId: updateProductFeedbackSharing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductFeedbackSharing"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductFeedbackSharing"
+          description: OK
+      summary: Choose whether reports can become public issues
+      tags:
+      - my-product-feedback
+  /product-feedback/{feedbackId}:
+    get:
+      operationId: getMyProductFeedback
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProductFeedback"
+          description: OK
+      summary: Get one of the current account's reports
+      tags:
+      - my-product-feedback
+  /product-feedback/{feedbackId}/allow-public:
+    put:
+      operationId: allowMyProductFeedbackPublic
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AllowPublic"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProductFeedback"
+          description: OK
+      summary: "Let maintainers publish a private report, or take that back"
+      tags:
+      - my-product-feedback
+  /product-feedback/{feedbackId}/draft:
+    put:
+      operationId: editMyProductFeedbackDraft
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditProductFeedbackDraft"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProductFeedback"
+          description: OK
+      summary: Edit a held report before it is filed
+      tags:
+      - my-product-feedback
+  /product-feedback/{feedbackId}/keep-private:
+    post:
+      operationId: keepMyProductFeedbackPrivate
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProductFeedback"
+          description: OK
+      summary: Keep a report private before it is filed
+      tags:
+      - my-product-feedback
+  /product-feedback/{feedbackId}/make-private:
+    post:
+      operationId: makeMyProductFeedbackPrivate
+      parameters:
+      - in: path
+        name: feedbackId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProductFeedback"
+          description: OK
+      summary: Move the report's public issue to the private repository
+      tags:
+      - my-product-feedback
   /public/workspaces/{slug}/activity:
     get:
       operationId: getPublicActivity
@@ -4865,68 +5051,6 @@ paths:
       summary: Update workspace feature flags
       tags:
       - workspace
-  /workspaces/{workspaceSlug}/integrations/dead-letters:
-    get:
-      operationId: listConsumerDeadLetters
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: query
-        name: after
-        required: false
-        schema:
-          type: integer
-          format: int64
-          default: 0
-          minimum: 0
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ConsumerDeadLetter"
-          description: OK
-      summary: List this workspace's dead letters
-      tags:
-      - consumer-dead-letter
-  /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays:
-    post:
-      operationId: replayConsumerDeadLetter
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: integer
-          format: int64
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConsumerDeadLetter"
-          description: OK
-      summary: Replay a dead letter in this workspace
-      tags:
-      - consumer-dead-letter
   /workspaces/{workspaceSlug}/llm/available-models:
     get:
       operationId: workspaceListAvailableLlmModels
@@ -10463,6 +10587,10 @@ paths:
         required: true
       responses:
         "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackReceipt"
           description: OK
       summary: Send product feedback to instance administrators
       tags:
@@ -11941,6 +12069,13 @@ components:
           - CLOUD
       required:
       - choice
+    AllowPublic:
+      type: object
+      properties:
+        allowPublic:
+          type: boolean
+      required:
+      - allowPublic
     AppliesWhen:
       type: object
       properties:
@@ -13163,38 +13298,6 @@ components:
       - completed
       - noticeVersion
       - participateInResearch
-    ConsumerDeadLetter:
-      type: object
-      properties:
-        errorClass:
-          type: string
-        failedAt:
-          type: string
-          format: date-time
-        id:
-          type: integer
-          format: int64
-        receivedAt:
-          type: string
-          format: date-time
-        replayedAt:
-          type: string
-          format: date-time
-        replayedBy:
-          type: integer
-          format: int64
-        sequence:
-          type: integer
-          format: int64
-        stream:
-          type: string
-      required:
-      - errorClass
-      - failedAt
-      - id
-      - receivedAt
-      - sequence
-      - stream
     Contributor:
       type: object
       description: Information about a contributor to the Hephaestus project
@@ -13984,6 +14087,20 @@ components:
             format: int32
           explanation:
             type: string
+    EditProductFeedbackDraft:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 0
+        title:
+          type: string
+          maxLength: 80
+          minLength: 0
+      required:
+      - description
+      - title
     EmailTestRequest:
       type: object
       properties:
@@ -14128,6 +14245,12 @@ components:
         ADMIN:
           type: boolean
           description: User has admin privileges
+        GITLAB_WORKSPACE_CREATION:
+          type: boolean
+          description: GitLab workspace creation feature is enabled
+        NOTIFICATION_ACCESS:
+          type: boolean
+          description: User can receive notifications
         PAGE_EXPERIENCE_METRICS:
           type: boolean
           description: The browser measures and reports how page visits feel to the
@@ -14613,6 +14736,38 @@ components:
       - automatic
       - defaultMode
       - "off"
+    FeedbackReceipt:
+      type: object
+      properties:
+        filedAfter:
+          type: string
+          format: date-time
+          description: "when a held public report is filed, unless the person keeps\
+            \ it private first"
+        id:
+          type: string
+          format: uuid
+        route:
+          type: string
+          description: where the report is going now; it can still change while the
+            state is DRAFTING or HELD
+          enum:
+          - PUBLIC
+          - PRIVATE
+          - EMAIL
+        state:
+          type: string
+          enum:
+          - SENT_TO_ADMINS
+          - DRAFTING
+          - HELD
+          - FILING
+          - FILED
+          - STOPPED
+      required:
+      - id
+      - route
+      - state
     FeedbackRequest:
       type: object
       properties:
@@ -14630,7 +14785,9 @@ components:
           type: string
           maxLength: 500
           minLength: 0
-          pattern: "/(?!/)[^?#\\p{Cc}]*"
+          pattern: "/|(/(?:[a-z0-9][a-z0-9-]*|\\$[A-Za-z]*))+"
+        share:
+          type: boolean
         userAgent:
           type: string
           maxLength: 500
@@ -15389,9 +15546,6 @@ components:
           - ITEM_GONE
           - LEGACY_REVIEW_UNBOUND
           - OCCASION_EVIDENCE_UNAVAILABLE
-          - QUIET_WINDOW
-          - REVIEW_IN_PROGRESS
-          - ALREADY_CURRENT
           - null
         reviewId:
           type:
@@ -16831,6 +16985,90 @@ components:
       required:
       - groupSlug
       - position
+    MyProductFeedback:
+      type: object
+      description: One of the person's own reports.
+      properties:
+        allowPublic:
+          type: boolean
+        canAllowPublic:
+          type: boolean
+        canEdit:
+          type: boolean
+        canKeepPrivate:
+          type: boolean
+        canMakePrivate:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        draftDescription:
+          type: string
+          description: the drafted main text the person can edit while the report
+            is held
+        draftTitle:
+          type: string
+          description: "the drafted title, while the report is held or once it is\
+            \ filed"
+        excerpt:
+          type: string
+        filedAfter:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        issueClosedAs:
+          type: string
+          description: "<code>completed</code>, <code>not_planned</code> or <code>duplicate</code>\
+            \ once the issue is closed"
+        issueNumber:
+          type: integer
+          format: int64
+        issueUrl:
+          type: string
+          description: "the public issue; null for a private issue, which the person\
+            \ cannot open"
+        kind:
+          type: string
+          enum:
+          - IDEA
+          - BUG
+          - FEEDBACK
+        reason:
+          type: string
+          description: "why the report is not public, in words; null for a public\
+            \ one"
+        removed:
+          type: string
+          description: "what redaction removed, in words"
+        route:
+          type: string
+          enum:
+          - PUBLIC
+          - PRIVATE
+          - EMAIL
+        state:
+          type: string
+          enum:
+          - SENT_TO_ADMINS
+          - DRAFTING
+          - HELD
+          - FILING
+          - FILED
+          - STOPPED
+      required:
+      - allowPublic
+      - canAllowPublic
+      - canEdit
+      - canKeepPrivate
+      - canMakePrivate
+      - createdAt
+      - excerpt
+      - id
+      - kind
+      - route
+      - state
     NotReviewedScanReportItem:
       allOf:
       - type: object
@@ -16876,6 +17114,8 @@ components:
           type: string
         productFeedback:
           type: boolean
+        productFeedbackUpdates:
+          type: boolean
         weeklyDigest:
           type: boolean
           description: The weekly digest is on
@@ -16890,6 +17130,7 @@ components:
       - emailAvailable
       - etag
       - productFeedback
+      - productFeedbackUpdates
       - weeklyDigest
       - weeklyDigestAvailable
       - workspaceAlerts
@@ -19601,6 +19842,143 @@ components:
       - id
       - severity
       - summary
+    ProductFeedbackDestinations:
+      type: object
+      description: The instance's product feedback destinations and their health.
+      properties:
+        dailyDraftLimit:
+          type: integer
+          format: int32
+        draftsToday:
+          type: integer
+          format: int64
+          description: "drafts made since midnight UTC, against <code>dailyDraftLimit</code>"
+        lastFiledAt:
+          type: string
+          format: date-time
+        llmModelId:
+          type: integer
+          format: int64
+          description: "the instance model that drafts issues, or null for none (reports\
+            \ then go private undrafted)"
+        needsAction:
+          type: integer
+          format: int64
+        noticeVersion:
+          type: integer
+          format: int32
+        oldestWaitingSince:
+          type: string
+          format: date-time
+          description: the oldest report not yet on GitHub or in the admin email
+        paused:
+          type: boolean
+        privateCheck:
+          type: string
+          enum:
+          - UNSET
+          - INSTALLED
+          - MISSING
+          - NOT_PRIVATE
+          - NOT_PUBLIC
+          - DIFFERENT_OWNER
+        privateRepository:
+          type: string
+        publicCheck:
+          type: string
+          enum:
+          - UNSET
+          - INSTALLED
+          - MISSING
+          - NOT_PRIVATE
+          - NOT_PUBLIC
+          - DIFFERENT_OWNER
+        publicRepository:
+          type: string
+        snapshotAt:
+          type: string
+          format: date-time
+      required:
+      - dailyDraftLimit
+      - draftsToday
+      - needsAction
+      - noticeVersion
+      - paused
+      - privateCheck
+      - publicCheck
+    ProductFeedbackNeedsAction:
+      type: object
+      description: A report that failed to file and waits for an admin.
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - IDEA
+          - BUG
+          - FEEDBACK
+        reason:
+          type: string
+        repository:
+          type: string
+        route:
+          type: string
+          enum:
+          - PUBLIC
+          - PRIVATE
+          - EMAIL
+        stoppedAt:
+          type: string
+          format: date-time
+      required:
+      - createdAt
+      - id
+      - kind
+      - reason
+      - route
+      - stoppedAt
+    ProductFeedbackNeedsActionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductFeedbackNeedsAction"
+      required:
+      - items
+    ProductFeedbackSharing:
+      type: object
+      description: The person's sharing choice for public issues.
+      properties:
+        allowPublic:
+          type: boolean
+          description: "the remembered choice, or null when the person has not chosen\
+            \ for the current notice"
+        decidedAt:
+          type: string
+          format: date-time
+        filesToGitHub:
+          type: boolean
+          description: "reports become GitHub issues on this instance, public or private"
+        githubLogin:
+          type: string
+          description: "the person's GitHub login, for the mention; null when the\
+            \ account has no GitHub sign-in"
+        mention:
+          type: boolean
+        publicRepository:
+          type: string
+          description: |-
+            <code>owner/name</code> of the public repository, or null when the instance has none and the
+                 choice is not asked
+      required:
+      - filesToGitHub
+      - mention
     ProfileChange:
       type: object
       properties:
@@ -22618,9 +22996,6 @@ components:
           - ITEM_GONE
           - LEGACY_REVIEW_UNBOUND
           - OCCASION_EVIDENCE_UNAVAILABLE
-          - QUIET_WINDOW
-          - REVIEW_IN_PROGRESS
-          - ALREADY_CURRENT
           - null
         reviewId:
           type:
@@ -25158,6 +25533,10 @@ components:
       properties:
         productFeedback:
           type: boolean
+        productFeedbackUpdates:
+          type: boolean
+          description: Updates on your own product feedback. On by default. Absent
+            keeps the saved choice.
         weeklyDigest:
           type: boolean
           description: "The weekly digest in your Hephaestus conversation, with one\
@@ -25277,6 +25656,47 @@ components:
           $ref: "#/components/schemas/WorkspaceReviewScope"
           description: Replaces repository and person coverage wholesale. Null leaves
             it unchanged.
+    UpdateProductFeedbackDestinations:
+      type: object
+      properties:
+        dailyDraftLimit:
+          type: integer
+          format: int32
+          maximum: 1000
+          minimum: 0
+        llmModelId:
+          type: integer
+          format: int64
+        newNoticeVersion:
+          type: boolean
+          description: "true to raise the notice version, so that every person chooses\
+            \ again"
+        paused:
+          type: boolean
+        privateRepository:
+          type: string
+          maxLength: 200
+          minLength: 0
+          pattern: "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+        publicRepository:
+          type: string
+          maxLength: 200
+          minLength: 0
+          pattern: "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+      required:
+      - dailyDraftLimit
+      - newNoticeVersion
+      - paused
+    UpdateProductFeedbackSharing:
+      type: object
+      properties:
+        allowPublic:
+          type: boolean
+        mention:
+          type: boolean
+      required:
+      - allowPublic
+      - mention
     UpdateReviewBatchStatusRequest:
       type: object
       properties:

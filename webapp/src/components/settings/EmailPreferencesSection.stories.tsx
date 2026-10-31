@@ -11,6 +11,7 @@ const ready = {
 	status: "ready",
 	preferences: {
 		productFeedback: false,
+		productFeedbackUpdates: true,
 		workspaceAlerts: false,
 		emailAvailable: true,
 		deliveryConfigured: true,
@@ -62,6 +63,19 @@ export const Default: Story = {
 		await expect(ready.onChange).toHaveBeenCalledWith({ workspaceAlerts: true });
 		await userEvent.click(product);
 		await expect(product).not.toBeChecked();
+	},
+};
+
+export const ReporterUpdates: Story = {
+	play: async ({ canvas }) => {
+		const updates = canvas.getByRole("switch", { name: "Your product feedback updates" });
+		await expect(updates).toBeChecked();
+		await userEvent.click(updates);
+		await expect(updates).not.toBeChecked();
+		await expect(ready.onChange).toHaveBeenCalledWith({ productFeedbackUpdates: false });
+		await userEvent.click(updates);
+		await expect(updates).toBeChecked();
+		await expect(ready.onChange).toHaveBeenCalledWith({ productFeedbackUpdates: true });
 	},
 };
 
@@ -123,7 +137,16 @@ export const NoVerifiedAddress: Story = {
 };
 
 export const DeliveryNotConfigured: Story = {
-	args: { state: { ...ready, preferences: { ...ready.preferences, deliveryConfigured: false } } },
+	args: {
+		state: {
+			...ready,
+			preferences: {
+				...ready.preferences,
+				deliveryConfigured: false,
+				productFeedbackUpdates: false,
+			},
+		},
+	},
 };
 
 export const RetainedSubscriptions: Story = {

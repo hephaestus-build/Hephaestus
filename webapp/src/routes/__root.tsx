@@ -41,6 +41,7 @@ import {
 	USER_AGENT_MAX_LENGTH,
 } from "@/components/product-feedback/ProductFeedbackDialog";
 import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
+import { ProductFeedbackReceipt } from "@/components/product-feedback/ProductFeedbackReceipt";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
@@ -49,7 +50,12 @@ import environment from "@/environment";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import { useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import {
+	useFollowedProductFeedback,
+	useMyProductFeedbackActions,
+	useProductFeedbackSharing,
+	useSubmitProductFeedback,
+} from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
@@ -213,9 +219,13 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const feedback = useSubmitProductFeedback(workspaceSlug);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
+	const { sharing, publicRepository } = useProductFeedbackSharing(feedbackOpen);
+	const report = useFollowedProductFeedback(feedback.receipt, feedbackOpen);
+	const actions = useMyProductFeedbackActions();
 	return (
 		<>
 			<ProductFeedbackMenu
+				workspaceSlug={workspaceSlug}
 				onSendFeedback={(kind) => {
 					setFeedbackKind(kind);
 					setFeedbackOpen(true);
@@ -235,9 +245,22 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 					pagePath: route.slice(0, PAGE_PATH_MAX_LENGTH),
 					userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
 				}}
+				sharing={sharing}
+				workspaceSlug={workspaceSlug}
 				isSubmitting={feedback.isPending}
 				error={feedback.error}
 				onSubmit={feedback.submit}
+				confirmation={
+					report === undefined ? undefined : (
+						<ProductFeedbackReceipt
+							report={report}
+							publicRepository={publicRepository}
+							pending={actions.pendingFor(report.id)}
+							onKeepPrivate={() => actions.keepPrivate(report.id)}
+							onEdit={async (draft) => actions.edit(report.id, draft)}
+						/>
+					)
+				}
 			/>
 		</>
 	);

@@ -2327,8 +2327,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             var incoming = incomingHeaders();
             incoming.set("anthropic-version", "caller-version");
             incoming.set("anthropic-beta", "caller-beta");
-            var output =
-                    controller.buildUpstreamHeaders(incoming, credential("anthropic-messages", LlmAuthMode.API_KEY));
+            var output = LlmProxyService.buildUpstreamHeaders(
+                    incoming, credential("anthropic-messages", LlmAuthMode.API_KEY));
             assertThat(output.getFirst("x-api-key")).isEqualTo("secret");
             assertThat(output.getFirst("anthropic-version")).isEqualTo("2023-06-01");
             assertThat(output.get("anthropic-beta")).isNull();
@@ -2340,8 +2340,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         void shouldInjectBearerAuthAndDropUnapprovedHeaders() {
             var incoming = incomingHeaders();
 
-            HttpHeaders output =
-                    controller.buildUpstreamHeaders(incoming, credential("openai-completions", LlmAuthMode.BEARER));
+            HttpHeaders output = LlmProxyService.buildUpstreamHeaders(
+                    incoming, credential("openai-completions", LlmAuthMode.BEARER));
 
             assertThat(output.getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer secret");
             assertThat(output.get("api-key")).isNull();
@@ -2354,7 +2354,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
         @Test
         void shouldInjectRawApiKeyAuth() {
-            HttpHeaders output = controller.buildUpstreamHeaders(
+            HttpHeaders output = LlmProxyService.buildUpstreamHeaders(
                     incomingHeaders(), credential("openai-responses", LlmAuthMode.API_KEY));
 
             assertThat(output.getFirst("api-key")).isEqualTo("secret");
@@ -2366,7 +2366,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             var credential = new LlmModelResolver.ProxyCredential(
                     "https://api.example.com/v1", "openai-completions", LlmAuthMode.BEARER, "catalog-model", " ");
 
-            HttpHeaders output = controller.buildUpstreamHeaders(incomingHeaders(), credential);
+            HttpHeaders output = LlmProxyService.buildUpstreamHeaders(incomingHeaders(), credential);
 
             assertThat(output.get(HttpHeaders.AUTHORIZATION)).isNull();
             assertThat(output.get("api-key")).isNull();
@@ -2406,13 +2406,13 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 .count();
     }
 
-    /** How long a conversation turn's provider may take to its first byte in these tests. */
+    // How long a conversation turn's provider may take to its first byte in these tests.
     private static final Duration HEPH_FIRST_BYTE = Duration.ofMillis(1500);
 
-    /** How long a conversation turn's stream may send no byte in these tests. */
+    // How long a conversation turn's stream may send no byte in these tests.
     private static final Duration HEPH_IDLE = Duration.ofMillis(400);
 
-    /** The review cap at practice concurrency 3: 2 × (3 + 1) + 4. */
+    // The review cap at practice concurrency 3: 2 × (3 + 1) + 4.
     private static final int REVIEW_CALLS_AT_THREE = 12;
 
     private static final ProxyRouting.BilledAttempt ATTEMPT = new ProxyRouting.BilledAttempt(

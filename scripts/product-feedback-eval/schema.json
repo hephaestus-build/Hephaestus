@@ -1,0 +1,261 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$defs": {
+		"route": {
+			"enum": ["public", "private", "email"]
+		},
+		"reason": {
+			"enum": [
+				"none",
+				"opted_out",
+				"security",
+				"redaction",
+				"about_person",
+				"low_confidence",
+				"abuse",
+				"no_draft"
+			]
+		},
+		"kind": {
+			"enum": ["BUG", "IDEA", "FEEDBACK"]
+		},
+		"case": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "kind", "allowPublic", "message", "expected", "mustNotAppear", "note"],
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^[a-z0-9-]+$"
+				},
+				"kind": {
+					"$ref": "#/$defs/kind"
+				},
+				"allowPublic": {
+					"type": "boolean"
+				},
+				"message": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 5000
+				},
+				"context": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"route": {
+							"type": "string"
+						},
+						"browser": {
+							"type": "string"
+						}
+					}
+				},
+				"expected": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["route", "reason", "decidedBy"],
+					"properties": {
+						"route": {
+							"$ref": "#/$defs/route"
+						},
+						"reason": {
+							"$ref": "#/$defs/reason"
+						},
+						"decidedBy": {
+							"enum": ["code", "model", "none"]
+						},
+						"relatedIssue": {
+							"type": ["integer", "null"]
+						}
+					}
+				},
+				"mustNotAppear": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"note": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"corpus": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "identities", "snapshot", "cases"],
+			"properties": {
+				"version": {
+					"const": 1
+				},
+				"identities": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["reporter", "workspaces", "members"],
+					"properties": {
+						"reporter": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["name", "login", "email"],
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"login": {
+									"type": "string"
+								},
+								"email": {
+									"type": "string"
+								}
+							}
+						},
+						"workspaces": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"additionalProperties": false,
+								"required": ["name", "slug"],
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"slug": {
+										"type": "string"
+									}
+								}
+							}
+						},
+						"members": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"snapshot": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["repository", "issueTypes", "openIssues"],
+					"properties": {
+						"repository": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+						},
+						"issueTypes": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"openIssues": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"additionalProperties": false,
+								"required": ["number", "title"],
+								"properties": {
+									"number": {
+										"type": "integer"
+									},
+									"title": {
+										"type": "string"
+									},
+									"poisoned": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"cases": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"$ref": "#/$defs/case"
+					}
+				}
+			}
+		},
+		"write": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["kind", "repository", "issue"],
+			"properties": {
+				"kind": {
+					"enum": ["create-issue", "comment", "edit", "label", "close", "transfer"]
+				},
+				"repository": {
+					"enum": ["public", "private"]
+				},
+				"issue": {
+					"type": ["integer", "null"]
+				}
+			}
+		},
+		"result": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "route", "reason", "relatedIssue", "title", "body", "writes"],
+			"properties": {
+				"id": {
+					"type": "string"
+				},
+				"route": {
+					"$ref": "#/$defs/route"
+				},
+				"reason": {
+					"$ref": "#/$defs/reason"
+				},
+				"relatedIssue": {
+					"type": ["integer", "null"]
+				},
+				"title": {
+					"type": "string"
+				},
+				"body": {
+					"type": "string"
+				},
+				"writes": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/write"
+					}
+				}
+			}
+		},
+		"report": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version", "tier", "casesSha256", "model", "promptSha256", "results"],
+			"properties": {
+				"version": {
+					"const": 1
+				},
+				"tier": {
+					"enum": ["unit", "live"]
+				},
+				"casesSha256": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{64}$"
+				},
+				"model": {
+					"type": ["string", "null"]
+				},
+				"promptSha256": {
+					"type": ["string", "null"]
+				},
+				"results": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/result"
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,45 +1,182 @@
 ---
 title: Product feedback
-description: Send an idea or bug report to your instance admins.
+description: Send an idea or bug report, choose whether it can become public, and follow what happens to it.
 page_type: feature
 ---
 
-Use **Product feedback** in the header to report a bug or suggest a change.
-Submissions reach your instance admins.
-This is separate from **practice feedback**, which Hephaestus gives you about your work.
+Use **Product feedback** in the header to report a bug, suggest a change, or tell the maintainers about Hephaestus.
+Select **Send**, and Hephaestus handles the rest.
+This is separate from practice feedback about your work.
 
-## Share an idea, report a bug, send feedback
+## Where your report goes
+
+Your instance admin chooses whether reports become GitHub issues and which repositories receive them.
+Until they set a repository, reports stay on your instance for its admins to read.
+When GitHub filing is enabled, an AI model from the provider named in the dialog drafts an issue.
+Keeping a report private still sends it to that provider and the private GitHub repository.
+
+A bug or idea can become public only with your permission and after the checks pass.
+If a check finds a security risk, secret, email address, or known person’s name, the report stays private.
+Reports about people, abuse, unclear reports, and reports without a usable draft stay private too.
+**Send feedback** reports, including praise and questions, take the private route automatically.
+If no private repository is available, your instance admins receive the report instead.
+
+Hephaestus saves your report before it tries GitHub.
+If filing stops, it notifies the instance admins, who can read the saved report and try again.
+The confirmation shows what has happened, including whether the report is still waiting.
+
+## Public and private details
+
+A public issue contains a short title, your reported problem or idea, and the context you chose to attach.
+Hephaestus removes the personal details and secrets it finds before drafting and checks the issue text again before filing.
+It can miss details, so leave out other people’s personal information and secrets.
+Anyone can read a public issue, including people without a Hephaestus account.
+
+The instance’s GitHub App posts the issue.
+It does not attach your account details or email address.
+It mentions your GitHub account only if you turn on **Mention my GitHub account on public issues**.
+That mention lets anyone see that you sent the report.
+Private issues do not carry that mention.
+
+Your original report stays linked to your account on the instance, where instance admins can read it.
+It is not anonymous.
+Private GitHub issues include a report number so instance admins can find you without publishing your contact details.
+Private repository access follows the operator’s GitHub permissions.
+
+## Send a report
 
 1. Select **Product feedback** in the header.
 2. Select **Share an idea**, **Report a bug**, or **Send feedback**.
 3. Enter the details the dialog asks for.
-4. Choose whether to include your page and browser with **Attach the page and browser you’re on**.
-5. Select **Send**.
+4. Choose whether to include context with **Attach the page and browser you’re on**.
+5. Choose whether the report can become public, as described below.
+6. Select **Send**.
 
-Wait one minute before you send another submission.
+There’s no separate publish step or required review of the draft.
 For a bug, describe the action, what happened, and what you expected.
-For example: “I selected Copy as Markdown on Activity, but the clipboard was empty.”
+You can change the kind of report without losing your text.
+Wait one minute before you send another report.
 
-You can change the kind of submission in the dialog without losing your text.
-Your submission goes directly to instance admins, with your name and contact address so they can follow up.
-To discuss in public instead, select **Open an issue on GitHub** in the same menu.
-It opens the public issue tracker.
+The attached page is the screen’s route, such as `/w/$workspaceSlug/activity`, without your workspace’s name or IDs.
+The browser context helps reproduce the problem.
+The issue uses a short browser summary rather than the full browser identification stored for admins.
+The attachment starts selected for bug reports and cleared otherwise.
+It never includes query parameters, page contents, or logs.
 
-**Attach the page and browser you’re on** adds the page and the browser identification that the dialog shows.
-The page is the screen’s route, such as `/w/$workspaceSlug/activity`, not its address.
-So it does not include your workspace’s name or the IDs in the address.
-This helps reproduce a bug.
-It starts selected for bug reports and cleared otherwise.
-It never attaches query parameters, page contents, or logs.
+If sending fails, the dialog keeps your text and explains why.
+Closing the dialog keeps your unsent text until you reload, switch workspace, or sign out.
 
-If the submission goes through, the dialog clears your draft and says thanks.
-If it does not, the dialog keeps your draft and explains why.
-If you close the dialog, the draft stays until you reload, switch workspace, or sign out.
+### Choose public or private
 
-## Who can read your submission
+Your first report asks **Can this become a public GitHub issue?**
+Neither answer starts selected:
 
-Your product feedback links to your account. It is not anonymous.
-Instance admins can read it in their private inbox.
-Submissions stay on your instance and have no automatic expiry by age.
-Account erasure and removal of the workspace you sent from remove the corresponding submissions.
-See [Privacy](./privacy) for your rights and your instance’s privacy contact.
+- **Yes, share it publicly** allows a public issue if the checks pass.
+- **No, keep it private** sends the report privately to the maintainers.
+
+**Send** becomes available after you choose.
+Hephaestus remembers your answer.
+Later reports show the **Public GitHub issue** switch with that answer.
+Changing the switch applies to that report only.
+If your instance changes its privacy notice version, you’ll see the question again.
+
+### Use the five-minute hold
+
+A report intended for the public repository waits five minutes after **Send** before filing.
+Drafting happens during that time.
+You do not have to stay on the page or approve the draft.
+
+The confirmation offers **Keep private** and **Edit** while the report waits.
+**Keep private** sends it to the private route.
+**Edit** lets you change the draft and starts a new five-minute hold with new checks.
+An edit cannot clear a privacy or security risk already found in the report.
+If filing has already started, **Keep private** can no longer stop it.
+Use **Make private** after filing instead.
+
+## Follow your reports
+
+1. Select **Product feedback** in the header.
+2. Select **Your product feedback**.
+
+The page lists your reports with their date, an excerpt, destination, and state.
+It also has issue links where available.
+Every product feedback update email links to this page.
+
+### Make a public issue private
+
+1. Open **Your product feedback**.
+2. Find the public report.
+3. Select **Make private**.
+4. Confirm **Make private**.
+
+Hephaestus moves the issue to the private repository, even if it is already closed.
+Copies made while it was public can remain in email, archives, or other people’s records.
+Hephaestus cannot remove those copies.
+If the move cannot finish, contact your instance admin.
+
+### Allow a private report to become public
+
+1. Open **Your product feedback**.
+2. Find the private report.
+3. Select **Allow public**.
+
+This gives permission for a maintainer to publish the report.
+It does not publish the report by itself or bypass privacy and security checks.
+You can withdraw that permission while the report stays private.
+
+## Change your defaults
+
+1. Open **User settings → Product feedback**.
+2. Turn **Public GitHub issues** on or off for future reports.
+3. Optional: turn on **Mention my GitHub account on public issues** if you have a connected GitHub account.
+
+Turning off **Public GitHub issues** also keeps your waiting public reports private.
+It does not move issues that are already public.
+Use **Make private** for each of those issues.
+Hephaestus records your choices with their date and notice version.
+
+## Email updates
+
+Product feedback updates start on.
+If your account has a verified email address and your instance sends email, Hephaestus can send these updates:
+
+- Your report was filed, with a public issue link or a private confirmation.
+- A new comment appeared on a public issue, from someone other than the app.
+- The issue closed as completed or not planned.
+- The issue reopened.
+- The issue closed as a duplicate.
+
+Updates can take about 30 minutes to arrive.
+Private issue comments do not generate reporter emails.
+
+Use the unsubscribe link in an email or your email notification settings to stop these updates.
+Without email, you can still follow your reports in **Your product feedback**.
+
+## Erase your report data
+
+Reports have no automatic expiry by age.
+Account erasure and removal of the workspace you sent from remove the corresponding reports from Hephaestus.
+Export through your instance’s privacy contact includes your reports, their destinations, and issue links.
+
+Erasure cancels waiting reports and starts cleanup of GitHub issues.
+Hephaestus moves public issues to the private repository, replaces issue text with “Erased at the reporter’s request”, and closes them.
+This cleanup can take time if GitHub is unavailable.
+The app cannot delete issues or their edit history, so maintainers must complete those steps where needed.
+Copies outside GitHub can remain.
+Completed requests to the model provider cannot be recalled.
+
+See [Privacy](./privacy) for account deletion, wider erasure requests, and your instance’s privacy contact.
+
+## Troubleshooting
+
+### Your report stayed private
+
+The confirmation explains why a check kept it private.
+The maintainers still receive it.
+If no draft was available, Hephaestus can file a private issue from the report text after removing detected personal details.
+
+### Your report is not on GitHub
+
+Your instance might have no destination or might have paused filing.
+Filing can also stop if GitHub refuses a request.
+Your instance admins receive a notification and can read the saved report.

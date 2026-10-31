@@ -7,7 +7,7 @@ import { ProductFeedbackMenu } from "./ProductFeedbackMenu";
 
 const meta = {
 	component: ProductFeedbackMenu,
-	args: { onSendFeedback: fn() },
+	args: { onSendFeedback: fn(), workspaceSlug: "acme" },
 	decorators: [
 		(Story) => (
 			<div className="flex justify-end p-4">
@@ -29,10 +29,12 @@ export const Default: Story = {
 		// The detail is announced as a description, not folded into the item's name.
 		await expect(idea).toHaveAccessibleDescription("A feature or change that would help.");
 		await expect(menu.getByText("Help make Hephaestus better")).toBeVisible();
-		await expect(menu.getByRole("menuitem", { name: /Open an issue on GitHub/u })).toHaveAttribute(
+		// The person's own reports, in the workspace the header keeps; no static link leaves the instance.
+		await expect(menu.getByRole("menuitem", { name: "Your product feedback" })).toHaveAttribute(
 			"href",
-			"https://github.com/hephaestus-build/Hephaestus/issues/new/choose",
+			"/product-feedback?chromeWorkspace=acme",
 		);
+		await expect(menu.queryByRole("menuitem", { name: /GitHub/u })).toBeNull();
 		await userEvent.click(menu.getByRole("menuitem", { name: "Report a bug" }));
 		await expect(args.onSendFeedback).toHaveBeenCalledWith("BUG");
 	},

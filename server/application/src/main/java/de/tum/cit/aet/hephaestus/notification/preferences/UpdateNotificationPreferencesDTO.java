@@ -19,4 +19,8 @@ public record UpdateNotificationPreferencesDTO(
                 description =
                         "The weekly digest in your Hephaestus conversation, with one note in Slack or email that it is"
                                 + " ready. Absent keeps the saved choice.")
-        Boolean weeklyDigest) {}
+        Boolean weeklyDigest,
+
+        @Nullable
+        @Schema(description = "Updates on your own product feedback. On by default. Absent keeps the saved choice.")
+        Boolean productFeedbackUpdates) {}

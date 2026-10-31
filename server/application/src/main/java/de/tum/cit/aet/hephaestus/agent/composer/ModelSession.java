@@ -18,34 +18,34 @@ import tools.jackson.databind.node.ObjectNode;
  * One composer conversation with the attempt's frozen chat model: the system prompt, the turns, the tools and what the
  * model called. It speaks the chat protocols the proxy serves, and it never streams.
  */
-final class ModelSession {
+public final class ModelSession {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
 
     /** One model call as the transport sends it; the proxy fences, bills and bounds it. */
-    interface Transport {
+    public interface Transport {
         Answer call(byte[] body);
     }
 
     /** What the transport returned: the provider's answer, or the proxy rule that refused the call. */
     @SuppressWarnings("ArrayRecordComponent") // the provider's response bytes, parsed once here
-    record Answer(int status, byte[] body, boolean owned, ReviewModelGateway.@Nullable Refusal refusal) {}
+    public record Answer(int status, byte[] body, boolean owned, ReviewModelGateway.@Nullable Refusal refusal) {}
 
     /** A tool the model may call. */
-    record Tool(String name, String description, ObjectNode parameters) {}
+    public record Tool(String name, String description, ObjectNode parameters) {}
 
     /** One tool call: its id, its tool, and its arguments as the model wrote them. */
-    record ToolCall(String id, String name, JsonNode arguments) {}
+    public record ToolCall(String id, String name, JsonNode arguments) {}
 
     /** The tool's answer to one call. */
     record ToolResult(String callId, String text) {}
 
     /** The model's reply: its text and the tools it called, or why the call failed. */
-    record Reply(
+    public record Reply(
             @Nullable String text,
             List<ToolCall> toolCalls,
             @Nullable Failure failure) {}
 
-    enum Failure {
+    public enum Failure {
         /** The attempt no longer runs on this worker; nothing more may be sent or stored. */
         OWNERSHIP_LOST,
         /** The workspace's AI choice no longer permits the model. */
@@ -62,7 +62,7 @@ final class ModelSession {
     }
 
     /** The model settings frozen on the attempt. */
-    record Settings(
+    public record Settings(
             LlmApiProtocol protocol,
             String modelId,
             @Nullable ReasoningEffort reasoningEffort,
@@ -77,7 +77,7 @@ final class ModelSession {
     private final ArrayNode history = JSON.arrayNode();
     private int calls;
 
-    ModelSession(Transport transport, ObjectMapper mapper, Settings settings, String system, List<Tool> tools) {
+    public ModelSession(Transport transport, ObjectMapper mapper, Settings settings, String system, List<Tool> tools) {
         this.transport = transport;
         this.mapper = mapper;
         this.settings = settings;
@@ -92,13 +92,13 @@ final class ModelSession {
     }
 
     /** Sends a user turn and returns the model's reply. */
-    Reply send(String text) {
+    public Reply send(String text) {
         history.add(JSON.objectNode().put("role", "user").put("content", text));
         return call();
     }
 
     /** Sends the same request again, after a provider failure left the conversation unchanged. */
-    Reply retry() {
+    public Reply retry() {
         return call();
     }
 

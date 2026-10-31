@@ -19,6 +19,7 @@ const meta = {
 				status: "ready",
 				preferences: {
 					productFeedback: false,
+					productFeedbackUpdates: true,
 					workspaceAlerts: false,
 					emailAvailable: true,
 					deliveryConfigured: true,

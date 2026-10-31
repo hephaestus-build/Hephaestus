@@ -1,71 +1,209 @@
 ---
-title: Manage product feedback
-description: Read product feedback in the private admin inbox, then resolve or reopen submissions.
+title: Configure product feedback
+description: File product feedback in GitHub, monitor destinations, and recover reports that need action.
 page_type: how-to
 ---
 
-Instance administrators read submissions under **Instance administration → Product feedback → Inbox**.
-Product feedback is separate from practice feedback and stays on this instance.
+Configure product feedback to send reports about Hephaestus to the repositories where your maintainers work.
+GitHub filing is off by default.
+Until you name a repository, reports stay on the instance for instance admins to read.
 
-## Read and resolve submissions
+## Before you start
 
-**Inbox** lists ideas, bug reports, and feedback.
-Each item identifies its sender, workspace, and the Hephaestus release that received it.
-It includes the page and browser only if the sender chose to attach them.
-**Mark resolved** removes an item from the open list.
-**Reopen** returns it to that list.
-Neither action notifies anyone.
+You need instance-admin access, a recent sign-in for destination changes, and permission to install the instance’s GitHub App.
+The **Product feedback** page is in the instance admin console.
+Workspace admins cannot configure it.
+GitHub is the only issue destination. GitLab, Slack, and Outline are not destinations for product feedback.
 
-To receive email about new submissions:
+Complete the [operator steps for product feedback](./legal-pages.mdx#product-feedback-on-github) before you name a repository.
+They cover lawful bases, the privacy notice, GitHub, the model provider, contracts, transfers, and the choice about publication.
+Redaction reduces risk but can miss personal data.
+A private report also leaves the instance when GitHub filing is enabled.
 
-1. In your personal settings, opt into product-feedback email.
+## Configure destinations
 
-To handle a report:
+1. Install the instance’s GitHub App on both destination repositories.
+2. Give the app **Issues: read and write** permission.
+3. Make the private repository private.
+4. Use two distinct repositories with the same owner.
+5. Open **Product feedback** in the instance admin console.
+6. In **Destinations**, enter the private repository in **Private repository**.
+7. Check that its installation is available and its visibility is private.
+8. Choose an instance-level chat model in **Model**.
+9. Set **Daily draft limit** for the instance.
+10. After the private smoke test below, enter the public repository in **Public repository**.
+11. Check its installation and visibility.
 
-1. Sign in.
-2. Use **Inbox** to read the report text or attached context.
-3. Follow your team's process for reports.
-4. If necessary, follow up with the sender.
-5. Resolve or reopen the item.
+The default daily draft limit is 50.
+Each account also has a limit of five drafts per day.
+Failed model calls and retries count toward the draft budget.
+Choose a model with an available pool and provider connection.
+Use the [routing evaluation](/contributor/product-feedback#routing-evaluation) to assess the model before public use.
 
-Emails are sent as soon as the submission commits, subject to capacity and relay availability.
-They never include report text or attached context.
-Only currently active instance admins with verified email addresses receive them.
-Resolution is private administration, not a reply.
+The app acts as itself. Reports need no workspace connection or reporter GitHub token.
+The same owner permits **Make private** to move a public issue to the private repository.
+Before each private write, the server checks that the repository is still private.
+If that check fails or gives no answer, the write stops.
 
-An idea or bug that concerns every instance is worth reporting to the [Hephaestus project](https://github.com/hephaestus-build/Hephaestus/issues).
-Nothing reports it automatically.
+The card shows destination health, the draft count, the last filing time, and the seven-day route split by reason.
+A destination change is audited.
+It never redirects a report already queued for the previous repository.
+Those reports go to the admin email fallback with `DESTINATION_CHANGED`.
+Hephaestus refuses removal of a destination while followed issues or cleanup still need it.
 
-1. Before you create a public issue, remove private details.
+## Route reports
 
-Product feedback can identify questions worth study.
-Collection for product improvement does not authorize reuse of identifiable reports or quotations as research data.
-A general research opt-in does not permit reuse of every submission for a different purpose.
+Code selects the route after the model drafts the issue:
 
-Before research collection or reuse, agree the research purpose, lawful basis, participant notice, retention, and safeguards with your institution.
+| Route | Conditions |
+| --- | --- |
+| Public issue | The reporter allows publication. The report is a bug or idea with a valid draft for the outgoing revision. All privacy, security, safety, and confidence checks pass. |
+| Private issue | The public gate does not pass and a private destination is set. |
+| Admin email and saved report | No suitable destination is set, **Pause** is on, or filing stops. |
+
+Every public write checks the reporter’s current permission to publish and the frozen destination again.
+The first public filing waits five minutes after **Send**.
+**Edit** restarts that hold and repeats the checks.
+**Keep private** changes a held report to the private route.
+
+Each private issue starts with a reason:
+
+| Reason | Meaning |
+| --- | --- |
+| `opted out` | The reporter did not allow a public issue. |
+| `security` | The report can describe a security problem. |
+| `redaction` | Code found a secret, credential, email address, or known person’s name. |
+| `about a person` | The report concerns a named person. |
+| `low confidence` | The report is unclear, is not an issue, or is not a bug or idea. |
+| `abuse` | The safety check found abuse. |
+| `no draft` | The model was unavailable, the limit was reached, or the model response stayed invalid. |
+
+Security, blocking redaction, or a report about a named person sets a persistent risk latch.
+An edit or retry cannot clear it.
+Without a draft, the private issue uses the original report after code redaction.
+The public route never uses this fallback text.
+Praise, questions, and **Send feedback** reports stay private.
+
+The app uses Bug or Feature issue types where available. It adds no labels.
+A possible duplicate becomes a new issue with a reference to the possible match.
+The app does not comment on or close another issue automatically.
+
+## Recover reports that need action
+
+Reports filed on GitHub are handled there.
+**Needs action** lists stopped reports with their reasons and **Retry**.
+The console also retains reports that are not on GitHub, including instances without a destination.
+Instance admins can read their text and resolve or reopen them.
+Resolution in that list does not reply to the reporter.
+
+1. Read the reason in **Needs action**.
+2. Correct the destination, app access, or provider problem.
+3. Select **Retry** for the report.
+4. Check that one issue exists in the intended repository.
+
+Automatic retries use backoff, with up to three retries before manual action.
+An uncertain GitHub response requires reconciliation before another write.
+Do not create another report or clear its state to bypass that check.
+
+Admin email covers every report that is not on GitHub: no destination, or filing stopped.
+It carries the kind and a link, never the report text or attached context.
+Active instance admins need a verified address and the relevant email subscription to receive it.
+Without email delivery, the saved report remains available in the console.
+See [Email setup](./production-setup.mdx#email) for relay setup.
+
+## Publish a private issue
+
+The reporter can select **Allow public** in **Your product feedback**.
+This permits publication but does not publish the report.
+
+1. Confirm that the reporter allows public and that the report has a valid draft.
+2. With write or admin permission on both repositories, comment `/publish` on the private issue.
+3. Check for the app’s response.
+
+The server checks the commenter’s current permission on both repositories at dispatch.
+Organization membership or a read-only collaborator role is insufficient.
+An unknown permission denies publication.
+The command can override kind and confidence checks only.
+It cannot override the reporter’s choice, security, the risk latch, or abuse.
+
+GitHub cannot transfer a private issue to a public repository.
+The app creates a public issue from the redacted draft, then closes the private issue with the public link.
+The public issue contains no link back to the private one.
+The server checks commands every five minutes.
+During **Pause**, commands wait until you resume.
+
+## Handle erasure
+
+The [user guide](/user/product-feedback) describes reporter choices, emails, and withdrawal.
+Turning off the account default keeps held reports private but does not move issues already public.
+**Make private** moves each public issue to the private repository.
+Copies made while an issue was public can remain.
+
+Account erasure and workspace purge remove the applicable reports and start external cleanup.
+Cleanup moves public issues to private, replaces their title and body with “Erased at the reporter’s request”, and closes them.
+It first reconciles any uncertain create, including a create with no known issue number.
+If no private repository is available, cleanup scrubs and closes the public issue and retries the move until one is.
+The [personal-data map](./dsms/personal-data-map.md) owns the store and export inventory.
+
+The app cannot delete an issue or its edit history.
+If cleanup needs manual action, use the issue locator in **Needs action**:
+
+1. Open the issue with the repository access needed for removal.
+2. Remove revision content that still carries erased text.
+3. If required, ask a repository admin to delete the issue.
+4. Confirm the manual step in **Needs action** after it is complete.
+
+Unfinished cleanup becomes a manual action after 30 days and sends an admin email.
+Its locator remains until an admin confirms the manual step.
+Do not remove app access or destinations before cleanup finishes.
+
+Product improvement does not authorize research reuse of identifiable reports or quotations.
+Agree any research purpose, lawful basis, notice, retention, and safeguards separately with your institution.
+
+## Run it
+
+Start with the private route before you enable the public route.
+
+1. Configure the private destination, model, and daily limit.
+2. Send a synthetic report through **Send feedback** with public permission off.
+3. Check for one private issue with the report number and model disclosure.
+4. Check that `product_feedback_steps_total` records `step=file` with `outcome=ok`.
+5. Close the test issue.
+6. Configure the public destination after the private test passes.
+7. Monitor the first real public report, its hold, route, and alerts.
+
+Do not send test issues to a production public repository.
+Use a separate test repository with synthetic data to test public behavior.
 
 ## Check that it worked
 
-After you resolve a submission, it leaves the open inbox.
-Select the resolved list to find it again.
-Reopen it to return it to the open inbox.
+The destinations card shows available app installations and a usable model.
+The private smoke test produces one issue and no public issue.
+**Needs action** explains stopped reports, and the admin email fallback reaches its subscribed recipients.
+The first real public report waits for its hold and contains no detected personal details.
 
-## Handle personal data
+## Undo
 
-Submissions link to accounts and stay on your instance.
-They always record the Hephaestus release that received the report.
+1. Turn on **Pause** in **Destinations**.
+2. Check that new and unfiled reports go to the admin email fallback.
 
-Users can attach the page and their browser’s user agent, as the dialog displays them.
-The page is the route of the screen, such as `/w/$workspaceSlug/activity`.
-It contains no workspace slug and no ID.
-Submissions from before this change can contain the page's full path.
-Submissions never attach query parameters, page contents, or logs.
+Keep the repositories configured.
+Follow-up, **Make private**, and erasure cleanup continue during **Pause**.
+Writes already in progress finish or reconcile. Pending `/publish` commands wait.
+To resume new filing, turn off **Pause** after you correct the cause.
 
-Drafts never reach the server.
-Product feedback has a limit of one submission per account per minute.
+## Troubleshooting
 
-Account erasure and workspace purge remove the corresponding submissions.
-These operations cannot recall email that a relay already accepted.
-There is no automatic expiry by age.
-Include product feedback in your retention and rights-request procedures.
-The [personal-data map](dsms/personal-data-map.md) describes erasure coverage.
+| Symptom | Check and cause | Action |
+| --- | --- | --- |
+| Installation missing or suspended | The app cannot reach the named repository. | Restore its installation and **Issues: read and write** permission. Select **Retry**. |
+| Private destination unavailable | The repository is public, inaccessible, or has an unknown visibility. | Turn on **Pause**. Restore private visibility and app access before **Retry**. |
+| Model unavailable | The model, pool, credentials, or provider connection is unavailable. | Restore the instance model and its pool. Reports without drafts stay private. |
+| Many `no draft` routes | The daily limit is reached or model output stays invalid. | Check the count and model health. Reassess the model with the routing evaluation. |
+| Many private routes | Read the route split by reason. The gate can be strict or reports can contain detected personal data. | Inspect synthetic evaluation results before you change the model. Keep privacy checks in place. |
+| Public report waits longer than five minutes | The hold is a minimum. Drafts, filing pace, rate limits, or reconciliation can delay it. | Check worker and server health, model availability, and **Needs action**. |
+| GitHub write stopped | `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` explains the stop. | Turn on **Pause** if privacy is in doubt. Correct app access or the refusal, then select **Retry**. |
+| `/publish` does nothing | **Pause**, missing reporter permission, insufficient repository access, or a safety condition blocks it. | Resume only when safe. Check the app’s response and both repository permissions. |
+| No admin email | No verified subscribed admin or no usable relay exists. | Read the saved report in the console. Restore email delivery and subscriptions. |
+| No reporter email | The account lacks a verified address, delivery is unavailable, or updates are off. | Use **Your product feedback** for status. Private comments do not generate reporter emails. |
+| Cleanup needs action | The app cannot remove edit history, or cleanup remained incomplete for 30 days. | Complete the manual erasure steps above before you confirm them. |

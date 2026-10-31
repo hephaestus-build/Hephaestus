@@ -493,7 +493,11 @@ A second reasoning rate would count the same work twice.
 
 Hephaestus uses one SMTP relay for the whole instance.
 Account-security and deletion confirmations are essential mail.
-New product feedback emails and connection alerts are separate opt-in subscriptions in personal settings.
+
+Admin alerts for product feedback not on GitHub and connection alerts are separate opt-in subscriptions in personal settings.
+Reporter updates for product feedback start on, with an unsubscribe link.
+See [Product feedback](./product-feedback.mdx) for the email fallback and reporter updates.
+
 Email stays off until a relay host is set.
 There is no per-workspace mail configuration or connection authorization.
 Spring Boot's `spring.mail.*` is the transport, so each variable is the uppercase property path.
