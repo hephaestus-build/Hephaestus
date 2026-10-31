@@ -9,6 +9,9 @@ import { server } from "@/mocks/server";
 import { deferred } from "./async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "./router-harness";
 
+// A cold route mount takes seconds on a busy file pool, so these tests wait as long as the route tests do.
+vi.setConfig({ testTimeout: 30_000 });
+
 let left: AnyRouter | undefined;
 
 /**
