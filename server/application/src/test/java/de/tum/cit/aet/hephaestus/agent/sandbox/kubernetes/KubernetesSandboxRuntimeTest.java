@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
@@ -756,6 +757,16 @@ class KubernetesSandboxRuntimeTest {
         assertThat(backend().roomFor(LIMITS))
                 .as("1280 MiB free hold two reviews that request 640 MiB")
                 .isEqualTo(2);
+    }
+
+    @Test
+    void shouldPreserveUnknownRoomWhenTheQuotaWatchIsUnavailable() {
+        var unavailable = mock(KubernetesSandboxCache.class);
+        when(unavailable.quotas()).thenThrow(new IllegalStateException("quota watch unavailable"));
+        var reviews = new KubernetesSandboxBackend(
+                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()), unavailable);
+
+        assertThat(reviews.roomFor(LIMITS)).isEqualTo(SandboxRoom.UNKNOWN_ROOM);
     }
 
     @Test

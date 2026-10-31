@@ -138,6 +138,14 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "WHERE j.workspaceId = :workspaceId AND j.status = 'QUEUED' AND j.holdReason = 'BUDGET'")
     int releaseBudgetHolds(@Param("workspaceId") Long workspaceId, @Param("now") Instant now);
 
+    /** Parent-first lock order shared with cancellation and recovery; no parent state changes here. */
+    @WorkspaceAgnostic("Queued job ID from the global poller; parent join includes its workspace")
+    @Query(value = """
+            SELECT r.id FROM review r JOIN review_job j ON j.review_id=r.id AND j.workspace_id=r.workspace_id
+            WHERE j.id=:id AND j.status='QUEUED' FOR UPDATE OF r SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<UUID> lockParentForQueuedClaim(@Param("id") UUID id);
+
     /** Rechecks eligibility under the row lock, using the same application clock that set available_at. */
     @WorkspaceAgnostic("ID-based claim; job ID from a workspace-scoped candidate poll")
     @Query(
@@ -392,8 +400,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      *
      * <p>Work already started comes first: a job on a later attempt, such as one a drain or a handed-on composition
      * put back, and a job whose results were admitted. A requeue sets a fresh {@code available_at}, so oldest-first
-     * alone left an admitted review's composition behind every fresh review queued before it. Within each group the
-     * oldest available job comes first.
+     * alone left an admitted review's composition behind every fresh review queued before it. The candidate query
+     * below applies workspace and origin fairness within each group.
      */
     @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the workspace-agnostic job poller")
     default List<UUID> findQueuedIdsStartedFirst(int limit) {
@@ -401,12 +409,18 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     }
 
     /**
-     * Offer fresh demand to fairness first. The poller then dispatches the fair winner; only an unavailable
-     * endpoint is skipped for the rest of this poll.
+     * Started work, workspace running count plus its batch position, then origin with aging and age. Ten minutes of eligible waiting
+     * offsets one origin priority step. An unavailable endpoint is skipped for the rest of this poll.
      */
     @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and per-poll endpoint exclusions")
     @Query(value = """
+            WITH running AS (
+              SELECT workspace_id,count(*) AS reviews FROM review_job
+              WHERE status='RUNNING' AND admission_digest IS NULL GROUP BY workspace_id
+            )
             SELECT j.id FROM review_job j JOIN workspace w ON w.id=j.workspace_id
+            LEFT JOIN running ON running.workspace_id=j.workspace_id
+            LEFT JOIN review v ON v.id=j.review_id AND v.workspace_id=j.workspace_id
             LEFT JOIN llm_model im ON j.config_snapshot->'model'->>'connectionScope'='INSTANCE'
               AND im.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
               AND im.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
@@ -422,11 +436,15 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
                     WHERE b.workspace_id=j.workspace_id AND b.purpose='PRACTICE_REVIEW'
                       AND b.data_handling_tier=COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')),2147483647)
               AND (:#{#excludedJobs.isEmpty()} OR j.id NOT IN (:excludedJobs))
-              AND (j.capture->'admission' IS NOT NULL OR :#{#excludedPools.isEmpty()}
+              AND (j.admission_digest IS NOT NULL OR :#{#excludedPools.isEmpty()}
                 OR COALESCE(im.call_pool_id,wm.call_pool_id,0) NOT IN (:excludedPools))
-            ORDER BY (j.attempt>0 OR j.capture->'admission' IS NOT NULL) DESC,
-              (SELECT max(pending.renewed_at) FROM llm_call_permit pending WHERE pending.source_id=j.id
-                 AND pending.workspace_id=j.workspace_id AND pending.attempt=j.attempt AND pending.state='CLAIM_WAITING') ASC NULLS FIRST,
+            ORDER BY (j.attempt>0 OR j.admission_digest IS NOT NULL) DESC,
+              COALESCE(running.reviews,0)+row_number() OVER (
+                PARTITION BY j.workspace_id,(j.attempt>0 OR j.admission_digest IS NOT NULL)
+                ORDER BY (CASE v.origin WHEN 'REQUEST' THEN 0 WHEN 'EVENT' THEN 1 WHEN 'SCHEDULE' THEN 2 ELSE 3 END
+                  - EXTRACT(EPOCH FROM (now()-j.available_at))/600.0),j.available_at,j.id) ASC,
+              (CASE v.origin WHEN 'REQUEST' THEN 0 WHEN 'EVENT' THEN 1 WHEN 'SCHEDULE' THEN 2 ELSE 3 END
+                - EXTRACT(EPOCH FROM (now()-j.available_at))/600.0) ASC,
               j.available_at ASC,j.id ASC LIMIT :limit
             """, nativeQuery = true)
     List<UUID> findQueuedIdsStartedFirst(

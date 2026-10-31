@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -25,10 +26,11 @@ class ReviewJobEventListenerTest extends BaseUnitTest {
         var assignment = RuntimeReviewTestData.assignment(5L, null);
         var review = RuntimeReviewTestData.review(ReviewKind.ITEM, assignment);
         when(reviews.find(1, review.id())).thenReturn(Optional.of(review));
-        when(reviews.start(1, review.id())).thenReturn(true);
         when(assignments.executable(1, review.id(), 2)).thenReturn(List.of(assignment.id()));
         new ReviewJobEventListener(reviews, queue, assignments).onReviewRequested(new ReviewRequested(review.id(), 1));
         verify(queue).enqueue(review, 2, List.of(assignment.id()));
+        // The parent stays QUEUED until a worker claims its job.
+        verify(reviews, never()).start(1, review.id());
     }
 
     @Test
