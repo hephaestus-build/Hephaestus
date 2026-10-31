@@ -68,13 +68,36 @@ await test("fails when a published contract file is edited", (t) => {
 	assert.throws(() => runChecker(repo), /1\.0\.0 is immutable/u);
 });
 
-await test("fails when a published contract version is deleted", (t) => {
+await test("fails when the newest published contract version is deleted", (t) => {
 	const { repo, git } = repoWithPublishedContract();
 	t.after(() => rmSync(repo, { recursive: true, force: true }));
 	git("rm", "--quiet", "-r", path.join(CONTRACTS, "1.0.0"));
 	git("commit", "--quiet", "-m", "delete published contract");
 
 	assert.throws(() => runChecker(repo), /1\.0\.0 is immutable/u);
+});
+
+await test("an older published version may leave the tree whole, but not in part", (t) => {
+	const { repo, git } = repoWithPublishedContract();
+	t.after(() => rmSync(repo, { recursive: true, force: true }));
+	git("checkout", "--quiet", "main");
+	mkdirSync(path.join(repo, CONTRACTS, "1.1.0"), { recursive: true });
+	writeFileSync(path.join(repo, CONTRACTS, "1.1.0", "catalog.json"), '{"version":"1.1.0"}\n');
+	writeFileSync(path.join(repo, CONTRACTS, "1.0.0", "schema.json"), '{"older":true}\n');
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "publish 1.1.0");
+	git("checkout", "--quiet", "-B", "feature");
+
+	git("rm", "--quiet", path.join(CONTRACTS, "1.0.0", "schema.json"));
+	git("commit", "--quiet", "-m", "remove one file of 1.0.0");
+	assert.throws(() => runChecker(repo), /1\.0\.0 is immutable/u);
+
+	git("rm", "--quiet", "-r", path.join(CONTRACTS, "1.0.0"));
+	git("commit", "--quiet", "-m", "retire 1.0.0");
+	assert.match(
+		runChecker(repo),
+		/1 published version\(s\) unchanged .*\(1\.1\.0\); retired whole: 1\.0\.0/u,
+	);
 });
 
 await test("adding a new version alongside a published one is allowed", (t) => {
@@ -85,6 +108,38 @@ await test("adding a new version alongside a published one is allowed", (t) => {
 	git("add", "-A");
 	git("commit", "--quiet", "-m", "publish 1.1.0");
 
+	assert.match(runChecker(repo), /1 published version\(s\) unchanged/u);
+});
+
+await test("a retired version cannot return, and a new version must be above the newest", (t) => {
+	const { repo, git } = repoWithPublishedContract();
+	t.after(() => rmSync(repo, { recursive: true, force: true }));
+	git("checkout", "--quiet", "main");
+	mkdirSync(path.join(repo, CONTRACTS, "1.1.0"), { recursive: true });
+	writeFileSync(path.join(repo, CONTRACTS, "1.1.0", "catalog.json"), '{"version":"1.1.0"}\n');
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "publish 1.1.0");
+	git("rm", "--quiet", "-r", path.join(CONTRACTS, "1.0.0"));
+	git("commit", "--quiet", "-m", "retire 1.0.0");
+	git("checkout", "--quiet", "-B", "feature");
+
+	mkdirSync(path.join(repo, CONTRACTS, "1.0.0"), { recursive: true });
+	writeFileSync(
+		path.join(repo, CONTRACTS, "1.0.0", "catalog.json"),
+		'{"version":"1.0.0","changed":true}\n',
+	);
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "bring 1.0.0 back with other bytes");
+	assert.throws(
+		() => runChecker(repo),
+		/1\.0\.0 is not above the newest published version 1\.1\.0/u,
+	);
+
+	git("rm", "--quiet", "-r", path.join(CONTRACTS, "1.0.0"));
+	mkdirSync(path.join(repo, CONTRACTS, "1.2.0"), { recursive: true });
+	writeFileSync(path.join(repo, CONTRACTS, "1.2.0", "catalog.json"), '{"version":"1.2.0"}\n');
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "publish 1.2.0 instead");
 	assert.match(runChecker(repo), /1 published version\(s\) unchanged/u);
 });
 
