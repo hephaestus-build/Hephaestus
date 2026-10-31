@@ -73,6 +73,20 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a tools Job counts what the table says")
+    void shouldMatchTheTableWhenTheWorkerBuildsAToolsPod() throws IOException {
+        Pod tools = pods.toolsPod(
+                workload(KubernetesWorker.KIND_TOOLS),
+                KubernetesToolsJobs.LIMITS,
+                "tools-program",
+                KubernetesToolsJobs.PORT,
+                "nonce",
+                60);
+
+        assertCounts("toolsJob", List.of(tools));
+    }
+
+    @Test
     @DisplayName("the three Pods of one isolation probe run count what the table says")
     void shouldMatchTheTableWhenTheProbeRunsItsThreePods() throws IOException {
         Duration time = Duration.ofMinutes(2);

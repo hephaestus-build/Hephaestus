@@ -46,10 +46,14 @@ import {
 	strings,
 	text,
 	ToolProtocolError,
+	type ToolEndpoint,
+	TOOL_WORKSPACE,
+	TOOL_CONTEXT_ROOT,
+	TOOL_SCRATCH_ROOT,
 } from "./tool-protocol.ts";
 
 export interface ToolsServerOptions {
-	socketPath: string;
+	endpoint: ToolEndpoint;
 	/** The nonce that the worker wrote into this Pod's spec: `hello` returns it, and the loop compares it. */
 	nonce: string;
 	/** The mutable directory inside a volume. Its parent belongs to the tools user; reset replaces this directory. */
@@ -259,6 +263,43 @@ export function checkAuthority(): void {
 	}
 }
 
+/** The put directory being created now; the next creation waits for it. */
+let creatingDirectory: Promise<unknown> = Promise.resolve();
+
+/**
+ * Creates a put's new directory. Its parent can be one that an earlier put made read-only, as a repository's owner
+ * directory inside the documents is: only this mkdir gets owner write on it, and the parent keeps its mode otherwise.
+ * Commands run as the same user, so the moment grants them nothing they lack. One creation runs at a time, so that two
+ * puts into one parent never restore its mode under each other.
+ */
+async function createPutDirectory(dir: string): Promise<void> {
+	const previous = creatingDirectory;
+	const { promise, resolve } = Promise.withResolvers<undefined>();
+	creatingDirectory = promise;
+	await previous;
+	try {
+		const parent = path.dirname(dir);
+		const { mode } = await lstat(parent);
+		// oxlint-disable-next-line no-bitwise -- a file mode is a bitmask
+		const permissions = mode & 0o7777;
+		// oxlint-disable-next-line no-bitwise -- a file mode is a bitmask
+		const writable = (permissions & 0o200) !== 0;
+		if (!writable) {
+			// oxlint-disable-next-line no-bitwise -- a file mode is a bitmask
+			await chmod(parent, permissions | 0o200);
+		}
+		try {
+			await mkdir(dir);
+		} finally {
+			if (!writable) {
+				await chmod(parent, permissions);
+			}
+		}
+	} finally {
+		resolve(undefined);
+	}
+}
+
 /** Best-effort reclamation of a detached tree, under the same UID, groups and mounts as every command. */
 async function removeTrash(file: string, root: string): Promise<void> {
 	const info = await lstat(file).catch((error: unknown) => {
@@ -431,7 +472,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 	if (
 		!within(workspace, realpathSync(options.scratch)) ||
 		options.putRoots.some((root) => !within(workspace, realpathSync(root))) ||
-		within(workspace, path.resolve(options.socketPath))
+		(typeof options.endpoint === "string" && within(workspace, path.resolve(options.endpoint)))
 	) {
 		throw new Error(
 			"Scratch and upload roots belong inside the mutable workspace, and the socket outside it.",
@@ -526,7 +567,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		sweepTrash();
 	}
 
-	return createServer({ highWaterMark: LIMITS.bodyBytes }, (socket: Socket) => {
+	const server = createServer({ highWaterMark: LIMITS.bodyBytes }, (socket: Socket) => {
 		const reader = frameReader();
 		/** The ids of this connection's requests that have not sent their final frame. */
 		const inFlight = new Set<string>();
@@ -1000,7 +1041,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				}
 				// Reserve cleanup capacity before creating a tree, including parallel failed extractions.
 				retirement = reserveTrash();
-				await mkdir(entry.dir);
+				await createPutDirectory(entry.dir);
 				created = true;
 				// GNU tar and bsdtar both strip leading slashes, skip members with `..`, and never write through a
 				// symlink that the archive made: GNU tar creates such a symlink last, and bsdtar refuses. The spec
@@ -1197,7 +1238,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		socket.on("error", () => {
 			socket.destroy();
 		});
-	}).listen(options.socketPath);
+	});
+	return typeof options.endpoint === "string"
+		? server.listen(options.endpoint)
+		: server.listen(options.endpoint);
 }
 
 if (import.meta.main) {
@@ -1209,20 +1253,28 @@ if (import.meta.main) {
 	if (nonce === undefined || nonce === "") {
 		throw new Error("TOOLS_NONCE is required: the worker writes the Pod's nonce into its spec");
 	}
-	const workspace = "/tmp/tools/workspace";
-	const scratch = path.join(workspace, ".scratch");
-	const repos = path.join(workspace, "repos");
+	const workspace = TOOL_WORKSPACE;
+	const scratch = TOOL_SCRATCH_ROOT;
 	await mkdir(path.dirname(workspace), { recursive: true, mode: 0o700 });
-	for (const directory of [workspace, scratch, repos]) {
+	// The context directory is the loop's first put, which names a new directory: it is not made here.
+	for (const directory of [workspace, scratch]) {
 		await mkdir(directory, { recursive: true, mode: 0o700 });
 	}
+	const portText = process.env.TOOLS_PORT;
+	const port = portText === undefined ? undefined : Number(portText);
+	if (port !== undefined && (!Number.isSafeInteger(port) || port < 1 || port > 65_535)) {
+		throw new Error("TOOLS_PORT must be an integer from 1 to 65535");
+	}
 	startToolsServer({
-		socketPath: process.env.TOOLS_SOCKET ?? "/run/tools/tools.sock",
+		endpoint:
+			port === undefined
+				? (process.env.TOOLS_SOCKET ?? "/run/tools/tools.sock")
+				: { host: "0.0.0.0", port },
 		nonce,
 		workspace,
-		roots: ["/workspace", workspace],
+		roots: [TOOL_CONTEXT_ROOT, scratch],
 		scratch,
-		putRoots: [repos],
+		putRoots: [workspace],
 		soleUser: true,
 	});
 }

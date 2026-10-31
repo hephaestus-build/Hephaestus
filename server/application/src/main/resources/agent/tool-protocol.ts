@@ -7,6 +7,14 @@
 
 export const PROTOCOL = 1;
 
+/** The two real transports: a review sidecar's Unix socket, or a conversation tools Job's TCP port. */
+export type ToolEndpoint = string | { host: string; port: number };
+
+/** Mutable tools data has a private parent owned by the command UID, so reset can replace it atomically. */
+export const TOOL_WORKSPACE = "/tmp/tools/workspace";
+export const TOOL_CONTEXT_ROOT = `${TOOL_WORKSPACE}/context`;
+export const TOOL_SCRATCH_ROOT = `${TOOL_WORKSPACE}/.scratch`;
+
 export const LIMITS = {
 	/** The most bytes of one JSON header. */
 	headerBytes: 64 * 1024,

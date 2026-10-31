@@ -27,6 +27,8 @@ public class KubernetesWorker {
     public static final String KIND_REVIEW = "review";
     public static final String KIND_HOST = "host";
     public static final String KIND_TURN = "turn";
+    /** A conversation attempt's credential-free tools Job: it serves the tool protocol to the loop alone. */
+    public static final String KIND_TOOLS = "tools";
 
     /** A Pod of the isolation probe: the chart's policies treat it as a review Pod or a turn Pod, by its kind. */
     public static final String PROBE = "hephaestus.build/isolation-probe";
@@ -35,6 +37,11 @@ public class KubernetesWorker {
     public static final String JOB_ATTEMPT = "hephaestus.build/job-attempt";
     public static final String SESSION_ID = "hephaestus.build/session-id";
     public static final String SANDBOX_ID = "hephaestus.build/sandbox-id";
+    public static final String WORKSPACE_ID = "hephaestus.build/workspace-id";
+    public static final String TURN_ID = "hephaestus.build/turn-id";
+    public static final String TURN_ATTEMPT = "hephaestus.build/turn-attempt";
+    public static final String LEASE_ID = "hephaestus.build/lease-id";
+    public static final String CONTEXT_GENERATION = "hephaestus.build/context-generation";
 
     private final KubernetesSandboxProperties properties;
     private final String workerId;

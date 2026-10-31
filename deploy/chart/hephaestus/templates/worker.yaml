@@ -119,6 +119,32 @@ spec:
   podSelector: {}
   policyTypes: ["Ingress", "Egress"]
 ---
+# A tools Job serves its tool protocol to the conversation loop alone, and reaches nothing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "sandbox-tools") }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: hephaestus
+      hephaestus.build/sandbox-kind: tools
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 14 }}
+      ports:
+        - port: 7070
+          protocol: TCP
+---
 # The workers' authority over the sandboxes of this namespace, and over nothing else in it.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -144,6 +170,10 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
+  # The worker's own tools server, which its tools Jobs mount read-only.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
   # The Job controller reports a quota refusal of a review Pod as an event.
   - apiGroups: [""]
     resources: ["events"]

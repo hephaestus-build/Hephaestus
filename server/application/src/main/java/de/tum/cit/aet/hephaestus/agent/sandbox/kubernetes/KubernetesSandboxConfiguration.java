@@ -108,6 +108,16 @@ public class KubernetesSandboxConfiguration {
         return new KubernetesSandboxJobs(sandboxKubernetesClient, worker);
     }
 
+    @Bean(destroyMethod = "close")
+    public KubernetesToolsJobs kubernetesToolsJobs(
+            KubernetesClient sandboxKubernetesClient,
+            KubernetesPods pods,
+            KubernetesSandboxJobs jobs,
+            KubernetesWorker worker,
+            AgentImageProperties agentImageProperties) {
+        return new KubernetesToolsJobs(sandboxKubernetesClient, pods, jobs, worker, agentImageProperties.reference());
+    }
+
     @Bean
     public SandboxExits sandboxExits(KubernetesPods pods, MeterRegistry meters) {
         return new SandboxExits(pods, meters);

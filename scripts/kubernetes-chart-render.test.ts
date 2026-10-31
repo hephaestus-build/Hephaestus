@@ -1176,6 +1176,8 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 				"/pods/exec:get",
 				"/pods/log:get",
 				...["create", "delete", "get", "list", "watch"].map((verb) => `batch/jobs:${verb}`),
+				// The worker's own tools server, which its tools Jobs mount read-only.
+				"/configmaps:create",
 				// A quota refusal of a review Pod: the Job controller's event.
 				...["get", "list"].map((verb) => `/events:${verb}`),
 				// How many reviews fit, watched as Pods and Jobs are, so a claim poll reads a cache.
@@ -1218,7 +1220,39 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 			)
 			.map(nameOf)
 			.toSorted(byCodePoint);
-	assert.deepEqual(policiesIn(sandboxes), ["heph-sandbox-deny", "heph-sandbox-gateway"]);
+	assert.deepEqual(policiesIn(sandboxes), [
+		"heph-sandbox-deny",
+		"heph-sandbox-gateway",
+		"heph-sandbox-tools",
+	]);
+	// A tools Job admits the conversation loop alone, on the tool protocol's port, and reaches nothing.
+	const toolsPolicy = resources.find(
+		(resource) => kindOf(resource) === "NetworkPolicy" && nameOf(resource) === "heph-sandbox-tools",
+	);
+	assert.deepEqual(get(toolsPolicy, "spec", "podSelector"), {
+		matchLabels: {
+			"app.kubernetes.io/part-of": "hephaestus",
+			"hephaestus.build/sandbox-kind": "tools",
+		},
+	});
+	assert.deepEqual(get(toolsPolicy, "spec", "policyTypes"), ["Ingress"]);
+	assert.deepEqual(get(toolsPolicy, "spec", "ingress"), [
+		{
+			from: [
+				{
+					namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "hephaestus" } },
+					podSelector: {
+						matchLabels: {
+							"app.kubernetes.io/name": "hephaestus",
+							"app.kubernetes.io/instance": "heph",
+							"app.kubernetes.io/component": "conversation-loop",
+						},
+					},
+				},
+			],
+			ports: [{ port: 7070, protocol: "TCP" }],
+		},
+	]);
 	const gateway = resources.find(
 		(resource) =>
 			kindOf(resource) === "NetworkPolicy" && nameOf(resource) === "heph-sandbox-gateway",

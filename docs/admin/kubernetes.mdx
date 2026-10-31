@@ -1050,6 +1050,7 @@ The worker's service account has these permissions in the sandbox namespace, and
 - `pods/log`: `get`.
 - `pods/exec`: `get` and `create`. The client opens an exec as a WebSocket `GET`, and the API server also authorizes it as `create`.
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`.
+- ConfigMaps: `create`. A tools Job mounts the worker's own tools server read-only from a ConfigMap. The ConfigMap's name carries a digest of its content.
 - Events: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
 - ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
 

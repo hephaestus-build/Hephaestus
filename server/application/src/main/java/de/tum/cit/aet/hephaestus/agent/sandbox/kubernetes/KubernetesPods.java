@@ -10,12 +10,14 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
+import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.EnvVarBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodSecurityContextBuilder;
+import io.fabric8.kubernetes.api.model.ProbeBuilder;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.api.model.ResourceRequirementsBuilder;
@@ -89,6 +91,12 @@ public class KubernetesPods {
 
     /** A turn sandbox's trusted container, which only stages archives into the workspace. */
     public static final String STAGER = "stager";
+
+    /** The container of a tools Job: the tool protocol's server, the only process the Pod starts. */
+    public static final String TOOLS = "tools";
+
+    /** Where a tools Pod mounts the worker's own tools server and its protocol, read-only. */
+    static final String TOOLS_ROOT = "/opt/tools";
 
     static final long SANDBOX_UID = Long.parseLong(ExecSandboxes.SANDBOX_USER);
 
@@ -208,6 +216,13 @@ public class KubernetesPods {
      */
     static final Size TURN =
             new Size(128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size(), 20);
+
+    /**
+     * A tools Job: the tool protocol's server and the commands it runs, in the scratch places alone. It sizes like a
+     * turn sandbox's command container, whose work it takes over.
+     */
+    static final Size TOOLS_JOB =
+            new Size(128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, SCRATCH_PATHS.size(), 20);
 
     /** The stager of a turn sandbox: a shell that sleeps, 1 MiB measured. It writes the workspace to disk. */
     private static final Quantity STAGER_MEMORY = new Quantity(Long.toString(32 * MIB));
@@ -367,6 +382,62 @@ public class KubernetesPods {
                 .withVolumes(volumes)
                 .endSpec()
                 .build();
+    }
+
+    /**
+     * A tools Job's Pod. Its one container serves the tool protocol on {@code port} to the holder of {@code nonce}, and
+     * runs every command it is asked for under the same user, in its scratch places. The server is the worker's own,
+     * from the ConfigMap {@code program}. The Pod carries no credential and no captured context, and the sandbox
+     * namespace's policy lets it reach nothing.
+     */
+    public Pod toolsPod(
+            Workload workload,
+            ResourceLimits limits,
+            String program,
+            int port,
+            String nonce,
+            long activeDeadlineSeconds) {
+        Container tools = base(TOOLS, workload.image(), SANDBOX_UID)
+                .withCommand(limited(List.of("node", TOOLS_ROOT + "/tools-server.ts")))
+                .withEnv(new EnvVar("TOOLS_PORT", Integer.toString(port), null), new EnvVar("TOOLS_NONCE", nonce, null))
+                .withPorts(new ContainerPortBuilder()
+                        .withName(TOOLS)
+                        .withContainerPort(port)
+                        .build())
+                .withReadinessProbe(new ProbeBuilder()
+                        .withNewTcpSocket()
+                        .withNewPort(port)
+                        .endTcpSocket()
+                        .withPeriodSeconds(1)
+                        .build())
+                .withVolumeMounts(withProgram(scratchMounts()))
+                .withResources(resources(limits, TOOLS_JOB))
+                .build();
+        return pod(workload, SANDBOX_UID, activeDeadlineSeconds, worker.userNamespaces())
+                .editSpec()
+                .withInitContainers(isolation(workload.image()))
+                .withContainers(tools)
+                .withVolumes(withProgram(scratchVolumes(TOOLS_JOB), program))
+                .endSpec()
+                .build();
+    }
+
+    private static List<VolumeMount> withProgram(List<VolumeMount> mounts) {
+        List<VolumeMount> all = new ArrayList<>(mounts);
+        all.add(mount(TOOLS, TOOLS_ROOT, true));
+        return all;
+    }
+
+    private static List<Volume> withProgram(List<Volume> volumes, String program) {
+        List<Volume> all = new ArrayList<>(volumes);
+        all.add(new VolumeBuilder()
+                .withName(TOOLS)
+                .withNewConfigMap()
+                .withName(program)
+                .withDefaultMode(0444)
+                .endConfigMap()
+                .build());
+        return all;
     }
 
     /**
