@@ -37,7 +37,7 @@ import tools.jackson.databind.node.ObjectNode;
 /** Applies the actual data-only cutover to populated snapshots, including retained terminal jobs. */
 @Tag("database")
 class SandboxSnapshotMigrationTest {
-    private static final String CHANGELOG = "db/changelog/next/20261031075406-kubernetes-only-sandboxes.xml";
+    private static final String CHANGELOG = "db/changelog/next/20261031181109-kubernetes-only-sandboxes.xml";
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @Test
