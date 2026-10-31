@@ -512,6 +512,7 @@ The parent review and its job start in one transaction after those checks pass.
 The claim stays queued while the quota has no room or the pool has a live background call waiting.
 Background classes are requested reviews, event reviews, scheduled reviews, backfill, and composition.
 Conversation and product feedback waiters do not block a review claim.
+
 An unavailable observation leaves the review queued.
 The Kubernetes readiness check also fails while a namespace informer cannot list or watch its resources.
 
