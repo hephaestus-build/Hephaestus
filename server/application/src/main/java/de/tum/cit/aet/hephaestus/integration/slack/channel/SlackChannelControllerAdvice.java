@@ -21,7 +21,7 @@ public class SlackChannelControllerAdvice {
     @ExceptionHandler(SlackSendException.class)
     ProblemDetail handleSlackSend(SlackSendException exception) {
         ProblemDetail problem = ProblemDetail.forStatus(mapSlackError(exception.slackError()));
-        problem.setTitle("Slack channel is not reachable");
+        problem.setTitle("Slack did not complete the request");
         problem.setDetail(slackErrorDetail(exception.slackError()));
         problem.setProperty("slackError", LoggingUtils.sanitizeForLog(exception.slackError()));
         return problem;
@@ -41,7 +41,8 @@ public class SlackChannelControllerAdvice {
     private static HttpStatus mapSlackError(String slackError) {
         return switch (slackError == null ? "" : slackError) {
             case "not_in_channel", "channel_not_found", "is_archived" -> HttpStatus.CONFLICT;
-            case "missing_scope", "no_active_slack_connection" -> HttpStatus.PRECONDITION_FAILED;
+            case "missing_scope", "no_active_slack_connection", "invalid_auth", "token_revoked" ->
+                HttpStatus.PRECONDITION_FAILED;
             default -> HttpStatus.BAD_GATEWAY;
         };
     }
@@ -51,9 +52,11 @@ public class SlackChannelControllerAdvice {
             case "not_in_channel" -> "Invite Hephaestus to the Slack channel, then try again.";
             case "channel_not_found" -> "Check the Slack channel link or ID, then try again.";
             case "is_archived" -> "Unarchive the Slack channel or choose another channel.";
-            case "missing_scope" -> "Reinstall the Slack app with the required scopes, then try again.";
-            case "no_active_slack_connection" -> "Reconnect Slack for this workspace, then try again.";
-            default -> "Slack rejected the channel operation. Check the channel and the app access, then try again.";
+            case "missing_scope" -> "Reconnect Slack to grant the scopes Hephaestus requests, then try again.";
+            case "no_active_slack_connection", "invalid_auth", "token_revoked" ->
+                "Reconnect Slack for this workspace, then try again.";
+            case "scopes_not_reported" -> "Slack did not say which scopes the token holds. Try again.";
+            default -> "Slack rejected the request. Check the app access in Slack, then try again.";
         };
     }
 }

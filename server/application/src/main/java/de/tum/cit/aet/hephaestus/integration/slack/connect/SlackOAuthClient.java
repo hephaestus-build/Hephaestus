@@ -5,12 +5,17 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExemption;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -107,7 +112,7 @@ public class SlackOAuthClient {
         if (botToken == null || botToken.isBlank()) {
             throw new SlackOAuthException("missing_token");
         }
-        AuthRevoke response;
+        AuthResponse response;
         try {
             response = restClient
                     .post()
@@ -115,7 +120,7 @@ public class SlackOAuthClient {
                     .header("Authorization", "Bearer " + botToken)
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .retrieve()
-                    .body(AuthRevoke.class);
+                    .body(AuthResponse.class);
         } catch (RestClientException e) {
             throw new SlackOAuthException("transport_failure", e);
         }
@@ -127,13 +132,52 @@ public class SlackOAuthClient {
         }
     }
 
+    /**
+     * The scopes that {@code botToken} holds. Slack names them in the {@code X-OAuth-Scopes} header of every Web API
+     * response; {@code auth.test} needs no scope of its own.
+     *
+     * @throws SlackOAuthException with Slack's error, or with {@code scopes_not_reported} when Slack named no scopes:
+     *     a missing header proves no missing scope
+     */
+    public Set<String> grantedScopes(String botToken) {
+        ResponseEntity<AuthResponse> response;
+        try {
+            response = restClient
+                    .post()
+                    .uri("/api/auth.test")
+                    .header("Authorization", "Bearer " + botToken)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .retrieve()
+                    .toEntity(AuthResponse.class);
+        } catch (RestClientException e) {
+            throw new SlackOAuthException("transport_failure", e);
+        }
+        AuthResponse body = response.getBody();
+        if (body == null) {
+            throw new SlackOAuthException("empty_response");
+        }
+        if (!body.ok()) {
+            throw new SlackOAuthException(body.error() == null ? "unknown" : body.error());
+        }
+        List<String> named = response.getHeaders().get("X-OAuth-Scopes");
+        if (named == null) {
+            throw new SlackOAuthException("scopes_not_reported");
+        }
+        return named.stream()
+                .flatMap(value -> Arrays.stream(value.split(",")))
+                .map(String::strip)
+                .filter(scope -> !scope.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
     private static String stripTrailingSlash(String url) {
         if (url == null || url.isEmpty()) return "";
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
+    /** The {@code ok} and {@code error} that {@code auth.revoke} and {@code auth.test} answer with. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record AuthRevoke(
+    public record AuthResponse(
             @JsonProperty("ok") boolean ok,
             @JsonProperty("error") @Nullable String error) {}
 

@@ -5100,6 +5100,13 @@ export const zSlackMonitoredChannel = z.object({
     slackTeamId: z.string()
 });
 
+/**
+ * The Slack scopes that Hephaestus requests and the workspace's Slack token does not hold
+ */
+export const zSlackScopes = z.object({
+    missingScopes: z.array(z.string())
+});
+
 export const zSlackUserWorkspacePreferences = z.object({
     activeMonitoredChannelCount: z.int().optional(),
     channelMessagesAllowed: z.boolean().optional(),

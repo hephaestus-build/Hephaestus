@@ -120,6 +120,50 @@ class SlackOAuthClientTest extends BaseUnitTest {
                 .hasMessageContaining("invalid_auth");
     }
 
+    @Test
+    void shouldReadTheGrantedScopesFromTheHeaderOfAuthTest() throws Exception {
+        slackMock.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("X-OAuth-Scopes", "chat:write,assistant:write, im:history")
+                .body("{\"ok\":true,\"team_id\":\"T1\",\"user_id\":\"U1\"}")
+                .build());
+
+        assertThat(client.grantedScopes("xoxb-abc"))
+                .containsExactlyInAnyOrder("chat:write", "assistant:write", "im:history");
+
+        RecordedRequest req = slackMock.takeRequest();
+        assertThat(req.getUrl().encodedPath()).isEqualTo("/api/auth.test");
+        assertThat(req.getHeaders().get("Authorization")).isEqualTo("Bearer xoxb-abc");
+    }
+
+    @Test
+    void shouldRefuseToNameTheGrantedScopesWhenSlackSendsNoScopeHeader() {
+        slackMock.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .body("{\"ok\":true,\"team_id\":\"T1\",\"user_id\":\"U1\"}")
+                .build());
+
+        assertThatThrownBy(() -> client.grantedScopes("xoxb-abc"))
+                .isInstanceOf(SlackOAuthException.class)
+                .hasMessage("scopes_not_reported");
+    }
+
+    @Test
+    void shouldRefuseToNameTheGrantedScopesWhenSlackRefusesTheToken() {
+        slackMock.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("X-OAuth-Scopes", "")
+                .body("{\"ok\":false,\"error\":\"invalid_auth\"}")
+                .build());
+
+        assertThatThrownBy(() -> client.grantedScopes("xoxb-invalid"))
+                .isInstanceOf(SlackOAuthException.class)
+                .hasMessage("invalid_auth");
+    }
+
     private static <T> T required(@Nullable T value) {
         assertNotNull(value);
         return value;

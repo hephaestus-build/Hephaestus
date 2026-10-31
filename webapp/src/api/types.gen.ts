@@ -5640,6 +5640,16 @@ export type SlackMonitoredChannel = {
     slackTeamId: string;
 };
 
+/**
+ * The Slack scopes that Hephaestus requests and the workspace's Slack token does not hold
+ */
+export type SlackScopes = {
+    /**
+     * Missing bot scopes, sorted; empty when the token holds every scope
+     */
+    missingScopes: Array<string>;
+};
+
 export type SlackUserPreferences = {
     workspaces: Array<SlackUserWorkspacePreferences>;
 };
@@ -15235,6 +15245,27 @@ export type UpdateSlackUserPreferencesResponses = {
 };
 
 export type UpdateSlackUserPreferencesResponse = UpdateSlackUserPreferencesResponses[keyof UpdateSlackUserPreferencesResponses];
+
+export type GetSlackScopesData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/slack/scopes';
+};
+
+export type GetSlackScopesResponses = {
+    /**
+     * OK
+     */
+    200: SlackScopes;
+};
+
+export type GetSlackScopesResponse = GetSlackScopesResponses[keyof GetSlackScopesResponses];
 
 export type UpdateStatusData = {
     body: UpdateWorkspaceStatusRequest;

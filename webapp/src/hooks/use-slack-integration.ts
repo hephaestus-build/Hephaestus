@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 
 import {
 	getIntegrationCatalogOptions,
+	getSlackScopesOptions,
 	getWorkspaceOptions,
 	initiateMutation,
 	listSlackChannelCandidatesOptions,
@@ -12,12 +13,16 @@ import {
 	updateConnectionStatusMutation,
 	updateSlackChannelConsentMutation,
 } from "@/api/@tanstack/react-query.gen";
+import type { SlackScopes } from "@/api/types.gen";
 import { syncPollInterval } from "@/components/admin/integrations/sync-format";
 import type {
 	WorkspaceSlackChannelsSettingsProps,
 	SlackConsentState,
 } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
-import type { WorkspaceSlackConnectionSettingsProps } from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
+import type {
+	SlackScopeCheck,
+	WorkspaceSlackConnectionSettingsProps,
+} from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useConnectionSync } from "@/hooks/use-connection-sync";
 import { useLivePushUnavailable } from "@/hooks/use-sync-liveness";
@@ -74,6 +79,12 @@ export function useSlackIntegration(workspaceSlug: string) {
 		resourceNoun: "channel",
 		resourceNounPlural: "channels",
 		expectedClassKeys: ["messages"],
+	});
+
+	// Slack answers this from the token itself. A failed read claims nothing, also over an earlier answer.
+	const slackScopesQuery = useQuery({
+		...getSlackScopesOptions({ path: { workspaceSlug } }),
+		enabled: isConnectionActive,
 	});
 
 	const slackChannelsQueryOptions = listSlackChannelsOptions({ path: { workspaceSlug } });
@@ -245,6 +256,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 			? {
 					state: "connected",
 					credentialsUnreadableSince: entry.credentialsUnreadableSince,
+					scopeCheck: slackScopeCheck(slackScopesQuery),
 					onReconnect: startSlackOAuth,
 					isReconnecting: connect.isPending,
 					onDisconnect:
@@ -299,4 +311,19 @@ export function useSlackIntegration(workspaceSlug: string) {
 			onRemoveChannel: handleRemoveChannel,
 		} satisfies WorkspaceSlackChannelsSettingsProps,
 	};
+}
+
+function slackScopeCheck(query: UseQueryResult<SlackScopes, unknown>): SlackScopeCheck {
+	if (query.isError) {
+		return {
+			state: "failed",
+			onRetry: () => {
+				void query.refetch();
+			},
+			isRetrying: query.isFetching,
+		};
+	}
+	return query.data === undefined
+		? { state: "checking" }
+		: { state: "checked", missingScopes: query.data.missingScopes };
 }
