@@ -66,8 +66,10 @@ class LlmCallBacklogIntegrationTest extends BaseIntegrationTest {
     void shouldIgnoreExpiredWaitersWithoutMutatingThem() {
         long pool = pool();
         UUID id = enqueue(pool, LlmCallClass.COMPOSITION);
-        jdbc.update("UPDATE llm_call_permit SET renewed_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
-                1 + LlmCallPermitsTestFixtures.PROPERTIES.permitLease().toSeconds(), id);
+        jdbc.update(
+                "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-make_interval(secs => ?) WHERE id=?",
+                1 + LlmCallPermitsTestFixtures.PROPERTIES.permitLease().toSeconds(),
+                id);
         var observer = LlmCallPermitsTestFixtures.worker(context, "observer");
 
         assertThat(observer.hasBackgroundWaiters(pool)).isFalse();
@@ -109,8 +111,14 @@ class LlmCallBacklogIntegrationTest extends BaseIntegrationTest {
 
     private UUID enqueue(long pool, LlmCallClass kind) {
         UUID id = UUID.randomUUID();
-        transactions.executeWithoutResult(status -> rows.enqueue(
-                new LlmCallPermitRepository.Request(id, pool, "backlog", kind.name(), kind == LlmCallClass.PRODUCT_FEEDBACK ? null : 2L, UUID.randomUUID(), 0)));
+        transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                id,
+                pool,
+                "backlog",
+                kind.name(),
+                kind == LlmCallClass.PRODUCT_FEEDBACK ? null : 2L,
+                UUID.randomUUID(),
+                0)));
         return id;
     }
 }

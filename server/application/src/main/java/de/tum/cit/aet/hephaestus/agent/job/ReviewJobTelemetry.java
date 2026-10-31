@@ -70,9 +70,11 @@ final class ReviewJobTelemetry {
         this.tracer = tracer;
         this.registry = registry;
         concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
-                .description("Jobs rejected due to concurrency limits").register(registry);
+                .description("Jobs rejected due to concurrency limits")
+                .register(registry);
         claimLatency = Timer.builder(AgentMetrics.AGENT_JOB_CLAIM_LATENCY)
-                .description("Time between job submission and its claim").register(registry);
+                .description("Time between job submission and its claim")
+                .register(registry);
         for (Phase phase : Phase.values()) {
             durations.put(
                     phase,

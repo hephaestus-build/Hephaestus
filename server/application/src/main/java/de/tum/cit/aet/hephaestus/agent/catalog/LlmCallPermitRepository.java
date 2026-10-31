@@ -29,7 +29,13 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     long countBackground(@Param("poolId") long poolId);
 
     record Request(
-            UUID id, long poolId, String workerId, String callClass, @Nullable Long workspaceId, UUID sourceId, int attempt) {}
+            UUID id,
+            long poolId,
+            String workerId,
+            String callClass,
+            @Nullable Long workspaceId,
+            UUID sourceId,
+            int attempt) {}
 
     @Query(
             value =
