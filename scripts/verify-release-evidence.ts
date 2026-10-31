@@ -3,7 +3,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import { componentEvidence, validateReleaseSbom } from "./check-release-sbom.ts";
+import {
+	assertBundledNpmInventory,
+	assertBundledNpmScan,
+	componentEvidence,
+	validateReleaseSbom,
+} from "./check-release-sbom.ts";
 import {
 	advisoryFile,
 	componentAdvisories,
@@ -19,6 +24,7 @@ import {
 	releaseOwner,
 	releaseRepository,
 } from "./lib/release-identities.ts";
+import { requiresSbomInventory } from "./lib/release-sbom-contract.ts";
 import { isRelease } from "./release-image-lock.ts";
 
 /** One platform of one image, as the manifest records it. `generate-release-evidence.ts` emits
@@ -45,6 +51,19 @@ interface ExpectedImage {
 /** This release must include the checksum signature before its version is published. */
 export function requiresSignedEvidence(release: string): boolean {
 	return releaseAtLeast(release, "v0.86.2");
+}
+
+/** Enforce the inventory and scan that the signed manifest requires. */
+export function validateImageBundleInventory(
+	syft: unknown,
+	trivy: unknown,
+	image: string,
+	required: boolean,
+): void {
+	if (image === "webapp" && required) {
+		assertBundledNpmInventory(syft);
+		assertBundledNpmScan(syft, trivy);
+	}
 }
 
 type VerificationMode = "verify" | "verify-signatures" | "write-validation" | "verify-capture";
@@ -363,6 +382,12 @@ export function verifyReleaseEvidence(
 		mode === "write-validation" || mode === "verify-capture"
 			? undefined
 			: verifyEvidenceChecksums(directory, release);
+	const bundleInventoryRequired = requiresSbomInventory(
+		manifestValue,
+		"bundledNpmSbom",
+		covered === undefined,
+	);
+
 	requireChecksumCoverage(covered, [
 		"manifest.json",
 		"release-images.json",
@@ -390,6 +415,8 @@ export function verifyReleaseEvidence(
 		const suffix = subject.platform.replace("/", "-");
 		const prefix = path.join(directory, `${subject.image}-${suffix}`);
 		const syft = readJsonFileSync(`${prefix}.syft.json`);
+		const trivy = readJsonFileSync(`${prefix}.trivy.json`);
+		validateImageBundleInventory(syft, trivy, subject.image, bundleInventoryRequired);
 		const sbom = validateReleaseSbom(
 			syft,
 			readJsonFileSync(`${prefix}.spdx.json`),
@@ -403,7 +430,7 @@ export function verifyReleaseEvidence(
 		const advisoryIds = componentAdvisories(policy, subject, historical);
 		const result = evaluate(
 			subject.image,
-			readJsonFileSync(`${prefix}.trivy.json`),
+			trivy,
 			policy,
 			new Date(),
 			{

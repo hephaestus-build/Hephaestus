@@ -72,15 +72,14 @@ const config: StorybookConfig = {
 				},
 			],
 		};
-		// The app's entry budget measures what a page loads before it renders; the preview is no page,
-		// and the chunk budgets below hold it instead.
+		// The app entry budget and release inventory describe the SPA. The preview has its own chunk budgets.
 		viteConfig.plugins = (viteConfig.plugins ?? []).filter(
 			(plugin) =>
 				!(
 					typeof plugin === "object" &&
 					plugin !== null &&
 					"name" in plugin &&
-					plugin.name === "entry-chunk-budget"
+					(plugin.name === "entry-chunk-budget" || plugin.name === "bundle-packages")
 				),
 		);
 		viteConfig.plugins.push(storybookChunkBudgets());

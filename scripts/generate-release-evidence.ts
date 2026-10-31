@@ -5,7 +5,11 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { syftImageArguments } from "./check-release-sbom.ts";
+import {
+	assertBundledNpmInventory,
+	assertBundledNpmScan,
+	syftImageArguments,
+} from "./check-release-sbom.ts";
 import {
 	advisoryFile,
 	componentAdvisories,
@@ -45,6 +49,7 @@ export interface ManifestMetadata {
 
 export interface EvidenceManifest extends ManifestMetadata {
 	readonly schemaVersion: 1;
+	readonly bundledNpmSbom: 1;
 	readonly subjects: readonly Subject[];
 }
 
@@ -109,6 +114,7 @@ export function buildManifest(
 		commit: metadata.commit,
 		generatedAt: metadata.generatedAt,
 		durationSeconds: metadata.durationSeconds,
+		bundledNpmSbom: 1,
 		subjects,
 	};
 }
@@ -191,6 +197,9 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 			"-o",
 			`cyclonedx-json=${stem}.cdx.json`,
 		]);
+		if (subject.image === "webapp") {
+			assertBundledNpmInventory(await readJsonFile(`${stem}.syft.json`));
+		}
 		await scan("trivy", [
 			"image",
 			"--skip-db-update",
@@ -199,12 +208,19 @@ export async function captureSubject(subject: Subject, directory: string): Promi
 			"memory",
 			"--scanners",
 			"vuln,license",
+			"--list-all-pkgs",
 			"--format",
 			"json",
 			"--output",
 			`${stem}.trivy.json`,
 			reference,
 		]);
+		if (subject.image === "webapp") {
+			assertBundledNpmScan(
+				await readJsonFile(`${stem}.syft.json`),
+				await readJsonFile(`${stem}.trivy.json`),
+			);
+		}
 		// Both evidence consumers receive the same digest-bound scan, in the bundle's report paths.
 		await copyFile(`${stem}.trivy.json`, `${stem}.license.json`);
 	} finally {

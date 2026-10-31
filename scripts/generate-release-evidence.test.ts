@@ -54,6 +54,7 @@ void describe("the release evidence generator", () => {
 		});
 		assert.doesNotThrow(() => validateManifest(manifest, document, NAMESPACE));
 		assert.equal(manifest.schemaVersion, 1);
+		assert.equal(manifest.bundledNpmSbom, 1);
 	});
 
 	void test("evidences both platforms of every image, first-party and upstream alike", async () => {
@@ -104,24 +105,44 @@ void test(
 	async (context) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "combined-evidence-"));
 		context.after(async () => rm(directory, { recursive: true, force: true }));
-		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+		const syftScript = `#!/bin/sh
+for argument in "$@"; do
+  case "$argument" in
+    syft-json=*) printf '%s' "$SYFT_JSON" > "\${argument#syft-json=}" ;;
+  esac
+done
+`;
+		await writeFile(path.join(directory, "syft"), syftScript, { mode: 0o755 });
 		await writeFile(
 			path.join(directory, "trivy"),
 			`#!/bin/sh
 [ "$1" = image ] && [ "$2" = --skip-db-update ] && [ "$3" = --skip-java-db-update ] && [ "$4" = --cache-backend ] && [ "$5" = memory ] || exit 90
 shift 5
-[ "$1" = --scanners ] && [ "$2" = vuln,license ] && [ "$3" = --format ] && [ "$4" = json ] && [ "$5" = --output ] || exit 91
+[ "$1" = --scanners ] && [ "$2" = vuln,license ] && [ "$3" = --list-all-pkgs ] && [ "$4" = --format ] && [ "$5" = json ] && [ "$6" = --output ] || exit 91
 printf 'scan\\n' >> "$SCAN_LOG"
 [ "$SCAN_EXIT" = 0 ] || exit "$SCAN_EXIT"
-printf '%s' '{"Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-example"}],"Licenses":[{"Name":"MIT"}]}]}' > "$6"
+printf '%s' '{"Results":[{"Type":"node-pkg","Packages":[{"Name":"example","Version":"1.2.3","FilePath":"usr/share/nginx/html/.vite/packages/example%401.2.3/package.json"}],"Vulnerabilities":[{"VulnerabilityID":"CVE-example"}],"Licenses":[{"Name":"MIT"}]}]}' > "$7"
 `,
 			{ mode: 0o755 },
 		);
 		const subjects = planEvidenceSubjects(await evidenceImages(), platformDigest);
-		const subject = subjects[0];
+		const subject = subjects.find((entry) => entry.image === "webapp");
 		assert.ok(subject);
+		const manifest = "/usr/share/nginx/html/.vite/packages/example%401.2.3/package.json";
+		const bundleInventory = {
+			files: [{ location: { path: manifest } }],
+			artifacts: [
+				{
+					name: "example",
+					version: "1.2.3",
+					type: "npm",
+					foundBy: "javascript-package-cataloger",
+					locations: [{ path: manifest }],
+				},
+			],
+		};
 		const scanLog = path.join(directory, "scans");
-		const invoke = (exit: string) =>
+		const invoke = (exit: string, syftInventory: unknown = bundleInventory) =>
 			spawnSync(
 				process.execPath,
 				[
@@ -138,6 +159,7 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 						SCAN_LOG: scanLog,
 						SCAN_EXIT: exit,
+						SYFT_JSON: JSON.stringify(syftInventory),
 					},
 					encoding: "utf8",
 				},
@@ -168,6 +190,14 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		);
 		assert.match(await readFile(`${prefix}.license.json`, "utf8"), /CVE-example/u);
 		assert.match(await readFile(`${prefix}.license.json`, "utf8"), /MIT/u);
+		const missingBundle = invoke("0", { files: [], artifacts: [] });
+		assert.notEqual(missingBundle.status, 0);
+		assert.match(missingBundle.stderr, /no bundled npm/u);
+		assert.equal(
+			await readFile(scanLog, "utf8"),
+			"scan\n",
+			"Trivy must not run after missing bundle evidence",
+		);
 		const failed = invoke("17");
 		assert.notEqual(failed.status, 0);
 		assert.match(failed.stderr, /trivy exited with code 17/u);
@@ -181,7 +211,7 @@ await captureSubject(${JSON.stringify(subject)}, ${JSON.stringify(directory)});
 		assert.match(failedInventory.stderr, /syft exited with code 23/u);
 		assert.deepEqual(await readTimings(), [{ tool: "syft", success: false }]);
 		assert.equal(await readFile(scanLog, "utf8"), "scan\nscan\n");
-		await writeFile(path.join(directory, "syft"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+		await writeFile(path.join(directory, "syft"), syftScript, { mode: 0o755 });
 		await rm(`${prefix}.timings.json`);
 		await mkdir(`${prefix}.timings.json`);
 		const unavailableProfile = invoke("0");

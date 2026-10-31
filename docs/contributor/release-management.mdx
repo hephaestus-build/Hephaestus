@@ -184,6 +184,41 @@ It remains a draft until later gates pass.
 For each image, the gate resolves the index and `linux/amd64` and `linux/arm64` manifests to digests.
 It reads each platform manifest from the registry and generates a Syft inventory, SPDX SBOM, and CycloneDX SBOM.
 
+The webapp preserves npm names, versions and licenses in `/usr/share/nginx/html/.vite/packages/` in the image.
+Vite's native license report supplies this metadata, including lazy chunks.
+Syft's JavaScript cataloger reads the package manifests from the final image.
+
+Capture fails if the image has no bundle manifests, or if Syft or Trivy omits an identity.
+New captures declare `bundledNpmSbom: 1` in the signed manifest.
+Verification requires bundle manifests when that declaration is present.
+Archived releases that predate it keep their original contract.
+
+Trivy scans these packages under the release vulnerability and license policy.
+Vite's report does not identify worker bundles, CSS-only packages or font source packages.
+The workspace lockfile is not the runtime inventory.
+
+The SBOM and byte-budget consumers share `bundle-metadata.json` in the `.vite` directory under the webapp build directory.
+The build writes this artifact after Vite expands its preload maps.
+Its `schemaVersion` is `1`.
+Each `packages` entry has a `name`, `version`, and optional `license` and `licenseText`.
+The build derives Syft's package manifests from these same entries.
+Each `chunks` entry describes one final JavaScript chunk:
+
+| Field | Meaning |
+| --- | --- |
+| `fileName` | The hashed output path. Use it to resolve imports within this build. |
+| `isEntry`, `isDynamicEntry` | The entry and lazy-entry flags from Vite. |
+| `facadeModule` | The source module relative to `webapp/`, with its query. Shared chunks have `null`. |
+| `imports`, `dynamicImports` | The static and dynamic imports, as output paths. |
+| `bytes` | The UTF-8 byte count of the final code. |
+| `gzipBytes` | The final code's gzip size at level 6. |
+| `packages` | The sorted, distinct npm package names in this chunk. This list contains no filesystem paths. |
+
+Consumers use `facadeModule` as the stable lazy-chunk key because content hashes change between builds.
+An incompatible field change requires a new schema version.
+The runtime image retains the artifact so its full license notices remain available.
+The artifact covers JavaScript chunks, not emitted worker assets or CSS.
+
 One native Trivy `vuln,license` scan supplies both vulnerability and license report paths.
 This avoids duplicate image analysis and binds both evidence consumers to the same subject.
 `scripts/verify-release-evidence.ts` checks every document's platform repository, digest, and architecture.

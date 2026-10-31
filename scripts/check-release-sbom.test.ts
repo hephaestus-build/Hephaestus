@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { componentEvidence, imagePath, validateReleaseSbom } from "./check-release-sbom.ts";
+import {
+	assertBundledNpmInventory,
+	assertBundledNpmScan,
+	componentEvidence,
+	imagePath,
+	validateReleaseSbom,
+} from "./check-release-sbom.ts";
 
 const repository = "ghcr.io/hephaestus-build/webapp";
 const digest = "sha256:1102d43b320b1b9c06bdfc7f9e616c068abadace9b6874dedfcf41e1f35da3f5";
@@ -381,4 +387,68 @@ await test("records unknown licenses instead of pretending they are known", () =
 	);
 	assert.equal(result.packagesWithLicense, 0);
 	assert.deepEqual(result.packagesWithoutLicense, [{ name: "example", version: "1.2.3" }]);
+});
+
+const bundlePath = "/usr/share/nginx/html/.vite/packages/%40scope%2Flazy%401.2.3/package.json";
+const scan = {
+	files: [{ location: { path: bundlePath } }],
+	artifacts: [
+		{
+			type: "npm",
+			foundBy: "javascript-package-cataloger",
+			name: "@scope/lazy",
+			version: "1.2.3",
+			locations: [{ path: bundlePath }],
+		},
+	],
+};
+
+await test("release capture requires every bundled identity from its image manifest", () => {
+	assert.doesNotThrow(() => assertBundledNpmInventory(scan));
+	assert.throws(() => assertBundledNpmInventory({ ...scan, files: [] }), /no bundled npm/u);
+	assert.throws(() => assertBundledNpmInventory({ ...scan, artifacts: [] }), /omitted/u);
+	assert.throws(
+		() =>
+			assertBundledNpmInventory({
+				...scan,
+				artifacts: scan.artifacts.map((item) => ({ ...item, version: "1.2.4" })),
+			}),
+		/omitted/u,
+	);
+});
+
+await test("independent validation rejects a present bundle manifest without its npm identity", () => {
+	const manifest = "/usr/share/nginx/html/.vite/packages/example%401.2.3/package.json";
+	const bundled = {
+		...syft,
+		files: [{ location: { path: manifest } }],
+		artifacts: [
+			{ ...artifact, foundBy: "javascript-package-cataloger", locations: [{ path: manifest }] },
+		],
+	};
+	assert.doesNotThrow(() => validateReleaseSbom(bundled, spdx, cycloneDx, subject));
+	assert.throws(
+		() => validateReleaseSbom({ ...bundled, artifacts: [artifact] }, spdx, cycloneDx, subject),
+		/omitted/u,
+	);
+});
+
+await test("Trivy must retain every emitted npm identity at its image path", () => {
+	const file = "/usr/share/nginx/html/.vite/packages/example%401.2.3/package.json";
+	const inventory = { files: [{ location: { path: file } }] };
+	const pkg = { Name: "example", Version: "1.2.3", FilePath: file.slice(1) };
+	const report = { Type: "node-pkg" };
+	assert.doesNotThrow(() =>
+		assertBundledNpmScan(inventory, { Results: [{ ...report, Packages: [pkg] }] }),
+	);
+	for (const packages of [
+		[],
+		[{ ...pkg, Version: "1.2.4" }],
+		[{ ...pkg, FilePath: "different/package.json" }],
+	]) {
+		assert.throws(
+			() => assertBundledNpmScan(inventory, { Results: [{ ...report, Packages: packages }] }),
+			/Trivy omitted bundled npm/u,
+		);
+	}
 });
