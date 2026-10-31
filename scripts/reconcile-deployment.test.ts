@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
-	appendFile,
 	copyFile,
 	mkdir,
 	mkdtemp,
@@ -17,7 +16,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { asArray, asRecord, asString, asStringArray, at, parseJson } from "./lib/json.ts";
+import { asRecord, at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
@@ -35,7 +34,6 @@ import {
 	lockedReleaseCommit,
 	parseChannel,
 	readApplied,
-	OperatorActionRequiredError,
 	renderMetrics,
 	requestIdentity,
 	serializeChannel,
