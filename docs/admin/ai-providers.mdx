@@ -13,7 +13,7 @@ The catalog you use determines whose provider account pays:
 
 |                                  | **Instance catalog**                                 | **Workspace's own provider (BYO)**                                    |
 | -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
-| Who sets it up                   | Instance admin, under **Instance admin → AI models** | Workspace admin, under the workspace's **Administration → AI models** |
+| Who sets it up                   | Instance admin, under **Instance administration → AI models** | Workspace admin, under the workspace's **Administration → AI models** |
 | Whose provider account is billed | Yours, because you registered the key                | Theirs                                                                |
 | Who may use a model              | Every workspace, or only those you grant access      | Only that workspace                                                   |
 | Monthly cap                      | The **shared-model budget** you set per workspace    | The workspace's own **provider cap**                                  |
@@ -847,7 +847,7 @@ On such a host, keep the models for practice scripts loaded, or expect calls tha
 ### Assign a model for practice scripts
 
 1. Create the connection.
-   An instance admin uses **Instance admin → AI models**.
+   An instance admin uses **Instance administration → AI models**.
    A workspace admin uses **Your providers** at the bottom of the workspace's **AI models** page.
    Under each provider's name, an icon for each kind of model that its API serves comes before the API's name.
 2. In **API**, choose the API from the table above.
@@ -1051,10 +1051,10 @@ A workspace uses its own provider in a month when one of these conditions is tru
 Thus, an admin can set the provider cap before the first call.
 A provider cap alone does not make a workspace use its own provider.
 The tables show **Own provider** columns only when the workspace uses its own provider in the month.
-On **Instance admin → AI usage**, the **Own provider** columns appear when at least one workspace uses its own provider in the month.
+On **Instance administration → AI usage**, the **Own provider** columns appear when at least one workspace uses its own provider in the month.
 
 While the workspace does not use its own provider, its provider cap pauses nothing.
-Thus, no page shows a state for that cap, and **Instance admin → AI usage** shows no provider cap for the workspace.
+Thus, no page shows a state for that cap, and **Instance administration → AI usage** shows no provider cap for the workspace.
 This is also true for a $0 cap.
 
 Each table has its own money columns for **Shared models** and for **Own provider**.
@@ -1065,7 +1065,7 @@ Two tables show an average next to the spend of each purse:
 - **Models for practice scripts, by practice** shows **Spend** and **Avg per review**.
 
 **By day** shows only the spend of each purse.
-The table of workspaces on **Instance admin → AI usage** shows the spend of each purse, the shared-model budget, and the provider cap.
+The table of workspaces on **Instance administration → AI usage** shows the spend of each purse, the shared-model budget, and the provider cap.
 [Usage](./instance-admin.mdx#usage) describes its columns.
 On a narrow screen, the token and call columns are hidden.
 
@@ -1075,7 +1075,7 @@ A run is one review attempt or one conversation turn, with all of its usage rows
 In **Models for practice scripts, by practice**, it counts reviews.
 
 **Models for practice scripts, by practice** appears only in a month with decision, embedding, or reranking usage.
-On **Instance admin → AI usage**, the same table appears when you select **Details** for a workspace.
+On **Instance administration → AI usage**, the same table appears when you select **Details** for a workspace.
 The instance console has no table of practices across all workspaces.
 To see the practices of one workspace, open its details.
 

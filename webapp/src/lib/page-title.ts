@@ -2,7 +2,7 @@ const APP_NAME = "Hephaestus";
 
 const SEPARATOR = " · ";
 
-/** `"AI usage · Instance admin · Hephaestus"` — page name first, because a narrow tab truncates from the end. */
+/** `"AI usage · Instance administration · Hephaestus"` — page name first, because a narrow tab truncates from the end. */
 export function pageTitle(...parts: string[]): string {
 	return [...parts, APP_NAME].join(SEPARATOR);
 }
@@ -14,7 +14,7 @@ export function withoutAppName(title: string): string {
 }
 
 export function instanceAdminHead(page: string) {
-	return () => ({ meta: [{ title: pageTitle(page, "Instance admin") }] });
+	return () => ({ meta: [{ title: pageTitle(page, "Instance administration") }] });
 }
 
 export function workspaceAdminHead(page: string) {

@@ -20,7 +20,7 @@ An operator-owned silent run requires the silent deployment checklist first.
 
 ## First response and kill-switch map
 
-1. If external feedback is wrong, immediately turn on silent mode in **Instance admin → Instance settings**.
+1. If external feedback is wrong, immediately turn on silent mode in **Instance administration → Instance settings**.
 2. If the control plane is unavailable, block provider egress at the host/network boundary.
 3. Apply the same block if a request already in progress may still write.
 4. Under either condition, stop all application servers, workers, and active sandboxes.

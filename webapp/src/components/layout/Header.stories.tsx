@@ -150,21 +150,27 @@ export const NoWorkspace: Story = {
 	},
 };
 
-/** Open, so the accessibility check sees links as menu items, which a wrapping link would break. */
+/**
+ * Open, so the accessibility check sees links as menu items, which a wrapping link would break.
+ * The menu holds account tasks only: Activity is in the sidebar, and each place has one name.
+ */
 export const AccountMenu: Story = {
 	args: {
 		session: "signed-in",
 	},
 	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("button", { name: "Product feedback, 1 survey waiting" }),
+		).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
 		const menu = within(await screen.findByRole("menu"));
-		const activity = menu.getByRole("menuitem", { name: "Activity" });
-		await expectSettledVisible(activity);
-		await expect(activity).toHaveAttribute("href", "/w/demo-workspace/activity");
-		await expect(menu.getByRole("menuitem", { name: "Settings" })).toHaveAttribute(
-			"href",
-			"/settings?chromeWorkspace=demo-workspace",
-		);
+		const settings = menu.getByRole("menuitem", { name: "User settings" });
+		await expectSettledVisible(settings);
+		await expect(settings).toHaveAttribute("href", "/settings?chromeWorkspace=demo-workspace");
+		await expect(menu.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+			"User settings",
+			"Sign out",
+		]);
 	},
 };
 
@@ -178,8 +184,7 @@ export const ReadOnly: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
 		const menu = within(await screen.findByRole("menu"));
 		await expectSettledVisible(menu.getByRole("menuitem", { name: "Sign out" }));
-		await expect(menu.queryByRole("menuitem", { name: "Activity" })).not.toBeInTheDocument();
-		await expect(menu.queryByRole("menuitem", { name: "Settings" })).not.toBeInTheDocument();
+		await expect(menu.queryByRole("menuitem", { name: "User settings" })).not.toBeInTheDocument();
 	},
 };
 
@@ -196,7 +201,7 @@ export const Mobile: Story = {
 		// Firefox lays this row out wider than Chromium does, so Chromium has to show room to spare
 		// between the logo and the controls: a row that fits exactly here overflows there.
 		const logo = canvas.getByRole("link", { name: "Hephaestus home" });
-		const feedback = canvas.getByRole("button", { name: /^Feedback/u });
+		const feedback = canvas.getByRole("button", { name: /^Product feedback/u });
 		await expect(
 			feedback.getBoundingClientRect().left - logo.getBoundingClientRect().right,
 		).toBeGreaterThanOrEqual(40);

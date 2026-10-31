@@ -101,7 +101,7 @@ function renderNavigation(initialEntry = "/w/beta/conversation") {
 	const adminIndex = createRoute({
 		getParentRoute: () => admin,
 		path: "/",
-		component: () => <h1>Instance admin page</h1>,
+		component: () => <h1>Instance administration page</h1>,
 	});
 	const adminSettings = createRoute({
 		getParentRoute: () => admin,
@@ -148,8 +148,8 @@ describe("workspace context on global routes", () => {
 		const user = userEvent.setup();
 		const view = renderNavigation();
 		await screen.findByText("beta|beta|GITLAB");
-		await user.click(screen.getByRole("link", { name: "Instance admin" }));
-		await screen.findByRole("heading", { name: "Instance admin page" });
+		await user.click(screen.getByRole("link", { name: "Instance administration" }));
+		await screen.findByRole("heading", { name: "Instance administration page" });
 		await user.click(screen.getByRole("link", { name: "Instance settings" }));
 		await screen.findByRole("heading", { name: "Instance settings page" });
 		expect(view.router.state.location.search).toMatchObject({ chromeWorkspace: "beta" });
@@ -172,12 +172,12 @@ describe("workspace context on global routes", () => {
 		);
 	});
 
-	it("keeps the selected workspace through the header Settings menu", async () => {
+	it("keeps the selected workspace through the account menu's User settings", async () => {
 		const user = userEvent.setup();
 		renderNavigation();
 		await screen.findByText("beta|beta|GITLAB");
 		await user.click(screen.getByRole("button", { name: "Account" }));
-		await user.click(await screen.findByRole("menuitem", { name: "Settings" }));
+		await user.click(await screen.findByRole("menuitem", { name: "User settings" }));
 		await screen.findByRole("heading", { name: "User settings page" });
 		await screen.findByText("undefined|beta|GITLAB");
 		expect(screen.getByRole("link", { name: "Hephaestus home" }).getAttribute("href")).toBe(
@@ -189,8 +189,8 @@ describe("workspace context on global routes", () => {
 		const user = userEvent.setup();
 		const { router } = renderNavigation();
 		await screen.findByText("beta|beta|GITLAB");
-		await user.click(screen.getByRole("link", { name: "Instance admin" }));
-		await screen.findByRole("heading", { name: "Instance admin page" });
+		await user.click(screen.getByRole("link", { name: "Instance administration" }));
+		await screen.findByRole("heading", { name: "Instance administration page" });
 		const back = screen.getByRole("link", { name: "Back to app" });
 		expect(back.getAttribute("href")).toBe("/w/beta");
 		await user.click(back);
@@ -201,7 +201,7 @@ describe("workspace context on global routes", () => {
 
 	it("keeps the normal app fallback when global context names no eligible membership", async () => {
 		renderNavigation("/admin?chromeWorkspace=missing");
-		await screen.findByRole("heading", { name: "Instance admin page" });
+		await screen.findByRole("heading", { name: "Instance administration page" });
 		expect(screen.getByRole("link", { name: "Back to app" }).getAttribute("href")).toBe("/");
 	});
 });

@@ -59,8 +59,8 @@ export function ProductFeedbackMenu({
 			<DropdownMenuTrigger
 				aria-label={
 					count > 0
-						? `Feedback, ${count} ${count === 1 ? "survey" : "surveys"} waiting`
-						: "Feedback"
+						? `Product feedback, ${count} ${count === 1 ? "survey" : "surveys"} waiting`
+						: "Product feedback"
 				}
 				render={
 					<Button
@@ -79,7 +79,7 @@ export function ProductFeedbackMenu({
 					aria-hidden
 					className="transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-12 motion-reduce:transition-none motion-reduce:group-hover:transform-none"
 				/>
-				<span className="hidden sm:inline">Feedback</span>
+				<span className="hidden sm:inline">Product feedback</span>
 				{count > 0 && (
 					<span
 						aria-hidden

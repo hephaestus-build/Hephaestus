@@ -1,6 +1,6 @@
 import { TagIcon } from "@primer/octicons-react";
 import { Link } from "@tanstack/react-router";
-import { Activity, LogOut, Settings } from "lucide-react";
+import { LogOut, UserRoundCog } from "lucide-react";
 
 import { cn } from "cn";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
@@ -176,25 +176,6 @@ export default function Header({
 									{!readOnly && (
 										<>
 											<DropdownMenuGroup>
-												{hasWorkspace ? (
-													<DropdownMenuItem
-														render={
-															<Link
-																to="/w/$workspaceSlug/activity"
-																params={{ workspaceSlug: workspaceSlug ?? "" }}
-																className="[&]:no-underline"
-															/>
-														}
-													>
-														<Activity />
-														<span>Activity</span>
-													</DropdownMenuItem>
-												) : (
-													<DropdownMenuItem disabled title="Join a workspace to see your activity">
-														<Activity />
-														<span>Activity</span>
-													</DropdownMenuItem>
-												)}
 												<DropdownMenuItem
 													render={
 														<Link
@@ -204,8 +185,8 @@ export default function Header({
 														/>
 													}
 												>
-													<Settings />
-													<span>Settings</span>
+													<UserRoundCog />
+													<span>User settings</span>
 												</DropdownMenuItem>
 											</DropdownMenuGroup>
 											<DropdownMenuSeparator />

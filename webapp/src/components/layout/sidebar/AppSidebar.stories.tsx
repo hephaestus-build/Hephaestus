@@ -148,7 +148,7 @@ export const WorkspaceAdminUser: Story = {
 			"href",
 			"/w/aet/admin/teams",
 		);
-		await expect(canvas.queryByText("Instance admin")).not.toBeInTheDocument();
+		await expect(canvas.queryByText("Instance administration")).not.toBeInTheDocument();
 	},
 };
 
@@ -205,7 +205,8 @@ export const AdminContextNoWorkspace: Story = {
 		activeWorkspace: undefined,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("Instance administration");
+		// The footer link takes the name of the console's own group, so the place has one name.
+		await expect(canvas.getAllByText("Instance administration")).toHaveLength(2);
 		await expect(canvas.getByRole("link", { name: "Back to app" })).toHaveAttribute("href", "/");
 		await expect(canvas.queryByText(/no workspace/iu)).not.toBeInTheDocument();
 	},

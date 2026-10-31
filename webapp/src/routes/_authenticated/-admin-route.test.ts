@@ -90,7 +90,7 @@ async function titleOf(url: string) {
 /** Both consoles reuse page names, so the title is all that separates two open admin tabs. */
 describe("admin tab titles", () => {
 	it.each([
-		["/admin/usage", "AI usage · Instance admin · Hephaestus"],
+		["/admin/usage", "AI usage · Instance administration · Hephaestus"],
 		["/w/hephaestus/admin/usage", "AI usage · Admin · Hephaestus"],
 	])("distinguishes %s in the tab title", async (url, title) => {
 		await expect(titleOf(url)).resolves.toBe(title);
