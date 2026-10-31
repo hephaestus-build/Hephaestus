@@ -134,16 +134,21 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
         assertThat(service.backfillCommits(100L, repository)).isEqualTo(SyncResult.abortedError(0));
     }
 
-    @Test
-    void shouldCompleteBackfillForARealEmptyRepositoryWithoutADefaultBranchHead() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldCompleteBackfillForARealEmptyRepositoryWithoutADefaultBranchHead(boolean replaceCachedMirror)
+            throws Exception {
         Path remote = temporary.resolve("remote/owner/repo.git");
-        Files.createDirectories(remote.getParent());
-        try (Git source = Git.init().setBare(true).setDirectory(remote.toFile()).call()) {
-            assertThat(source.getRepository().getRefDatabase().getRefs()).isEmpty();
+        createEmptyRepository(remote);
+        Path cachedRemote = replaceCachedMirror ? temporary.resolve("previous/owner/repo.git") : remote;
+        if (replaceCachedMirror) {
+            createEmptyRepository(cachedRemote);
         }
         var git = localGit();
         var key = new RepositoryKey(100L, 1L);
-        git.ensureRepository(key, remote.toUri().toString(), null);
+        String cachedUrl = cachedRemote.toUri().toString();
+        git.ensureRepository(
+                key, cachedUrl.endsWith("/") ? cachedUrl.substring(0, cachedUrl.length() - 1) : cachedUrl, null);
         assertThat(git.resolveBranchHead(key, "main")).isNull();
         List<CommitDetails> walked = new ArrayList<>();
         git.forEachMissingCommit(key, shas -> Set.of(), walked::add);
@@ -206,6 +211,14 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
 
         assertThat(service.backfillCommits(100L, repository)).isEqualTo(SyncResult.abortedError(0));
         verify(persister, never()).persist(any(), any(), any());
+    }
+
+    private static void createEmptyRepository(Path directory) throws Exception {
+        Files.createDirectories(directory.getParent());
+        try (Git source =
+                Git.init().setBare(true).setDirectory(directory.toFile()).call()) {
+            assertThat(source.getRepository().getRefDatabase().getRefs()).isEmpty();
+        }
     }
 
     private GitRepositoryManager localGit() {

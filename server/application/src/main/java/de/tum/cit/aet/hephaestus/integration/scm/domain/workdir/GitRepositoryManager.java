@@ -167,7 +167,7 @@ public class GitRepositoryManager {
                     // A mirror is a cache keyed by ids a restore can reuse for another
                     // upstream: rebuild
                     // rather than retarget, so no old objects survive.
-                    FileSystemUtils.deleteRecursively(mirror);
+                    FileUtils.delete(mirror.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
                     Files.createDirectories(mirror.getParent());
                     try (Git git = Git.init()
                             .setBare(true)
