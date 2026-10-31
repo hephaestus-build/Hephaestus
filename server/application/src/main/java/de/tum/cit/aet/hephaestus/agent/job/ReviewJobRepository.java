@@ -138,7 +138,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "WHERE j.workspaceId = :workspaceId AND j.status = 'QUEUED' AND j.holdReason = 'BUDGET'")
     int releaseBudgetHolds(@Param("workspaceId") Long workspaceId, @Param("now") Instant now);
 
-    /** Parent-first lock order shared with cancellation and recovery; no parent state changes here. */
+    /** The parent before the job, as the review service locks it before it changes the review; no parent state changes here. */
     @WorkspaceAgnostic("Queued job ID from the global poller; parent join includes its workspace")
     @Query(value = """
             SELECT r.id FROM review r JOIN review_job j ON j.review_id=r.id AND j.workspace_id=r.workspace_id
