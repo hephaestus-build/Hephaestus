@@ -256,7 +256,7 @@ export function PracticeCatalog({
 						title={
 							<DetailStackLink
 								entry={{ kind: "practice", id: row.slug }}
-								className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+								className="rounded-sm break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 							>
 								{row.name}
 							</DetailStackLink>

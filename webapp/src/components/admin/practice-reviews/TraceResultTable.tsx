@@ -271,7 +271,7 @@ function ResultDot({ result, number }: { result: LineageResult; number: number }
 			onClick={() => {
 				open({ kind: "result", id: result.id });
 			}}
-			className="flex size-6 items-center justify-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+			className="flex size-6 items-center justify-center rounded-full hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 		>
 			{chip}
 		</button>
@@ -412,7 +412,7 @@ function TraceProblems({
 			<Collapsible defaultOpen={defaultOpen} className="min-w-0">
 				<CollapsibleTrigger
 					aria-label={`${summary}, of observation ${String(number)}`}
-					className="group inline-flex min-h-6 items-center gap-1 rounded-sm px-1 text-muted-foreground outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+					className="group inline-flex min-h-6 items-center gap-1 rounded-sm px-1 text-muted-foreground hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 				>
 					<ChevronRightIcon
 						aria-hidden
@@ -464,7 +464,7 @@ function TraceProblemList({
 								onClick={() => {
 									open({ kind: "problem", id: problem.id });
 								}}
-								className="flex w-full min-w-0 items-baseline gap-1.5 rounded-sm px-1 py-0.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+								className="flex w-full min-w-0 items-baseline gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
 							>
 								{words}
 							</button>

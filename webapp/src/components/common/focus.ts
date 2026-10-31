@@ -3,7 +3,7 @@
  * button, a name that is a link — so it focuses like a `Button` does: a solid 1 px line in the ring
  * colour at its edge, and a 3 px half-transparent ring outside it. A `Button` draws the line with its
  * border. Most hand-made controls have no border, and some wrap a card that would cover an inset
- * line, so the line here is the outline. A caller's `outline-none` voids the line. `ui/button.tsx`
+ * line, so the line here is the outline. A caller's `focus-visible:outline-hidden` voids the line. `ui/button.tsx`
  * keeps its own literal: it is a registry install that re-vendoring overwrites, so it cannot import
  * from here.
  */
@@ -26,4 +26,4 @@ export const HIT_AREA_24 = "relative before:absolute before:-inset-1 before:cont
  * focus alike, in the accent that the practice surfaces palette gives a link on focus.
  */
 export const ROW_CONTROL_FOCUS =
-	"outline-none focus-visible:ring-2 focus-visible:ring-highlight focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+	"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-highlight focus-visible:ring-offset-2 focus-visible:ring-offset-background";

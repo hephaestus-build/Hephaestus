@@ -256,7 +256,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 									<Section
 										ref={accountsRef}
 										tabIndex={-1}
-										className="outline-none"
+										className="focus-visible:outline-hidden"
 										id={`${id}-accounts`}
 										title={
 											<span className="flex items-start gap-3">

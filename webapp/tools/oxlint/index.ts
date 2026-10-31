@@ -1,5 +1,6 @@
 import { definePlugin } from "@oxlint/plugins";
 
+import { focusOutlineInForcedColors } from "./rules/focus-outline-in-forced-colors.ts";
 import { noManualQueryKey } from "./rules/no-manual-query-key.ts";
 import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
 import { noNondeterministicRender } from "./rules/no-nondeterministic-render.ts";
@@ -20,6 +21,7 @@ export default definePlugin({
 		"no-manual-query-key": noManualQueryKey,
 		"no-non-ascii-filename": noNonAsciiFilename,
 		"no-nondeterministic-render": noNondeterministicRender,
+		"focus-outline-in-forced-colors": focusOutlineInForcedColors,
 		"no-redundant-in-the-document": noRedundantInTheDocument,
 		"no-story-a11y-override": noStoryA11yOverride,
 		"no-within-canvas-element": noWithinCanvasElement,

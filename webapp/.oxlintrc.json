@@ -221,6 +221,16 @@
 			"rules": { "hephaestus/ui-text-voice": "off" }
 		},
 		{
+			// A focus ring is a box-shadow, which forced colors drops; the outline is what it draws instead.
+			"files": ["src/**"],
+			"rules": { "hephaestus/focus-outline-in-forced-colors": "error" }
+		},
+		{
+			// A registry install keeps upstream's classes: `webapp/AGENTS.md` § `src/components/ui/`.
+			"files": ["src/components/ui/**"],
+			"rules": { "hephaestus/focus-outline-in-forced-colors": "off" }
+		},
+		{
 			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.
 			// Scanning all strings everywhere misreads element ids such as "outline-token" as CSS.
 			"files": [

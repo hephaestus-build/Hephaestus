@@ -91,7 +91,7 @@ export default function Header({
 							to="/w/$workspaceSlug"
 							params={{ workspaceSlug: workspaceSlug ?? "" }}
 							aria-label="Hephaestus home"
-							className="group/logo flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+							className="group/logo flex items-center gap-2 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
 						>
 							{logo}
 						</Link>
@@ -99,7 +99,7 @@ export default function Header({
 						<Link
 							to="/"
 							aria-label="Hephaestus home"
-							className="group/logo flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+							className="group/logo flex items-center gap-2 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
 						>
 							{logo}
 						</Link>

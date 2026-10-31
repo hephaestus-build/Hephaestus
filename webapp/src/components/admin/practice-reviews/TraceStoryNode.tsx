@@ -81,7 +81,7 @@ export function StoryNode({
 	const record = context.recordOf(node);
 	const { open } = context;
 	const card = cn(
-		"block w-full min-w-0 text-left outline-none",
+		"block w-full min-w-0 text-left focus-visible:outline-hidden",
 		row ? "rounded-none" : "rounded-md",
 		here && hereFrame(row),
 		className,
@@ -99,7 +99,7 @@ export function StoryNode({
 				className={cn(
 					card,
 					"group/open hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring",
-					row ? "focus-visible:ring-inset" : "relative pr-14",
+					row ? "focus-visible:-outline-offset-2 focus-visible:ring-inset" : "relative pr-14",
 				)}
 			>
 				{children}

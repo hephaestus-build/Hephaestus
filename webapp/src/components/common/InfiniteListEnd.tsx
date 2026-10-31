@@ -52,7 +52,7 @@ export function InfiniteListEnd({
 
 	return (
 		// Stays after the last page, so the focus of a press that loaded it has a place to stay.
-		<div tabIndex={-1} data-list-end className="outline-none">
+		<div tabIndex={-1} data-list-end className="focus-visible:outline-hidden">
 			{(hasMore || failed) && (
 				<div ref={end} className="flex flex-col gap-2.5">
 					<span className="flex flex-wrap items-center gap-2 text-sm">
