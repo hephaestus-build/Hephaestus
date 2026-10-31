@@ -124,10 +124,10 @@ export const Streaming: Story = {
 	},
 	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getByText("Writing…")).toBeVisible();
-		// The live answer marks its words to fade in; under reduced motion, as this suite runs, none moves.
-		const word = canvasElement.querySelector("[data-sd-animate]");
-		await expect(word).not.toBeNull();
-		await expect(word === null ? undefined : getComputedStyle(word).animationName).toBe("none");
+		// The live answer fades in per block, never per word; under reduced motion, as this suite runs, nothing moves.
+		const paragraph = canvas.getByText(/^Your last three pull requests/u);
+		await expect(getComputedStyle(paragraph).animationName).toBe("none");
+		await expect(canvasElement.querySelector("[data-sd-animate]")).toBeNull();
 	},
 };
 

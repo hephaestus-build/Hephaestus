@@ -94,13 +94,6 @@ function authorOf(message: ShownMessage, developer: MessageAuthor) {
 /** One below the `h2` that heads each place a message shows: the conversation page, the thread panel and the Hephaestus panel. */
 const HEADING_LEVEL = 3;
 
-/**
- * Fades in each word of a streaming answer, staggered as the stream marks it. Only the live row
- * streams, so a stored answer or a remount never fades; reduced motion shows words at once.
- */
-const NEW_WORDS_FADE =
-	"[&_[data-sd-animate]]:animate-in [&_[data-sd-animate]]:fade-in [&_[data-sd-animate]]:[--tw-animation-delay:var(--sd-delay,0ms)] [&_[data-sd-animate]]:[--tw-animation-fill-mode:both] motion-reduce:[&_[data-sd-animate]]:animate-none";
-
 function MessageBody({ message, streaming }: { message: ShownMessage; streaming: boolean }) {
 	if (message.deleted) {
 		return <p className="text-sm text-muted-foreground italic">This message was deleted.</p>;
@@ -113,11 +106,9 @@ function MessageBody({ message, streaming }: { message: ShownMessage; streaming:
 		<Bubble variant="ghost">
 			<BubbleContent className={UNTRUSTED_MARKDOWN_PROSE}>
 				{streaming ? (
-					<div className={NEW_WORDS_FADE}>
-						<UntrustedMarkdown streaming headingLevel={HEADING_LEVEL}>
-							{message.text}
-						</UntrustedMarkdown>
-					</div>
+					<UntrustedMarkdown streaming headingLevel={HEADING_LEVEL}>
+						{message.text}
+					</UntrustedMarkdown>
 				) : (
 					<UntrustedMarkdown headingLevel={HEADING_LEVEL}>{message.text}</UntrustedMarkdown>
 				)}

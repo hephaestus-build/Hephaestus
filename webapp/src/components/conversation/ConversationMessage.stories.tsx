@@ -1,9 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { useState } from "react";
+import { expect, userEvent } from "storybook/test";
 
+import { Button } from "@/components/ui/button";
 import { minutesBefore } from "@/stories/story-clock";
 
-import { ConversationMessage } from "./ConversationMessage";
+import { ConversationMessage, type ConversationMessageProps } from "./ConversationMessage";
 import {
 	ANSWER,
 	ANSWER_WITH_FEEDBACK,
@@ -182,5 +184,57 @@ export const Streaming: Story = {
 		const explain = canvas.getByText("explain");
 		await expect(Number(getComputedStyle(explain).fontWeight)).toBeGreaterThanOrEqual(600);
 		await expect(canvas.queryByText(/\*\*/u)).toBeNull();
+	},
+};
+
+const STREAMED_CHUNKS = [
+	"Your team asks for pull request",
+	" descriptions that explain why.",
+	"\n\nTwo of yours this week left the reason out.",
+];
+
+/** The answer as the stream delivers it, one more chunk at each press of Next. */
+function StreamingAnswer(props: ConversationMessageProps) {
+	const [chunks, setChunks] = useState(1);
+	return (
+		<div className="flex flex-col gap-3">
+			<Button
+				variant="outline"
+				className="self-start"
+				onClick={() => setChunks((count) => count + 1)}
+			>
+				Next
+			</Button>
+			<ConversationMessage
+				{...props}
+				message={{ ...ANSWER, text: STREAMED_CHUNKS.slice(0, chunks).join("") }}
+				streaming
+			/>
+		</div>
+	);
+}
+
+/**
+ * A streaming answer fades in each paragraph once, as it is appended, with no span per word. Words
+ * that grow the same paragraph keep its element, so they do not fade it again. The story tests run
+ * with reduced motion, as for a reader who asked for it, so they see no fade at all.
+ */
+export const StreamingFadesEachNewBlock: Story = {
+	render: (args) => <StreamingAnswer {...args} />,
+	play: async ({ canvas, canvasElement }) => {
+		const first = canvas.getByText("Your team asks for pull request");
+		await expect(matchMedia("(prefers-reduced-motion: reduce)").matches).toBe(true);
+		await expect(getComputedStyle(first).animationName).toBe("none");
+
+		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
+		await expect(
+			canvas.getByText("Your team asks for pull request descriptions that explain why."),
+		).toBe(first);
+
+		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
+		const second = canvas.getByText("Two of yours this week left the reason out.");
+		await expect(second).not.toBe(first);
+		await expect(getComputedStyle(second).animationName).toBe("none");
+		await expect(canvasElement.querySelector("[data-sd-animate]")).toBeNull();
 	},
 };
