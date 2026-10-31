@@ -101,18 +101,17 @@ and review the release notes for endpoint changes.
 ### New Required Environment Variable
 
 1. Check the release notes and the [Production Setup](https://docs.hephaestus.build/admin/production-setup) guide for new variables
-2. Add them to your deployment's environment (see the `docker/compose.app.yaml` env block)
+2. Set the corresponding chart values and protected Secret keys
 3. Restart services
 
 ### Database Schema Changed
 
 First follow the [database migration instructions](https://docs.hephaestus.build/admin/compatibility-policy#database-migrations).
-For a migration run at startup, a failure prevents the application context from starting.
-The container exits, and the orchestrator may restart it.
-Capture the first failed startup log before retrying:
+The chart's migration Job must complete before application roles start.
+Capture its first failure log before retrying:
 
 ```bash
-docker compose logs application-server | grep -i -m5 liquibase
+kubectl -n hephaestus logs job/<migration-job> | grep -i -m5 liquibase
 ```
 
 Liquibase normally runs each changeset in a transaction. A changeset with `runInTransaction="false"`

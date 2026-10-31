@@ -180,7 +180,7 @@ It attaches one `HTTPRoute` to the Gateways in `route.parentRefs`.
 | `/api` and below | `server` | `/api` is removed |
 | All other paths | `webapp` | None. The webapp serves the SPA for an unknown path. |
 
-The server serves the API without the `/api` prefix, as behind Traefik in Compose.
+The server serves the API without the `/api` prefix.
 A standard `Ingress` cannot remove a path prefix, so the chart does not use one.
 
 The Gateway controller must support these `HTTPRoute` features:
@@ -385,7 +385,7 @@ The bundled NATS is one JetStream server, and every stream has one replica.
 The application has no setting for more replicas.
 A lost NATS volume loses each provider delivery that the broker accepted and the server had not yet processed.
 That window is usually seconds, and it grows while the server is stopped or behind.
-Use a storage class whose volumes survive the loss of a node, and back up the volume as [Backup and restore](./backup-restore) describes for Compose.
+Use a storage class whose volumes survive the loss of a node, and back up the volume as [Backup and restore](./backup-restore) describes.
 
 ### Disk on one host
 
@@ -610,7 +610,7 @@ The installer does not run the application itself as a k3s `HelmChart`.
 The k3s Helm controller does not wait for the migration Job, and it does not roll back a failed upgrade.
 
 The limit of 4096 processes applies to each Pod on the host, the server and the worker included.
-On Compose, the server and the worker had a limit of 512 each, so a lower limit for every Pod could stop them.
+Size the Pod PID limit for every runtime role and its subprocesses.
 CI's clusters run with the same 4096.
 
 When the host shuts down, the kubelet stops the Pods first.
@@ -1153,7 +1153,7 @@ A sandbox process cannot raise them.
 
 ## Backup and restore
 
-With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest, as the [Compose backup overlay](./backup-restore#automated-off-host-backup-self-host-compose) does.
+With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest, as [Backup and restore](./backup-restore#automated-off-host-backup) describes.
 The repository is encrypted with `BACKUP_CIPHER_PASS`.
 A CronJob takes a full backup each Sunday at 02:15 UTC, and another takes a differential backup on the other days at the same time.
 `postgresql.backup.retentionFull` full backup chains stay, 2 by default.
@@ -1435,7 +1435,7 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 - The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
   A sandbox can pass its limit until the next measurement, for some seconds.
   Only file system project quotas (`LocalStorageCapacityIsolationFSQuotaMonitoring`) refuse the write itself.
-- Move a Compose install at the same release version. Back up PostgreSQL, JetStream and the encryption keys before the move.
+- Use the [versioned deployment move](./compose-to-kubernetes) before upgrading an older installation.
 
 ## What CI does not show
 

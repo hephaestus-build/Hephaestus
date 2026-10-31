@@ -6,96 +6,81 @@ description: Verify the image digests selected by a Hephaestus release.
 
 # Release image lock
 
-Each release publishes `release-vX.Y.Z.json` with its Sigstore bundle. The lock records the release,
-source commit, provenance class, repository, multi-platform index digest, and supported platform child
-digests for every deployed image. Compose uses the index digests. Tags identify releases for people.
+Each release publishes `release-vX.Y.Z.chart.json` with its Sigstore bundle.
+This joint lock records the release, source commit, chart repository, chart version and chart digest.
+It also records the provenance class, repository, multi-platform index digest and platform child digests of every application image.
+The chart uses these image digests. Tags identify releases for people.
 
-Follow the [install guide](./install) to install or upgrade. Its verifier checks the signature, signer
-identity, release identity, schema, and equality with the release evidence manifest before writing
-`release-lock.env`.
+Follow [Verify the release chart](./kubernetes#verify-the-release-chart) before an install or upgrade.
+The verifier authenticates the lock and the chart, checks their release identity, and checks the packaged image pins against the lock.
+
+:::note[Chart-only release]
+These instructions describe the chart-only release.
+For a 0.95.x deployment, use that release's versioned instructions and signed assets.
+The [0.x upgrade path](/admin/upgrade-to-1-0) requires 0.95.1 and its installed reconciler tooling before the cutover.
+:::
 
 ## Release assets
 
-Each release builds one lock from its verified evidence.
-Every asset that names an image gets its digests from that lock, so no two assets can name different images.
-The release workflow signs each asset with the same keyless identity, `release.yml` on `main`.
+The release builds one joint lock from its verified evidence and chart.
+Every asset that names an image uses the same image digests.
+The signing identity is `release.yml` on `main` in `hephaestus-build/Hephaestus`.
 
 | Asset | Contents | Reader |
 | --- | --- | --- |
-| `release-vX.Y.Z.json` and its `.sigstore.json` bundle | The lock of schema version 1: release, source commit, and every image by digest. | Compose hosts, through the [install guide](./install) and the [pull-based deployment](./pull-based-deployment). Releases keep this asset until the Compose path is removed after 1.0. |
-| `release-vX.Y.Z.chart.json` and its `.sigstore.json` bundle | The joint lock of schema version 2: the schema 1 lock and the chart's OCI repository, version, and digest. | Kubernetes operators look up the chart digest in it, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes. The release workflow verifies the chart from it. |
-| The chart, `ghcr.io/hephaestus-build/charts/hephaestus@sha256:…`, with its signature in the registry | The Helm chart. Its values name the release version, the source commit, and the five images that it runs, by digest. | Kubernetes operators, after `cosign verify` on the digest ([Verify the release chart](./kubernetes#verify-the-release-chart)). |
-| `k3s-install.sh`, `k3s-platform.yaml`, `k3s-certificates.yaml`, `k3s-config.yaml`, `k3s-kubelet.yaml`, `k3s-logind.conf`, `k3s-values.yaml`, each with its `.sigstore.json` bundle | The installer and the platform and host files of the one-host install. `k3s-platform.yaml` pins k3s, Traefik, and cert-manager. | Operators of [Install on one host (k3s)](./kubernetes#install-on-one-host-k3s). |
-| `release-vX.Y.Z.intoto.jsonl` | The bundle of the release attestation. Its subjects are the first-party image digests, the chart manifest digest, the chart package, both locks, and the `k3s-*` assets. | [Independent verification](#independent-verification). |
-| `manifest.json`, the SBOM, vulnerability and license files, and `SHA256SUMS` with its bundle | The release evidence. | The verifiers that [release management](/contributor/release-management#operator-verification) describes. |
+| `release-vX.Y.Z.chart.json` and its `.sigstore.json` bundle | The joint lock of schema version 2. | [Chart verification](./kubernetes#verify-the-release-chart), the installer and the reconciler. |
+| The chart at `ghcr.io/hephaestus-build/charts/hephaestus@sha256:…`, signed in the registry | Release metadata and the five chart images by digest. | Helm, after chart verification. |
+| `k3s-install.sh`, `k3s-platform.yaml`, `k3s-certificates.yaml`, `k3s-config.yaml`, `k3s-kubelet.yaml`, `k3s-logind.conf`, `k3s-values.yaml`, each with its `.sigstore.json` bundle | The installer and the platform and host configuration. | [Install on one host](./kubernetes#install-on-one-host-k3s). |
+| `release-vX.Y.Z.intoto.jsonl` | The release attestation bundle. Subjects include the first-party image digests, chart manifest and package, joint lock and platform assets. | [Independent verification](#independent-verification). |
+| `manifest.json`, SBOMs, vulnerability and license reports, and signed `SHA256SUMS` | Per-platform release evidence. | [Operator verification](/contributor/release-management#operator-verification). |
 | `host-smoke-k3s-amd64.json`, `host-smoke-k3s-arm64.json` | The native k3s install, repeated-install, upgrade and isolation qualification records. | Operators who check the hosts that the release passed on. |
 
-When a stable release promotes a qualified candidate, image digests stay unchanged.
+A stable release that promotes a qualified candidate keeps its image digests.
 The chart is packaged from the same source with stable release metadata.
-The joint lock names its new digest.
-Image build metadata retains the candidate version.
-The stable chart's values name the stable release and source commit.
+The joint lock names the new chart digest.
+Image build metadata retains the candidate version. The chart reports the stable release and source commit.
 
 ## Independent verification
 
-The certificate identity belongs to the release, not necessarily the current repository.
-A lock signed before the `ls1intum` → `hephaestus-build` transfer permanently names the old repository in its Fulcio certificate.
-`security/release-identities.json` in the repository maps each version to its signing identity and image namespace.
-The verifier and every workflow use that map.
-
-1. For releases before that map's `hephaestus-build` boundary, substitute `https://github.com/ls1intum/Hephaestus/.github/workflows/release.yml@refs/heads/main` below.
-2. For those releases, substitute `--owner ls1intum` in the attestation check.
-3. Run the verification commands:
+Use the target release's joint lock:
 
    ```bash
    VERSION=vX.Y.Z
    gh release download "$VERSION" --repo hephaestus-build/Hephaestus \
-     --pattern "release-$VERSION.json" \
-     --pattern "release-$VERSION.json.sigstore.json"
+  --pattern "release-$VERSION.chart.json" \
+  --pattern "release-$VERSION.chart.json.sigstore.json" \
+  --pattern "release-$VERSION.intoto.jsonl"
    cosign verify-blob \
-     --bundle "release-$VERSION.json.sigstore.json" \
+  --bundle "release-$VERSION.chart.json.sigstore.json" \
      --certificate-identity \
        'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-     "release-$VERSION.json"
-   gh attestation verify "release-$VERSION.json" --owner hephaestus-build
-   ```
-
-4. To check the release attestation without GitHub's attestation store, use the bundle that ships with the release:
-
-   ```bash
-   gh release download "$VERSION" --repo hephaestus-build/Hephaestus \
-     --pattern "release-$VERSION.intoto.jsonl"
-   gh attestation verify "release-$VERSION.json" \
+  "release-$VERSION.chart.json"
+gh attestation verify "release-$VERSION.chart.json" \
      --bundle "release-$VERSION.intoto.jsonl" \
      --predicate-type https://in-toto.io/attestation/release/v0.1 \
      --repo hephaestus-build/Hephaestus
    ```
 
-   Releases before this asset existed have no such file.
+Continue with [Verify the release chart](./kubernetes#verify-the-release-chart) to authenticate and inspect the chart that the lock names.
+Do not use the lock contents before signature verification succeeds.
 
 ## Rollback
 
-Follow the [rollback procedure](./upgrade#rollback). It selects an earlier published lock without
-reconstructing metadata or resolving image tags. Production startup independently rejects a
-non-digest `agent-pi` reference.
+Follow [Rollback](./upgrade#rollback).
+Restore the database, secrets and signed release together when schema compatibility requires it.
+Do not reconstruct an old lock or resolve image tags.
 
 ## Runtime identity handoff
 
-Compose hands every server, worker and webhook container three lines of `release-lock.env`:
-`IMAGE_TAG` (as `APP_VERSION`), `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER`.
-Each process reports them, with the runtime roles it booted, under `release` in `/actuator/info`.
-`DEPLOYMENT_ENVIRONMENT` from `.env` adds where the process runs.
-This is deployment metadata from the verified lock, not an observation of the container and not a
-second signature verification. A process without a lock reports the version it was given and no
-commit or image. If a value is present but malformed, the process refuses startup.
+The chart gives the server, worker and webhook Pods `APP_VERSION`, `HEPHAESTUS_RELEASE_COMMIT` and `HEPHAESTUS_IMAGE_APPLICATION_SERVER` from the verified release metadata.
+Each process reports these values, with its runtime roles, under `release` in `/actuator/info`.
+The chart's `deploymentEnvironment` value identifies the environment.
+This is deployment metadata from the verified lock, not a second signature verification or an observation of the container.
+Malformed identity values stop startup.
 
-`/actuator/info` is unauthenticated, like the health probes beside it.
-The version was always visible in the web application.
-The published lock contains the commit and digest.
-The role list shows the container topology that this guide documents.
-
-After an upgrade, compare `release` on **each** role's management listener. The administration
-overview shows only the server it talks to. The instance-admin API adds the update check to the same
-identity: `GET /admin/release` reads it and `POST /admin/release/checks` asks GitHub now. See
-[Update checks](./upgrade#update-checks) for cadence, privacy and offline operation.
+`/actuator/info` is unauthenticated, like the adjacent health probes.
+After an upgrade, compare `release` on each role's private management listener.
+The administration overview shows the server that it connects to.
+The instance-admin API adds the update check: `GET /admin/release` reads it and `POST /admin/release/checks` asks GitHub now.
+[Update checks](./upgrade#update-checks) describes cadence, privacy and offline operation.

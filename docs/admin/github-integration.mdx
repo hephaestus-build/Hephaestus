@@ -357,26 +357,10 @@ On a new instance, the manifest-generated secret can become `WEBHOOK_SECRET`.
 2. Download the `.pem`.
    Alternatively, use the key from manifest registration.
 3. **Install the App** on your organization, for all repositories or only those to monitor.
-4. Set these values in `.env`:
-
-   ```bash
-   GH_APP_ID=123456
-   # Multi-line PEM: quote the whole value; Docker Compose .env preserves the newlines.
-   GH_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
-   ...
-   -----END RSA PRIVATE KEY-----"
-   # The workspace-creation wizard sends operators to this URL to install the App.
-   GH_APP_INSTALLATION_URL=https://github.com/apps/<your-app-slug>/installations/new
-   # App settings → General → Client ID; generate a client secret there too.
-   GH_APP_CLIENT_ID=Iv23...
-   GH_APP_CLIENT_SECRET=...
-   ```
-
-5. Restart with the new environment:
-
-   ```bash
-   docker compose --env-file .env --env-file release-lock.env up -d
-   ```
+4. Set the GitHub App ID, installation URL and client ID through the [chart integration values](./kubernetes#integration-values).
+5. Store the private key and client secret in the release Secret, with the key names that the chart requires.
+   Preserve the PEM file's newlines. Do not put either secret in `site.yaml`.
+6. Upgrade the verified chart with your site values.
 
 ## GitHub webhooks — manual setup (PAT mode)
 
@@ -508,7 +492,7 @@ Leave the receiver's `WEBHOOK_SECRET` unchanged.
    For failures, use [delivery triage](#failed-deliveries-and-redelivery) and:
 
    ```bash
-   docker compose --env-file .env --env-file release-lock.env logs -f webhook-server
+   kubectl -n hephaestus logs -f deployment/hephaestus-webhook
    ```
 
 8. For Projects v2, change a project item.

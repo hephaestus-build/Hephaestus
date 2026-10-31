@@ -28,8 +28,7 @@ Status is one of:
 | `NOT_CONFIGURED`  | An optional setting is absent.                                                          |
 | `NOT_APPLICABLE`  | The check does not apply to this process's runtime roles.                               |
 
-The table names variables inside the application container. In the supported self-host stack,
-Compose maps `POSTGRES_PASSWORD` to `DATABASE_PASSWORD` and owns the runtime-role values.
+The table names variables inside each application Pod. The chart owns their role selection and their mapping from values and Secret keys.
 
 | Setting                                         | Application environment variable                |
 | ----------------------------------------------- | ----------------------------------------------- |
@@ -97,8 +96,8 @@ The webhook role stores no secret and needs neither key.
 2. Keep both keys with the backup set, in separate storage with separate credentials.
    [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) gives the rule.
 
-The supported self-host setup generates the master key and copies it into an empty credential-key setting.
-These settings are separate even when their initial values match.
+The [Secret procedure](./kubernetes#create-the-secret) generates the required keys.
+Keep the general and credential encryption keys as separate settings.
 
 ## External URL
 
@@ -108,7 +107,7 @@ The origin must have no credentials, query, fragment, or path other than `/`.
 ## Webhooks
 
 Server and webhook roles require `hephaestus.webhook.secret` with at least 32 printable, non-space ASCII characters.
-The supported self-host setup generates an independent value.
+Generate an independent value in the release Secret.
 Never reuse another application key.
 
 The REQUIRED fact `webhook.routing-secret` applies to server and webhook roles on every production deployment, even without GitLab.
@@ -124,9 +123,7 @@ The URI must have a host and, optionally, a valid port.
 It must have no query, fragment, or non-root path.
 A worker-only process must disable NATS because its job queue uses PostgreSQL.
 
-The supported Compose deployment requires `NATS_USERNAME` and `NATS_PASSWORD`.
-Setup generates both.
-Compose, not a readiness fact, requires these credentials.
+The chart requires the NATS username and password in its release Secret.
 Readiness checks syntax and role consistency, not connectivity or JetStream health.
 
 ## Login
@@ -137,9 +134,7 @@ Environment provider entries are seeds, not the readiness authority.
 Slack and Outline are link-only providers and do not satisfy sign-in readiness.
 Worker and webhook roles do not load login providers.
 
-Compose does not forward custom auth session or user-view rate-limit variables.
-To change the properties below, supply an explicit application-server environment or mounted configuration override.
-A value only in the stack's `.env` does not change these limits.
+Use the [configuration reference](./configuration-reference) to find the chart-owned values for auth session and user-view rate limits.
 
 ### Recent sign-in for sensitive actions
 

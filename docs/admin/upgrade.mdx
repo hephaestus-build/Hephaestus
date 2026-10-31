@@ -1,10 +1,10 @@
 ---
 id: upgrade
 title: Upgrade
-description: Upgrade the self-hosted Compose stack to a new release, recover from a failed migration, and check for new releases.
+description: Upgrade the Helm release to a new release, recover from a failed migration, and check for new releases.
 ---
 
-This page owns the upgrade of the self-hosted Compose stack.
+This page owns the upgrade and recovery of the Helm release.
 The [Compatibility Policy](./compatibility-policy) defines the guarantee and the support window.
 The release notes and [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) state the actions for each release.
 
@@ -68,29 +68,14 @@ The server refuses plaintext secrets after the conversion.
 
 Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before you use the commands below.
 
-1. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), pause reconciliation before manual changes.
-2. Wait for any active service run to finish.
-3. Before starting target images, read that release's migration instructions.
-4. If an intermediate release is required, first complete its [intermediate upgrade procedure](./liquibase-baseline-runbook.md).
-5. Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) through backup and staging validation.
-6. Acquire the tested release:
-
-   ```bash
-   (
-   set -eu
-   VERSION='<new-version>'
-   cd /opt/hephaestus
-   sudo git fetch --depth 1 origin tag "v$VERSION"
-   sudo git checkout "v$VERSION"
-   node scripts/prepare-release-lock.ts "v$VERSION"
-   cd docker/self-host
-   docker compose --env-file .env --env-file release-lock.env pull
-   )
-   ```
-
-7. Before startup, compare `.env` with the release's `.env.example`.
-8. Complete manual steps in [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL major-version changes.
-9. Return to **Validate then deploy** in the runbook for guarded startup.
+1. Pause [pull-based deployment](./pull-based-deployment#operating-it), if enabled, and wait for its active run to finish.
+2. Complete the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist), including a verified backup and a migration rehearsal.
+3. Read the target release's migration instructions and update your protected `site.yaml` and Secret as required.
+4. Follow [Upgrade on Kubernetes](./kubernetes#upgrades). Verify the signed joint lock and chart. Apply the verified package with your site values.
+5. Check the migration Job and each role's readiness before traffic or provider writes resume.
+6. If Helm times out or reports a pending or failed release, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).
+   A failed Helm status does not prove that the migration Job has stopped.
+7. If reconciliation is enabled, make its channel name the installed release before you resume its timer.
 
 ## If migration fails
 

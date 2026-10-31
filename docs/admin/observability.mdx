@@ -13,58 +13,20 @@ The container runtime keeps them on the host until an operator collects them ([C
 ## Scrape metrics
 
 Each runtime role serves `GET /actuator/prometheus` without a user token on a separate management
-listener, port **9090** by default (`MANAGEMENT_PORT` outside the supported Compose stacks). The
+listener, port **9090** by default. The
 application listener refuses this metrics path, including requests with a user token. Port 8081 is
 the sandbox gateway, not a metrics endpoint. Liveness and readiness also remain available on the
 application listener at `/livez` and `/readyz`. Container probes use these application-listener paths.
 
-The multi-file and single-host Compose stacks bind management to the container's own `shared-network` address through its network-qualified hostname.
-They expose 9090 **only on that network**.
-This excludes sandbox interfaces, including after a restart with other networks attached.
-Docker's [network-scoped DNS resolution](https://github.com/moby/moby/blob/v28.2.2/libnetwork/sandbox.go#L401-L425) selects the management network without a fixed container IP.
-The stacks do not publish the management port to the host or configure a proxy route.
-
-Docker `expose` is not a firewall.
-Any container on that network can read metrics.
-The management listener's default address is loopback (`127.0.0.1`).
-
-1. Attach your own Prometheus to that network.
-2. Do not add a `ports` mapping, Traefik router, or internet ingress for management.
-3. Restrict network membership to trusted services.
-4. For non-Compose deployments, restrict the management listener with private networks and firewall policy before startup.
-5. For a remote scraper, set `MANAGEMENT_SERVER_ADDRESS` to a specific trusted private interface.
-6. Do not use the application or sandbox gateway port for management.
-
-See [Spring Boot management listeners](https://docs.spring.io/spring-boot/reference/actuator/monitoring.html) and [Prometheus security](https://prometheus.io/docs/operating/security/).
-
-No monitoring service or outbound metric exporter is enabled by this configuration. Operators who
-do not run Prometheus need no monitoring setup. Traces remain opt-in and separate from scraping.
-
-Example `prometheus.yml` for the multi-file Compose stack:
-
-```yaml
-scrape_configs:
-  - job_name: hephaestus
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [application-server:9090]
-        labels:
-          runtime_role: server
-      - targets: [application-worker:9090]
-        labels:
-          runtime_role: worker
-      - targets: [webhook-server:9090]
-        labels:
-          runtime_role: webhook
-rule_files:
-  - hephaestus-alerts.yml
-```
+The chart exposes this listener only to the private cluster network.
+Set `networkPolicy.metrics` to the namespace and Pod labels of your trusted Prometheus.
+Do not create an internet route to management.
+The application exports no metrics to an external service.
+Operators without Prometheus need no scrape configuration.
 
 For multiple replicas:
 
-1. Discover and scrape **all containers**, not a load-balanced service address that can switch replicas between scrapes.
+1. Discover and scrape **all Pods**, not a load-balanced service address that can switch replicas between scrapes.
 2. Keep each target's `instance` label distinct.
 3. Apply `increase` or `rate` to each counter before you sum them.
 4. Never add `workspace.id` or `job.id` as metric labels.
@@ -276,12 +238,12 @@ The bundled PostgreSQL image loads [`pg_stat_statements`](https://www.postgresql
 It records the run count and time of each statement for all databases.
 To read the statistics, create the extension once in the `postgres` database.
 Then the application schema stays unchanged.
-From `/opt/hephaestus/docker/self-host`, run:
+For a release named `hephaestus` in namespace `hephaestus`, run:
 
 ```bash
-docker compose --env-file .env --env-file release-lock.env exec postgres \
+kubectl -n hephaestus exec hephaestus-postgresql-0 -- \
   psql -U root -d postgres -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
-docker compose --env-file .env --env-file release-lock.env exec postgres \
+kubectl -n hephaestus exec hephaestus-postgresql-0 -- \
   psql -U root -d postgres -c 'SELECT calls, round(mean_exec_time) AS mean_ms, round(total_exec_time) AS total_ms, left(query, 120) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20'
 ```
 
@@ -579,7 +541,6 @@ The gauge makes no claim that the server did not check:
   `HephaestusWalArchiveFailing` also fires on failed reads that continue, so a read outage does not resolve it.
 
 The bundled PostgreSQL archives its WAL only when `postgresql.backup.enabled` is `true`.
-The Compose stacks archive with the backup overlay.
 
 ## Correlating a request
 
@@ -595,13 +556,13 @@ request's trace ID. Sandbox proxy calls propagate the execution trace. The
 [trace export contract](#exporting-opentelemetry-traces) describes the separate submission attribute.
 
 No collector or log aggregator is necessary.
-From the multi-file Compose stack:
+From the deployment namespace:
 
 1. Take the ID a user reports, or the `X-Request-Id` from a failed response.
 2. Search the container logs:
 
    ```bash
-   docker compose logs --no-color | grep '"traceId":"<the-id>"'
+   kubectl -n hephaestus logs -l app.kubernetes.io/instance=hephaestus --all-containers --prefix | grep '"traceId":"<the-id>"'
    ```
 
    That command finds records in the matching trace scope.
@@ -791,7 +752,7 @@ roles whose spans you want to collect:
 | `TRACING_SAMPLING_PROBABILITY` | `0.0`                             | Fraction of new traces sampled. Use `1.0` for a dedicated evaluation instance. |
 
 The chart sets them on the server, worker and webhook from `config.tracing.otlpEnabled`, `config.tracing.otlpEndpoint` and `config.tracing.samplingProbability`.
-The chart's network policy blocks a collector inside the cluster.
+By default, the chart's network policy admits no collector inside the cluster.
 Set `networkPolicy.traceCollector` to the namespace and pod labels of that collector ([Network policy](./kubernetes.mdx#network-policy)).
 The roles can then reach it on the port that `config.tracing.otlpEndpoint` names.
 

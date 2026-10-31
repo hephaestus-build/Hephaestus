@@ -15,7 +15,7 @@ The [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/M
 ## Before you start
 
 1. Find the release that the host runs on **Instance administration → Overview**.
-2. If the database has not passed the v0.77.4 cut-point, follow the [database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites) first.
+2. If the database has not passed the v0.95.0 cut-point, follow the [database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites) first.
 3. Read every migration guide entry between your release and 1.0.
 4. Make a database backup and verify that it restores, as [Backup & restore](./backup-restore) describes.
 5. Keep the signed release lock and the `.env` of your current release with the backup.
@@ -32,6 +32,7 @@ Stop `application-server`, `application-worker`, and `webhook-server` before you
 Change the deployment or the release, never both in one step.
 First, upgrade on Compose to `0.95.0`.
 Then use [Move from Compose to the Helm chart](./compose-to-kubernetes) to move that version.
+Apply release `0.95.1` and install its reconciler tooling before upgrading to the chart-only release.
 The procedure requires a backup and a verified restore before the move.
 
 ## Breaking changes after v0.94.7

@@ -1,80 +1,27 @@
 ---
 id: install
-title: Docker Compose (deprecated)
-description: The deprecated 0.x install of Hephaestus — Docker Compose on a single host.
+title: Install Hephaestus
+description: Install the signed Helm chart on Kubernetes or on one host with k3s.
 ---
 
-For a new install, use the Helm chart on [Kubernetes](./kubernetes).
-On one Linux host, follow [Install on one host (k3s)](./kubernetes#install-on-one-host-k3s).
-
-This page installs the Docker Compose stack in
-[`docker/self-host/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docker/self-host)
-on one Linux host. It stays supported for the rest of the 0.x releases.
-From 1.0.0, the Helm chart is the only supported deployment.
-Other setups (own reverse proxy, external database, Podman) can work but are unsupported.
-
-The stack you get:
-
-| Service              | What it is                                                                                   |
-| -------------------- | -------------------------------------------------------------------------------------------- |
-| `reverse-proxy`      | Traefik — TLS through `Let's Encrypt`, routes `/`, `/api`, `/webhooks`                       |
-| `webapp`             | React SPA served by nginx                                                                    |
-| `application-server` | Spring Boot API                                                                              |
-| `application-worker` | Same image, worker profile — runs the AI sandboxes. The only service given the Docker socket |
-| `webhook-server`     | Same image, webhook profile — keeps receiving events while the app restarts                  |
-| `postgres`           | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in)       |
-| `nats-server`        | NATS JetStream event buffer                                                                  |
-
-:::caution[CAUTION: Docker Compose is deprecated]
-The [compatibility policy](./compatibility-policy#supported-deployment) states the supported deployment from 1.0.0 and what it means for your install.
-:::
+Hephaestus runs from its signed Helm chart on Kubernetes.
+For one Linux host, use the [k3s installation](./kubernetes#install-on-one-host-k3s).
+For an existing cluster, follow [Install](./kubernetes#install).
+Both procedures install the same chart.
 
 ## Requirements
 
 ### Supported host matrix
 
-Hephaestus supports the specified single-host stack on the following native (not emulated) hosts:
-
-| Distribution     | CPU architecture       |
-| ---------------- | ---------------------- |
-| Ubuntu 24.04 LTS | x86-64 (`amd64`)       |
-| Ubuntu 24.04 LTS | ARMv8 64-bit (`arm64`) |
-
-Both require the Docker Engine and Docker Compose versions in [Tested versions](#tested-versions).
-Docker supports these hosts according to its [Ubuntu installation requirements](https://docs.docker.com/engine/install/ubuntu/#os-requirements).
-Before publication, each release passes qualification on both matrix cells.
-
-Only the listed native hosts and the unmodified self-hosted Compose topology are supported. Other hosts, runtimes, and topologies are outside release qualification.
+Check the [platform requirements](./kubernetes#requirements) before you prepare a one-host installation.
+For an existing cluster, check [cluster requirements](./kubernetes#supported-clusters).
+The [sizing guide](./sizing) gives the workload budget.
 
 ### Tested versions
 
-This table lists the versions that CI and release qualification actually run.
-A version that no job runs is not in the table.
-
-| Component | Version | What tests it |
-| --- | --- | --- |
-| Docker Engine | 28 or newer | Release qualification refuses an older engine on both matrix cells. It records the engine that it ran in the release assets `host-smoke-amd64.json` and `host-smoke-arm64.json`. No job runs version 28.0.0 itself. |
-| Docker Compose | 2.24.4 or newer | Release qualification refuses an older Compose and records the version that it ran in the same assets. Every pull request checks that the Compose files render. No job runs version 2.24.4 itself. |
-| PostgreSQL | 18, the release image with `pg_partman` | The merge queue runs the integration tests against an image built from the same Dockerfile before every change merges. |
-| NATS server | The version that `security/release-images.json` pins | Release qualification boots it. The integration tests use NATS 2.10. |
-| Traefik | The version that `security/release-images.json` pins | Release qualification sends a request through it. |
-| Java | 21 | CI builds and tests with Java 21. The server image runs the Java 21 runtime of its buildpack. |
-| Browsers | Chromium, the build that Playwright 1.63 bundles | The end-to-end, component, and Chrome extension suites run Chromium only. No job runs Firefox or Safari. |
-| Chrome extension | Chrome 130 or newer | The extension manifest requires it. No job runs Chrome 130 itself. |
-| Node.js, for release-lock verification | The version pinned in `package.json#devEngines.runtime` | CI installs this version through the setup-toolchain action. |
-| Cosign, for release-lock verification | 3.1.4 | Release, promotion, and image signing jobs verify with this version. |
-
-To see which Docker Engine and Docker Compose a release ran, download the `host-smoke-*.json` assets of that release from the [releases page](https://github.com/hephaestus-build/Hephaestus/releases).
-
-- The CPU, memory, and disk that [Sizing](./sizing) gives.
-- A host in the supported matrix, plus `git` and `openssl`.
-- An NTP-synchronized clock. [Clocks](#clocks) explains why.
-- A **DNS A record** that points your hostname at the host.
-  Ports **80 and 443** must be reachable from the internet for `Let's Encrypt` HTTP-01, OAuth callbacks, and webhooks.
-- Outbound HTTPS to the destinations in [Network egress](./network-egress).
-- The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
-  and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
-  verification.
+The [Kubernetes guide](./kubernetes) owns the supported Kubernetes, Helm and platform versions.
+Use the images and chart digest from the release that you install.
+[Release image lock](./release-image-lock) explains their verification.
 
 ### Clocks
 
@@ -84,151 +31,18 @@ If Slack does not answer when Hephaestus starts a streamed reply, the server loo
 Hephaestus assumes that Slack's clock and the server's clock differ by less than 2 seconds.
 [Conversation runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) has the rule.
 
-## 1. Get the files
+## Install
 
-1. Check out the newest version from the [releases page](https://github.com/hephaestus-build/Hephaestus/releases):
-
-```bash
-VERSION=0.95.1   # the release you are installing, without the leading "v"
-sudo git clone --depth 1 --branch "v$VERSION" \
-  https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
-sudo chown -R "$USER" /opt/hephaestus
-cd /opt/hephaestus
-cd docker/self-host
-./setup.sh
-cd ../..
-node scripts/prepare-release-lock.ts "v$VERSION"
-cd docker/self-host
-```
-
-`setup.sh` creates or updates `.env` with mode `0600`.
-It generates the database password and master encryption key (`HEPHAESTUS_SECURITY_ENCRYPTION_KEY`).
-It copies the master key into an empty `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
-It also generates these values:
-
-- OAuth state-cookie key.
-- Webhook secret.
-- Routing secret.
-- Message-broker credentials.
-  It does not replace non-empty values and never prints a secret.
-  Changing either encryption key on an existing installation makes everything encrypted under the old
-  one unreadable.
-
-Everything below runs from `/opt/hephaestus/docker/self-host`.
-After step 2 supplies the remaining required values, `docker compose --env-file .env --env-file release-lock.env config` renders the effective configuration.
-Before then it exits at the first missing required variable, as does every other `docker compose` subcommand in this directory.
-See [Troubleshooting](./troubleshooting).
-
-## 2. Configure `.env`
-
-:::caution[CAUTION: Back up both encryption keys]
-`HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects the values that [What the database seals](./secret-custody#what-the-database-seals) lists.
-`HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration credentials. Loss of either key
-makes the corresponding database values unreadable. Keep both with the backup set, in separate storage with separate credentials, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. Rotate the
-credential key only with the [credential-key rotation procedure](./credential-key-rotation).
-:::
-
-`setup.sh` manages the internal secrets listed above.
-
-1. Open `.env`.
-2. Fill in the remaining **REQUIRED** values.
-3. Do not replace the generated internal secrets manually.
-
-   | Variable                           | What / how                                                                                                                                                                                                  |
-   | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                                                                                 |
-   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                                                                              |
-   | One login provider                 | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from [First steps § 1](./first-steps#1-configure-a-login-provider). One is enough. |
-   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                                                                                    |
-   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From [First steps § 2](./first-steps#2-name-the-first-admin) — set it **before** first boot                                                                                                                 |
-
-4. To find `DOCKER_GROUP_ID`, run:
-
-   ```bash
-   stat -c %g /var/run/docker.sock
-   ```
-
-   Other generated values also affect the lifecycle:
-
-   - A database password change does not update an initialized PostgreSQL volume.
-   - State-cookie key rotation invalidates OAuth flows in progress.
-   - Webhook secret rotation requires the same change at each configured provider.
-     The GitLab routing secret is never entered anywhere.
-     GitLab group hooks stop delivery until registration repeats if you rotate the secret incorrectly.
-
-5. Rotate it as [production setup](./production-setup#gitlab-rollout-bundle) describes.
-6. Back up `.env` with the database as [Backup & Restore](./backup-restore) describes.
-
-### Serving more than one hostname
-
-An instance answers on `APP_HOSTNAME`.
-It can also answer on other names, such as a domain you are leaving or a `www.` variant.
-The reverse proxy reads `APP_HOST_MATCH` as a host matcher.
-It **replaces** the default rather than extending it.
-
-1. List all required hostnames in `APP_HOST_MATCH`.
-2. Include `APP_HOSTNAME` in the matcher:
-
-   ```ini
-   APP_HOST_MATCH=Host(`hephaestus.example.com`) || Host(`old.example.com`)
-   ```
-
-   Traefik takes one hostname per `Host()`, joined with `||`. ``Host(`a`,`b`)`` is rejected and the
-   router does not load at all.
-
-3. Before deployment, point each name at this host in DNS.
-
-The certificate covers exactly the names in the matcher.
-Certificate issuance requires a challenge response on each name.
-A name that does not yet resolve here delays the whole certificate.
-The first name becomes the certificate's subject.
-The other names become its alternative names.
-
-`APP_HOSTNAME` remains the instance's single origin.
-The SPA, API, and auth issuer all use it.
-**The proxy redirects a browser that opens any other name to `APP_HOSTNAME`.**
-The app therefore loads from only one host.
-OAuth callback URLs stay on `APP_HOSTNAME`.
-
-The API and webhook endpoints deliberately answer on all names in the matcher.
-An open tab and a provider that still posts to the old name continue to work through the move.
-The proxy redirects only what a browser loads.
-
-The login callback uses the address where the request arrived.
-A sign-in *started* at `/api/login/...` on another name asks the provider to return to that name.
-The provider refuses because its only registered callback uses `APP_HOSTNAME`.
-Normal access avoids this problem: the proxy redirects the browser before sign-in starts.
-
-1. Register callbacks for `APP_HOSTNAME` only.
-
-A callback for another name would permit a session outside the canonical origin.
-
-The proxy controls both the matcher and the redirect.
-A proxy that does not read this stack's routing configuration can send requests for any names.
-In that setup, `APP_HOST_MATCH` has no effect.
-
-1. Configure the extra names on that proxy.
-2. Configure their certificate there.
-3. Configure its redirect to `APP_HOSTNAME`.
-
-## 3. First boot
-
-```bash
-docker compose --env-file .env --env-file release-lock.env up -d
-docker compose --env-file .env --env-file release-lock.env logs -f database-migration application-server
-```
-
-First startup pulls about 2 GB of images, and the one-shot `database-migration` service runs all database migrations.
-The application server starts after it completes. A failed migration shows in its log.
-It can take a few minutes.
-
-Continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
+1. Read the release notes and [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md).
+2. [Verify the release chart](./kubernetes#verify-the-release-chart).
+3. Install it with your site values and the referenced Secret.
+   [Secret custody](./secret-custody) lists the keys to keep outside the cluster.
+4. Complete [First steps](./first-steps): configure sign-in, identify the first admin, and connect a workspace.
+5. Configure [integrations](./production-setup), [AI providers](./ai-providers), and the [practice catalog](./practice-catalog).
+6. Configure and rehearse [backup and restore](./backup-restore) before you admit work.
 
 ## Upgrades
 
-<a id="update-checks"></a>
-<a id="rollback"></a>
-<a id="deployment-environment-and-release-history"></a>
-
-[Upgrade](./upgrade) owns the upgrade procedure, failed-migration recovery, rollback, update checks, and the release history.
-[Troubleshooting](./troubleshooting) lists the common failures of an installation and their fixes.
+Follow [Upgrade](./upgrade) and the release's migration guide.
+The [channel reconciler](./pull-based-deployment) applies a signed release chart or the image pins of a verified commit channel.
+An irreversible schema upgrade uses the [stopped upgrade procedure](./kubernetes#stopped-schema-upgrades).

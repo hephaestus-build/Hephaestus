@@ -10,7 +10,7 @@ const sidebars: SidebarsConfig = {
 			items: [
 				{ type: "doc", id: "kubernetes", label: "Kubernetes (Helm chart)" },
 				"first-steps",
-				{ type: "doc", id: "install", label: "Docker Compose (0.x, deprecated)" },
+				{ type: "doc", id: "install", label: "Install Hephaestus" },
 				"pull-based-deployment",
 			],
 		},
