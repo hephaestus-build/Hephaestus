@@ -25,7 +25,17 @@ public final class WebVitalsDTOs {
         TTFB
     }
 
-    /** The journey page a visit started on. Every other page is `OTHER`, so the set stays small. */
+    /**
+     * What a measurement covers. `LOAD` is the document's first page; in a browser that does not detect route
+     * changes, it is the whole document. `ROUTE` is one route view after a route change that the browser
+     * detected.
+     */
+    public enum Navigation {
+        LOAD,
+        ROUTE
+    }
+
+    /** The journey page that a measurement names. Every other page is `OTHER`, so the set stays small. */
     public enum Page {
         PRACTICE_PROFILE,
         ASK_HEPHAESTUS,
@@ -47,6 +57,8 @@ public final class WebVitalsDTOs {
     public record WebVitalDTO(
             @NotNull Vital vital,
 
+            @NotNull Navigation navigation,
+
             @NotNull Page page,
 
             @NotNull Region region,
@@ -61,7 +73,7 @@ public final class WebVitalsDTOs {
             @DecimalMax("600000")
             Double value) {}
 
-    @Schema(description = "The measurements of one page visit, one of each vital, sent once when the reader leaves it")
+    @Schema(description = "Measurements of a document's page load and route views, each sent once when the page hides")
     public record WebVitalsReportDTO(
-            @NotNull @Size(min = 1, max = 4) List<@Valid @NotNull WebVitalDTO> vitals) {}
+            @NotNull @Size(min = 1, max = 40) List<@Valid @NotNull WebVitalDTO> vitals) {}
 }

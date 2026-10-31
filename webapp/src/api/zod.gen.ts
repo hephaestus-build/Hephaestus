@@ -6266,6 +6266,7 @@ export const zVerifyPasskeyRequest = z.object({
  * One measurement of a page visit
  */
 export const zWebVital = z.object({
+    navigation: z.enum(['LOAD', 'ROUTE']),
     page: z.enum([
         'PRACTICE_PROFILE',
         'ASK_HEPHAESTUS',
@@ -6290,10 +6291,10 @@ export const zWebVital = z.object({
 });
 
 /**
- * The measurements of one page visit, one of each vital, sent once when the reader leaves it
+ * Measurements of a document's page load and route views, each sent once when the page hides
  */
 export const zWebVitalsReport = z.object({
-    vitals: z.array(zWebVital).min(1).max(4)
+    vitals: z.array(zWebVital).min(1).max(40)
 });
 
 /**
