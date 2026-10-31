@@ -96,10 +96,12 @@ Such a file needs a complete header and a component in the release SBOM.
 
 `security/dependency-baseline.json` records, for each lockfile and workspace, the number of direct and transitive packages.
 `gate:dependency-baseline` compares it with the lockfiles and fails when a count rises above the baseline.
-Thus, a pull request that adds a package also raises the baseline, and the review sees the cost beside the change.
+Thus, an addition that takes a count above the baseline raises the baseline in its pull request.
+The review sees the cost beside the change.
+
 A count below the baseline passes, and the gate names the lower value.
 Any later pull request can lower the baseline in passing.
-Thus, removals and Renovate updates merge in parallel.
+Thus, removals, and updates that stay within the baseline, merge in parallel.
 
 To raise the baseline with an addition, or to lower it after a removal, run:
 

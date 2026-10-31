@@ -57,7 +57,7 @@ The incidents teach five lessons:
 1. **A platform feature comes first, a few owned lines second, a new package third.** A framework or platform feature is better than code that we write. A few owned lines are better than a new package for a sliver.
 2. **A new package answers a written bar in its pull request.** [Dependencies](../contributor/dependencies.md#the-bar-for-a-new-dependency) owns the bar.
 3. **Owned code keeps the license and the provenance of its upstream**, in its source and in the release SBOM. [Dependencies](../contributor/dependencies.md#how-owned-code-lives) owns the rules.
-4. **The package counts are a one-way ratchet that CI checks.** A count above the committed baseline fails, so each addition raises the baseline in the same pull request. A count below it passes. [Dependencies](../contributor/dependencies.md#the-dependency-baseline) describes it.
+4. **The package counts are a one-way ratchet that CI checks.** A count above the committed baseline fails, so an addition beyond it raises the baseline in the same pull request. A count below it passes. [Dependencies](../contributor/dependencies.md#the-dependency-baseline) describes it.
 5. **The install policy lives in `pnpm-workspace.yaml`**, with the reason for each setting in a comment.
 
 ## Consequences

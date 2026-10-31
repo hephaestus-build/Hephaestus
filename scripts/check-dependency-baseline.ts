@@ -1,8 +1,8 @@
 /**
  * Holds the npm dependency counts of every lockfile to `security/dependency-baseline.json`.
  *
- * A count above the baseline fails. Thus, a pull request that adds a package also raises the baseline,
- * and the review sees the cost of the addition beside it. A count below the baseline passes with a
+ * A count above the baseline fails. Thus, an addition beyond the baseline also raises it in its pull
+ * request, and the review sees the cost of the addition beside it. A count below the baseline passes with a
  * notice, so removals, Renovate's included, merge in parallel; any later change can lower the
  * baseline. An exact match would serialize every pull request that changes a count.
  * `docs/contributor/dependencies.md` gives the bar for an addition.
