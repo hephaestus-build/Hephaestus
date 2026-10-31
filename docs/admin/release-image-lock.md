@@ -28,6 +28,7 @@ The release workflow signs each asset with the same keyless identity, `release.y
 | `k3s-install.sh`, `k3s-platform.yaml`, `k3s-certificates.yaml`, `k3s-config.yaml`, `k3s-kubelet.yaml`, `k3s-logind.conf`, `k3s-values.yaml`, each with its `.sigstore.json` bundle | The installer and the platform and host files of the one-host install. `k3s-platform.yaml` pins k3s, Traefik, and cert-manager. | Operators of [Install on one host (k3s)](./kubernetes#install-on-one-host-k3s). |
 | `release-vX.Y.Z.intoto.jsonl` | The bundle of the release attestation. Its subjects are the first-party image digests, the chart manifest digest, the chart package, both locks, and the `k3s-*` assets. | [Independent verification](#independent-verification). |
 | `manifest.json`, the SBOM, vulnerability and license files, and `SHA256SUMS` with its bundle | The release evidence. | The verifiers that [release management](/contributor/release-management#operator-verification) describes. |
+| `source.syft.json`, `source.spdx.json`, `source.cdx.json` | The source and build inventory, separate from installed runtime packages. | [Supply-chain evidence](/contributor/release-management#supply-chain-evidence) describes its scope and signed verification. |
 | `host-smoke-amd64.json`, `host-smoke-arm64.json` | The supported-host smoke records. | Operators who check the hosts that the release passed on. |
 
 When a stable release promotes a qualified candidate, image digests stay unchanged.
