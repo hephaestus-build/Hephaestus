@@ -68,10 +68,10 @@ public class ReviewJobRetentionService {
     /**
      * {@code @SchedulerLock} single-flights this across replicas: concurrent passes cannot go faster (the
      * batches serialize on row-level contention anyway) and only multiply lock/WAL pressure.
-     * {@code lockAtMostFor} must stay above the four passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
+     * {@code lockAtMostFor} must stay above the five passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
      */
     @Scheduled(fixedDelay = 6, initialDelay = 1, timeUnit = TimeUnit.HOURS)
-    @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT25M", lockAtLeastFor = "PT10S")
+    @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT30M", lockAtLeastFor = "PT10S")
     public void runRetention() {
         pass.run(log, "staged-practices", () -> staging.discardUnusable(clock.instant(), pass.batchSize()));
         deleteUnusableCompositionInputs();

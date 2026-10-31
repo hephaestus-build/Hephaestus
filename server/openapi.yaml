@@ -25449,6 +25449,8 @@ components:
           type: string
           format: uuid
       required:
+      - attempt
+      - contractVersion
       - jobId
       - reviewId
     SearchWarrant:

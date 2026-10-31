@@ -5504,8 +5504,8 @@ export type ScanSummary = {
  * Identity of the retained set to seal; candidates can only enter through per-practice staging.
  */
 export type SealResultsRequest = {
-    attempt?: number;
-    contractVersion?: number;
+    attempt: number;
+    contractVersion: number;
     jobId: string;
     reviewId: string;
 };

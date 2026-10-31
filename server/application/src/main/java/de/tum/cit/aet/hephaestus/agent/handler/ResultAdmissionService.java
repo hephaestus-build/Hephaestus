@@ -387,7 +387,7 @@ public class ResultAdmissionService {
                 || job.getAttempt() != identity.attempt()
                 || !identity.workerId().equals(job.getWorkerId())
                 || job.getLeasedUntil() == null
-                || !job.getLeasedUntil().isAfter(Instant.now())) throw new StaleAttemptException();
+                || !job.getLeasedUntil().isAfter(jobs.databaseNow())) throw new StaleAttemptException();
         return job;
     }
 

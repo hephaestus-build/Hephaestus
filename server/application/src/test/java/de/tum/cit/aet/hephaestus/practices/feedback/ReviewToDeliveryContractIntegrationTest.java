@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -512,8 +511,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     void shouldDiscardExpiredCitationsWhileRunningAndKeepItsRefusalForTheSeal() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             admission.stage(review.identity(), request(review));
-            stagingStore.discardUnusable(
-                    Instant.now().plus(ReviewCompositionBasis.RETENTION).plusSeconds(1), 1000);
+            jdbc.update(
+                    "UPDATE review_item SET staged_payload=jsonb_set(staged_payload,'{evidence,expiresAt}',to_jsonb(CAST(? AS text)))"
+                            + " WHERE workspace_id=? AND review_id=? AND practice_id=? AND item_id=?",
+                    Instant.now().minusSeconds(1).toString(),
+                    review.workspaceId(),
+                    review.reviewId(),
+                    review.practiceId(),
+                    review.item().itemId());
+            stagingStore.discardUnusable(Instant.now(), 1000);
             assertThat(stagingStore.staged(
                             review.workspaceId(),
                             review.reviewId(),

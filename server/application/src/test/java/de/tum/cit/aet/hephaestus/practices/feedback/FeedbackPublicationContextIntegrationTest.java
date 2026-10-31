@@ -1053,6 +1053,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     /** The production service and its own history snapshot; only ownership and late-copy custody are stand-ins. */
     private ResultAdmissionService admissionService(ReviewJob job, FeedbackHistoryQuery query) {
         var jobs = mock(ReviewJobRepository.class);
+        when(jobs.databaseNow()).thenAnswer(call -> Instant.now());
         when(jobs.findByIdAndWorkspaceId(job.getId(), workspace.getId())).thenReturn(Optional.of(job));
         when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), workspace.getId()))
                 .thenReturn(Optional.of(job));
