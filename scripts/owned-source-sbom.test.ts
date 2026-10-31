@@ -64,6 +64,48 @@ await test("asset notices preserve opaque bytes and upstreams without editing th
 	assert.notDeepEqual(scanOwnedAssets(undefined, directory), components);
 });
 
+await test("patch notices record the fork once in working and committed inventories", async (context) => {
+	const { directory, git } = await fixture(context);
+	const patches = "docker/agents/pi/patches";
+	const name = "@earendil-works__pi-ai@1.0.0.patch";
+	const upstream =
+		"https://github.com/earendil-works/pi/tree/a13d35a742c6ef8462812a28fbe1d8c8b7431c32/packages/ai";
+	const purl = "pkg:npm/%40earendil-works/pi-ai@1.0.0";
+	const bytes = Buffer.from("diff --git a/dist/api.js b/dist/api.js\r\n+diagnostics();\n");
+	await mkdir(path.join(directory, patches), { recursive: true });
+	await writeFile(path.join(directory, patches, name), bytes);
+	await writeFile(
+		path.join(directory, patches, "NOTICE.md"),
+		`Owned from: ${upstream}
+Package: ${purl}
+License: MIT
+Changes: Keep the provider diagnostics patch.
+Files: ["${name}"]
+`,
+	);
+	const components = scanOwnedSource(undefined, directory);
+	const patch = components.filter((component) => component.name === `${patches}/${name}`);
+	assert.equal(components.length, 3);
+	assert.equal(patch.length, 1);
+	assert.deepEqual(patch[0]?.hashes, [
+		{ alg: "SHA-256", content: createHash("sha256").update(bytes).digest("hex") },
+	]);
+	assert.equal(patch[0].pedigree.ancestors[0]?.purl, purl);
+	assert.equal(patch[0].pedigree.ancestors[0].externalReferences[0]?.url, upstream);
+	assert.deepEqual(patch[0].licenses, [{ expression: "MIT" }]);
+	git("add", ".");
+	git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "patch");
+	const revision = git("rev-parse", "HEAD");
+	await writeFile(path.join(directory, patches, name), "dirty patch");
+	assert.deepEqual(scanOwnedSource(revision, directory), components);
+	assert.notDeepEqual(scanOwnedSource(undefined, directory), components);
+	await writeFile(path.join(directory, patches, "unlisted.patch"), "unlisted");
+	assert.throws(
+		() => scanOwnedSource(undefined, directory),
+		/asset has no ownership entry: unlisted.patch/u,
+	);
+});
+
 await test("asset notices reject gaps, overlap, missing files, paths and malformed blocks", async (context) => {
 	const { directory, git, write } = await fixture(context);
 	const invalid = [

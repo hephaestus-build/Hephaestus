@@ -105,7 +105,7 @@ Reviewers verify the SPDX expression and the fixed upstream tag or commit.
 
 ## Owned static assets
 
-Static assets under `webapp/public/` and `extension/public/` use a directory notice.
+Static assets under `webapp/public/` and `extension/public/`, and package patches under `docker/agents/pi/patches/`, use a directory notice.
 A directory enters this inventory when its notice contains an `Owned from:` line.
 Keep the asset bytes unchanged.
 Put the four fields from [the owned-code header](#the-owned-code-header) in a directory notice named NOTICE.md.

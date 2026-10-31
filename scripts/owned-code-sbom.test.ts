@@ -171,6 +171,18 @@ Changes: Keep one unmodified mark.
 Files: ["mark.svg"]
 `,
 		);
+		const patch = "docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch";
+		await mkdir(path.join(directory, "docker/agents/pi/patches"), { recursive: true });
+		await writeFile(path.join(directory, patch), "diff --git a/api.js b/api.js\n+diagnostics();\n");
+		await writeFile(
+			path.join(directory, "docker/agents/pi/patches/NOTICE.md"),
+			`Owned from: https://github.com/earendil-works/pi/tree/a13d35a742c6ef8462812a28fbe1d8c8b7431c32/packages/ai
+Package: pkg:npm/%40earendil-works/pi-ai@1.0.0
+License: MIT
+Changes: Keep the provider diagnostics patch.
+Files: ["@earendil-works__pi-ai@1.0.0.patch"]
+`,
+		);
 
 		git("init", "-q");
 		git("add", ".");
@@ -237,38 +249,41 @@ Files: ["mark.svg"]
 		);
 		const written = parseJson(await readFile(path.join(evidence, "source.cdx.json"), "utf8"));
 		const expected = scanOwnedSource(revision, directory);
-		assert.equal(expected.length, 2);
+		assert.equal(expected.length, 3);
 		assert.doesNotThrow(() => assertOwnedCoverage(written, expected));
 		await writeFile(
 			path.join(evidence, "manifest.json"),
 			JSON.stringify({ schemaVersion: 1, release: "v0.95.2", commit: revision, sourceSbom: 1 }),
 		);
-		await writeFile(
-			path.join(evidence, "source.cdx.json"),
-			JSON.stringify({
-				...asRecord(written, "written BOM"),
-				components: asArray(asRecord(written, "written BOM").components, "components").filter(
-					(entry) => asRecord(entry, "component")["bom-ref"] !== `owned:${asset}`,
-				),
-			}),
-		);
 		const verifier = pathToFileURL(
 			path.join(import.meta.dirname, "verify-release-evidence.ts"),
 		).href;
-		for (const mode of ["write-validation", "verify-capture"]) {
-			assert.throws(
-				() =>
-					execFileSync(
-						process.execPath,
-						[
-							"--input-type=module",
-							"-e",
-							`import {verifyReleaseEvidence} from ${JSON.stringify(verifier)}; verifyReleaseEvidence(${JSON.stringify(evidence)}, ${JSON.stringify(mode)});`,
-						],
-						{ cwd: directory, env: childEnv, stdio: "pipe" },
+		for (const omitted of [asset, patch]) {
+			await writeFile(
+				path.join(evidence, "source.cdx.json"),
+				JSON.stringify({
+					...asRecord(written, "written BOM"),
+					components: asArray(asRecord(written, "written BOM").components, "components").filter(
+						(entry) => asRecord(entry, "component")["bom-ref"] !== `owned:${omitted}`,
 					),
-				/owned-code entry for webapp\/public\/brand\/mark\.svg/u,
+				}),
 			);
+			for (const mode of ["write-validation", "verify-capture"]) {
+				assert.throws(
+					() =>
+						execFileSync(
+							process.execPath,
+							[
+								"--input-type=module",
+								"-e",
+								`import {verifyReleaseEvidence} from ${JSON.stringify(verifier)}; verifyReleaseEvidence(${JSON.stringify(evidence)}, ${JSON.stringify(mode)});`,
+							],
+							{ cwd: directory, env: childEnv, stdio: "pipe" },
+						),
+					(error: unknown) =>
+						error instanceof Error && error.message.includes(`owned-code entry for ${omitted}`),
+				);
+			}
 		}
 	},
 );

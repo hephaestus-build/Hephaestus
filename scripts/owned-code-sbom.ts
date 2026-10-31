@@ -12,11 +12,13 @@ import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES, exitStatus } from "./lib/process.ts";
 
 const roots = ["webapp/src", "extension/src", "docker", "server/application/src/main"];
+export const OWNED_ASSET_ROOTS = ["webapp/public", "extension/public", "docker/agents/pi/patches"];
 export const OWNED_FIELDS = ["Owned from", "Package", "License", "Changes"];
 
 export function isShippedFile(file: string): boolean {
 	return (
 		roots.some((directory) => file.startsWith(`${directory}/`)) &&
+		!OWNED_ASSET_ROOTS.some((directory) => file.startsWith(`${directory}/`)) &&
 		!/(?:^|\/)(?:test|__tests__)\//u.test(file) &&
 		!/\.(?:test|spec|stories)\./u.test(file)
 	);

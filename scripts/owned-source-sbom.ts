@@ -6,6 +6,7 @@ import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asString, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
+	OWNED_ASSET_ROOTS,
 	OWNED_FIELDS,
 	ownedCandidates,
 	ownedFileComponent,
@@ -14,7 +15,6 @@ import {
 	scanOwnedCode,
 } from "./owned-code-sbom.ts";
 
-const publicRoots = ["webapp/public", "extension/public"];
 const assetFields = [...OWNED_FIELDS, "Files"];
 const metadataFile = (file: string) =>
 	file === "NOTICE.md" || /^LICENSE(?:-[A-Z0-9-]+)?$/u.test(file);
@@ -66,7 +66,7 @@ function assetFiles(notice: string, commit: string | undefined, directory: strin
 /** Directory notices describe opaque static files without changing their shipped bytes. */
 export function scanOwnedAssets(commit?: string, directory = process.cwd()) {
 	const components: ReturnType<typeof ownedFileComponent>[] = [];
-	for (const notice of ownedCandidates(publicRoots, commit, directory)) {
+	for (const notice of ownedCandidates(OWNED_ASSET_ROOTS, commit, directory)) {
 		if (path.posix.basename(notice) !== "NOTICE.md") {
 			throw new Error(`${notice}: static asset ownership belongs in a sibling NOTICE.md`);
 		}
