@@ -1767,14 +1767,20 @@ for (const failure of [
 	});
 }
 
-for (const direction of ["behind", "divergent"] as const) {
+for (const [release, direction, allowRollback] of [
+	["v1.0.0", "behind", false],
+	["v1.0.0", "divergent", false],
+	["v1.0.0", "behind", true],
+	["v1.0.0", "divergent", true],
+	["v0.95.1", "behind", true],
+] as const) {
 	await test(
-		`a commit channel ${direction} the recorded release is refused before Helm`,
+		`a commit channel ${direction} ${release} with rollback ${allowRollback} is ${release === "v0.95.1" ? "applied" : "refused"}`,
 		reconcilerSubprocess,
 		async () => {
 			const directory = await mkdtemp(path.join(tmpdir(), "release-commit-order-"));
 			try {
-				const fixture = await reconcilerFixture(directory);
+				const fixture = await reconcilerFixture(directory, release);
 				const { helm, log } = await fakeHelm(directory);
 				let target = fixture.commitOf("v0.9.0");
 				if (direction === "divergent") {
@@ -1788,7 +1794,7 @@ for (const direction of ["behind", "divergent"] as const) {
 				gitIn(fixture.checkout, "checkout", "--quiet", "deploy-state");
 				await writeFile(
 					path.join(fixture.checkout, "channels/chart.json"),
-					JSON.stringify({ commit: target, images: chartChannelImages() }),
+					JSON.stringify({ commit: target, images: chartChannelImages(), allowRollback }),
 				);
 				gitIn(fixture.checkout, "add", "channels/chart.json");
 				gitIn(fixture.checkout, "commit", "--quiet", "-m", "commit promotion");
@@ -1821,8 +1827,22 @@ for (const direction of ["behind", "divergent"] as const) {
 						HEPHAESTUS_SECRETS: directory,
 					},
 				});
+				if (release === "v0.95.1") {
+					assert.equal(result.status, 0, result.stderr);
+					const rollbackRecord = await readApplied(path.join(directory, "applied.json"));
+					const calls = await log();
+					assert.equal(rollbackRecord?.commit, target);
+					assert.ok(calls.some((call) => call.startsWith("upgrade ")));
+					return;
+				}
 				assert.notEqual(result.status, 0, result.stderr);
-				assert.match(result.stderr, /behind the running/u);
+				assert.match(
+					result.stderr,
+					allowRollback ? /major downgrade requires a database restore/u : /behind the running/u,
+				);
+				if (allowRollback) {
+					assert.match(result.stderr, /pull-based-deployment#recover-a-stopped-cutover/u);
+				}
 				assert.deepEqual(await readApplied(path.join(directory, "applied.json")), record);
 				assert.deepEqual(await log(), []);
 			} finally {

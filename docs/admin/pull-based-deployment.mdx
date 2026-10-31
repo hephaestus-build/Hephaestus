@@ -429,19 +429,27 @@ If a stopped cutover fails or remains pending:
    Wait for its Complete or Failed condition before you restore data.
    After its 24-hour TTL, an absent Job is finished only if no migration Pod remains.
    If you must cancel it, delete that Job and wait for its Pods to disappear first.
-5. Restore the pre-upgrade database as [If migration fails](./upgrade#if-migration-fails) describes.
-   Keep every database writer stopped during the restore.
+5. Scale the server and worker Deployments to zero.
+   Wait for their Pods and sandboxes to stop.
+   Restore the pre-upgrade database with steps 1 to 14 of [If migration fails](./upgrade#if-migration-fails).
+   Defer its application startup and checks in steps 9 to 12 until the selected release succeeds in step 7 below.
 6. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
    Use the recorded source revision with zero server and worker replicas.
 7. To retry the target, resume the timer.
    To return to the source release, promote its signed release with rollback enabled, then resume the timer.
-8. After the selected release succeeds, restore the worker count as phase 4 describes.
+8. Complete the deferred startup and checks under pre-boot isolation.
+   Then restore the worker count as phase 4 describes.
 
 A signed rollback request does not permit an automatic major release downgrade.
-Before a commit rollback across a schema boundary, restore the database through the same manual procedure.
-If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json` after both restores succeed.
+A commit channel must descend from the recorded release source.
+For a recorded pre-1.0 release tag, a signed request can permit an older commit.
+For a recorded 1.0 or later release tag, use the manual recovery steps above first.
+An applied commit record has no version.
+This version boundary does not apply to it.
+
+If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json`.
+Do this after the database restore and Helm rollback succeed.
 Then promote the source release and resume the timer.
-A commit channel must descend from the recorded release source, unless its signed request permits rollback.
 
 ### Switch a host between Compose and the chart
 
