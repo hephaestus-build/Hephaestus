@@ -1177,6 +1177,120 @@ void test("a conversation past the working budget is compacted before the prompt
 	assert.doesNotMatch(sent, /question 0 /u);
 });
 
+/** A file of about 10,500 tokens by Pi's estimate. */
+function largeFile(name: string): string {
+	return `${name} ${"f".repeat(42_000)}`;
+}
+
+void test("a turn that passes the working budget with its answer and link is not summarised before it ends", async () => {
+	// The shape of staging's turn 115fee59 (T2-2): two reads, then the whole answer with a link_result call, which
+	// passed the trigger. Pi then summarised the older conversation inside the turn, and the continuation commented on
+	// the answer. About 40,000 tokens of earlier conversation by Pi's estimate.
+	const earlier: unknown[] = [];
+	for (let index = 0; index < 18; index += 1) {
+		const parent = idOf(earlier.at(-1));
+		earlier.push(...storedExchange(index, parent === "" ? null : parent));
+	}
+	const requests: FauxRequest[] = [];
+	const step =
+		(answer: () => ReturnType<typeof faux.fauxAssistantMessage>): FauxStep =>
+		(request) => {
+			if (asksForSummary(request)) {
+				return faux.fauxAssistantMessage("## Goal\nthe summary");
+			}
+			requests.push(request);
+			return answer();
+		};
+	// About 5,000 tokens each: the turn stays inside Pi's recent messages, so Pi's cut falls in the older conversation.
+	const worker = fakeWorker(
+		contextOf(earlier, "what feedback did I get recently?"),
+		async (request) => ({
+			ok: true,
+			text: `${request.path} ${"r".repeat(20_000)}`,
+		}),
+	);
+
+	const end = await runTurn(
+		worker,
+		fauxModels([
+			step(() =>
+				faux.fauxAssistantMessage(
+					[
+						faux.fauxToolCall("read", {
+							path: "inputs/context/prepared_conversation_feedback.json",
+						}),
+						faux.fauxToolCall("read", { path: "inputs/context/results_history.json" }),
+					],
+					{ stopReason: "toolUse" },
+				),
+			),
+			step(() =>
+				faux.fauxAssistantMessage(
+					[
+						faux.fauxText("The review found five problems; the insecure file access matters most."),
+						faux.fauxToolCall("link_result", { ...LINK_CALLS[0][1] }),
+					],
+					{ stopReason: "toolUse" },
+				),
+			),
+			step(() => faux.fauxAssistantMessage("Want the details?")),
+			step(() => faux.fauxAssistantMessage("unused")),
+		]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	assert.equal(requests.length, 3);
+	assert.ok(
+		worker.appended.every((entry) => entry.type !== "compaction"),
+		"no summary was written inside the turn",
+	);
+	const last = requests.at(-1)?.messages.map(textOf).join("\n") ?? "";
+	assert.ok(
+		!last.includes("the summary"),
+		"the continuation does not read a summary of the conversation",
+	);
+	assert.ok(last.includes("question 0 "), "the continuation still reads the earlier conversation");
+});
+
+void test("a turn whose reads pass the working budget answers from the files it read, not from a summary of them", async () => {
+	// About 27,000 tokens by Pi's estimate of one token per four characters, below the working trigger.
+	const earlier: unknown[] = [];
+	for (let index = 0; index < 12; index += 1) {
+		const parent = idOf(earlier.at(-1));
+		earlier.push(...storedExchange(index, parent === "" ? null : parent));
+	}
+	// Each read is about 10,500 tokens: the third passes the trigger, and keeping the recent messages would cut the
+	// turn after its first read.
+	const read = (path: string) => (_request: FauxRequest) =>
+		faux.fauxAssistantMessage([faux.fauxToolCall("read", { path })], { stopReason: "toolUse" });
+	const answered: FauxRequest[] = [];
+	const step: FauxStep = (request) => {
+		if (asksForSummary(request)) {
+			return faux.fauxAssistantMessage("## Goal\nthe summary");
+		}
+		answered.push(request);
+		return faux.fauxAssistantMessage("the answer");
+	};
+	const worker = fakeWorker(contextOf(earlier, "walk me through the change"), async (request) => ({
+		ok: true,
+		text: largeFile(request.path),
+	}));
+
+	const end = await runTurn(
+		worker,
+		fauxModels([read("the-diff"), read("the-old-file"), read("the-new-file"), step, step, step]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	assert.equal(answered.length, 1);
+	const sent = answered[0]?.messages.map(textOf).join("\n") ?? "";
+	assert.ok(
+		sent.includes(largeFile("the-diff")),
+		"the first file the turn read reaches the answer whole",
+	);
+	assert.ok(!sent.includes("the summary"), "the answer does not rest on a summary of this turn");
+});
+
 void test("a summary is written with thinking off and the answer with the configured effort, and no level is stored", async () => {
 	const levels: { summary: (string | undefined)[]; answer: (string | undefined)[] } = {
 		summary: [],
