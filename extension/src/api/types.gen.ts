@@ -4078,6 +4078,10 @@ export type ProblemDetail = {
     properties?: {
         [key: string]: unknown;
     };
+    /**
+     * The request's trace id, the same as the X-Request-Id header
+     */
+    requestId?: string;
     status?: number;
     title?: string;
     type?: string;

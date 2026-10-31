@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.observability;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
@@ -31,8 +32,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @ReceiverComponent
 public class RequestCorrelationFilter extends OncePerRequestFilter {
 
-    public static final String HEADER_NAME = "X-Request-Id";
-
     private final @Nullable Tracer tracer;
     private final @Nullable Propagator propagator;
 
@@ -53,7 +52,7 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
         }
         Span current = tracer.currentSpan();
         if (current != null) {
-            response.setHeader(HEADER_NAME, current.context().traceId());
+            response.setHeader(RequestReference.HEADER, current.context().traceId());
             chain.doFilter(request, response);
             return;
         }
@@ -63,7 +62,7 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
                 .name("http.request")
                 .kind(Span.Kind.SERVER)
                 .start();
-        response.setHeader(HEADER_NAME, span.context().traceId());
+        response.setHeader(RequestReference.HEADER, span.context().traceId());
 
         try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
             chain.doFilter(request, response);

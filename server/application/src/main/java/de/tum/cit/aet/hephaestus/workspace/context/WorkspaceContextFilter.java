@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.security.WorkspaceElevationContext;
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
@@ -181,7 +182,8 @@ public class WorkspaceContextFilter implements Filter {
                 } catch (ErrorResponseException challenge) {
                     httpResponse.setStatus(challenge.getStatusCode().value());
                     httpResponse.setContentType("application/problem+json");
-                    objectMapper.writeValue(httpResponse.getWriter(), challenge.getBody());
+                    objectMapper.writeValue(
+                            httpResponse.getWriter(), RequestReference.name(challenge.getBody(), httpResponse));
                     return;
                 }
                 log.info(
@@ -330,7 +332,7 @@ public class WorkspaceContextFilter implements Filter {
                 "We could not find the workspace “" + slug + "”. Check the address, or choose another workspace.");
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(problem));
+        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }
 
     private void sendWorkspaceSlugValidationError(HttpServletResponse response, String slug) throws IOException {
@@ -344,7 +346,7 @@ public class WorkspaceContextFilter implements Filter {
                         "The workspace path must contain a lowercase slug with at most 64" + " characters."));
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(problem));
+        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }
 
     private void sendMembershipForbiddenError(HttpServletResponse response, String slug) throws IOException {
@@ -353,7 +355,7 @@ public class WorkspaceContextFilter implements Filter {
         problem.setDetail("To access this resource, you must be a member of workspace " + slug + ".");
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(problem));
+        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }
 
     private void sendWorkspaceUnauthorizedError(HttpServletResponse response, String slug) throws IOException {
@@ -362,7 +364,7 @@ public class WorkspaceContextFilter implements Filter {
         problem.setDetail("To access workspace " + slug + ", you must sign in.");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(problem));
+        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }
 
     private String extractInvalidSlug(String path) {

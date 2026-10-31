@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,6 +45,6 @@ public final class RateLimitResponse {
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds));
-        response.getWriter().write(objectMapper.writeValueAsString(problem));
+        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }
 }
