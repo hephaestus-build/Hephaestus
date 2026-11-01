@@ -369,13 +369,13 @@
 			"id": "pasted-jwt",
 			"kind": "BUG",
 			"allowPublic": true,
-			"message": "After sign-in the API answers 403. The request header is Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.ZmFrZS1zaWduYXR1cmU",
+			"message": "After sign-in the API answers 403. The request header is Authorization: Bearer eyJhIjoiYiJ9.eyJzIjoiMSJ9.ZmFrZS1zaWc",
 			"expected": {
 				"route": "private",
 				"reason": "redaction",
 				"decidedBy": "code"
 			},
-			"mustNotAppear": ["eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.ZmFrZS1zaWduYXR1cmU"],
+			"mustNotAppear": ["eyJhIjoiYiJ9.eyJzIjoiMSJ9.ZmFrZS1zaWc"],
 			"note": "A JSON Web Token."
 		},
 		{
