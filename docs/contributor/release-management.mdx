@@ -149,8 +149,8 @@ Either architecture can block publication.
 The seeded-upgrade gate separately proves the supported migration path.
 
 `release-host-smoke.yml` follows [Install on one host (k3s)](/admin/kubernetes#install-on-one-host-k3s).
-It verifies the signed `k3s-*` assets. The installer verifies the release chart as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
-Then `scripts/kubernetes-cluster.ts release-smoke` runs the release's `k3s-install.sh`, the command of the docs, with a local CA and without the DNS and clock checks. A runner of 16 GiB installs with the `small-16gib.yaml` profile.
+It verifies the signature of the signed k3s bundle and unpacks it, as the operator does. The installer verifies the release chart as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
+Then `scripts/kubernetes-cluster.ts release-smoke` runs the `k3s-install.sh` of the unpacked bundle, the command of the docs, with a local CA and without the DNS and clock checks. A runner of 16 GiB installs with the `small-16gib.yaml` profile.
 
 The smoke disables swap on its disposable runner. It explicitly passes `--allow-unqualified-host`, because a hosted runner label does not pin its kernel.
 This qualification override retains the effective kubelet policy and allocatable checks. It does not establish loaded-host capacity.
@@ -164,8 +164,12 @@ Publication waits for both native k3s smokes and their matching `host-smoke-k3s-
 The k3s smoke runs only at a release, or by a dispatch of `release-host-smoke.yml` with a release tag and its commit.
 A change to `deploy/platform/` runs the k3d jobs of `ci-kubernetes.yml` in pull requests, not the k3s smoke.
 
-The release job copies the files of `deploy/platform/`, `k3s-install.sh` included, as release assets.
-It signs each of these assets, attests them with the release, and uploads them beside the release locks.
+The release job packs the files of `deploy/platform/`, `k3s-install.sh` included, into one bundle, `hephaestus-k3s-<version>.tar.gz`, with `scripts/package-k3s-bundle.ts`.
+The same files and commit time give the same bytes.
+It signs the bundle, attests it with the release, and uploads it and its signature beside the release locks.
+A release has no other k3s asset.
+A new file in `deploy/platform/` joins the bundle with no change to the workflow.
+
 `deploy/platform/k3s-platform.yaml` holds every platform pin: k3s, Traefik, and cert-manager.
 k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.
 The clusters of `ci-kubernetes.yml` run no cert-manager: only the k3s smoke tests that pin.

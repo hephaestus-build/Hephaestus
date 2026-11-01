@@ -1,8 +1,8 @@
 #!/bin/sh
 # The one-host install of Hephaestus on k3s: docs/admin/kubernetes.mdx § Install on one host (k3s).
 #
-# Run it as a user with sudo rights, from the folder that holds the verified k3s-* assets of one
-# release:
+# Run it as a user with sudo rights, from the folder where you unpacked the verified
+# hephaestus-k3s-X.Y.Z.tar.gz bundle of one release:
 #
 #   sh k3s-install.sh --version 0.95.0 --host hephaestus.example.com --email ops@example.com
 #
@@ -156,7 +156,7 @@ fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 for file in k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
-	[ -f "$HERE/$file" ] || die "$file is not beside this script: download and verify the k3s-* assets of the release first"
+	[ -f "$HERE/$file" ] || die "$file is not beside this script: download, verify and unpack the k3s bundle of the release first"
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
 # instead of parsing YAML in shell or replacing that certificate with an implicit apex-only one.

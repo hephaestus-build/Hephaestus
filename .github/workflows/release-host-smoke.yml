@@ -1,13 +1,13 @@
 name: Release / Host smoke
 
 # The one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on a clean runner of
-# each supported architecture: the release's signed k3s-install.sh with its other k3s assets, as the
-# docs run it. It then checks the migration Job and every role, each worker's isolation probe and
+# each supported architecture: the release's signed k3s bundle, unpacked and run with k3s-install.sh
+# as the docs run it. It then checks the migration Job and every role, each worker's isolation probe and
 # its reviews, the configured shutdown budget, and requests through the Gateway, and it runs the
 # installer a second time and an upgrade.
 # Let's Encrypt cannot reach a runner, so a local CA issues the Gateway certificate in its place.
 # release.yml requires it before publication; a dispatch runs it again for
-# a release, a draft included, that has the k3s assets.
+# a release, a draft included, that has the k3s bundle.
 
 on:
   workflow_call:
@@ -58,7 +58,7 @@ jobs:
           ref: ${{ inputs.sha }}
           persist-credentials: false
 
-      # The smoke reads the certificates asset with the repository's YAML parser.
+      # The smoke reads the unpacked certificates and kubelet files with the repository's YAML parser.
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
@@ -76,9 +76,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      # As the operator does: every k3s asset after its signature check. The installer verifies the
-      # chart by the digest in the joint lock; a draft's assets need the token, so gh downloads them.
-      - name: Verify the k3s assets
+      # As the operator does: the bundle, its signature check, and then the unpacked files. The
+      # installer verifies the chart by the digest in the joint lock; a draft's assets need the
+      # token, so gh downloads them.
+      - name: Verify and unpack the k3s bundle
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -86,14 +87,15 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP"
-          mkdir k3s-assets
-          gh release download "$TAG" --repo "$REPOSITORY" --dir k3s-assets --pattern 'k3s-*'
+          bundle="hephaestus-k3s-${TAG#v}.tar.gz"
+          mkdir k3s-download k3s-assets
+          gh release download "$TAG" --repo "$REPOSITORY" --dir k3s-download \
+            --pattern "$bundle" --pattern "$bundle.sigstore.json"
           gh release download "$TAG" --repo "$REPOSITORY" --pattern "release-$TAG.chart.json"
-          [ -f k3s-assets/k3s-install.sh ] || { echo "::error::$TAG has no k3s-install.sh"; exit 1; }
-          for file in $(find k3s-assets -type f ! -name '*.sigstore.json' | sort); do
-            cosign verify-blob --bundle "$file.sigstore.json" --certificate-identity "$IDENTITY" \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$file"
-          done
+          cosign verify-blob --bundle "k3s-download/$bundle.sigstore.json" --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "k3s-download/$bundle"
+          tar -xzf "k3s-download/$bundle" -C k3s-assets
+          [ -f k3s-assets/k3s-install.sh ] || { echo "::error::$bundle has no k3s-install.sh"; exit 1; }
 
       - name: Disable swap on the qualification host
         run: sudo swapoff --all

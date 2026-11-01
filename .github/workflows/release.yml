@@ -317,18 +317,26 @@ jobs:
           echo "joint-path=$JOINT" >> "$GITHUB_OUTPUT"
           jq . "$JOINT"
 
-      # The files of the one-host install, its installer included, as the released commit has them.
-      - name: Collect the k3s platform assets
+      # The files of the one-host install, its installer included, as the released commit has them,
+      # in the one bundle that operators verify and unpack. Its file time is the commit's, so a
+      # rebuild gives the same bytes.
+      - name: Build the k3s bundle
+        id: k3s
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir k3s-platform
-          cp deploy/platform/k3s-* k3s-platform/
+          bundle="hephaestus-k3s-${VERSION}.tar.gz"
+          node scripts/package-k3s-bundle.ts "$bundle" "$(git log -1 --format=%ct)"
+          echo "bundle-path=$bundle" >> "$GITHUB_OUTPUT"
+          tar -tzf "$bundle"
 
       - name: Generate subject checksums
         id: subjects
         env:
           JOINT: ${{ steps.pin.outputs.joint-path }}
           CHART_PACKAGE: ${{ steps.chart.outputs.package }}
+          K3S_BUNDLE: ${{ steps.k3s.outputs.bundle-path }}
         run: |
           set -euo pipefail
           while IFS=$'\t' read -r image _ digest; do
@@ -339,7 +347,7 @@ jobs:
           printf '%s  %s\n' "$(sha256sum "$CHART_PACKAGE" | cut -d' ' -f1)" "$(basename "$CHART_PACKAGE")" \
             >> subjects.sha256
           sha256sum "$JOINT" >> subjects.sha256
-          (cd k3s-platform && sha256sum -- *) >> subjects.sha256
+          sha256sum "$K3S_BUNDLE" >> subjects.sha256
           cat subjects.sha256
           # purl namespace/name are canonically lowercase; derive them from the run
           # context so the attestation follows a repository transfer (issue #1599).
@@ -354,16 +362,16 @@ jobs:
           predicate: |
             { "purl": "pkg:github/${{ steps.subjects.outputs.purl-repository }}@${{ needs.release.outputs.tag_name }}" }
 
-      # The joint lock and k3s platform assets, each with its own bundle, and the chart's digest in the
-      # registry, all with the release workflow identity. Operators verify the chart with `cosign verify`
-      # on that digest.
+      # The joint lock and the k3s bundle, each with its own signature bundle, and the chart's digest in
+      # the registry, all with the release workflow identity. Operators verify the chart with
+      # `cosign verify` on that digest.
       - name: Sign release image lock
         env:
           JOINT: ${{ steps.pin.outputs.joint-path }}
+          K3S_BUNDLE: ${{ steps.k3s.outputs.bundle-path }}
         run: |
           set -euo pipefail
-          # The glob expands before the first bundle exists.
-          for lock in "$JOINT" k3s-platform/*; do
+          for lock in "$JOINT" "$K3S_BUNDLE"; do
             node scripts/keyless-sign.ts sign-blob --yes --bundle "${lock}.sigstore.json" "$lock"
           done
           chart=$(jq -er '"\(.chart.repository)@\(.chart.digest)"' "$JOINT")
@@ -372,10 +380,11 @@ jobs:
       - name: Verify signature with the deploy-side identity (fail fast)
         env:
           JOINT: ${{ steps.pin.outputs.joint-path }}
+          K3S_BUNDLE: ${{ steps.k3s.outputs.bundle-path }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
-          for lock in "$JOINT" $(find k3s-platform -type f ! -name '*.sigstore.json' | sort); do
+          for lock in "$JOINT" "$K3S_BUNDLE"; do
             cosign verify-blob \
               --bundle "${lock}.sigstore.json" \
               --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
@@ -428,6 +437,7 @@ jobs:
           SHA: ${{ needs.release.outputs.sha }}
           ATTESTATION: ${{ steps.release-attestation.outputs.bundle-path }}
           JOINT: ${{ steps.pin.outputs.joint-path }}
+          K3S_BUNDLE: ${{ steps.k3s.outputs.bundle-path }}
         run: |
           set -euo pipefail
           # Assets replace those of this commit's own draft only.
@@ -440,7 +450,7 @@ jobs:
           # every name that already exists.
           gh release upload "$TAG_NAME" \
             "$provenance" "$JOINT" "${JOINT}.sigstore.json" \
-            k3s-platform/* evidence/* \
+            "$K3S_BUNDLE" "${K3S_BUNDLE}.sigstore.json" evidence/* \
             --clobber \
             --repo "${{ github.repository }}"
 
@@ -576,13 +586,12 @@ jobs:
             --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
             --predicate-type https://in-toto.io/attestation/release/v0.1 \
             --repo "${{ github.repository }}"
-          # The k3s platform assets of the one-host install, with the same identity.
-          [ -f evidence/k3s-platform.yaml ] || { echo "::error::The release has no k3s-platform.yaml"; exit 1; }
-          for file in $(find evidence -name 'k3s-*' ! -name '*.sigstore.json' | sort); do
-            cosign verify-blob --bundle "$file.sigstore.json" \
-              --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
-              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$file" >/dev/null
-          done
+          # The k3s bundle of the one-host install, with the same identity.
+          k3s="evidence/hephaestus-k3s-${TAG_NAME#v}.tar.gz"
+          [ -f "$k3s" ] || { echo "::error::The release has no ${k3s#evidence/}"; exit 1; }
+          cosign verify-blob --bundle "$k3s.sigstore.json" \
+            --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$k3s" >/dev/null
 
       - name: Publish immutable release
         env:
