@@ -19,6 +19,18 @@ const TITLE = "chore(release): version packages";
 // GitHub refuses a pull request body above 65,536 characters.
 const BODY_LIMIT = 60_000;
 
+/** `.github/actions/setup-toolchain/action.yml`'s install; `ci-contract.test.ts` keeps the two equal. */
+export const INSTALL_ARGUMENTS = [
+	"install",
+	"--frozen-lockfile",
+	"--ignore-scripts",
+	"--no-trust-lockfile",
+];
+export const INSTALL_ENVIRONMENT = {
+	pnpm_config_trust_policy: "no-downgrade",
+	pnpm_config_trust_policy_ignore_after: "43200",
+};
+
 /** The newest first-parent commit of main that a successful push run validated. */
 export function newestValidated(
 	firstParents: readonly string[],
@@ -205,11 +217,13 @@ async function maintain(): Promise<void> {
 	const worktree = await mkdtemp(path.join(process.env.RUNNER_TEMP ?? tmpdir(), "version-base-"));
 	await run("git", ["worktree", "add", "--detach", worktree, base]);
 	try {
-		// Versioning needs no credential, so its dependencies get none.
+		// The same install as setup-toolchain: no lifecycle script runs, and every locked entry is
+		// verified against the trust policy. Removing the token from these children is an extra
+		// layer only; a process of the same user can still read this one's environment.
 		const withoutToken = { GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
-		await run("pnpm", ["install", "--frozen-lockfile", "--prefer-offline"], {
+		await run("pnpm", INSTALL_ARGUMENTS, {
 			cwd: worktree,
-			env: withoutToken,
+			env: { ...withoutToken, ...INSTALL_ENVIRONMENT },
 		});
 		await run("vp", ["run", "release:version"], { cwd: worktree, env: withoutToken });
 		const manifest = asRecord(

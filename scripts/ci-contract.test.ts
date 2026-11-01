@@ -19,6 +19,7 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
+import { INSTALL_ARGUMENTS, INSTALL_ENVIRONMENT } from "./maintain-version-pr.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
 import { QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
@@ -3116,6 +3117,21 @@ void describe("CI contract", () => {
 				assert.doesNotMatch(run, /workflow run|dispatch/u);
 			}
 		}
+		// The base's dependencies install in the job that holds the write token, so they install
+		// exactly as every other CI job installs them: no lifecycle script, every entry verified.
+		const toolchain = parseDocument(
+			await readFile(".github/actions/setup-toolchain/action.yml", "utf8"),
+		);
+		const toolchainSteps = toolchain.getIn(["runs", "steps"]);
+		assert.ok(isSeq(toolchainSteps));
+		const install = toolchainSteps.items.find(
+			(item) => isMap(item) && item.get("id") === "pnpm-install",
+		);
+		assert.ok(isMap(install));
+		assert.equal(install.get("run"), `pnpm ${INSTALL_ARGUMENTS.join(" ")}`);
+		const installEnvironment = install.get("env");
+		assert.ok(isMap(installEnvironment));
+		assert.deepEqual(installEnvironment.toJSON(), INSTALL_ENVIRONMENT);
 		const maintainerSource = await readFile("scripts/maintain-version-pr.ts", "utf8");
 		assert.doesNotMatch(maintainerSource, /"workflow",\s*"run"|\/dispatches/u);
 
