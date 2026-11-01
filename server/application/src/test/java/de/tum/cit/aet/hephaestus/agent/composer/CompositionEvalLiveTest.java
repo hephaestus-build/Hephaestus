@@ -30,7 +30,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Composes the review on the work for every labelled composition case with a live model, through main's
- * {@link ModelSession} and its system prompt, opening turn and report_review tool. The session follows
+ * {@link ModelSession} and its system prompt, opening turn and check_package tool. The session follows
  * {@code WorkerFeedbackComposer}'s review session: the same call bound, one finish reminder, the nudge before the bound,
  * and main's answer to a refused review. It writes each case's final review and main's check of it to
  * {@code COMPOSITION_EVAL_CHECKED} after each case. A rerun with the same model settings and requests resumes from that
@@ -102,7 +102,7 @@ class CompositionEvalLiveTest {
             ModelSession.Settings settings,
             String system) {
         var tool = new ModelSession.Tool(
-                "report_review", ReviewOnWork.TOOL_DESCRIPTION, scenario.turn().toolParameters());
+                "check_package", ReviewOnWork.TOOL_DESCRIPTION, scenario.turn().toolParameters());
         var session = new ModelSession(transport, MAPPER, settings, system, List.of(tool));
         long notMet = scenario.turn().restable().values().stream()
                 .filter(Evidence.Result::notMet)
@@ -141,10 +141,10 @@ class CompositionEvalLiveTest {
             var results = new ArrayList<ModelSession.ToolResult>();
             boolean stored = false;
             for (var call : calls) {
-                if (!call.name().equals("report_review")) {
+                if (!call.name().equals("check_package")) {
                     results.add(new ModelSession.ToolResult(
                             call.id(),
-                            "There is no tool named " + call.name() + "; store the review with report_review."));
+                            "There is no tool named " + call.name() + "; check the review with check_package."));
                     continue;
                 }
                 if (stored) {

@@ -2,9 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
+import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
@@ -86,15 +86,15 @@ public class ReviewHistoryContentSource {
                 item.path(),
                 null);
         var projection = selected.stream()
-                .map(entry -> mapper.treeToValue(entry.publicHistory(), PublicFeedbackHistoryDTO.Entry.class))
+                .map(entry -> mapper.treeToValue(entry.publicHistory(), PublicFeedbackSnapshot.Entry.class))
                 .toList();
         return new PublicHistoryRead(
-                new PublicFeedbackHistoryDTO(
-                        4, Instant.now(), publicationContext, new PublicFeedbackHistoryDTO.History(ref, projection)),
+                new PublicFeedbackSnapshot(
+                        Instant.now(), publicationContext, new PublicFeedbackSnapshot.History(ref, projection)),
                 selected.stream().map(copies::of).toList());
     }
 
-    public record PublicHistoryRead(PublicFeedbackHistoryDTO response, List<HistoryCopy> copies) {
+    public record PublicHistoryRead(PublicFeedbackSnapshot response, List<HistoryCopy> copies) {
         public PublicHistoryRead {
             copies = List.copyOf(copies);
         }

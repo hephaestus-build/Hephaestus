@@ -186,7 +186,7 @@ Each case gives the expected decision for every Not met result, a reference comp
 The criteria come from the shipped catalog, so a criteria change applies to the set without an edit.
 
 `CompositionEvalTest` turns each case into a scenario in the layout of the golden pull-request scenario.
-Then it renders the case through main's composer: the system prompt, the opening turn and the `report_review` tool.
+Then it renders the case through main's composer: the system prompt, the opening turn and the `check_package` tool.
 Main's check is `ReviewOnWork.read` and then the text policy that preparation applies to links, mentions, HTML, images and hidden characters.
 It does not read what the words claim.
 The test fails when main's check refuses a reference composition.
@@ -224,7 +224,7 @@ The `liveTest` task stops after 20 minutes. The run writes its file after each c
 A rerun refuses a file from another model, other settings or other rendered requests.
 The run sends requests directly to the endpoint, without the proxy that fences and bills them in production.
 
-A run from another runner writes one `report_review` argument object for each case into a file such as `outputs.json`.
+A run from another runner writes one `check_package` argument object for each case into a file such as `outputs.json`.
 This command applies main's check to that file and writes the checked run:
 
 ```bash

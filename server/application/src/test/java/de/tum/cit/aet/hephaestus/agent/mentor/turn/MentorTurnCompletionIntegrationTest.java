@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -81,7 +81,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     private TransactionTemplate transactionTemplate;
 
     @Autowired
-    private FeedbackStore feedback;
+    private ConversationClaims feedback;
 
     @Autowired
     private FailedEventPublications failedPublications;

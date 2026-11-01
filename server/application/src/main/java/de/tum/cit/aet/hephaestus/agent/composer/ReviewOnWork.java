@@ -22,7 +22,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * The review on the reviewed work: what it is composed from, the {@code report_review} tool it is stored with, and the
+ * The review on the reviewed work: what it is composed from, the {@code check_package} tool it is stored with, and the
  * checks that store or refuse it whole.
  */
 final class ReviewOnWork {
@@ -300,9 +300,9 @@ final class ReviewOnWork {
 
     // ---------------------------------------------------------------- the tool
 
-    /** What report_review tells the model it does. The rules are applied by {@link #read}, with every reason at once. */
+    /** What check_package tells the model it does. The rules are applied by {@link #read}, with every reason at once. */
     static final String TOOL_DESCRIPTION =
-            "Store the final review on this piece of work. First decide each NOT_MET result: RAISE it, or withhold it "
+            "Check a complete draft without publishing it. Correct any refusal before publishing its returned draftId. First decide each NOT_MET result: RAISE it, or withhold it "
                     + "with your reason and, for advice this work already received, the statement that gave it. Write useful local notes first, "
                     + "then use the summary for a warranted point without a useful line note, or useful orientation. Do not repeat a note's diagnosis or action. "
                     + "Use summary:null when it adds nothing; without useful line notes, put the complete guidance in the summary. "
@@ -367,7 +367,7 @@ final class ReviewOnWork {
 
     /** The nudge a composer gets when it ends without the final call. */
     static final String NUDGE =
-            "Everything this review may rest on is in this session. Store the final review now with one report_review call: "
+            "Everything this review may rest on is in this session. Check the complete draft now with check_package, then publish_package using the returned draftId: "
                     + "first one decision for each NOT_MET result, RAISE or a withholding reason, then the complete summary and "
                     + "any line notes, which speak about each raised result, itself or through its problems, and no withheld one. "
                     + "No prose outside the calls.";
@@ -386,14 +386,14 @@ final class ReviewOnWork {
         return list;
     }
 
-    /** The JSON schema of report_review's arguments for these results. */
+    /** The JSON schema of check_package's arguments for these results. */
     static ObjectNode toolParameters(
             Map<String, Evidence.Result> results, boolean lineNotes, List<String> eligibleWitnesses) {
         var concerns = results.entrySet().stream()
                 .filter(entry -> entry.getValue().notMet())
                 .toList();
         if (concerns.isEmpty())
-            throw new IllegalArgumentException("report_review needs at least one NOT_MET result to rest on");
+            throw new IllegalArgumentException("check_package needs at least one NOT_MET result to rest on");
         var notMet = concerns.stream().map(Map.Entry::getKey).toList();
         var restable = new ArrayList<String>();
         var anchorable = new ArrayList<String>();
@@ -592,7 +592,7 @@ final class ReviewOnWork {
                 + "- The summary: one comment on the work.\n"
                 + location + "\n"
                 + Evidence.notReachedNote(input.notReached())
-                + "Store the whole review with one report_review call. It decides first: each NOT_MET result is RAISE, and a text speaks about it or its problems, or withheld with its reason, and no text speaks about it or its problems. Writing nothing for the work is a decision too: it is still one final report_review call.\n\n"
+                + "Check the whole review with check_package, then publish_package using the returned draftId. It decides first: each NOT_MET result is RAISE, and a text speaks about it or its problems, or withheld with its reason, and no text speaks about it or its problems. Writing nothing for the work is a decision too: it is still a checked draft followed by publish_package.\n\n"
                 + WRITE_CONTRACT;
     }
 
@@ -1065,6 +1065,6 @@ final class ReviewOnWork {
                 : "## Undecided\nThe review leaves these NOT_MET results undecided: " + String.join(", ", undecided)
                         + ".";
         return owed
-                + "\nStore the final review with one report_review call. A review that says nothing is still one final report_review call. No prose outside the calls.";
+                + "\nCheck the final review with check_package, then publish_package using the returned draftId. A review that says nothing is still a checked draft followed by publish_package. No prose outside the calls.";
     }
 }

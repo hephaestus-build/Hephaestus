@@ -1,0 +1,3 @@
+mutation UpdateFeedbackReview($id:ID!, $body:String!) {
+    updatePullRequestReview(input:{pullRequestReviewId:$id,body:$body}) { pullRequestReview { id url } }
+}

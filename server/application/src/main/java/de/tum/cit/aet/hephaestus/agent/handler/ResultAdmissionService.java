@@ -1,17 +1,16 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -21,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -261,12 +261,20 @@ public class ResultAdmissionService {
                         progress.conversationDeliveries()));
     }
 
-    public PrepareFeedbackResponseDTO prepareFeedback(AdmissionIdentity identity, PrepareFeedbackRequestDTO request) {
+    public void checkPackage(AdmissionIdentity identity, FeedbackPackage request) {
+        applyPackage(identity, request, false);
+    }
+
+    public PreparedPackage publishPackage(AdmissionIdentity identity, FeedbackPackage request) {
+        return Objects.requireNonNull(applyPackage(identity, request, true));
+    }
+
+    private @Nullable PreparedPackage applyPackage(
+            AdmissionIdentity identity, FeedbackPackage request, boolean publish) {
         var context = files.indexLateRead(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {
                     var owned = ownedJob(identity);
-                    requireIdentity(owned, request.reviewId(), request.jobId(), request.attempt());
                     if (!isAdmitted(owned) || assignments.review(owned).kind() != ReviewKind.ITEM)
                         throw new AdmissionConflictException();
                     return composition.readForPreparation(
@@ -278,9 +286,8 @@ public class ResultAdmissionService {
                                     citationAttempt(owned)));
                 })),
                 read -> new JobEvidenceFiles.LateCopies(read.copies()));
-        return Objects.requireNonNull(transactions.execute(status -> {
+        return transactions.execute(status -> {
             ReviewJob job = ownedJob(identity);
-            requireIdentity(job, request.reviewId(), request.jobId(), request.attempt());
             if (!isAdmitted(job) || assignments.review(job).kind() != ReviewKind.ITEM)
                 throw new AdmissionConflictException();
             var rows = proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), citationAttempt(job));
@@ -289,6 +296,16 @@ public class ResultAdmissionService {
             context.support().stream().map(row -> row.resultId()).forEach(allowed::add);
             if (!allowed.containsAll(request.basisResultIds())) throw new AdmissionConflictException();
             var anchors = projection.anchors(job, rows);
+            if (!publish) {
+                composition.check(
+                        job,
+                        request,
+                        rows,
+                        context,
+                        anchors,
+                        request.publicComposition() && assignments.publicReviewed(job));
+                return null;
+            }
             var response = composition.prepare(
                     job,
                     request,
@@ -298,7 +315,7 @@ public class ResultAdmissionService {
                     request.publicComposition() && assignments.publicReviewed(job));
             jobs.saveAndFlush(job);
             return response;
-        }));
+        });
     }
 
     /** A review on the work that an earlier attempt prepared, with the admitted anchor of each of its notes. */
@@ -360,7 +377,7 @@ public class ResultAdmissionService {
                 .orElse(List.of());
     }
 
-    public PublicFeedbackHistoryDTO publicFeedbackHistory(AdmissionIdentity identity) {
+    public PublicFeedbackSnapshot publicFeedbackHistory(AdmissionIdentity identity) {
         var retained = files.indexLateRead(
                 identity,
                 () -> Objects.requireNonNull(transactions.execute(status -> {

@@ -8,9 +8,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
+import de.tum.cit.aet.hephaestus.agent.context.PublicFeedbackSnapshot;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
@@ -88,9 +88,8 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         var assignment = RuntimeReviewTestData.assignment(5L, null);
         var read = source.publicSameItemFeedback(
                 job, List.of(assignment, assignment, RuntimeReviewTestData.assignment(null, null)));
-        assertThat(read.response().contractVersion()).isEqualTo(4);
         assertThat(read.response().history().feedback())
-                .containsExactly(mapper.treeToValue(visible.publicHistory(), PublicFeedbackHistoryDTO.Entry.class));
+                .containsExactly(mapper.treeToValue(visible.publicHistory(), PublicFeedbackSnapshot.Entry.class));
         assertThat(read.copies())
                 .containsExactly(new HistoryCopy(true, List.of(), List.of(20L), visible.sourceJobIds()));
         assertThat(read.response().history().item()).satisfies(item -> {
@@ -172,7 +171,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             boolean complete) {
         UUID id = UUID.randomUUID();
         var projection = destination == FeedbackDestination.ON_WORK && delivered != null
-                ? mapper.valueToTree(new PublicFeedbackHistoryDTO.Entry(
+                ? mapper.valueToTree(new PublicFeedbackSnapshot.Entry(
                         id,
                         destination,
                         FeedbackState.DELIVERED,

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.composer;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace.CopySupport;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace.QuietDecision;
@@ -9,10 +9,16 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace.Support;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -22,11 +28,7 @@ import org.jspecify.annotations.Nullable;
 final class CompositionPackages {
     private CompositionPackages() {}
 
-    /** The fields of a preparation request that name the attempt it is prepared under. */
-    record Attempt(UUID reviewId, UUID jobId, int attempt) {}
-
-    static PrepareFeedbackRequestDTO review(
-            Attempt attempt, ReviewOnWork.ComposedReview review, @Nullable String publicationContext) {
+    static FeedbackPackage review(ReviewOnWork.ComposedReview review, @Nullable String publicationContext) {
         var refs = new ArrayList<Evidence.Ref>();
         if (review.summary() != null) refs.addAll(review.summary().basedOn());
         review.inline().forEach(note -> refs.addAll(note.basedOn()));
@@ -65,11 +67,10 @@ final class CompositionPackages {
                             null),
                     null));
         }
-        return request(attempt, composition, true, publicationContext);
+        return request(composition, true, publicationContext);
     }
 
-    static PrepareFeedbackRequestDTO piece(
-            Attempt attempt,
+    static FeedbackPackage piece(
             PrivateFeedback.Piece piece,
             List<PrivateFeedback.PreparedTarget> preparedTargets,
             @Nullable String primaryResultId) {
@@ -111,12 +112,11 @@ final class CompositionPackages {
                 card && piece.title() != null && piece.body() != null && piece.nextStep() != null
                         ? new ComposedFeedback.Page(piece.title(), piece.body(), piece.nextStep())
                         : null);
-        return request(attempt, List.of(composed), false, null);
+        return request(List.of(composed), false, null);
     }
 
     /** A destination no decision was composed for: withheld on these results, with the reason recorded. */
-    static PrepareFeedbackRequestDTO withheld(
-            Attempt attempt, FeedbackDestination destination, FeedbackStopReason reason, List<UUID> resultIds) {
+    static FeedbackPackage withheld(FeedbackDestination destination, FeedbackStopReason reason, List<UUID> resultIds) {
         var support = resultIds.stream().map(id -> new Support(id, null)).toList();
         var composed = new ComposedFeedback(
                 destination,
@@ -130,24 +130,65 @@ final class CompositionPackages {
                         null,
                         destination == FeedbackDestination.ON_WORK ? null : resultIds.getFirst()),
                 null);
-        return request(attempt, List.of(composed), destination == FeedbackDestination.ON_WORK, null);
+        return request(List.of(composed), destination == FeedbackDestination.ON_WORK, null);
     }
 
-    private static PrepareFeedbackRequestDTO request(
-            Attempt attempt,
-            List<ComposedFeedback> composition,
-            boolean publicComposition,
-            @Nullable String publicationContext) {
+    private static FeedbackPackage request(
+            List<ComposedFeedback> composition, boolean publicComposition, @Nullable String publicationContext) {
         var basis = new LinkedHashSet<UUID>();
         composition.forEach(piece -> basis.addAll(piece.resultIds()));
-        return new PrepareFeedbackRequestDTO(
-                attempt.reviewId(),
-                attempt.jobId(),
-                attempt.attempt(),
-                List.copyOf(basis),
-                composition,
-                publicComposition,
-                publicComposition ? publicationContext : null);
+        return new FeedbackPackage(
+                List.copyOf(basis), composition, publicComposition, publicComposition ? publicationContext : null);
+    }
+
+    static FeedbackPackage pieces(
+            List<PrivateFeedback.Piece> pieces,
+            List<PrivateFeedback.PreparedTarget> targets,
+            Function<PrivateFeedback.Piece, @Nullable String> primary) {
+        var composition = new ArrayList<ComposedFeedback>();
+        pieces.forEach(piece ->
+                composition.addAll(piece(piece, targets, primary.apply(piece)).composition()));
+        return request(composition, false, null);
+    }
+
+    /** The checked drafts of one destination. Only the exact checked draft may be published, once. */
+    static final class Drafts {
+        private final UUID reviewId;
+        private final Consumer<FeedbackPackage> check;
+        private final Function<FeedbackPackage, PreparedPackage> publish;
+        private final Map<String, FeedbackPackage> checked = new LinkedHashMap<>();
+        private @Nullable String publishedId;
+        private @Nullable PreparedPackage receipt;
+
+        Drafts(UUID reviewId, Consumer<FeedbackPackage> check, Function<FeedbackPackage, PreparedPackage> publish) {
+            this.reviewId = reviewId;
+            this.check = check;
+            this.publish = publish;
+        }
+
+        String check(FeedbackPackage proposal) {
+            check.accept(proposal);
+            String id = proposal.draftId(reviewId);
+            checked.put(id, proposal);
+            return id;
+        }
+
+        PreparedPackage publish(String id) {
+            if (publishedId != null) {
+                if (!publishedId.equals(id))
+                    throw new IllegalArgumentException(
+                            "This destination already accepted its package; do not publish another.");
+                return Objects.requireNonNull(receipt);
+            }
+            var proposal = checked.get(id);
+            if (proposal == null)
+                throw new IllegalArgumentException(
+                        "Unknown draft id; check the package first and use its returned draftId.");
+            var accepted = publish.apply(proposal);
+            publishedId = id;
+            receipt = accepted;
+            return accepted;
+        }
     }
 
     private static List<UUID> distinct(List<Evidence.Ref> refs) {

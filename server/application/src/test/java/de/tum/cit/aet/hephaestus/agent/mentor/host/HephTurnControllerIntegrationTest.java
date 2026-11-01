@@ -45,8 +45,8 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -366,7 +366,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     /** The gateway in front of a controller whose turn contexts read these results and claim through this store. */
-    private MockMvc gatewayWith(ResultHistoryQuery results, FeedbackStore feedback) throws Exception {
+    private MockMvc gatewayWith(ResultHistoryQuery results, ConversationClaims feedback) throws Exception {
         gateway = gateway(controller(HephTurnFixtures.contexts(beans, results, feedback)));
         return gateway;
     }
@@ -386,7 +386,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         developerAccount,
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(Optional.of(colleagues));
-        gatewayWith(results, mock(FeedbackStore.class));
+        gatewayWith(results, mock(ConversationClaims.class));
 
         call(
                         "POST",
@@ -414,7 +414,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .thenReturn(List.of(carrier));
         when(results.find(workspace.getId(), resultId, developerAccount, SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(Optional.of(carrier));
-        gatewayWith(results, mock(FeedbackStore.class));
+        gatewayWith(results, mock(ConversationClaims.class));
 
         call("POST", "link-problem", turn.getAttempt(), """
                         {"problemId":"%s"}""".formatted(problemId))
@@ -429,7 +429,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldShowFeedbackOnlyWhileTheAttemptHoldsItsClaimWhenTheTurnShowsFeedback() throws Exception {
         UUID ready = UUID.randomUUID();
         UUID taken = UUID.randomUUID();
-        FeedbackStore store = mock(FeedbackStore.class);
+        ConversationClaims store = mock(ConversationClaims.class);
         when(store.claimConversationCopy(workspace.getId(), ready, turn.getId(), turn.getAttempt()))
                 .thenReturn(Optional.of(new CopyWriteFence(ready, UUID.randomUUID(), turn.getId(), Instant.now())));
         when(store.claimConversationCopy(workspace.getId(), taken, turn.getId(), turn.getAttempt()))

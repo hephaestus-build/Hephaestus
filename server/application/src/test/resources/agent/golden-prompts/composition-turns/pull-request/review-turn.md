@@ -589,7 +589,7 @@ Practices this review looked at and did not decide, or found not applicable, eac
 
 This review did not settle one of its practices: names-things. Say nothing about them, for or against, and do not describe this review as complete.
 
-Store the whole review with one report_review call. It decides first: each NOT_MET result is RAISE, and a text speaks about it or its problems, or withheld with its reason, and no text speaks about it or its problems. Writing nothing for the work is a decision too: it is still one final report_review call.
+Check the whole review with check_package, then publish_package using the returned draftId. It decides first: each NOT_MET result is RAISE, and a text speaks about it or its problems, or withheld with its reason, and no text speaks about it or its problems. Writing nothing for the work is a decision too: it is still a checked draft followed by publish_package.
 
 ## Writing the review
 Write from the results and problems each text rests on, within their qualifications. A declared affordance supports its bounded benefit, not an unobserved runtime or test outcome. Keep each remedy on its recorded gap and leave unrelated behavior as it is; make another change a prerequisite only when the evidence establishes that dependency. You are not told whether the work is ready, so do not approve it, call it ready or blocked, or set conditions for merging it. Timing the evidence itself warrants is fine: a committed secret is removed and rotated before anyone relies on the history.

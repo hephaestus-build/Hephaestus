@@ -6,10 +6,10 @@ import org.jspecify.annotations.Nullable;
 public interface LineNoteWriter {
     IntegrationKind kind();
 
-    CopyWriteResult postImmutablePackage(FeedbackTarget target, List<LineNote> notes, CopyWriteFence fence);
+    CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence);
 
     @Nullable
-    List<CopyReceipt> findPosted(FeedbackTarget target, List<LineNote> notes);
+    List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication);
 
     List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies);
 }

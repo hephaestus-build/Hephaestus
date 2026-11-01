@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient.Request;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +36,38 @@ public final class ScriptedGitLabNotes {
     private final ScriptedCommentThreads threads = new ScriptedCommentThreads("gid://gitlab/Note/");
     private final SummaryWriter channel;
     private boolean rejectPositions;
+    private final List<Map<String, Object>> drafts = new ArrayList<>();
+    private int draftCalls;
+    private int failDraft;
+    private boolean losePublish;
+    private int bulkPublications;
+
+    void failDraft(int call) {
+        failDraft = call;
+    }
+
+    void losePublish(boolean lose) {
+        losePublish = lose;
+    }
+
+    int bulkPublications() {
+        return bulkPublications;
+    }
+
+    int pendingDrafts() {
+        return drafts.size();
+    }
+
+    void foreignDraft() {
+        var draft = new LinkedHashMap<String, Object>();
+        draft.put("id", 999L);
+        draft.put("author_id", 1L);
+        draft.put("note", "An unrelated draft");
+        draft.put("discussion_id", null);
+        draft.put("position", null);
+        drafts.add(draft);
+    }
+
     private final Map<String, Map<String, Object>> positions = new ConcurrentHashMap<>();
     private final GitLabGraphQlClientProvider provider;
     private final ScriptedGitLabRest rest = new ScriptedGitLabRest(this::discuss);
@@ -85,6 +118,9 @@ public final class ScriptedGitLabNotes {
     // GitLab's REST discussions API: a diff thread with the asked position, or an overview thread without one.
     @SuppressWarnings("unchecked")
     private Mono<ClientResponse> discuss(ScriptedGitLabRest.Call call) {
+        var pending = Pattern.compile(".*/merge_requests/(\\d+)/(draft_notes(?:/bulk_publish)?|notes)")
+                .matcher(call.path());
+        if (pending.matches()) return drafts(call, Integer.parseInt(pending.group(1)), pending.group(2));
         var path = DISCUSSIONS.matcher(call.path());
         if (!path.matches()) return Mono.error(new IllegalStateException("Unscripted GitLab REST call " + call.path()));
         String thread = mergeRequest(Integer.parseInt(path.group(1)));
@@ -104,6 +140,55 @@ public final class ScriptedGitLabNotes {
                 thread, position == null ? "gid://gitlab/DiscussionNote/" : "gid://gitlab/DiffNote/", body);
         if (position != null) positions.put(id, (Map<String, Object>) position);
         return ScriptedGitLabRest.respond(201, discussion(id, body));
+    }
+
+    @SuppressWarnings("unchecked") // The fake stores the draft payloads submitted by this client.
+    private Mono<ClientResponse> drafts(ScriptedGitLabRest.Call call, int iid, String endpoint) {
+        String parent = mergeRequest(iid);
+        if (HttpMethod.GET.equals(call.method())) {
+            if (endpoint.equals("draft_notes")) return ScriptedGitLabRest.respond(200, drafts);
+            return ScriptedGitLabRest.respond(
+                    200,
+                    threads.on(parent).stream()
+                            .map(note -> {
+                                var row = new LinkedHashMap<String, Object>();
+                                row.put("id", number(note.id()));
+                                row.put("body", note.body());
+                                row.put("author", Map.of("id", 1));
+                                row.put("system", false);
+                                return row;
+                            })
+                            .toList());
+        }
+        var fields = call.json();
+        if (endpoint.equals("draft_notes")) {
+            draftCalls++;
+            if (draftCalls == failDraft || (rejectPositions && fields.get("position") != null))
+                return ScriptedGitLabRest.respond(429, Map.of("message", "Draft creation refused"));
+            var draft = new LinkedHashMap<String, Object>();
+            draft.put("id", (long) draftCalls);
+            draft.put("author_id", 1);
+            draft.put("note", fields.get("note"));
+            draft.put("discussion_id", null);
+            draft.put("position", fields.get("position"));
+            drafts.add(draft);
+            return ScriptedGitLabRest.respond(201, draft);
+        }
+        if (!endpoint.equals("draft_notes/bulk_publish")) return Mono.error(new IllegalArgumentException(endpoint));
+        bulkPublications++;
+        for (var draft : drafts) {
+            Object position = draft.get("position");
+            String id = threads.append(
+                    parent,
+                    position == null ? "gid://gitlab/DiscussionNote/" : "gid://gitlab/DiffNote/",
+                    Objects.requireNonNull((String) draft.get("note")));
+            if (position != null) positions.put(id, (Map<String, Object>) position);
+        }
+        drafts.clear();
+        if (fields.get("note") instanceof String summary) threads.append(parent, "gid://gitlab/Note/", summary);
+        return losePublish
+                ? Mono.error(new IllegalStateException("Response lost after bulk publication"))
+                : ScriptedGitLabRest.respond(204, "");
     }
 
     private Map<String, Object> discussion(String id, String body) {

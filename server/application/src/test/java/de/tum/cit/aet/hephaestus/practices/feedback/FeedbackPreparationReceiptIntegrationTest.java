@@ -12,9 +12,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackDraftBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
@@ -91,6 +91,35 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
     void readAsOne() {
         when(resultVisibility.asOneRead(anyLong(), any()))
                 .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
+    }
+
+    @Test
+    void shouldCheckTheWholePackageWithoutWritingFeedbackCopiesReceiptsOrSends() {
+        var proposals = List.of(draft(true), conversation(developerId));
+        var before = reviews.findById(reviewId).orElseThrow().getChecks().deepCopy();
+        store.checkPackage(workspace.getId(), reviewId, proposals);
+        for (var proposal : proposals) {
+            assertThat(feedback.findById(proposal.id())).isEmpty();
+            assertThat(sends.findById(proposal.id())).isEmpty();
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspace.getId(), proposal.id()))
+                    .isEmpty();
+        }
+        assertThat(reviews.findById(reviewId).orElseThrow().getChecks()).isEqualTo(before);
+        assertThat(provider.summaryCreates).isZero();
+        assertThat(provider.noteCreates).isZero();
+        var published = store.prepareAll(workspace.getId(), reviewId, proposals);
+        assertThat(published.pieces()).hasSize(2);
+    }
+
+    @Test
+    void shouldLeaveNoPartialDraftWhenACheckedPrivateDestinationContainsAnInvalidPiece() {
+        var invalid = conversation(developerId + 1);
+        assertThatThrownBy(() -> store.checkPackage(workspace.getId(), reviewId, List.of(draft(true), invalid)))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(feedback.findById(feedbackId)).isEmpty();
+        assertThat(feedback.findById(invalid.id())).isEmpty();
+        assertThat(sends.findById(feedbackId)).isEmpty();
+        assertThat(children()).isEmpty();
     }
 
     @Test
@@ -468,14 +497,8 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
         job.setInput(new ReviewJobInput(itemId, List.of()));
         var proposal = FeedbackDraftBuilder.build(
                         job,
-                        new PrepareFeedbackRequestDTO(
-                                job.getReviewId(),
-                                job.getId(),
-                                job.getAttempt(),
-                                List.copyOf(Set.of(supportingResult.getId())),
-                                List.of(composed),
-                                false,
-                                null),
+                        new FeedbackPackage(
+                                List.copyOf(Set.of(supportingResult.getId())), List.of(composed), false, null),
                         List.of(new AdmittedResultSnapshot(supportingResult.getId(), candidate, List.of())),
                         List.of(),
                         Map.of())
@@ -553,10 +576,7 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                         "Check that the context reaches the caller."));
         var drafts = FeedbackDraftBuilder.build(
                 job,
-                new PrepareFeedbackRequestDTO(
-                        reviewId,
-                        job.getId(),
-                        0,
+                new FeedbackPackage(
                         List.of(named.getId(), grouped.getId(), carded.getId()),
                         List.of(conversation, withheld, card),
                         false,
@@ -643,14 +663,7 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                         "Add a test that reaches the failure case."));
         var draft = FeedbackDraftBuilder.build(
                         job,
-                        new PrepareFeedbackRequestDTO(
-                                reviewId,
-                                job.getId(),
-                                0,
-                                List.of(supportingResult.getId()),
-                                List.of(composed),
-                                false,
-                                null),
+                        new FeedbackPackage(List.of(supportingResult.getId()), List.of(composed), false, null),
                         List.of(snapshot(supportingResult)),
                         List.of(),
                         Map.of())

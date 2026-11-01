@@ -225,6 +225,29 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void updateSummary_reviewSummary_editsTheReviewBodyInPlace() {
+        FeedbackTarget target =
+                ScmFeedbackFixtures.target(new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo#42", null);
+        when(gitHubProvider.isRateLimitCritical(1L)).thenReturn(false);
+
+        HttpGraphQlClient client = mock(HttpGraphQlClient.class);
+        GraphQlClient.RequestSpec spec = mock(GraphQlClient.RequestSpec.class);
+        when(gitHubProvider.forScope(1L)).thenReturn(client);
+        when(client.documentName("UpdateFeedbackReview")).thenReturn(spec);
+        when(spec.variable(any(), any())).thenReturn(spec);
+        ClientGraphQlResponse response =
+                mockGraphQlResponse("updatePullRequestReview.pullRequestReview.id", "PRR_prior");
+        when(spec.execute()).thenReturn(Mono.just(response));
+
+        var outcome = channel.updateSummary(
+                target, new SummaryHandle("PRR_prior", null), ScmFeedbackFixtures.summary("corrected", "marker"));
+
+        assertThat(outcome.kind()).isEqualTo(CopyUpdateKind.EDITED);
+        assertThat(outcome.externalRef()).isEqualTo("PRR_prior");
+        verify(client, never()).documentName("UpdateIssueComment");
+    }
+
+    @Test
     void updateSummary_blankExternalId_throws() {
         FeedbackTarget target =
                 ScmFeedbackFixtures.target(new IntegrationRef(IntegrationKind.GITHUB, 1L, null), "owner/repo#42", null);

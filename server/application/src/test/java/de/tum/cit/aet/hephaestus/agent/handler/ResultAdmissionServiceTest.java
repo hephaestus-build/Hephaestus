@@ -16,13 +16,13 @@ import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.PinnedInlineAnchorQuery;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -177,10 +177,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         "package-digest",
                         preparedAt,
                         List.of(new PreparedFeedback(feedbackId, "piece-digest", preparedAt))));
-        var request = new PrepareFeedbackRequestDTO(
-                job.getReviewId(),
-                job.getId(),
-                0,
+        var request = new FeedbackPackage(
                 List.of(resultId),
                 List.of(new ComposedFeedback(
                         FeedbackDestination.ON_WORK,
@@ -199,9 +196,10 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         null)),
                 true,
                 null);
-        var response = service.prepareFeedback(identity(), request);
-        assertThat(response.feedbackIds()).containsExactly(feedbackId);
-        assertThat(response.contentDigest()).isEqualTo("package-digest");
+        var response = service.publishPackage(identity(), request);
+        assertThat(response.pieces().stream().map(PreparedFeedback::feedbackId).toList())
+                .containsExactly(feedbackId);
+        assertThat(response.packageDigest()).isEqualTo("package-digest");
         assertThat(response.preparedAt()).isEqualTo(preparedAt);
         assertThat(job.getPublicReviewDigest()).isEqualTo("package-digest");
         verify(feedback).prepareAll(eq(1L), eq(job.getReviewId()), any());
@@ -211,10 +209,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     @Test
     void shouldRejectAnOldWorkerAttemptBeforePreparingAnything() {
         var stale = new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 1, LEASE);
-        assertThatThrownBy(() -> service.prepareFeedback(
-                        stale,
-                        new PrepareFeedbackRequestDTO(
-                                job.getReviewId(), job.getId(), 1, List.of(), List.of(), false, null)))
+        assertThatThrownBy(() -> service.publishPackage(stale, new FeedbackPackage(List.of(), List.of(), false, null)))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
         verifyNoInteractions(feedback, proof);
     }
@@ -323,10 +318,9 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         var acceptedAt = Instant.parse("2026-10-14T10:00:00Z");
         when(feedback.prepareAll(1, job.getReviewId(), List.of()))
                 .thenReturn(new PreparedPackage("empty-package", acceptedAt, List.of()));
-        var response = service.prepareFeedback(
-                identity(),
-                new PrepareFeedbackRequestDTO(job.getReviewId(), job.getId(), 0, List.of(), List.of(), true, null));
-        assertThat(response.feedbackIds()).isEmpty();
+        var response = service.publishPackage(identity(), new FeedbackPackage(List.of(), List.of(), true, null));
+        assertThat(response.pieces().stream().map(PreparedFeedback::feedbackId).toList())
+                .isEmpty();
         assertThat(job.getPublicReviewDigest()).isEqualTo("empty-package");
         verify(members).publicReviewed(1, job.getReviewId(), job.getId(), 0, acceptedAt);
     }
@@ -340,9 +334,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         var acceptedAt = Instant.parse("2026-10-14T10:00:00Z");
         when(feedback.prepareAll(1, job.getReviewId(), List.of()))
                 .thenReturn(new PreparedPackage("empty-package", acceptedAt, List.of()));
-        service.prepareFeedback(
-                identity(),
-                new PrepareFeedbackRequestDTO(job.getReviewId(), job.getId(), 0, List.of(), List.of(), false, null));
+        service.publishPackage(identity(), new FeedbackPackage(List.of(), List.of(), false, null));
         assertThat(job.getPublicReviewDigest()).isNull();
         verifyNoInteractions(members);
     }
