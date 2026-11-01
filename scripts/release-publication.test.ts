@@ -50,7 +50,7 @@ const upstream = ["agent-pi", "application-server", "nats", "postgres"].map((nam
 const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
 const jointLock = `release-${release}.chart.json`;
 /** The k3s platform assets, in the job's workspace as release.yml collects them. */
-const platformAssets = ["k3s-platform.yaml", "k3s-values.yaml"];
+const platformAssets = ["k3s-platform.yaml", "k3s-values.yaml", "hephaestus-keys.sh"];
 /** A synthetic Cosign bundle: a JSON object naming the signed bytes. It proves nothing about Sigstore. */
 const bundle = (bytes: string | Uint8Array) => JSON.stringify({ sha256: hash(bytes) });
 const sign = async (file: string) =>

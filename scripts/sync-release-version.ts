@@ -30,17 +30,19 @@ if (version.endsWith("-rc.0")) {
 const edits = [
 	{
 		file: "docs/admin/kubernetes.mdx",
-		re: /^(?<indent>[ \t]*)VERSION=\S+(?<comment>\s+# the release, without the leading "v".*)$/mu,
+		// Every install path sets VERSION in its own snippet, so each one follows the release.
+		re: /^(?<indent>[ \t]*)VERSION=\S+(?<comment>\s+# the release, without the leading "v".*)$/gmu,
 		line: `$<indent>VERSION=${version}$<comment>`,
 	},
 ];
 
 for (const { file, re, line } of edits) {
 	const text = readFileSync(file, "utf8");
+	// replaceAll resets lastIndex, which test() moves on a global expression.
 	if (!re.test(text)) {
 		throw new Error(`sync-release-version: no version reference matched in ${file}`);
 	}
-	writeFileSync(file, text.replace(re, line));
+	writeFileSync(file, text.replaceAll(re, line));
 }
 
 const migrationFile = "MIGRATION.md";

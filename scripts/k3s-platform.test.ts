@@ -545,19 +545,19 @@ await test("the installer ends with the backup command for exactly the keys a re
 		assert.match(text, /\(umask 077 && rm -f hephaestus-keys\.env && kubectl /u);
 		assert.match(text, /jq -er /u);
 	}
-	const generated = [...installer.matchAll(/has (?<key>\w+) \|\| add /gu)].map(
+	const generated = [...read("hephaestus-keys.sh").matchAll(/has (?<key>\w+) \|\| add /gu)].map(
 		(match) => match.groups?.key ?? "",
 	);
-	const keys = [
+	const keys = new Set([
 		...generated,
 		"GITHUB_OAUTH_CLIENT_SECRET",
 		"HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY",
 		"BACKUP_CIPHER_PASS",
 		"BACKUP_S3_KEY_SECRET",
-	];
+	]);
 	const copied = new RegExp(selection, "u");
 	assert.deepEqual(
-		keys.filter((key) => copied.test(key)).toSorted((a, b) => a.localeCompare(b)),
+		[...keys].filter((key) => copied.test(key)).toSorted((a, b) => a.localeCompare(b)),
 		[
 			"BACKUP_CIPHER_PASS",
 			"DATABASE_USERNAME",

@@ -145,31 +145,56 @@ A minimal install needs these keys:
 If a needed key is missing, the Pod that reads it stays in `CreateContainerConfigError`.
 For a feature that you turn on later, for example backups or Slack, add the keys that the [inventory](./secret-custody#inventory) lists for it.
 
-To create the Secret, write each value to its own file in a private directory.
-Then give the directory to `kubectl`.
-Each file name becomes a key, and the file content becomes its value.
-This keeps the values out of your shell history and out of the process list.
-Generate each value as [Generation and rotation](./secret-custody#generation-and-rotation) gives it.
+The release script `hephaestus-keys.sh` creates the Secret with these keys.
+It generates each key that you do not choose, and it never changes a key that exists.
+It prints key names, never a value.
+It needs `kubectl` with access to the release namespace, `openssl` and `jq`.
 
-```bash
-SECRET_DIR=$(mktemp -d)
-printf '%s' hephaestus > "$SECRET_DIR/DATABASE_USERNAME"
-printf '%s' "$(openssl rand -hex 16)" > "$SECRET_DIR/DATABASE_PASSWORD"
-printf '%s' "$(openssl rand -hex 16)" > "$SECRET_DIR/HEPHAESTUS_SECURITY_ENCRYPTION_KEY"
-printf '%s' "$(openssl rand -hex 16)" > "$SECRET_DIR/HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY"
-printf '%s' "$(openssl rand -base64 32)" > "$SECRET_DIR/HEPHAESTUS_AUTH_STATE_COOKIE_KEY"
-printf '%s' "$(openssl rand -hex 32)" > "$SECRET_DIR/WEBHOOK_SECRET"
-printf '%s' "$(openssl rand -hex 32)" > "$SECRET_DIR/WEBHOOK_ROUTING_SECRET"
-printf 'heph%s' "$(openssl rand -hex 16)" > "$SECRET_DIR/NATS_USERNAME"
-printf 'heph%s' "$(openssl rand -hex 16)" > "$SECRET_DIR/NATS_PASSWORD"
-read -rs GITHUB_OAUTH_CLIENT_SECRET
-printf '%s' "$GITHUB_OAUTH_CLIENT_SECRET" > "$SECRET_DIR/GITHUB_OAUTH_CLIENT_SECRET"
-kubectl --namespace hephaestus create secret generic hephaestus-app --from-file="$SECRET_DIR"
-```
+1. Download the script and its signature from the release, and verify the signature:
 
-Set `secret.name` to `hephaestus-app`.
-Do not write a newline into a value: `printf '%s'` writes none.
-Before you delete `$SECRET_DIR`, keep the required keys outside the cluster, as [Secret custody and rotation](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+   ```bash
+   VERSION=0.95.0   # the release, without the leading "v"
+   release="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
+   curl -fsSLO "$release/hephaestus-keys.sh"
+   curl -fsSLO "$release/hephaestus-keys.sh.sigstore.json"
+   cosign verify-blob --bundle hephaestus-keys.sh.sigstore.json \
+     --certificate-identity https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+     hephaestus-keys.sh
+   ```
+
+2. Type the client secret of your GitHub OAuth app. The shell does not show it:
+
+   ```bash
+   read -rs GITHUB_OAUTH_CLIENT_SECRET && export GITHUB_OAUTH_CLIENT_SECRET
+   ```
+
+3. Run the script:
+
+   ```bash
+   sh hephaestus-keys.sh --namespace hephaestus --secret hephaestus-app
+   ```
+
+   Add `--external-database` when you use your own PostgreSQL.
+   The script then takes `DATABASE_USERNAME` and `DATABASE_PASSWORD` from the environment instead of generating them.
+   It cannot see whether that database holds Hephaestus data, so it generates no encryption key there unless you add `--new-keys`.
+   Add `--new-keys` only for a database without Hephaestus data. For a database with data, restore both keys from your backup first.
+   Add `--external-nats` for your own NATS broker, with `NATS_USERNAME` and `NATS_PASSWORD`.
+   Add `--backups` when you turn on backups with a new, empty backup repository: it generates `BACKUP_CIPHER_PASS`.
+   For an existing repository, restore its passphrase into the Secret instead. A new passphrase cannot read it.
+
+4. Set `secret.name` to `hephaestus-app`.
+5. Copy the keys off the cluster, as [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) describes.
+
+Run the script again at any time, for example with `--backups` when you turn on backups.
+It adds only the keys that the Secret lacks.
+If the bundled PostgreSQL volume exists but the Secret lacks the database login or an encryption key, the script stops: restore the Secret from your backup.
+
+If Git holds your release, for example with Argo CD or Flux, create the release namespace, and run the script once from your workstation before the first sync.
+Keep the Secret out of Git.
+The chart never generates a key: a generated key in a rendered manifest would change at each render, and every new system key loses what the old one encrypts.
+
+To write the Secret yourself instead, generate each value as [Generation and rotation](./secret-custody#generation-and-rotation) gives it, and do not write a newline into a value.
 
 ### PostgreSQL TLS Secret
 
@@ -752,6 +777,7 @@ Each release publishes the files of the one-host install as signed assets.
 | Asset | What it is |
 | --- | --- |
 | `k3s-install.sh` | The installer. It is a POSIX shell script, and it needs no Node.js and no checkout of the repository. |
+| `hephaestus-keys.sh` | Creates or completes the release Secret. The installer runs it. [Create the Secret](#create-the-secret) uses it on another cluster. |
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
@@ -884,7 +910,7 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 
    ```bash
    release="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
-   for file in k3s-install.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
+   for file in k3s-install.sh hephaestus-keys.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
      curl -fsSLO "$release/$file"
      curl -fsSLO "$release/$file.sigstore.json"
      cosign verify-blob --bundle "$file.sigstore.json" \
@@ -923,7 +949,7 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 4. Open `https://<host>` and sign in as the bootstrap admin.
 5. Continue with [First steps § 4](./first-steps#4-connect-repository-data).
 
-The installer keeps every key of the release Secret `hephaestus-app` and generates only the keys that it lacks.
+The installer runs `hephaestus-keys.sh`, which keeps every key of the release Secret `hephaestus-app` and generates only the keys that it lacks.
 It generates each key as [Secret custody and rotation](./secret-custody#generation-and-rotation) gives it.
 If the PostgreSQL volume exists and the Secret lacks the database login or an encryption key, the installer stops: restore the Secret from your backup.
 
@@ -1337,7 +1363,9 @@ That server admits only a client certificate for the common name `hephaestus-bac
 To prepare backups:
 
 1. Create the bucket for this instance alone, and an identity with read, write and delete rights in it.
-2. Add `BACKUP_S3_KEY`, `BACKUP_S3_KEY_SECRET` and `BACKUP_CIPHER_PASS` to the release Secret. Generate the passphrase and keep a copy as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+2. Add `BACKUP_S3_KEY` and `BACKUP_S3_KEY_SECRET` to the release Secret.
+   Run `sh hephaestus-keys.sh --backups` to generate `BACKUP_CIPHER_PASS`, as [Create the Secret](#create-the-secret) describes.
+   Keep a copy of the passphrase as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 3. Set `postgresql.backup.clientTlsSecret` to a TLS Secret for the common name `hephaestus-backup`.
    It needs `ca.crt`, `tls.crt` and `tls.key`, signed by the PostgreSQL CA.
    The one-host platform issues `hephaestus-postgresql-backup-tls` and sets this value.

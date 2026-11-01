@@ -155,8 +155,8 @@ if [ "$VERIFY" = false ]; then
 fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-for file in k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
-	[ -f "$HERE/$file" ] || die "$file is not beside this script: download and verify the k3s-* assets of the release first"
+for file in hephaestus-keys.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
+	[ -f "$HERE/$file" ] || die "$file is not beside this script: download and verify the platform assets of the release first"
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
 # instead of parsing YAML in shell or replacing that certificate with an implicit apex-only one.
@@ -447,49 +447,13 @@ for namespace in "$NAMESPACE" "$SANDBOXES"; do
 done
 
 say "Keeping the release Secret"
-# An error of the API stops the run here: it must never read as "no Secret", which would make new keys.
-secret_json=$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o json --ignore-not-found)
-existing=$(printf '%s' "$secret_json" | jq -r '.data // {} | keys[]')
-has() { printf '%s\n' "$existing" | grep -qx "$1"; }
-database=$(kubectl -n "$NAMESPACE" get pvc -l app.kubernetes.io/component=postgresql -o name)
-umask 077
-: >"$TEMP/secret.env"
-add() { printf '%s=%s\n' "$1" "$2" >>"$TEMP/secret.env"; }
-if [ -n "$database" ] && ! { has DATABASE_USERNAME && has DATABASE_PASSWORD &&
-	has HEPHAESTUS_SECURITY_ENCRYPTION_KEY && has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY; }; then
-	die "the PostgreSQL volume exists, but the Secret $SECRET lacks its database login or an encryption key. A new value would lock the database or lose what it encrypts. Restore the Secret from your backup, and run this again"
-fi
-has DATABASE_USERNAME || add DATABASE_USERNAME hephaestus
-has DATABASE_PASSWORD || add DATABASE_PASSWORD "$(openssl rand -hex 16)"
-has NATS_USERNAME || add NATS_USERNAME "heph$(openssl rand -hex 16)"
-has NATS_PASSWORD || add NATS_PASSWORD "heph$(openssl rand -hex 16)"
-# Each key gets its own value (docs/admin/secret-custody.mdx § Generation and rotation).
-has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_ENCRYPTION_KEY "$(openssl rand -hex 16)"
-has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY "$(openssl rand -hex 16)"
-has HEPHAESTUS_AUTH_STATE_COOKIE_KEY || add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(openssl rand -base64 32)"
-has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(openssl rand -hex 32)"
-has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(openssl rand -hex 32)"
+# hephaestus-keys.sh adds only the keys that the Secret lacks, and stops when the PostgreSQL volume
+# exists without its login or an encryption key. It prints key names, never a value.
+keys=$(sh "$HERE/hephaestus-keys.sh" --namespace "$NAMESPACE" --secret "$SECRET") ||
+	die "the release Secret was not kept: see the message above"
+printf '%s\n' "$keys" | sed 's/^/    /'
 oauth_changed=false
-if [ -n "${GITHUB_OAUTH_CLIENT_SECRET:-}" ]; then
-	current=
-	if has GITHUB_OAUTH_CLIENT_SECRET; then
-		current=$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o jsonpath='{.data.GITHUB_OAUTH_CLIENT_SECRET}' | base64 -d)
-	fi
-	if [ "$current" != "$GITHUB_OAUTH_CLIENT_SECRET" ]; then
-		add GITHUB_OAUTH_CLIENT_SECRET "$GITHUB_OAUTH_CLIENT_SECRET"
-		[ -z "$secret_json" ] || oauth_changed=true
-	fi
-elif ! has GITHUB_OAUTH_CLIENT_SECRET; then
-	warn "the Secret has no GITHUB_OAUTH_CLIENT_SECRET: GitHub sign-in fails until you run this again with it set"
-fi
-if [ -z "$secret_json" ]; then
-	kubectl -n "$NAMESPACE" create secret generic "$SECRET" --from-env-file="$TEMP/secret.env" >/dev/null
-elif [ -s "$TEMP/secret.env" ]; then
-	jq -Rn '[inputs | capture("^(?<key>[^=]+)=(?<value>.*)$")] | {stringData: (map({(.key): .value}) | add)}' \
-		<"$TEMP/secret.env" >"$TEMP/secret-patch.json"
-	kubectl -n "$NAMESPACE" patch secret "$SECRET" --type merge --patch-file "$TEMP/secret-patch.json" >/dev/null
-fi
-umask 022
+if printf '%s\n' "$keys" | grep -qx 'Changed GITHUB_OAUTH_CLIENT_SECRET'; then oauth_changed=true; fi
 
 say "Waiting for cert-manager to issue the certificates"
 kubectl wait --for=create crd/certificates.cert-manager.io --timeout=10m >/dev/null

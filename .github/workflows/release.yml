@@ -322,7 +322,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir k3s-platform
-          cp deploy/platform/k3s-* k3s-platform/
+          cp deploy/platform/k3s-* deploy/platform/hephaestus-keys.sh k3s-platform/
 
       - name: Generate subject checksums
         id: subjects
@@ -577,8 +577,10 @@ jobs:
             --predicate-type https://in-toto.io/attestation/release/v0.1 \
             --repo "${{ github.repository }}"
           # The k3s platform assets of the one-host install, with the same identity.
-          [ -f evidence/k3s-platform.yaml ] || { echo "::error::The release has no k3s-platform.yaml"; exit 1; }
-          for file in $(find evidence -name 'k3s-*' ! -name '*.sigstore.json' | sort); do
+          for asset in k3s-platform.yaml hephaestus-keys.sh; do
+            [ -f "evidence/$asset" ] || { echo "::error::The release has no $asset"; exit 1; }
+          done
+          for file in $(find evidence \( -name 'k3s-*' -o -name hephaestus-keys.sh \) ! -name '*.sigstore.json' | sort); do
             cosign verify-blob --bundle "$file.sigstore.json" \
               --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
               --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$file" >/dev/null
