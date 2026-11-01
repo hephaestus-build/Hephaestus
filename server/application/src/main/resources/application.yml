@@ -186,6 +186,11 @@ server:
 # Actuator on the management port; health probes for Kubernetes liveness/readiness.
 management:
     metrics:
+        distribution:
+            # One histogram bound for the API read objective (hephaestus-alerts.yml, group hephaestus-slos):
+            # a bucket at 2 s and +Inf, not a full histogram: two series for each label set of the meter.
+            slo:
+                "[http.server.requests]": 2s
         web:
             server:
                 # The API has more route templates than Boot's default 100. The integration test
