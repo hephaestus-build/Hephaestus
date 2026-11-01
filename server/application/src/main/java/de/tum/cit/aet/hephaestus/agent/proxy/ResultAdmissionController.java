@@ -37,11 +37,6 @@ public class ResultAdmissionController {
         return checked(() -> admission.admit(identity, request));
     }
 
-    @Operation(
-            operationId = "stagePracticeResult",
-            summary = "Stage one completed practice privately",
-            description = "Verifies one candidate or records one runtime withholding under the current attempt fence.",
-            security = @SecurityRequirement(name = "workerBearer"))
     @PostMapping("/stage-result")
     @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
     public StageResponseDTO stageResult(
