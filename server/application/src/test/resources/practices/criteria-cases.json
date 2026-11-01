@@ -3621,7 +3621,7 @@
 			"repo/Sources/Screens/Screen9.swift": "import SwiftUI\n\nstruct Screen9: View {\n    let item: Trek\n\n    var body: some View {\n        Text(item.name)\n    }\n}\n",
 			"repo/Sources/Models/Trek.swift": "import Foundation\n\nstruct Trek: Identifiable {\n    let id: UUID\n    var name: String\n}\n",
 			"context/description.md": "Renames `Hike` to `Trek` to match the product name. Mechanical rename; no behaviour change.\n",
-			"context/metadata.json": "{\"title\": \"Rename Hike to Trek\", \"additions\": 15, \"deletions\": 15, \"changed_files\": 11}\n"
+			"context/metadata.json": "{\"title\": \"Rename Hike to Trek\", \"additions\": 10, \"deletions\": 10, \"changed_files\": 10}\n"
 		},
 		"baseFiles": {
 			"repo/Sources/Screens/Screen1.swift": "import SwiftUI\n\nstruct Screen1: View {\n    let item: Hike\n\n    var body: some View {\n        Text(item.name)\n    }\n}\n",
@@ -3635,7 +3635,7 @@
 			"repo/Sources/Screens/Screen9.swift": "import SwiftUI\n\nstruct Screen9: View {\n    let item: Hike\n\n    var body: some View {\n        Text(item.name)\n    }\n}\n",
 			"repo/Sources/Models/Hike.swift": "import Foundation\n\nstruct Hike: Identifiable {\n    let id: UUID\n    var name: String\n}\n"
 		},
-		"reason": "A single-purpose rename touching eleven small files (nine edited, one type file renamed) with 15 added and 15 removed lines, one substituted identifier per hunk; the meaningful content is small and uniform, so a reviewer can read all of it.",
+		"reason": "A single-purpose rename touching ten small files (nine edited, one type file renamed) with 10 added and 10 removed lines, one substituted identifier per hunk; the meaningful content is small and uniform, so a reviewer can read all of it.",
 		"workType": "pull_request"
 	},
 	{
