@@ -37,16 +37,16 @@ class ReviewAttemptLeaseDatabaseTest {
                     .orElseThrow();
             liquibase.update(prefix, new Contexts(context), new LabelExpression());
         }
-        // Only review_job's own columns matter here, so its parents are not seeded.
+        // Only review_job's own columns matter here, so its parents are not seeded; each row is its own review.
         PracticeMigrationFixture.execute(database, """
                 SET session_replication_role = replica;
                 INSERT INTO review_job(id,review_id,workspace_id,status,attempt,input,config_snapshot,trace_id,
                                        submitted_at,worker_id,leased_until)
                 VALUES('00000000-0000-0000-0000-000000897461','00000000-0000-0000-0000-000000897460',897461,
                        'RUNNING',2,'{}','{}',repeat('a',32),now(),'old-worker',now()+interval '1 minute'),
-                      ('00000000-0000-0000-0000-000000897462','00000000-0000-0000-0000-000000897460',897461,
+                      ('00000000-0000-0000-0000-000000897462','00000000-0000-0000-0000-000000897464',897461,
                        'QUEUED',1,'{}','{}',repeat('b',32),now(),NULL,NULL),
-                      ('00000000-0000-0000-0000-000000897463','00000000-0000-0000-0000-000000897460',897461,
+                      ('00000000-0000-0000-0000-000000897463','00000000-0000-0000-0000-000000897465',897461,
                        'COMPLETED',0,'{}','{}',repeat('c',32),now(),'old-worker',NULL);
                 SET session_replication_role = origin;
                 """);
