@@ -1577,7 +1577,7 @@ async function gatewayRequests(
 
 interface SmokeOptions {
 	work: string;
-	/** The directory of the release's k3s-* assets, after their signature checks. */
+	/** The directory of the unpacked k3s bundle of the release, after its signature check. */
 	assets: string;
 	/** The joint lock of the release, downloaded: a draft release's assets need a token. */
 	lock: string;
@@ -1647,7 +1647,7 @@ async function reviewsOn(): Promise<void> {
 
 /**
  * The one-host install as docs/admin/kubernetes.mdx § Install on one host (k3s) runs it: the
- * release's k3s-install.sh, with a local CA in place of Let's Encrypt, and without the DNS and
+ * release's k3s-install.sh from its unpacked bundle, with a local CA in place of Let's Encrypt, and without the DNS and
  * clock checks that a runner cannot pass. A runner of 16 GiB installs with the small-16gib profile. Then the checks around it, a second run that must change
  * nothing, and an upgrade that rolls every role except PostgreSQL and NATS.
  */
@@ -2672,7 +2672,7 @@ if (import.meta.main) {
 				architecture === undefined
 			) {
 				throw new Error(
-					"release-smoke needs --assets <directory of k3s-* assets> --lock <joint lock> --release <vX.Y.Z> --architecture <amd64|arm64>",
+					"release-smoke needs --assets <directory of the unpacked k3s bundle> --lock <joint lock> --release <vX.Y.Z> --architecture <amd64|arm64>",
 				);
 			}
 			await releaseSmoke({
