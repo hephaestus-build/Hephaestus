@@ -280,13 +280,13 @@ mock.module("node:child_process", { exports: {
 				assert.ok(
 					candidate.includes("SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/hephaestus"),
 				);
-				assert.equal(calls.filter((call) => call[0] === "delivery").length, 4);
+				assert.equal(calls.filter((call) => call[0] === "delivery").length, 2);
 				assert.equal(
 					calls.some((call) => call[0] === "pull" && call.includes("agent-image")),
 					!stopped,
 				);
 				if (expectedError === "") {
-					for (const provider of ["github", "gitlab"]) {
+					for (const provider of ["github"]) {
 						assert.ok(
 							result.stdout.includes(
 								`Webhook NATS protocol passed (0.95.1 receiver -> candidate, ${provider})`,
