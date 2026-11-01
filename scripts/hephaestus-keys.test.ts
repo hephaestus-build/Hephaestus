@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -291,4 +299,233 @@ await test("the installer keeps the Secret only through the script", () => {
 		/for file in hephaestus-keys\.sh /u,
 		"the installer requires the script beside it",
 	);
+});
+
+/** A fresh folder for a key file, removed after the test. */
+function keyFolder(): { file: (name: string) => string; done: () => void } {
+	const folder = mkdtempSync(path.join(tmpdir(), "heph-keys-file-"));
+	return {
+		file: (name) => path.join(folder, name),
+		done: () => rmSync(folder, { recursive: true, force: true }),
+	};
+}
+
+await test(
+	"--export-keys writes exactly the keys a restore needs, readable only by the owner",
+	{ skip },
+	() => {
+		const first = run({ args: ["--backups"] });
+		const folder = keyFolder();
+		try {
+			const file = folder.file("keys.env");
+			const result = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--export-keys", file],
+			});
+			assert.equal(result.status, 0, result.output);
+			assert.equal((statSync(file).mode % 0o1000).toString(8), "600");
+			const written = Object.fromEntries(
+				readFileSync(file, "utf8")
+					.split("\n")
+					.filter(Boolean)
+					.map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+			);
+			assert.deepEqual(Object.keys(written).toSorted(byName), [
+				"BACKUP_CIPHER_PASS",
+				"DATABASE_USERNAME",
+				"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
+				"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
+			]);
+			for (const [key, value] of Object.entries(written)) {
+				assert.equal(value, first.secret[key]);
+			}
+			for (const stored of Object.values(written).filter((value) => value !== "hephaestus")) {
+				assert.ok(!result.output.includes(stored), "the output holds no value");
+			}
+			assert.deepEqual(result.secret, first.secret, "an export changes nothing");
+
+			const again = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--export-keys", file],
+			});
+			assert.notEqual(again.status, 0, "an existing file is never overwritten");
+			assert.match(again.output, /name a new file/u);
+		} finally {
+			folder.done();
+		}
+	},
+);
+
+await test(
+	"--export-keys refuses a Secret without its encryption keys, and a mixed run",
+	{ skip },
+	() => {
+		const folder = keyFolder();
+		try {
+			const first = run();
+			const { HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: _lost, ...partial } = first.secret;
+			const lacking = run({
+				cluster: { secret: encoded(partial) },
+				args: ["--export-keys", folder.file("a.env")],
+			});
+			assert.notEqual(lacking.status, 0);
+			assert.match(lacking.output, /lacks an encryption key/u);
+			assert.ok(!existsSync(folder.file("a.env")));
+
+			const mixed = run({ args: ["--backups", "--export-keys", folder.file("b.env")] });
+			assert.notEqual(mixed.status, 0);
+			assert.match(mixed.output, /run alone/u);
+		} finally {
+			folder.done();
+		}
+	},
+);
+
+await test(
+	"--check-keys reports each key as matching or not, and fails on any difference",
+	{ skip },
+	() => {
+		const first = run();
+		const folder = keyFolder();
+		try {
+			const file = folder.file("keys.env");
+			assert.equal(
+				run({ cluster: { secret: encoded(first.secret) }, args: ["--export-keys", file] }).status,
+				0,
+			);
+
+			const same = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--check-keys", file],
+			});
+			assert.equal(same.status, 0, same.output);
+			assert.match(same.stdout, /^HEPHAESTUS_SECURITY_ENCRYPTION_KEY: matches$/mu);
+
+			const rotated = {
+				...first.secret,
+				HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "f".repeat(32),
+			};
+			const differs = run({ cluster: { secret: encoded(rotated) }, args: ["--check-keys", file] });
+			assert.notEqual(differs.status, 0);
+			assert.match(
+				differs.stdout,
+				/^HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: differs from the Secret$/mu,
+			);
+			assert.ok(!differs.output.includes("f".repeat(32)), "the output holds no value");
+
+			const added = { ...first.secret, BACKUP_CIPHER_PASS: "passphrase" };
+			const missing = run({ cluster: { secret: encoded(added) }, args: ["--check-keys", file] });
+			assert.notEqual(missing.status, 0);
+			assert.match(missing.stdout, /^BACKUP_CIPHER_PASS: not in the file$/mu);
+		} finally {
+			folder.done();
+		}
+	},
+);
+
+await test("an empty file name is refused, so a backup run never creates keys", { skip }, () => {
+	for (const flag of ["--export-keys", "--check-keys"]) {
+		const result = run({ args: [flag, ""] });
+		assert.notEqual(result.status, 0);
+		assert.match(result.output, /needs a file/u);
+		assert.deepEqual(result.secret, {}, "no Secret was created");
+	}
+});
+
+await test(
+	"--export-keys refuses a key whose value holds a line break, and prints no part of it",
+	{ skip },
+	() => {
+		const first = run();
+		const broken = {
+			...first.secret,
+			HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "first-half\nsecond-half",
+		};
+		const folder = keyFolder();
+		try {
+			const result = run({
+				cluster: { secret: encoded(broken) },
+				args: ["--export-keys", folder.file("keys.env")],
+			});
+			assert.notEqual(result.status, 0);
+			assert.match(result.output, /line break/u);
+			assert.ok(!result.output.includes("half"));
+			assert.ok(!existsSync(folder.file("keys.env")));
+		} finally {
+			folder.done();
+		}
+	},
+);
+
+await test(
+	"--check-keys reads a file with CRLF lines, and refuses a malformed or empty file",
+	{ skip },
+	() => {
+		const first = run();
+		const folder = keyFolder();
+		try {
+			const exported = folder.file("keys.env");
+			assert.equal(
+				run({ cluster: { secret: encoded(first.secret) }, args: ["--export-keys", exported] })
+					.status,
+				0,
+			);
+			const crlf = folder.file("crlf.env");
+			writeFileSync(crlf, readFileSync(exported, "utf8").replaceAll("\n", "\r\n"));
+			const windows = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--check-keys", crlf],
+			});
+			assert.equal(windows.status, 0, windows.output);
+
+			const malformed = folder.file("malformed.env");
+			writeFileSync(malformed, "HEPHAESTUS_SECURITY_ENCRYPTION_KEY\n");
+			const bad = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--check-keys", malformed],
+			});
+			assert.notEqual(bad.status, 0);
+			assert.match(bad.output, /not KEY=VALUE/u);
+
+			const empty = folder.file("empty.env");
+			writeFileSync(empty, "# no keys\n");
+			const none = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--check-keys", empty],
+			});
+			assert.notEqual(none.status, 0);
+			assert.match(none.output, /holds no key/u);
+		} finally {
+			folder.done();
+		}
+	},
+);
+
+await test("a jq that ends its lines with CRLF, as on Windows, changes no result", { skip }, () => {
+	const realJq = spawnSync("sh", ["-c", "command -v jq"], { encoding: "utf8" }).stdout.trim();
+	const windowsJq = `#!/bin/sh\n"${realJq}" "$@" | awk '{ printf "%s\\r\\n", $0 }'\n`;
+	const first = run();
+	const second = run({ cluster: { secret: encoded(first.secret) }, tools: { jq: windowsJq } });
+	assert.equal(second.status, 0, second.output);
+	assert.deepEqual(second.secret, first.secret, "a repeat run keeps every key");
+	const folder = keyFolder();
+	try {
+		const file = folder.file("keys.env");
+		const exported = run({
+			cluster: { secret: encoded(first.secret) },
+			args: ["--export-keys", file],
+			tools: { jq: windowsJq },
+		});
+		assert.equal(exported.status, 0, exported.output);
+		assert.ok(!readFileSync(file, "utf8").includes("\r"));
+		const checked = run({
+			cluster: { secret: encoded(first.secret) },
+			args: ["--check-keys", file],
+			tools: { jq: windowsJq },
+		});
+		assert.equal(checked.status, 0, checked.output);
+		assert.doesNotMatch(checked.output, /differs|not in/u);
+	} finally {
+		folder.done();
+	}
 });
