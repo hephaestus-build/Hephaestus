@@ -1,7 +1,12 @@
 #!/bin/sh
 # The entrypoint of the image built by the Dockerfile beside this file. It preloads
-# pg_stat_statements and, in a container with a memory limit, sizes PostgreSQL from that limit. Then
-# it runs the official entrypoint (docs/admin/sizing.mdx).
+# pg_stat_statements, compresses the full-page images in the write-ahead log with lz4 and, in a
+# container with a memory limit, sizes PostgreSQL from that limit. Then it runs the official
+# entrypoint (docs/admin/sizing.mdx).
+#
+# A streamed answer inserts many small index entries; the first change to a page after a checkpoint
+# writes the whole page to the WAL. lz4 halves those images for a little CPU per image
+# (docs/admin/kubernetes.mdx, External PostgreSQL and NATS).
 #
 # shared_buffers is 25 % of the limit, the starting value that the PostgreSQL manual (Resource
 # consumption) gives; the manual also says that a larger shared_buffers needs a larger max_wal_size.
@@ -42,7 +47,7 @@ if [ "${1:-}" = postgres ]; then
 			;;
 	esac
 	# $sizing holds only flags and numbers, so word splitting is safe here.
-	set -- postgres -c shared_preload_libraries=pg_stat_statements $sizing "$@"
+	set -- postgres -c shared_preload_libraries=pg_stat_statements -c wal_compression=lz4 $sizing "$@"
 fi
 
 exec docker-entrypoint.sh "$@"

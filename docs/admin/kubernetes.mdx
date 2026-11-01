@@ -708,6 +708,9 @@ The preview profile sets only capacity.
 
 Set `postgresql.bundled=false` to use your PostgreSQL server.
 That server must have the `pg_partman` extension.
+Also set `wal_compression = lz4` (or `zstd`) on it, as the bundled PostgreSQL does.
+Without it, a streamed answer writes about 1.5 times more write-ahead log, because most of that log is full-page images of index pages.
+Compression costs a little CPU for each full-page image.
 The chart connects to `postgresql.external.host` and `postgresql.external.port` with `sslmode=verify-full`.
 The server certificate must name that host.
 The Secret in `postgresql.tls.existingSecret` needs only `ca.crt`, the CA that signed the server certificate.
