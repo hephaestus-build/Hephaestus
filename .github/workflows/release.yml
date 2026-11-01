@@ -299,8 +299,7 @@ jobs:
           echo "package=$package" >> "$GITHUB_OUTPUT"
           jq . "$RUNNER_TEMP/chart.json"
 
-      # One typed joint lock from the verified evidence and the pushed chart. The schema 1 lock that
-      # hosts on earlier releases read is derived from it and keeps its name and shape.
+      # The verified evidence and the signed chart have one release lock.
       - name: Write release image lock
         id: pin
         env:
@@ -308,19 +307,15 @@ jobs:
           CANDIDATE: ${{ needs.release.outputs.candidate }}
         run: |
           set -euo pipefail
-          ASSET="release-v${VERSION}.json"
           JOINT="release-v${VERSION}.chart.json"
           node scripts/release-image-lock.ts write evidence/manifest.json "$RUNNER_TEMP/chart.json" \
-            "v${VERSION}" "$JOINT" "$ASSET"
-          node scripts/release-image-lock.ts "$ASSET" evidence/manifest.json \
-            "v${VERSION}" "$RUNNER_TEMP/release-lock.env"
-          node scripts/release-image-lock.ts projection "$JOINT" "$ASSET" "v${VERSION}"
+            "v${VERSION}" "$JOINT"
+          node scripts/release-image-lock.ts verify "$JOINT" evidence/manifest.json "v${VERSION}"
           if [ -n "$CANDIDATE" ]; then
             node scripts/promote-release-candidate.ts verify "$RUNNER_TEMP/candidate/release-${CANDIDATE}.chart.json" "$JOINT"
           fi
-          echo "asset-path=$ASSET" >> "$GITHUB_OUTPUT"
           echo "joint-path=$JOINT" >> "$GITHUB_OUTPUT"
-          jq . "$ASSET" "$JOINT"
+          jq . "$JOINT"
 
       # The files of the one-host install, its installer included, as the released commit has them.
       - name: Collect the k3s platform assets
@@ -332,7 +327,6 @@ jobs:
       - name: Generate subject checksums
         id: subjects
         env:
-          ASSET: ${{ steps.pin.outputs.asset-path }}
           JOINT: ${{ steps.pin.outputs.joint-path }}
           CHART_PACKAGE: ${{ steps.chart.outputs.package }}
         run: |
@@ -344,7 +338,7 @@ jobs:
           jq -r '"\(.chart.digest | ltrimstr("sha256:"))  \(.chart.repository)"' "$JOINT" >> subjects.sha256
           printf '%s  %s\n' "$(sha256sum "$CHART_PACKAGE" | cut -d' ' -f1)" "$(basename "$CHART_PACKAGE")" \
             >> subjects.sha256
-          sha256sum "$ASSET" "$JOINT" >> subjects.sha256
+          sha256sum "$JOINT" >> subjects.sha256
           (cd k3s-platform && sha256sum -- *) >> subjects.sha256
           cat subjects.sha256
           # purl namespace/name are canonically lowercase; derive them from the run
@@ -360,17 +354,16 @@ jobs:
           predicate: |
             { "purl": "pkg:github/${{ steps.subjects.outputs.purl-repository }}@${{ needs.release.outputs.tag_name }}" }
 
-      # Both locks and the k3s platform assets, each with its own bundle, and the chart's digest in the
+      # The joint lock and k3s platform assets, each with its own bundle, and the chart's digest in the
       # registry, all with the release workflow identity. Operators verify the chart with `cosign verify`
       # on that digest.
       - name: Sign release image lock
         env:
-          ASSET: ${{ steps.pin.outputs.asset-path }}
           JOINT: ${{ steps.pin.outputs.joint-path }}
         run: |
           set -euo pipefail
           # The glob expands before the first bundle exists.
-          for lock in "$ASSET" "$JOINT" k3s-platform/*; do
+          for lock in "$JOINT" k3s-platform/*; do
             node scripts/keyless-sign.ts sign-blob --yes --bundle "${lock}.sigstore.json" "$lock"
           done
           chart=$(jq -er '"\(.chart.repository)@\(.chart.digest)"' "$JOINT")
@@ -378,12 +371,11 @@ jobs:
 
       - name: Verify signature with the deploy-side identity (fail fast)
         env:
-          ASSET: ${{ steps.pin.outputs.asset-path }}
           JOINT: ${{ steps.pin.outputs.joint-path }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
-          for lock in "$ASSET" "$JOINT" $(find k3s-platform -type f ! -name '*.sigstore.json' | sort); do
+          for lock in "$JOINT" $(find k3s-platform -type f ! -name '*.sigstore.json' | sort); do
             cosign verify-blob \
               --bundle "${lock}.sigstore.json" \
               --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
@@ -434,7 +426,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
           SHA: ${{ needs.release.outputs.sha }}
-          ASSET: ${{ steps.pin.outputs.asset-path }}
           ATTESTATION: ${{ steps.release-attestation.outputs.bundle-path }}
           JOINT: ${{ steps.pin.outputs.joint-path }}
         run: |
@@ -448,7 +439,7 @@ jobs:
           # --clobber so a re-run over a resumed draft replaces its assets instead of failing on
           # every name that already exists.
           gh release upload "$TAG_NAME" \
-            "$ASSET" "${ASSET}.sigstore.json" "$provenance" "$JOINT" "${JOINT}.sigstore.json" \
+            "$provenance" "$JOINT" "${JOINT}.sigstore.json" \
             k3s-platform/* evidence/* \
             --clobber \
             --repo "${{ github.repository }}"
@@ -559,7 +550,7 @@ jobs:
           set -euo pipefail
           mkdir evidence
           gh release download "$TAG_NAME" --repo "${{ github.repository }}" --dir evidence
-          lock="release-${TAG_NAME}.json"
+          lock="release-${TAG_NAME}.chart.json"
           cosign verify-blob \
             --bundle "evidence/$lock.sigstore.json" \
             --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
@@ -567,20 +558,11 @@ jobs:
             "evidence/$lock"
           jq -e --arg commit "$RELEASE_SHA" '.commit == $commit' "evidence/$lock" >/dev/null || {
             echo "::error::Release lock does not cover the qualified source commit"; exit 1; }
-          node scripts/release-image-lock.ts "evidence/$lock" evidence/manifest.json \
-            "$TAG_NAME" "$RUNNER_TEMP/release-lock.env"
-          # The joint lock: signed with the same identity, and exactly the schema 1 lock plus the chart.
-          joint="release-${TAG_NAME}.chart.json"
-          cosign verify-blob \
-            --bundle "evidence/$joint.sigstore.json" \
-            --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-            "evidence/$joint"
-          node scripts/release-image-lock.ts projection "evidence/$joint" "evidence/$lock" "$TAG_NAME"
+          node scripts/release-image-lock.ts verify "evidence/$lock" evidence/manifest.json "$TAG_NAME"
           # The chart by the locked digest: its registry signature, metadata, values that pin exactly the
           # lock's images, and the release attestation that release.yml made for it.
           mkdir "$RUNNER_TEMP/chart"
-          package=$(node scripts/release-chart.ts verify "evidence/$joint" "$TAG_NAME" \
+          package=$(node scripts/release-chart.ts verify "evidence/$lock" "$TAG_NAME" \
             security/release-images.json "$RUNNER_TEMP/chart")
           gh attestation verify "$package" --repo "${{ github.repository }}" \
             --signer-workflow "${{ github.repository }}/.github/workflows/release.yml" \
@@ -601,10 +583,6 @@ jobs:
               --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
               --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$file" >/dev/null
           done
-          asset="evidence/release-${TAG_NAME}.json"
-          cosign verify-blob --bundle "${asset}.sigstore.json" \
-            --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$asset" >/dev/null
 
       - name: Publish immutable release
         env:

@@ -88,16 +88,14 @@ const writer = jobSteps("tag-images", [
 	"Create the draft release",
 	"Upload release image lock to GitHub Release",
 ]);
-// The producer: chart push behind the release-state guard, the joint lock and its projection,
-// the two lock signatures and the chart's registry signature, and the fail-fast verification.
+// The producer: chart push behind the release-state guard, the joint lock,
+// its signature and the chart's registry signature, and the fail-fast verification.
 const producer = jobSteps("tag-images", [
 	"Publish the chart by digest",
 	"Write release image lock",
 	"Sign release image lock",
 	"Verify signature with the deploy-side identity (fail fast)",
 ]);
-/** The v0.94.7 lock reader, byte-exact; hosts one release behind verify a new release with it. */
-const previousReader = path.join(root, "scripts/fixtures/release-v0.94.7/release-image-lock.ts");
 /** Remote release, tag and registry state; everything else in the archive is a release asset. */
 const remoteState: ReadonlySet<string> = new Set([
 	"state",
@@ -366,7 +364,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 		goAdvisories: [],
 		exceptions: [],
 	});
-	// Both locks come from the release's own producer: one joint lock, and its schema 1 projection.
+	// The release producer writes one joint lock.
 	await writeFile(path.join(directory, "chart.json"), JSON.stringify(fixtureChart));
 	const produced = spawnSync(
 		process.execPath,
@@ -377,7 +375,6 @@ async function fixture(directory: string, source = commit, tag = release) {
 			path.join(directory, "chart.json"),
 			fixtureRelease,
 			path.join(archive, fixtureJointLock),
-			path.join(archive, `release-${fixtureRelease}.json`),
 		],
 		{ encoding: "utf8", env: environment, timeout: 30_000 },
 	);
@@ -473,7 +470,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 		files.map(async (file) => `${hash(await readFile(path.join(archive, file)))}  ${file}\n`),
 	);
 	await writeFile(path.join(archive, "SHA256SUMS"), checksums.join(""));
-	for (const file of ["SHA256SUMS", `release-${fixtureRelease}.json`, fixtureJointLock]) {
+	for (const file of ["SHA256SUMS", fixtureJointLock]) {
 		await sign(path.join(archive, file));
 	}
 	// The k3s platform assets: collected in the job's workspace, where the producer signs them, and
@@ -558,7 +555,6 @@ async function fixture(directory: string, source = commit, tag = release) {
 	const run = async (overrides: Record<string, string> = {}, job = publication) => {
 		if (job === publication) {
 			await rm(path.join(directory, "evidence"), { recursive: true, force: true });
-			await rm(path.join(directory, "release-lock.env"), { force: true });
 			await rm(path.join(directory, "chart"), { recursive: true, force: true });
 			await rm(path.join(directory, "installed-chart"), { recursive: true, force: true });
 		}
@@ -610,7 +606,7 @@ const refusalReasons = new Map([
 	["unpinned-chart", /hephaestus@sha256-b+\.tgz does not pin the v0\.93\.0 images/u],
 	["unlocked-chart-digest", /not found/u],
 	["missing-joint-lock", /ENOENT/u],
-	["projection-mismatch", /the schema 1 lock is not the projection of the joint lock/u],
+	["lock-image-mismatch", /lock and evidence disagree/u],
 	["foreign-chart-version", /is not the hephaestus chart 0\.93\.0/u],
 	["chart-attestation-missing", /no matching attestations found/u],
 ]);
@@ -657,12 +653,11 @@ async function tamperChartAssets(
 		);
 	}
 	if (scenario === "missing-joint-lock") {
-		// The schema 1 lock alone is valid history, but this release must name its chart.
 		await rm(path.join(archive, jointLock));
 		await rm(path.join(archive, `${jointLock}.sigstore.json`));
 	}
-	if (scenario === "projection-mismatch") {
-		// A correctly signed joint lock whose images are not the ones the schema 1 lock names.
+	if (scenario === "lock-image-mismatch") {
+		// A signed joint lock whose image digests differ from its evidence.
 		const lock = path.join(archive, jointLock);
 		const joint = asRecord(parseJson(await readFile(lock, "utf8")), "joint lock");
 		await writeFile(
@@ -694,7 +689,7 @@ for (const scenario of [
 	"unpinned-chart",
 	"unlocked-chart-digest",
 	"missing-joint-lock",
-	"projection-mismatch",
+	"lock-image-mismatch",
 	"foreign-chart-version",
 	"chart-attestation-missing",
 ]) {
@@ -775,7 +770,7 @@ for (const scenario of [
 				await rm(path.join(archive, "webapp-linux-arm64.spdx.json"));
 			}
 			if (scenario === "wrong-commit") {
-				const lock = path.join(archive, `release-${release}.json`);
+				const lock = path.join(archive, jointLock);
 				const contents = await readFile(lock, "utf8");
 				await writeFile(lock, contents.replace(commit, "d".repeat(40)));
 				await sign(lock);
@@ -899,7 +894,6 @@ async function laterEvidence(directory: string) {
 	await writeFile(attestation, '{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}\n');
 	return {
 		SHA: later,
-		ASSET: `evidence/release-${release}.json`,
 		ATTESTATION: attestation,
 		JOINT: `evidence/${jointLock}`,
 		MIGRATIONS: "false",
@@ -963,10 +957,6 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 					isPrerelease: false,
 					targetCommitish: later,
 				});
-				assert.deepEqual(
-					await readFile(path.join(archive, `release-${release}.json`)),
-					await readFile(path.join(directory, evidence.ASSET)),
-				);
 				assert.deepEqual(
 					await readFile(path.join(archive, "release-notes.md")),
 					await readFile(path.join(directory, "evidence", "release-notes.md")),
@@ -1256,7 +1246,6 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 				GH_TOKEN: "github-token",
 				REGISTRY_TOKEN: "registry-token",
 				GITHUB_OUTPUT: path.join(directory, "outputs"),
-				ASSET: `release-${release}.json`,
 				JOINT: jointLock,
 				CHART_PACKAGE: path.join(directory, "chart", chartPackage),
 			},
@@ -1284,7 +1273,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			push > 0 && calls.slice(0, push).some((call) => call.startsWith('["gh",')),
 			"guard before push",
 		);
-		// One joint lock, and a schema 1 lock that is exactly its projection.
+		// One joint lock covers the source, images and chart.
 		const tags = asRecord(
 			parseJson(await readFile(path.join(archive, "chart-tags"), "utf8")),
 			"chart tags",
@@ -1293,25 +1282,17 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			parseJson(await readFile(path.join(directory, jointLock), "utf8")),
 			"joint",
 		);
-		const legacy = asRecord(
-			parseJson(await readFile(path.join(directory, `release-${release}.json`), "utf8")),
-			"lock",
-		);
 		assert.deepEqual(joint.chart, {
 			repository: chart.repository,
 			version: chart.version,
 			digest: tags[`${chart.repository}:${chart.version}`],
 		});
-		assert.deepEqual(Object.keys(legacy).toSorted(), [
-			"commit",
-			"images",
-			"release",
-			"schemaVersion",
-		]);
-		const { chart: _chart, ...projection } = joint;
-		assert.equal(legacy.commit, commit);
-		assert.deepEqual(legacy, { ...projection, schemaVersion: 1 });
-		// The pushed package pins the evidence's index digests, the ones both locks name.
+		assert.equal(joint.schemaVersion, 2);
+		assert.equal(joint.commit, commit);
+		await assert.rejects(readFile(path.join(directory, `release-${release}.json`)), {
+			code: "ENOENT",
+		});
+		// The pushed package pins the evidence's index digests, the ones the joint lock names.
 		const pushed = `${chart.repository}@${String(tags[`${chart.repository}:${chart.version}`])}`;
 		const registry = asRecord(
 			parseJson(await readFile(path.join(archive, "chart-registry"), "utf8")),
@@ -1339,41 +1320,13 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			`${chart.repository}@${chart.digest}`,
 			pushed,
 		]);
-		for (const file of [
-			`release-${release}.json`,
-			jointLock,
-			...platformAssets.map((name) => `k3s-platform/${name}`),
-		]) {
+		for (const file of [jointLock, ...platformAssets.map((name) => `k3s-platform/${name}`)]) {
 			const signature = asRecord(
 				parseJson(await readFile(path.join(directory, `${file}.sigstore.json`), "utf8")),
 				file,
 			);
 			assert.equal(typeof signature.sha256, "string", file);
 		}
-		// The archived v0.94.7 reader of a host one release behind: it accepts the schema 1 lock this
-		// producer wrote, with the environment the current reader writes, and refuses the joint lock.
-		// This proves the old parser and its CLI, not the old reconciler or a Docker host.
-		const previous = (lock: string, output: string) =>
-			spawnSync(
-				process.execPath,
-				[
-					previousReader,
-					path.join(directory, lock),
-					path.join(directory, "evidence", "manifest.json"),
-					release,
-					path.join(directory, output),
-				],
-				{ encoding: "utf8", timeout: 30_000 },
-			);
-		const accepted = previous(`release-${release}.json`, "previous.env");
-		assert.equal(accepted.status, 0, accepted.stderr);
-		assert.equal(
-			await readFile(path.join(directory, "previous.env"), "utf8"),
-			await readFile(path.join(directory, "release-lock.env"), "utf8"),
-		);
-		const refused = previous(jointLock, "refused.env");
-		assert.notEqual(refused.status, 0);
-		assert.match(refused.stderr, /lock has missing or extra fields/u);
 	});
 }
 

@@ -1,11 +1,8 @@
 /**
  * Per-release image namespace and signing identity.
  *
- * GHCR packages do not transfer between organizations and Fulcio certificates are
- * immutable, so a release keeps the namespace and certificate identity it was
- * published under forever. `security/release-identities.json` records that history;
- * everything that resolves a *previous* release's images or verifies its lock must
- * go through this map instead of assuming the run's own identity.
+ * `security/release-identities.json` records the supported release identities. A release
+ * outside that map is refused before its images or signatures are verified.
  *
  * The last entry is the current identity. Inside CI its certificate identity is
  * derived from the run context (`release-signer.ts`), which keeps signing and
@@ -89,9 +86,6 @@ export function parseReleaseIdentities(value: unknown): ReleaseIdentity[] {
 	if (entries.length === 0) {
 		throw new Error("release identities must contain at least one entry");
 	}
-	if (entries[0]?.firstVersion !== "0.0.0") {
-		throw new Error("the first release identity must start at 0.0.0 so every version resolves");
-	}
 	for (let index = 1; index < entries.length; index += 1) {
 		const previous = entries[index - 1];
 		const current = entries[index];
@@ -110,7 +104,7 @@ export function loadReleaseIdentities(): ReleaseIdentity[] {
 	return parseReleaseIdentities(JSON.parse(readFileSync(identitiesFile, "utf8")));
 }
 
-/** The identity a release (`0.74.3` or `v0.74.3`) was published under. */
+/** The identity of a supported release. */
 export function releaseIdentityFor(
 	release: string,
 	identities: ReleaseIdentity[] = loadReleaseIdentities(),

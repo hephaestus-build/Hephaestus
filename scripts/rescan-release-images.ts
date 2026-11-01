@@ -9,6 +9,7 @@ import { output, run } from "./lib/process.ts";
 import { releaseCertificateIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 import {
 	isRelease,
+	jointLockAsset,
 	parseReleaseImageLock,
 	verifyLockAgainstEvidence,
 } from "./release-image-lock.ts";
@@ -19,7 +20,7 @@ async function authenticateSubjects(directory: string, release: string) {
 	if (!isRelease(release)) {
 		throw new Error("malformed supported release");
 	}
-	const lockPath = path.join(directory, `release-${release}.json`);
+	const lockPath = path.join(directory, jointLockAsset(release));
 	await run("cosign", [
 		"verify-blob",
 		"--bundle",
@@ -31,6 +32,9 @@ async function authenticateSubjects(directory: string, release: string) {
 		lockPath,
 	]);
 	const lock = parseReleaseImageLock(readJsonFileSync(lockPath), release);
+	if (lock.schemaVersion !== 2) {
+		throw new Error("expected a joint lock");
+	}
 	const manifestValue = readJsonFileSync(path.join(directory, "manifest.json"));
 	verifyLockAgainstEvidence(lock, manifestValue);
 	return validateManifest(
