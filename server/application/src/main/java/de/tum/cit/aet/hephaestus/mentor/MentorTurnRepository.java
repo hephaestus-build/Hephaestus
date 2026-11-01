@@ -180,7 +180,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     @Query("""
             SELECT COUNT(t) FROM MentorTurn t
             WHERE t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
-               OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND t.leasedUntil IS NOT NULL)
+               OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND t.leaseId IS NOT NULL)
             """)
     long countHeld();
 
@@ -228,11 +228,14 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     @WorkspaceAgnostic("Fleet-wide queue depth for the mentor.turn.queued gauge")
     long countByStatus(MentorTurn.Status status);
 
-    /** Expired leases, and the running turns without one that only the 1.0 upgrade leaves ({@code expireLease}). */
+    /**
+     * Expired leases, and the running turns without one that only the 1.0 upgrade leaves ({@code expireLease}). The
+     * lease id finds the leased turns: no index covers the lease end, so that a renewal rewrites the row in place.
+     */
     @WorkspaceAgnostic("The lease reaper sweeps expired leases across tenants")
     @Query("""
             SELECT t.id FROM MentorTurn t
-            WHERE (t.leasedUntil < :now
+            WHERE (t.leaseId IS NOT NULL AND t.leasedUntil < :now
                    AND t.status IN (de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING,
                                     de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED))
                OR (t.leasedUntil IS NULL AND t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING)
