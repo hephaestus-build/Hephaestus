@@ -262,8 +262,8 @@ importers:
         specifier: 3.0.0
         version: 3.0.0
       minimatch:
-        specifier: 10.2.6
-        version: 10.2.6
+        specifier: 11.0.3
+        version: 11.0.3
       mprocs:
         specifier: 0.9.6
         version: 0.9.6
@@ -395,8 +395,8 @@ importers:
         specifier: 0.3.0
         version: 0.3.0
       cn:
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.2.6
+        version: 0.2.6
       lucide-react:
         specifier: 1.64.0
         version: 1.64.0(@types/react@19.2.18)(react@19.2.8)
@@ -498,8 +498,8 @@ importers:
   webapp:
     dependencies:
       '@base-ui/react':
-        specifier: 1.9.0
-        version: 1.9.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 1.8.0
+        version: 1.8.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -540,8 +540,8 @@ importers:
         specifier: 0.7.1
         version: 0.7.1
       cn:
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.2.6
+        version: 0.2.6
       date-fns:
         specifier: 4.4.0
         version: 4.4.0
@@ -573,8 +573,8 @@ importers:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
       recharts:
-        specifier: 3.10.1
-        version: 3.10.1(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@17.0.2)(react@19.2.8)(redux@5.0.1)
+        specifier: 3.8.0
+        version: 3.8.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@17.0.2)(react@19.2.8)(redux@5.0.1)
       sonner:
         specifier: 2.0.8
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -619,8 +619,8 @@ importers:
         specifier: 11.10.0
         version: 11.10.0
       '@shadcn/lint':
-        specifier: 0.2.3
-        version: 0.2.3(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@7.0.2))(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))
+        specifier: 0.1.0
+        version: 0.1.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@7.0.2)
       '@storybook/addon-a11y':
         specifier: 10.6.2
         version: 10.6.2(storybook@10.6.2(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8)(vite-plus@1.4.0(@types/node@24.13.3)(@vitest/browser-playwright@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(jsdom@30.0.1)(msw@2.14.6(@types/node@24.13.3)(typescript@7.0.2))(playwright@1.63.0)(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.1)))
@@ -1501,8 +1501,8 @@ packages:
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
-  '@base-ui/react@1.9.0':
-    resolution: {integrity: sha512-S8CSYosASBKtpL8SWUfS78rFElfLijiCgA7oHOK22jCJ95FULsYyKwBNFOgudt0RA+/7yNc7F81bOvQnRgbBiQ==}
+  '@base-ui/react@1.8.0':
+    resolution: {integrity: sha512-P0/1sxo6SBVZOklKMIedvTWqw2s2IQzi9x5bIVsXu980cuSOD4NeuRSs+/L7LZQfDkZP/uRZyGPyfFl/B1oH+Q==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       '@date-fns/tz': ^1.2.0
@@ -1518,8 +1518,8 @@ packages:
       date-fns:
         optional: true
 
-  '@base-ui/utils@0.5.0':
-    resolution: {integrity: sha512-dYGGcEttjkYiMoa5nHm8vLaJ2UcuTWxo3BFAwOYXeRg/q7UVVvA6cacEIXEs3FgBfK1CGtW1ptElqs7wsx+t9A==}
+  '@base-ui/utils@0.4.0':
+    resolution: {integrity: sha512-bO9fz25kKtPf+aZVyfQrC0PDmJdmVni31W2hCS5/Owb+inwdIL3XU26pCPRPlt4LSxZrBgLwubXQXQlKaFEZzw==}
     peerDependencies:
       '@types/react': ^17 || ^18 || ^19
       react: ^17 || ^18 || ^19
@@ -2800,6 +2800,9 @@ packages:
     peerDependenciesMeta:
       '@types/node':
         optional: true
+
+  '@isaacs/nonrecursive-glob-match@1.0.3':
+    resolution: {integrity: sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA==}
 
   '@jest/schemas@29.6.3':
     resolution: {integrity: sha512-mo5j5X+jIZmJQveBKeS/clAueipV7KgiX1vMgCxam1RNYiqE1w62n0/tJJnHtjW8ZHcQco5gY85jA3mi0L+nSA==}
@@ -4288,15 +4291,12 @@ packages:
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
-  '@shadcn/lint@0.2.3':
-    resolution: {integrity: sha512-N/eAXidyPYXpbUOzPCf6uX5UN/hhObMZbrURrHe71CLNvPio78agqBt4EW/V89KQyS1NTxXcqMsNfiLxsBh8sA==}
+  '@shadcn/lint@0.1.0':
+    resolution: {integrity: sha512-UDSxO4eQa8UAclN1tChum+L336CL2uB2ZLGYiJ7r/GDrYUBOKPWWNUVoAfh2dZs4LhcwJRCn62+fKG12eAy1FQ==}
     engines: {node: '>=20.19'}
     peerDependencies:
-      '@typescript-eslint/parser': '>=8.40.0'
       eslint: '>=9.30.0'
     peerDependenciesMeta:
-      '@typescript-eslint/parser':
-        optional: true
       eslint:
         optional: true
 
@@ -6348,16 +6348,6 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  cn@0.4.0:
-    resolution: {integrity: sha512-qOAeUhPwPzBxx6jaeQdo646XIKliKHc2j1ZF7Ngb1o0pJZKH5gq8FkA0aVdUdPFUDXNXyUCXpCtoJISo6dhizg==}
-    engines: {node: '>=20'}
-    hasBin: true
-
-  cn@0.5.0:
-    resolution: {integrity: sha512-JGEixZEpfFXm1P5uXwvEobOFLlHwIWi5v4tjd1ZwfiYmcEilkuD2l+054rvJcYCR1B+uVThHeUbgmNz1FwuxuA==}
-    engines: {node: '>=22'}
-    hasBin: true
-
   code-block-writer@13.0.3:
     resolution: {integrity: sha512-Oofo0pq3IKnsFtuHqSF7TqBfr71aeyZDVJ0HpmqB7FBM2qEigL0iPONSCZSO9pE9dZTAxANe5XHG9Uy0YMv8cg==}
 
@@ -8018,6 +8008,9 @@ packages:
   immediate@3.3.0:
     resolution: {integrity: sha512-HR7EVodfFUdQCTIeySw+WDRFJlPcLOJbXfwwZ7Oom6tjsvZ3bOkCDJHehQC3nxJrv7+f9XecwazynjU8e4Vw3Q==}
 
+  immer@10.2.0:
+    resolution: {integrity: sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==}
+
   immer@11.1.18:
     resolution: {integrity: sha512-EQyQtLiYW029lyoczMl/Hh4Xu7cDecSc58JRYpHyL4tIAu3eqd1yJzQX04d2BZHDkzFFvm6qJEJWOtfDSWAXbQ==}
 
@@ -9051,6 +9044,10 @@ packages:
 
   minimatch@10.2.6:
     resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
+    engines: {node: 18 || 20 || >=22}
+
+  minimatch@11.0.3:
+    resolution: {integrity: sha512-iny/40PEGkNJQ5/Pv6z3nm6FbRAby32GeZRjCUJk2WnNDbgPSTcdI+DDvLqsgBdD4cD5sMtMheqPPnehCCa8Nw==}
     engines: {node: 18 || 20 || >=22}
 
   minimatch@3.1.5:
@@ -10358,8 +10355,8 @@ packages:
     resolution: {integrity: sha512-mFAyJq9vUbSTARLZUvAEf1z3YxlvAwswbmxMx2mPA/MSm4KmpwvwvhsH/NIrZhyOuwD60Lzyw2qh83uCbgTPYw==}
     engines: {node: '>= 4'}
 
-  recharts@3.10.1:
-    resolution: {integrity: sha512-QXFrvt6IVcw7eeZCoyXTwkIJAX3Dv1nyVhMicXJ47GsGDDpcN8z6o644DibE9XjpBTThtsomLKnTV6lc+cVFUA==}
+  recharts@3.8.0:
+    resolution: {integrity: sha512-Z/m38DX3L73ExO4Tpc9/iZWHmHnlzWG4njQbxsF5aSjwqmHNDDIm0rdEBArkwsBvR8U6EirlEHiQNYWCVh9sGQ==}
     engines: {node: '>=18'}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -10491,8 +10488,8 @@ packages:
   requires-port@1.0.0:
     resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
 
-  reselect@5.2.0:
-    resolution: {integrity: sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==}
+  reselect@5.1.1:
+    resolution: {integrity: sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==}
 
   reselect@5.3.0:
     resolution: {integrity: sha512-XGoLeRAVzUTcJ1qkxPQhDJyIZ5d6zzZD9nT7AEZOaaU9UbWclhycElmhO+VD5bFeLuzhPBaOV2oXC8uG35ZSpg==}
@@ -12981,10 +12978,10 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@base-ui/react@1.9.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@base-ui/react@1.8.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@babel/runtime': 7.29.7
-      '@base-ui/utils': 0.5.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@base-ui/utils': 0.4.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@floating-ui/react-dom': 2.1.9(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@floating-ui/utils': 0.2.12
       react: 19.2.8
@@ -12995,7 +12992,7 @@ snapshots:
       '@types/react': 19.2.18
       date-fns: 4.4.0
 
-  '@base-ui/utils@0.5.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@base-ui/utils@0.4.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@babel/runtime': 7.29.7
       '@floating-ui/utils': 0.2.12
@@ -13022,13 +13019,11 @@ snapshots:
       '@keyv/bigmap': 1.3.1(keyv@5.6.0)
       hookified: 1.15.1
       keyv: 5.6.0
-    optional: true
 
   '@cacheable/utils@2.5.0':
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
-    optional: true
 
   '@changesets/apply-release-plan@8.1.1':
     dependencies:
@@ -14808,10 +14803,8 @@ snapshots:
     dependencies:
       eslint: 10.10.0(jiti@2.7.0)(supports-color@8.1.1)
       eslint-visitor-keys: 3.4.3
-    optional: true
 
-  '@eslint-community/regexpp@4.12.2':
-    optional: true
+  '@eslint-community/regexpp@4.12.2': {}
 
   '@eslint/config-array@0.23.5(supports-color@8.1.1)':
     dependencies:
@@ -14820,12 +14813,10 @@ snapshots:
       minimatch: 10.2.6
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@eslint/config-helpers@0.7.0':
     dependencies:
       '@eslint/core': 1.2.1
-    optional: true
 
   '@eslint/core@0.17.0':
     dependencies:
@@ -14834,16 +14825,13 @@ snapshots:
   '@eslint/core@1.2.1':
     dependencies:
       '@types/json-schema': 7.0.15
-    optional: true
 
-  '@eslint/object-schema@3.0.5':
-    optional: true
+  '@eslint/object-schema@3.0.5': {}
 
   '@eslint/plugin-kit@0.7.3':
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
-    optional: true
 
   '@exodus/bytes@1.15.1': {}
 
@@ -14944,23 +14932,18 @@ snapshots:
   '@humanfs/core@0.19.2':
     dependencies:
       '@humanfs/types': 0.15.0
-    optional: true
 
   '@humanfs/node@0.16.8':
     dependencies:
       '@humanfs/core': 0.19.2
       '@humanfs/types': 0.15.0
       '@humanwhocodes/retry': 0.4.3
-    optional: true
 
-  '@humanfs/types@0.15.0':
-    optional: true
+  '@humanfs/types@0.15.0': {}
 
-  '@humanwhocodes/module-importer@1.0.1':
-    optional: true
+  '@humanwhocodes/module-importer@1.0.1': {}
 
-  '@humanwhocodes/retry@0.4.3':
-    optional: true
+  '@humanwhocodes/retry@0.4.3': {}
 
   '@iconify/types@2.0.0': {}
 
@@ -14996,6 +14979,8 @@ snapshots:
   '@inquirer/type@4.0.7(@types/node@24.13.3)':
     optionalDependencies:
       '@types/node': 24.13.3
+
+  '@isaacs/nonrecursive-glob-match@1.0.3': {}
 
   '@jest/schemas@29.6.3':
     dependencies:
@@ -15177,10 +15162,8 @@ snapshots:
       hashery: 1.5.1
       hookified: 1.15.1
       keyv: 5.6.0
-    optional: true
 
-  '@keyv/serialize@1.1.1':
-    optional: true
+  '@keyv/serialize@1.1.1': {}
 
   '@leichtgewicht/ip-codec@2.0.5': {}
 
@@ -16125,14 +16108,17 @@ snapshots:
 
   '@sec-ant/readable-stream@0.4.1': {}
 
-  '@shadcn/lint@0.2.3(@typescript-eslint/parser@8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@7.0.2))(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))':
+  '@shadcn/lint@0.1.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@7.0.2)':
     dependencies:
       '@eslint/core': 0.17.0
-      cn: 0.4.0
-    optionalDependencies:
       '@typescript-eslint/parser': 8.70.0(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@7.0.2)
+      cn: 0.2.6
+    optionalDependencies:
       eslint: 10.10.0(jiti@2.7.0)(supports-color@8.1.1)
       oxc-parser: 0.148.0
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
 
   '@shadcn/react@0.3.1(@types/react@19.2.18)(react@19.2.8)':
     optionalDependencies:
@@ -17008,8 +16994,7 @@ snapshots:
 
   '@types/doctrine@0.0.9': {}
 
-  '@types/esrecurse@4.3.1':
-    optional: true
+  '@types/esrecurse@4.3.1': {}
 
   '@types/estree-jsx@1.0.5':
     dependencies:
@@ -17199,7 +17184,6 @@ snapshots:
       typescript: 7.0.2
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@typescript-eslint/project-service@8.70.0(supports-color@8.1.1)(typescript@7.0.2)':
     dependencies:
@@ -17209,21 +17193,17 @@ snapshots:
       typescript: 7.0.2
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@typescript-eslint/scope-manager@8.70.0':
     dependencies:
       '@typescript-eslint/types': 8.70.0
       '@typescript-eslint/visitor-keys': 8.70.0
-    optional: true
 
   '@typescript-eslint/tsconfig-utils@8.70.0(typescript@7.0.2)':
     dependencies:
       typescript: 7.0.2
-    optional: true
 
-  '@typescript-eslint/types@8.70.0':
-    optional: true
+  '@typescript-eslint/types@8.70.0': {}
 
   '@typescript-eslint/typescript-estree@8.70.0(supports-color@8.1.1)(typescript@7.0.2)':
     dependencies:
@@ -17239,13 +17219,11 @@ snapshots:
       typescript: 7.0.2
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@typescript-eslint/visitor-keys@8.70.0':
     dependencies:
       '@typescript-eslint/types': 8.70.0
       eslint-visitor-keys: 5.0.1
-    optional: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
@@ -18089,7 +18067,6 @@ snapshots:
       hookified: 1.15.1
       keyv: 5.6.0
       qified: 0.10.1
-    optional: true
 
   call-bind-apply-helpers@1.0.2:
     dependencies:
@@ -18271,10 +18248,6 @@ snapshots:
   clsx@2.1.1: {}
 
   cn@0.2.6: {}
-
-  cn@0.4.0: {}
-
-  cn@0.5.0: {}
 
   code-block-writer@13.0.3: {}
 
@@ -18921,8 +18894,7 @@ snapshots:
 
   deep-extend@0.6.0: {}
 
-  deep-is@0.1.4:
-    optional: true
+  deep-is@0.1.4: {}
 
   deepmerge@4.3.1: {}
 
@@ -19257,13 +19229,10 @@ snapshots:
       '@types/estree': 1.0.9
       esrecurse: 4.3.0
       estraverse: 5.3.0
-    optional: true
 
-  eslint-visitor-keys@3.4.3:
-    optional: true
+  eslint-visitor-keys@3.4.3: {}
 
-  eslint-visitor-keys@5.0.1:
-    optional: true
+  eslint-visitor-keys@5.0.1: {}
 
   eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1):
     dependencies:
@@ -19301,21 +19270,18 @@ snapshots:
       jiti: 2.7.0
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   espree@11.2.0:
     dependencies:
       acorn: 8.18.0
       acorn-jsx: 5.3.2(acorn@8.18.0)
       eslint-visitor-keys: 5.0.1
-    optional: true
 
   esprima@4.0.1: {}
 
   esquery@1.7.0:
     dependencies:
       estraverse: 5.3.0
-    optional: true
 
   esrecurse@4.3.0:
     dependencies:
@@ -19513,8 +19479,7 @@ snapshots:
 
   fast-json-stable-stringify@2.1.0: {}
 
-  fast-levenshtein@2.0.6:
-    optional: true
+  fast-levenshtein@2.0.6: {}
 
   fast-sha256@1.3.0: {}
 
@@ -19588,7 +19553,6 @@ snapshots:
   file-entry-cache@11.1.5:
     dependencies:
       flat-cache: 6.1.23
-    optional: true
 
   file-loader@6.2.0(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.31))(csso@5.0.5)(esbuild@0.27.7)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.31)):
     dependencies:
@@ -19638,7 +19602,6 @@ snapshots:
     dependencies:
       locate-path: 6.0.0
       path-exists: 4.0.0
-    optional: true
 
   find-up@6.3.0:
     dependencies:
@@ -19650,7 +19613,6 @@ snapshots:
       cacheable: 2.5.0
       flatted: 3.4.4
       hookified: 1.15.1
-    optional: true
 
   flat@5.0.2: {}
 
@@ -19879,7 +19841,6 @@ snapshots:
   hashery@1.5.1:
     dependencies:
       hookified: 1.15.1
-    optional: true
 
   hasown@2.0.4:
     dependencies:
@@ -20113,11 +20074,9 @@ snapshots:
 
   hookable@6.1.2: {}
 
-  hookified@1.15.1:
-    optional: true
+  hookified@1.15.1: {}
 
-  hookified@2.2.0:
-    optional: true
+  hookified@2.2.0: {}
 
   hosted-git-info@10.1.1:
     dependencies:
@@ -20311,6 +20270,8 @@ snapshots:
   image-size@2.0.4: {}
 
   immediate@3.3.0: {}
+
+  immer@10.2.0: {}
 
   immer@11.1.18: {}
 
@@ -20574,8 +20535,7 @@ snapshots:
 
   json-schema@0.4.0: {}
 
-  json-stable-stringify-without-jsonify@1.0.1:
-    optional: true
+  json-stable-stringify-without-jsonify@1.0.1: {}
 
   json5@2.2.3: {}
 
@@ -20611,7 +20571,6 @@ snapshots:
   keyv@5.6.0:
     dependencies:
       '@keyv/serialize': 1.1.1
-    optional: true
 
   khroma@2.1.0: {}
 
@@ -20646,7 +20605,6 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
-    optional: true
 
   lightningcss-android-arm64@1.32.0:
     optional: true
@@ -20782,7 +20740,6 @@ snapshots:
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
-    optional: true
 
   locate-path@7.2.0:
     dependencies:
@@ -21537,6 +21494,11 @@ snapshots:
     dependencies:
       brace-expansion: 5.0.12
 
+  minimatch@11.0.3:
+    dependencies:
+      '@isaacs/nonrecursive-glob-match': 1.0.3
+      brace-expansion: 5.0.12
+
   minimatch@3.1.5:
     dependencies:
       brace-expansion: 1.1.21
@@ -21685,8 +21647,7 @@ snapshots:
 
   nanoid@3.3.20: {}
 
-  natural-compare@1.4.0:
-    optional: true
+  natural-compare@1.4.0: {}
 
   negotiator@0.6.3: {}
 
@@ -21854,7 +21815,6 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
       word-wrap: 1.2.5
-    optional: true
 
   ora@8.2.0:
     dependencies:
@@ -22033,7 +21993,6 @@ snapshots:
   p-limit@3.1.0:
     dependencies:
       yocto-queue: 0.1.0
-    optional: true
 
   p-limit@4.0.0:
     dependencies:
@@ -22046,7 +22005,6 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
-    optional: true
 
   p-locate@6.0.0:
     dependencies:
@@ -22151,8 +22109,7 @@ snapshots:
 
   path-exists@3.0.0: {}
 
-  path-exists@4.0.0:
-    optional: true
+  path-exists@4.0.0: {}
 
   path-exists@5.0.0: {}
 
@@ -22921,8 +22878,7 @@ snapshots:
 
   powershell-utils@0.2.1: {}
 
-  prelude-ls@1.2.1:
-    optional: true
+  prelude-ls@1.2.1: {}
 
   prettier@3.9.6: {}
 
@@ -23022,7 +22978,6 @@ snapshots:
   qified@0.10.1:
     dependencies:
       hookified: 2.2.0
-    optional: true
 
   qs@6.16.1:
     dependencies:
@@ -23117,7 +23072,7 @@ snapshots:
     dependencies:
       '@types/use-sync-external-store': 0.0.6
       react: 19.2.8
-      use-sync-external-store: 1.6.0(react@19.2.8)
+      use-sync-external-store: 1.7.0(react@19.2.8)
     optionalDependencies:
       '@types/react': 19.2.18
       redux: 5.0.1
@@ -23188,21 +23143,21 @@ snapshots:
       tiny-invariant: 1.3.3
       tslib: 2.8.1
 
-  recharts@3.10.1(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@17.0.2)(react@19.2.8)(redux@5.0.1):
+  recharts@3.8.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-is@17.0.2)(react@19.2.8)(redux@5.0.1):
     dependencies:
       '@reduxjs/toolkit': 2.12.0(react-redux@9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1))(react@19.2.8)
       clsx: 2.1.1
       decimal.js-light: 2.5.1
       es-toolkit: 1.51.0
       eventemitter3: 5.0.4
-      immer: 11.1.18
+      immer: 10.2.0
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
       react-is: 17.0.2
       react-redux: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
-      reselect: 5.2.0
+      reselect: 5.1.1
       tiny-invariant: 1.3.3
-      use-sync-external-store: 1.6.0(react@19.2.8)
+      use-sync-external-store: 1.7.0(react@19.2.8)
       victory-vendor: 37.3.6
     transitivePeerDependencies:
       - '@types/react'
@@ -23408,7 +23363,7 @@ snapshots:
 
   requires-port@1.0.0: {}
 
-  reselect@5.2.0: {}
+  reselect@5.1.1: {}
 
   reselect@5.3.0: {}
 
@@ -24193,7 +24148,6 @@ snapshots:
   ts-api-utils@2.5.0(typescript@7.0.2):
     dependencies:
       typescript: 7.0.2
-    optional: true
 
   ts-dedent@2.3.0: {}
 
@@ -24223,7 +24177,6 @@ snapshots:
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
-    optional: true
 
   type-fest@1.4.0: {}
 
@@ -24879,8 +24832,7 @@ snapshots:
 
   wildcard@2.0.1: {}
 
-  word-wrap@1.2.5:
-    optional: true
+  word-wrap@1.2.5: {}
 
   wrap-ansi@7.0.0:
     dependencies:
@@ -25024,8 +24976,7 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 22.0.0
 
-  yocto-queue@0.1.0:
-    optional: true
+  yocto-queue@0.1.0: {}
 
   yocto-queue@1.2.2: {}
 

@@ -160,6 +160,30 @@ void describe("grep", () => {
 		assert.deepEqual(globFilesSync("*.ts", dir), ["file.ts"]);
 	});
 
+	void it("finds every file under a pattern with more than one ** between sections", async () => {
+		const dir = await createTempDir();
+		for (const file of [
+			"web/src/components/Card.tsx",
+			"web/components/admin/forms/Field.tsx",
+			"web/src/App.tsx",
+		]) {
+			await mkdir(path.join(dir, path.dirname(file)), { recursive: true });
+			await writeFile(path.join(dir, file), "export {};\n");
+		}
+
+		assert.deepEqual(globFilesSync("web/**/components/**/*.tsx", dir), [
+			"web/components/admin/forms/Field.tsx",
+			"web/src/components/Card.tsx",
+		]);
+	});
+
+	void it("reads nothing for an empty or comment pattern", () => {
+		const missing = path.join(tmpdir(), "glob-files-sync-no-such-directory");
+
+		assert.deepEqual(globFilesSync("", missing), []);
+		assert.deepEqual(globFilesSync("#comment", missing), []);
+	});
+
 	void it("splits a file name that holds :<n>: and skips binary files", async () => {
 		const dir = await createTempDir();
 		await writeFile(path.join(dir, "a:12:b.ts"), "first\nneedle: here\n");

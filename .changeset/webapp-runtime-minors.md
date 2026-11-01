@@ -1,5 +1,4 @@
 ---
-"hephaestus": patch
 ---
 
-The web app and the browser extension move to the current releases of their routing, data, table, chart, Markdown, component and icon libraries.
+The web app and the browser extension move to current releases of their routing, table, Markdown and icon libraries. Nothing that a user, an admin or an operator sees changes.
