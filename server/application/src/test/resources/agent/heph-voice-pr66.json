@@ -1,5 +1,5 @@
 {
-	"$comment": "Pull request #66 of HephaestusTest/practice-validation at its head, as staging's turn 5bf7c467 loaded it (triage T4-4). HephaestusTest is the Hephaestus maintainers' own test organization, and a Hephaestus maintainer wrote this repository as practice-review test data. The eval stages these files; heph-voice.live.ts says which claims they support.",
+	"$comment": "Pull request #66 of HephaestusTest/practice-validation at its head, as staging's turn 5bf7c467 loaded it (triage T4-4). HephaestusTest is the Hephaestus maintainers' own test organization, and a Hephaestus maintainer wrote this repository as practice-review test data. The eval stages these files; heph-voice/t4-4.live.ts says which claims they support.",
 	"repository": "HephaestusTest/practice-validation",
 	"number": 66,
 	"head": "e1a34915a80fd69a15127ad811ca817dd7e2f11b",
