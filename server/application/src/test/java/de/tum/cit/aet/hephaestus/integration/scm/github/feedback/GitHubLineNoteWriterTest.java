@@ -281,6 +281,28 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPostCodeAndPunctuationAsWrittenWhenALineNoteHoldsMarkdown() {
+        stubPostable();
+        stubReviewThreads(List.of());
+        GraphQlClient.RequestSpec addSpec = stubAddReview(
+                "REVIEW_1",
+                List.of(returned("RC_a", "result:a:0", "https://github.com/owner/repo/pull/42#discussion_r111")));
+        ThreadsCaptor threads = captureThreads(addSpec);
+
+        channel.postImmutablePackage(
+                githubTarget(),
+                List.of(item("`deactivateUser` returns `false` here; log it, @alice.", "result:a:0")),
+                fence);
+
+        assertThat(threads.bodies())
+                .containsExactly("`deactivateUser` returns `false` here; log it, <code>\\@alice</code>.\n\n"
+                        + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                        + githubTarget().item().itemId() + ").</sub>\n"
+                        + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                        + MARKER + "\n<!-- hephaestus-diff-note-ck=result:a:0 -->");
+    }
+
+    @Test
     void shouldRecognizeAPostedLineNoteThatNamedSomeone() {
         when(gitHubProvider.forScope(1L)).thenReturn(client);
         var note = item("Ask @alice", "result:a:0");

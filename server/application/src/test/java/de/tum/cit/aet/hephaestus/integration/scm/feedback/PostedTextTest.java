@@ -126,8 +126,35 @@ class PostedTextTest extends BaseUnitTest {
     @Test
     void shouldWriteOneLineOfLiteralTextAndCodeThatNoBacktickEnds() {
         assertThat(PostedText.plain("Use *x*\nthen @alice, #1"))
-                .isEqualTo("Use \\*x\\* then <code>\\@alice</code>\\, <code>\\#1</code>");
+                .isEqualTo("Use \\*x\\* then <code>\\@alice</code>, <code>\\#1</code>");
         assertThat(PostedText.inlineCode("a`b <c>")).isEqualTo("<code>a\\`b &lt;c&gt;</code>");
+    }
+
+    @Test
+    void shouldKeepCodeSpansEmphasisAndPunctuationAsWrittenWhenTheTextIsMarkdown() {
+        assertThat(PostedText.of("This catch returns `false` for every exception without logging. A missing user and a"
+                        + " failed save look identical; log the exception here, @alice.\nSee **`deactivateUser`**, such"
+                        + " as `Closes #123` and _always_ www.example.com."))
+                .isEqualTo("This catch returns `false` for every exception without logging. A missing user and a"
+                        + " failed save look identical; log the exception here, <code>\\@alice</code>.\nSee"
+                        + " **`deactivateUser`**, such as `Closes #123` and *always* www\\.example\\.com.");
+    }
+
+    @Test
+    void shouldWriteACodeSpanThatItsOwnBackticksDoNotEndWhenTheCodeHoldsBackticks() {
+        assertThat(PostedText.of("Use `` a`b `` and ``` `` ``` here")).isEqualTo("Use ``a`b`` and ``` `` ``` here");
+    }
+
+    @Test
+    void shouldKeepEveryLineOutOfBlocksWhenALineStartsWithMarkdown() {
+        assertThat(PostedText.of("# Title\n1. one\n- two\n> quote\n/title x\n---\n[a](https://x.example)"))
+                .isEqualTo("\\# Title\n1\\. one\n\\- two\n&gt; quote\n\\/title x\n\\---\n"
+                        + "\\[a\\](https\\:\\/\\/x\\.example)");
+    }
+
+    @Test
+    void shouldTakeOutALineEndOrHiddenCharacterWhenACharacterReferenceDecodesToIt() {
+        assertThat(PostedText.of("a&#10;# b&#x202E;c")).isEqualTo("a # bc");
     }
 
     @Test

@@ -239,6 +239,28 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPostCodeAndPunctuationAsWrittenWhenANoteHoldsMarkdown() {
+        stubResolvedMr();
+        stubDiscussions(List.of(), BOT);
+        when(diffVersions.read(eq(1L), any(), any())).thenReturn(GitLabDiffPositionsTest.VERSION);
+        rest.createAsAsked(987654, "DiffNote", 1);
+        var note = ScmFeedbackFixtures.line(
+                new FeedbackAnchor("new.java", null, 21, CitationSide.NEW),
+                "`deactivateUser` returns `false` here; log it, @alice.",
+                MARKER,
+                "selected");
+
+        channel.postImmutablePackage(target(), List.of(note), fence);
+
+        assertThat(bodies())
+                .containsExactly("`deactivateUser` returns `false` here; log it, <code>\\@alice</code>.\n\n"
+                        + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                        + target().item().itemId() + ").</sub>\n"
+                        + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                        + MARKER + "\n<!-- hephaestus-diff-note-ck=selected -->");
+    }
+
+    @Test
     void shouldPostARangeAsOneNativeDiffThreadWithBothEndsAndItsPlacement() {
         stubResolvedMr();
         stubDiscussions(List.of(), BOT);
