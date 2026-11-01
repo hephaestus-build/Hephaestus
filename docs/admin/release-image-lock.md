@@ -35,6 +35,7 @@ The signing identity is `release.yml` on `main` in `hephaestus-build/Hephaestus`
 | `k3s-install.sh`, `k3s-platform.yaml`, `k3s-certificates.yaml`, `k3s-config.yaml`, `k3s-kubelet.yaml`, `k3s-logind.conf`, `k3s-values.yaml`, each with its `.sigstore.json` bundle | The installer and the platform and host configuration. | [Install on one host](./kubernetes#install-on-one-host-k3s). |
 | `release-vX.Y.Z.intoto.jsonl` | The release attestation bundle. Subjects include the first-party image digests, chart manifest and package, joint lock and platform assets. | [Independent verification](#independent-verification). |
 | `manifest.json`, SBOMs, vulnerability and license reports, and signed `SHA256SUMS` | Per-platform release evidence. | [Operator verification](/contributor/release-management#operator-verification). |
+| `source.syft.json`, `source.spdx.json`, `source.cdx.json` | The source and build inventory, separate from installed runtime packages. | [Supply-chain evidence](/contributor/release-management#supply-chain-evidence) describes its scope and signed verification. |
 | `host-smoke-k3s-amd64.json`, `host-smoke-k3s-arm64.json` | The native k3s install, repeated-install, upgrade and isolation qualification records. | Operators who check the hosts that the release passed on. |
 
 A stable release that promotes a qualified candidate keeps its image digests.

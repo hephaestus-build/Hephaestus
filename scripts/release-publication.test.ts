@@ -22,6 +22,7 @@ import { githubReleaseBody } from "./github-release-notes.ts";
 import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 import { lockFromEvidence } from "./release-image-lock.ts";
+import { SOURCE_CATALOGERS } from "./release-source-sbom.ts";
 import { verifyReleaseEvidence } from "./verify-release-evidence.ts";
 
 const release = "v0.93.0";
@@ -310,9 +311,48 @@ async function fixture(directory: string, source = commit, tag = release) {
 		release: fixtureRelease,
 		commit: source,
 		bundledNpmSbom: 1,
+		sourceSbom: 1,
 		subjects,
 	};
 	await json("manifest.json", manifest);
+	const identity = { type: "file", name: "hephaestus-build/Hephaestus", version: source };
+	const artifacts = [
+		{ name: "example", version: "1.0.0", type: "npm", locations: [] },
+		{
+			name: "plugin",
+			version: "1.0.0",
+			type: "java-archive",
+			locations: [{ path: "gradle-inputs/buildscript/gradle.lockfile" }],
+		},
+		...["github-action", "github-action-workflow"].map((type) => ({
+			name: type,
+			version: "1.0.0",
+			type,
+			locations: [],
+			metadata: { value: `owner/repo@${"a".repeat(40)}` },
+		})),
+	];
+	await json("source.syft.json", {
+		source: identity,
+		descriptor: { configuration: { catalogers: { used: SOURCE_CATALOGERS } } },
+		artifacts,
+	});
+	await json("source.spdx.json", {
+		spdxVersion: "SPDX-2.3",
+		dataLicense: "CC0-1.0",
+		documentNamespace: "https://example.invalid/source",
+		packages: [
+			{ name: identity.name, versionInfo: source, primaryPackagePurpose: "FILE" },
+			...artifacts.map((item) => ({ name: item.name, versionInfo: item.version })),
+		],
+	});
+	await json("source.cdx.json", {
+		bomFormat: "CycloneDX",
+		specVersion: "1.7",
+		metadata: { component: identity },
+		components: artifacts.map((item) => ({ name: item.name, version: item.version })),
+	});
+
 	await json("release-images.json", inventory);
 	// The checkout's inventory, which the release scripts read beside the evidence.
 	await mkdir(path.join(directory, "security"));

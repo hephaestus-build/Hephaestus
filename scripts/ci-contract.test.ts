@@ -2733,6 +2733,24 @@ void describe("CI contract", () => {
 			preflight,
 			/COMMIT: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u,
 		);
+		const preflightJob = parseDocument(source).getIn(["jobs", "Release-preflight"]);
+		assert.ok(isMap(preflightJob));
+		const steps = asArray(
+			asRecord(preflightJob.toJSON(), "preflight job").steps,
+			"preflight steps",
+		).map((entry) => asRecord(entry, "step"));
+		const checkout = steps.find(
+			(entry) => typeof entry.uses === "string" && entry.uses.startsWith("actions/checkout@"),
+		);
+		const generate = steps.find(
+			(entry) =>
+				typeof entry.run === "string" && entry.run.includes("generate-release-evidence.ts"),
+		);
+		assert.ok(checkout && generate);
+		assert.equal(
+			asRecord(checkout.with, "checkout inputs").ref,
+			asRecord(generate.env, "generation env").COMMIT,
+		);
 		assert.match(preflight, /resolve-release-images\.ts "\$COMMIT"/u);
 		assert.match(preflight, /--commit "\$COMMIT"/u);
 		const cluster = job(source, "Kubernetes");

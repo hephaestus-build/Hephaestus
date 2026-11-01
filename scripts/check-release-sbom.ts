@@ -72,7 +72,12 @@ interface PackageInventory {
 	keys: Set<string>;
 }
 
-function spdxInventory(spdxInput: unknown, repository: string, digest: string): PackageInventory {
+function spdxInventory(
+	spdxInput: unknown,
+	repository: string,
+	version: string,
+	type: "container" | "file",
+): PackageInventory {
 	const spdx = object(spdxInput, "SPDX SBOM");
 	if (spdx.spdxVersion !== "SPDX-2.3" || spdx.dataLicense !== "CC0-1.0") {
 		throw new Error("invalid SPDX document metadata");
@@ -83,7 +88,7 @@ function spdxInventory(spdxInput: unknown, repository: string, digest: string): 
 	const containers: JsonObject[] = [];
 	for (const [index, value] of array(spdx.packages, "SPDX packages").entries()) {
 		const item = object(value, `SPDX package ${index}`);
-		if (item.primaryPackagePurpose === "CONTAINER") {
+		if (item.primaryPackagePurpose === type.toUpperCase()) {
 			containers.push(item);
 		}
 		if (typeof item.name === "string" && typeof item.versionInfo === "string") {
@@ -97,17 +102,17 @@ function spdxInventory(spdxInput: unknown, repository: string, digest: string): 
 		}
 	}
 
-	// Package parity alone would accept an SPDX rendering of a *different* image that
+	// Package parity alone would accept an SPDX rendering of a different source or image that
 	// installs the same packages, so bind each document to the subject as well.
 	const [container, ...extraContainers] = containers;
 	if (container === undefined || extraContainers.length > 0) {
-		throw new Error("SPDX document must describe exactly one container");
+		throw new Error(`SPDX document must describe exactly one ${type}`);
 	}
 	if (
-		canonicalRepository(text(container.name, "SPDX container name")) !== repository ||
-		container.versionInfo !== digest
+		canonicalRepository(text(container.name, `SPDX ${type} name`)) !== repository ||
+		container.versionInfo !== version
 	) {
-		throw new Error(`SPDX document is not bound to ${imageReference(repository, digest)}`);
+		throw new Error(`SPDX document is not bound to ${imageReference(repository, version)}`);
 	}
 	return { purls, keys };
 }
@@ -115,7 +120,8 @@ function spdxInventory(spdxInput: unknown, repository: string, digest: string): 
 function cycloneDxInventory(
 	cycloneDxInput: unknown,
 	repository: string,
-	digest: string,
+	version: string,
+	type: "container" | "file",
 ): PackageInventory {
 	const cycloneDx = object(cycloneDxInput, "CycloneDX SBOM");
 	if (cycloneDx.bomFormat !== "CycloneDX") {
@@ -127,11 +133,11 @@ function cycloneDxInventory(
 		"CycloneDX metadata component",
 	);
 	if (
-		subject.type !== "container" ||
+		subject.type !== type ||
 		canonicalRepository(text(subject.name, "CycloneDX component name")) !== repository ||
-		subject.version !== digest
+		subject.version !== version
 	) {
-		throw new Error(`CycloneDX document is not bound to ${imageReference(repository, digest)}`);
+		throw new Error(`CycloneDX document is not bound to ${imageReference(repository, version)}`);
 	}
 	const purls = new Set<string>();
 	const keys = new Set<string>();
@@ -244,7 +250,24 @@ function assertDerivedInventoriesCover(
 	}
 }
 
-/** The one Syft configuration: every file's metadata and SHA-256, package catalogers at their defaults. */
+/** Check standard renderings against the native inventory and the same source or image identity. */
+export function assertSbomFormatsCover(
+	syftInput: unknown,
+	spdxInput: unknown,
+	cycloneDxInput: unknown,
+	repository: string,
+	version: string,
+	type: "container" | "file",
+): void {
+	const artifacts = array(object(syftInput, "Syft inventory").artifacts, "Syft artifacts");
+	assertDerivedInventoriesCover(
+		artifacts,
+		spdxInventory(spdxInput, repository, version, type),
+		cycloneDxInventory(cycloneDxInput, repository, version, type),
+	);
+}
+
+/** Shared Syft configuration for file metadata and SHA-256 digests. */
 export const SYFT_CONFIG = path.join(import.meta.dirname, "..", "security", "syft.yaml");
 
 const BUNDLE_PACKAGES = "/usr/share/nginx/html/.vite/packages/";
@@ -495,9 +518,7 @@ export function validateReleaseSbom(
 		assertBundledNpmInventory(syft);
 	}
 
-	const spdx = spdxInventory(spdxInput, repository, digest);
-	const cycloneDx = cycloneDxInventory(cycloneDxInput, repository, digest);
-	assertDerivedInventoriesCover(artifacts, spdx, cycloneDx);
+	assertSbomFormatsCover(syft, spdxInput, cycloneDxInput, repository, digest, "container");
 
 	return {
 		schemaVersion: 1,
