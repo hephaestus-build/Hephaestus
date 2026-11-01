@@ -7,7 +7,7 @@ import { Stateful } from "@/stories/stateful";
 import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 
 const context = {
-	pagePath: "/w/engineering/practices",
+	pagePath: "/w/$workspaceSlug/practice-profile",
 	userAgent: "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0",
 };
 

@@ -38,6 +38,7 @@ const COUNTER_THRESHOLD = 500;
 const KINDS: FeedbackKind[] = ["IDEA", "BUG", "FEEDBACK"];
 
 export interface FeedbackContext {
+	/** The page's route, such as `/w/$workspaceSlug/activity`, never its address: no workspace slug or id. */
 	pagePath: string;
 	userAgent: string;
 }

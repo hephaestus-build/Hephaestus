@@ -6,7 +6,7 @@ import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
 
 afterEach(cleanup);
 
-const context = { pagePath: "/w/acme/practices", userAgent: "Mozilla/5.0 Test" };
+const context = { pagePath: "/w/$workspaceSlug/practice-profile", userAgent: "Mozilla/5.0 Test" };
 
 function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeedbackDialog>> = {}) {
 	const props = {

@@ -53,9 +53,14 @@ Reopen it to return it to the open inbox.
 ## Handle personal data
 
 Submissions link to accounts and stay on your instance.
-Users can attach the displayed page path and their browser’s user agent.
-Submissions never attach query parameters, page contents, or logs.
 They always record the Hephaestus release that received the report.
+
+Users can attach the page and their browser’s user agent, as the dialog displays them.
+The page is the route of the screen, such as `/w/$workspaceSlug/activity`.
+It contains no workspace slug and no ID.
+Submissions from before this change can contain the page's full path.
+Submissions never attach query parameters, page contents, or logs.
+
 Drafts never reach the server.
 Product feedback has a limit of one submission per account per minute.
 
