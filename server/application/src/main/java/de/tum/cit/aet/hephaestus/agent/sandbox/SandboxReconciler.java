@@ -31,7 +31,6 @@ import org.slf4j.MDC;
  *   <li>A practice review's sandbox also goes once its job holds a later attempt: a requeue gave the work to a new
  *       attempt, and the old one's output is skipped. No grace applies, since an attempt starts its sandbox only after
  *       the job row holds that attempt, so an attempt below the one read is never the current one.
- *   <li>A Heph host goes once the worker that launched it is positively gone.
  * </ul>
  *
  * <p>A sweep that cannot read the jobs or the sandboxes removes nothing: a sweep blind to either would take every live
@@ -125,7 +124,6 @@ public class SandboxReconciler {
                 Integer attempt = sandbox.attempt();
                 yield current == null ? !isYoung(sandbox.created()) : attempt != null && attempt < current;
             }
-            case HOST -> sandbox.creatorGone();
         };
     }
 

@@ -83,6 +83,16 @@ public class ScmContextLoader implements ContextLoader {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<String> destinations(long workspaceId, long accountId) {
+        Optional<String> host = host(workspaceId);
+        if (host.isEmpty() || !checkouts.enabled()) return List.of();
+        return visible(workspaceId).stream()
+                .map(repository -> RepositoryLoadPath.PREFIX + host.get() + "/" + repository.getNameWithOwner())
+                .toList();
+    }
+
+    @Override
     public String index(long workspaceId, long accountId) {
         Optional<String> host = host(workspaceId);
         List<Repository> visible = visible(workspaceId);

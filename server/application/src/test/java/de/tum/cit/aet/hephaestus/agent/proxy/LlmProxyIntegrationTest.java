@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
@@ -172,8 +171,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         meterRegistry = new SimpleMeterRegistry();
-        filter = new JobTokenAuthenticationFilter(
-                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier);
+        filter = new JobTokenAuthenticationFilter(jobRepository, turnRepository, credential -> false, jwtVerifier);
         User owner = persistUser("proxy-owner");
         workspace = createWorkspace("proxy-ws", "Proxy Workspace", "proxy-org", AccountType.ORG, owner);
         for (String slug : List.of(PRACTICE, "test-coverage")) {

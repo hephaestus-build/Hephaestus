@@ -15,13 +15,13 @@ import {
 	type SandboxReadAnswer,
 	type SandboxReadRequest,
 	type TurnContext,
-} from "../../../main/resources/agent/heph-host-protocol.ts";
+} from "../../../main/resources/agent/conversation-loop-protocol.ts";
 import {
 	type LinkAnswer,
 	type ModelFactory,
 	proxyModels,
-} from "../../../main/resources/agent/heph-host.ts";
-import { AGENT_DIR, contextOf, fakeWorker, ran, runTurn } from "./heph-host-worker.ts";
+} from "../../../main/resources/agent/conversation-loop.ts";
+import { AGENT_DIR, contextOf, fakeWorker, ran, runTurn } from "./conversation-loop-worker.ts";
 
 const { env } = process;
 const baseUrl = env.HEPHAESTUS_LIVE_LLM_BASE_URL ?? "";
@@ -35,7 +35,7 @@ const TURN_MS = 180_000;
 const RESOURCES = new URL("../../../main/resources/agent/mentor/", import.meta.url);
 const FIELDS = readFileSync(new URL("fields.md", RESOURCES), "utf8");
 
-/** The prompt HephHostSpec stages, system.md then the writing guide, or the whole prompt a comparison names. */
+/** The prompt ConversationLoopSpec stages, system.md then the writing guide, or the whole prompt a comparison names. */
 function systemPrompt(): string {
 	const override = env.HEPHAESTUS_LIVE_HEPH_SYSTEM_PROMPT_FILE;
 	if (override !== undefined) {
@@ -474,7 +474,12 @@ async function ask(
 		appended?: (stored: readonly SessionEntry[]) => void;
 	},
 ): Promise<Reply & { looked: string[]; linked: [LinkToolName, string][] }> {
-	const worker = fakeWorker(context, reader(folder), undefined, link);
+	const worker = fakeWorker(
+		{ ...context, systemPrompt: systemPrompt() },
+		reader(folder),
+		undefined,
+		link,
+	);
 	const api = worker.api();
 	const exec = executor(folder);
 	const end = await runTurn(
@@ -498,7 +503,6 @@ async function ask(
 		},
 		models,
 		250,
-		systemPrompt(),
 	);
 	assert.equal(end.outcome, "DONE", `the turn ended ${end.outcome}: ${end.detail ?? ""}`);
 	repository?.appended?.(worker.appended);

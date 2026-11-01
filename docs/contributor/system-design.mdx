@@ -10,22 +10,26 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. Workers claim them from PostgreSQL and run reviews in sandboxes and conversation turns in one conversation host each.
+    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. Workers claim reviews from PostgreSQL and run them in sandboxes. The conversation loop pulls conversation turns from the workers and runs them.
     Providers[GitHub, GitLab, Slack, Outline] --> Webhook[Webhook role]
     Webhook --> NATS[NATS JetStream]
     NATS --> Server[Server role]
     SPA[React webapp] --> Server
     Server --> DB[(PostgreSQL)]
     Worker[Worker role] --> DB
-    Worker --> Sandbox[Review sandboxes and the conversation host]
+    Worker --> Sandbox[Review sandboxes and tools Jobs]
+    Loop[Conversation loop] -->|Pulls turns| Worker
+    Loop -->|Tool calls| Sandbox
     Sandbox --> Proxy[Worker LLM proxy]
+    Loop --> Proxy
     Proxy --> Models[Configured model services]
     Worker -->|Automatic review feedback| Providers
     Server -->|Approved feedback and Hephaestus replies| Providers
 ```
 
-One JAR boots in the server, worker, and webhook roles. The supported Compose deployment runs each
-in its own container. Only the worker has Docker access. Conversation turns need a running worker even
+One JAR boots in the server, worker, and webhook roles. The Helm chart runs each in its own Deployment.
+Only the worker can create sandbox Pods and Jobs. The conversation loop is a separate Deployment that
+runs the agent image. Conversation turns need a running worker and a running conversation loop, even
 when server and worker roles share a JVM.
 There is no direct server-side sandbox fallback.
 
@@ -126,19 +130,21 @@ Missing required capture produces no result.
 ```mermaid
 sequenceDiagram
     accTitle: One conversation turn
-    accDescr: The server stores the question and a queued turn. A worker claims the turn after a PostgreSQL notification and starts it in its conversation host. The host reads the context, reports partial answers, and sends all entries with the end of the turn. The server streams changes to the app and posts Slack answers.
+    accDescr: The server stores the question and a queued turn. The conversation loop pulls an assignment, and a worker claims the turn for it. The loop reads the context, calls the model, runs tools in a tools Job, reports partial answers, and sends all entries with the end of the turn. The server streams changes to the app and posts Slack answers.
     participant C as App or Slack
     participant S as Server role
     participant DB as PostgreSQL
     participant W as Worker role
-    participant H as conversation host
+    participant L as Conversation loop
+    participant T as Tools Job
     C->>S: Question
     S->>DB: Question entry and queued turn
-    DB-->>W: NOTIFY mentor_ledger
+    L->>W: Pull an assignment (ServiceAccount token)
     W->>DB: Claim turn, admit, lease
-    W->>H: start (AttemptJwt)
-    H->>W: Read context, call tools and the model
-    H->>W: Partial answers, then the end with all entries
+    W-->>L: Turn token, renewal interval, deadline
+    L->>W: Read context, renew the lease, call the model
+    L->>T: bash and load_context (no credential, no network)
+    L->>W: Partial answers, then the end with all entries
     W->>DB: Entries, usage, feedback receipts
     DB-->>S: NOTIFY mentor_ledger
     S-->>C: SSE events, or the Slack answer
@@ -146,9 +152,10 @@ sequenceDiagram
 
 PostgreSQL holds the whole conversation in three workspace-scoped tables.
 The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
-A worker owns dispatch, admission, its conversation host, and the turn endpoints that the host calls.
-No conversation state lives in a process, so any worker can run any turn.
-[Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, the host, and the context of a turn.
+A worker owns the claim, admission, the tools Jobs, and the turn endpoints that the loop calls.
+The conversation loop owns the Pi session of each running turn and holds no model or provider credential.
+No conversation state outlives a turn in a process, so any worker can serve any pull.
+[Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, the loop, and the context of a turn.
 
 The UI uses shadcn components over Base UI.
 It renders the stored messages and the partial answer from the generated client, with no assistant runtime.

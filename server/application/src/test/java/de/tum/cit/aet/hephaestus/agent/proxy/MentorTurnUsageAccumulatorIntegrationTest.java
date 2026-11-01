@@ -262,7 +262,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
     }
 
     private MentorTurn stored(MentorTurn turn) {
@@ -309,7 +309,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
         accumulate(attempt(turn), new ProxyTokenUsage(999, 999, 0, 0, 0));
 
         MentorTurn row = stored(turn);
@@ -361,7 +361,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
 
         MentorTurn ended = stored(turn);
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.DONE);
@@ -421,7 +421,8 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                         ADMITTED.route(),
                         ADMITTED.contextWindow(),
                         ADMITTED.maxOutputTokens(),
-                        ADMITTED.reasoningEffort()));
+                        ADMITTED.reasoningEffort(),
+                        ADMITTED.timeoutSeconds()));
 
         accumulate(first, new ProxyTokenUsage(50_000, 0, 0, 0, 0));
         accumulate(attempt(retried), new ProxyTokenUsage(7_000, 0, 0, 0, 0));
@@ -556,7 +557,8 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 ADMITTED.route(),
                 ADMITTED.contextWindow(),
                 ADMITTED.maxOutputTokens(),
-                ADMITTED.reasoningEffort());
+                ADMITTED.reasoningEffort(),
+                ADMITTED.timeoutSeconds());
         MentorTurn turn = admittedTurn(unpriced);
         accumulate(attempt(turn), new ProxyTokenUsage(100_000, 0, 0, 0, 0));
         end(turn);

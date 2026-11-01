@@ -254,12 +254,22 @@ worker:
   # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
   # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes). The reviews tier's quota follows it.
   reviews: 5
-  # Resident turns per worker. Unprofiled clusters keep eight; the single-node profiles select auto.
-  # Auto divides the declared CPU budget across workers,
+  # Resident turns per conversation loop replica. Unprofiled clusters keep eight; the single-node
+  # profiles select auto. Auto divides the declared CPU budget across loop replicas,
   # less resident role requests and review reservations, at 50m per turn and at most 32 in total.
   # An explicit count overrides auto. Provider calls still need pool grants; the tools quota stays
   # at eight assigned plus two warm Pods per worker, independent of resident turns.
   conversationTurns: 8
+  # The conversation loop runs the Pi session of every conversation turn and holds no model or provider
+  # credential (docs/admin/kubernetes.mdx § Conversation loop). One replica runs every resident turn.
+  conversationLoop:
+    # 0 stops the loop: questions wait in the queue.
+    replicas: 1
+    # sandbox-pod-requests.json holds the requests. The old conversation host measured 364 MiB with
+    # 90 turns at once.
+    limits:
+      cpu: "1"
+      memory: 1Gi
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
   # that is still running stops and is tried again, within its separate limit on drains.

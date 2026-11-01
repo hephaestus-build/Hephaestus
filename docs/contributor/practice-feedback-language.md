@@ -309,7 +309,7 @@ A destination matches a delivery strategy only by the place where feedback appea
 | **Message** (conversation) | One question, answer or weekly digest in a conversation. It never counts feedback. | chat message, entry (in UI), turn (in UI) |
 | **Weekly digest** | A message that Hephaestus writes into a developer's conversation at most once a week, when the developer turned it on. It links to feedback that reached the developer and says what changed on the Practice profile. It is not a destination and delivers no feedback. | summary, report, newsletter, recap |
 
-The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation host, the context folder, the context document, the context loader and the turn sandbox.
+The [review glossary](./practice-review-glossary.mdx#runtime-terms) defines the turn, the conversation loop, the context folder, the context document, the context loader, the tools Job and the context generation.
 [ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) owns the decisions behind these terms.
 
 ### Member onboarding and AI choices

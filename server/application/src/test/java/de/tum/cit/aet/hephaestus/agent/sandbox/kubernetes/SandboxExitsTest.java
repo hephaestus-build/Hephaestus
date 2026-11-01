@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
@@ -82,16 +80,6 @@ class SandboxExitsTest extends BaseUnitTest {
                         .counter()
                         .count())
                 .isEqualTo(1.0);
-    }
-
-    @Test
-    void shouldNeverReadTheOutputOfAHephHostThatFailed() {
-        var pods = mock(KubernetesPods.class);
-        when(pods.get("hephaestus-host-1")).thenReturn(pod(null, ended(KubernetesPods.RUNTIME, 1, "Error")));
-
-        new SandboxExits(pods, new SimpleMeterRegistry()).record(SandboxExits.Kind.HOST, "hephaestus-host-1");
-
-        verify(pods, never()).tail(anyString(), anyString(), anyInt(), anyInt());
     }
 
     private static final String CANARY = "sk-canary-7f3a9c";
@@ -192,16 +180,16 @@ class SandboxExitsTest extends BaseUnitTest {
     void shouldCountEveryKindAndReasonFromZeroAndAPodThatIsGoneAsNotFound() {
         var meters = new SimpleMeterRegistry();
         var pods = mock(KubernetesPods.class);
-        when(pods.get("hephaestus-host-gone")).thenReturn(null);
+        when(pods.get("hephaestus-review-gone")).thenReturn(null);
         var exits = new SandboxExits(pods, meters);
 
         assertThat(meters.find(AgentMetrics.SANDBOX_EXITS).counters())
                 .hasSize(SandboxExits.Kind.values().length * SandboxExits.Reason.values().length);
 
-        exits.record(SandboxExits.Kind.HOST, "hephaestus-host-gone");
+        exits.record(SandboxExits.Kind.REVIEW, "hephaestus-review-gone");
 
         assertThat(meters.get(AgentMetrics.SANDBOX_EXITS)
-                        .tag("kind", "host")
+                        .tag("kind", "review")
                         .tag("reason", "not_found")
                         .counter()
                         .count())

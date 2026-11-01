@@ -116,7 +116,7 @@ public class MentorTurnStarter {
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.FAILED, List.of(), reason));
+                new MentorTurnService.Ending(MentorTurn.Status.FAILED, List.of(), null, reason));
         log.info(
                 "conversation turn {} attempt {} was declined at its start: {}",
                 turn.getId(),

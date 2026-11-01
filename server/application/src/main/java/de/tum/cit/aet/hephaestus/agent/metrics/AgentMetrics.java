@@ -71,16 +71,12 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_COMPLETED = "mentor.turn.completed";
     public static final String MENTOR_TURN_COST = "mentor.turn.cost";
     public static final String MENTOR_TURN_DURATION = "mentor.turn.duration";
-    public static final String MENTOR_HOST_READY = "mentor.host.ready";
-    public static final String MENTOR_HOST_TURNS_ACTIVE = "mentor.host.turns.active";
     public static final String MENTOR_TURN_FIRST_TOKEN = "mentor.turn.first_token";
     public static final String MENTOR_TURN_STARTED = "mentor.turn.started";
     public static final String MENTOR_TURN_RETRIED = "mentor.turn.retried";
     public static final String MENTOR_TURN_QUEUED = "mentor.turn.queued";
-    public static final String MENTOR_TURN_TOOLS_WAIT = "mentor.turn.tools.wait";
     public static final String MENTOR_TURN_QUEUE_WAIT = "mentor.turn.queue_wait";
     public static final String MENTOR_TURN_LEASE_REAPER_FAILURE = "mentor.turn.lease_reaper.failure";
-    public static final String MENTOR_TURN_CLAIM_FAILURE = "mentor.turn.claim.failure";
     public static final String MENTOR_LIVE_STREAMS = "mentor.live.streams";
     public static final String PRACTICE_FEEDBACK_DISPATCH = "practice.feedback.dispatch";
     public static final String SANDBOX_CLEANUP_FAILURES = "sandbox.cleanup.failures";

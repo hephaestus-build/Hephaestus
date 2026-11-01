@@ -33,10 +33,14 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class MentorTurnService {
 
-    /** How an attempt ends: its outcome, the session entries it adds, and the error of a failed one. */
+    /**
+     * How an attempt ends: its outcome, the session entries it adds, the partial answer it sent last, which readers may
+     * have seen, and the error of a failed one.
+     */
     public record Ending(
             MentorTurn.Status outcome,
             List<JsonNode> appended,
+            @Nullable JsonNode lastPartial,
             @Nullable String error) {}
 
     /** One automatic retry after a lost lease. */
@@ -54,6 +58,7 @@ public class MentorTurnService {
     private final MentorRedaction redaction;
     private final PersonDataCopyFence copies;
     private final PersonDataWriteFence writeFence;
+    private final MentorTurnProgress progress;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final int maxFollowUps;
@@ -66,6 +71,7 @@ public class MentorTurnService {
             MentorRedaction redaction,
             PersonDataCopyFence copies,
             PersonDataWriteFence writeFence,
+            MentorTurnProgress progress,
             ApplicationEventPublisher events,
             Clock clock,
             @Value("${hephaestus.mentor.turn.max-follow-ups:3}") int maxFollowUps) {
@@ -76,6 +82,7 @@ public class MentorTurnService {
         this.redaction = redaction;
         this.copies = copies;
         this.writeFence = writeFence;
+        this.progress = progress;
         this.events = events;
         this.clock = clock;
         this.maxFollowUps = maxFollowUps;
@@ -190,22 +197,26 @@ public class MentorTurnService {
     }
 
     /**
-     * Replaces the running attempt's partial answer with the host's newest whole snapshot: one conditional write and
-     * its notification. A stopped attempt takes no partial answer, because the stop cleared it.
+     * Sends the running attempt's newest partial answer to every reader, as frames of one notification each. It
+     * writes no row: the attempt's end stores the answer once ({@link #end}), and memory alone keeps the partial
+     * answer meanwhile ({@link MentorTurnProgress}). A stopped attempt takes no partial answer.
+     *
+     * @throws MentorLeaseLostException when the attempt no longer holds its live lease
      */
     @Transactional
     public void updatePartial(long workspaceId, UUID turnId, int attempt, UUID leaseId, JsonNode partial) {
         turns.commitWithoutFlushWait();
-        MentorTurnRepository.RunningAttempt running = turns.writePartial(
-                        workspaceId, turnId, attempt, leaseId, partial.toString())
+        MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, attempt, leaseId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
-        events.publishEvent(new MentorLedgerEvents.TurnChanged(
-                running.getWorkspaceId(),
-                running.getConversationId(),
-                turnId,
-                MentorTurn.Status.RUNNING,
-                MentorTurn.Surface.valueOf(running.getSurface()),
-                attempt));
+        progress.next(workspaceId, turnId, attempt, partial.toString(), clock.instant())
+                .ifPresent(update -> progress.frames(
+                                workspaceId,
+                                running.getConversationId(),
+                                turnId,
+                                MentorTurn.Surface.valueOf(running.getSurface()),
+                                attempt,
+                                update)
+                        .forEach(events::publishEvent));
     }
 
     /**
@@ -239,7 +250,7 @@ public class MentorTurnService {
             copies.holdForCapture();
         }
         MentorTurn turn = held(workspaceId, turnId, attempt, leaseId);
-        Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, turn.getPartial());
+        Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, ending.lastPartial());
         append(turn, stored, copiesData);
         Instant endedAt = clock.instant();
         turn.end(outcome, error, endedAt);
@@ -484,15 +495,7 @@ public class MentorTurnService {
     private MentorTurn held(long workspaceId, UUID turnId, int attempt, UUID leaseId) {
         MentorTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
-        Instant expires = turn.getLeasedUntil();
-        if (!turn.isLeased()
-                || turn.getAttempt() != attempt
-                || !leaseId.equals(turn.getLeaseId())
-                || expires == null
-                || !expires.isAfter(turns.databaseClock())) {
-            throw new MentorLeaseLostException(turnId, attempt);
-        }
-        return turn;
+        return MentorTurnAttempts.fenced(turns, turn, attempt, leaseId);
     }
 
     /** The account the turn answers: its conversation's owner. */

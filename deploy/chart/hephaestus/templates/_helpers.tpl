@@ -615,13 +615,14 @@ PostgreSQL volume.
 {{- end -}}
 
 {{/*
-Turn admission uses the same declared CPU budget as the fit gate. Model calls and tools Pods have
-independent pool and quota admission. The ceiling is the qualified model-only replay, not provider capacity.
+Turn admission uses the same declared CPU budget as the fit gate. The release's fixed tools Job quota
+(toolsJobs) is reserved once, like a role; each turn then costs cpuMillisPerTurn in the conversation loop.
+Model calls have independent pool admission. The ceiling is the qualified model-only replay, not provider
+capacity.
 */}}
 {{- define "hephaestus.conversationTurns" -}}
 {{- if eq (toString .Values.worker.conversationTurns) "auto" -}}
 {{- $budget := .Files.Get "turn-admission.json" | fromJson -}}
-{{- $replicas := int .Values.worker.replicas -}}
 {{- $roles := 0 -}}
 {{- range $component := list "server" "webhook" "webapp" "worker" -}}
 {{- $role := get $.Values $component -}}
@@ -639,18 +640,21 @@ independent pool and quota admission. The ceiling is the qualified model-only re
 {{- $roles = add $roles (int (include "hephaestus.cpuMillis" .Values.postgresql.backup.resources.requests.cpu)) -}}
 {{- end -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
-{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") -}}
-{{- $tools := add (int $table.activeTurnSandboxes) (int $table.pooledTurnSandboxes) -}}
-{{- $conversationPods := add (int $table.hephHost.pods) (mul $tools (int $table.turnSandbox.pods)) -}}
-{{- $roles = add $roles (mul $running (add (int $table.hephHost.cpuMillis) (mul $tools (int $table.turnSandbox.cpuMillis)) (mul $conversationPods (int .Values.worker.runtime.podOverhead.cpuMillis)))) -}}
+{{- /* The conversation loop is a role: each replica requests what the table holds for it. */ -}}
+{{- $roles = add $roles (mul (int .Values.worker.conversationLoop.replicas) (int $table.conversationLoop.cpuMillis)) -}}
+{{- $job := $table.toolsJob -}}
+{{- $toolsPods := mul (int $table.toolsJobs) (int $job.pods) -}}
+{{- $roles = add $roles (mul (int $table.toolsJobs) (int $job.cpuMillis)) (mul $toolsPods (int .Values.worker.runtime.podOverhead.cpuMillis)) -}}
 {{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
 {{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
 {{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}
-{{- $perWorker := div $turns (max 1 $replicas) -}}
-{{- if and .Values.worker.enabled (gt $replicas 0) (lt $perWorker 1) -}}
+{{- /* The loop runs the turns, so each loop replica takes its share. */ -}}
+{{- $loops := int .Values.worker.conversationLoop.replicas -}}
+{{- $perLoop := div $turns (max 1 $loops) -}}
+{{- if and .Values.worker.enabled (gt $loops 0) (lt $perLoop 1) -}}
 {{- fail "Automatic turn admission has no CPU room; reduce reservations or set worker.conversationTurns to 0 to disable turns" -}}
 {{- end -}}
-{{- $perWorker -}}
+{{- $perLoop -}}
 {{- else -}}
 {{- .Values.worker.conversationTurns | int -}}
 {{- end -}}

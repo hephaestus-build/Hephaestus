@@ -235,7 +235,7 @@ The chart then opens only these paths:
 | `worker` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
 | `worker`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
 | `server`, `worker`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
-| Review sandboxes and conversation hosts | `worker` | 8081, the sandbox gateway |
+| Review sandboxes and the conversation loop | `worker` | 8081, the sandbox gateway |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
 | All pods | `networkPolicy.dns` pods | 53 |
@@ -243,7 +243,7 @@ The chart then opens only these paths:
 | `server`, `worker`, `webhook`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
-Turn sandboxes get no other path.
+Tools Jobs get no other path.
 
 A model endpoint that this cluster's own Gateway serves resolves to a public address, but the connection ends at a Gateway Pod.
 That private address is outside `networkPolicy.externalEgress`, so the worker cannot reach the endpoint.
@@ -458,7 +458,7 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.8 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.8 GiB | 0.75 | The new Pods' caches |
-| The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.2 GiB | 0.55 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
+| The sandbox quotas: one review, one isolation probe and the ten tools Jobs of the release | 3.2 GiB | 0.55 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
 | Total, against the node less platform reservations and the hard eviction floor | 16.8 GiB of 30.25 GiB | 2.55 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker drains before its replacement starts.
@@ -468,16 +468,15 @@ The server also uses `Recreate`. The webhook role keeps its rolling update.
 Measure the deployment outage against the 99.5% availability budget.
 
 `worker.conversationTurns: auto` uses the CPU declaration in the chart's `turn-admission.json`.
-It subtracts resident role requests and the existing review-tier reservation from 3500m of allocatable CPU.
-Each resident turn budgets 50m, with a ceiling of 32 across the workers.
-The chart divides that count across worker replicas. An explicit turn count remains the operator's override.
+It subtracts resident role requests, the conversation loop among them, and the review-tier reservation from 3500m of allocatable CPU.
+It also reserves the requests of the release's ten tools Jobs once. Each resident turn then budgets 50m, with a ceiling of 32 in total.
+The chart divides that count across the conversation loop replicas. An explicit turn count remains the operator's override.
 The declaration also supplies the fit test, which checks it against the kubelet reservation policy.
 
-The conversation quota has ten tools-Pod slots per worker, including a warm pool of up to two.
-A turn needs a tools Pod only when it calls a tool.
-When the quota is full, it waits and shows "Waiting for tools…".
-The metric `mentor_turn_tools_wait_seconds` records that wait from quota refusal through tools readiness, including Pod start.
-Its `outcome` is `ready` or `abandoned`. Model calls still wait for their own provider grants.
+The conversation quota holds ten tools Jobs for the whole release (`toolsJobs` in the chart's `sandbox-pod-requests.json`).
+A turn starts its tools Job only when it first calls `bash` or `load_context`.
+When the quota is full, the answer goes on without tools.
+Model calls still wait for their own provider grants.
 
 The table counts schedulable Pod requests. The resident-turn CPU planning cost is checked separately in steady state.
 
@@ -508,18 +507,18 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 
 The overlay lowers the NATS request to 512 MiB and keeps its limit at 3 GiB.
 It keeps worker updates at `Recreate`, with a drain of at most 10 minutes.
-It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
-The worker still runs one review and up to 32 resident conversation turns at a time, as in `small.yaml`.
-A second worker's conversation host and turn pool do not fit in 16 GiB beside the first: the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
+It admits 32 resident turns with the same tools Job quota as `small.yaml`.
+The worker still runs one review at a time, as in `small.yaml`.
+A second worker does not fit in 16 GiB beside the first: the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
 The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
 A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.8 GiB of 13.9 GiB | 1.75 of 3.5 |
-| The same, with the isolation probe | 12.5 GiB | — |
-| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.2 GiB of 13.9 GiB | 2.40 of 3.5 |
+| Steady: every role, the conversation loop among them, one backup, one review and the ten tools Jobs | 11.4 GiB of 13.9 GiB | 1.70 of 3.5 |
+| The same, with the isolation probe | 12.2 GiB | — |
+| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs and the new worker's probe | 13.4 GiB of 13.9 GiB | 2.30 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
@@ -527,7 +526,7 @@ It does not qualify the peak memory of running work.
 Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
-A chart test derives the conversation turns of both single-node profiles: 8, the worker's automatic number, as long as one more turn sandbox would still fit.
+A chart test derives the conversation turns of both single-node profiles from the CPU declaration: 32, the ceiling, beside the reserved tools Jobs.
 
 An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
 Its request figures precede the PostgreSQL memory-request change:
@@ -933,7 +932,7 @@ Each integration takes its settings from `site.yaml` and its secrets from the [S
 
 ## Worker
 
-The worker role runs every review sandbox, the conversation host, and every turn sandbox.
+The worker role runs every review sandbox and every tools Job. The conversation loop runs the conversation turns.
 The chart's default disables the worker, and `small.yaml` enables it.
 Prepare the [sandbox prerequisites](#sandbox-prerequisites).
 Set `worker.sandbox.namespace` and `networkPolicy.kubernetesApi` ([Install](#install), step 4).
@@ -947,7 +946,7 @@ The chart runs the workers as one Deployment:
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
-- `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the resident conversation turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Tools start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
+- `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the resident conversation turns of each conversation loop replica (`auto` by default). Tools Jobs start on demand within the separate conversations quota ([Runtime roles § Conversation turn capacity](./runtime-roles#conversation-turn-capacity)). `small.yaml` resolves 32.
 - The sandbox namespace and the Pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
@@ -955,8 +954,8 @@ The sandbox namespace is the one that you created for this release.
 The chart creates no namespace.
 It writes these objects into it:
 
-- One ResourceQuota for each PriorityClass tier: reviews, and conversations for the conversation host and turn sandboxes.
-  The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.conversationTurns`.
+- One ResourceQuota for each PriorityClass tier: reviews, and conversations for the tools Jobs.
+  The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews`, `worker.conversationTurns` and `worker.conversationLoop.replicas`.
   They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
   Thus, Hephaestus's sandboxes never take a review's room, and reviews never take Hephaestus's.
   Each tier's quota counts Pods, CPU and memory. Kubernetes does not let a quota that selects a PriorityClass count disk.
@@ -977,11 +976,36 @@ It writes these objects into it:
   Another worker can still take the room after the claim.
   The quota then refuses the review's Pod, and the review is tried again.
 - A deny-all policy for ingress and egress.
-- One more policy that lets review and host sandboxes reach port 8081 of the worker Pods, and nothing else.
+- One more policy that lets review sandboxes reach port 8081 of the worker Pods, and nothing else.
   Those sandboxes carry the label `hephaestus.build/sandbox-kind` from the runtime.
-  Turn sandboxes get no other policy, so they have no network.
+  Tools Jobs only admit the conversation loop on their tools port, so they reach no network.
   The worker policy admits the same sandboxes on the same port.
 - The worker's Role and RoleBinding.
+
+### Conversation loop
+
+The conversation loop runs the Pi session of each conversation turn.
+The chart runs it as one Deployment in the release namespace when the worker is enabled.
+It runs the release's agent image.
+
+The loop holds no model key, no provider credential and no database credential.
+It pulls each turn from a worker and calls the worker for the model, the context and the tools.
+Its only credential is a token of its own ServiceAccount, for the audience `hephaestus-conversation-loop`.
+The kubelet renews the token before it expires.
+A worker accepts the token only after a TokenReview names the loop's ServiceAccount.
+Thus, the chart gives the workers one cluster-wide permission: to create a TokenReview.
+That permission reads no object.
+
+The loop reaches only port 8081 of the worker Pods, through one Service.
+The Service sends every call of one loop Pod to the same worker.
+The loop accepts no connection.
+
+To size the loop:
+
+- `worker.conversationLoop.replicas` sets the replicas, 1 by default. One replica runs every resident turn. A second replica on another node keeps answers going while one node is lost. `0` stops the loop, and questions wait in the queue.
+- Each replica requests the CPU and memory that `sandbox-pod-requests.json` holds for it.
+- `worker.conversationLoop.limits` sets the CPU and memory limits of each replica, `1` CPU and `1Gi` by default.
+- A stopping replica pulls no new turn and finishes its running turns. A turn that is still running after 16 minutes runs again.
 
 ### Priorities
 
@@ -990,7 +1014,7 @@ The scheduler can also preempt Pods of a lower priority to place one of a higher
 The chart gives every Pod one of three priorities, highest first:
 
 1. The roles, PostgreSQL, NATS, and the migration and backup Jobs. They serve everyone.
-2. The conversation host and the turn sandboxes. A person waits for the answer.
+2. The conversation loop and the tools Jobs. A person waits for the answer.
 3. The review sandboxes and the isolation probe. A review is an attempt that runs again. It never preempts another Pod.
 
 A preempted or evicted review counts as an attempt that the worker lost, and the review runs again.
@@ -1048,8 +1072,8 @@ The worker's service account has these permissions in the sandbox namespace, and
 
 - Pods: `get`, `list`, `watch`, `create`, `delete`, and `patch`. A cancellation or a timeout patches the deadline of the sandbox's Pod.
 - `pods/log`: `get`.
-- `pods/exec`: `get` and `create`. The client opens an exec as a WebSocket `GET`, and the API server also authorizes it as `create`.
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`.
+- ConfigMaps: `create`. A tools Job mounts the worker's own tools server read-only from a ConfigMap. The ConfigMap's name carries a digest of its content.
 - Events: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
 - ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
 
@@ -1065,7 +1089,7 @@ The sandbox nodes need these items:
 1. A network plugin that enforces NetworkPolicy, for egress as well as ingress.
 2. The sandbox namespace with the label `pod-security.kubernetes.io/enforce=restricted`.
 3. Encrypted node storage, for example LUKS or the disk encryption of the cloud provider.
-   A sandbox Pod writes to the node's disk: the review workspace with the repository, `/tmp`, `~/.local` and a turn sandbox's workspace.
+   A sandbox Pod writes to the node's disk: the review workspace with the repository, `/tmp`, `~/.local` and a tools Job's scratch.
    Only `/run` is in memory.
    Encryption protects a stolen disk and a backup of it without the key.
    It does not protect against a compromised running node or a privileged workload on the node.
@@ -1085,7 +1109,7 @@ The probe checks these items on the running cluster:
 - The API server refuses, in a dry run, a Pod that the Baseline standard admits and the Restricted standard refuses.
 - A Pod with the labels of a review sandbox reaches the worker's gateway port.
   It does not reach the worker's management port, the Kubernetes API, or the cluster DNS server.
-- A Pod of no sandbox kind does not reach the gateway port. Turn sandboxes have the same policy.
+- A Pod of no sandbox kind does not reach the gateway port. Tools Jobs have the same policy.
 - The probe Pods have no service account token, a read-only root filesystem, and a non-root user.
 - A named RuntimeClass exists: without it, no probe Pod runs.
 
@@ -1122,20 +1146,17 @@ The Pod-kind table owns the memory and storage sizes; no per-review memory or pr
 | Sandbox Pod | CPU request | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
 | --- | --- | --- | --- | --- | --- | --- |
 | Review | 100m | 640 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
-| conversation host | 50m | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
-| Turn sandbox | 20m, and 5m for its stager | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
+| Tools Job | 20m | 128 MiB | 512 MiB | 256 MiB | 512 MiB, 2 volumes | 1 GiB and 64 MiB |
 
-A review and the conversation host have seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
-A turn sandbox has three: its workspace, `/tmp` and `~/.local`.
+A review has seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
+A tools Job has two: `/tmp`, which holds the context folder, and `~/.local`.
 The disk limit of the main container holds all the volumes full and 64 MiB for its logs.
-Each other container, such as the isolation init container and the stager, has a disk limit of 16 MiB for its logs.
+Each other container, such as the isolation init container, has a disk limit of 16 MiB for its logs.
 
-The stager and each probe Pod request a tenth of their CPU limit.
+Each probe Pod requests a tenth of its CPU limit.
 The isolation init container requests 10m.
 The chart's sandbox quotas count the requests of this table, not the limits.
 Four large reviews at once peaked at 632 to 657 MiB each.
-One conversation used 136 MiB in the host, and a turn sandbox used 3 MiB.
-The host's Node heap stops at 768 MiB.
 
 `/run` is in memory, with 16 MiB.
 The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
@@ -1144,7 +1165,7 @@ The worker counts the eviction as a failure of the infrastructure, and the revie
 The chart's sandbox quota without a scope counts the disk requests of all sandbox Pods.
 
 The sandbox uses the cluster runtime and its volume options.
-`/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
+`/tmp` and `/run` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
 [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-24-the-kubernetes-runtime) records why.
 
 Every container command and every exec starts through `prlimit` from the agent image.
@@ -1388,7 +1409,7 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 
 1. Delete the sandbox namespace first.
    This stops every sandbox at once.
-   If you remove the release first, its network policies go, and the conversation hosts and turn sandboxes that are left run without them.
+   If you remove the release first, its network policies go, and the tools Jobs that are left run without them.
 
    ```bash
    kubectl delete namespace hephaestus-sandboxes
@@ -1431,7 +1452,6 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 - PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again; a lost volume needs a [restore](#restore).
 - The server runs as one replica until the server processes provider events in order across replicas.
 - The worker records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
-- Turn sandboxes take their commands through `pods/exec` until they pull them through the gateway, as the conversation host does.
 - The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
   A sandbox can pass its limit until the next measurement, for some seconds.
   Only file system project quotas (`LocalStorageCapacityIsolationFSQuotaMonitoring`) refuse the write itself.

@@ -5,21 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
@@ -50,7 +47,6 @@ import io.fabric8.mockwebserver.ServerResponse;
 import io.fabric8.mockwebserver.http.MockResponse;
 import io.fabric8.mockwebserver.http.RecordedRequest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -111,7 +107,6 @@ class KubernetesSandboxRuntimeTest {
 
     private String workerName;
     private KubernetesSandboxProperties properties;
-    private KubernetesLiveWorkers liveWorkers;
     private KubernetesWorker worker;
     private KubernetesPods pods;
     private KubernetesSandboxJobs reviewJobs;
@@ -166,12 +161,10 @@ class KubernetesSandboxRuntimeTest {
                 "",
                 "hephaestus-conversations",
                 "hephaestus-reviews",
-                Duration.ofMinutes(15));
+                Duration.ofMinutes(15),
+                "system:serviceaccount:hephaestus:hephaestus-conversation-loop");
         worker = new KubernetesWorker(properties, WORKER_ID, 8081);
         worker.proved(passed());
-        WorkerRegistryRepository registry = mock(WorkerRegistryRepository.class);
-        when(registry.findLiveWorkerIds(anyLong())).thenReturn(List.of(WORKER_ID));
-        liveWorkers = new KubernetesLiveWorkers(registry);
         pods = new KubernetesPods(api(), worker, 10, ImagePullPolicy.IF_NOT_PRESENT);
         reviewJobs = new KubernetesSandboxJobs(api(), worker);
     }
@@ -257,27 +250,31 @@ class KubernetesSandboxRuntimeTest {
                         "/home/agent/.local");
     }
 
+    /**
+     * Every volume of the Pod on the node's disk has the size limit of its kind, the main container may use them all
+     * with its logs, and every container has a disk limit, which a quota that counts {@code limits.ephemeral-storage}
+     * requires of each.
+     */
     @Test
     void shouldBoundTheDiskOfEverySandboxPodSoThatNoneCanFillItsNode() {
         Map<String, String> review = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
-        Map<String, String> host = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_HOST);
+        Map<String, String> tools = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TOOLS);
         Pod reviewPod = pods.workspacePod(
                 new KubernetesPods.Workload("r", review, IMAGE, "agent"),
                 Map.of(),
                 List.of("node"),
                 LIMITS,
                 KubernetesPods.REVIEW);
-        Pod hostPod = pods.workspacePod(
-                new KubernetesPods.Workload("h", host, IMAGE, "agent"),
-                Map.of(),
-                List.of("node"),
-                LIMITS,
-                KubernetesPods.HOST);
-        Pod turnPod = pods.turnPod(new KubernetesPods.Workload("t", Map.of(), IMAGE, "sandbox"), LIMITS);
+        Pod toolsPod = pods.toolsPod(
+                new KubernetesPods.Workload("t", tools, IMAGE, "tools"),
+                KubernetesToolsJobs.LIMITS,
+                "tools-program",
+                KubernetesToolsJobs.PORT,
+                "nonce",
+                60);
 
         assertDiskBounded(reviewPod, KubernetesPods.RUNTIME, KubernetesPods.REVIEW);
-        assertDiskBounded(hostPod, KubernetesPods.RUNTIME, KubernetesPods.HOST);
-        assertDiskBounded(turnPod, KubernetesPods.SANDBOX, KubernetesPods.TURN);
+        assertDiskBounded(toolsPod, KubernetesPods.TOOLS, KubernetesPods.TOOLS_JOB);
         Pod probePod = pods.probePod(
                 new KubernetesPods.Workload("p", review, IMAGE, "agent"),
                 List.of("true"),
@@ -292,11 +289,155 @@ class KubernetesSandboxRuntimeTest {
         }
     }
 
-    /**
-     * Every volume of the Pod on the node's disk has the size limit of its kind, the main container may use them all
-     * with its logs, and every container has a disk limit, which a quota that counts {@code limits.ephemeral-storage}
-     * requires of each.
-     */
+    @Test
+    void shouldRankConversationsAboveReviewsAndEveryProbeWithTheReviews() {
+        Map<String, String> review = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
+        Map<String, String> tools = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TOOLS);
+        Map<String, String> toolsProbe =
+                Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TOOLS, KubernetesWorker.PROBE, "run");
+
+        assertThat(pods.workspacePod(
+                                new KubernetesPods.Workload("r", review, IMAGE, "agent"),
+                                Map.of(),
+                                List.of("node"),
+                                LIMITS,
+                                KubernetesPods.REVIEW)
+                        .getSpec()
+                        .getPriorityClassName())
+                .isEqualTo("hephaestus-reviews");
+        assertThat(pods.toolsPod(
+                                new KubernetesPods.Workload("t", tools, IMAGE, "tools"),
+                                KubernetesToolsJobs.LIMITS,
+                                "tools-program",
+                                KubernetesToolsJobs.PORT,
+                                "nonce",
+                                60)
+                        .getSpec()
+                        .getPriorityClassName())
+                .isEqualTo("hephaestus-conversations");
+        assertThat(pods.probePod(
+                                new KubernetesPods.Workload("p", toolsProbe, IMAGE, "agent"),
+                                List.of("true"),
+                                LIMITS,
+                                1024L * 1024 * 1024,
+                                60,
+                                true)
+                        .getSpec()
+                        .getPriorityClassName())
+                .as("a probe never displaces a person's conversation")
+                .isEqualTo("hephaestus-reviews");
+    }
+
+    @Test
+    void shouldUseTheClustersDefaultRuntimeAndRuntimeDefaultSeccompWhenNoneIsNamed() {
+        var defaults = new KubernetesWorker(
+                new KubernetesSandboxProperties(
+                        SANDBOXES, workerName, "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15), ""),
+                WORKER_ID,
+                8081);
+        Pod pod = new KubernetesPods(api(), defaults, 10, ImagePullPolicy.IF_NOT_PRESENT)
+                .workspacePod(
+                        new KubernetesPods.Workload(
+                                "review",
+                                Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW),
+                                IMAGE,
+                                "agent"),
+                        Map.of(),
+                        List.of("node"),
+                        LIMITS,
+                        KubernetesPods.REVIEW);
+
+        assertThat(pod.getSpec().getRuntimeClassName()).isNull();
+        assertThat(pod.getSpec().getSecurityContext().getSeccompProfile().getType())
+                .isEqualTo("RuntimeDefault");
+        assertThat(pod.getSpec().getSecurityContext().getSeccompProfile().getLocalhostProfile())
+                .isNull();
+    }
+
+    @Test
+    void shouldChargeTheOverheadThatASandboxPodOfTheRuntimeClassShows() {
+        quotaWithRoomForTwoReviews();
+        api().pods()
+                .inNamespace(SANDBOXES)
+                .resource(new PodBuilder()
+                        .withNewMetadata()
+                        .withName("turn-with-overhead")
+                        .withLabels(worker.labels(KubernetesWorker.KIND_TOOLS))
+                        .endMetadata()
+                        .withNewSpec()
+                        .withRuntimeClassName("gvisor")
+                        .withOverhead(Map.of("memory", new Quantity("512Mi")))
+                        .addNewContainer()
+                        .withName("sandbox")
+                        .withImage(IMAGE)
+                        .endContainer()
+                        .endSpec()
+                        .build())
+                .create();
+
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor", "").roomFor(LIMITS))
+                .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
+                .isEqualTo(1);
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "", "").roomFor(LIMITS))
+                .as("the cluster's default runtime has no overhead")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldRemoveTheJobsOfEndedReviewsWhenSwept() {
+        UUID activeJob = UUID.randomUUID();
+        String ended = KubernetesSandboxBackend.jobName(UUID.randomUUID(), 1);
+        String active = KubernetesSandboxBackend.jobName(activeJob, 2);
+        String activeOfGoneWorker = KubernetesSandboxBackend.jobName(activeJob, 1);
+        createJob(ended, labels -> withJob(labels, UUID.randomUUID()));
+        createJob(active, labels -> withJob(labels, activeJob));
+        createJob(activeOfGoneWorker, labels -> gone(withJob(labels, activeJob)));
+        createSandbox("tools-of-gone-worker", KubernetesWorker.KIND_TOOLS, KubernetesSandboxRuntimeTest::gone);
+        var running = new ReviewJob();
+        running.setId(activeJob);
+        ReviewJobRepository jobs = mock(ReviewJobRepository.class);
+        when(jobs.findByStatusIn(any())).thenReturn(List.of(running));
+        var registry = new SimpleMeterRegistry();
+        // An hour later, every object here is past the reconciler's grace.
+        Clock later = Clock.offset(Clock.systemUTC(), Duration.ofHours(1));
+
+        new SandboxReconciler(jobs, backend(), registry, later).periodicReconciliation();
+
+        assertThat(api().batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
+                .extracting(job -> job.getMetadata().getName())
+                .as("a review's Job follows its job; the ledger, not the worker, decides that it runs")
+                .containsExactlyInAnyOrder(active, activeOfGoneWorker);
+        assertThat(api().pods().inNamespace(SANDBOXES).list().getItems())
+                .extracting(pod -> pod.getMetadata().getName())
+                .as("a tools Job is its attempt's, not the reconciler's")
+                .containsExactly("tools-of-gone-worker");
+        assertThat(registry.get(AgentMetrics.SANDBOX_RECONCILER_ORPHANED)
+                        .tag("resource", "sandbox")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldListTheJobsOfEveryWorkerByTheirNames() {
+        UUID jobId = UUID.randomUUID();
+        createJob("hephaestus-review-" + jobId + "-3", labels -> {
+            labels.put(KubernetesWorker.JOB_ATTEMPT, "3");
+            return gone(withJob(labels, jobId));
+        });
+
+        List<SandboxBackend.Listed> listed = backend().list();
+
+        assertThat(listed)
+                .extracting(
+                        sandbox -> sandbox.handle().id(),
+                        SandboxBackend.Listed::kind,
+                        SandboxBackend.Listed::attempt,
+                        SandboxBackend.Listed::creatorGone)
+                .containsExactly(tuple("hephaestus-review-" + jobId + "-3", SandboxBackend.Kind.REVIEW, 3, false));
+        assertThat(listed).allSatisfy(sandbox -> assertThat(sandbox.created()).isNotNull());
+    }
+
     private static void assertDiskBounded(Pod pod, String main, KubernetesPods.Size size) {
         var disk = pod.getSpec().getVolumes().stream()
                 .filter(volume ->
@@ -317,108 +458,6 @@ class KubernetesSandboxRuntimeTest {
                 .toList()) {
             assertThat(each.getResources().getLimits()).as(each.getName()).containsKey("ephemeral-storage");
         }
-    }
-
-    @Test
-    void shouldRankConversationsAboveReviewsAndEveryProbeWithTheReviews() {
-        Map<String, String> review = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
-        Map<String, String> host = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_HOST);
-        Map<String, String> turn = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TURN);
-        Map<String, String> turnProbe =
-                Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TURN, KubernetesWorker.PROBE, "run");
-
-        assertThat(pods.workspacePod(
-                                new KubernetesPods.Workload("r", review, IMAGE, "agent"),
-                                Map.of(),
-                                List.of("node"),
-                                LIMITS,
-                                KubernetesPods.REVIEW)
-                        .getSpec()
-                        .getPriorityClassName())
-                .isEqualTo("hephaestus-reviews");
-        assertThat(pods.workspacePod(
-                                new KubernetesPods.Workload("h", host, IMAGE, "agent"),
-                                Map.of(),
-                                List.of("node"),
-                                LIMITS,
-                                KubernetesPods.HOST)
-                        .getSpec()
-                        .getPriorityClassName())
-                .isEqualTo("hephaestus-conversations");
-        assertThat(pods.turnPod(new KubernetesPods.Workload("t", turn, IMAGE, "sandbox"), LIMITS)
-                        .getSpec()
-                        .getPriorityClassName())
-                .isEqualTo("hephaestus-conversations");
-        assertThat(pods.probePod(
-                                new KubernetesPods.Workload("p", turnProbe, IMAGE, "agent"),
-                                List.of("true"),
-                                LIMITS,
-                                1024L * 1024 * 1024,
-                                60,
-                                true)
-                        .getSpec()
-                        .getPriorityClassName())
-                .as("a probe never displaces a person's conversation")
-                .isEqualTo("hephaestus-reviews");
-    }
-
-    @Test
-    void shouldGiveTurnSandboxAReadOnlyWorkspaceAndTheStagerAUserOfItsOwn() {
-        Pod pod = pods.turnPod(new KubernetesPods.Workload("turn", Map.of(), IMAGE, "sandbox"), LIMITS);
-
-        assertThat(pod.getSpec().getShareProcessNamespace()).isNotEqualTo(true);
-        assertThat(pod.getSpec().getInitContainers())
-                .extracting(Container::getName)
-                .as("no staging or command reaches a sandbox before its isolation gate passed")
-                .containsExactly(KubernetesPods.ISOLATION);
-        assertRestricted(pod.getSpec().getInitContainers().getFirst(), KubernetesPods.SANDBOX_UID);
-        Container sandbox = container(pod, KubernetesPods.SANDBOX);
-        Container stager = container(pod, KubernetesPods.STAGER);
-        assertRestricted(sandbox, KubernetesPods.SANDBOX_UID);
-        assertRestricted(stager, KubernetesPods.STAGER_UID);
-        assertThat(KubernetesPods.STAGER_UID).isNotEqualTo(KubernetesPods.SANDBOX_UID);
-        assertThat(readOnly(sandbox, "/workspace")).isTrue();
-        assertThat(readOnly(stager, "/workspace")).isFalse();
-        assertThat(sandbox.getCommand())
-                .containsExactly(limitedArgv(KubernetesPods.SANDBOX_INIT.toArray(String[]::new)));
-        assertThat(stager.getCommand()).containsExactly(limitedArgv("sleep", "infinity"));
-        assertThat(pod.getSpec().getSecurityContext().getFsGroup()).isEqualTo(KubernetesPods.STAGER_UID);
-    }
-
-    @Test
-    void shouldSizeTheTurnSandboxFromMeasuredUseAndKeepItsWorkspaceOnDisk() {
-        Pod pod = pods.turnPod(new KubernetesPods.Workload("turn", Map.of(), IMAGE, "sandbox"), LIMITS);
-
-        Container sandbox = container(pod, KubernetesPods.SANDBOX);
-        assertSized(sandbox, KubernetesPods.TURN);
-        assertThat(Quantity.getAmountInBytes(container(pod, KubernetesPods.STAGER)
-                                .getResources()
-                                .getRequests()
-                                .get("memory"))
-                        .longValueExact())
-                .as("the stager writes the workspace to disk, not into its memory")
-                .isEqualTo(32L * 1024 * 1024);
-        // An idle turn Pod requests 25m of CPU, so that a rolling update fits a second worker's pool on one node; a
-        // turn's short bursts run on the limits.
-        assertThat(Quantity.getAmountInBytes(
-                        sandbox.getResources().getRequests().get("cpu")))
-                .isEqualByComparingTo(new BigDecimal("0.020"));
-        assertThat(Quantity.getAmountInBytes(container(pod, KubernetesPods.STAGER)
-                        .getResources()
-                        .getRequests()
-                        .get("cpu")))
-                .isEqualByComparingTo(new BigDecimal("0.005"));
-        assertThat(Quantity.getAmountInBytes(sandbox.getResources().getLimits().get("cpu")))
-                .isEqualByComparingTo(BigDecimal.ONE);
-        assertThat(pod.getSpec().getVolumes())
-                .filteredOn(volume -> volume.getName().equals("workspace"))
-                .singleElement()
-                .satisfies(volume -> {
-                    assertThat(volume.getEmptyDir().getMedium()).isNull();
-                    assertThat(Quantity.getAmountInBytes(volume.getEmptyDir().getSizeLimit())
-                                    .longValueExact())
-                            .isEqualTo(SandboxLayout.TURN_WORKSPACE_BYTES);
-                });
     }
 
     /** The container requests the memory and the local disk of its kind, and is limited to both. */
@@ -472,44 +511,6 @@ class KubernetesSandboxRuntimeTest {
     @Test
     void shouldReachGatewayAtTheWorkersOwnAddress() {
         assertThat(worker.gatewayUrl()).isEqualTo("http://[fd00::7]:8081");
-    }
-
-    @Test
-    void shouldStartListAndRemoveTurnSandbox() throws Exception {
-        var sandboxes = new KubernetesExecSandboxes(
-                pods,
-                worker,
-                IMAGE,
-                liveWorkers,
-                new SandboxExits(pods, new SimpleMeterRegistry()),
-                mock(KubernetesSandboxCache.class));
-        String sandboxId = UUID.randomUUID().toString();
-        CompletableFuture<String> created =
-                CompletableFuture.supplyAsync(() -> sandboxes.create(sandboxId, LIMITS), background);
-        String name = "hephaestus-turn-" + sandboxId;
-        setStatus(
-                SANDBOXES,
-                name,
-                "Running",
-                List.of(),
-                List.of(running(KubernetesPods.SANDBOX), running(KubernetesPods.STAGER)));
-
-        assertThat(created.get(10, TimeUnit.SECONDS)).isEqualTo(name);
-        Pod pod = Objects.requireNonNull(
-                api().pods().inNamespace(SANDBOXES).withName(name).get());
-        assertThat(pod.getMetadata().getLabels())
-                .containsEntry(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TURN)
-                .containsEntry(KubernetesWorker.WORKER_POD, workerName)
-                .containsEntry(KubernetesWorker.SANDBOX_ID, sandboxId)
-                .containsEntry(KubernetesWorker.PART_OF, "hephaestus");
-        assertThat(sandboxes.workerInstance()).isEqualTo(workerName);
-        assertThat(sandboxes.list()).containsExactly(new ExecSandboxes.Listed(name, sandboxId, workerName, false));
-
-        sandboxes.remove(name);
-        sandboxes.remove(name);
-
-        assertThat(api().pods().inNamespace(SANDBOXES).withName(name).get()).isNull();
-        sandboxes.close();
     }
 
     @Test
@@ -730,23 +731,6 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
-    void shouldUseTheClustersDefaultRuntimeAndRuntimeDefaultSeccompWhenNoneIsNamed() {
-        var defaults = new KubernetesWorker(
-                new KubernetesSandboxProperties(
-                        SANDBOXES, workerName, "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15)),
-                WORKER_ID,
-                8081);
-        Pod pod = new KubernetesPods(api(), defaults, 10, ImagePullPolicy.IF_NOT_PRESENT)
-                .turnPod(new KubernetesPods.Workload("turn", Map.of(), IMAGE, "sandbox"), LIMITS);
-
-        assertThat(pod.getSpec().getRuntimeClassName()).isNull();
-        assertThat(pod.getSpec().getSecurityContext().getSeccompProfile().getType())
-                .isEqualTo("RuntimeDefault");
-        assertThat(pod.getSpec().getSecurityContext().getSeccompProfile().getLocalhostProfile())
-                .isNull();
-    }
-
-    @Test
     void shouldAdmitAsManyReviewsAsTheSandboxQuotaHolds() {
         assertThat(backend().roomFor(LIMITS))
                 .as("no quota, no bound of its own")
@@ -764,7 +748,7 @@ class KubernetesSandboxRuntimeTest {
         var unavailable = mock(KubernetesSandboxCache.class);
         when(unavailable.quotas()).thenThrow(new IllegalStateException("quota watch unavailable"));
         var reviews = new KubernetesSandboxBackend(
-                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()), unavailable);
+                pods, reviewJobs, worker, new SandboxExits(pods, new SimpleMeterRegistry()), unavailable);
 
         assertThat(reviews.roomFor(LIMITS)).isEqualTo(SandboxRoom.UNKNOWN_ROOM);
     }
@@ -789,35 +773,6 @@ class KubernetesSandboxRuntimeTest {
         assertThat(reviews.roomFor(LIMITS))
                 .as("the quota does not count the Job until the Job controller creates its Pod")
                 .isEqualTo(1);
-    }
-
-    @Test
-    void shouldChargeTheOverheadThatASandboxPodOfTheRuntimeClassShows() {
-        quotaWithRoomForTwoReviews();
-        api().pods()
-                .inNamespace(SANDBOXES)
-                .resource(new PodBuilder()
-                        .withNewMetadata()
-                        .withName("turn-with-overhead")
-                        .withLabels(worker.labels(KubernetesWorker.KIND_TURN))
-                        .endMetadata()
-                        .withNewSpec()
-                        .withRuntimeClassName("gvisor")
-                        .withOverhead(Map.of("memory", new Quantity("512Mi")))
-                        .addNewContainer()
-                        .withName("sandbox")
-                        .withImage(IMAGE)
-                        .endContainer()
-                        .endSpec()
-                        .build())
-                .create();
-
-        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor", "").roomFor(LIMITS))
-                .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
-                .isEqualTo(1);
-        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "", "").roomFor(LIMITS))
-                .as("the cluster's default runtime has no overhead")
-                .isEqualTo(2);
     }
 
     @Test
@@ -953,7 +908,6 @@ class KubernetesSandboxRuntimeTest {
                         unprovedPods,
                         new KubernetesSandboxJobs(api(), unproved),
                         unproved,
-                        liveWorkers,
                         new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
                         cache()),
                 new SandboxWorkspaceManager(),
@@ -970,15 +924,6 @@ class KubernetesSandboxRuntimeTest {
         assertThatThrownBy(() -> adapter.execute(spec(UUID.randomUUID())))
                 .isInstanceOf(SandboxInfrastructureException.class)
                 .hasMessageContaining("isolation probe");
-        try (var turns = new KubernetesExecSandboxes(
-                unprovedPods,
-                unproved,
-                IMAGE,
-                liveWorkers,
-                new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
-                mock(KubernetesSandboxCache.class))) {
-            assertThatThrownBy(() -> turns.create("turn", LIMITS)).isInstanceOf(SandboxInfrastructureException.class);
-        }
         assertThat(api().batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
                 .isEmpty();
         assertThat(api().pods().inNamespace(SANDBOXES).list().getItems()).isEmpty();
@@ -987,45 +932,6 @@ class KubernetesSandboxRuntimeTest {
 
         assertThat(adapter.ready()).isTrue();
         assertThat(Objects.requireNonNull(readiness.health()).getStatus()).isEqualTo(Status.UP);
-    }
-
-    @Test
-    void shouldRemoveTheJobsOfEndedReviewsAndTheHostsOfGoneWorkersWhenSwept() {
-        UUID activeJob = UUID.randomUUID();
-        String ended = KubernetesSandboxBackend.jobName(UUID.randomUUID(), 1);
-        String active = KubernetesSandboxBackend.jobName(activeJob, 2);
-        String activeOfGoneWorker = KubernetesSandboxBackend.jobName(activeJob, 1);
-        String hostHere = "hephaestus-host-" + UUID.randomUUID();
-        String hostOfGoneWorker = "hephaestus-host-" + UUID.randomUUID();
-        createJob(ended, labels -> withJob(labels, UUID.randomUUID()));
-        createJob(active, labels -> withJob(labels, activeJob));
-        createJob(activeOfGoneWorker, labels -> gone(withJob(labels, activeJob)));
-        createSandbox(hostHere, KubernetesWorker.KIND_HOST, KubernetesSandboxRuntimeTest::withSession);
-        createSandbox(hostOfGoneWorker, KubernetesWorker.KIND_HOST, labels -> gone(withSession(labels)));
-        createSandbox("turn-of-gone-worker", KubernetesWorker.KIND_TURN, KubernetesSandboxRuntimeTest::gone);
-        var running = new ReviewJob();
-        running.setId(activeJob);
-        ReviewJobRepository jobs = mock(ReviewJobRepository.class);
-        when(jobs.findByStatusIn(any())).thenReturn(List.of(running));
-        var registry = new SimpleMeterRegistry();
-        // An hour later, every object here is past the reconciler's grace.
-        Clock later = Clock.offset(Clock.systemUTC(), Duration.ofHours(1));
-
-        new SandboxReconciler(jobs, backend(), registry, later).periodicReconciliation();
-
-        assertThat(api().batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
-                .extracting(job -> job.getMetadata().getName())
-                .as("a review's Job follows its job; the ledger, not the worker, decides that it runs")
-                .containsExactlyInAnyOrder(active, activeOfGoneWorker);
-        assertThat(api().pods().inNamespace(SANDBOXES).list().getItems())
-                .extracting(pod -> pod.getMetadata().getName())
-                .as("turn sandboxes are their worker's, not the reconciler's")
-                .containsExactlyInAnyOrder(hostHere, "turn-of-gone-worker");
-        assertThat(registry.get(AgentMetrics.SANDBOX_RECONCILER_ORPHANED)
-                        .tag("resource", "sandbox")
-                        .counter()
-                        .count())
-                .isEqualTo(2);
     }
 
     @Test
@@ -1039,49 +945,6 @@ class KubernetesSandboxRuntimeTest {
         assertThat(job("job-young"))
                 .as("an attempt that starts is not mistaken for an ended one")
                 .isNotNull();
-    }
-
-    @Test
-    void shouldCallNoHostsWorkerGoneWhileTheRegistryIsUnreadable() {
-        createSandbox("host-of-gone-worker", KubernetesWorker.KIND_HOST, labels -> gone(withSession(labels)));
-        WorkerRegistryRepository unreadable = mock(WorkerRegistryRepository.class);
-        when(unreadable.findLiveWorkerIds(anyLong())).thenThrow(new IllegalStateException("database unavailable"));
-
-        List<SandboxBackend.Listed> listed = new KubernetesSandboxBackend(
-                        pods,
-                        reviewJobs,
-                        worker,
-                        new KubernetesLiveWorkers(unreadable),
-                        new SandboxExits(pods, new SimpleMeterRegistry()),
-                        cache())
-                .list();
-
-        assertThat(listed)
-                .singleElement()
-                .satisfies(host -> assertThat(host.creatorGone()).isFalse());
-    }
-
-    @Test
-    void shouldListTheJobsAndHostsOfEveryWorkerByTheirNames() {
-        UUID jobId = UUID.randomUUID();
-        createJob("hephaestus-review-" + jobId + "-3", labels -> {
-            labels.put(KubernetesWorker.JOB_ATTEMPT, "3");
-            return gone(withJob(labels, jobId));
-        });
-        createSandbox("host-here", KubernetesWorker.KIND_HOST, KubernetesSandboxRuntimeTest::withSession);
-
-        List<SandboxBackend.Listed> listed = backend().list();
-
-        assertThat(listed)
-                .extracting(
-                        sandbox -> sandbox.handle().id(),
-                        SandboxBackend.Listed::kind,
-                        SandboxBackend.Listed::attempt,
-                        SandboxBackend.Listed::creatorGone)
-                .containsExactlyInAnyOrder(
-                        tuple("hephaestus-review-" + jobId + "-3", SandboxBackend.Kind.REVIEW, 3, false),
-                        tuple("host-here", SandboxBackend.Kind.HOST, null, false));
-        assertThat(listed).allSatisfy(sandbox -> assertThat(sandbox.created()).isNotNull());
     }
 
     @Test
@@ -1135,31 +998,9 @@ class KubernetesSandboxRuntimeTest {
         assertThat(seconds).isBetween(expected - 5, expected);
     }
 
-    @Test
-    void shouldCallEveryOtherWorkerOfATurnSandboxGone() {
-        createSandbox("turn-here", KubernetesWorker.KIND_TURN, labels -> labels);
-        createSandbox("turn-of-gone-worker", KubernetesWorker.KIND_TURN, KubernetesSandboxRuntimeTest::gone);
-        try (var sandboxes = new KubernetesExecSandboxes(
-                pods,
-                worker,
-                IMAGE,
-                liveWorkers,
-                new SandboxExits(pods, new SimpleMeterRegistry()),
-                mock(KubernetesSandboxCache.class))) {
-            assertThat(sandboxes.list())
-                    .extracting(ExecSandboxes.Listed::id, ExecSandboxes.Listed::workerGone)
-                    .containsExactlyInAnyOrder(tuple("turn-here", false), tuple("turn-of-gone-worker", true));
-        }
-    }
-
     /** The labels as a worker process that no longer beats in the registry wrote them. */
     private static Map<String, String> gone(Map<String, String> labels) {
         labels.put(KubernetesWorker.WORKER_ID, "worker-process-gone");
-        return labels;
-    }
-
-    private static Map<String, String> withSession(Map<String, String> labels) {
-        labels.put(KubernetesWorker.SESSION_ID, UUID.randomUUID().toString());
         return labels;
     }
 
@@ -1171,7 +1012,7 @@ class KubernetesSandboxRuntimeTest {
 
     private KubernetesSandboxBackend backend() {
         return new KubernetesSandboxBackend(
-                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()), cache());
+                pods, reviewJobs, worker, new SandboxExits(pods, new SimpleMeterRegistry()), cache());
     }
 
     private SandboxAttemptRunner adapter() {
@@ -1360,16 +1201,6 @@ class KubernetesSandboxRuntimeTest {
                 .withContainerStatuses(statuses)
                 .build());
         api().pods().inNamespace(namespace).resource(pod).update();
-    }
-
-    private static ContainerStatus running(String name) {
-        return new ContainerStatusBuilder()
-                .withName(name)
-                .withNewState()
-                .withNewRunning()
-                .endRunning()
-                .endState()
-                .build();
     }
 
     private static ContainerStatus exited(String name, int exitCode) {

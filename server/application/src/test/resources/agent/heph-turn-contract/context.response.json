@@ -10,5 +10,7 @@
 		"reasoningEffort": null
 	},
 	"situation": "<situation>\nNow: Thu 2026-10-08 09:12 UTC.\n</situation>",
-	"contextFolder": true
+	"contextFolder": true,
+	"systemPrompt": "You are Hephaestus.",
+	"generation": "00000000-0000-4000-8000-000000000001"
 }

@@ -170,6 +170,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")),
+                        null,
                         null));
 
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId()))
@@ -523,6 +524,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                                         "link_problem",
                                         "No such problem",
                                         true)),
+                        null,
                         null));
         List<MentorEntry> answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                 workspace.getId(), turn.getId(), MentorEntry.Kind.HEPH);
@@ -573,7 +575,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(piEntry), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(piEntry), null, null));
         return MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .getLast();
     }

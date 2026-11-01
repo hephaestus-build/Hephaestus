@@ -66,7 +66,6 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 		const env = hostWorkerEnvironment(rendered);
 		assert.equal(env.AGENT_ENABLED, "true");
 		assert.equal(env.SANDBOX_MAX_CONCURRENT, "1");
-		assert.equal(env.HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX, "1");
 		assert.equal(env.HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST, "true");
 		assert.equal(env.SPRING_PROFILES_ACTIVE, undefined);
 		assert.equal(env.HEPHAESTUS_RUNTIME_SERVER_ENABLED, undefined);
@@ -109,12 +108,19 @@ await test("host sandboxes retain the chart's quotas and restricted authority wi
 			{ kind: "ServiceAccount", name: "host-worker", namespace },
 		]);
 		const policies = resources.filter((resource) => resource.kind === "NetworkPolicy");
-		assert.equal(policies.length, 2);
-		const deny = policies.find(
-			(resource) => asRecord(resource.spec, "policy").egress === undefined,
-		);
+		assert.equal(policies.length, 3);
+		const deny = policies.find((resource) => {
+			const spec = asRecord(resource.spec, "policy");
+			return spec.egress === undefined && spec.ingress === undefined;
+		});
 		assert.ok(deny);
 		assert.deepEqual(deny.spec, { podSelector: {}, policyTypes: ["Ingress", "Egress"] });
+		// The tools Jobs admit only ingress; the deny-all policy still denies their egress.
+		const tools = policies.find(
+			(resource) => asRecord(resource.spec, "policy").ingress !== undefined,
+		);
+		assert.ok(tools);
+		assert.deepEqual(asRecord(tools.spec, "policy").policyTypes, ["Ingress"]);
 		const gateway = policies.find(
 			(resource) => asRecord(resource.spec, "policy").egress !== undefined,
 		);

@@ -206,7 +206,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 running.getId(),
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(pi), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(pi), null, null));
         UUID answerId = Objects.requireNonNull(
                 turns.answer(workspace.getId(), running.getId()).answerEntryId());
         delivery.delivered(
@@ -597,7 +597,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 first.getId(),
                 first.getAttempt(),
                 Objects.requireNonNull(first.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.STOPPED, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.STOPPED, List.of(), null, null));
         MentorTurn next = turns.claimNext(LEASE).orElseThrow();
         assertThat(next.getId()).isEqualTo(question("100.6").getTurnId());
         assertThat(Objects.requireNonNull(turnOf(question("100.6")).getStartedAt()))

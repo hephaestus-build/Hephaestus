@@ -10,9 +10,9 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.gateway.ConversationLoopCredentials;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -25,8 +25,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.github.bucket4j.Bucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.Cookie;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -41,12 +39,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -92,7 +89,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private MentorTurnRepository turnRepository;
 
     @Mock
-    private SandboxGatewaySessions gatewaySessions;
+    private ConversationLoopCredentials loopCredentials;
 
     private final Map<String, Bucket> buckets = new HashMap<>();
     private FilterChainProxy chains;
@@ -101,10 +98,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @BeforeEach
     void buildChains() throws Exception {
         SecurityContextHolder.clearContext();
-        chains = chains(gatewaySessions);
+        chains = chains();
     }
 
-    private FilterChainProxy chains(SandboxGatewaySessions sessions) throws Exception {
+    private FilterChainProxy chains() throws Exception {
         var context = new GenericApplicationContext();
         context.refresh();
         var config = new LlmProxySecurityConfig();
@@ -122,7 +119,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new SandboxGatewayConnector(GATEWAY_PORT),
                         jobRepository,
                         turnRepository,
-                        sessions,
+                        new StaticListableBeanFactory(Map.of("loop", loopCredentials))
+                                .getBeanProvider(ConversationLoopCredentials.class),
                         jwtVerifier,
                         resolver,
                         accounting,
@@ -359,10 +357,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                     .isEqualTo(403);
             assertThat(servedAs.get()).isNull();
         }
-        for (String path : List.of(
-                "/internal/llm/runtime/" + turn.id(),
-                "/internal/llm/runtime/" + turn.id() + "/workspace",
-                "/internal/llm/runtime/" + turn.id() + "/commands")) {
+        for (String path :
+                List.of("/internal/llm/runtime/" + turn.id(), "/internal/llm/runtime/" + turn.id() + "/workspace")) {
             assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), "turn-token")))
                     .as(path)
                     .isEqualTo(401);
@@ -391,87 +387,66 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(403);
     }
 
-    /**
-     * A review session is registered with its signed job token. A revoked or expired job token is rejected by the
-     * signature check and must stay rejected, even while the review's session is open.
-     */
-    @ParameterizedTest
-    @ValueSource(strings = {"revoked", "expired"})
-    void shouldRefuseARejectedJobTokenWhenItsReviewSessionIsStillOpen(String reason, @TempDir Path directory)
-            throws Exception {
-        var sessions = new SandboxGatewaySessions();
-        chains = chains(sessions);
-        UUID job = UUID.randomUUID();
-        String token = reason + "-job-token";
-        when(jwtVerifier.verify(token)).thenThrow(new AttemptTokenInvalidException("job token " + reason, reason));
-        try (var review = sessions.register(job, token, Files.createFile(directory.resolve("input.tar")), "out")) {
-            assertThat(review.id()).isEqualTo(job);
-            for (String suffix : List.of("", "/workspace", "/commands")) {
-                String path = "/internal/llm/runtime/" + job + suffix;
-                assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), token)))
-                        .as(path)
-                        .isEqualTo(401);
-                assertThat(servedAs.get()).isNull();
-            }
-        }
-    }
-
     @Test
-    void shouldServeAHostSessionOnlyItsOwnRuntimeReadsAndCommandChannel() throws Exception {
-        // The host's workspace initializer downloads with the session token before the host starts. One session per
-        // path, because the test gateway allows one call per minute and caller.
-        for (String suffix : List.of("", "/workspace", "/commands")) {
-            UUID host = UUID.randomUUID();
-            String token = "session-token-" + host;
-            when(jwtVerifier.verify(token)).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
-            when(gatewaySessions.unsignedSessionFor(token))
-                    .thenReturn(Optional.of(
-                            new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));
-            servedAs.set(null);
-            String path = "/internal/llm/runtime/" + host + suffix;
-            assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), token)))
-                    .as(path)
+    void shouldServeTheConversationLoopOnlyItsAssignments() throws Exception {
+        when(jwtVerifier.verify("loop-token")).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
+        when(loopCredentials.authenticates("loop-token")).thenReturn(true);
+
+        assertThat(answerTo(withToken(
+                        request("POST", JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, GATEWAY_PORT), "loop-token")))
+                .isEqualTo(200);
+        assertThat(servedAs.get())
+                .isNotNull()
+                .extracting(Authentication::getPrincipal)
+                .asInstanceOf(type(ProxyIdentity.class))
+                .extracting(ProxyIdentity::description)
+                .isEqualTo("conversation-loop");
+        for (int pull = 0; pull < 3; pull++) {
+            assertThat(answerTo(withToken(
+                            request("POST", JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, GATEWAY_PORT),
+                            "loop-token")))
+                    .as("an idle loop pulls past the per-caller limit")
                     .isEqualTo(200);
-            assertThat(servedAs.get())
-                    .isNotNull()
-                    .extracting(Authentication::getPrincipal)
-                    .asInstanceOf(type(ProxyIdentity.class))
-                    .extracting(ProxyIdentity::description)
-                    .isEqualTo("gateway-session:" + host);
         }
-        UUID host = UUID.randomUUID();
-        when(jwtVerifier.verify("session-token")).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
-        when(gatewaySessions.unsignedSessionFor("session-token"))
-                .thenReturn(Optional.of(
-                        new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));
+
         UUID other = UUID.randomUUID();
-        for (String path : List.of(
-                "/internal/llm/runtime/" + other,
-                "/internal/llm/runtime/" + other + "/workspace",
-                "/internal/llm/runtime/" + other + "/commands")) {
-            assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), "session-token")))
+        for (String path : List.of("/internal/llm/runtime/" + other, "/internal/llm/runtime/" + other + "/workspace")) {
+            assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), "loop-token")))
                     .as(path)
                     .isEqualTo(401);
         }
-        assertThat(answerTo(withToken(
-                        request("POST", "/internal/llm/runtime/" + host + "/result", GATEWAY_PORT), "session-token")))
-                .isEqualTo(401);
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "session-token")))
-                .isEqualTo(401);
-        assertThat(answerTo(withToken(
-                        request("POST", "/internal/llm/turn/" + host + "/end", GATEWAY_PORT), "session-token")))
-                .isEqualTo(401);
+        for (String path : List.of(
+                "/internal/llm/runtime/" + other + "/result",
+                "/internal/llm/responses",
+                "/internal/llm/practice-script/1/run",
+                "/internal/llm/turn/" + other + "/end",
+                "/internal/llm/turn/" + other + "/tools")) {
+            assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "loop-token")))
+                    .as(path)
+                    .isEqualTo(401);
+        }
     }
 
     @Test
-    void shouldRefuseAJobTokenOnTheCommandChannelAndOnTurnEndpoints() throws Exception {
+    void shouldRefuseAnAttemptTokenOnTheAssignments() throws Exception {
+        AttemptJwt turn = turnJwt(1);
+        leased(turn, true);
         ReviewJob job = runningJobOnAttempt(1);
         when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
 
-        assertThat(answerTo(withToken(
-                        request("GET", "/internal/llm/runtime/" + job.getId() + "/commands", GATEWAY_PORT),
-                        "job-token")))
-                .isEqualTo(401);
+        for (String token : List.of("turn-token", "job-token")) {
+            assertThat(answerTo(withToken(
+                            request("POST", JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, GATEWAY_PORT), token)))
+                    .as(token)
+                    .isEqualTo(401);
+        }
+    }
+
+    @Test
+    void shouldRefuseAJobTokenOnTurnEndpoints() throws Exception {
+        ReviewJob job = runningJobOnAttempt(1);
+        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
+
         assertThat(answerTo(withToken(
                         request("POST", "/internal/llm/turn/" + UUID.randomUUID() + "/end", GATEWAY_PORT),
                         "job-token")))

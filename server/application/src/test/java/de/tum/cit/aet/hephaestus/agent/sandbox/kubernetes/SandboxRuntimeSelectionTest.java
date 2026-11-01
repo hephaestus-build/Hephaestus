@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.ConversationLoopCredentials;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -11,11 +12,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerPropertiesConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxHosts;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
@@ -83,8 +81,8 @@ class SandboxRuntimeSelectionTest {
             assertThat(context.getBean(KubernetesClient.class).getHttpClient()).isInstanceOf(OkHttpClientImpl.class);
             assertThat(context.getBean(SandboxBackend.class)).isInstanceOf(KubernetesSandboxBackend.class);
             assertThat(context.getBean(SandboxManager.class)).isInstanceOf(SandboxAttemptRunner.class);
-            assertThat(context.getBean(HostSandbox.class)).isInstanceOf(SandboxHosts.class);
-            assertThat(context.getBean(ExecSandboxes.class)).isInstanceOf(KubernetesExecSandboxes.class);
+            assertThat(context.getBean(ConversationLoopCredentials.class))
+                    .isInstanceOf(KubernetesConversationLoopCredentials.class);
             assertThat(context)
                     .hasSingleBean(KubernetesSandboxJobs.class)
                     .hasSingleBean(SandboxReconciler.class)
@@ -101,8 +99,7 @@ class SandboxRuntimeSelectionTest {
             assertThat(context)
                     .doesNotHaveBean(SandboxBackend.class)
                     .doesNotHaveBean(SandboxManager.class)
-                    .doesNotHaveBean(HostSandbox.class)
-                    .doesNotHaveBean(ExecSandboxes.class)
+                    .doesNotHaveBean(ConversationLoopCredentials.class)
                     .doesNotHaveBean("sandboxKubernetesClient");
         });
     }

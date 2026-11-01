@@ -70,6 +70,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     private PersonDataWriteFence writeFence;
 
     @Autowired
+    private MentorTurnProgress progress;
+
+    @Autowired
     private ApplicationEventPublisher events;
 
     @Autowired
@@ -109,6 +112,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Words about the developer")),
+                        null,
                         null));
 
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId()))
@@ -211,7 +215,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getId(),
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         assertThat(turns.claimNext(LEASE))
                 .hasValueSatisfying(next ->
@@ -368,7 +372,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getId(),
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         assertThat(publishedQueued())
                 .as("the follow-up is now the one its conversation starts next")
@@ -387,7 +391,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getId(),
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         assertThat(publishedQueued())
                 .as("every workspace shares the Hephaestus slot that the end gave back")
@@ -432,7 +436,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         running.getId(),
                         running.getAttempt() + 1,
                         Objects.requireNonNull(running.getLeaseId()),
-                        new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null)))
+                        new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null)))
                 .isInstanceOf(MentorLeaseLostException.class);
     }
 
@@ -459,10 +463,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         turnId,
                         attempt,
                         leaseId,
-                        new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null)))
+                        new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null)))
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThat(stored(expired).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(stored(expired).getPartial()).isNull();
     }
 
     @Test
@@ -487,7 +490,6 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         leaseId,
                         JsonNodeFactory.instance.objectNode()))
                 .isInstanceOf(MentorLeaseLostException.class);
-        assertThat(stored(running).getPartial()).isNull();
     }
 
     @Test
@@ -528,6 +530,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                                 MentorLedgerFixtures.thinkingLevel(MentorLedgerFixtures.piId()),
                                 MentorLedgerFixtures.user(userPiId, "rendered prompt"),
                                 MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Answer")),
+                        null,
                         null));
 
         List<MentorEntry> stored = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId());
@@ -564,7 +567,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                                         MentorLedgerFixtures.piIdOf(submission.question())),
                                 MentorLedgerFixtures.user(MentorLedgerFixtures.piId(), "rendered prompt"),
                                 MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "PARTIAL-ANSWER-NOT-STORED")),
-                        "its Hephaestus host reported ERROR"));
+                        null,
+                        "its conversation loop reported ERROR"));
 
         List<MentorEntry> stored = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId());
         assertThat(stored)
@@ -585,7 +589,10 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
-                        MentorTurn.Status.STOPPED, answerThatReadContext("Half an answer about the secret"), null));
+                        MentorTurn.Status.STOPPED,
+                        answerThatReadContext("Half an answer about the secret"),
+                        null,
+                        null));
 
         MentorEntry question =
                 entryRepository.findById(submission.question().getId()).orElseThrow();
@@ -616,7 +623,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
-                        MentorTurn.Status.DONE, answerThatReadContext("An answer for Slack"), null));
+                        MentorTurn.Status.DONE, answerThatReadContext("An answer for Slack"), null, null));
 
         assertThat(storedFor(running))
                 .extracting(MentorEntry::getId)
@@ -638,10 +645,11 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     @Test
-    void shouldStoreThePartialAnswerOfARunningAttemptAndRefuseOneAfterTheDeveloperStoppedIt() {
+    void shouldSendThePartialAnswerWithoutWritingTheTurnAndRefuseOneAfterTheDeveloperStoppedIt() {
         ask(main, "Question");
         MentorTurn running = turns.claimNext(LEASE).orElseThrow();
         var snapshot = JsonNodeFactory.instance.objectNode().put("text", "Thinking");
+        String version = rowVersion(running);
 
         turns.updatePartial(
                 running.getWorkspaceId(),
@@ -649,8 +657,10 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
                 snapshot);
-        assertThat(stored(running).getPartial()).isEqualTo(snapshot);
 
+        assertThat(rowVersion(running)).as("a partial answer writes no row").isEqualTo(version);
+        assertThat(published.stream(MentorLedgerEvents.ProgressChanged.class))
+                .anySatisfy(frame -> assertThat(frame.turnId()).isEqualTo(running.getId()));
         turns.stop(workspace.getId(), running.getId());
         assertThatThrownBy(() -> turns.updatePartial(
                         running.getWorkspaceId(),
@@ -659,7 +669,14 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         Objects.requireNonNull(running.getLeaseId()),
                         snapshot))
                 .isInstanceOf(MentorLeaseLostException.class);
-        assertThat(stored(running).getPartial()).isNull();
+    }
+
+    private String rowVersion(MentorTurn turn) {
+        return (String) entityManager
+                .createNativeQuery("SELECT xmin::text FROM mentor_turn WHERE workspace_id = :workspaceId AND id = :id")
+                .setParameter("workspaceId", turn.getWorkspaceId())
+                .setParameter("id", turn.getId())
+                .getSingleResult();
     }
 
     @Test
@@ -692,6 +709,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Partial answer")),
+                        null,
                         null));
 
         MentorTurn ended = stored(running);
@@ -728,7 +746,6 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(turns.answer(workspace.getId(), first.getId()).answerEntryId())
                 .as("a lost attempt stored nothing")
                 .isNull();
-        assertThat(stored(first).getPartial()).isNull();
 
         MentorTurn second = turns.claimNext(EXPIRED).orElseThrow();
         assertThat(second.getAttempt()).isEqualTo(2);
@@ -755,6 +772,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 redaction,
                 copies,
                 writeFence,
+                progress,
                 events,
                 Clock.offset(Clock.systemUTC(), Duration.ofMinutes(-10)),
                 3);
@@ -797,7 +815,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
             MentorTurn stale = turnRepository.findById(running.getId()).orElseThrow();
             turnRepository.accumulateUsage(
                     running.getId(), running.getAttempt(), new MentorTurnUsage(4_242, 99, 0, 0, 0, 1));
-            stale.progress(JsonNodeFactory.instance.objectNode().put("text", "stale"));
+            stale.admit(JsonNodeFactory.instance.objectNode().put("model", "stale"));
             turnRepository.saveAndFlush(stale);
         });
 
@@ -831,6 +849,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                                 MentorLedgerFixtures.toolResult(
                                         MentorLedgerFixtures.piId(), "call-2", "show_feedback", "Refused", true),
                                 MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Done")),
+                        null,
                         null));
 
         MentorTurnService.Answer answer = turns.answer(workspace.getId(), running.getId());

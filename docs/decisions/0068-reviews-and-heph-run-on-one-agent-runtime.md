@@ -730,3 +730,21 @@ This update amends [decision F](#f-delete-the-hub-and-fence-attempts-on-the-leas
 - A drain is local to the worker. It flips readiness, stops claims and settles the attempts in flight.
 
 A draining flag and a `NOTIFY` channel would have no reader, so the layer adds neither.
+
+## Update — 2026-10-31: the Heph loop layer
+
+This update amends § The tools Pod and § The Heph loop for the layer that ships the loop.
+
+- The tools Job has no pool.
+  The worker starts it at the first `bash` or `load_context` of an attempt.
+  The release has a fixed number of tools Jobs.
+  A full quota answers `503`, and the model answers without those tools.
+- The loop has one credential: a projected token of its own ServiceAccount, for the audience `hephaestus-conversation-loop`.
+  A worker checks it with the Kubernetes TokenReview API.
+  It reaches only `POST /internal/llm/conversation/assignments`.
+  An assignment returns the attempt token, and every later call of the attempt uses it.
+- `mentor_turn.context_generation` rotates in the transaction that withdraws source access.
+  Documents and tools Jobs carry the generation.
+  A change makes the loop drop its documents and its Job, and tells the model `CONTEXT_CHANGED`.
+- The worker that started a Job discards it on a context change.
+  It also discards it when the turn ends and when the worker shuts down.

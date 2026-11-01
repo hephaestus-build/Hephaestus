@@ -131,7 +131,7 @@ The same name is the source capture code that causes it.
 | Term                           | Meaning                                                                                                   | Identifier                     |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | **Job**                        | Execution of a review in a sandbox, with attempts and costs.                                              | review_job                     |
-| **Agent**                      | The sandboxed runtime that executes a review, or the conversation host.                                           | agent runtime                  |
+| **Agent**                      | The sandboxed runtime that executes a review.                                                             | agent runtime                  |
 | **Attempt**                    | One claimed execution of a job, protected by its execution fence.                                         | attempt                        |
 | **Attempt token**              | The signed credential of one attempt, of a review or of a conversation turn. It names the attempt and its workspace, and nothing else. | AttemptJwt |
 | **Lease**                      | A running attempt's own identity, valid until a time on the database clock. Each claim sets a new one. The worker that runs the attempt renews it by that identity, and every write of the attempt names it. When it expires, the server recovers the attempt. | review_job.lease_id, review_job.leased_until |
@@ -153,7 +153,7 @@ The same name is the source capture code that causes it.
 | **Seal**                       | The one transaction that writes a review's staged results and problems. | planned |
 | **Send**                       | One leased provider write or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
 | **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
-| **Conversation host**                  | The one long-lived sandboxed process on a worker that runs conversation turns.                      | `heph-host.ts`, `HephHost`         |
+| **Conversation loop**          | The one long-lived trusted process of a release that runs the Pi session of every conversation turn. It pulls its turns from the workers and holds no model or provider credential. | conversation-loop, `conversation-loop.ts` |
 | **Turn**                       | One run of Hephaestus for one question in a conversation, with its attempts, lease, partial answer and usage.       | mentor_turn, conversation_turn from 1.0                    |
 | **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a limit of calls in flight, an interactive reserve and a cooldown. | llm_call_pool |
 | **Call permit**                | One model call's share of its call pool, held as a lease by the worker that makes the call. | llm_call_permit |
@@ -161,21 +161,21 @@ The same name is the source capture code that causes it.
 | **Context folder**             | The read-only files that one agent may read for one person, in one workspace, for one purpose. | INDEX.md, inputs/context/, repos/ |
 | **Context document**           | One JSON document about the developer or the workspace in the context folder of a conversation.            | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |
-| **Turn sandbox**               | The sandbox that holds the context folder of a conversation for one turn attempt, with no network and no credentials. | TurnSandboxes               |
+| **Tools Job**                  | The credential-free Kubernetes Job that runs `bash` and `load_context` for one conversation turn attempt. It has no network, and only the conversation loop reaches it, with a nonce. The worker starts it at the first tool call and discards it when the context changes or the turn ends. | ToolsJobs, KubernetesToolsJobs |
+| **Context generation**         | A UUID that names the data a running turn may read. It rotates in the transaction that withdraws source access. Documents and tools Jobs carry it, so a change makes the loop drop both. | mentor_turn.context_generation |
 | **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | worker.sandbox.namespace       |
 | **Isolation probe**            | A worker's check, with real Pods, that the cluster holds the sandbox boundary. No sandbox starts while it fails. | KubernetesIsolationProbe |
 | **Isolation tier**             | What the isolation probe records without gating: the runtime class, user namespaces and the process limit. | sandbox.isolation.*     |
 | **Runtime attempt**            | One attempt of a review job or of a conversation turn, with one lease, one attempt token and writes fenced on the lease. | AttemptJwt |
 | **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token, and a tools container without one. | planned                |
-| **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one conversation turn attempt, with no token and no egress. | planned             |
-| **Conversation loop**                  | The one long-lived trusted process that runs the conversation turns of an install and calls tools Pods for their tools. | planned            |
-| **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | planned |
+| **Tools Pod**                  | The Pod of a tools Job, or the tools container of a review agent Pod. It runs only the tools program, with no token and no egress. | KubernetesToolsJobs |
+| **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | `tool-protocol.ts` |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
-Runtime attempt, review agent Pod, tools Pod, conversation loop and tool protocol v1 are decided for 1.0 and not shipped yet ([ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md)).
+The review agent Pod is decided for 1.0 and not shipped yet ([ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md)). The tools Job and tool protocol v1 ship for conversation turns only.
 
 The job folder of a review is the context folder of that review.
-The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation host, context documents, context loaders and turn sandboxes.
+The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation loop, context documents, context loaders, tools Jobs and the context generation.
 A turn is not a job: it has no job row and no review.
 
 A job can expire without removing its review or observations.

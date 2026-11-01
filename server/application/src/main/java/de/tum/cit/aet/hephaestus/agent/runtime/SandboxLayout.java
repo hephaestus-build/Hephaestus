@@ -34,12 +34,6 @@ public final class SandboxLayout {
     /** Each scratch place, {@code /tmp} and {@code ~/.local}: a bounded disk volume in Kubernetes. */
     public static final long SCRATCH_BYTES = 1024L * 1024 * 1024;
 
-    /** A turn sandbox's workspace: a bounded disk volume in Kubernetes. */
-    public static final long TURN_WORKSPACE_BYTES = 512L * 1024 * 1024;
-
-    /** The Heph host's memory limit on Kubernetes. Its Node heap stops at three quarters of it, on both backends. */
-    public static final long HEPH_HOST_MEMORY_BYTES = 1024L * 1024 * 1024;
-
     // ── Job folder (ADR 0041): read-only inputs and separate writable mounts ──────────────────────────────
     //   context/, repos/, inputs/, task.json, INDEX.* — the read-only job folder
     //   work/    — scratch the agent + practice scripts write during the run; NEVER collected
@@ -149,9 +143,6 @@ public final class SandboxLayout {
 
     /** Workspace-relative path of the orchestrator instructions (combination of prefix + filename). */
     public static final String ORCHESTRATOR_PATH = PI_AGENT_PREFIX + ORCHESTRATOR_FILENAME;
-
-    /** Heph's system prompt, staged for the Heph host — pinned by {@code SandboxLayoutSyncTest} against heph-host.ts. */
-    public static final String MENTOR_SYSTEM_PROMPT_PATH = "agent/mentor/system.md";
 
     /** Workspace-relative directory for Pi SDK session JSONL files. */
     public static final String SESSIONS_DIR = ".sessions";

@@ -1,0 +1,184 @@
+{{- /*
+The conversation loop runs the Pi session of each conversation turn. It pulls its assignments from the
+workers' sandbox gateway and calls the gateway for everything a turn needs: the model, the context and the
+tools Jobs. It holds no model, provider or database credential. Its one credential is a projected token of
+its own ServiceAccount, which the workers check with a TokenReview (docs/admin/kubernetes.mdx § Conversation
+loop). It runs in the release namespace, because the workers remove what they did not create in the
+sandbox namespace.
+*/}}
+{{- if .Values.worker.enabled }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "conversation-loop") }}
+{{- $gateway := include "hephaestus.name" (dict "root" . "component" "worker-gateway") }}
+{{- $worker := include "hephaestus.name" (dict "root" . "component" "worker") }}
+{{- $port := include "hephaestus.gatewayPort" . | int }}
+{{- $host := (.Files.Get "sandbox-pod-requests.json" | fromJson).conversationLoop }}
+# Any worker serves any assignment: the ledger's lease fences each attempt, not the worker that claimed it.
+# Every call of one loop Pod reaches one worker, though: the end of an attempt waits for that worker's model
+# calls in flight, so their usage is recorded before the lease fence closes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $gateway }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
+spec:
+  sessionAffinity: ClientIP
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 4 }}
+  ports:
+    - name: sandbox-gateway
+      port: {{ $port }}
+      targetPort: sandbox-gateway
+      protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "conversation-loop") | nindent 4 }}
+# The loop calls no Kubernetes API. Its only token is the projected one below, for the workers alone.
+automountServiceAccountToken: false
+---
+# A TokenReview is cluster-scoped, so the workers' permission to create one is too. It reads nothing.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "hephaestus.boundedName" (dict "name" (printf "%s-%s-worker-token-review" .Release.Namespace .Release.Name) "max" 63) }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
+rules:
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "hephaestus.boundedName" (dict "name" (printf "%s-%s-worker-token-review" .Release.Namespace .Release.Name) "max" 63) }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "hephaestus.boundedName" (dict "name" (printf "%s-%s-worker-token-review" .Release.Namespace .Release.Name) "max" 63) }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $worker }}
+    namespace: {{ .Release.Namespace }}
+---
+# The loop reaches the workers' gateway port and nothing else. The release's DNS policy gives it name
+# resolution, and the default deny keeps every ingress closed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 14 }}
+      ports:
+        - port: {{ $port }}
+          protocol: TCP
+    # Its attempts' tools Jobs, whose own policy admits only the loop (worker.yaml, sandbox-tools).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ include "hephaestus.sandboxNamespace" (dict "root" .) }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: hephaestus
+              hephaestus.build/sandbox-kind: tools
+      ports:
+        - port: 7070
+          protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "conversation-loop") | nindent 4 }}
+spec:
+  replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.worker.conversationLoop.replicas) }}
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "conversation-loop") | nindent 6 }}
+  strategy:
+    # The new loop pulls before the old one drains, so no question waits for a rollout.
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "conversation-loop") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "conversations") }}
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1000 "group" 1000) | nindent 8 }}
+      # A stopping loop pulls nothing new and finishes its running turns, which end at their deadline.
+      # A loop that is killed earlier loses its turns' leases, and each turn runs again.
+      terminationGracePeriodSeconds: 960
+      containers:
+        - name: conversation-loop
+          image: {{ include "hephaestus.image" (dict "root" . "name" "agent-pi") | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["node", "/opt/conversation-loop/conversation-loop.js"]
+          env:
+            - name: CONVERSATION_GATEWAY_URL
+              value: {{ printf "http://%s.%s.svc:%d/internal/llm" $gateway .Release.Namespace $port | quote }}
+            - name: CONVERSATION_ASSIGNMENT_TOKEN_FILE
+              value: /var/run/secrets/hephaestus/conversation-loop/token
+            # The turns this replica runs at once; the server's capacity counts every replica's.
+            - name: CONVERSATION_MAX_TURNS
+              value: {{ include "hephaestus.conversationTurns" . | quote }}
+            - name: CONVERSATION_WORK_DIR
+              value: /tmp/work
+            - name: CONVERSATION_AGENT_DIR
+              value: /tmp/agent
+            - name: HOME
+              value: /tmp/home
+          resources:
+            # sandbox-pod-requests.json holds what the loop requests, as it did for the conversation host.
+            requests:
+              cpu: {{ printf "%dm" (int $host.cpuMillis) | quote }}
+              memory: {{ printf "%dMi" (int $host.memoryMi) | quote }}
+              ephemeral-storage: {{ printf "%dMi" (int $host.ephemeralStorageMi) | quote }}
+            limits:
+              cpu: {{ .Values.worker.conversationLoop.limits.cpu | quote }}
+              memory: {{ .Values.worker.conversationLoop.limits.memory | quote }}
+              ephemeral-storage: {{ printf "%dMi" (int $host.ephemeralStorageMi) | quote }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: assignment-token
+              mountPath: /var/run/secrets/hephaestus/conversation-loop
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # The kubelet rotates the token before it expires; the loop reads the file for each pull.
+        - name: assignment-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: hephaestus-conversation-loop
+                  expirationSeconds: 3600
+                  path: token
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ printf "%dMi" (int $host.ephemeralStorageMi) | quote }}
+{{- end }}

@@ -10,7 +10,7 @@ class WorkerCapacityStateTest extends BaseUnitTest {
 
     @Test
     void reviewClaimReleaseFlow() {
-        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("3", "1"));
+        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("3"));
         assertThat(state.reviewMax()).isEqualTo(3);
         assertThat(state.spareReview()).isEqualTo(3);
 
@@ -26,7 +26,7 @@ class WorkerCapacityStateTest extends BaseUnitTest {
     @Test
     void releaseUnderflowIsIdempotent() {
         // Double-release happens on the executor's cleanup path during early shutdown.
-        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("1", "1"));
+        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("1"));
         state.releaseReview();
         assertThat(state.inFlightReview()).isZero();
     }
@@ -34,7 +34,7 @@ class WorkerCapacityStateTest extends BaseUnitTest {
     @Test
     void spareClampsToZeroWhenInFlightExceedsMax() {
         // Defensive: claim/release accounting drift must never surface a negative spare count.
-        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("1", "0"));
+        WorkerCapacityState state = new WorkerCapacityState(WorkerPropertiesFixtures.minimal("1"));
         state.claimReview();
         state.claimReview();
         assertThat(state.spareReview()).isZero();

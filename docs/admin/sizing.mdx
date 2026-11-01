@@ -120,8 +120,9 @@ A worker that cannot prove isolation starts no sandbox work.
 
 ## What you can scale
 
-The chart controls worker replicas, review capacity and conversation capacity.
-Each replica also needs its JVM, database connections and conversation host budget.
+The chart controls worker replicas, review capacity, conversation loop replicas and conversation capacity.
+Each worker replica also needs its JVM and database connections.
+Each conversation loop replica needs its own CPU and memory ([Kubernetes](./kubernetes#conversation-loop)).
 Before raising capacity, qualify the workload on the target host shape.
 Keep the workload, logs and before/after measurements with the qualification result.
 
@@ -186,13 +187,13 @@ Back up persistent state as [Backup and restore](./backup-restore) describes.
 
 Both single-node Kubernetes profiles admit 32 resident conversation turns from the declared CPU budget.
 The formula subtracts resident role and fixed tools-tier requests, plus the review-tier CPU reservation, then divides the remaining millicores by 50.
-It caps the total at 32 and divides it across workers. An explicit `worker.conversationTurns` overrides the automatic count.
+It caps the total at 32 and divides it across conversation loop replicas. An explicit `worker.conversationTurns` overrides the automatic count.
 The chart and its fit gate read the same `turn-admission.json` declaration.
 The provider pool admits each physical model call independently.
 
 Tools memory is a separate resource.
-The unchanged conversation quota holds ten tools Pods per worker, including a warm pool of up to two.
-A turn requests tools only when it calls a tool. A full quota makes that turn wait with visible progress.
+The conversation quota holds ten tools Jobs for the whole release ([Kubernetes](./kubernetes#conversation-loop)).
+A turn requests tools only when it first runs a command or loads a repository. When the quota is full, that answer goes on without tools.
 The resident-turn count does not enlarge this quota or reduce any Pod's request.
 
 The approved model-only sweep supports the 50m planning coefficient and the 32-turn ceiling.

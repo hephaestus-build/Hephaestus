@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
@@ -119,8 +118,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private Result call(String method, String path, String token) throws Exception {
-        var filter = new JobTokenAuthenticationFilter(
-                jobRepository, turnRepository, new SandboxGatewaySessions(), jwtVerifier);
+        var filter = new JobTokenAuthenticationFilter(jobRepository, turnRepository, credential -> false, jwtVerifier);
         var request = new MockHttpServletRequest(method, path);
         request.setRemoteAddr("10.0.0.2");
         request.addHeader("Authorization", "Bearer " + token);
@@ -198,7 +196,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         Result result = call("PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
 
@@ -213,7 +211,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
 
         Result result = call("POST", "/internal/llm/responses", token());
 

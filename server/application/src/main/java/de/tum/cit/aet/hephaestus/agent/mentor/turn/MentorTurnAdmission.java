@@ -28,7 +28,8 @@ public record MentorTurnAdmission(
         Route route,
         @Nullable Integer contextWindow,
         @Nullable Integer maxOutputTokens,
-        @Nullable ReasoningEffort reasoningEffort) {
+        @Nullable ReasoningEffort reasoningEffort,
+        int timeoutSeconds) {
 
     private static final Logger log = LoggerFactory.getLogger(MentorTurnAdmission.class);
     private static final ObjectMapper MAPPER = JsonMapper.builder()
@@ -60,7 +61,8 @@ public record MentorTurnAdmission(
                 new Route(llm.apiProtocol(), llm.baseUrl(), llm.connectionScope(), llm.connectionId(), llm.modelId()),
                 llm.contextWindow(),
                 llm.maxOutputTokens(),
-                llm.reasoningEffort());
+                llm.reasoningEffort(),
+                llm.timeoutSeconds());
     }
 
     public JsonNode toJson() {

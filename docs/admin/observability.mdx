@@ -424,7 +424,6 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `mentor_turn_retried_total`                | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
 | `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a worker, sampled by the server every 30 seconds    |
 | `mentor_turn_queue_wait_seconds`           | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
-| `mentor_turn_tools_wait_seconds` | Histogram | `outcome` | From a tools-quota refusal until tools are ready or the attempt ends, including Pod start |
 | `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
@@ -432,9 +431,6 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `mentor_turn_duration_seconds`             | Histogram | none      | An attempt, from its claim to its end                                   |
 | `mentor_turn_first_token_seconds`          | Histogram | none      | From the start of an attempt to the first part of Hephaestus's answer         |
 | `mentor_turn_cost_usd`                     | Summary   | none      | The cost of one billed attempt in US dollars                            |
-| `mentor_host_ready`                        | Gauge     | none      | `1` while the conversation host of this worker has its command channel open     |
-| `mentor_host_turns_active`                 | Gauge     | none      | Turns that run in the conversation host of this worker now                      |
-| `mentor_turn_claim_failure_total`          | Counter   | none      | Claims and starts of a turn that failed with an error                   |
 | `mentor_slack_reply_total`                 | Counter   | `state`   | Replies to questions asked in Slack, by the state they were left in     |
 | `mentor_live_streams`                      | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
 
@@ -460,10 +456,6 @@ Workers record most of these series.
 The server role records `lease_expired` outcomes, the two lease-reaper counters, the cost of an attempt that lost its lease, the Slack replies and the live streams.
 Thus, sum each series across all roles.
 
-`mentor_host_ready` is `0` until the first turn on a worker starts its host.
-It is also `0` while a host starts and after a host is lost.
-Thus, a `0` alone does not show a fault.
-
 The share of attempts that did not succeed shows problems that developers see.
 This query gives that share for the last hour:
 
@@ -472,19 +464,18 @@ sum(increase(mentor_turn_completed_total{outcome=~"failed|lease_expired"}[1h]))
   / sum(increase(mentor_turn_completed_total[1h]))
 ```
 
-A high `lease_expired` share shows workers or conversation hosts that stop during turns.
+A high `lease_expired` share shows workers or conversation loop replicas that stop during turns.
 A high `failed` share with no lease expiries shows one of these causes:
 
 - Admission declines turns.
 - Turns reach their deadline.
-- Turns cannot start a host.
 - Turns get an error from the model.
 
 The worker logs each failed attempt at `WARN` as `conversation turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
-The reason tells which of these happened, for example `its conversation host reported ERROR: model_error`.
-The conversation host reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
+The reason tells which of these happened, for example `its conversation loop reported ERROR: model_error`.
+In that text, the host is the [conversation loop](./kubernetes.mdx#conversation-loop).
+The loop reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
 It does not report the error text of the model provider, a tool or the worker, or the messages of the conversation.
-A worker that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
 
 The worker logs each failed model call of a turn at `WARN` as `conversation model call failed`.
 The line has the turn id, the attempt, the kind of failure and the status that the provider or the proxy sent.
@@ -501,7 +492,7 @@ The turn row keeps the cause, so the cause stays after the worker stops:
 | `failed_call_status` | The HTTP status that the provider or the proxy sent for that call, if one was sent |
 | `llm_calls` | The model calls of the attempt that completed |
 
-The conversation host's end, the worker's own end and a lease that expires write the first three columns.
+The end that the loop reports and a lease that expires write the first three columns.
 A lease that expires writes no `failed_call`, because the server role, not the worker, ends the turn.
 The columns are empty for a turn that did not fail, and for a turn that admission declines.
 
@@ -509,9 +500,7 @@ A turn that admission declines, for example because the budget is spent, is logg
 A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Mentor turn lease expired`.
 Its `failure_cause` is `its lease expired on its last attempt`.
 
-An increase in `mentor_turn_claim_failure_total` shows a worker that claims turns but cannot start them.
-The worker fails each such turn and continues to claim.
-[Runtime roles](./runtime-roles.mdx#the-conversation-host) tells when a worker replaces its conversation host, what it logs, and what happens to the turns of that host.
+[Runtime roles](./runtime-roles.mdx#the-conversation-loop) tells what happens to the turns of a conversation loop replica that stops.
 
 ## Call pool metrics
 

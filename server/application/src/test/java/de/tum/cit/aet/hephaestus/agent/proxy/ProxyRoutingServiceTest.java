@@ -273,7 +273,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                                         2L),
                                 null,
                                 null,
-                                null)
+                                null,
+                                900)
                         .toJson());
         when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(row));
         return row;

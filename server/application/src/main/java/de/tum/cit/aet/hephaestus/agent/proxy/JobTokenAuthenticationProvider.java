@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.ConversationLoopCredentials;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import java.io.Serial;
@@ -14,26 +14,26 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 
 /**
- * Authenticates the sandbox credentials: an attempt's, of a review or of a Heph turn, and a Heph host's session token.
- * A review attempt's token reaches its own runtime and the model. A Heph turn attempt's token reaches the model while this worker holds the attempt's lease, and its own turn endpoints, which
- * check that the attempt runs here. A Heph host's gateway session token, which no signed claim backs, reaches only its
- * own runtime: the discovery and workspace its initializer downloads, and its command channel.
+ * Authenticates the gateway credentials: an attempt's, of a review or of a conversation turn, and the conversation
+ * loop's. A review attempt's token reaches its own runtime and the model. A turn attempt's token reaches the model and
+ * its own turn endpoints while the attempt holds its lease. The loop's service account token reaches only the
+ * conversation assignments, and an attempt token never reaches them.
  */
 // Credential checks must not initialize model configuration.
 final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     private final ReviewJobRepository jobs;
     private final MentorTurnRepository turns;
-    private final SandboxGatewaySessions sessions;
+    private final ConversationLoopCredentials loops;
     private final AttemptTokenVerifier verifier;
 
     JobTokenAuthenticationProvider(
             ReviewJobRepository jobs,
             MentorTurnRepository turns,
-            SandboxGatewaySessions sessions,
+            ConversationLoopCredentials loops,
             AttemptTokenVerifier verifier) {
         this.jobs = jobs;
         this.turns = turns;
-        this.sessions = sessions;
+        this.loops = loops;
         this.verifier = verifier;
     }
 
@@ -46,12 +46,12 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         try {
             attempt = verifier.verify(token.getToken());
         } catch (AttemptTokenInvalidException invalid) {
-            // Only a session registered as a Heph host's takes an unsigned token. A rejected job token is never
-            // read as one, even while its review session is open.
-            var session = sessions.unsignedSessionFor(token.getToken());
-            if (session.isPresent()) return unsignedSession(session.get(), request);
+            // Only the assignments take the loop's token, and the cluster decides it on no other path.
+            if (request.assignments() && loops.authenticates(token.getToken()))
+                return new JobTokenAuthentication(ProxyIdentity.conversationLoop(), Set.of(), null);
             throw new BadCredentialsException("Invalid or expired credential", invalid);
         }
+        if (request.assignments()) throw invalid();
         return switch (attempt.kind()) {
             case REVIEW -> review(attempt, request);
             case TURN -> turn(attempt, request);
@@ -59,7 +59,7 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     }
 
     private Authentication review(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
-        if (request.turnId() != null || request.commands()) throw invalid();
+        if (request.turnId() != null) throw invalid();
         var job = jobs.findById(jwt.id()).orElseThrow(JobTokenAuthenticationProvider::invalid);
         if (job.getWorkspaceId() != jwt.workspaceId()) throw invalid();
         if (request.runtimeJobId() != null
@@ -86,20 +86,6 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
                 throw new AttemptLeaseConflict("This turn attempt no longer holds its lease");
         }
         return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), jwt);
-    }
-
-    /**
-     * A Heph host's session token, which no signed claim backs, reaches only that host's own runtime reads: the
-     * discovery and workspace archive its initializer downloads before the host starts, and its command channel.
-     */
-    private static Authentication unsignedSession(
-            SandboxGatewaySessions.UnsignedSession session, JobTokenAuthenticationFilter.RequestIdentity request) {
-        boolean permitted = switch (session.kind()) {
-            case HEPH_HOST -> request.commands() || request.workspaceRead();
-            case REVIEW -> false;
-        };
-        if (!permitted || !session.id().toString().equals(request.runtimeJobId())) throw invalid();
-        return new JobTokenAuthentication(ProxyIdentity.hostSession(session.id()), Set.of(), null);
     }
 
     /**

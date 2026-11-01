@@ -90,6 +90,18 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             @Param("attempt") int attempt,
             @Param("leaseId") UUID leaseId);
 
+    /**
+     * Rotates the context in the transaction that withdraws source access: its own one when the change commits
+     * outside a transaction.
+     */
+    @Transactional
+    @Modifying
+    @Query(value = """
+            UPDATE mentor_turn SET context_generation = :generation
+            WHERE workspace_id = :workspaceId AND status IN ('RUNNING', 'STOPPED') AND leased_until IS NOT NULL
+            """, nativeQuery = true)
+    int changeContextGeneration(@Param("workspaceId") long workspaceId, @Param("generation") UUID generation);
+
     /** Locks the row, so a state change reads the proxy's latest totals and the proxy waits for it. */
     @WorkspaceAgnostic("Locks by primary key; callers hold the id from a workspace-scoped read or a lease")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -249,7 +261,31 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     @Query(value = "SELECT set_config('synchronous_commit', 'off', true)", nativeQuery = true)
     String commitWithoutFlushWait();
 
-    /** A running attempt, as one partial-answer write found it. */
+    /** A running attempt that may hold a tools Job: its complete identity and the context it may read. */
+    interface LiveAttempt {
+        Long getWorkspaceId();
+
+        UUID getId();
+
+        Integer getAttempt();
+
+        UUID getLeaseId();
+
+        UUID getContextGeneration();
+    }
+
+    /** Every running attempt that holds its live lease on the database clock, of every workspace. */
+    @WorkspaceAgnostic("A worker keeps the tools Jobs of the live attempts only, whichever workspace they serve")
+    @Query(value = """
+            SELECT workspace_id AS workspaceId, id AS id, attempt AS attempt, lease_id AS leaseId,
+                   context_generation AS contextGeneration
+              FROM mentor_turn
+             WHERE status = 'RUNNING' AND lease_id IS NOT NULL AND context_generation IS NOT NULL
+               AND leased_until > clock_timestamp()
+            """, nativeQuery = true)
+    List<LiveAttempt> findLiveAttempts();
+
+    /** A running attempt, as the read before its partial answer found it. */
     interface RunningAttempt {
         Long getWorkspaceId();
 
@@ -259,25 +295,23 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     }
 
     /**
-     * Replaces the partial answer of a running attempt that this worker holds, in one statement: no lock is taken
-     * before it, and the row's own lock is held only while it runs.
+     * The running attempt that holds this live lease, read without a lock or a write: a partial answer only checks the
+     * lease, because memory alone keeps it ({@link MentorTurnProgress}).
      *
-     * @param partial the snapshot as JSON text
      * @return the attempt, or empty when the attempt no longer holds its live lease
      */
     @WorkspaceAgnostic("The worker holds the attempt's lease; the statement returns the turn's workspace")
     @Query(value = """
-            UPDATE mentor_turn SET partial = CAST(:partial AS jsonb)
+            SELECT workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
+              FROM mentor_turn
              WHERE workspace_id = :workspaceId AND id = :id AND attempt = :attempt AND lease_id = :leaseId
                AND status = 'RUNNING' AND leased_until > clock_timestamp()
-            RETURNING workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
             """, nativeQuery = true)
-    Optional<RunningAttempt> writePartial(
+    Optional<RunningAttempt> findRunningAttempt(
             @Param("workspaceId") long workspaceId,
             @Param("id") UUID id,
             @Param("attempt") int attempt,
-            @Param("leaseId") UUID leaseId,
-            @Param("partial") String partial);
+            @Param("leaseId") UUID leaseId);
 
     /**
      * Adds one proxied call to the attempt that made it. The fence drops a call that arrives after the attempt

@@ -9,8 +9,9 @@ Use it to build a firewall allowlist.
 The [architecture diagram](./overview#architecture-and-network) shows where the main connections start and which ports the stack publishes.
 
 Sandboxes have no internet access.
-A review sandbox and the conversation host reach only the sandbox gateway of their worker.
-A turn sandbox has no network.
+A review sandbox reaches only the sandbox gateway of its worker.
+The conversation loop reaches only the workers' gateway port, its tools Jobs and DNS ([Kubernetes](./kubernetes#conversation-loop)).
+A tools Job has no network.
 The [threat model](./threat-model#boundary-3-outbound-egress) gives the controls that limit the destinations below.
 
 ## Host

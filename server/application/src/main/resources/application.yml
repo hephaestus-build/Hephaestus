@@ -245,10 +245,10 @@ management:
             #
             # `practiceReview` is the worker's own configuration. `kubernetesSandbox` holds a Kubernetes
             # worker unready until its isolation probe passed, so a rollout drains an old worker only after
-            # the new one proved the cluster. `hephTurnDispatcher` also requires its conversation host's command channel.
+            # the new one proved the cluster.
             group:
                 readiness:
-                    include: readinessState,practiceReview,kubernetesSandbox,hephTurnDispatcher
+                    include: readinessState,practiceReview,kubernetesSandbox
             # Most of the group is role-gated, and the default (true) aborts the refresh wherever a
             # named contributor is absent — so every container that is not a Kubernetes worker, plus the
             # specs and test profiles. What it removes is a spelling check, and
@@ -644,8 +644,8 @@ hephaestus:
         default-resource-limits:
             cpus: ${SANDBOX_CPUS:1.0}
 
-    # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the other
-    # hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx § Tunables.
+    # Per-workspace readiness of Heph is the Heph model binding. The hephaestus.mentor.turn.* keys besides capacity keep
+    # their code defaults: docs/admin/runtime-roles.mdx § Tunables.
     mentor:
         turn:
             capacity: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}

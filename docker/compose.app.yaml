@@ -509,8 +509,6 @@ services:
       HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP:-false}
       # No LLM credential passthrough: docs/admin/runtime-roles.mdx § Worker pod env vars.
       HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX: ${HEPHAESTUS_WORKER_REVIEW_MAX:-auto}
-      # docs/admin/runtime-roles.mdx § Tunables.
-      HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: ${HEPHAESTUS_WORKER_MENTOR_MAX:-auto}
       HEPHAESTUS_WORKER_DRAIN_TIMEOUT: ${HEPHAESTUS_WORKER_DRAIN_TIMEOUT:-5m}
       # Persistence for the JPA layer the worker shares (connection credentials,
       # workspace/agent context). The auth web layer is gated off this role, so no auth env is needed.

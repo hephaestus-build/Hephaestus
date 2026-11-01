@@ -113,9 +113,9 @@ Only the worker that started it joins this network.
 Thus, practice reviews need the worker role in a Docker container under its default hostname, as `application-worker` does.
 A host-run server refuses them.
 
-The conversation host is different.
-When the worker runs outside any container, the host uses an ordinary bridge network and reaches the worker through `host.docker.internal`.
-[Runtime roles](/admin/runtime-roles#the-conversation-host) gives the rule.
+A conversation turn does not run in the worker.
+It runs in the conversation loop, which pulls the turn from the worker.
+[Conversation runtime](./unified-pi-runtime.mdx#the-conversation-loop) gives the loop's settings.
 No binding setting controls this.
 Hephaestus posts feedback back to the MR.
 The workspace's **Practices → Practice reviews** view shows the results behind it.

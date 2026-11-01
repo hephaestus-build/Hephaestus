@@ -18,6 +18,7 @@ Three boolean properties control the roles:
 
 All three properties default to on, which starts the monolith role set.
 Conversation turns need at least one process with the worker role, even when the server and worker roles share that JVM.
+They also need the [conversation loop](./kubernetes.mdx#conversation-loop).
 The server role never runs a conversation turn itself.
 
 ## Boot log
@@ -297,7 +298,7 @@ These model calls take the same proxy path and rules as the sandbox's calls, so 
 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 The worker removes orphaned sandbox resources at startup and then at a fixed interval.
-These resources include a conversation host whose worker is gone.
+These resources include a tools Job whose worker is gone.
 They also include the sandbox of a review attempt after its review moved to a later attempt.
 This maintenance does not enable server-wide scheduled jobs on the worker.
 API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
@@ -357,7 +358,8 @@ Server maintenance still records the spend of attempts that already ran.
 ## Conversation turns
 
 Each question to Hephaestus, in the webapp or in a Slack DM, starts one turn.
-Turns run in the conversation host, one long-lived container on each worker.
+Turns run in the conversation loop, a Deployment that is separate from the workers.
+[Kubernetes](./kubernetes.mdx#conversation-loop) owns its credential, its network and its sizes.
 The [glossary](/contributor/practice-review-glossary#runtime-terms) defines both terms.
 The application server keeps these functions:
 
@@ -365,19 +367,19 @@ The application server keeps these functions:
 - A first admission check when a question arrives. The worker admits the turn again, with the budget check, when it claims it.
 - The conversation store in PostgreSQL.
 
-The server role needs no sandbox client and never connects to a conversation host.
+The server role needs no sandbox client and never connects to the conversation loop.
 `AGENT_ENABLED` controls queued practice reviews, not Hephaestus.
 
 ### Dispatch
 
 When a developer asks a question, the server stores it in PostgreSQL with a queued turn.
-Each worker listens for turn changes through PostgreSQL `LISTEN/NOTIFY`.
-It also checks the queue every 30 seconds as a backstop.
-A worker with free capacity claims the next turn and holds a lease on it.
-The worker runs the turn in its conversation host and writes the answer to PostgreSQL while Hephaestus writes it.
+A conversation loop replica with free capacity asks a worker for the next turn.
+The worker claims the turn, admits it, and holds a lease on it.
+The loop runs the turn and sends the answer to the worker while Hephaestus writes it.
+The worker writes the finished answer to PostgreSQL once.
 The server then sends the answer to the webapp or posts it to Slack.
 
-A turn that finds no free capacity waits in the queue until a worker can claim it.
+A turn that finds no free capacity waits in the queue until a loop replica pulls it.
 Each conversation runs one turn at a time.
 A thread is a separate conversation, so a thread turn can run at the same time as a turn in the main conversation.
 Questions that arrive during a turn wait in their conversation.
@@ -385,15 +387,18 @@ When `hephaestus.mentor.turn.max-follow-ups` questions wait, Hephaestus refuses 
 
 ### Conversation turn capacity
 
-`hephaestus.worker.capacity.mentor-max` sets how many conversation turns one worker runs at once.
-The Helm chart resolves `worker.conversationTurns: auto` from the declared CPU budget, after role requests and the review reservation.
+Each conversation loop replica runs a fixed number of turns at once.
+`worker.conversationTurns` sets that number for each replica.
+The Helm chart resolves `auto` from the declared CPU budget, after role requests and the review reservation.
 Both single-node profiles admit 32 resident turns. An explicit count overrides the automatic value.
-The local development default outside Helm remains eight.
 
-Resident turns, model calls and tools Pods use separate resources:
+The worker role has no capacity setting for conversation turns.
+The worker does not read `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
 
-- A turn uses little of the conversation host. In a load test, one host ran 90 turns at once in 364 MiB of memory.
-- Each turn that streams writes its partial answer up to 4 times each second, one short statement each time.
+Resident turns, model calls and tools Jobs use separate resources:
+
+- A turn uses little of the loop. In a load test, one process ran 90 turns at once in 364 MiB of memory.
+- Each turn that streams sends its partial answer up to 4 times each second as a database notification. A notification writes no table row, and the database stores no partial answer. The answer is stored once, when the turn ends.
 - A provider that queues calls past its concurrency limit makes each call slower.
   In the same load test, one provider key answered a single call in 4 seconds.
   With 8 calls at once, each call took 34 seconds.
@@ -401,9 +406,8 @@ Resident turns, model calls and tools Pods use separate resources:
 A turn that waits in the Hephaestus queue does not count against its execution deadline.
 A call that waits at the provider counts against the deadline and against the model idle timeout.
 The provider pool bounds physical calls independently of resident turns.
-The tools quota bounds tools Pods independently of both.
-A turn that waits for tools shows "Waiting for tools…" in its existing progress stage.
-`mentor_turn_tools_wait_seconds` records the interval from quota refusal until tools are ready or the attempt ends, including Pod start.
+The tools quota bounds tools Jobs independently of both.
+When the quota is full, the answer goes on without tools ([Tools Jobs](#tools-jobs)).
 
 A queued turn has a separate wait of three minutes to start, counted from its stored queue time.
 Server maintenance ends an overdue queued question with a message that asks the developer to try again.
@@ -416,20 +420,20 @@ Concurrent turns are about the questions each second multiplied by the seconds f
 For example, 1.8 questions each second with 4.5-second answers need 8 concurrent turns.
 `mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Observability](./observability.mdx#conversation-turn-metrics)).
 
-The server must also know the capacity of all workers together: `hephaestus.mentor.turn.capacity` (`HEPHAESTUS_MENTOR_TURN_CAPACITY`).
+The server must also know the capacity of all loop replicas together: `hephaestus.mentor.turn.capacity` (`HEPHAESTUS_MENTOR_TURN_CAPACITY`).
 While that many turns run, a question that a worker can start next says that Hephaestus is answering other questions.
-The Helm chart sets the value to `worker.replicas` multiplied by `worker.conversationTurns`.
-If you run workers without the chart, set it on the server to the sum of their `mentor-max` values.
+The Helm chart sets the value to `worker.conversationLoop.replicas` multiplied by `worker.conversationTurns`.
+If you run the loop without the chart, set it on the server to the sum of the turns that its replicas run at once.
 If it is not set, no question says why it waits.
 
-During a rollout, the old workers finish their turns beside the new workers, and those turns count too.
-Thus, for a short time, a question can say that Hephaestus is busy while a new worker has a free slot.
+During a rollout, the old loop replicas finish their turns beside the new replicas, and those turns count too.
+Thus, for a short time, a question can say that Hephaestus is busy while a new replica has a free slot.
 The question starts at the next claim.
 
 ### Lease, retry, and deadline
 
-The worker renews the lease of each running turn at one third of `hephaestus.mentor.turn.lease`.
-If the worker or its conversation host stops, the lease expires.
+The loop renews the lease of each running turn through a worker, at one third of `hephaestus.mentor.turn.lease`.
+If the loop or the worker that it calls stops, the lease expires.
 The server's lease reaper then returns the turn to the queue once, and any worker can claim it.
 If the lease of the second attempt also expires, the turn fails with **Hephaestus could not finish this reply. Try again.**
 
@@ -440,9 +444,10 @@ The timeout of the workspace's conversation model binding is the deadline of eac
 A binding accepts no longer Hephaestus timeout, and an older binding with a longer one acts as 300 seconds.
 A turn also stops after 40 model calls, retries included.
 
-At the deadline or the call limit, the worker stops the turn.
+At the deadline or the call limit, the loop stops the turn.
 The turn fails with **Hephaestus took too long to reply and stopped. Try again.**
-The worker ends a stopped turn itself if the conversation host does not end it within 30 seconds.
+The worker refuses to renew the lease of a turn that is still open 30 seconds after its deadline.
+The lease then expires, and the turn follows the retry rule above.
 
 The worker's LLM proxy cuts a conversation model call whose provider stays silent too long.
 Two bounds apply:
@@ -587,26 +592,59 @@ It acquires this local capacity before it loads or restores composition inputs.
 This bound is separate from the existing sixteen-local-attempt ceiling.
 It does not reduce the resident review limit to four.
 
-### The conversation host
+### The conversation loop
 
-Each worker starts its conversation host before it claims a turn, including when no question is queued.
-The host runs in a Pod of the pinned agent image. Its script comes from the worker.
-The [Pod-kind table](./kubernetes#sandbox-sizes) owns its resource requests and limits.
-The host does not count against `SANDBOX_MAX_CONCURRENT` or the worker JVM's memory limit.
-Its sandbox namespace and NetworkPolicy come from the chart.
+The conversation loop is a Deployment in the release namespace, not a part of a worker.
+[Kubernetes](./kubernetes.mdx#conversation-loop) owns its credential, its network, its replicas and its limits.
+The worker role starts no process for conversation turns.
 
-The [host development loop](/contributor/local-development#spring-profiles-and-local-configuration) supplies its own namespace and gateway metadata.
-
-The host is ready when it opens its command channel to the worker's sandbox gateway.
-A worker whose host is not ready claims no question. A question that waits to start for 3 minutes fails through server maintenance, using its persisted queue time.
+A question waits in the queue while no loop replica is ready.
+A question that waits to start for 3 minutes fails through server maintenance, using its persisted queue time.
 The developer then sees **Hephaestus could not start. Try again in a moment.**
 
-If the command channel closes, the worker removes the host.
-The worker pings the channel every 5 seconds.
-If the host leaves 6 pings in a row without an answer, about 30 seconds, the worker closes the channel and removes the host.
+A loop replica that stops loses the leases of its running turns, unless it drains first.
+A turn on its first attempt then runs again when its lease expires.
+A turn on its second attempt fails.
+A stopping replica pulls no new turn and finishes its running turns.
+A worker that drains also keeps serving the loop calls of its running turns.
 
-The worker logs the removal with the host's id at `INFO`.
-It does not copy the host's output into its own log, because that output can hold the conversation, a provider's answer, or a credential.
+The worker gives each attempt a credential that is valid only for that turn.
+The worker resolves provider keys and never sends them to the loop.
+PostgreSQL remains the billing record.
+
+### Tools Jobs
+
+Hephaestus reads its context documents, code, and Git history through a [tools Job](/contributor/practice-review-glossary#runtime-terms), not in the loop.
+The worker starts one tools Job for an answer when the answer first runs a command or loads a repository.
+An answer that needs no tools starts no Job.
+A tools Job has no network and no credential. Only the loop reaches it.
+The worker removes the Job when the answer ends.
+
+The worker also removes the Jobs that can hold data that is no longer allowed.
+A person's erasure, a change of the AI choice, and a hidden repository each cause this.
+The answer then continues with a new Job for the new context, or without tools.
+
+The conversations quota limits the Jobs to a fixed count for the release.
+When the quota is full, the answer goes on without tools.
+The model gets a tool error that tells it to answer without tools.
+[Kubernetes](./kubernetes.mdx#sandbox-sizes) gives the count and the limits of a Job.
+`SANDBOX_MAX_CONCURRENT` and the review capacity of the worker do not count tools Jobs.
+Their Pods have `hephaestus.build/sandbox-kind=tools`.
+
+Tools Jobs need the qualified Kubernetes worker and the pinned agent image of the release.
+The worker mounts its own tools server into each Job from a ConfigMap that it creates.
+Hephaestus reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
+Without Git mirrors, Hephaestus tells the developer that it cannot read the code.
+No setting turns tools Jobs on or off.
+
+A tools Job ends at the deadline of its answer.
+Sandbox maintenance removes a tools Job that no worker owns.
+It never removes a tools Job of another worker that still runs.
+Host development does not run the worker role.
+
+The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
+
+### Sandbox exit logs
 
 When a sandbox ends abnormally, the worker logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
 Only for a practice review does that line also carry the review runtime's own last diagnostic lines, as `sandbox.stderr.tail`.
@@ -617,57 +655,6 @@ The line never holds a tool result, a provider's error message, model output, re
 The worker keeps a line only when its event, fields and values are in the runtime's diagnostic vocabulary.
 This rule also applies to a line from an older runtime image.
 It counts every other line in `sandbox.stderr.dropped`.
-
-When a host cannot start, the worker logs the cause that it knows.
-For example, it logs an API refusal or the exit code of the host's workspace setup.
-
-A turn that ran in a removed host runs again when its lease expires, if it was on its first attempt.
-A turn on its second attempt fails.
-The next turn that the worker claims starts a new host.
-On a graceful drain, the worker stops claiming turns and waits for its running turns up to `hephaestus.worker.drain.timeout`, the same timeout as for reviews.
-Then it removes the host.
-If a worker stops without a drain, sandbox maintenance removes its host after its worker lease expires.
-
-The worker gives each attempt a credential that is valid only for that turn.
-The worker resolves provider keys and never sends them to the host.
-PostgreSQL remains the billing record.
-
-### Turn sandboxes
-
-Hephaestus reads its context documents, code, and Git history in a [turn sandbox](/contributor/practice-review-glossary#runtime-terms) on the worker, not in the conversation host.
-The first read of a turn attempt takes one turn sandbox.
-The worker removes it when the attempt ends.
-Each worker also keeps a pool of 2 empty turn sandboxes, so that a turn does not wait for a container start.
-
-Plan for these containers on each worker, beside the review sandboxes and the conversation host:
-
-- One turn sandbox for each running conversation turn that reads, at most `hephaestus.worker.capacity.mentor-max`.
-- 2 empty turn sandboxes in the pool.
-
-Each turn sandbox has these fixed limits:
-
-- 1 CPU.
-- Memory and storage from the [Pod-kind table](./kubernetes#sandbox-sizes).
-- The process limit enforced by the kubelet.
-- No network.
-
-The limits are bounds, not reservations. An idle sandbox runs only `sleep`.
-`SANDBOX_MAX_CONCURRENT` and the review capacity of the worker do not count turn sandboxes.
-Their Pods have `hephaestus.build/sandbox-kind=turn`.
-
-Turn sandboxes need the qualified Kubernetes worker and the pinned agent image of the release.
-If the worker cannot start a turn sandbox, Hephaestus cannot read the developer's work and says so.
-The worker logs `Could not fill the turn sandbox pool` at `WARN` and tries again every 60 seconds.
-Hephaestus reads repositories only where the worker has Git mirrors (`GIT_CHECKOUT_ENABLED`).
-Without Git mirrors, Hephaestus tells the developer that it cannot read the code.
-No setting turns turn sandboxes on or off.
-
-The worker removes leftover turn sandboxes at startup and every 60 seconds.
-It never removes a turn sandbox of another worker that still runs.
-The worker uses its sandbox namespace and worker ownership labels for cleanup.
-Host development does not run the worker role.
-
-The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives the other limits and the measured times.
 
 ### Live answers
 
@@ -690,18 +677,16 @@ A load test that asks more questions as one account must raise the capacity.
 
 | Property                                    | Default       | Effect                                                                  |
 | ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| `hephaestus.worker.capacity.mentor-max`     | `auto` (8)    | The number of conversation turns that one worker's conversation host runs at once ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.turn.lease`              | `PT1M`        | The lease of a running turn. The worker renews it at one third of this. |
 | `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn may wait for the provider's response headers |
 | `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn may send nothing |
 | `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
 | `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
-| `hephaestus.mentor.turn.capacity`           | Not set       | The conversation turns that all workers together run at once. Only the server reads it ([Conversation turn capacity](#conversation-turn-capacity)) |
+| `hephaestus.mentor.turn.capacity`           | Not set       | The conversation turns that all loop replicas together run at once. Only the server reads it ([Conversation turn capacity](#conversation-turn-capacity)) |
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.
-The Compose files forward only the capacity, as `HEPHAESTUS_WORKER_MENTOR_MAX`.
-To change another key, add its environment variable to the services with a Compose override.
+To change a key, add its environment variable to the services with a Compose override.
 An example is `HEPHAESTUS_MENTOR_TURN_LEASE`.
 
 [Observability](./observability.mdx#conversation-turn-metrics) lists the conversation turn metrics.
@@ -717,7 +702,7 @@ AGENT_ENABLED=true
 ```
 
 Without the last line, the worker boots but claims no practice-review jobs.
-It can still run conversation turns: `AGENT_ENABLED` does not gate them.
+It still serves conversation turns: `AGENT_ENABLED` does not gate them.
 
 No LLM environment variables are necessary.
 The LLM proxy runs in-process on each pod with the worker role, whatever `AGENT_ENABLED` says.
@@ -727,14 +712,14 @@ It reads providers from the same instance/workspace catalog as the app pod.
 1. Register providers at runtime under Instance administration → AI models, or under the workspace's AI models page.
 2. Never register providers through an environment variable.
 
-Both capacities default to `auto`.
-Review capacity then sizes from `Runtime.availableProcessors()`.
-[Tunables](#tunables) gives the Conversation turn capacity.
-Override them only if the host is noisy.
+Review capacity defaults to `auto`, which sizes from `Runtime.availableProcessors()`.
+Override it only if the host is noisy.
+The conversation loop runs the conversation turns, not the worker.
+On the Helm chart, `worker.conversationTurns` sets the turns that each loop replica runs at once.
 
-The JVM binds `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` and `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
-The shorter `HEPHAESTUS_WORKER_REVIEW_MAX` and `HEPHAESTUS_WORKER_MENTOR_MAX` are **Compose-file aliases only**.
-`docker/compose.app.yaml` translates them.
+The JVM binds `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX`.
+The shorter `HEPHAESTUS_WORKER_REVIEW_MAX` is a **Compose-file alias only**.
+`docker/compose.app.yaml` translates it.
 A Kubernetes or systemd deployment ignores them without a warning.
 
 `SANDBOX_MAX_CONCURRENT` also caps review capacity.
@@ -759,7 +744,7 @@ Missing metadata prevents worker startup.
 The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
 
 Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
-The other workers keep a worker's conversation host and turn sandboxes while it beats.
+The other workers keep the tools Jobs of a worker while it beats.
 
 ## Graceful drain
 
