@@ -2796,6 +2796,15 @@ void describe("CI contract", () => {
 		);
 		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ inputs.platform }}`);
 		assert.doesNotMatch(String(enforce.get("run")), /github\.(?:run_id|run_attempt)/u);
+		// The scans run on freed disk, with their temporary files on the roomiest volume.
+		const disk = namedStep(workflow, build, "Free disk space for the scans");
+		assert.equal(
+			at("Free disk space for the scans"),
+			at("Enforce the release vulnerability policy") - 1,
+		);
+		assert.equal(disk.get("run"), "node scripts/prepare-image-scan-runner.ts");
+		assert.equal(disk.get("if"), enforce.get("if"));
+		assert.equal(enforce.getIn(["env", "TMPDIR"]), `\${{ steps.scan-disk.outputs.directory }}`);
 		// A gate that cannot say what it rejected is not finished.
 		const report = namedStep(workflow, build, "Upload the vulnerability policy results");
 		assert.equal(

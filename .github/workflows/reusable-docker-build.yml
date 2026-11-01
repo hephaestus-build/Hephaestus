@@ -339,6 +339,12 @@ jobs:
         with:
           database-artifact: ${{ inputs.database-artifact }}
 
+      # The builds fill the root volume; ci-cd.mdx § Parallelism and concurrency gives the reason.
+      - name: Free disk space for the scans
+        id: scan-disk
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
+        run: node scripts/prepare-image-scan-runner.ts
+
       # Trivy and Syft pull through the job's registry login, so the package-writing token is not
       # also handed to them as environment variables. A scan or policy failure of one image does not
       # stop the scans of the others; a subject that cannot be resolved stops the step at once.
@@ -349,6 +355,7 @@ jobs:
           IMAGES: ${{ steps.prep.outputs.images }}
           REGISTRY: ${{ inputs.registry }}
           SCAN_PLATFORM: ${{ inputs.platform }}
+          TMPDIR: ${{ steps.scan-disk.outputs.directory }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
           set -euo pipefail

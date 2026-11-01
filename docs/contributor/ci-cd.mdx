@@ -925,6 +925,9 @@ Right after a merge, that run is still building, so the pull request builds ever
   pinned node image. Renovate updates the image within its minor. A new minor is a workflow change.
   Before cluster creation, each leg removes unused SDKs from its GitHub-hosted runner.
   `scripts/prepare-kubernetes-runner.ts` checks free space on Docker's filesystem before each cluster starts.
+- Before its vulnerability scans, each image build job removes the same unused SDKs and logs the free space.
+  Trivy copies each image layer to a temporary file after the builds have filled the root volume.
+  Thus, `scripts/prepare-image-scan-runner.ts` gives the scans' temporary files the volume with the most free space.
 - A pull request that matches the `kubernetes` filter runs `Chart` and the latest k3s on amd64.
   The merge queue also runs the lowest supported minor on amd64 and arm64, `kind 1.37 Calico` and
   the backup drill. It tests the commit that `main` receives, so a pull request does not repeat
