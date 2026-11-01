@@ -911,7 +911,11 @@ If your network cannot reach its own public address, the DNS check fails. Then r
    Delete the Secret `traefik/hephaestus-tls` to get a trusted certificate.
    [First steps § 2](./first-steps#2-name-the-first-admin) explains the admin list.
 
-3. Keep the required keys of the release Secret outside the host, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. For `kubectl` on this host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first.
+3. Back up the encryption keys before you continue.
+   Hephaestus cannot make them again: without them, the data that they protect is lost.
+   The installer ends with the command that copies them to a file that only you can read.
+   [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) gives the command, and [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) says where to keep the file.
+   For `kubectl` on this host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first.
 
 4. Open `https://<host>` and sign in as the bootstrap admin.
 5. Continue with [First steps § 4](./first-steps#4-connect-repository-data).

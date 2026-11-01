@@ -560,9 +560,21 @@ fi
 say "Hephaestus $VERSION runs at https://$HOST"
 cat <<EOF
 - For kubectl and helm on this host: export KUBECONFIG=$KUBECONFIG
-- Keep the required keys of the release Secret outside this host, with the database backups, as
-  the Secret custody page of the admin docs describes. Without the two encryption keys, the data
-  that they protect is lost.
+
+Back up the encryption keys now. Hephaestus cannot make them again.
+If you lose them, sign-in stops, and the stored provider secrets, AI keys and integration
+credentials are lost for good. A new install cannot read them.
+These commands copy the keys to a file that only you can read, and count them. They print no key:
+
+  (umask 077 && rm -f hephaestus-keys.env && kubectl -n $NAMESPACE get secret $SECRET -o json |
+    jq -er '.data | to_entries[]
+    | select(.key | test("^(HEPHAESTUS_SECURITY_(CREDENTIAL_|PRIOR_CREDENTIAL_)?ENCRYPTION_KEY|DATABASE_USERNAME|BACKUP_CIPHER_PASS)$"))
+    | "\(.key)=\(.value | @base64d)"' >hephaestus-keys.env)
+  grep -c '^HEPHAESTUS_SECURITY_.*ENCRYPTION_KEY=' hephaestus-keys.env
+
+The count must be 2 or more. The file is not encrypted: put it in a password manager or encrypt
+it, keep it with site.yaml off this host, then delete it here. Copy it again after each key change.
+The admin docs page "Secret custody and rotation" gives the full rule.
 EOF
 if [ "$STAGING" = true ]; then
 	echo "- The certificate comes from the Let's Encrypt staging service. Run this again without --staging, then delete the Secret $GATEWAY_NAMESPACE/hephaestus-tls."
