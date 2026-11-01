@@ -195,6 +195,10 @@ function git(args: readonly string[], directory: string, failure: string): strin
 	return result.stdout;
 }
 
+const insideRoots = (file: string) =>
+	roots.some((root) => file === root || file.startsWith(`${root}/`));
+const aboveRoots = (folder: string) => roots.some((root) => root.startsWith(`${folder}/`));
+
 /** The scan reads each path's own bytes, so a link out of the roots would ship a file it never reads. */
 export function assertLinksStayInRoots(
 	paths: readonly string[],
@@ -210,7 +214,7 @@ export function assertLinksStayInRoots(
 		);
 		for (const file of files.split("\0").filter(Boolean)) {
 			const absolute = path.join(directory, file);
-			if (lstatSync(absolute, { throwIfNoEntry: false })?.isSymbolicLink()) {
+			if (lstatSync(absolute, { throwIfNoEntry: false })?.isSymbolicLink() === true) {
 				links.push([file, readlinkSync(absolute)]);
 			}
 		}
@@ -229,9 +233,6 @@ export function assertLinksStayInRoots(
 		}
 	}
 	const targets = new Map(links);
-	const inside = (file: string) =>
-		roots.some((root) => file === root || file.startsWith(`${root}/`));
-	const above = (directory: string) => roots.some((root) => root.startsWith(`${directory}/`));
 	// The OS follows a directory link before it applies a later `..`, so resolve one segment at a time.
 	const resolve = (link: string, hops: number): string | undefined => {
 		const target = targets.get(link) ?? "";
@@ -256,14 +257,14 @@ export function assertLinksStayInRoots(
 					return undefined;
 				}
 				parts = followed.split("/");
-			} else if (inside(current) || above(current)) {
+			} else if (insideRoots(current) || aboveRoots(current)) {
 				parts.push(segment);
 			} else {
 				return undefined;
 			}
 		}
 		const resolved = parts.join("/");
-		return inside(resolved) ? resolved : undefined;
+		return insideRoots(resolved) ? resolved : undefined;
 	};
 	for (const [file] of links) {
 		if (resolve(file, 0) === undefined) {
