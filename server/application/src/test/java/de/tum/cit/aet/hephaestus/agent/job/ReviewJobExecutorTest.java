@@ -264,6 +264,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     private double requeuedAfterExit(int exitCode, String cause) {
         var job = admittedJob();
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         recovery = mock(ReviewJobRecovery.class);
         when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
         var executor = runExecutor(
@@ -885,6 +886,32 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(handler).finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
         verify(composer).withholdResumed(any(), eq(job.getLeaseId()), eq(CompositionStop.MODEL_UNAVAILABLE));
         verifyNoInteractions(sandbox);
+    }
+
+    @Test
+    void shouldNeitherSealNorInterruptStagedWorkForTheClaimThatTookTheRow() {
+        var job = configuredJob();
+        job.setAttempt(1);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        // By the time the attempt reads its row again, a later claim holds it under another lease.
+        var taken = configuredJob();
+        taken.setId(job.getId());
+        taken.setAttempt(2);
+        taken.setLeaseId(UUID.randomUUID());
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(taken));
+        when(policy.permitsReview(job)).thenReturn(true);
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(assignments.hasStaged(job)).thenReturn(true);
+        var composer = mock(WorkerFeedbackComposer.class);
+        var executor = executor(inlinePool());
+        executor.setFeedbackComposer(composer);
+
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        verify(handler, never()).finishInterrupted(any(), any());
+        verify(handler, never()).completeStaged(any());
+        verifyNoInteractions(composer, sandbox);
     }
 
     /** An admitted job queued again to compose what its lost attempt left open, claimable by this worker. */

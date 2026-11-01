@@ -775,7 +775,14 @@ public class ReviewJobExecutor {
                     queueDuration);
 
             // An admitted review measures nothing again: its attempt composes what an earlier attempt left open.
-            ReviewJob current = jobRepository.findById(jobId).orElse(job);
+            // The row must still carry this attempt's lease: a seal or interruption acts for whoever holds it.
+            ReviewJob current;
+            try {
+                current = ownRow(jobId);
+            } catch (ResultAdmissionService.StaleAttemptException lost) {
+                metricOutcome = "OWNERSHIP_LOST";
+                return;
+            }
             boolean sealOnly = !ResultAdmissionService.isAdmitted(current)
                     && (current.spentAttempts() > agentProperties.maxRetries() || claim.withholdOnly() != null)
                     && handler.hasStaged(current);
@@ -946,7 +953,12 @@ public class ReviewJobExecutor {
         }
         AgentResult agentResult = practiceAgent.parseResult(result);
 
-        var retained = jobRepository.findById(jobId).orElse(job);
+        ReviewJob retained;
+        try {
+            retained = ownRow(jobId);
+        } catch (ResultAdmissionService.StaleAttemptException lost) {
+            return null;
+        }
         if (!ResultAdmissionService.isAdmitted(retained)
                 && handler.hasStaged(retained)
                 && !handler.completeStaged(retained)) {

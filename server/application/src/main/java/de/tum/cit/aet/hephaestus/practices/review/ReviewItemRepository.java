@@ -110,12 +110,15 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         """, nativeQuery = true)
     List<Long> executablePracticeIds(long workspaceId, UUID reviewId, long itemId);
 
-    /** The practices that a queued or running review of the item lists and has not judged yet, with that review. */
+    /**
+     * The practices that a queued or running review of the item lists and has not admitted yet, with that review. A
+     * staged result stays the earlier review's until it seals.
+     */
     @Query(value = """
         SELECT m.practice_id AS practiceId, r.id AS reviewId, r.status AS status,
         CAST(r.checks->>'startedAt' AS timestamptz) AS startedAt FROM review_item m
         JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id WHERE m.workspace_id=:workspaceId
-        AND m.item_id=:itemId AND m.state='LISTED' AND r.kind='ITEM' AND r.status IN ('QUEUED','RUNNING')
+        AND m.item_id=:itemId AND m.state IN ('LISTED','STAGED') AND r.kind='ITEM' AND r.status IN ('QUEUED','RUNNING')
         """, nativeQuery = true)
     List<ListedPractice> listedPractices(long workspaceId, long itemId);
 

@@ -1657,6 +1657,37 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
+    void shouldHoldALaterOccasionWhileTheEarlierReviewOnlyStagedThePractice() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_READY, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        deliver(
+                prepared,
+                "ready_for_review",
+                pullRequestPayload(prepared, "b".repeat(40), Instant.now().plusSeconds(60)));
+        var admitted = itemReviews(prepared).stream().map(Review::getId).toList();
+        assertThat(admitted).hasSize(1);
+        // The earlier review measured the practice and staged its result, but has not sealed it.
+        jdbc.update("UPDATE review_item SET state='STAGED', staged_attempt=0 WHERE review_id=?", admitted.getFirst());
+        long jobsBefore = jobs(prepared);
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(120)));
+
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactlyElementsOf(admitted);
+        assertThat(jobs(prepared)).isEqualTo(jobsBefore);
+        assertThat(itemEvents(prepared))
+                .filteredOn(occasion -> occasion.getState() == ItemEventState.WAITING)
+                .extracting(ItemEvent::getReason)
+                .containsOnly(ReviewRequestReason.REVIEW_IN_PROGRESS);
+    }
+
+    @Test
     void shouldReviewALateFirstReadyDeliveryOnceWhenAPushWasStoredBeforeIt() {
         var prepared = prepare(
                 IdentityProviderType.GITHUB,
