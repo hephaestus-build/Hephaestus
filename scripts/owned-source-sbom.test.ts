@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
@@ -104,6 +104,24 @@ Files: ["${name}"]
 		() => scanOwnedSource(undefined, directory),
 		/asset has no ownership entry: unlisted.patch/u,
 	);
+	await rm(path.join(directory, patches, "unlisted.patch"));
+
+	// An SDK bump renames the patch for the new release; a notice that keeps the old Package: no
+	// longer describes the shipped fork.
+	const bumped = "@earendil-works__pi-ai@1.4.0.patch";
+	await rm(path.join(directory, patches, name));
+	await writeFile(path.join(directory, patches, bumped), bytes);
+	const notice = await readFile(path.join(directory, patches, "NOTICE.md"), "utf8");
+	await writeFile(path.join(directory, patches, "NOTICE.md"), notice.replace(name, bumped));
+	assert.throws(
+		() => scanOwnedSource(undefined, directory),
+		/patches pkg:npm\/%40earendil-works\/pi-ai@1\.4\.0, but Package: names pkg:npm\/%40earendil-works\/pi-ai@1\.0\.0/u,
+	);
+	await writeFile(
+		path.join(directory, patches, "NOTICE.md"),
+		notice.replace(name, bumped).replace(purl, "pkg:npm/%40earendil-works/pi-ai@1.4.0"),
+	);
+	assert.equal(scanOwnedSource(undefined, directory).length, 3);
 });
 
 await test("asset notices reject gaps, overlap, missing files, paths and malformed blocks", async (context) => {

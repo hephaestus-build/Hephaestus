@@ -16,6 +16,20 @@ import {
 } from "./owned-code-sbom.ts";
 
 const assetFields = [...OWNED_FIELDS, "Files"];
+
+/**
+ * A pnpm patch file is named for the release it patches, as `@scope__name@version.patch`. A notice
+ * whose `Package:` names another release describes code the image no longer ships.
+ */
+export function patchedRelease(file: string): string | undefined {
+	const match = /^(?<name>.+)@(?<version>[^@]+)\.patch$/u.exec(file);
+	if (match?.groups === undefined) {
+		return undefined;
+	}
+	const name = asString(match.groups.name, "patched package").replace("__", "/");
+	const version = asString(match.groups.version, "patched version");
+	return `pkg:npm/${encodeURIComponent(name).replaceAll("%2F", "/")}@${version}`;
+}
 const metadataFile = (file: string) =>
 	file === "NOTICE.md" || /^LICENSE(?:-[A-Z0-9-]+)?$/u.test(file);
 
@@ -95,6 +109,11 @@ export function scanOwnedAssets(commit?: string, directory = process.cwd()) {
 					throw new Error(`${notice}: asset declared more than once: ${file}`);
 				}
 				declared.add(file);
+				const release = patchedRelease(file);
+				const named = values[1] ?? "";
+				if (release !== undefined && release !== named) {
+					throw new Error(`${notice}: ${file} patches ${release}, but Package: names ${named}`);
+				}
 				const source = `${path.posix.dirname(notice)}/${file}`;
 				components.push(
 					ownedFileComponent(source, readOwnedFile(source, commit, directory), values),
