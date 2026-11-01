@@ -141,7 +141,7 @@ export function NavSuperAdmin({ workspaceSlug }: NavSuperAdminProps) {
 						<SidebarMenuButton
 							tooltip="Instance overview"
 							isActive={matchRoute({ to: "/admin" }) !== false}
-							render={<Link to="/admin" />}
+							render={<Link to="/admin" activeOptions={{ exact: true }} />}
 						>
 							<Gauge />
 							<span>Overview</span>

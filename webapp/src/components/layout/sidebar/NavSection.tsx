@@ -24,11 +24,6 @@ export interface NavSectionProps {
 	 * reaches its entries.
 	 */
 	landingLink: ReactElement;
-	/**
-	 * The landing link's own page is current, in the icon-only sidebar. Defaults to `active`; a
-	 * section whose entries keep icons of their own there passes its landing page alone.
-	 */
-	landingActive?: boolean;
 	children: ReactNode;
 }
 
@@ -36,20 +31,13 @@ export interface NavSectionProps {
  * A collapsible sidebar entry, composed from the `Collapsible` and `SidebarMenu*` primitives as
  * shadcn's collapsible sidebar does. The kit has no section component of its own.
  */
-export function NavSection({
-	label,
-	icon,
-	active,
-	badge,
-	landingLink,
-	landingActive = active,
-	children,
-}: NavSectionProps) {
+export function NavSection({ label, icon, active, badge, landingLink, children }: NavSectionProps) {
 	const [open, setOpen] = useSectionOpen(active);
 	// On a phone the sidebar is a sheet with full labels, never icon-only.
 	const { isMobile, state } = useSidebar();
 	const collapsed = !isMobile && state === "collapsed";
-	const shown = collapsed || !open ? badge : undefined;
+	const entriesHidden = collapsed || !open;
+	const shown = entriesHidden ? badge : undefined;
 	const name = (
 		<span>
 			{label}
@@ -58,13 +46,24 @@ export function NavSection({
 	);
 	// `SidebarMenuBadge` hides itself in the icon-only sidebar, so the tooltip carries the count.
 	const tooltip = shown ? `${label} (${shown.phrase})` : label;
+	// With its entries hidden, the section stands in for the current one. The landing link's own
+	// match would cover its landing page only.
+	const current = active && entriesHidden;
+	const ariaCurrent = current ? "page" : undefined;
 	const button = collapsed ? (
-		<SidebarMenuButton tooltip={tooltip} isActive={landingActive} render={landingLink}>
+		<SidebarMenuButton
+			tooltip={tooltip}
+			isActive={current}
+			aria-current={ariaCurrent}
+			render={landingLink}
+		>
 			{icon}
 			{name}
 		</SidebarMenuButton>
 	) : (
-		<CollapsibleTrigger render={<SidebarMenuButton tooltip={tooltip} isActive={!open && active} />}>
+		<CollapsibleTrigger
+			render={<SidebarMenuButton tooltip={tooltip} isActive={current} aria-current={ariaCurrent} />}
+		>
 			{icon}
 			{name}
 			<ChevronRight
@@ -82,10 +81,13 @@ export function NavSection({
 					{shown.count}
 				</SidebarMenuBadge>
 			)}
-			<CollapsibleContent>
-				{/* Named, so a screen reader jumping by list hears which section it landed in. */}
-				<SidebarMenuSub aria-label={label}>{children}</SidebarMenuSub>
-			</CollapsibleContent>
+			{/* Not rendered when folded to icons, where the landing link stands in for every entry. */}
+			{!collapsed && (
+				<CollapsibleContent>
+					{/* Named, so a screen reader jumping by list hears which section it landed in. */}
+					<SidebarMenuSub aria-label={label}>{children}</SidebarMenuSub>
+				</CollapsibleContent>
+			)}
 		</Collapsible>
 	);
 }

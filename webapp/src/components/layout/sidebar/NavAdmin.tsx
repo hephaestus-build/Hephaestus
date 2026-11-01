@@ -108,7 +108,6 @@ export function NavAdmin({
 						<Link
 							to="/w/$workspaceSlug/admin/practices/reviews/overview"
 							params={{ workspaceSlug }}
-							aria-current={onReviews ? "page" : undefined}
 						/>
 					}
 				>
@@ -219,12 +218,7 @@ export function NavAdmin({
 					icon={<PlugZapIcon />}
 					active={onIntegrationsSection}
 					landingLink={
-						<Link
-							to="/w/$workspaceSlug/admin/integrations"
-							params={{ workspaceSlug }}
-							activeOptions={{ exact: true }}
-							aria-current={onIntegrationsOverview ? "page" : undefined}
-						/>
+						<Link to="/w/$workspaceSlug/admin/integrations" params={{ workspaceSlug }} />
 					}
 				>
 					<SidebarMenuSubItem>
