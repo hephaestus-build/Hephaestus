@@ -549,7 +549,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                                 job.getWorkspaceId(),
                                 job.getReviewId()))
                         .isEqualTo("QUEUED");
-                assertThat(CompletableFuture.supplyAsync(() -> claims.claimJob(job.getId(), () -> true, properties.maxRetries()), requests)
+                assertThat(CompletableFuture.supplyAsync(
+                                        () -> claims.claimJob(job.getId(), () -> true, properties.maxRetries()),
+                                        requests)
                                 .orTimeout(10, TimeUnit.SECONDS)
                                 .join())
                         .isEqualTo(ReviewJobClaimService.ClaimOutcome.ALREADY_CLAIMED);
@@ -777,13 +779,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 snapshots,
                 transactions,
                 mapper,
-                metrics,
+                context.getBean(ReviewStart.class),
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty(),
                 permits);
-        assertThat(claims.claimJob(job.getId(), properties.maxRetries()))
+        assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isEqualTo(ReviewJobClaimService.ClaimOutcome.BUDGET_HELD);
         var held = jobs.findById(job.getId()).orElseThrow();
         assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
@@ -811,13 +812,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 snapshots,
                 transactions,
                 mapper,
-                metrics,
+                context.getBean(ReviewStart.class),
                 budgets,
                 modelAdmission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty(),
                 permits);
-        assertThat(claims.claimJob(job.getId(), properties.maxRetries()))
+        assertThat(claims.claimJob(job.getId(), () -> true, properties.maxRetries()))
                 .isInstanceOfSatisfying(ReviewJobClaimService.ClaimResult.class, claimed -> {
                     assertThat(claimed.withholdOnly()).isEqualTo(CompositionStop.RETRIES_EXHAUSTED);
                     assertThat(claimed.job().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);

@@ -351,13 +351,13 @@ public class DefaultReviewExecutionHandler {
     public void finishInterrupted(ReviewJob job, ReviewStopReason reason) {
         admission.finishInterrupted(
                 new ResultAdmissionService.AdmissionIdentity(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId())),
+                        job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId())),
                 reason);
     }
 
     public boolean completeStaged(ReviewJob job) {
         return admission.sealIfComplete(new ResultAdmissionService.AdmissionIdentity(
-                job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId())));
+                job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId())));
     }
 
     public void completeWithoutExecution(ReviewJob job) {

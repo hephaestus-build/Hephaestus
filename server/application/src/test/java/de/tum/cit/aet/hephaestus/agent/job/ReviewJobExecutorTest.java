@@ -869,11 +869,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(assignments.hasStaged(job)).thenReturn(true);
         when(handler.hasStaged(job)).thenReturn(true);
-        when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), eq(1), any()))
-                .thenAnswer(call -> {
-                    job.setWorkerId("worker-1");
-                    return 1;
-                });
+        when(jobs.markExecutionStarted(eq(job.getId()), any(UUID.class), eq(1), any()))
+                .thenReturn(1);
         doAnswer(call -> {
                     job.setAdmissionAttempt(1);
                     job.setAdmissionDigest("sealed");
@@ -886,7 +883,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         executor.setFeedbackComposer(composer);
         assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
         verify(handler).finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
-        verify(composer).withholdResumed(any(), eq("worker-1"), eq(CompositionStop.MODEL_UNAVAILABLE));
+        verify(composer).withholdResumed(any(), eq(job.getLeaseId()), eq(CompositionStop.MODEL_UNAVAILABLE));
         verifyNoInteractions(sandbox);
     }
 

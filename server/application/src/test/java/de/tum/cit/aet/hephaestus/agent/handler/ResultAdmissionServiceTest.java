@@ -125,7 +125,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                         mapper,
                         new PracticeCatalogInjector(mapper)));
         job.setLeasedUntil(Instant.now().plusSeconds(3600));
-        lenient().when(jobs.databaseNow()).thenAnswer(call -> Instant.now());
+        lenient().when(jobs.databaseClock()).thenAnswer(call -> Instant.now());
         lenient().when(members.endedPractices(anyLong(), any(), any())).thenReturn(Set.of(31L));
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setLeaseId(LEASE);
@@ -144,7 +144,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     void shouldAcceptALiveDatabaseLeaseWhenTheServerClockIsAhead() {
         var databaseNow = Instant.now().minusSeconds(7200);
         job.setLeasedUntil(databaseNow.plusSeconds(60));
-        when(jobs.databaseNow()).thenReturn(databaseNow);
+        when(jobs.databaseClock()).thenReturn(databaseNow);
 
         assertThat(service.ownedJob(identity())).isSameAs(job);
     }
@@ -153,7 +153,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     void shouldRejectALeaseAtItsDatabaseExpiryWhenTheServerClockIsBehind() {
         var databaseNow = Instant.now().plusSeconds(7200);
         job.setLeasedUntil(databaseNow);
-        when(jobs.databaseNow()).thenReturn(databaseNow);
+        when(jobs.databaseClock()).thenReturn(databaseNow);
 
         assertThatThrownBy(() -> service.ownedJob(identity()))
                 .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);

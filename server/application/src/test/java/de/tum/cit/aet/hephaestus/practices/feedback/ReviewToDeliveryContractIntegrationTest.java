@@ -308,11 +308,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             review.inputs().close();
             FileUtils.deleteDirectory(directory.toFile());
             before.setAttempt(1);
-            before.setWorkerId("replacement-worker");
+            var replacement = UUID.fromString("5c1f8e2a-93b4-4d7e-a6c0-2b8f4e1d9a37");
+            before.setLeaseId(replacement);
             before.setLeasedUntil(Instant.now().plusSeconds(3600));
             jobs.saveAndFlush(before);
-            var identity = new ResultAdmissionService.AdmissionIdentity(
-                    before.getId(), review.workspaceId(), 1, "replacement-worker");
+            var identity =
+                    new ResultAdmissionService.AdmissionIdentity(before.getId(), review.workspaceId(), 1, replacement);
             assertThatThrownBy(() -> admission.stage(review.identity(), request))
                     .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
             assertThat(admission.sealIfComplete(identity)).isTrue();
@@ -551,15 +552,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             job.setLlmCalls(1);
             jobs.saveAndFlush(job);
             transactions.executeWithoutResult(
-                    status -> attemptRecovery.recover(job.getId(), WORKER, job.getAttempt(), null));
+                    status -> attemptRecovery.recover(job.getId(), WORKER_LEASE, job.getAttempt(), null));
             assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             var last = jobs.findById(job.getId()).orElseThrow();
             last.setStatus(ReviewJobStatus.RUNNING);
-            last.setWorkerId(WORKER);
+            last.setLeaseId(WORKER_LEASE);
             last.setLeasedUntil(Instant.now().plusSeconds(3600));
             jobs.saveAndFlush(last);
             transactions.executeWithoutResult(
-                    status -> attemptRecovery.recover(last.getId(), WORKER, last.getAttempt(), null));
+                    status -> attemptRecovery.recover(last.getId(), WORKER_LEASE, last.getAttempt(), null));
             assertThat(jobs.findById(last.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.FAILED);
             assertThat(jobs.findById(job.getId()).orElseThrow().getAttempt())
                     .isEqualTo(agentProperties.maxRetries() + 1);
@@ -670,7 +671,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             job.setLlmCacheReadTokens(1200);
             job.setLlmCacheWriteTokens(300);
             jobs.saveAndFlush(job);
-            transactions.executeWithoutResult(status -> attemptRecovery.recover(job.getId(), WORKER, 0, null));
+            transactions.executeWithoutResult(status -> attemptRecovery.recover(job.getId(), WORKER_LEASE, 0, null));
             var retry = jobs.findById(job.getId()).orElseThrow();
             assertThat(retry.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             assertThat(retry.getAttempt()).isEqualTo(1);
@@ -702,7 +703,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isInstanceOf(AdmissionConflictException.class);
             assertThatThrownBy(() -> admission.stage(
                             new ResultAdmissionService.AdmissionIdentity(
-                                    review.identity().jobId(), review.workspaceId() + 1000000, 0, WORKER),
+                                    review.identity().jobId(), review.workspaceId() + 1000000, 0, WORKER_LEASE),
                             request(review)))
                     .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
             assertThat(stagingStore.staged(
