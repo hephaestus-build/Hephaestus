@@ -1841,6 +1841,7 @@ export const zCurrentUserView = z.object({
     accessTokenExpiresAt: z.int().optional(),
     appRole: z.string().optional(),
     avatarUrl: z.string().optional(),
+    consent: zConsentStatus,
     displayName: z.string().optional(),
     gitProviderId: z.string().optional(),
     id: z.int().optional(),

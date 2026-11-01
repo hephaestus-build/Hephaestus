@@ -9,7 +9,6 @@ export const budgets = {
 	practiceProfile: {
 		reads: [
 			"GET /user",
-			"GET /user/consent",
 			"GET /user/features",
 			"GET /w/members/me",
 			"GET /w/mentor/conversation",
@@ -21,13 +20,12 @@ export const budgets = {
 			"GET /w/practices/standings",
 			"GET /workspaces",
 		],
-		rounds: 5,
+		rounds: 4,
 		moved: ["page"],
 	},
 	askHephaestus: {
 		reads: [
 			"GET /user",
-			"GET /user/consent",
 			"GET /user/features",
 			"GET /w/members/me",
 			"GET /w/mentor/conversation",
@@ -35,13 +33,12 @@ export const budgets = {
 			"GET /w/onboarding/me",
 			"GET /workspaces",
 		],
-		rounds: 5,
+		rounds: 4,
 		moved: ["page"],
 	},
 	feedbackApproval: {
 		reads: [
 			"GET /user",
-			"GET /user/consent",
 			"GET /user/features",
 			"GET /w/connections/catalog",
 			"GET /w/members/me",
@@ -57,7 +54,7 @@ export const budgets = {
 			"GET /w/practices/reviews?size=1",
 			"GET /workspaces",
 		],
-		rounds: 5,
+		rounds: 4,
 		moved: ["other", "sidebar"],
 	},
 	profileToAsk: {

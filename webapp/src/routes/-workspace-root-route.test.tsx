@@ -18,7 +18,7 @@ import type {
 import type { Wire } from "@/lib/dates";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
-import { unauthenticatedUser } from "@/mocks/handlers";
+import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { workspaceRewrite } from "@/runtime/workspace-address";
@@ -828,7 +828,7 @@ describe("a signed-in person who is not a member", () => {
 describe("a signed-in person whose consent is pending", () => {
 	it("gives it before the page", async () => {
 		server.use(
-			http.get("*/user/consent", () => HttpResponse.json({ completed: false })),
+			...consentOutstanding,
 			http.get("*/workspaces", () => HttpResponse.json([])),
 		);
 		publish();

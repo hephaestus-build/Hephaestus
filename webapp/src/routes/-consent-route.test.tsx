@@ -1,3 +1,4 @@
+import { noop } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
@@ -5,7 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import type { FirstLoginConsent } from "@/api/types.gen";
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
+import { workspaceListItem } from "@/mocks/fixtures/workspaces";
+import { consentOutstanding } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
+import { sleep } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 const notice = {
@@ -73,6 +77,64 @@ describe("first-login consent route", () => {
 	});
 });
 
+describe("after the notice is answered", () => {
+	it("opens the protected page it was asked for, without asking again", async () => {
+		server.use(
+			...consentOutstanding,
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		);
+		showNotice(noop);
+		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fsettings");
+
+		await screen.findByRole("heading", { name: "Get set up" }, ROUTE_RENDER_WAIT);
+		await userEvent.click(screen.getByRole("checkbox", { name: /terms of use/iu }));
+		await userEvent.click(screen.getByRole("radio", { name: /keep my data out of research/u }));
+		fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/settings"),
+			ROUTE_RENDER_WAIT,
+		);
+	});
+});
+
+describe("a notice answered elsewhere", () => {
+	it("opens the protected page when the notice reads as answered", async () => {
+		server.use(
+			http.get("*/user/consent", () => HttpResponse.json({ ...notice, completed: true })),
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+			...consentOutstanding,
+		);
+		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fsettings");
+
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/settings"),
+			ROUTE_RENDER_WAIT,
+		);
+		await sleep(200);
+		expect(router.state.location.pathname).toBe("/settings");
+	});
+
+	it("opens the protected page when a retry finds the notice answered", async () => {
+		server.use(
+			http.get("*/user/consent", () => new HttpResponse(null, { status: 503 })),
+			http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+			...consentOutstanding,
+		);
+		const { router } = renderRouteAtWithRouter("/consent?returnTo=%2Fsettings");
+		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
+		server.use(http.get("*/user/consent", () => HttpResponse.json({ ...notice, completed: true })));
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/settings"),
+			ROUTE_RENDER_WAIT,
+		);
+		await sleep(200);
+		expect(router.state.location.pathname).toBe("/settings");
+	});
+});
+
 describe("consent recovery", () => {
 	it("offers retry after a failed notice fetch without loading protected data", async () => {
 		let protectedReads = 0;
@@ -82,6 +144,7 @@ describe("consent recovery", () => {
 				protectedReads += 1;
 				return HttpResponse.json([]);
 			}),
+			...consentOutstanding,
 		);
 		renderRouteAtWithRouter("/");
 		await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);

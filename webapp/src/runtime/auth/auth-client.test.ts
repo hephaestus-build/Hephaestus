@@ -3,13 +3,15 @@ import { afterEach, assert, describe, expect, it } from "vitest";
 
 import type { CurrentUserView } from "@/api/types.gen";
 import { hasText } from "@/lib/text";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { workspaceAddressConfig } from "@/runtime/workspace-address";
 
 import { applyStateChangingHeaders, authClient, toUserProfile } from "./auth-client";
 
-function makeCurrentUser(overrides: CurrentUserView = {}): CurrentUserView {
+function makeCurrentUser(overrides: Partial<CurrentUserView> = {}): CurrentUserView {
 	return {
+		consent: currentUser.consent,
 		id: 7,
 		displayName: "Ada Lovelace",
 		appRole: "USER",

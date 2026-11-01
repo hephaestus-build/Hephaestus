@@ -2,7 +2,6 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { getConsentStatusQueryKey } from "@/api/@tanstack/react-query.gen";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -281,56 +280,39 @@ describe("resolveWorkspaceMembership", () => {
 		}
 	});
 });
-
 describe("consentIsPending with the application's client", () => {
-	it("holds the route back at the first failed consent read, without retrying it", async () => {
+	it("keeps a consented reader in the app when the identity cannot be revalidated", async () => {
 		const { queryClient } = getContext();
 		serve(asAppRole("APP_USER"));
-		const consent = { asked: 0 };
-		server.use(
-			http.get("*/user/consent", () => {
-				consent.asked += 1;
-				return HttpResponse.json({ status: 503 }, { status: 503 });
-			}),
+		try {
+			await expect(consentIsPending(queryClient)).resolves.toBe(false);
+			const outage = serve(() => HttpResponse.json({ status: 503 }, { status: 503 }));
+			await goStale(queryClient);
+
+			await expect(consentIsPending(queryClient)).resolves.toBe(false);
+			await vi.waitFor(() => expect(outage.times).toBeGreaterThan(0));
+			await expect(consentIsPending(queryClient)).resolves.toBe(false);
+		} finally {
+			queryClient.clear();
+		}
+	});
+
+	it("holds the route back when the identity shows consent outstanding", async () => {
+		const { queryClient } = getContext();
+		serve(() =>
+			HttpResponse.json({ ...currentUser, consent: { ...currentUser.consent, completed: false } }),
 		);
 		try {
 			await expect(consentIsPending(queryClient)).resolves.toBe(true);
-			expect(consent.asked).toBe(1);
 		} finally {
 			queryClient.clear();
 		}
 	});
 
-	it("keeps a consent it already read as complete when a later read fails", async () => {
-		const { queryClient } = getContext();
-		serve(asAppRole("APP_USER"));
-		try {
-			// The default handler answers that consent is complete.
-			await expect(consentIsPending(queryClient)).resolves.toBe(false);
-			server.use(
-				http.get("*/user/consent", () => HttpResponse.json({ status: 503 }, { status: 503 })),
-			);
-			await queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
+	it("sends a reader with no identity yet to the error surface, not to consent", async () => {
+		const queryClient = client();
+		serve(() => HttpResponse.error());
 
-			await expect(consentIsPending(queryClient)).resolves.toBe(false);
-		} finally {
-			queryClient.clear();
-		}
-	});
-
-	it("still holds the route back when the server refuses the consent read", async () => {
-		const { queryClient } = getContext();
-		serve(asAppRole("APP_USER"));
-		try {
-			await expect(consentIsPending(queryClient)).resolves.toBe(false);
-			server.use(
-				http.get("*/user/consent", () => HttpResponse.json({ status: 403 }, { status: 403 })),
-			);
-			await queryClient.invalidateQueries({ queryKey: getConsentStatusQueryKey({}) });
-
-			await expect(consentIsPending(queryClient)).resolves.toBe(true);
-		} finally {
-			queryClient.clear();
-		}
+		await expect(consentIsPending(queryClient)).rejects.toSatisfy(serverUnreachable);
 	});
 });
