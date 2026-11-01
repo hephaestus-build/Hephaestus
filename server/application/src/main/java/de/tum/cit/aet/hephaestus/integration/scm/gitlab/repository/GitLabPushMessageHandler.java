@@ -2,13 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
@@ -18,8 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
@@ -30,7 +25,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO.CommitInfo;
@@ -64,9 +58,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * diff statistics (additions/deletions per file). Falls back to webhook-only processing
  * on error or for non-default branches.
  * <p>
- * Also ensures the parent group is linked as an Organization via DB lookup.
- * If the organization doesn't exist yet (push arrives before full sync), it is left unlinked
- * and will be resolved during the next scheduled sync.
+ * Only a delivery admitted on its connection's route is handled, for the project admission stored.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -75,17 +67,12 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     private static final Logger log = LoggerFactory.getLogger(GitLabPushMessageHandler.class);
     private static final String ZERO_SHA = "0000000000000000000000000000000000000000";
 
-    private final GitLabProjectProcessor projectProcessor;
-    private final OrganizationRepository organizationRepository;
     private final RepositoryRepository repositoryRepository;
     private final CommitRepository commitRepository;
     private final CommitDetailsPersister persister;
-    private final IdentityProviderRepository gitProviderRepository;
-    private final GitLabProperties gitLabProperties;
     private final GitRepositoryManager gitRepositoryManager;
     private final GitLabTokenService tokenService;
     private final CommitAuthorResolver authorResolver;
-    private final ScopeIdResolver scopeIdResolver;
     private final SyncTargetProvider syncTargetProvider;
     private final ApplicationEventPublisher eventPublisher;
     private final GitLabCommitMergeRequestLinker commitMergeRequestLinker;
@@ -95,17 +82,12 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     private final GitLabProjectAdmission admission;
 
     GitLabPushMessageHandler(
-            GitLabProjectProcessor projectProcessor,
-            OrganizationRepository organizationRepository,
             RepositoryRepository repositoryRepository,
             CommitRepository commitRepository,
             CommitDetailsPersister persister,
-            IdentityProviderRepository gitProviderRepository,
-            GitLabProperties gitLabProperties,
             GitRepositoryManager gitRepositoryManager,
             GitLabTokenService tokenService,
             CommitAuthorResolver authorResolver,
-            ScopeIdResolver scopeIdResolver,
             SyncTargetProvider syncTargetProvider,
             ApplicationEventPublisher eventPublisher,
             GitLabCommitMergeRequestLinker commitMergeRequestLinker,
@@ -119,17 +101,12 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 GitLabPushEventDTO.class,
                 deserializer,
                 transactionTemplate);
-        this.projectProcessor = projectProcessor;
-        this.organizationRepository = organizationRepository;
         this.repositoryRepository = repositoryRepository;
         this.commitRepository = commitRepository;
         this.persister = persister;
-        this.gitProviderRepository = gitProviderRepository;
-        this.gitLabProperties = gitLabProperties;
         this.gitRepositoryManager = gitRepositoryManager;
         this.tokenService = tokenService;
         this.authorResolver = authorResolver;
-        this.scopeIdResolver = scopeIdResolver;
         this.syncTargetProvider = syncTargetProvider;
         this.eventPublisher = eventPublisher;
         this.commitMergeRequestLinker = commitMergeRequestLinker;
@@ -170,53 +147,25 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 event.totalCommitsCount());
 
         Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
-        if (route.isPresent() && !route.get().contains(projectPath)) {
+        if (route.isEmpty()) {
+            log.warn("Skipped push event: reason=noAdmittedRoute, projectPath={}", safeProjectPath);
+            return;
+        }
+        if (!route.get().contains(projectPath)) {
             log.warn("Skipped push event: reason=outsideConnectedGroup, projectPath={}", safeProjectPath);
             return;
         }
 
-        var preparedPush = transactions.execute(status -> {
-            // On a connection route admission already stored the project as GitLab reports it; the payload's copy of
-            // its metadata is not written over that.
-            if (route.isPresent()) {
-                return repositoryRepository
-                        .findByNameWithOwnerAndProviderId(
-                                projectPath, route.get().providerId())
-                        .filter(admitted -> routeAdmission.admitRepository(route.get(), admitted))
-                        .flatMap(admitted -> repositoryRepository.findByIdWithOrganization(admitted.getId()))
-                        .flatMap(admitted -> admission
-                                .capture(route.get().workspaceId(), admitted)
-                                .map(read -> new PreparedPush(admitted, read)))
-                        .orElse(null);
-            }
-            IdentityProvider provider = gitProviderRepository
-                    .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
-                    .orElseThrow(() -> new IllegalStateException("GitLab identity provider is unavailable"));
-            // A legacy shared hook has no signed workspace claim. Only an existing positive monitor can
-            // authorize its project; an organization row shared with another workspace is not that authority.
-            Long scopeId =
-                    scopeIdResolver.findScopeIdByRepositoryName(projectPath).orElse(null);
-            Long nativeId = Objects.requireNonNull(event.project()).id();
-            if (scopeId == null || nativeId == null) return null;
-            var connection = admission
-                    .captureConnection(scopeId, Objects.requireNonNull(provider.getId()))
-                    .orElse(null);
-            if (connection == null) return null;
-            return admission
-                    .discover(connection, nativeId, projectPath, provider.getServerUrl(), () -> {
-                        var prepared = projectProcessor.processPushEvent(event.project(), provider);
-                        if (prepared == null) return null;
-                        ensureOrganizationLinked(prepared, projectPath, provider);
-                        Repository repository = repositoryRepository
-                                .findByIdWithOrganization(prepared.getId())
-                                .orElseThrow();
-                        return admission
-                                .capture(scopeId, repository)
-                                .map(read -> new PreparedPush(repository, read))
-                                .orElse(null);
-                    })
-                    .orElse(null);
-        });
+        // Admission already stored the project as GitLab reports it; the payload's copy of its metadata is not written
+        // over that.
+        GitLabRouteAdmission.AdmittedRoute admitted = route.get();
+        var preparedPush = transactions.execute(status -> repositoryRepository
+                .findByNameWithOwnerAndProviderId(projectPath, admitted.providerId())
+                .filter(stored -> routeAdmission.admitRepository(admitted, stored))
+                .flatMap(stored -> repositoryRepository.findByIdWithOrganization(stored.getId()))
+                .flatMap(stored ->
+                        admission.capture(admitted.workspaceId(), stored).map(read -> new PreparedPush(stored, read)))
+                .orElse(null));
 
         if (preparedPush != null) {
             Repository repository = preparedPush.repository();
@@ -470,50 +419,17 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     // Scope resolution
 
     /**
-     * For a write transaction after the git fetch: whether the delivery may still write, which on a connection route
-     * means the connection is still active, held so until the transaction ends.
+     * For a write transaction after the git fetch: whether the delivery may still write, which means its connection is
+     * still active, held so until the transaction ends.
      */
     private boolean mayWrite(GitLabProjectAdmission.ProjectRead read) {
         return admission.hold(read)
                 && GitLabRouteAdmission.current()
                         .map(routeAdmission::holdActive)
-                        .orElse(true);
-    }
-
-    // Organization linking
-
-    private void ensureOrganizationLinked(Repository repository, String projectPath, IdentityProvider provider) {
-        if (repository.getOrganization() != null) {
-            return;
-        }
-
-        String groupPath = extractGroupPath(projectPath);
-        if (groupPath == null) {
-            return;
-        }
-
-        Organization org = organizationRepository
-                .findByLoginIgnoreCaseAndProviderId(groupPath, Objects.requireNonNull(provider.getId()))
-                .orElse(null);
-
-        if (org != null) {
-            repository.setOrganization(org);
-            repositoryRepository.save(repository);
-            log.debug(
-                    "Linked org to repository: repoId={}, orgLogin={}", repository.getId(), sanitizeForLog(groupPath));
-        } else {
-            log.debug("Organization not yet synced: groupPath={}", sanitizeForLog(groupPath));
-        }
+                        .orElse(false);
     }
 
     // Utility methods
-
-    @Nullable
-    static String extractGroupPath(@Nullable String projectPath) {
-        if (projectPath == null || projectPath.isBlank()) return null;
-        int lastSlash = projectPath.lastIndexOf('/');
-        return lastSlash <= 0 ? null : projectPath.substring(0, lastSlash);
-    }
 
     private static String extractHeadline(@Nullable String fullMessage, @Nullable String title) {
         if (title != null && !title.isBlank()) return CommitDetailsPersister.fit(title, Commit.MESSAGE_LENGTH);

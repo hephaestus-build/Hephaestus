@@ -60,11 +60,11 @@ import org.junit.jupiter.api.Test;
 @Tag("integration")
 class ScopeConsumerReconcileIntegrationTest {
 
-    private static final String STREAM = "gitlab";
+    private static final String STREAM = "github";
     private static final long SCOPE_ID = 9L;
-    private static final String REPOSITORY = "hephaestustest/introcourse/demo-heph-e2e";
-    private static final String DISCOVERED_REPOSITORY = "hephaestustest/introcourse/discovered";
-    private static final String DISCOVERED_ISSUE_SUBJECT = "gitlab.hephaestustest~introcourse.discovered.issue";
+    private static final String REPOSITORY = "hephaestustest/demo-heph-e2e";
+    private static final String DISCOVERED_REPOSITORY = "hephaestustest/discovered";
+    private static final String DISCOVERED_ISSUE_SUBJECT = "github.hephaestustest.discovered.issues";
     private static final String OUTLINE_STREAM = "outline";
     private static final String OUTLINE_SUBSCRIPTION = "5b0f3a1e-4c52-4d8e-9a57-2f7c1b9e0d31";
     private static final String ADDED_OUTLINE_SUBSCRIPTION = "9e2d7c40-1f6b-4a3e-8c95-6d0a4b7e2f18";
@@ -359,7 +359,7 @@ class ScopeConsumerReconcileIntegrationTest {
         IntegrationMessageHandler handler = new IntegrationMessageHandler() {
             @Override
             public EventTypeKey key() {
-                return new EventTypeKey(IntegrationKind.GITLAB, "issue");
+                return new EventTypeKey(IntegrationKind.GITHUB, "issues");
             }
 
             @Override

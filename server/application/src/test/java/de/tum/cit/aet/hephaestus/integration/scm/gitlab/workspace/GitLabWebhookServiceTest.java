@@ -704,6 +704,20 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
+        void replacesAnEnabledStoredHookOnTheRemovedSharedEndpoint() {
+            // A workspace whose stored id is a hook on /webhooks/gitlab gets refusals for every delivery while GitLab
+            // still reports the hook as executable. Its own connection hook is registered; the foreign one stays.
+            storeHook(new WebhookInfo(99L, EXTERNAL_URL + "/webhooks/gitlab", "executable"));
+
+            webhookService.checkWebhookHealth();
+
+            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
+            verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
+            assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
+        }
+
+        @Test
         void reRegistersExternallyDeletedWebhook() {
             storeHook(99L, connectionUrl(routeCredential));
             hooks.clear();

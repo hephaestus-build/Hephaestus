@@ -91,7 +91,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @DisplayName("verified Outline webhook body → outline.<sub>.<event> subject on JetStream")
     void publishesOutlineOnVerified() {
         // Real Outline deriver so the body → subject/dedup derivation is exercised end to end through
-        // the pipeline, mirroring the GitLab webhook→NATS path.
+        // the pipeline.
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
                 List.of(stubVerifier(IntegrationKind.OUTLINE, new VerificationResult.Verified())),
                 List.of(new OutlineSubjectKeyDeriver(objectMapper)),
@@ -110,6 +110,27 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         assertThat(pr.subject()).isEqualTo("outline.sub-1.documents~update");
         assertThat(pr.dedupId()).startsWith("outline-");
         assertThat(pr.headers()).containsEntry("Nats-Msg-Id", pr.dedupId());
+    }
+
+    @Test
+    void anAuthenticatedRouteNeedsNoSharedPathDeriver() {
+        // GitLab's connection route derives its own subject and dedup id; the kind has no SubjectKeyDeriver bean.
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(List.of(), List.of(), publisher, objectMapper);
+
+        ResponseEntity<?> resp = pipeline.publishAuthenticated(
+                IntegrationKind.GITLAB,
+                "{\"object_kind\":\"push\"}".getBytes(StandardCharsets.UTF_8),
+                headers(),
+                payload -> "gitlab.?connection.7." + payload.path("object_kind").asString(),
+                "gitlab-c7-abc",
+                Map.of("Hephaestus-Route-Workspace", "3"));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
+        verify(publisher).publish(captor.capture());
+        assertThat(captor.getValue().subject()).isEqualTo("gitlab.?connection.7.push");
+        assertThat(captor.getValue().dedupId()).isEqualTo("gitlab-c7-abc");
+        assertThat(captor.getValue().headers()).containsEntry("Hephaestus-Route-Workspace", "3");
     }
 
     @Test
@@ -170,19 +191,19 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     @Test
     void publisherExceptionMapsTo503AndTheLogNamesItsCause(CapturedOutput output) {
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
-                List.of(stubVerifier(IntegrationKind.GITLAB, new VerificationResult.Verified())),
-                List.of(stubDeriver(IntegrationKind.GITLAB, "gitlab.foo.bar.push", "gitlab-uuid")),
+                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
+                List.of(stubDeriver(IntegrationKind.GITHUB, "github.foo.bar.push", "github-uuid")),
                 publisher,
                 objectMapper);
         doThrow(new JetStreamPublisher.PublishFailedException(
                         new JetStreamPublisher.Failure(JetStreamPublisher.Cause.NO_RESPONDERS, "503"),
                         3,
-                        "gitlab.foo.bar.push"))
+                        "github.foo.bar.push"))
                 .when(publisher)
                 .publish(any());
 
         ResponseEntity<?> resp =
-                pipeline.handle(IntegrationKind.GITLAB, "{}".getBytes(StandardCharsets.UTF_8), headers());
+                pipeline.handle(IntegrationKind.GITHUB, "{}".getBytes(StandardCharsets.UTF_8), headers());
 
         assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "publish-failed");
         assertThat(output.getAll()).contains("cause=no_responders attempts=3");

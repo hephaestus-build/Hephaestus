@@ -728,12 +728,11 @@ hephaestus:
     # WEBHOOK CONFIGURATION
     # ═══════════════════════════════════════════════════════════════════════════
     # Single `hephaestus.webhook` block consumed by both webhook sides (ADR 0008):
-    #   - workspace.GitLabWebhookService reads external-url, secret, token-rotation.* for
-    #     auto-registration with the provider.
-    #   - integration.webhook.* reads secret (HMAC / token verification) and the nested
-    #     publish/stream/http blocks for the inbound receiver.
-    # `secret` is shared by design — same value registered with the provider and used
-    # to verify incoming bodies. The receiver runs in the `webhook-server` container.
+    #   - workspace.GitLabWebhookService reads external-url, routing.* and token-rotation.* to
+    #     register each connection's group hook.
+    #   - integration.webhook.* reads secret (GitHub HMAC verification), routing.* (GitLab and
+    #     Outline route credentials) and the nested publish/stream/http blocks for the receiver.
+    # The receiver runs in the `webhook-server` container.
     # external-url is empty outside production, so local runs register no provider hook; the prod profile
     # defaults it to the app's own origin. Set WEBHOOK_EXTERNAL_URL when the receiver is fronted elsewhere.
     webhook:
@@ -756,7 +755,7 @@ hephaestus:
             deadline: 8s
             retry-base-delay: 200ms
         stream:
-            # Must be >= the max vendor replay tolerance (5m: GitLab whsec + Slack v0). GitHub has
+            # Must be >= the max vendor replay tolerance (5m: Slack v0). GitHub has
             # no timestamp, so this dedup window keyed on X-GitHub-Delivery is its only replay
             # defense. It also outlasts the 2h look-back of the GitHub redelivery job, so a delivery
             # that was stored but answered late is not stored again when the job redelivers it. The

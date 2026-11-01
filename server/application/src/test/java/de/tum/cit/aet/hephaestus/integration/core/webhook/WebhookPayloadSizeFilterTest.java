@@ -38,7 +38,7 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
     @Test
     void rejectsOversizedGitlabPostWith413() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/webhooks/gitlab");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/webhooks/github");
         request.setContentType("application/json");
         request.setContent(new byte[2048]);
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -48,8 +48,8 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
         assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
         verify(chain, never()).doFilter(request, response);
-        assertCounter("gitlab", "payload-too-large", 1);
-        assertCounter("gitlab", "length-required", 0); // no swapped tags
+        assertCounter("github", "payload-too-large", 1);
+        assertCounter("github", "length-required", 0); // no swapped tags
     }
 
     @Test
@@ -82,7 +82,7 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
     @Test
     void rejectsMissingContentLengthWith411() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/webhooks/gitlab") {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/webhooks/github") {
             @Override
             public long getContentLengthLong() {
                 return -1;
@@ -97,8 +97,8 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
         assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_LENGTH_REQUIRED);
         verify(chain, never()).doFilter(request, response);
-        assertCounter("gitlab", "length-required", 1);
-        assertCounter("gitlab", "payload-too-large", 0); // no swapped tags
+        assertCounter("github", "length-required", 1);
+        assertCounter("github", "payload-too-large", 0); // no swapped tags
     }
 
     private void assertCounter(String provider, String reason, double expected) {
@@ -155,7 +155,7 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
     @Test
     void bypassesGetRequests() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/webhooks/gitlab");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/webhooks/github");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 

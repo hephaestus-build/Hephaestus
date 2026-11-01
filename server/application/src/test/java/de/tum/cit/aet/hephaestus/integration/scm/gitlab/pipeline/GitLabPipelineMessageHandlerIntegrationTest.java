@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -18,6 +19,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pipeline.dto.GitLabPipelineEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -28,6 +31,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Set;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,6 +44,14 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ConnectionService routeConnectionService;
+
+    @Autowired
+    private GitLabProjectAdmission routeAdmissionReads;
+
+    private Workspace savedWorkspace;
 
     private static final String PIPELINE_SHA = "bcbb5ec396a2c0f828686f14fac9b80b780504f2";
 
@@ -114,6 +127,7 @@ class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setAccountLogin("hephaestustest");
         workspace.setAccountType(AccountType.ORG);
         workspace = workspaceRepository.save(workspace);
+        savedWorkspace = workspace;
         var connection = new Connection(
                 workspace,
                 IntegrationKind.GITLAB,
@@ -137,7 +151,7 @@ class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
     void shouldRecordTheFailedPipelineOnTheMergeRequestItNames() throws Exception {
         PullRequest mr = persistMergeRequest(11);
 
-        handler.handleEvent(load("pipeline"));
+        handleOnRoute(load("pipeline"));
 
         PullRequest checked = pullRequestRepository.findById(mr.getId()).orElseThrow();
         assertThat(checked.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
@@ -172,7 +186,7 @@ class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
     }
 
     private void receive(GitLabPipelineEventDTO event, Instant arrivedAt) {
-        transactionTemplate.executeWithoutResult(status -> handler.handle(event, arrivedAt));
+        transactionTemplate.executeWithoutResult(status -> handleOnRoute(event, arrivedAt));
     }
 
     /** The recorded pipeline hook with {@code status}. */
@@ -200,5 +214,32 @@ class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private GitLabPipelineEventDTO load(String fixture) throws IOException {
         String json = new ClassPathResource("gitlab/" + fixture + ".json").getContentAsString(StandardCharsets.UTF_8);
         return objectMapper.readValue(json, GitLabPipelineEventDTO.class);
+    }
+
+    /** Delivers {@code event} on the connection route of the fixture workspace, as admission would. */
+    private <T> @Nullable T onRoute(Object event, Supplier<@Nullable T> handling) {
+        return new GitLabRouteTestFixtures.Deliveries(
+                        connections,
+                        routeConnectionService,
+                        routeAdmissionReads,
+                        objectMapper,
+                        transactionTemplate,
+                        "https://gitlab.lrz.de")
+                .call(savedWorkspace, repository, event, handling);
+    }
+
+    private void handleOnRoute(GitLabPipelineEventDTO event) {
+        // As dispatchEvent does in production: the handler runs in one transaction.
+        onRoute(event, () -> {
+            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+            return null;
+        });
+    }
+
+    private void handleOnRoute(GitLabPipelineEventDTO event, Instant arrivedAt) {
+        onRoute(event, () -> {
+            transactionTemplate.executeWithoutResult(status -> handler.handle(event, arrivedAt));
+            return null;
+        });
     }
 }

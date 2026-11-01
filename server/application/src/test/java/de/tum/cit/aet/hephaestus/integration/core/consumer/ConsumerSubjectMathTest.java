@@ -44,9 +44,8 @@ class ConsumerSubjectMathTest extends BaseUnitTest {
         }
 
         @Test
-        void repositoryFilterForGitLabUsesTildeJoinedNamespace() {
-            assertThat(ConsumerSubjectMath.repositoryFilter("gitlab", "group/sub/project"))
-                    .isEqualTo("gitlab.group~sub.project.>");
+        void connectionFilterNamesTheConnectionNotAPath() {
+            assertThat(ConsumerSubjectMath.connectionFilter("gitlab", 7L)).isEqualTo("gitlab.?connection.7.>");
         }
 
         @Test

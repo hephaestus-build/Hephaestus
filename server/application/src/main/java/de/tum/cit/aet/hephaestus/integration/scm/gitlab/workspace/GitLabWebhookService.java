@@ -91,7 +91,7 @@ public class GitLabWebhookService {
         if (lifecycle != null) lifecycle.check(workspace.getId());
     }
 
-    /** Whether this deployment registers group webhooks: GitLab is enabled and a webhook URL and secret are set. */
+    /** Whether this deployment registers group webhooks: GitLab is enabled and a webhook URL is set. */
     public boolean isRegistrationEnabled() {
         return webhookProperties.isConfigured() && webhookClientProvider.getIfAvailable() != null;
     }
@@ -108,7 +108,7 @@ public class GitLabWebhookService {
      * never edited: an exact URL is adopted, anything else gets a new hook. Its id is recorded only if the stored id is
      * still the one this registration started from, so a slower registration under an older key cannot replace a newer
      * hook. Only then is the replaced hook deleted, and only when it is this connection's hook under a key this server
-     * knows; the shared hook and hooks of an unknown key are left alone.
+     * knows; a hook an operator created and hooks of an unknown key are left alone.
      *
      * @param workspace the workspace to register a webhook for
      * @return result indicating success or failure with reason
@@ -122,7 +122,7 @@ public class GitLabWebhookService {
 
         if (!webhookProperties.isConfigured()) {
             return WebhookSetupResult.skipped(
-                    "The webhook properties are not configured. The external URL or the secret is missing.");
+                    "The webhook properties are not configured. The external URL is missing.");
         }
         if (!routeCredential.isConfigured()) {
             return WebhookSetupResult.skipped("The webhook routing secret is not configured.");
@@ -481,16 +481,26 @@ public class GitLabWebhookService {
 
                 boolean missing = existing.isEmpty();
                 boolean disabled = existing.isPresent() && existing.get().isDisabled();
-                if (!missing && !disabled) {
-                    continue; // hook exists and is still delivering — nothing to do
+                boolean own = existing.isPresent()
+                        && existing.get().url().startsWith(connectionWebhookUrl(candidate.connectionId()));
+                if (own && !disabled) {
+                    continue; // this connection's hook exists and is still delivering — nothing to do
                 }
 
-                if (disabled && existing.get().url().startsWith(connectionWebhookUrl(candidate.connectionId()))) {
+                if (!missing && !own) {
+                    // The stored id names a hook that does not post to this connection's route, such as one on the
+                    // removed shared endpoint: it delivers nothing Hephaestus accepts. registerWebhook adopts or
+                    // creates the connection's own hook and leaves the foreign one alone.
+                    log.warn(
+                            "Webhook is not the connection's own, re-registering: workspaceId={}, webhookId={}",
+                            workspace.getId(),
+                            candidate.webhookId());
+                } else if (disabled) {
                     // GitLab auto-disabled the hook after repeated delivery failures: the row still
                     // exists (so getGroupWebhook returns it) but it delivers nothing. A fresh register
                     // adopts by URL, which would re-adopt this same disabled hook — so delete it first,
                     // best-effort, then let registerWebhook create a clean one. A hook that is not this
-                    // connection's own, such as the shared hook, is never deleted.
+                    // connection's own, such as one an operator created, is never deleted.
                     log.warn(
                             "Webhook auto-disabled (alert_status=disabled), re-registering: workspaceId={}, webhookId={}",
                             workspace.getId(),
@@ -505,7 +515,7 @@ public class GitLabWebhookService {
                     }
                 } else {
                     log.warn(
-                            "Webhook missing or disabled, re-registering: workspaceId={}, webhookId={}",
+                            "Webhook missing, re-registering: workspaceId={}, webhookId={}",
                             workspace.getId(),
                             candidate.webhookId());
                 }

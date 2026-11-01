@@ -26,12 +26,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Handles GitLab subgroup webhook events for real-time team structure updates.
  * <p>
- * Processes {@code subgroup_create} and {@code subgroup_destroy} events that are
- * normalized to the "subgroup" event key by the webhook receiver.
+ * Processes {@code subgroup_*} events that are normalized to the "subgroup" event key by the webhook receiver.
  * <p>
- * On creation, delegates to {@link GitLabTeamProcessor#process} to upsert a Team entity.
- * On deletion, delegates to {@link GitLabTeamProcessor#delete} to remove the team and
- * cascade-clear memberships and repo permissions.
+ * Only a delivery admitted on its connection's route is handled: the team stored is the group GitLab reports.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -86,18 +83,11 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
         }
 
         Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
-        if (route.isPresent()) {
-            applyReportedGroup(route.get(), event.groupId(), provider);
+        if (route.isEmpty()) {
+            log.warn("Skipped subgroup event: reason=noAdmittedRoute, groupId={}", event.groupId());
             return;
         }
-
-        if (event.isCreation()) {
-            handleSubgroupCreate(event, provider);
-        } else if (event.isDeletion()) {
-            handleSubgroupDestroy(event, provider);
-        } else {
-            log.debug("Unhandled subgroup event action: eventName={}", event.eventName());
-        }
+        applyReportedGroup(route.get(), event.groupId(), provider);
     }
 
     /**
@@ -125,42 +115,5 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
             return;
         }
         teamProcessor.process(reported, route.groupPath(), provider);
-    }
-
-    private void handleSubgroupCreate(GitLabSubgroupEventDTO event, IdentityProvider provider) {
-        // Determine root full path from parent hierarchy.
-        // The workspace's accountLogin is the root group. We derive it from the
-        // parent_full_path by taking the top-level segment, but since we don't know
-        // the exact workspace root, we pass parentFullPath as rootFullPath.
-        // GitLabTeamProcessor.computeRelativePath() handles the slug computation.
-        String rootFullPath = event.parentFullPath() != null ? event.parentFullPath() : "";
-
-        // Build a GitLabDescendantGroupResponse from the webhook DTO
-        // to reuse the existing processor logic.
-        GitLabDescendantGroupResponse groupResponse = new GitLabDescendantGroupResponse(
-                "gid://gitlab/Group/" + event.groupId(),
-                event.fullPath(),
-                event.name(),
-                null, // description not in webhook payload
-                null, // webUrl not in webhook payload
-                null, // visibility not in webhook payload
-                event.parentFullPath() != null
-                        ? new GitLabDescendantGroupResponse.ParentRef(
-                                "gid://gitlab/Group/" + event.parentGroupId(), event.parentFullPath())
-                        : null);
-
-        teamProcessor.process(groupResponse, rootFullPath, provider);
-        log.info(
-                "Created/updated team from subgroup event: fullPath={}, groupId={}",
-                sanitizeForLog(event.fullPath()),
-                event.groupId());
-    }
-
-    private void handleSubgroupDestroy(GitLabSubgroupEventDTO event, IdentityProvider provider) {
-        teamProcessor.delete(event.groupId(), Objects.requireNonNull(provider.getId()));
-        log.info(
-                "Deleted team from subgroup event: fullPath={}, groupId={}",
-                sanitizeForLog(event.fullPath()),
-                event.groupId());
     }
 }

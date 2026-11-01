@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -127,64 +126,6 @@ public class GitLabProjectProcessor {
     }
 
     /**
-     * Processes a GitLab push event payload into a Repository entity.
-     * <p>
-     * Uses the embedded project metadata from the push event for a lightweight upsert
-     * without requiring a separate GraphQL API call.
-     *
-     * @param projectInfo the project info from the push event
-     * @return the persisted Repository entity, or null if the info is invalid
-     */
-    @Transactional
-    @Nullable
-    public Repository processPushEvent(
-            GitLabPushEventDTO.@Nullable ProjectInfo projectInfo, IdentityProvider provider) {
-        if (projectInfo == null
-                || projectInfo.id() == null
-                || projectInfo.name() == null
-                || projectInfo.pathWithNamespace() == null
-                || projectInfo.webUrl() == null) {
-            log.warn("Skipped push event project processing: reason=nullOrMissingFields");
-            return null;
-        }
-
-        long nativeId = GitLabSyncConstants.toEntityId(projectInfo.id());
-        Repository repository = repositoryRepository
-                .findByNativeIdAndProviderId(nativeId, Objects.requireNonNull(provider.getId()))
-                .orElseGet(Repository::new);
-
-        repository.setNativeId(nativeId);
-        repository.setProvider(provider);
-        repository.setName(projectInfo.name());
-        repository.setNameWithOwner(projectInfo.pathWithNamespace());
-        repository.setHtmlUrl(projectInfo.webUrl());
-        repository.setDescription(projectInfo.description());
-        repository.setVisibility(mapVisibilityLevel(projectInfo.visibilityLevel()));
-        repository.setPrivate(projectInfo.visibilityLevel() == GitLabPushEventDTO.ProjectInfo.VISIBILITY_PRIVATE);
-        repository.setDisabled(false);
-
-        if (projectInfo.defaultBranch() != null) {
-            repository.setDefaultBranch(projectInfo.defaultBranch());
-        } else if (repository.getDefaultBranch() == null) {
-            repository.setDefaultBranch("main");
-        }
-
-        // Update pushedAt, updatedAt, and lastSyncAt on every push event
-        Instant now = Instant.now();
-        repository.setPushedAt(now);
-        repository.setUpdatedAt(now);
-        repository.setLastSyncAt(now);
-
-        // Preserve existing archived status and organization — webhook payload doesn't carry these
-        // Only set createdAt if this is a new entity
-        if (repository.getCreatedAt() == null) {
-            repository.setCreatedAt(now);
-        }
-
-        return repositoryRepository.save(repository);
-    }
-
-    /**
      * Maps a GitLab visibility string (from GraphQL) to the Repository.Visibility enum.
      */
     static Repository.Visibility mapVisibility(@Nullable String visibility) {
@@ -195,18 +136,6 @@ public class GitLabProjectProcessor {
             case "public" -> Repository.Visibility.PUBLIC;
             case "private" -> Repository.Visibility.PRIVATE;
             case "internal" -> Repository.Visibility.INTERNAL;
-            default -> Repository.Visibility.UNKNOWN;
-        };
-    }
-
-    /**
-     * Maps a GitLab numeric visibility level (from webhook) to the Repository.Visibility enum.
-     */
-    static Repository.Visibility mapVisibilityLevel(int visibilityLevel) {
-        return switch (visibilityLevel) {
-            case GitLabPushEventDTO.ProjectInfo.VISIBILITY_PRIVATE -> Repository.Visibility.PRIVATE;
-            case GitLabPushEventDTO.ProjectInfo.VISIBILITY_INTERNAL -> Repository.Visibility.INTERNAL;
-            case GitLabPushEventDTO.ProjectInfo.VISIBILITY_PUBLIC -> Repository.Visibility.PUBLIC;
             default -> Repository.Visibility.UNKNOWN;
         };
     }

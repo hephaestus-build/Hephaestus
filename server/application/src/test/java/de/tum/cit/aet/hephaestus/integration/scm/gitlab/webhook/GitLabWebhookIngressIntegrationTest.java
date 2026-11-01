@@ -13,11 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.PublishRequest;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Base64;
 import java.util.function.Consumer;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,16 +26,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * {@code POST /webhooks/gitlab} over HTTP through to the JetStream publish: the verifier sees the
- * bytes and headers GitLab sent, and a rejected delivery is never published. The suite's webhook
- * secret is a {@code whsec_} signing token, which a legacy hook sends verbatim as its token.
+ * A connection's GitLab hook over HTTP through to the JetStream publish: the route credential decides, the exact bytes
+ * GitLab sent are published, and a rejected delivery is never published. GitLab has no shared endpoint.
  */
 class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
-
-    /** Unusual spacing and a non-ASCII character: any re-serialisation would break the signature. */
-    private static final byte[] BODY =
-            "{ \"object_kind\":\"push\",\n  \"message\":\"Grüße\", \"project\":{\"path_with_namespace\":\"group/project\"} }"
-                    .getBytes(StandardCharsets.UTF_8);
 
     @Autowired
     private WebTestClient webTestClient;
@@ -66,62 +56,17 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldPublishTheExactBytesWhenSignatureIsValid() {
-        String timestamp = now();
-        String signature = "v1," + sign("msg_valid", timestamp, BODY);
-
-        postResponse(BODY, headers -> signed(headers, "msg_valid", timestamp, signature))
-                .expectStatus()
-                .isAccepted()
-                .expectHeader()
-                .contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
-                .expectBody(String.class)
-                .isEqualTo("{\"status\":\"ok\"}");
-
-        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher).publish(published.capture());
-        assertThat(published.getValue().body()).isEqualTo(BODY);
-        assertThat(published.getValue().subject()).isEqualTo("gitlab.group.project.push");
-        assertThat(published.getValue().headers()).containsEntry("X-Gitlab-Event", "Push Hook");
-    }
-
-    @Test
-    void shouldRejectWhenBodyIsNotTheSignedOne() {
-        String timestamp = now();
-        String signature = "v1," + sign("msg_tampered", timestamp, BODY);
-        byte[] tampered = new String(BODY, StandardCharsets.UTF_8)
-                .replace("Grüße", "Grüsse")
-                .getBytes(StandardCharsets.UTF_8);
-
-        assertProblem(
-                postResponse(tampered, headers -> signed(headers, "msg_tampered", timestamp, signature)),
-                HttpStatus.UNAUTHORIZED,
-                "invalid");
-        verify(publisher, never()).publish(any());
-    }
-
-    @Test
-    void shouldRejectWithoutLegacyFallbackWhenSignatureIsBlankOrMalformed() {
-        String timestamp = now();
-        for (String signature : new String[] {"", sign("msg_malformed", timestamp, BODY), "v2,AAAA"}) {
-            assertThat(post(BODY, headers -> {
-                        signed(headers, "msg_malformed", timestamp, signature);
-                        headers.set("X-Gitlab-Token", secret);
-                    }))
-                    .as("webhook-signature: '%s'", signature)
-                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+    void shouldHaveNoSharedEndpoint() {
+        // Neither the instance secret nor a connection's own credential is accepted on the former shared path.
+        GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
+        for (String token : new String[] {secret, issued.token()}) {
+            HttpStatusCode status = post(ROUTED_BODY, headers -> {
+                headers.set("X-Gitlab-Event", "Issue Hook");
+                headers.set("X-Gitlab-Token", token);
+            });
+            assertThat(status.is4xxClientError()).as("status %s", status).isTrue();
         }
         verify(publisher, never()).publish(any());
-    }
-
-    @Test
-    void shouldPublishWhenLegacyHookSendsOnlyTheToken() {
-        assertThat(post(BODY, headers -> {
-                    headers.set("X-Gitlab-Event", "Push Hook");
-                    headers.set("X-Gitlab-Token", secret);
-                }))
-                .isEqualTo(HttpStatus.ACCEPTED);
-        verify(publisher).publish(any());
     }
 
     @Test
@@ -196,38 +141,15 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
                 }),
                 HttpStatus.UNAUTHORIZED,
                 "invalid");
-        assertThat(post(ROUTED_BODY, headers -> {
-                    headers.set("X-Gitlab-Event", "Issue Hook");
-                    headers.set("X-Gitlab-Token", token);
-                }))
-                .as("the shared endpoint")
-                .isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(postToConnection(7L, issued, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", secret)))
-                .as("the shared secret on a connection endpoint")
+                .as("the instance webhook secret on a connection endpoint")
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
-        verify(publisher, never()).publish(any());
-    }
-
-    @Test
-    void shouldReturnProblemDetailsWhenSignaturesAreMissingOrStale() {
-        assertProblem(postResponse(BODY, headers -> {}), HttpStatus.UNAUTHORIZED, "missing-signature");
-
-        String timestamp = String.valueOf(Instant.now().minusSeconds(900).getEpochSecond());
-        String signature = "v1," + sign("msg_stale", timestamp, BODY);
-        assertProblem(
-                postResponse(BODY, headers -> signed(headers, "msg_stale", timestamp, signature)),
-                HttpStatus.UNAUTHORIZED,
-                "stale-timestamp");
         verify(publisher, never()).publish(any());
     }
 
     @Test
     void shouldReturnProblemDetailsWhenAuthenticatedPayloadIsInvalidJson() {
         byte[] body = "invalid-json-private-payload".getBytes(StandardCharsets.UTF_8);
-        assertProblem(
-                postResponse(body, headers -> headers.set("X-Gitlab-Token", secret)),
-                HttpStatus.BAD_REQUEST,
-                "invalid-json");
         GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
         assertProblem(
                 postToConnectionResponse(7L, issued, body, headers -> headers.set("X-Gitlab-Token", issued.token())),
@@ -244,32 +166,17 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
                         "gitlab.connection"))
                 .when(publisher)
                 .publish(any());
+        GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
         try {
             assertProblem(
-                    postResponse(BODY, headers -> headers.set("X-Gitlab-Token", secret)),
+                    postToConnectionResponse(
+                            7L, issued, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", issued.token())),
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "publish-failed");
             verify(publisher).publish(any());
         } finally {
             reset(publisher);
         }
-    }
-
-    @Test
-    void shouldNeverPublishAConnectionSubjectFromTheSharedEndpoint() {
-        byte[] body = "{\"object_kind\":\"issue\",\"project\":{\"path_with_namespace\":\"?connection/7\"}}"
-                .getBytes(StandardCharsets.UTF_8);
-
-        assertThat(post(body, headers -> {
-                    headers.set("X-Gitlab-Event", "Issue Hook");
-                    headers.set("X-Gitlab-Token", secret);
-                }))
-                .isEqualTo(HttpStatus.ACCEPTED);
-
-        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher).publish(published.capture());
-        assertThat(published.getValue().subject()).isEqualTo("gitlab.?.7.issue");
-        assertThat(published.getValue().headers()).doesNotContainKey(GitLabRouteCredential.HEADER_WORKSPACE);
     }
 
     private HttpStatusCode postToConnection(
@@ -319,27 +226,5 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
                 .doesNotExist()
                 .jsonPath("$.cause")
                 .doesNotExist();
-    }
-
-    private static void signed(HttpHeaders headers, String id, String timestamp, String signature) {
-        headers.set("X-Gitlab-Event", "Push Hook");
-        headers.set("webhook-id", id);
-        headers.set("webhook-timestamp", timestamp);
-        headers.set("webhook-signature", signature);
-    }
-
-    private static String now() {
-        return String.valueOf(Instant.now().getEpochSecond());
-    }
-
-    private String sign(String id, String timestamp, byte[] body) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(Base64.getDecoder().decode(secret.substring("whsec_".length())), "HmacSHA256"));
-            mac.update((id + "." + timestamp + ".").getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(mac.doFinal(body));
-        } catch (Exception e) {
-            throw new AssertionError(e);
-        }
     }
 }

@@ -133,7 +133,6 @@ import io.nats.client.api.StreamConfiguration;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -193,14 +192,10 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private static final String SERVER_URL = "https://gitlab.lrz.de";
     private static final String GROUP = "hephaestustest";
     private static final String REPOSITORY = "hephaestustest/demo-repository";
-    private static final String WEBHOOK_URL = "http://localhost:8080/webhooks/gitlab";
-    private static final String ISSUE_SUBJECT = "gitlab.hephaestustest.demo-repository.issue";
-    private static final String NOTE_SUBJECT = "gitlab.hephaestustest.demo-repository.note";
     private static final Long NATIVE_ISSUE_ID = 422296L;
     private static final Long NATIVE_NOTE_ID = 4406174L;
     private static final long GROUP_ID = 42L;
     private static final long WEBHOOK_ID = 99L;
-    private static final long LEGACY_WEBHOOK_ID = 7L;
     private static final String NESTED_PROJECT = "hephaestustest/test-subgroup/nested-demo";
     private static final long NESTED_PROJECT_ID = 777L;
     private static final long SUBGROUP_ID = 319723L;
@@ -452,10 +447,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .deregisterGroupWebhook(anyLong(), eq(GROUP_ID), anyLong());
         ingress = new GitLabConnectionWebhookController(
                 new WebhookIngestPipeline(
-                        List.of(),
-                        List.of(subjectKeyDeriver),
-                        JetStreamPublishers.of(natsConnection, webhookProperties),
-                        objectMapper),
+                        List.of(), List.of(), JetStreamPublishers.of(natsConnection, webhookProperties), objectMapper),
                 routeCredential,
                 subjectKeyDeriver);
         when(deletionSweepService.sweepScope(anyLong(), any()))
@@ -551,8 +543,9 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         when(gitLabWebhookClient.registerGroupWebhook(anyLong(), eq(GROUP_ID), any()))
                 .thenAnswer(invocation -> {
                     GitLabWebhookClient.WebhookInfo hook = registerHook(invocation.getArgument(2));
-                    publish(ISSUE_SUBJECT, "gitlab/issue.open.json");
-                    publish(NOTE_SUBJECT, "gitlab/note.issue.create.json");
+                    Workspace connecting = Objects.requireNonNull(workspace);
+                    deliver(connecting, fixture("gitlab/issue.open.json"), "issue");
+                    deliver(connecting, fixture("gitlab/note.issue.create.json"), "note");
                     return hook;
                 });
         holdFullSync();
@@ -576,11 +569,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 ConsumerConfiguration.builder()
                         .durable(ConsumerSubjectMath.scopeConsumerName(
                                 natsConnectionProperties.durableConsumerName(), restarted.getId(), STREAM))
-                        .filterSubjects(legacyFilter().toArray(String[]::new))
+                        .filterSubjects(expectedFilter(restarted).toArray(String[]::new))
                         .deliverPolicy(DeliverPolicy.New)
                         .build());
-        publish(ISSUE_SUBJECT, "gitlab/issue.open.json");
-        publish(NOTE_SUBJECT, "gitlab/note.issue.create.json");
+        deliverOnRoute(restarted, fixture("gitlab/issue.open.json"), "issue");
+        deliverOnRoute(restarted, fixture("gitlab/note.issue.create.json"), "note");
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL))).thenAnswer(invocation -> {
             syncBlocked.countDown();
             releaseSync.await();
@@ -611,8 +604,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
         assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter(connected));
         verify(gitLabWebhookClient, times(1)).registerGroupWebhook(anyLong(), anyLong(), any());
-        publish(ISSUE_SUBJECT, "gitlab/issue.open.json");
-        publish(NOTE_SUBJECT, "gitlab/note.issue.create.json");
+        deliver(connected, fixture("gitlab/issue.open.json"), "issue");
+        deliver(connected, fixture("gitlab/note.issue.create.json"), "note");
         assertIssueAndNotePersistedOnce();
     }
 
@@ -658,14 +651,13 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRouteTheScopeFromTheMonitorsWhenARemovalAndAnAdditionCommit() throws Exception {
+    void shouldKeepTheConnectionRouteWhenARemovalAndAnAdditionCommit() throws Exception {
         createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
-        Set<String> withRepository = expectedFilter(connected);
-        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(withRepository));
-        Set<String> withoutRepository = new HashSet<>(withRepository);
-        withoutRepository.remove(ConsumerSubjectMath.repositoryFilter(STREAM, REPOSITORY));
+        // Monitors do not shape a GitLab scope's filter: route admission decides per delivery.
+        Set<String> routed = expectedFilter(connected);
+        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(routed));
         clearInvocations(integrationNatsConsumer);
 
         transactionTemplate.executeWithoutResult(status -> {
@@ -676,7 +668,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         verify(integrationNatsConsumer, atLeastOnce()).updateScopeConsumer(connected.getId());
         assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
                 .isFalse();
-        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(withoutRepository));
+        assertThat(filterSubjects()).isEqualTo(routed);
         clearInvocations(integrationNatsConsumer);
 
         doReturn(Optional.of(reported(REPOSITORY_NATIVE_ID, REPOSITORY)))
@@ -691,7 +683,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         verify(integrationNatsConsumer, atLeastOnce()).updateScopeConsumer(connected.getId());
         assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
                 .isTrue();
-        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(withRepository));
+        assertThat(filterSubjects()).isEqualTo(routed);
     }
 
     @Test
@@ -2275,6 +2267,15 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(HttpStatus.ACCEPTED);
     }
 
+    /** Delivers {@code payload} on a route credential issued for {@code target}'s connection and group. */
+    private void deliverOnRoute(Workspace target, JsonNode payload, String deliveryKey) throws Exception {
+        long connectionId = connectionId(target);
+        GitLabRouteCredential.Issued issued = routeCredential.issue(
+                new GitLabRouteCredential.Route(connectionId, target.getId(), SERVER_URL, GROUP_ID, GROUP));
+        assertThat(ingest(connectionId, routeOf(issued), issued.token(), SERVER_URL, deliveryKey, bytes(payload)))
+                .isEqualTo(HttpStatus.ACCEPTED);
+    }
+
     private HttpStatusCode ingest(
             long connectionId, String route, String token, String instance, String deliveryKey, byte[] body)
             throws Exception {
@@ -2432,7 +2433,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         return saved;
     }
 
-    /** A GitLab workspace connected by an earlier run, with its group webhook registered. */
+    /** A GitLab workspace connected by an earlier run, with its group known. */
     private Workspace persistedWorkspace() {
         Workspace saved = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaceRepository, connectionRepository, WorkspaceTestFixtures.gitLabPatWorkspace(GROUP), SERVER_URL);
@@ -2441,10 +2442,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         connectionService.updateConfig(
                 saved.getId(),
                 IntegrationKind.GITLAB,
-                config -> ((ConnectionConfig.GitLabConfig) config)
-                        .withGitlabGroupId(GROUP_ID)
-                        .withGitlabWebhookId(LEGACY_WEBHOOK_ID));
-        hooks.add(new GitLabWebhookClient.WebhookInfo(LEGACY_WEBHOOK_ID, WEBHOOK_URL));
+                config -> ((ConnectionConfig.GitLabConfig) config).withGitlabGroupId(GROUP_ID));
         return saved;
     }
 
@@ -2551,16 +2549,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .count();
     }
 
-    private static Set<String> legacyFilter() {
-        return Set.of(
-                ConsumerSubjectMath.repositoryFilter(STREAM, REPOSITORY),
-                ConsumerSubjectMath.organizationFilter(STREAM, GROUP));
-    }
-
     private Set<String> expectedFilter(Workspace target) {
-        Set<String> subjects = new HashSet<>(legacyFilter());
-        subjects.add(ConsumerSubjectMath.connectionFilter(STREAM, connectionId(target)));
-        return subjects;
+        return Set.of(ConsumerSubjectMath.connectionFilter(STREAM, connectionId(target)));
     }
 
     private Set<String> filterSubjects() throws Exception {
@@ -2585,9 +2575,5 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .subjects(STREAM + ".>")
                 .storageType(StorageType.Memory)
                 .build());
-    }
-
-    private void publish(String subject, String fixture) throws Exception {
-        natsConnection.jetStream().publish(subject, new ClassPathResource(fixture).getContentAsByteArray());
     }
 }

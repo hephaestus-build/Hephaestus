@@ -146,44 +146,20 @@ public class GitLabUserService {
     }
 
     /**
-     * Finds or creates a user from webhook data.
-     * <p>
-     * Stores the raw GitLab user ID as {@code nativeId} with the given {@code providerId}.
-     * Constructs HTML URL from the GitLab server URL and username.
+     * The user a webhook names, stored as GitLab reported it for the delivery being handled; {@code null} without an
+     * admitted route or when GitLab did not report the user. The body is only as trustworthy as the group owner who
+     * could shape it, and a user row is shared by every workspace, so the body's profile is never written.
      */
     @Nullable
     public User findOrCreateUser(@Nullable GitLabWebhookUser dto, Long providerId) {
-        // On a connection route the body is only as trustworthy as the group owner who could shape it; a user row is
-        // shared by every workspace, so it is written only as GitLab reported it to that connection.
-        if (GitLabRouteAdmission.current().isPresent()) {
-            return dto == null || dto.id() == null ? null : storeReportedUser(dto.id(), providerId);
-        }
-        if (dto == null || dto.id() == null || dto.username() == null) {
+        if (dto == null || dto.id() == null) {
             return null;
         }
-
-        long nativeId = dto.id();
-        String login = dto.username();
-        String name = dto.name() != null ? dto.name() : login;
-        String avatarUrl = resolveAvatarUrl(dto.avatarUrl());
-        String htmlUrl = gitLabProperties.defaultServerUrl() + "/" + login;
-
-        userRepository.upsertUser(
-                nativeId,
-                providerId,
-                login,
-                name,
-                avatarUrl,
-                htmlUrl,
-                // A hook's user carries no bot flag: a stored type stays, and only a new user's is guessed.
-                null,
-                GitLabUserClassifier.insertionType(login, null),
-                dto.email(),
-                null, // createdAt — not in webhook
-                null // updatedAt — not in webhook
-                );
-
-        return userRepository.findByNativeIdAndProviderId(nativeId, providerId).orElse(null);
+        if (GitLabRouteAdmission.current().isEmpty()) {
+            log.warn("Skipped user: reason=noAdmittedRoute, userId={}", dto.id());
+            return null;
+        }
+        return storeReportedUser(dto.id(), providerId);
     }
 
     /**

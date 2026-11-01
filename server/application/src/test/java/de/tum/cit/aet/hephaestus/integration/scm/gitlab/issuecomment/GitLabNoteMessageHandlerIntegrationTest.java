@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -48,6 +49,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
@@ -67,6 +69,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -87,6 +90,12 @@ import tools.jackson.databind.node.ObjectNode;
 @Tag("integration")
 @DisplayName("GitLab Note Message Handler")
 class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ConnectionService routeConnectionService;
+
+    private Workspace savedWorkspace;
+
     @Autowired
     private GitLabProjectAdmission projectAdmission;
 
@@ -210,7 +219,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateCommentFromIssueNote() throws Exception {
-            handler.handleEvent(loadPayload("note.issue.create"));
+            handleOnRoute(loadPayload("note.issue.create"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 List<IssueComment> comments = commentRepository.findAll();
@@ -233,10 +242,10 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateCommentOnIssueNoteUpdate() throws Exception {
-            handler.handleEvent(loadPayload("note.issue.create"));
+            handleOnRoute(loadPayload("note.issue.create"));
             eventListener.clear();
 
-            handler.handleEvent(loadPayload("note.issue.update"));
+            handleOnRoute(loadPayload("note.issue.update"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 List<IssueComment> comments = commentRepository.findAll();
@@ -257,7 +266,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateCommentFromMrNote() throws Exception {
-            handler.handleEvent(loadPayload("note.mergerequest.create"));
+            handleOnRoute(loadPayload("note.mergerequest.create"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 List<IssueComment> comments = commentRepository.findAll();
@@ -276,10 +285,10 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateCommentFromMrNoteUpdate() throws Exception {
-            handler.handleEvent(loadPayload("note.mergerequest.create"));
+            handleOnRoute(loadPayload("note.mergerequest.create"));
             eventListener.clear();
 
-            handler.handleEvent(loadPayload("note.mergerequest.update"));
+            handleOnRoute(loadPayload("note.mergerequest.update"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 List<IssueComment> comments = commentRepository.findAll();
@@ -302,7 +311,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         @ValueSource(strings = {"note.system", "note.confidential.issue.create", "note.commit.create"})
         void shouldSkipTheNoteWhenItIsASystemConfidentialOrCommitNote(String payload) throws Exception {
             GitLabNoteEventDTO note = loadPayload(payload);
-            handler.handleEvent(note);
+            handleOnRoute(note);
 
             long nativeId = Objects.requireNonNull(note.objectAttributes()).id();
             assertThat(commentRepository.findByNativeIdAndProviderId(
@@ -413,7 +422,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         /** Handles {@code event} in the transaction a delivery runs in. */
         private void receive(GitLabNoteEventDTO event) {
-            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+            transactionTemplate.executeWithoutResult(status -> handleOnRoute(event));
         }
 
         private GitLabNoteEventDTO whileChangesAreRequested(String fixture, Consumer<ObjectNode> attributes)
@@ -726,7 +735,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             position.put("start_sha", "a".repeat(40));
             position.put("head_sha", "b".repeat(40));
             GitLabNoteEventDTO event = objectMapper.treeToValue(payload, GitLabNoteEventDTO.class);
-            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+            transactionTemplate.executeWithoutResult(status -> handleOnRoute(event));
         }
 
         private void sync(@Nullable Boolean resolved) {
@@ -941,17 +950,17 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             repositoryRepository.deleteAll();
 
             GitLabNoteEventDTO event = loadPayload("note.issue.create");
-            assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();
+            assertThatCode(() -> handleOnRoute(event)).doesNotThrowAnyException();
             assertThat(commentRepository.count()).isZero();
         }
 
         @Test
         @DisplayName("is idempotent — same event twice creates one comment")
         void shouldBeIdempotent() throws Exception {
-            handler.handleEvent(loadPayload("note.issue.create"));
+            handleOnRoute(loadPayload("note.issue.create"));
             long countAfterFirst = commentRepository.count();
 
-            handler.handleEvent(loadPayload("note.issue.create"));
+            handleOnRoute(loadPayload("note.issue.create"));
 
             assertThat(commentRepository.count()).isEqualTo(countAfterFirst);
         }
@@ -962,7 +971,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
             commentRepository.deleteAll();
             issueRepository.deleteAll();
 
-            handler.handleEvent(loadPayload("note.issue.create"));
+            handleOnRoute(loadPayload("note.issue.create"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 // Should have created a stub issue AND the comment
@@ -1060,6 +1069,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setAccountLogin(FIXTURE_ORG_LOGIN);
         workspace.setAccountType(AccountType.ORG);
         workspace = workspaceRepository.save(workspace);
+        savedWorkspace = workspace;
         workspaceId = workspace.getId();
         var connection = new Connection(
                 workspace,
@@ -1073,5 +1083,25 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
         monitor.setNameWithOwner(savedRepo.getNameWithOwner());
         monitor.setNativeId(savedRepo.getNativeId());
         monitors.saveAndFlush(monitor);
+    }
+
+    /** Delivers {@code event} on the connection route of the fixture workspace, as admission would. */
+    private <T> @Nullable T onRoute(Object event, Supplier<@Nullable T> handling) {
+        return new GitLabRouteTestFixtures.Deliveries(
+                        connections,
+                        routeConnectionService,
+                        projectAdmission,
+                        objectMapper,
+                        transactionTemplate,
+                        "https://gitlab.lrz.de")
+                .call(savedWorkspace, savedRepo, event, handling);
+    }
+
+    private void handleOnRoute(GitLabNoteEventDTO event) {
+        // As dispatchEvent does in production: the handler runs in one transaction.
+        onRoute(event, () -> {
+            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+            return null;
+        });
     }
 }

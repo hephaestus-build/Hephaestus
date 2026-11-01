@@ -81,7 +81,7 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
     void suffixOverlap_isNotMatchedByLastSegmentRule() throws IOException {
         TestHandler handler = new TestHandler(IntegrationKind.GITLAB, "push");
         Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.ns.proj.tag_push");
+        when(msg.getSubject()).thenReturn("gitlab.?connection.7.tag_push");
 
         handler.onMessage(msg);
 
@@ -93,7 +93,7 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
     void deserializeIOException_translatesToPayloadParsing() throws IOException {
         TestHandler handler = new TestHandler(IntegrationKind.GITLAB, "merge_request");
         Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.ns.proj.merge_request");
+        when(msg.getSubject()).thenReturn("gitlab.?connection.7.merge_request");
         when(deserializer.deserialize(msg, String.class)).thenThrow(new IOException("bad json"));
 
         assertThatThrownBy(() -> handler.onMessage(msg))
@@ -110,7 +110,7 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
             }
         };
         Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.ns.proj.merge_request");
+        when(msg.getSubject()).thenReturn("gitlab.?connection.7.merge_request");
         when(deserializer.deserialize(msg, String.class)).thenReturn("payload");
 
         assertThatThrownBy(() -> handler.onMessage(msg))

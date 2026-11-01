@@ -258,7 +258,7 @@ public class GitLabWorkspaceInitializationService {
                 repositoryMonitors.monitorAll(workspace, syncedRepos);
             }
 
-            // Phase 3: Consume every monitored repository, then let GitLab deliver. Without NATS no
+            // Phase 3: Consume the connection's subject, then let GitLab deliver. Without NATS no
             // consumer exists for the webhook's events, so no hook is registered.
             if (!natsProperties.enabled()) {
                 log.info("Skipped GitLab webhook registration: reason=natsDisabled, workspaceId={}", workspace.getId());
@@ -338,7 +338,7 @@ public class GitLabWorkspaceInitializationService {
     }
 
     /**
-     * Confirms the NATS scope consumer holds every monitored repository.
+     * Confirms the NATS scope consumer holds the connection's subject filter.
      *
      * @return {@code false} when the consumer could not be confirmed and the webhook must stay closed
      */

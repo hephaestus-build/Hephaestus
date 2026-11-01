@@ -412,8 +412,7 @@ public class GitLabDataSyncScheduler {
      * <p>
      * The group-project sync (which runs earlier in the cycle) upserts the domain {@link Repository}
      * by its stable native id, so a renamed project's row already carries the new path while the
-     * {@code RepositoryToMonitor} still holds the old one — the name-keyed monitor join and the NATS
-     * subject filter both then miss it. For each sync target we resolve the domain repository by its
+     * {@code RepositoryToMonitor} still holds the old one, so the name-keyed monitor join misses it. For each sync target we resolve the domain repository by its
      * native id (falling back to the name for a monitor without one, which captures it once)
      * and hand the current identity to the SPI, which re-keys the monitor and refreshes the consumer.
      * Best-effort: a per-target failure never aborts the sync.

@@ -6,12 +6,8 @@ import java.util.Optional;
 /**
  * Per-kind signing-secret resolution.
  *
- * <p>Vendors scope their webhook signing secret differently:
- * <ul>
- *   <li>GitHub: APP_GLOBAL — one shared {@code hephaestus.webhook.secret}
- *   <li>GitLab plaintext: APP_GLOBAL
- *   <li>GitLab {@code whsec_*} HMAC: WORKSPACE — per-Connection in {@code GitLabConfig.signingSecret}
- * </ul>
+ * <p>GitHub uses it with {@link Scope#APP_GLOBAL}: one shared {@code hephaestus.webhook.secret}. GitLab and Outline
+ * verify a route credential on their connection endpoints instead.
  */
 public interface WebhookSecretSource {
     IntegrationKind kind();
@@ -23,7 +19,6 @@ public interface WebhookSecretSource {
 
     enum Scope {
         APP_GLOBAL,
-        WORKSPACE,
     }
 
     /** Best-effort identification of the request before signature verification: its headers. */

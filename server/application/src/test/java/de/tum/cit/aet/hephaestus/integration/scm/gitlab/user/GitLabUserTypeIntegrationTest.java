@@ -16,6 +16,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
@@ -105,8 +107,7 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
         assertThat(type(SERVICE_ACCOUNT)).isEqualTo(stated);
 
         // A hook's user, and a read that did not carry the flag.
-        transactionTemplate.executeWithoutResult(status -> gitLabUserService.findOrCreateUser(
-                new GitLabWebhookUser(SERVICE_ACCOUNT, login, "Account", null, null), providerId));
+        storeHookUser(new GitLabWebhookUser(SERVICE_ACCOUNT, login, "Account", null, null));
         store(canonicalUsers(List.of(node(SERVICE_ACCOUNT, login, null))).get(SERVICE_ACCOUNT));
         // A member hook or listing without the flag, whose login-based guess applies only to a new user.
         transactionTemplate.executeWithoutResult(status -> userRepository.upsertUser(
@@ -132,8 +133,7 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRecordAFirstSeenAccountWhoseTypeIsUnknownAsAUser() {
-        transactionTemplate.executeWithoutResult(status -> gitLabUserService.findOrCreateUser(
-                new GitLabWebhookUser(STUDENT, "ab12cde", "Muster, Max (Erika)", null, null), providerId));
+        storeHookUser(new GitLabWebhookUser(STUDENT, "ab12cde", "Muster, Max (Erika)", null, null));
 
         assertThat(type(STUDENT)).isEqualTo(User.Type.USER);
     }
@@ -151,6 +151,15 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
                         .map(node ->
                                 GitLabSyncConstants.extractNumericId((String) Objects.requireNonNull(node.get("id"))))
                         .toList());
+    }
+
+    /** A hook's user on an admitted route, which GitLab reports with the hook's profile and no bot flag. */
+    private void storeHookUser(GitLabWebhookUser user) {
+        long id = Objects.requireNonNull(user.id());
+        var route = new GitLabRouteAdmission.AdmittedRoute(1L, 1L, providerId, 1L, "group");
+        var reported = new GitLabUserLookup(gid(id), user.username(), user.name(), null, null, null, null);
+        transactionTemplate.executeWithoutResult(status -> GitLabRouteTestFixtures.handle(
+                route, Map.of(id, reported), null, () -> gitLabUserService.findOrCreateUser(user, providerId)));
     }
 
     private void store(@Nullable GitLabUserLookup lookup) {

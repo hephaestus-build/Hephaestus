@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,9 +56,10 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
     }
 
     /**
-     * The SCM stream subscription (repository + organization filters). Added only when the workspace
-     * has an ACTIVE SCM connection: without one there is no stream to bind, so an Outline-only
-     * workspace is never mislabeled onto the {@code github} stream.
+     * The SCM stream subscription. Added only when the workspace has an ACTIVE SCM connection: without one there is no
+     * stream to bind, so an Outline-only workspace is never mislabeled onto the {@code github} stream. GitHub subscribes
+     * to its monitored repositories and its organization; GitLab to everything the connection's own hook delivers,
+     * including projects not monitored yet, since route admission decides.
      */
     private void addScmSubscription(Workspace workspace, List<StreamSubscription> out) {
         Optional<IntegrationKind> scmKind = connectionService.findActiveProviderKind(workspace.getId());
@@ -70,24 +70,22 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
                 .orElseThrow(() -> new IllegalStateException("No NATS stream for SCM kind=" + scmKind.get()));
 
         Set<String> subjects = new HashSet<>();
-        Set<String> repositoryNames = workspace.getRepositoriesToMonitor().stream()
-                .map(RepositoryToMonitor::getNameWithOwner)
-                .filter(workspaceScopeFilter::isRepositoryAllowed)
-                .collect(Collectors.toSet());
-        for (String nameWithOwner : repositoryNames) {
-            subjects.add(ConsumerSubjectMath.repositoryFilter(streamName, nameWithOwner));
-        }
-        String organizationLogin = workspace.getAccountLogin();
-        if (organizationLogin != null && !organizationLogin.isBlank()) {
-            subjects.add(ConsumerSubjectMath.organizationFilter(streamName, organizationLogin));
-        }
-        // Everything the connection's own hook delivers, including projects not monitored yet; admission decides.
         if (scmKind.get() == IntegrationKind.GITLAB) {
             connectionService
                     .findActive(workspace.getId(), IntegrationKind.GITLAB)
                     .map(Connection::getId)
                     .ifPresent(connectionId ->
                             subjects.add(ConsumerSubjectMath.connectionFilter(streamName, connectionId)));
+        } else {
+            workspace.getRepositoriesToMonitor().stream()
+                    .map(RepositoryToMonitor::getNameWithOwner)
+                    .filter(workspaceScopeFilter::isRepositoryAllowed)
+                    .forEach(nameWithOwner ->
+                            subjects.add(ConsumerSubjectMath.repositoryFilter(streamName, nameWithOwner)));
+            String organizationLogin = workspace.getAccountLogin();
+            if (organizationLogin != null && !organizationLogin.isBlank()) {
+                subjects.add(ConsumerSubjectMath.organizationFilter(streamName, organizationLogin));
+            }
         }
         if (!subjects.isEmpty()) {
             out.add(new StreamSubscription(streamName, subjects));

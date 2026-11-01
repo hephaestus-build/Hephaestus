@@ -509,7 +509,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository",
             "de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContext",
-            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabWebhookSignatureVerifier",
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential",
         )
     )
     targetTests.set(
@@ -524,7 +524,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookieTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepositoryTest",
             "de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContextTest",
-            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabWebhookSignatureVerifierTest",
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredentialTest",
         )
     )
 }

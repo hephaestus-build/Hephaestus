@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -17,6 +18,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -63,6 +66,12 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private ConnectionService connectionService;
+
+    @Autowired
+    private GitLabProjectAdmission admission;
+
     @Test
     void shouldProcessPushWhenExistingOrganizationIsLazyOutsidePreparationTransaction() throws Exception {
         databaseTestUtils.cleanDatabase();
@@ -93,7 +102,8 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         repository.setPushedAt(Instant.now());
         repository.setOrganization(organization);
         repository.setProvider(provider);
-        Long repositoryId = repositories.save(repository).getId();
+        Repository saved = repositories.save(repository);
+        Long repositoryId = saved.getId();
         var workspace = new Workspace();
         workspace.setWorkspaceSlug("push-fixture");
         workspace.setDisplayName("Push fixture");
@@ -118,7 +128,10 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         try (var input = new ClassPathResource("gitlab/push.json").getInputStream()) {
             event = objectMapper.readValue(input, GitLabPushEventDTO.class);
         }
-        handler.handleEvent(event);
+        GitLabPushEventDTO push = event;
+        new GitLabRouteTestFixtures.Deliveries(
+                        connections, connectionService, admission, objectMapper, transactions, provider.getServerUrl())
+                .handle(workspace, saved, push, () -> handler.handleEvent(push));
 
         transactions.executeWithoutResult(status -> {
             var initial = commits.findByShaAndRepositoryId("9c5dedd52046bb5213189afc25f75e608a98d462", repositoryId)

@@ -1,97 +1,35 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook;
 
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Builds NATS subjects + dedup keys for GitLab webhook payloads under the unified
- * integration framework.
+ * Builds the NATS subject and dedup key of a delivery that {@link GitLabConnectionWebhookController} authenticated for
+ * one connection.
  *
- * <p>Subject format: {@code gitlab.<namespace~with~tildes>.<project>.<event>}
- * <ul>
- *   <li>{@code namespace} and {@code project} from {@code project.path_with_namespace}
- *       split on {@code /} (last segment is project; everything before joined with
- *       {@code ~}, since {@code /} is the NATS hierarchy separator and groups can be
- *       nested arbitrarily deep).
- *   <li>{@code event} from payload {@code object_kind} ({@code merge_request},
- *       {@code push}, {@code issue}, {@code note}, {@code pipeline}, {@code build},
- *       {@code wiki_page}, …). Lowercased via {@link Locale#ROOT} to dodge the
- *       Turkish-i pitfall.
- * </ul>
- *
- * <p>Dedup key priority (per ADR 0008): {@code Idempotency-Key} (GitLab 17.4+) →
- * {@code X-Gitlab-Event-UUID} (16.2+) → SHA-256 of {@code body + event}, truncated to
- * 32 hex chars. The vendor prefix {@code "gitlab-"} ensures cross-vendor uniqueness
- * even if two providers happen to issue the same UUID.
+ * <p>Subject format: {@code gitlab.?connection.<connectionId>.<event>}. The {@code event} token is the payload's
+ * {@code object_kind}, or its {@code event_name} folded onto a handler key; lowercased via {@link Locale#ROOT}, with
+ * dots replaced by {@code ~}. The payload's project path never selects a subject: the connection the route credential
+ * names does.
  */
 @Component
-public class GitLabSubjectKeyDeriver implements SubjectKeyDeriver {
+public class GitLabSubjectKeyDeriver {
 
     static final String SUBJECT_PREFIX = "gitlab.";
     static final String UNKNOWN_TOKEN = "unknown";
-    static final String PLACEHOLDER = "?";
 
-    /**
-     * Namespace token of a connection-scoped subject, {@code gitlab.?connection.<connectionId>.<event>}. Only the
-     * connection endpoint publishes it, after verifying that connection's credential; a namespace taken from a payload
-     * on the shared endpoint that spells it is replaced by {@link #PLACEHOLDER}.
-     */
+    /** Namespace token of a connection subject. */
     public static final String CONNECTION_TOKEN = "?connection";
 
     private static final String HEADER_EVENT_UUID = "x-gitlab-event-uuid";
-    private static final String HEADER_IDEMPOTENCY_KEY = "idempotency-key";
-
-    @Override
-    public IntegrationKind kind() {
-        return IntegrationKind.GITLAB;
-    }
-
-    @Override
-    public String deriveSubject(JsonNode payload, Map<String, String> headers) {
-        String event = eventToken(payload);
-
-        // Group-tier lifecycle events (project/subgroup/member) are ORG-scoped. They carry no routable
-        // project — subgroup/member payloads have no project.path_with_namespace at all, and a project
-        // event's own path is unstable across rename/transfer. They must land on the workspace's
-        // organization filter `gitlab.<accountLogin>.?.>` (WorkspaceNatsSubscriptionProvider#organizationFilter):
-        // the namespace token is the ROOT group segment and the project slot is the placeholder. Without
-        // this they derive `gitlab.?.?.<event>` (matches no filter) or a repo-scoped subject that no
-        // monitored-repo filter catches on create/rename — i.e. a silent drop.
-        if (isGroupTierEvent(event)) {
-            return SUBJECT_PREFIX + unreserved(rootGroupToken(payload)) + "." + PLACEHOLDER + "." + event;
-        }
-
-        String pathWithNs = firstNonBlank(
-                textOrEmpty(payload.path("project"), "path_with_namespace"),
-                textOrEmpty(payload, "path_with_namespace"));
-
-        String namespace = PLACEHOLDER;
-        String project = PLACEHOLDER;
-        if (pathWithNs != null) {
-            List<String> parts = sanitizeParts(pathWithNs);
-            if (parts.size() >= 2) {
-                namespace = String.join("~", parts.subList(0, parts.size() - 1));
-                project = parts.get(parts.size() - 1);
-            } else if (parts.size() == 1) {
-                namespace = parts.get(0);
-            }
-        }
-
-        return SUBJECT_PREFIX + unreserved(namespace) + "." + project + "." + event;
-    }
 
     /** The subject a delivery authenticated for {@code connectionId} is published on, whatever its payload path. */
     public String deriveConnectionSubject(long connectionId, JsonNode payload) {
@@ -105,30 +43,6 @@ public class GitLabSubjectKeyDeriver implements SubjectKeyDeriver {
         }
         String event = normalizeEvent(rawEvent);
         return event.isEmpty() ? UNKNOWN_TOKEN : event;
-    }
-
-    private static String unreserved(String namespace) {
-        return CONNECTION_TOKEN.equals(namespace) ? PLACEHOLDER : namespace;
-    }
-
-    @Override
-    public String deriveDedupKey(byte[] body, Map<String, String> headers) {
-        Map<String, String> lower = lowercaseKeys(headers);
-        String idempotency = lower.get(HEADER_IDEMPOTENCY_KEY);
-        if (idempotency != null && !idempotency.isBlank()) {
-            return "gitlab-" + idempotency.trim();
-        }
-        String eventUuid = lower.get(HEADER_EVENT_UUID);
-        if (eventUuid != null && !eventUuid.isBlank()) {
-            return "gitlab-" + eventUuid.trim();
-        }
-        // Fall back: SHA-256 over body + a vendor event marker. The event marker
-        // comes from headers (X-Gitlab-Event) when present; otherwise empty. Truncate
-        // the hex digest to 32 chars — the full 64 still fits NATS but bloats logs.
-        String event = lower.getOrDefault("x-gitlab-event", "");
-        byte[] digest = sha256(body, event.getBytes(StandardCharsets.UTF_8));
-        String hex = HexFormat.of().formatHex(digest);
-        return "gitlab-" + hex.substring(0, Math.min(32, hex.length()));
     }
 
     /**
@@ -193,65 +107,10 @@ public class GitLabSubjectKeyDeriver implements SubjectKeyDeriver {
         return sanitizeEvent(raw);
     }
 
-    private static boolean isGroupTierEvent(String event) {
-        return (GitLabEventType.PROJECT.getValue().equals(event)
-                || GitLabEventType.SUBGROUP.getValue().equals(event)
-                || GitLabEventType.MEMBER.getValue().equals(event));
-    }
-
-    /**
-     * Root (top-level) group segment for an org-scoped subject, matching the single-token
-     * {@code accountLogin} the workspace subscribes with via {@code organizationFilter}. Tries the
-     * richest path the group-tier payloads carry — a project's {@code path_with_namespace}, a
-     * subgroup's {@code full_path}/{@code parent_full_path}, a member event's {@code group_path} —
-     * then takes the first path segment (sanitizing dots to {@code ~} exactly as
-     * {@link #sanitizeParts}). Falls back to the {@code ?} placeholder when no path is present.
-     *
-     * <p><b>Known limitation:</b> member events on a <em>subgroup</em> carry only the leaf
-     * {@code group_path} (GitLab sends {@code group.path}, not the full path), so their root segment
-     * is the subgroup itself, not the workspace root group — those remain unroutable from payload
-     * alone and are healed by the periodic group-member sync. Member events on the root group route
-     * correctly.
-     */
-    private static String rootGroupToken(JsonNode payload) {
-        String path = firstNonBlank(
-                textOrEmpty(payload.path("project"), "path_with_namespace"),
-                textOrEmpty(payload, "path_with_namespace"),
-                textOrEmpty(payload.path("group"), "full_path"),
-                textOrEmpty(payload, "full_path"),
-                textOrEmpty(payload, "parent_full_path"),
-                textOrEmpty(payload, "group_path"));
-        if (path == null) {
-            return PLACEHOLDER;
-        }
-        List<String> parts = sanitizeParts(path);
-        return parts.isEmpty() ? PLACEHOLDER : parts.get(0);
-    }
-
-    private static List<String> sanitizeParts(String path) {
-        List<String> out = new ArrayList<>();
-        for (String segment : path.split("/", -1)) {
-            if (!segment.isEmpty()) {
-                // Case-preserving: the consumer-side filter (ConsumerSubjectMath#buildSubjectPrefix)
-                // is fed the stored, case-preserved RepositoryToMonitor#nameWithOwner, so the producer
-                // MUST preserve case too — lowercasing here drops events for mixed-case GitLab paths.
-                out.add(segment.replace('.', '~'));
-            }
-        }
-        return out;
-    }
-
     private static String textOrEmpty(JsonNode node, String field) {
         if (node == null || node.isMissingNode() || node.isNull()) return "";
         JsonNode v = node.path(field);
         return v.isMissingNode() || v.isNull() ? "" : v.asString("");
-    }
-
-    private static @Nullable String firstNonBlank(String... values) {
-        for (String v : values) {
-            if (v != null && !v.isBlank()) return v;
-        }
-        return null;
     }
 
     private static Map<String, String> lowercaseKeys(Map<String, String> raw) {
