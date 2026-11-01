@@ -100,9 +100,12 @@ A bounded recent sample of the observations about this developer. Each entry in 
 `reviewId`, `practiceSlug`, `practiceVersion`, `itemId`, `itemKind`, `itemVersion`, `outcome`, `recordedAt`,
 `endedAt` and `endReason` when it ended, `capturedAt` when it is known, `storedWorkVersion`, `activeMarks`, the detail
 `resource`, and `work` (the reviewed work's `number`, `title` and `url` as its source names it now; absent when it
-cannot). It is not a list of only current observations or a complete history. Read the exact `resource` for the
-captured evidence, criteria, example, problems, open questions and explanation. `wordsUnavailable` means the words
-cannot be used here; `omittedForSize` counts rows left out.
+cannot). Each entry also has `summary`, the observation's one-line summary, and `problems`, each with its `problemId`,
+`severity`, `summary` and any recorded source location: the words that their practice page shows. Quote and link them
+with `resultId` and `problemId`. It is not a list of only current observations or a complete history. Read the exact
+`resource` for the captured evidence, criteria, example, open questions and explanation. An entry with
+`wordsUnavailable` has no `summary` and no `problems`: its words cannot be used here, so say that you cannot show
+what it recorded, never that it recorded nothing. `omittedForSize` counts rows left out.
 
 `recordedAt` is when that one observation was recorded. It is not when the review, its other practices or its
 feedback finished: a review can go on for a long time after it. Only `reviewStatus` and the run timestamps in
@@ -112,8 +115,7 @@ Read each observation as a judgment about its recorded `itemVersion`, under the 
 `practiceVersion` names. `itemVersion` is an identifier: do not read a commit, a title or a description out of it.
 
 - `MET`: the captured work met the criteria. It does not prove general correctness or mastery.
-- `NOT_MET`: the captured work has problems. In detail, each problem has its own `problemId`, `severity`, `summary`
-  and any recorded source location.
+- `NOT_MET`: the captured work has problems, listed in `problems` when its words are available.
 - `DOES_NOT_APPLY`: the practice did not apply, with its reason in `explanation`.
 - `COULD_NOT_DETERMINE`: the captured evidence did not settle the question. Its `openQuestions` say what remains
   uncertain. Neither this outcome nor `DOES_NOT_APPLY` means the work was not reviewed.

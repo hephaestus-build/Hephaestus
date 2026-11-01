@@ -15,10 +15,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
+import de.tum.cit.aet.hephaestus.practices.spi.ProblemHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
@@ -53,6 +55,56 @@ class ResultHistoryContentSourceTest extends BaseUnitTest {
         assertThat(row.has("summary")).isFalse();
         assertThat(ResultHistoryContentSource.resultIdOf(ResultHistoryContentSource.resourceOf(id)))
                 .contains(id);
+    }
+
+    @Test
+    void shouldListEachResultWithItsIdAndThePracticePageWordsWhenTheWordsMayBeCopied() {
+        var results = mock(ResultHistoryQuery.class);
+        var copies = mock(HistoryCopies.class);
+        var pullRequest = new ItemRef(1, 41, new ItemKind("scm.pull_request"), 421L, null, null);
+        UUID shownId = UUID.randomUUID();
+        UUID withheldId = UUID.randomUUID();
+        UUID problemId = UUID.randomUUID();
+        var shown = notMet(shownId, pullRequest, Instant.parse("2026-11-01T22:30:48Z"), "v1");
+        when(shown.problems())
+                .thenReturn(List.of(new ProblemHistoryEntry(
+                        problemId, Severity.MAJOR, "The catch block drops the error.", "src/app.ts", 53)));
+        var withheld = notMet(withheldId, pullRequest, Instant.parse("2026-11-01T22:30:48Z"), "v1");
+        when(results.forDeveloper(eq(1L), eq(2L), any(), eq(91))).thenReturn(List.of(shown, withheld));
+        when(results.find(1, shownId, 2, SourceUsePurpose.CONVERSATIONAL_MENTORING))
+                .thenReturn(Optional.of(shown));
+        var authorized = new HistoryCopy(true, List.of(), List.of(), List.of());
+        var unauthorized = new HistoryCopy(false, List.of(), List.of(), List.of());
+        when(copies.of(shown)).thenReturn(authorized);
+        when(copies.of(withheld)).thenReturn(unauthorized);
+        when(copies.record(authorized)).thenReturn(true);
+        var source = new ResultHistoryContentSource(
+                results,
+                new JsonMapper(),
+                copies,
+                mock(ConversationConsentGate.class),
+                mock(RegisteredItemLabels.class));
+
+        var rows = source.buildPayload(1L, 2L).path("results");
+        var shownRow = rows.get(0);
+        var withheldRow = rows.get(1);
+
+        assertThat(shownRow.path("resultId").asString()).isEqualTo(shownId.toString());
+        assertThat(shownRow.path("summary").asString()).isEqualTo("The description omits why.");
+        var problem = shownRow.path("problems").get(0);
+        assertThat(problem.path("problemId").asString()).isEqualTo(problemId.toString());
+        assertThat(problem.path("severity").asString()).isEqualTo("MAJOR");
+        assertThat(problem.path("summary").asString()).isEqualTo("The catch block drops the error.");
+        assertThat(problem.path("path").asString()).isEqualTo("src/app.ts");
+        assertThat(problem.path("startLine").asInt()).isEqualTo(53);
+        assertThat(source.inspect(1, 2, shownId).path("result").path("problems"))
+                .as("the overview lists the problems in the shape of the detail")
+                .isEqualTo(shownRow.path("problems"));
+
+        assertThat(withheldRow.path("resultId").asString()).isEqualTo(withheldId.toString());
+        assertThat(withheldRow.path("wordsUnavailable").asString()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE");
+        assertThat(withheldRow.has("summary")).isFalse();
+        assertThat(withheldRow.has("problems")).isFalse();
     }
 
     @Test
@@ -298,7 +350,8 @@ class ResultHistoryContentSourceTest extends BaseUnitTest {
         when(entry.outcome()).thenReturn(ResultOutcome.NOT_MET);
         when(entry.recordedAt()).thenReturn(recordedAt);
         when(entry.item()).thenReturn(item);
-        when(entry.developerAccountId()).thenReturn(2L);
+        // Read only by a detail read.
+        lenient().when(entry.developerAccountId()).thenReturn(2L);
         // Read only where copy authority allows the result's words.
         lenient().when(entry.summary()).thenReturn("The description omits why.");
         lenient().when(entry.explanation()).thenReturn("The captured description names the change but not its reason.");
