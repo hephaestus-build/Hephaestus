@@ -29,9 +29,9 @@ if (version.endsWith("-rc.0")) {
 
 const edits = [
 	{
-		file: "docs/admin/install.mdx",
-		re: /^VERSION=\S+(?<comment>\s+# the release you are installing.*)$/mu,
-		line: `VERSION=${version}$<comment>`,
+		file: "docs/admin/kubernetes.mdx",
+		re: /^(?<indent>[ \t]*)VERSION=\S+(?<comment>\s+# the release, without the leading "v".*)$/mu,
+		line: `$<indent>VERSION=${version}$<comment>`,
 	},
 ];
 
