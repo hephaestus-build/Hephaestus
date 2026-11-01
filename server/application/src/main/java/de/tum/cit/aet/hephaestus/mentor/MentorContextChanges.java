@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AiChoiceChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
+import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -18,10 +19,13 @@ public class MentorContextChanges {
 
     private final ApplicationEventPublisher events;
     private final MentorConversationRepository conversations;
+    private final MentorTurnRepository turns;
 
-    public MentorContextChanges(ApplicationEventPublisher events, MentorConversationRepository conversations) {
+    public MentorContextChanges(
+            ApplicationEventPublisher events, MentorConversationRepository conversations, MentorTurnRepository turns) {
         this.events = events;
         this.conversations = conversations;
+        this.turns = turns;
     }
 
     /** The choice is the account's, so every workspace it is a member of is told. */
@@ -45,7 +49,9 @@ public class MentorContextChanges {
         changed(change.workspaceId());
     }
 
+    /** Rotates the workspace's context generation and tells every worker, in the caller's transaction. */
     public void changed(long workspaceId) {
+        turns.changeContextGeneration(workspaceId, UUID.randomUUID());
         events.publishEvent(new MentorLedgerEvents.ContextChanged(workspaceId));
     }
 }

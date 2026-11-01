@@ -498,6 +498,8 @@ jobs:
               - 'scripts/api-generator/**'
             agent-images:
               - 'docker/agents/**'
+              # The conversation loop is built into the agent image from these sources (docker/docker-bake.hcl).
+              - 'server/application/src/main/resources/agent/**'
             postgres-image:
               - 'docker/postgres/**'
             # What a cluster install of the chart exercises: the chart, its script, the worker's sandbox
@@ -524,6 +526,7 @@ jobs:
               - 'server/application/src/main/java/**/agent/gateway/**'
               - 'server/application/src/main/resources/application*.yml'
               - 'docker/agents/**'
+              - 'server/application/src/main/resources/agent/**'
               - 'docker/postgres/**'
               - '.github/workflows/ci-kubernetes.yml'
               - '.github/actions/setup-kubernetes-tools/**'

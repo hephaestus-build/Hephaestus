@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.ConversationLoopCredentials;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.WorkerRegistryRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -16,6 +17,7 @@ import io.fabric8.kubernetes.client.okhttp.OkHttpClientFactory;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
+import java.time.Clock;
 import java.time.Duration;
 import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
@@ -29,7 +31,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 
 /**
- * The worker's Kubernetes runtime: review Jobs, a conversation host, and turn Pods.
+ * The worker's Kubernetes runtime: review Jobs and the check of the conversation loop's credential.
  * The client uses the worker Pod's service account, or the host dev launcher's namespace-scoped kubeconfig.
  */
 @Configuration(proxyBeanMethods = false)
@@ -128,21 +130,16 @@ public class KubernetesSandboxConfiguration {
             KubernetesPods pods,
             KubernetesSandboxJobs reviewJobs,
             KubernetesWorker worker,
-            KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
             KubernetesSandboxCache cache) {
-        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
+        return new KubernetesSandboxBackend(pods, reviewJobs, worker, exits, cache);
     }
 
-    @Bean(destroyMethod = "close")
-    public KubernetesExecSandboxes kubernetesExecSandboxes(
-            KubernetesPods pods,
-            KubernetesWorker worker,
-            AgentImageProperties agentImageProperties,
-            KubernetesLiveWorkers liveWorkers,
-            SandboxExits exits,
-            KubernetesSandboxCache cache) {
-        return new KubernetesExecSandboxes(pods, worker, agentImageProperties.reference(), liveWorkers, exits, cache);
+    @Bean
+    public ConversationLoopCredentials conversationLoopCredentials(
+            KubernetesClient sandboxKubernetesClient, KubernetesSandboxProperties properties, Clock clock) {
+        return new KubernetesConversationLoopCredentials(
+                sandboxKubernetesClient, properties.conversationLoopServiceAccount(), clock);
     }
 
     @Bean

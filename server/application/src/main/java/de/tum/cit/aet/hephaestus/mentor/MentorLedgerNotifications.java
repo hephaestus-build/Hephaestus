@@ -23,7 +23,9 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Carries ledger changes between processes over PostgreSQL {@code LISTEN/NOTIFY}. Every {@link MentorLedgerEvents}
  * event becomes a notification on {@link #CHANNEL} inside the transaction that published it, so PostgreSQL delivers
- * it only when that transaction commits. The payload is the event itself; a listener reads the rows.
+ * it only when that transaction commits. The payload is the event itself; a listener reads the rows. A partial answer
+ * is the exception: its frames carry it, {@link MentorTurnProgress} keeps it, and listeners learn of it as a change of
+ * its running turn.
  *
  * <p>The first {@link #subscribe} opens one dedicated connection outside the pool and keeps it for the life of the
  * process. Notifications sent while that connection is down are lost, so after every (re)connect each listener is
@@ -56,14 +58,20 @@ public class MentorLedgerNotifications implements DisposableBean {
     }
 
     private final MentorTurnRepository turns;
+    private final MentorTurnProgress progress;
     private final DataSourceProperties dataSource;
     private final ObjectMapper mapper;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private volatile @Nullable Thread thread;
     private volatile boolean running = true;
 
-    public MentorLedgerNotifications(MentorTurnRepository turns, DataSourceProperties dataSource, ObjectMapper mapper) {
+    public MentorLedgerNotifications(
+            MentorTurnRepository turns,
+            MentorTurnProgress progress,
+            DataSourceProperties dataSource,
+            ObjectMapper mapper) {
         this.turns = turns;
+        this.progress = progress;
         this.dataSource = dataSource;
         this.mapper = mapper;
     }
@@ -78,6 +86,11 @@ public class MentorLedgerNotifications implements DisposableBean {
     /** Starts listening on first use. The listener stays registered until the process stops. */
     public void subscribe(Listener listener) {
         listeners.add(listener);
+        startListening();
+    }
+
+    /** Starts listening, so this process keeps the partial answers of running turns ({@link MentorTurnProgress}). */
+    public void startListening() {
         synchronized (this) {
             if (thread == null && running) {
                 thread = Thread.ofPlatform()
@@ -97,6 +110,7 @@ public class MentorLedgerNotifications implements DisposableBean {
                 statement.execute("LISTEN " + CHANNEL);
                 PGConnection notifications = connection.unwrap(PGConnection.class);
                 backoff = Duration.ofSeconds(1);
+                progress.resync();
                 listeners.forEach(MentorLedgerNotifications::resync);
                 while (running) {
                     PGNotification[] received = notifications.getNotifications(WAIT_MILLIS);
@@ -137,13 +151,28 @@ public class MentorLedgerNotifications implements DisposableBean {
                     malformed.getClass().getSimpleName());
             return;
         }
+        if (change instanceof MentorLedgerEvents.ProgressChanged frame) {
+            // A completed partial answer reaches listeners as the change of its running turn.
+            progress.accept(frame).ifPresent(this::deliverTurnChanged);
+            return;
+        }
+        if (change instanceof MentorLedgerEvents.TurnChanged turn) {
+            progress.changed(turn);
+        }
         for (Listener listener : listeners) {
             switch (change) {
                 case MentorLedgerEvents.TurnChanged turn -> deliver(() -> listener.turnChanged(turn));
                 case MentorLedgerEvents.EntryChanged entry -> deliver(() -> listener.entryChanged(entry));
                 case MentorLedgerEvents.ReadChanged read -> deliver(() -> listener.readChanged(read));
                 case MentorLedgerEvents.ContextChanged context -> deliver(() -> listener.contextChanged(context));
+                case MentorLedgerEvents.ProgressChanged ignored -> {}
             }
+        }
+    }
+
+    private void deliverTurnChanged(MentorLedgerEvents.TurnChanged turn) {
+        for (Listener listener : listeners) {
+            deliver(() -> listener.turnChanged(turn));
         }
     }
 

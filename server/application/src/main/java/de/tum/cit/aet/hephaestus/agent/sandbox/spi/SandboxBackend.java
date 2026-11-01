@@ -13,10 +13,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>A sandbox runs two processes of one image, in order. The initializer fills {@code /workspace} from the worker's
  * gateway and may write it. The runtime then runs with {@code /workspace} read-only. Each backend guarantees, for both:
- * the user {@link ExecSandboxes#SANDBOX_USER}, a read-only root file system, no capability, no privilege escalation,
+ * the image's unprivileged user {@code 1000}, a read-only root file system, no capability, no privilege escalation,
  * the memory, CPU and process limits of the launch, no credential and no environment but the launch's, and no network
- * destination but the worker's gateway. Only a Heph host whose worker runs outside any container may get a route out,
- * where a backend has no other way to its gateway.
+ * destination but the worker's gateway.
  *
  * <p>A sandbox is known by the name that its runtime records ({@link Handle}), not by the memory of the process that
  * launched it: {@link #list}, {@link #kill} and {@link #remove} reach it from any worker of the installation that
@@ -94,9 +93,7 @@ public interface SandboxBackend {
 
     enum Kind {
         /** A practice review attempt: it runs to its own end within its deadlines. */
-        REVIEW,
-        /** A Heph host: it runs until it is removed. */
-        HOST
+        REVIEW
     }
 
     enum Stage {
@@ -111,12 +108,11 @@ public interface SandboxBackend {
     }
 
     /**
-     * @param id the review job, or the Heph host, the sandbox serves
-     * @param attempt the claimed job's attempt; null for a host, or a caller that holds no claim
+     * @param id the review job the sandbox serves
+     * @param attempt the claimed job's attempt; null for a caller that holds no claim
      * @param command the runtime's command; the initializer's is {@code SandboxLayout.INITIALIZER_COMMAND}
      * @param deadline when a review attempt's upload window closes. A backend whose runtime enforces a deadline itself
-     *     ends the sandbox then, also when its worker is gone: a Kubernetes Job enforces that deadline. Null for a
-     *     Heph host, which runs until it is removed
+     *     ends the sandbox then, also when its worker is gone: a Kubernetes Job enforces that deadline
      * @param environment the environment of both processes, built for the gateway address the backend gives the sandbox
      */
     record Launch(
@@ -147,10 +143,10 @@ public interface SandboxBackend {
     /**
      * A sandbox as {@link #list} finds it.
      *
-     * @param id the review job, or the Heph host, it serves
+     * @param id the review job it serves
      * @param attempt the claimed attempt it runs, when it recorded one
      * @param created when its newest part was created; null when the runtime does not say, which counts as now
-     * @param creatorGone whether the worker that launched it is positively gone: a Heph host is useless without it
+     * @param creatorGone whether the worker that launched it is positively gone
      */
     record Listed(
             Handle handle,

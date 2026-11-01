@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.ConversationLoopCredentials;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
@@ -37,10 +37,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
-    private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
+    private final ConversationLoopCredentials loops = mock(ConversationLoopCredentials.class);
     private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
-    private final JobTokenAuthenticationFilter filter =
-            new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier);
+    private final JobTokenAuthenticationFilter filter = new JobTokenAuthenticationFilter(jobs, turns, loops, verifier);
 
     @AfterEach
     void clearContext() {
@@ -166,15 +165,13 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"other-turn", "runtime", "commands"})
+    @ValueSource(strings = {"other-turn", "runtime"})
     void turnTokenReachesNoOtherTurnAndNoSandboxRuntime(String target) throws Exception {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
-        var path = switch (target) {
-            case "other-turn" -> "/internal/llm/turn/" + UUID.randomUUID() + "/end";
-            case "runtime" -> "/internal/llm/runtime/" + jwt.id();
-            default -> "/internal/llm/runtime/" + jwt.id() + "/commands";
-        };
+        var path = target.equals("other-turn")
+                ? "/internal/llm/turn/" + UUID.randomUUID() + "/end"
+                : "/internal/llm/runtime/" + jwt.id();
         var response = new MockHttpServletResponse();
         filter.doFilter(request(path, "Bearer turn-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Turn token served outside its turn");
@@ -183,13 +180,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"turn", "commands"})
-    void jobTokenReachesNoTurnEndpointAndNoCommandChannel(String target) throws Exception {
+    @ValueSource(strings = {"end", "tools"})
+    void jobTokenReachesNoTurnEndpoint(String endpoint) throws Exception {
         var job = running();
         when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
-        var path = target.equals("turn")
-                ? "/internal/llm/turn/" + UUID.randomUUID() + "/end"
-                : "/internal/llm/runtime/" + job.getId() + "/commands";
+        var path = "/internal/llm/turn/" + UUID.randomUUID() + "/" + endpoint;
         var request = request(path, "Bearer valid-token");
         request.setMethod("GET");
         var response = new MockHttpServletResponse();
@@ -201,53 +196,76 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void hostSessionTokenReachesOnlyItsOwnRuntimeReadsAndCommandChannel() throws Exception {
-        UUID host = UUID.randomUUID();
-        when(verifier.verify("session-token")).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
-        when(sessions.unsignedSessionFor("session-token"))
-                .thenReturn(Optional.of(
-                        new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));
-        // The host's workspace initializer reads discovery and the workspace archive before the host starts.
-        for (var path : new String[] {
-            "/internal/llm/runtime/" + host,
-            "/internal/llm/runtime/" + host + "/workspace",
-            "/internal/llm/runtime/" + host + "/commands"
-        }) {
-            var principal = new AtomicReference<Authentication>();
-            var own = request(path, "Bearer session-token");
-            own.setMethod("GET");
-            var response = new MockHttpServletResponse();
-            filter.doFilter(
-                    own,
-                    response,
-                    (incoming, outgoing) -> principal.set(Objects.requireNonNull(
-                            SecurityContextHolder.getContext().getAuthentication())));
-            assertThat(response.getStatus()).as(path).isEqualTo(200);
-            var identity = ((JobTokenAuthentication) principal.get()).getPrincipal();
-            assertThat(identity.hostSession()).isEqualTo(host);
-            assertThat(principal.get().getAuthorities()).as("no model scope").isEmpty();
-            SecurityContextHolder.clearContext();
-        }
+    void conversationLoopTokenReachesOnlyTheAssignments() throws Exception {
+        when(verifier.verify("loop-token")).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
+        when(loops.authenticates("loop-token")).thenReturn(true);
+        var principal = new AtomicReference<Authentication>();
+        var response = new MockHttpServletResponse();
+        filter.doFilter(
+                request(JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, "Bearer loop-token"),
+                response,
+                (incoming, outgoing) -> principal.set(Objects.requireNonNull(
+                        SecurityContextHolder.getContext().getAuthentication())));
+        assertThat(response.getStatus()).isEqualTo(200);
+        var identity = ((JobTokenAuthentication) principal.get()).getPrincipal();
+        assertThat(identity.loop()).isNotNull();
+        assertThat(identity.job()).isNull();
+        assertThat(identity.turn()).isNull();
+        assertThat(principal.get().getAuthorities()).as("no model scope").isEmpty();
+        SecurityContextHolder.clearContext();
+
         UUID other = UUID.randomUUID();
         for (var path : new String[] {
-            "/internal/llm/runtime/" + other + "/commands",
             "/internal/llm/runtime/" + other,
             "/internal/llm/runtime/" + other + "/workspace",
-            "/internal/llm/runtime/" + host + "/result",
-            "/internal/llm/turn/" + host + "/end",
-            "/internal/llm/responses"
+            "/internal/llm/runtime/" + other + "/result",
+            "/internal/llm/turn/" + other + "/context",
+            "/internal/llm/turn/" + other + "/end",
+            "/internal/llm/practice-script/1/run",
+            "/internal/llm/responses",
+            "/internal/llm/chat/completions"
         }) {
-            var refused = request(path, "Bearer session-token");
-            refused.setMethod(
-                    path.endsWith("/commands") || path.endsWith("/workspace") || path.endsWith(other.toString())
-                            ? "GET"
-                            : "POST");
-            var response = new MockHttpServletResponse();
-            filter.doFilter(refused, response, (incoming, outgoing) -> {
-                throw new AssertionError("Session token served outside its own runtime: " + path);
+            var refused = new MockHttpServletResponse();
+            filter.doFilter(request(path, "Bearer loop-token"), refused, (incoming, outgoing) -> {
+                throw new AssertionError("The loop's token reached " + path);
             });
-            assertThat(response.getStatus()).as(path).isEqualTo(401);
+            assertThat(refused.getStatus()).as(path).isEqualTo(401);
         }
+        var pulled = request(JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, "Bearer loop-token");
+        pulled.setMethod("GET");
+        var notAPull = new MockHttpServletResponse();
+        filter.doFilter(pulled, notAPull, (incoming, outgoing) -> {
+            throw new AssertionError("Only a POST pulls an assignment");
+        });
+        assertThat(notAPull.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    void attemptTokenNeverReachesTheAssignments() throws Exception {
+        when(verifier.verify("turn-token")).thenReturn(turnJwt());
+        var response = new MockHttpServletResponse();
+        filter.doFilter(
+                request(JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, "Bearer turn-token"),
+                response,
+                (incoming, outgoing) -> {
+                    throw new AssertionError("An attempt token pulled an assignment");
+                });
+        assertThat(response.getStatus()).isEqualTo(401);
+        verifyNoInteractions(loops);
+    }
+
+    @Test
+    void refusedLoopTokenIsUnauthorized() throws Exception {
+        when(verifier.verify("stale-token")).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
+        when(loops.authenticates("stale-token")).thenReturn(false);
+        var response = new MockHttpServletResponse();
+        filter.doFilter(
+                request(JobTokenAuthenticationFilter.ASSIGNMENTS_PATH, "Bearer stale-token"),
+                response,
+                (incoming, outgoing) -> {
+                    throw new AssertionError("A refused loop token pulled an assignment");
+                });
+        assertThat(response.getStatus()).isEqualTo(401);
     }
 
     private static AttemptJwt turnJwt() {

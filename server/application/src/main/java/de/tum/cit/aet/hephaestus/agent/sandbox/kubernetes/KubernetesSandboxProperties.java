@@ -37,6 +37,9 @@ import org.springframework.validation.annotation.Validated;
  * @param reviewPriorityClass the PriorityClass of review and probe Pods, below the conversations': a review is an
  *     attempt that runs again, a conversation is a person waiting. Blank gives none
  * @param probeInterval how often the isolation probe runs again after the worker's start
+ * @param conversationLoopServiceAccount the user of the release's conversation loop, {@code
+ *     system:serviceaccount:<namespace>:<name>}: the only service account whose token may pull conversation
+ *     assignments. Blank accepts none
  */
 @Validated
 @Profile("!specs & !cds-training")
@@ -66,7 +69,10 @@ public record KubernetesSandboxProperties(
         @DefaultValue("") @Pattern(regexp = "|" + DNS_SUBDOMAIN)
         String reviewPriorityClass,
 
-        @DefaultValue("15m") Duration probeInterval) {
+        @DefaultValue("15m") Duration probeInterval,
+
+        @DefaultValue("") @Pattern(regexp = "|system:serviceaccount:" + DNS_LABEL + ":" + DNS_SUBDOMAIN)
+        String conversationLoopServiceAccount) {
 
     private static final KubernetesSerialization JSON = new KubernetesSerialization();
 

@@ -151,18 +151,6 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     }
 
     @Test
-    void aWorkerWithoutAReadyHephHostKeepsReadinessDown() {
-        healthContext(
-                        CONTRIBUTOR_BEANS.keySet(),
-                        Map.of("hephTurnDispatcher", Health.down().build()))
-                .run(context -> {
-                    var readiness = context.getBean(HealthEndpoint.class).healthForPath("readiness");
-                    assertNotNull(readiness);
-                    assertThat(readiness.getStatus()).isEqualTo(Status.DOWN);
-                });
-    }
-
-    @Test
     void readinessFormsOnAContainerMissingMostOfItsContributors() {
         healthContext(WEBHOOK_ROLE_ONLY).run(context -> {
             assertThat(context).hasNotFailed();

@@ -20,6 +20,33 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json
 
+# The conversation loop runs as JavaScript in its own Deployment (deploy/chart/hephaestus/templates/conversation-loop.yaml).
+# The bake target passes its sources as the agent-sources context: the loop's files and every module they import,
+# transitively. Only the practice toolkit's JSON reader comes from docker/agents.
+FROM gateway AS conversation-loop
+WORKDIR /opt/conversation-loop-src
+COPY --from=agent-sources \
+    conversation-loop.ts conversation-loop-http.ts conversation-loop-protocol.ts conversation-loop-pull.ts \
+    conversation-loop-tools.ts conversation-loop-tools-http.ts \
+    pi-agent-sandbox.ts pi-diagnostics.ts pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts \
+    tool-client.ts tool-protocol.ts ./
+COPY practice-scripts/lib/core/json.ts ./work/practice-scripts/lib/core/json.ts
+# Emitted as ES modules like the gateway (tsconfig.build.json): CI type-checks these sources (tsconfig.node.json).
+COPY <<'EOF' package.json
+{ "type": "module" }
+EOF
+COPY <<'EOF' tsconfig.json
+{
+	"extends": "/opt/pi-sdk/tsconfig.build.json",
+	"compilerOptions": { "sourceRoot": "/opt/conversation-loop", "outDir": "/opt/conversation-loop" },
+	"files": [
+		"conversation-loop.ts", "conversation-loop-http.ts", "conversation-loop-protocol.ts", "conversation-loop-pull.ts",
+		"conversation-loop-tools.ts", "conversation-loop-tools-http.ts"
+	]
+}
+EOF
+RUN /opt/pi-sdk/node_modules/.bin/tsc -p tsconfig.json && cp package.json pi-diagnostics.json /opt/conversation-loop/
+
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
@@ -163,6 +190,12 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
     fi
 
 COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
+# The loop resolves the Pi SDK and the toolkit's one dependency from the packages this image already installs.
+COPY --from=conversation-loop /opt/conversation-loop/ /opt/conversation-loop/
+RUN mkdir -p /opt/conversation-loop/node_modules && \
+    ln -s /opt/pi-sdk/node_modules/@earendil-works /opt/conversation-loop/node_modules/@earendil-works && \
+    ln -s /opt/practice-scripts/node_modules/jsonc-parser /opt/conversation-loop/node_modules/jsonc-parser && \
+    node --input-type=module -e 'const loop = await import("/opt/conversation-loop/conversation-loop.js"); if (typeof loop.createConversationLoop !== "function") { throw new Error("the conversation loop does not load"); }'
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules

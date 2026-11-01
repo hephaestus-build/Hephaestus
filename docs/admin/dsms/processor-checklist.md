@@ -9,7 +9,7 @@ Fill in the recipient record below for each recipient before you enable it.
 | Component | What it receives | Role to assess |
 |---|---|---|
 | Your container host, PostgreSQL, NATS and the application roles | All application data | Own infrastructure needs no agreement. An externally operated host or database needs an Art. 28 assessment. |
-| Worker, review sandboxes and the conversation host | AI work, temporary context and mounted evidence | Own infrastructure needs no agreement. Record each external worker operator, location, access and deletion acknowledgement. |
+| Worker, review sandboxes, conversation loop and tools Jobs | AI work, temporary context and mounted evidence | Own infrastructure needs no agreement. Record each external worker operator, location, access and deletion acknowledgement. |
 | Reverse proxy or Gateway, ACME endpoint, DNS provider | TLS traffic and domain-validation data | A DNS-only record carries no request data. A proxied record or CDN makes its provider a recipient of request data. |
 | GitHub, a GitLab instance | Sign-in identities and the source system's data | Assess whether the provider processes on your instructions or is a separate controller of its own service. |
 | Model providers configured for a workspace | Prompts and responses for practice review and Hephaestus, where the AI choice allows them | An external provider processes on your instructions and needs an agreement. An in-house model on your infrastructure does not. |

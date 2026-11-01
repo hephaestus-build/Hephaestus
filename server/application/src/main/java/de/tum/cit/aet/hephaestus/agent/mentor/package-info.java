@@ -8,7 +8,7 @@
  *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper}).</li>
  *   <li>{@code host/}: the worker's Heph host, the one long-lived container that runs this worker's turns, and the
  *       endpoints it calls with each turn's credential
- *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnDispatcher}).</li>
+ *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.loop.ConversationAssignments}).</li>
  * </ul>
  *
  * <p>Turn cost is derived from the admission-frozen {@code LlmPriceSnapshot} — the single pricing

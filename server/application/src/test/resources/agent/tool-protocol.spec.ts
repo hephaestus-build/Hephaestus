@@ -6,6 +6,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import {
+	chmodSync,
 	existsSync,
 	mkdtempSync,
 	mkdirSync,
@@ -167,6 +168,7 @@ for (const transport of ["unix", "tcp"] as const) {
 				roots: [workspace, scratch],
 				scratch,
 				putRoots: [path.join(workspace, "repos")],
+				loadRoots: [path.join(workspace, "repos", "documents", "repos")],
 				soleUser,
 			});
 			await once(server, "listening");
@@ -372,6 +374,7 @@ syncBuiltinESMExports();`;
 				roots: [mutable],
 				scratch: path.join(mutable, ".scratch"),
 				putRoots: [path.join(mutable, "repos")],
+				loadRoots: [],
 				soleUser: false,
 			});
 			try {
@@ -1166,7 +1169,7 @@ syncBuiltinESMExports();`;
 			const address = path.join(root, "tools.sock");
 			const module = new URL("../../../main/resources/agent/tools-server.ts", import.meta.url).href;
 			const program = `import { startToolsServer } from ${JSON.stringify(module)};
-const server = startToolsServer(${JSON.stringify({ endpoint: listenAt(address), nonce, workspace: mutable, roots: [repos, incoming], scratch: incoming, putRoots: [repos], soleUser: false })});
+const server = startToolsServer(${JSON.stringify({ endpoint: listenAt(address), nonce, workspace: mutable, roots: [repos, incoming], scratch: incoming, putRoots: [repos], loadRoots: [], soleUser: false })});
 let peak = 0;
 const sample = () => { global.gc(); peak = Math.max(peak, process.memoryUsage().external); };
 const timer = setInterval(sample, 20);
@@ -1344,6 +1347,64 @@ process.on('message', () => { sample(); process.send({peak}); });
 				refusal("request"),
 				"a put still never replaces a directory",
 			);
+		});
+
+		void test("a put creates nothing under a read-only parent outside where repositories load", async () => {
+			const tree = mkdtempSync(path.join(tmpdir(), "tree-"));
+			mkdirSync(path.join(tree, "sub"));
+			writeFileSync(path.join(tree, "sub", "kept.txt"), "kept\n");
+			const earlier = path.join(workspace, "repos", "earlier");
+			await client.put(earlier, archiveOf(execFileSync("tar", ["-c", "-C", tree, "sub"])));
+			const locked = path.join(workspace, "repos", "locked");
+			mkdirSync(locked, { mode: 0o555 });
+			chmodSync(locked, 0o555);
+			chmodSync(outside, 0o555);
+			const leaf = mkdtempSync(path.join(tmpdir(), "leaf-"));
+			writeFileSync(path.join(leaf, "planted.txt"), "planted\n");
+			const tar = execFileSync("tar", ["-c", "-C", leaf, "planted.txt"]);
+			try {
+				for (const parent of [path.join(earlier, "sub"), locked, outside]) {
+					await assert.rejects(
+						client.put(path.join(parent, "planted"), archiveOf(tar)),
+						refusal("request"),
+						parent,
+					);
+					assert.equal(existsSync(path.join(parent, "planted")), false, parent);
+					assert.equal(
+						statSync(parent).mode.toString(8).slice(-3),
+						"555",
+						`${parent} keeps its mode`,
+					);
+				}
+			} finally {
+				chmodSync(locked, 0o755);
+				chmodSync(outside, 0o755);
+			}
+		});
+
+		void test("a put creates, replaces and follows no symlink, inside or outside the put roots", async () => {
+			const leaf = mkdtempSync(path.join(tmpdir(), "leaf-"));
+			writeFileSync(path.join(leaf, "planted.txt"), "planted\n");
+			const tar = execFileSync("tar", ["-c", "-C", leaf, "planted.txt"]);
+			const plain = path.join(workspace, "repos", "plain");
+			mkdirSync(plain, { recursive: true });
+			const inward = path.join(workspace, "repos", "inward");
+			const outward = path.join(workspace, "repos", "outward");
+			const target = path.join(workspace, "repos", "target");
+			symlinkSync(plain, inward);
+			symlinkSync(outside, outward);
+			symlinkSync(outside, target);
+
+			for (const [dir, through] of [
+				[path.join(inward, "planted"), plain],
+				[path.join(outward, "planted"), outside],
+				[target, outside],
+			] as const) {
+				await assert.rejects(client.put(dir, archiveOf(tar)), refusal("request"), dir);
+				assert.equal(existsSync(path.join(through, "planted")), false, dir);
+				assert.equal(existsSync(path.join(through, "planted.txt")), false, dir);
+			}
+			assert.equal(readFileSync(path.join(outside, "kept.txt"), "utf8"), "kept\n");
 		});
 
 		void test("a hostile archive writes nothing outside its directory", async () => {

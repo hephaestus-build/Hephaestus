@@ -21,6 +21,9 @@ public interface ContextLoader {
      */
     String index(long workspaceId, long accountId);
 
+    /** Canonical destinations that the worker may prepare for this account's tools Job. */
+    List<String> destinations(long workspaceId, long accountId);
+
     /**
      * One compact line for the turn's situation, at most {@link #SITUATION_CHARS} long: the items the developer most
      * likely means, so that the model can load one in its first round. Empty when there is none.

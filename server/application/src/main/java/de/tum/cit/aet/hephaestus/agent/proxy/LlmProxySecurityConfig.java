@@ -4,9 +4,9 @@ import static org.springframework.security.oauth2.core.authorization.OAuth2Autho
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.gateway.ConversationLoopCredentials;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.util.function.Predicate;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -46,10 +47,11 @@ import tools.jackson.databind.ObjectMapper;
  * <ol>
  *   <li>the sandbox capabilities on the gateway connector, authenticated by a sandbox credential
  *       ({@link JobTokenAuthenticationProvider}) and rate-limited per caller. A review job reaches its runtime, its
- *       review endpoints and the model; a Heph turn reaches the model and its own turn endpoints; a Heph host's session
- *       reaches only its own runtime discovery, workspace and command channel. The Heph host's turn bookkeeping (its
- *       context, partial answer and end) is exempt from the rate limit: the host sends a partial answer several times
- *       a second, and the model-driven calls of the same turn stay limited;
+ *       review endpoints and the model; a conversation turn reaches the model and its own turn endpoints; the
+ *       conversation loop's service account token reaches only the conversation assignments. A turn's bookkeeping (its
+ *       context, partial answer, renewal, tools Job, documents and end) and the loop's assignment pull are exempt from
+ *       the rate limit: the loop sends a partial answer several times a second and pulls while it is idle, and the
+ *       model-driven calls of a turn stay limited;
  *   <li>everything else on the gateway connector, denied and answered {@code 404} so the connector admits to no route
  *       a sandbox is not meant to call;
  *   <li>the capability paths on every other connector, denied the same way, so they exist only where sandboxes reach
@@ -71,7 +73,7 @@ class LlmProxySecurityConfig {
             SandboxGatewayConnector gateway,
             ReviewJobRepository agentJobRepository,
             MentorTurnRepository mentorTurnRepository,
-            SandboxGatewaySessions gatewaySessions,
+            ObjectProvider<ConversationLoopCredentials> loopCredentials,
             AttemptTokenVerifier jwtVerifier,
             BucketResolver bucketResolver,
             ProxyAccounting accounting,
@@ -90,23 +92,26 @@ class LlmProxySecurityConfig {
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}"),
                 paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/workspace"));
         RequestMatcher resultUpload = paths.matcher(HttpMethod.POST, "/internal/llm/runtime/{id}/result");
-        RequestMatcher hostCommands = paths.matcher(HttpMethod.GET, "/internal/llm/runtime/{id}/commands");
+        RequestMatcher assignments = paths.matcher(HttpMethod.POST, JobTokenAuthenticationFilter.ASSIGNMENTS_PATH);
         RequestMatcher turnTools = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-result"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/link-problem"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/show-feedback"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/search"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/read"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/exec"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/sandbox/load"));
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/documents/read"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/documents/load"));
         RequestMatcher turnBookkeeping = new OrRequestMatcher(
                 paths.matcher(HttpMethod.GET, "/internal/llm/turn/{id}/context"),
                 paths.matcher(HttpMethod.PUT, "/internal/llm/turn/{id}/partial"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/renew"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/tools"),
+                paths.matcher(HttpMethod.DELETE, "/internal/llm/turn/{id}/tools/{generation}"),
+                paths.matcher(HttpMethod.GET, "/internal/llm/turn/{id}/documents/archive"),
                 paths.matcher(HttpMethod.POST, "/internal/llm/turn/{id}/end"));
         RequestMatcher turnEndpoints = new OrRequestMatcher(turnTools, turnBookkeeping);
         RequestMatcher bodies = new OrRequestMatcher(modelCalls, turnEndpoints);
         RequestMatcher capabilities =
-                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, hostCommands, turnEndpoints);
+                new OrRequestMatcher(modelCalls, runtimeReads, resultUpload, assignments, turnEndpoints);
         var limit = new AuthRateLimitProperties.Limit(gatewayProperties.requestsPerMinute(), Duration.ofMinutes(1));
 
         http.securityMatcher(new AndRequestMatcher(onGatewayConnector(gateway), capabilities))
@@ -114,14 +119,12 @@ class LlmProxySecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(
                         (request, response, exception) -> response.setStatus(HttpStatus.NOT_FOUND.value())))
-                .authorizeHttpRequests(auth -> auth.requestMatchers(hostCommands)
-                        .access(caller(identity -> identity.hostSession() != null))
+                .authorizeHttpRequests(auth -> auth.requestMatchers(assignments)
+                        .access(caller(identity -> identity.loop() != null))
                         .requestMatchers(runtimeReads)
-                        .access(AuthorizationManagers.anyOf(
-                                caller(identity -> identity.hostSession() != null),
-                                AuthorizationManagers.allOf(
-                                        hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
-                                        caller(identity -> identity.job() != null))))
+                        .access(AuthorizationManagers.allOf(
+                                hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
+                                caller(identity -> identity.job() != null)))
                         .requestMatchers(models)
                         .access(AuthorizationManagers.allOf(
                                 hasScope(AttemptTokenIssuer.LLM_PROXY_SCOPE),
@@ -136,7 +139,11 @@ class LlmProxySecurityConfig {
                                 caller(identity -> identity.job() != null))))
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
-                                agentJobRepository, mentorTurnRepository, gatewaySessions, jwtVerifier),
+                                agentJobRepository,
+                                mentorTurnRepository,
+                                // Build profiles start no Kubernetes runtime: there, no loop token is accepted.
+                                loopCredentials.getIfAvailable(() -> token -> false),
+                                jwtVerifier),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
                         bounded(gatewayProperties.maxRequestBytes(), bodies), JobTokenAuthenticationFilter.class)
@@ -145,7 +152,12 @@ class LlmProxySecurityConfig {
                         JobTokenAuthenticationFilter.class)
                 .addFilterAfter(
                         new SandboxGatewayRateLimitFilter(
-                                limit, bucketResolver, objectMapper, accounting, turnBookkeeping),
+                                limit,
+                                bucketResolver,
+                                objectMapper,
+                                accounting,
+                                // The loop pulls while it is idle; a turn's model-driven calls stay limited.
+                                new OrRequestMatcher(turnBookkeeping, assignments)),
                         AuthorizationFilter.class);
 
         return http.build();

@@ -36,8 +36,6 @@ public class SandboxExits {
     /** What the sandbox ran. */
     public enum Kind {
         REVIEW,
-        HOST,
-        TURN,
         PROBE;
 
         String tag() {
@@ -135,9 +133,8 @@ public class SandboxExits {
         String container = exit.container();
         if (container != null) {
             event = event.addKeyValue("container.name", container);
-            // Only a review's runtime lines. A Heph host's output can hold the conversation, a provider's answer or a
-            // credential, and the worker never copies it (docs/admin/runtime-roles.mdx); a turn sandbox runs the
-            // model's commands; a container that never started wrote nothing.
+            // Only a review's runtime lines: a probe's output is the probe's own, and a container that never started
+            // wrote nothing.
             if (kind == Kind.REVIEW && exit.reason() != Reason.START_FAILED) {
                 Tail tail = stderrTail(pods.tail(name, container, TAIL_LINES_READ, TAIL_BYTES_READ));
                 if (!tail.text().isEmpty()) event = event.addKeyValue("sandbox.stderr.tail", tail.text());

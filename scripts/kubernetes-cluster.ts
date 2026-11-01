@@ -58,6 +58,14 @@ const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
 
 export const RELEASE = "heph";
 export const NAMESPACE = "hephaestus";
+/**
+ * The agent image builds the conversation loop from the server's agent sources, as the named context that
+ * docker/docker-bake.hcl gives it.
+ */
+export const AGENT_IMAGE_BUILD_CONTEXTS = [
+	"--build-context",
+	"agent-sources=server/application/src/main/resources/agent",
+] as const;
 export const SANDBOXES = "hephaestus-sandboxes";
 const GATEWAY_NAMESPACE = "gateway";
 const EXTERNAL_POSTGRESQL = "external-postgresql";
@@ -1866,7 +1874,12 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		return { image, repository, indexDigest: digest };
 	};
 	const tag = `dev-${createHash("sha256").update(ROOT).digest("hex").slice(0, 12)}`;
-	const build = async (image: string, context: string, dockerfile?: string) => {
+	const build = async (
+		image: string,
+		context: string,
+		dockerfile?: string,
+		contexts: readonly string[] = [],
+	) => {
 		await run(
 			"docker",
 			[
@@ -1875,6 +1888,7 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 				"-t",
 				`hephaestus-local/${image}:${tag}`,
 				...(dockerfile === undefined ? [] : ["-f", dockerfile]),
+				...contexts,
 				context,
 			],
 			{
@@ -1884,7 +1898,12 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 		);
 	};
 	await build("webapp", ".", "webapp/Dockerfile");
-	await build("agent-pi", "docker/agents", "docker/agents/pi/Dockerfile");
+	await build(
+		"agent-pi",
+		"docker/agents",
+		"docker/agents/pi/Dockerfile",
+		AGENT_IMAGE_BUILD_CONTEXTS,
+	);
 	await build("postgres", "docker/postgres");
 	await run(
 		path.join(ROOT, "server", process.platform === "win32" ? "gradlew.bat" : "gradlew"),

@@ -168,7 +168,6 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.datasource.password=" + database.password(),
                         "hephaestus.agent.enabled=" + (role == RuntimeRole.WORKER),
                         "hephaestus.worker.capacity.review-max=1",
-                        "hephaestus.worker.capacity.mentor-max=1",
                         "hephaestus.sync.nats.enabled=" + (role != RuntimeRole.WORKER),
                         "hephaestus.sync.nats.server=" + NatsTestContainer.getServerUrl(),
                         "hephaestus.sync.nats.username=",

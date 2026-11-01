@@ -3,9 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration;
-import de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostSpec;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
@@ -57,22 +54,6 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a Hephaestus host counts what the table says")
-    void shouldMatchTheTableWhenTheWorkerBuildsAHephHostPod() throws IOException {
-        assertCounts(
-                "hephHost",
-                List.of(workspacePod(KubernetesWorker.KIND_HOST, HephHostSpec.LIMITS, KubernetesPods.HOST)));
-    }
-
-    @Test
-    @DisplayName("a turn sandbox, with its stager, counts what the table says")
-    void shouldMatchTheTableWhenTheWorkerBuildsATurnSandbox() throws IOException {
-        Pod turn = pods.turnPod(workload(KubernetesWorker.KIND_TURN), TurnSandboxes.LIMITS);
-
-        assertCounts("turnSandbox", List.of(turn));
-    }
-
-    @Test
     @DisplayName("a tools Job counts what the table says")
     void shouldMatchTheTableWhenTheWorkerBuildsAToolsPod() throws IOException {
         Pod tools = pods.toolsPod(
@@ -104,14 +85,6 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
                         probe.apply(KubernetesIsolationProbe.TRIAL_MEMORY),
                         probe.apply(KubernetesIsolationProbe.PROBE_MEMORY),
                         probe.apply(KubernetesIsolationProbe.PROBE_MEMORY)));
-    }
-
-    @Test
-    @DisplayName("the turn sandbox pool matches the worker")
-    void shouldMatchTheWorkerWhenTheTableCountsPooledSandboxes() throws IOException {
-        JsonNode table = table();
-
-        assertThat(table.path("pooledTurnSandboxes").asInt()).isEqualTo(HephHostConfiguration.SANDBOX_POOL);
     }
 
     private void assertCounts(String entry, List<Pod> counted) throws IOException {

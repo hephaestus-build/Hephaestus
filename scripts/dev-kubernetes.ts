@@ -7,6 +7,7 @@ import path from "node:path";
 import { parseAllDocuments } from "yaml";
 
 import {
+	AGENT_IMAGE_BUILD_CONTEXTS,
 	ensureDevCluster,
 	requireDevCluster,
 	mapImages,
@@ -149,7 +150,8 @@ export function hostResources(
 	}
 	if (
 		selected.filter((resource) => resource.kind === "ResourceQuota").length !== 3 ||
-		selected.filter((resource) => resource.kind === "NetworkPolicy").length !== 2 ||
+		// The sandbox deny-all, the gateway policy, and the tools Jobs' ingress from the conversation loop.
+		selected.filter((resource) => resource.kind === "NetworkPolicy").length !== 3 ||
 		selected.filter((resource) => resource.kind === "RoleBinding").length !== 1
 	) {
 		throw new Error(
@@ -300,7 +302,16 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 	const local = `localhost:5111/hephaestus-build/agent-pi:${tag}`;
 	await run(
 		"docker",
-		["build", "--quiet", "-t", local, "-f", "docker/agents/pi/Dockerfile", "docker/agents"],
+		[
+			"build",
+			"--quiet",
+			"-t",
+			local,
+			"-f",
+			"docker/agents/pi/Dockerfile",
+			...AGENT_IMAGE_BUILD_CONTEXTS,
+			"docker/agents",
+		],
 		{ cwd: ROOT, stdout: "ignore" },
 	);
 	await run("docker", ["push", "--quiet", local], { stdout: "ignore" });
@@ -329,7 +340,6 @@ export async function prepareHost(): Promise<NodeJS.ProcessEnv> {
 		HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS: `${ports.namespace}-host-${RELEASE}-conversations`,
 		HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS: `${ports.namespace}-host-${RELEASE}-reviews`,
 		HEPHAESTUS_AGENT_IMAGE_REFERENCE: digest.replace("localhost:5111/", "ghcr.io/"),
-		HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: "1",
 		SANDBOX_MAX_CONCURRENT: "1",
 	};
 }

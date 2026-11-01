@@ -36,7 +36,8 @@ class MentorTurnAdmissionTest extends BaseUnitTest {
                     "openai-responses", "https://api.example", UsageFundingSource.WORKSPACE, 3L, 5L),
             200_000,
             32_000,
-            ReasoningEffort.HIGH);
+            ReasoningEffort.HIGH,
+            900);
 
     @Test
     void shouldReadBackEveryFieldWhenAnAdmissionIsStoredAsJson() {

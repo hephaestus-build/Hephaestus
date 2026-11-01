@@ -49,6 +49,7 @@ public final class MentorLedgerEvents {
         @JsonSubTypes.Type(value = EntryChanged.class, name = "entry"),
         @JsonSubTypes.Type(value = ReadChanged.class, name = "read"),
         @JsonSubTypes.Type(value = ContextChanged.class, name = "context"),
+        @JsonSubTypes.Type(value = ProgressChanged.class, name = "progress"),
     })
     public sealed interface LedgerChanged {
         long workspaceId();
@@ -86,6 +87,28 @@ public final class MentorLedgerEvents {
      * @param accountId the developer's account, whose streams learn of it
      */
     public record ReadChanged(long workspaceId, UUID conversationId, long accountId, Instant lastReadAt)
+            implements LedgerChanged {}
+
+    /**
+     * One frame of a running attempt's partial answer, which only memory keeps ({@link MentorTurnProgress}). The frames
+     * of one update carry its JSON in order, so each notification stays below PostgreSQL's 8000-byte limit. No frame is
+     * stored, so a partial answer writes no row and no write-ahead log.
+     *
+     * @param sequence the update the frame belongs to
+     * @param index the frame's place in its update, from {@code 0}
+     * @param count how many frames the update has
+     * @param data a part of the update's UTF-8 JSON, Base64-encoded
+     */
+    public record ProgressChanged(
+            long workspaceId,
+            UUID conversationId,
+            UUID turnId,
+            MentorTurn.Surface surface,
+            int attempt,
+            long sequence,
+            int index,
+            int count,
+            String data)
             implements LedgerChanged {}
 
     /**

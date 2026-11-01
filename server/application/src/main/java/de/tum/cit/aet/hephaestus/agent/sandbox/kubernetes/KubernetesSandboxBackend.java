@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -41,12 +40,10 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     static final Duration DEADLINE_BACKSTOP = Duration.ofMinutes(2);
 
     private static final String REVIEW_PREFIX = "hephaestus-review-";
-    private static final String HOST_PREFIX = "hephaestus-host-";
 
     private final KubernetesPods pods;
     private final KubernetesSandboxJobs reviewJobs;
     private final KubernetesWorker worker;
-    private final KubernetesLiveWorkers liveWorkers;
     private final SandboxExits exits;
     private final KubernetesSandboxQuota quota;
     private final KubernetesSandboxCache cache;
@@ -56,13 +53,11 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             KubernetesPods pods,
             KubernetesSandboxJobs reviewJobs,
             KubernetesWorker worker,
-            KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
             KubernetesSandboxCache cache) {
         this.pods = pods;
         this.reviewJobs = reviewJobs;
         this.worker = worker;
-        this.liveWorkers = liveWorkers;
         this.exits = exits;
         this.quota = new KubernetesSandboxQuota(
                 cache,
@@ -122,42 +117,28 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     @Override
     public Handle launch(Launch launch) {
         worker.requireIsolation();
-        boolean review = launch.kind() == Kind.REVIEW;
-        String kind = review ? KubernetesWorker.KIND_REVIEW : KubernetesWorker.KIND_HOST;
-        Map<String, String> labels = worker.labels(kind);
-        String name;
-        if (review) {
-            labels.put(KubernetesWorker.JOB_ID, launch.id().toString());
-            if (launch.attempt() != null) {
-                labels.put(KubernetesWorker.JOB_ATTEMPT, launch.attempt().toString());
-            }
-            name = jobName(launch.id(), launch.attempt());
-        } else {
-            labels.put(KubernetesWorker.SESSION_ID, launch.id().toString());
-            name = HOST_PREFIX + launch.id();
+        Map<String, String> labels = worker.labels(KubernetesWorker.KIND_REVIEW);
+        labels.put(KubernetesWorker.JOB_ID, launch.id().toString());
+        if (launch.attempt() != null) {
+            labels.put(KubernetesWorker.JOB_ATTEMPT, launch.attempt().toString());
         }
+        String name = jobName(launch.id(), launch.attempt());
         Pod pod = pods.workspacePod(
-                new KubernetesPods.Workload(name, labels, launch.image(), review ? "agent" : "host"),
+                new KubernetesPods.Workload(name, labels, launch.image(), "agent"),
                 launch.environment().at(worker.gatewayUrl()),
                 launch.command(),
                 launch.limits(),
-                review ? KubernetesPods.REVIEW : KubernetesPods.HOST);
-        if (review) {
-            Instant end = launch.deadline();
-            if (end == null) {
-                throw new SandboxException("A practice review needs its upload deadline");
-            }
-            // Counted from the Job's start, which is after now: the bound is never earlier than the attempt's own.
-            long deadline = Math.max(
-                    1,
-                    Duration.between(Instant.now(), end).plus(DEADLINE_BACKSTOP).toSeconds());
-            reviewJobs.create(reviewJobs.job(pod, deadline));
-            sandboxes.put(name, new Sandbox(name, null));
-        } else {
-            pods.create(pod);
-            sandboxes.put(name, new Sandbox(name, name));
+                KubernetesPods.REVIEW);
+        Instant end = launch.deadline();
+        if (end == null) {
+            throw new SandboxException("A practice review needs its upload deadline");
         }
-        log.info("Sandbox {} created: {}", review ? "Job" : "Pod", name);
+        // Counted from the Job's start, which is after now: the bound is never earlier than the attempt's own.
+        long deadline = Math.max(
+                1, Duration.between(Instant.now(), end).plus(DEADLINE_BACKSTOP).toSeconds());
+        reviewJobs.create(reviewJobs.job(pod, deadline));
+        sandboxes.put(name, new Sandbox(name, null));
+        log.info("Sandbox Job created: {}", name);
         return new Handle(name);
     }
 
@@ -270,8 +251,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
      */
     @Override
     public void kill(Handle handle) {
-        boolean review = handle.id().startsWith(REVIEW_PREFIX);
-        if (!review && !handle.id().startsWith(HOST_PREFIX)) {
+        if (!handle.id().startsWith(REVIEW_PREFIX)) {
             return;
         }
         Sandbox sandbox = sandboxes.get(handle.id());
@@ -281,16 +261,15 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         String pod = pod(handle, sandbox);
         if (pod != null) {
             pods.terminate(pod);
-        } else if (review) {
+        } else {
             reviewJobs.delete(handle.id());
         }
     }
 
-    /** Removes the Job with its Pod, or the host's Pod. The Pod goes at once, not after the garbage collector's turn. */
+    /** Removes the Job with its Pod. The Pod goes at once, not after the garbage collector's turn. */
     @Override
     public void remove(Handle handle) {
-        boolean review = handle.id().startsWith(REVIEW_PREFIX);
-        if (!review && !handle.id().startsWith(HOST_PREFIX)) {
+        if (!handle.id().startsWith(REVIEW_PREFIX)) {
             return;
         }
         Sandbox sandbox = sandboxes.remove(handle.id());
@@ -302,16 +281,14 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             failure = e;
         }
         // Before any delete: the Pod's exit code and log go with it.
-        if (pod != null) exits.record(review ? SandboxExits.Kind.REVIEW : SandboxExits.Kind.HOST, pod);
-        if (review) {
-            try {
-                reviewJobs.delete(handle.id());
-            } catch (SandboxException e) {
-                if (failure == null) {
-                    failure = e;
-                } else {
-                    failure.addSuppressed(e);
-                }
+        if (pod != null) exits.record(SandboxExits.Kind.REVIEW, pod);
+        try {
+            reviewJobs.delete(handle.id());
+        } catch (SandboxException e) {
+            if (failure == null) {
+                failure = e;
+            } else {
+                failure.addSuppressed(e);
             }
         }
         if (pod != null) {
@@ -330,11 +307,8 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         }
     }
 
-    /** The sandbox's Pod: the host's own, or the one that a review's Job created; null before the Job created it. */
+    /** The Pod that a review's Job created; null before the Job created it. */
     private @Nullable String pod(Handle handle, @Nullable Sandbox sandbox) {
-        if (handle.id().startsWith(HOST_PREFIX)) {
-            return handle.id();
-        }
         String known = sandbox == null ? null : sandbox.pod;
         if (known != null) {
             return known;
@@ -343,13 +317,9 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         return created == null ? null : created.getMetadata().getName();
     }
 
-    /**
-     * The review Jobs and the Heph host Pods in the sandbox namespace, whichever worker created them. A host's worker is
-     * gone when it no longer beats in the registry; while the registry cannot be read, no worker counts as gone.
-     */
+    /** The review Jobs in the sandbox namespace, whichever worker created them. */
     @Override
     public List<Listed> list() {
-        Optional<Set<String>> live = liveWorkers.labels();
         List<Listed> listed = new ArrayList<>();
         for (Job job : reviewJobs.list()) {
             Map<String, String> labels = labels(job);
@@ -364,16 +334,6 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
                     attempt(labels.get(KubernetesWorker.JOB_ATTEMPT)),
                     created(job),
                     false));
-        }
-        for (Pod host : pods.list(KubernetesWorker.KIND_HOST)) {
-            Map<String, String> labels = labels(host);
-            Optional<UUID> id = uuid(labels.get(KubernetesWorker.SESSION_ID));
-            if (id.isEmpty()) {
-                continue;
-            }
-            boolean workerGone = live.isPresent() && !live.get().contains(labels.get(KubernetesWorker.WORKER_ID));
-            listed.add(new Listed(
-                    new Handle(host.getMetadata().getName()), Kind.HOST, id.get(), null, created(host), workerGone));
         }
         return listed;
     }

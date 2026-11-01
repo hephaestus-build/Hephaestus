@@ -65,9 +65,14 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntimeConfiguration", RuntimeRole.WORKER_PROPERTY),
             // Heph turns run on a worker's Heph host, in its sandbox, behind its gateway.
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephHostConfiguration", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController", RuntimeRole.WORKER_PROPERTY),
-            Map.entry("de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnContexts", RuntimeRole.WORKER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.agent.mentor.loop.ConversationAssignments", RuntimeRole.WORKER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.agent.mentor.loop.ConversationTurnController",
+                    RuntimeRole.WORKER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.agent.mentor.loop.ConversationTurnContexts",
+                    RuntimeRole.WORKER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenConfiguration", RuntimeRole.WORKER_PROPERTY),
             // Admin surfaces and the services behind them are server-only: the worker and webhook pods do
             // not load core.auth, so an admin controller mapped there is a route with no authentication

@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
@@ -40,15 +38,6 @@ public class SandboxRuntimeConfiguration {
             SandboxGatewaySessions gatewaySessions,
             MeterRegistry meterRegistry) {
         return new SandboxAttemptRunner(backend, workspaceManager, gatewaySessions, meterRegistry);
-    }
-
-    @Bean
-    public HostSandbox sandboxHosts(
-            SandboxBackend backend,
-            SandboxWorkspaceManager workspaceManager,
-            SandboxGatewaySessions gatewaySessions,
-            AgentImageProperties agentImageProperties) {
-        return new SandboxHosts(backend, workspaceManager, gatewaySessions, agentImageProperties.reference());
     }
 
     @Bean

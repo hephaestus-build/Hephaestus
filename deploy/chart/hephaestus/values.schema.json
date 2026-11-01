@@ -571,6 +571,7 @@
 				"replicas",
 				"reviews",
 				"conversationTurns",
+				"conversationLoop",
 				"drainTimeoutSeconds",
 				"rolloutStrategy",
 				"runtime",
@@ -587,8 +588,31 @@
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
 				"reviews": { "type": "integer", "minimum": 1, "maximum": 32 },
 				"conversationTurns": {
-					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this.",
+					"description": "auto, or the conversation turns that one conversation loop replica runs at once (CONVERSATION_MAX_TURNS). The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is conversationLoop.replicas times this.",
 					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
+				},
+				"conversationLoop": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["replicas", "limits"],
+					"properties": {
+						"replicas": {
+							"description": "The conversation loop's replicas. 0 stops it, and questions wait in the queue.",
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 8
+						},
+						"limits": {
+							"description": "The CPU and memory limits of one conversation loop replica.",
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["cpu", "memory"],
+							"properties": {
+								"cpu": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?m?$" },
+								"memory": { "type": "string", "pattern": "^[0-9]+(Mi|Gi)$" }
+							}
+						}
+					}
 				},
 				"drainTimeoutSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
 				"rolloutStrategy": { "enum": ["RollingUpdate", "Recreate"] },

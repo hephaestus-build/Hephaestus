@@ -474,6 +474,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                                                 .put("text", "Say why.")),
                                 MentorLedgerFixtures.toolResult(
                                         MentorLedgerFixtures.piId(), "call-feedback", "show_feedback", "Shown", false)),
+                        null,
                         null));
 
         List<MentorLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).entries().stream()

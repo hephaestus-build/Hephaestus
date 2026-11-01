@@ -60,7 +60,6 @@ erDiagram
         TIMESTAMPTZ leased_until
         INTEGER llm_calls "NOT NULL"
         BIGINT output_tokens "NOT NULL"
-        JSONB partial
         BIGINT reasoning_tokens "NOT NULL"
         VARCHAR(200) request_id UK "NOT NULL"
         TIMESTAMPTZ started_at
@@ -73,6 +72,7 @@ erDiagram
         VARCHAR(200) failure_cause
         TIMESTAMPTZ queued_at "NOT NULL"
         UUID lease_id
+        UUID context_generation
     }
 
     Account["Account · Core"]

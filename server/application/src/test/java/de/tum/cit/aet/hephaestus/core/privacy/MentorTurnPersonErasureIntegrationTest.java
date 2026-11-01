@@ -299,7 +299,7 @@ class MentorTurnPersonErasureIntegrationTest extends BaseIntegrationTest {
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(MentorTurn.Status.DONE, appended, null));
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, appended, null, null));
     }
 
     /** A source step that fails on its first run, before the last step, so the erasure fails and resumes. */

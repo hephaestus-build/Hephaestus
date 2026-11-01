@@ -163,24 +163,24 @@ const toolFlag = fakeCommand.indexOf("--tool-mode");
 if (toolFlag === -1 || fakeCommand[toolFlag + 1] !== "none") {
 	throw new Error("Admission sweep requires --tool-mode none on the fake");
 }
-const worker = asRecord(
+const server = asRecord(
 	parseJson(
-		await remote("sudo -n kubectl get deploy bench-worker -n capacity-bench-20261030 -o json"),
+		await remote("sudo -n kubectl get deploy bench-server -n capacity-bench-20261030 -o json"),
 	),
-	"worker",
+	"server",
 );
-const workerContainers = asArray(
-	asRecord(asRecord(asRecord(worker.spec, "spec").template, "template").spec, "pod").containers,
+const serverContainers = asArray(
+	asRecord(asRecord(asRecord(server.spec, "spec").template, "template").spec, "pod").containers,
 	"containers",
 );
-const workerEnv = asArray(asRecord(workerContainers[0], "worker container").env, "worker env").map(
+const serverEnv = asArray(asRecord(serverContainers[0], "server container").env, "server env").map(
 	(row) => asRecord(row, "variable"),
 );
 if (
-	workerEnv.find((row) => row.name === "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX")?.value !==
+	serverEnv.find((row) => row.name === "HEPHAESTUS_MENTOR_TURN_CAPACITY")?.value !==
 	String(admission)
 ) {
-	throw new Error("Worker admission does not match requested measurement");
+	throw new Error("Turn admission does not match requested measurement");
 }
 await writeFile(`${directory}/queue-before.json`, JSON.stringify(before, null, 2));
 const preflight = await collect(

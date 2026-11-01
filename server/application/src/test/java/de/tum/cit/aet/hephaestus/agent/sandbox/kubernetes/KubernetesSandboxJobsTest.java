@@ -221,9 +221,9 @@ class KubernetesSandboxJobsTest {
     void shouldListOnlyReviewJobsWhenListed() {
         String review = reviewName();
         jobs.create(jobs.job(template(review), 900L));
-        Pod host = template("hephaestus-host-" + UUID.randomUUID());
-        host.getMetadata().setLabels(worker.labels(KubernetesWorker.KIND_HOST));
-        jobs.create(jobs.job(host, 900L));
+        Pod tools = template("hephaestus-tools-" + UUID.randomUUID());
+        tools.getMetadata().setLabels(worker.labels(KubernetesWorker.KIND_TOOLS));
+        jobs.create(jobs.job(tools, 900L));
 
         assertThat(jobs.list()).extracting(job -> job.getMetadata().getName()).containsExactly(review);
     }

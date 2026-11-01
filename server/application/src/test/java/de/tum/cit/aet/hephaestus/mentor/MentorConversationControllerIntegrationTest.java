@@ -431,6 +431,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                                 MentorLedgerFixtures.toolResult(
                                         MentorLedgerFixtures.piId(), "call-fetch", "fetch_context", "{}", false),
                                 MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "That is all I saw.")),
+                        null,
                         null));
 
         get("/entries")
@@ -500,6 +501,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                                                 .put("text", text)),
                                 MentorLedgerFixtures.toolResult(
                                         MentorLedgerFixtures.piId(), "call-1", "show_feedback", "Result", refused)),
+                        null,
                         null));
     }
 
@@ -539,7 +541,10 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
-                        MentorTurn.Status.FAILED, List.of(), "Hephaestus could not finish this reply. Try again."));
+                        MentorTurn.Status.FAILED,
+                        List.of(),
+                        null,
+                        "Hephaestus could not finish this reply. Try again."));
 
         get("/entries")
                 .jsonPath("$.entries[0].id")

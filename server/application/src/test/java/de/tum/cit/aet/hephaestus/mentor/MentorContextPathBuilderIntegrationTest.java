@@ -68,7 +68,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                 turn.getId(),
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
-                new MentorTurnService.Ending(outcome, appended, null));
+                new MentorTurnService.Ending(outcome, appended, null, null));
         return turn;
     }
 
@@ -282,6 +282,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                                         "fetch_context",
                                         "colleague data",
                                         false)),
+                        null,
                         null));
         MentorEntry toolResult = entryRepository
                 .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(

@@ -65,6 +65,11 @@ export interface ToolsServerOptions {
 	/** The roots that `put` may create a directory in. */
 	putRoots: string[];
 	/**
+	 * The directories below which a put may create its new directory in a parent that an earlier put made read-only:
+	 * where `load_context` puts a repository into the documents. Under any other read-only parent a put is refused.
+	 */
+	loadRoots: string[];
+	/**
 	 * Whether this user runs nothing but the tools: then `reset` also ends processes that left their call's group.
 	 * Only the sidecar's own user does; a test shares its user with the test runner.
 	 */
@@ -118,6 +123,24 @@ interface Put {
 function within(root: string, absolute: string): boolean {
 	const rel = path.relative(root, absolute);
 	return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
+/**
+ * Whether `candidate` names its resolved path `real` through no symlink below the root of `roots` that holds it. The
+ * root itself may be named through a symlink or by its real path.
+ */
+async function withoutSymlinks(candidate: string, real: string, roots: string[]): Promise<boolean> {
+	const named = path.resolve(candidate);
+	for (const root of roots) {
+		const base = path.resolve(root);
+		const realBase = await realpath(base);
+		for (const prefix of [base, realBase]) {
+			if (within(prefix, named)) {
+				return path.join(realBase, path.relative(prefix, named)) === real;
+			}
+		}
+	}
+	return false;
 }
 
 /** `candidate` with every symlink resolved, when it exists and lies inside one of `roots`. */
@@ -267,24 +290,38 @@ export function checkAuthority(): void {
 let creatingDirectory: Promise<unknown> = Promise.resolve();
 
 /**
- * Creates a put's new directory. Its parent can be one that an earlier put made read-only, as a repository's owner
- * directory inside the documents is: only this mkdir gets owner write on it, and the parent keeps its mode otherwise.
- * Commands run as the same user, so the moment grants them nothing they lack. One creation runs at a time, so that two
- * puts into one parent never restore its mode under each other.
+ * Creates a put's new directory. Below a load root, its parent can be one that an earlier put made read-only, as a
+ * repository's owner directory inside the documents is: only this mkdir gets owner write on it, and the parent keeps
+ * its mode otherwise. Any other read-only parent refuses the put, and a parent that is a symlink always does. Commands
+ * run as the same user, so the moment grants them nothing they lack; a read-only mount refuses the chmod itself. One
+ * creation runs at a time, so that two puts into one parent never restore its mode under each other.
  */
-async function createPutDirectory(dir: string): Promise<void> {
+async function createPutDirectory(dir: string, loadRoots: string[]): Promise<void> {
 	const previous = creatingDirectory;
 	const { promise, resolve } = Promise.withResolvers<undefined>();
 	creatingDirectory = promise;
 	await previous;
 	try {
 		const parent = path.dirname(dir);
-		const { mode } = await lstat(parent);
+		const info = await lstat(parent);
+		if (info.isSymbolicLink()) {
+			throw new ToolProtocolError("request", "A put creates its directory through no symlink.");
+		}
+		const { mode } = info;
 		// oxlint-disable-next-line no-bitwise -- a file mode is a bitmask
 		const permissions = mode & 0o7777;
 		// oxlint-disable-next-line no-bitwise -- a file mode is a bitmask
 		const writable = (permissions & 0o200) !== 0;
 		if (!writable) {
+			const roots = await Promise.all(
+				loadRoots.map(async (root) => realpath(root).catch(() => null)),
+			);
+			if (!roots.some((root) => root !== null && within(root, parent))) {
+				throw new ToolProtocolError(
+					"request",
+					"A put creates its directory under a read-only parent only where repositories load.",
+				);
+			}
 			// oxlint-disable-next-line no-bitwise -- a file mode is a bitmask
 			await chmod(parent, permissions | 0o200);
 		}
@@ -929,6 +966,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		async function startPut(id: string, header: Header, arrivedAfter: number): Promise<void> {
 			const requested = text(header, "dir") ?? "";
 			const parent = await contained(path.dirname(requested), options.putRoots);
+			const direct =
+				parent !== undefined &&
+				(await withoutSymlinks(path.dirname(requested), parent, options.putRoots));
 			const size = integer(header, "size");
 			const sha256 = text(header, "sha256");
 			const fresh = await lstat(requested).then(
@@ -937,6 +977,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			);
 			if (
 				parent === undefined ||
+				!direct ||
 				!path.isAbsolute(requested) ||
 				!fresh ||
 				size === undefined ||
@@ -947,7 +988,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				await dropPut(
 					id,
 					"request",
-					"A put names a new directory inside the put roots, a bounded size and a sha256.",
+					"A put names a new directory inside the put roots, through no symlink, a bounded size and a sha256.",
 				);
 				return;
 			}
@@ -1041,7 +1082,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				}
 				// Reserve cleanup capacity before creating a tree, including parallel failed extractions.
 				retirement = reserveTrash();
-				await createPutDirectory(entry.dir);
+				await createPutDirectory(entry.dir, options.loadRoots);
 				created = true;
 				// GNU tar and bsdtar both strip leading slashes, skip members with `..`, and never write through a
 				// symlink that the archive made: GNU tar creates such a symlink last, and bsdtar refuses. The spec
@@ -1275,6 +1316,7 @@ if (import.meta.main) {
 		roots: [TOOL_CONTEXT_ROOT, scratch],
 		scratch,
 		putRoots: [workspace],
+		loadRoots: [path.join(TOOL_CONTEXT_ROOT, "repos")],
 		soleUser: true,
 	});
 }

@@ -87,9 +87,9 @@ spec:
             # The server submits practice review jobs only when a worker can run them.
             - name: AGENT_ENABLED
               value: {{ .Values.worker.enabled | quote }}
-            {{- $hephSlots := mul (int .Values.worker.replicas) (int (include "hephaestus.conversationTurns" .)) }}
-            {{- if and .Values.worker.enabled (gt $hephSlots 0) }}
-            # Every worker's conversation turns. A question says that Hephaestus answers other questions only while all of them run.
+            {{- $hephSlots := mul (int .Values.worker.conversationLoop.replicas) (int (include "hephaestus.conversationTurns" .)) }}
+            {{- if and .Values.worker.enabled (gt (int .Values.worker.replicas) 0) (gt $hephSlots 0) }}
+            # Every loop replica's conversation turns. A question says that Hephaestus answers other questions only while all of them run.
             - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
               value: {{ $hephSlots | quote }}
             {{- end }}

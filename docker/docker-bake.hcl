@@ -70,6 +70,8 @@ target "agent-pi" {
     "hephaestus.component" = "agent-pi"
   }
   context    = "docker/agents"
+  # The conversation loop's sources live beside the review runner's in the server's resources.
+  contexts   = { agent-sources = "server/application/src/main/resources/agent" }
   dockerfile = "pi/Dockerfile"
   cache-from = ["type=registry,ref=${repository("agent-pi")}:cache-main-${PLATFORM_PAIR}"]
   cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=${repository("agent-pi")}:cache-main-${PLATFORM_PAIR},mode=max"] : []
