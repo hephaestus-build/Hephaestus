@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0-rc.2
+
+### Minor Changes
+
+- A stopped practice review can continue without repeating practices that finished. It keeps the recorded model usage from earlier attempts. Results become visible together after the review seals.
+
+  The private review runtime stages each completed practice at `/internal/llm/stage-result`. Clients that call `/internal/llm/admit-results` must send `reviewId`, `jobId`, `attempt` and `contractVersion`, and omit `results` and `nonResults`. The server and bundled runner update together.
+
+- Pages open sooner after you sign in or reload. `GET /user` now includes the account's consent status (`consent`), so a client knows whether the first-login notice is outstanding without a separate request.
+- GitLab events reach Hephaestus only through the hook that each workspace's GitLab connection registers. The shared `POST /webhooks/gitlab` endpoint is removed, and `WEBHOOK_SECRET` now verifies GitHub webhooks only.
+
+  **Operators:** Before you upgrade, delete each GitLab group or project hook whose URL ends in `/webhooks/gitlab`. Keep the hooks under `/webhooks/gitlab/connections/`. Hephaestus registers a missing connection hook again on its own.
+
+- The shipped alert rules now include service level objectives, as burn-rate alerts: 99.5 % of API requests get no server error, 99.5 % of API reads finish within 2 seconds, and 75 % of page loads show their main content within 2.5 seconds. A fast burn pages, and a slow burn warns. To support the read objective, the server's `http_server_requests_seconds` metric now has one bucket at 2 seconds, which adds two series for each combination of route, method and status that the server already reports. Load the new rule file from the release that you run. The page load objective needs page experience metrics on.
+
+### Patch Changes
+
+- A Hephaestus answer from a slow reasoning model that keeps writing is no longer cut off after five minutes. An answer may now take up to 15 minutes, and existing conversation model assignments with a five-minute timeout or longer move to 15 minutes. An answer whose model stops sending still ends early, and an answer that reaches the limit on model calls now says that Hephaestus could not finish it, not that it took too long.
+- Product feedback now attaches the page as its route, such as `/w/$workspaceSlug/activity`, instead of the address. A bug report still shows which screen it came from, but no longer carries your workspace's name or the IDs from the address.
+
 ## 1.0.0-rc.1
 
 ### Major Changes
