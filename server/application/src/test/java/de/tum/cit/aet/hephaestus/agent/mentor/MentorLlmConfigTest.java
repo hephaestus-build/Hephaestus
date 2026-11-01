@@ -15,6 +15,13 @@ class MentorLlmConfigTest extends BaseUnitTest {
         assertThat(config(120).timeoutSeconds()).isEqualTo(120);
     }
 
+    @Test
+    void shouldGiveATurnTheWholeCeilingOfFifteenMinutesAndNotTheFormerFive() {
+        assertThat(AgentBindingLimits.MAX_HEPH_TURN_SECONDS).isEqualTo(900);
+        assertThat(config(900).timeoutSeconds()).isEqualTo(900);
+        assertThat(config(901).timeoutSeconds()).isEqualTo(900);
+    }
+
     private static MentorLlmConfig config(int timeoutSeconds) {
         return new MentorLlmConfig(
                 "openai-completions",

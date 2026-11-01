@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -2316,8 +2317,17 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 .isLessThanOrEqualTo(Duration.ofSeconds(10));
         assertThat(LlmProxyService.exchangeWait(Instant.now().minusSeconds(1), true))
                 .isZero();
-        // A mentor turn has no work deadline and keeps the proxy's own limits.
-        assertThat(LlmProxyService.exchangeWait(null, true)).isEqualTo(ceiling);
+    }
+
+    @Test
+    @DisplayName("a conversation call outlasts its turn's deadline stop, so the turn ends as a deadline")
+    void shouldBoundAConversationCallPastTheTurnCeilingAndItsStopGrace() {
+        Duration turnCeiling = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+        // The dispatcher's tick (5 s) and the host's stop grace (30 s) end the turn before the call's own bound.
+        Duration stopped = turnCeiling.plusSeconds(5).plusSeconds(30);
+
+        assertThat(LlmProxyService.exchangeWait(null, true)).isGreaterThan(stopped);
+        assertThat(LlmProxyService.exchangeWait(null, false)).isGreaterThan(stopped);
     }
 
     @Nested
