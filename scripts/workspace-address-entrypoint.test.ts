@@ -212,7 +212,7 @@ void describe("webapp container entrypoint", () => {
 		try {
 			const result = runEntrypoint(fixture, {
 				HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
-				HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: 'a"b\\c',
+				HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: String.raw`a"b\c`,
 				APPLICATION_CLIENT_URL: tricky,
 			});
 			assert.equal(result.status, 0, result.stderr);
@@ -220,7 +220,7 @@ void describe("webapp container entrypoint", () => {
 			assert.equal(environment.get("APPLICATION_CLIENT_URL"), tricky);
 			assert.deepEqual(discovery, {
 				apexOrigin: tricky,
-				baseDomain: 'a"b\\c',
+				baseDomain: String.raw`a"b\c`,
 				workspaceSubdomainsEnabled: true,
 			});
 		} finally {

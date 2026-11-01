@@ -1628,7 +1628,7 @@ function unanswered(entries: readonly SessionEntry[]): FailureDetail | null {
 
 function hasWords(message: AssistantMessage): boolean {
 	return message.content.some(
-		(part) => part.type === "text" && part.text.replace(CONTROL_TOKENS, "").trim() !== "",
+		(part) => part.type === "text" && part.text.replaceAll(CONTROL_TOKENS, "").trim() !== "",
 	);
 }
 

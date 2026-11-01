@@ -87,7 +87,7 @@ async function checkTree(sourceTree: string): Promise<number> {
 	for (const file of files) {
 		const source = await readFile(path.join(STORIES, file), "utf8");
 		for (const [index, line] of source.split("\n").entries()) {
-			if (COMMENT_LINE.test(line) && HTML_PARAGRAPH.test(line.replace(CODE_SPAN, ""))) {
+			if (COMMENT_LINE.test(line) && HTML_PARAGRAPH.test(line.replaceAll(CODE_SPAN, ""))) {
 				offenders.push(`${sourceTree}/${file}:${index + 1}`);
 			}
 		}

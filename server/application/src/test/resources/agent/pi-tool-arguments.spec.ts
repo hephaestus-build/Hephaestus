@@ -340,7 +340,7 @@ void test("an extra closing brace after complete evidence carries no claim and i
 		assert.doesNotThrow(() => validateResultEvidence(prepared, []));
 		assert.deepEqual(prepareResultArguments(prepared), prepared);
 	}
-	const unicode = { ...result, explanation: 'Read "🔒" and escaped \\ delimiters: } ]' };
+	const unicode = { ...result, explanation: String.raw`Read "🔒" and escaped \ delimiters: } ]` };
 	assert.deepEqual(prepareResultArguments({ args: `${JSON.stringify(unicode)}}` }), unicode);
 });
 
