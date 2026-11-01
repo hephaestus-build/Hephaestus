@@ -352,8 +352,11 @@ From the repository root:
 
 ```bash
 HEPHAESTUS_LIVE_LLM_BASE_URL=… HEPHAESTUS_LIVE_LLM_API_KEY=… HEPHAESTUS_LIVE_LLM_MODEL=… \
-  node --test 'server/application/src/test/resources/agent/heph-voice/*.live.ts'
+  node --test --test-concurrency=1 'server/application/src/test/resources/agent/heph-voice/*.live.ts'
 ```
+
+`--test-concurrency=1` runs one case file at a time.
+By default, `node --test` runs the files in parallel, and parallel model turns can hit the provider's rate limit or the turn timeout.
 
 Each case, or each group of cases for one finding, is its own `<id>.live.ts` file.
 `harness.ts` holds the model setup, the shared context folders and the oracles.
