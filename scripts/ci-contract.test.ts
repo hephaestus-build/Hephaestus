@@ -3083,24 +3083,9 @@ void describe("CI contract", () => {
 	void test("leaves the Version PR's CI to its own pull_request event and a deliberate dispatch", async () => {
 		const versioning = parseDocument(await readFile(".github/workflows/version-pr.yml", "utf8"));
 		const maintainer = ["jobs", "version-pr"];
-		// Only a successful same-repository push to main starts maintenance.
-		const trigger = String(versioning.getIn([...maintainer, "if"]));
-		for (const guard of [
-			"github.event.workflow_run.conclusion == 'success'",
-			"github.event.workflow_run.event == 'push'",
-			"github.event.workflow_run.head_repository.full_name == github.repository",
-		]) {
-			assert.ok(trigger.includes(guard), guard);
-		}
-		// `scripts/maintain-version-pr.ts` picks the validated commit and owns its tests.
+		// `version-pr-workflow.test.ts` owns the trigger; `maintain-version-pr.test.ts` the selection.
 		const steps = versioning.getIn([...maintainer, "steps"]);
 		assert.ok(isSeq(steps));
-		const maintain = namedStep(versioning, maintainer, "Maintain Version PR");
-		assert.equal(maintain.get("run"), "node scripts/maintain-version-pr.ts");
-		assert.doesNotMatch(
-			await readFile(".github/workflows/version-pr.yml", "utf8"),
-			/changesets\/action/u,
-		);
 		// The pull request's own run validates it; maintenance cannot start a second, competing one.
 		const permissions = versioning.getIn([...maintainer, "permissions"]);
 		assert.ok(isMap(permissions));
