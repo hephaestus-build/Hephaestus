@@ -109,6 +109,7 @@ const nodeTestConcurrency = process.env[PUSH_CHECK_ENV] === "true" ? 1 : 2;
 // The gates, by the tree they judge. `quality` runs all of them; each CI job runs one tree's set.
 const policyGates = [
 	"gate:toolchain",
+	"gate:owned-code",
 	"gate:runner-contract",
 	"gate:lint-contract",
 	"gate:agent-runtime-pins",
@@ -337,6 +338,7 @@ export default defineConfig({
 			"gate:agents-lint": run(`vp exec oxlint ${oxlintFormat}${oxlintTargets}`),
 			"gate:agents-typecheck": cached("tsc -p tsconfig.node.json --noEmit"),
 			"gate:scripts-typecheck": cached("tsc -p scripts/tsconfig.json --noEmit"),
+			"gate:owned-code": run("node scripts/owned-source-sbom.ts"),
 			"gate:release-image-inventory": run("node scripts/check-release-image-inventory.ts"),
 			"gate:tooling-tests": group(["test:tooling"]),
 			"gate:agents": group([
@@ -394,6 +396,7 @@ export default defineConfig({
 			// The package job compiles the tests without the analysis; this leg runs it.
 			"ci:server": group([
 				...serverGates,
+				"gate:owned-code",
 				"gate:server-test-analysis",
 				"gate:contracts",
 				"gate:env",
@@ -412,11 +415,20 @@ export default defineConfig({
 					"gate:alerts",
 				],
 			}),
-			"ci:webapp:static": group([...webappGates, "gate:docs-tokens", "verification:webapp-tests"]),
+			"ci:webapp:static": group([
+				...webappGates,
+				"gate:owned-code",
+				"gate:docs-tokens",
+				"verification:webapp-tests",
+			]),
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A
 			// second name after `vp run` is an argument, not a second task, so the two are separate.
 			"ci:webapp": run(["vp run ci:webapp:static", "vp run verification:webapp-build"]),
-			"ci:extension:static": group([...extensionGates, "verification:extension-tests"]),
+			"ci:extension:static": group([
+				...extensionGates,
+				"gate:owned-code",
+				"verification:extension-tests",
+			]),
 			"ci:extension": run(["vp run ci:extension:static", "vp run verification:extension-build"]),
 			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
 

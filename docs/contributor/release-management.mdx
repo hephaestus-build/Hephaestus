@@ -232,6 +232,21 @@ Archived releases that predate it keep their original contract.
 Verification checks the repository and commit labels, catalogers, ecosystem coverage, buildscript-lock coverage and remote Action pins.
 It requires both standard formats to preserve every native package identity.
 
+The source CycloneDX SBOM also lists owned code and declared static assets.
+Each component identifies the file and its SHA-256, license expression and upstream source URL.
+Its `pedigree.ancestors` records the upstream package URL, and `pedigree.notes` records the changes.
+The native and SPDX source inventories list package-manager inputs.
+The owned-source additions are in CycloneDX.
+
+The `gate:owned-code` task checks headers on each shipped-code quality leg before merge.
+Release capture reads those files from the exact commit.
+Run both capture-verification passes from the repository checkout.
+They compare the written CycloneDX file with a fresh scan of that commit.
+They require exactly the detected entries in the `owned:` namespace.
+A malformed header, missing or stale component, changed license, changed pedigree or changed content hash fails verification.
+
+Archived verification uses the signed checksums and does not require a source checkout.
+
 One native Trivy `vuln,license` scan supplies both vulnerability and license report paths.
 This avoids duplicate image analysis and binds both evidence consumers to the same subject.
 `scripts/verify-release-evidence.ts` checks every document's platform repository, digest, and architecture.

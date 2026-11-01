@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -6,11 +6,14 @@ import { assertSbomFormatsCover, SYFT_CONFIG } from "./check-release-sbom.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
 import { releaseRepository } from "./lib/release-identities.ts";
+import { addOwnedComponents } from "./owned-code-sbom.ts";
+import { scanOwnedSource } from "./owned-source-sbom.ts";
 
+const SOURCE_CYCLONEDX_FILE = "source.cdx.json";
 export const SOURCE_SBOM_FORMATS = [
 	["syft-json", "source.syft.json"],
 	["spdx-json", "source.spdx.json"],
-	["cyclonedx-json", "source.cdx.json"],
+	["cyclonedx-json", SOURCE_CYCLONEDX_FILE],
 ] as const;
 export const SOURCE_CATALOGERS = [
 	"javascript-lock-cataloger",
@@ -153,7 +156,12 @@ export async function captureReleaseSourceSbom(
 		const [syft, spdx, cycloneDx] = await Promise.all(
 			SOURCE_SBOM_FORMATS.map(async ([, file]) => readJsonFile(path.join(temporary, file))),
 		);
-		validateReleaseSourceBundle(syft, spdx, cycloneDx, commit, repository);
+		const enriched = addOwnedComponents(cycloneDx, scanOwnedSource(commit));
+		validateReleaseSourceBundle(syft, spdx, enriched, commit, repository);
+		await writeFile(
+			path.join(temporary, SOURCE_CYCLONEDX_FILE),
+			`${JSON.stringify(enriched, null, 2)}\n`,
+		);
 		for (const [, file] of SOURCE_SBOM_FORMATS) {
 			await copyFile(path.join(temporary, file), path.join(directory, file));
 		}

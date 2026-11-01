@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
@@ -23,7 +24,6 @@ import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
 import { lockFromEvidence } from "./release-image-lock.ts";
 import { SOURCE_CATALOGERS } from "./release-source-sbom.ts";
-import { verifyReleaseEvidence } from "./verify-release-evidence.ts";
 
 const release = "v0.93.0";
 const commit = "c".repeat(40);
@@ -123,7 +123,11 @@ const state = () => read('state');
 const option = flag => args[args.indexOf(flag) + 1];
 const write = (name, value) => fs.writeFileSync(path.join(store, name), JSON.stringify(value));
 fs.appendFileSync(process.env.CALL_LOG, JSON.stringify([tool, ...args]) + '\n');
-if (tool === 'gh') {
+if (tool === 'git') {
+  // The release commit has no owned source: grep finds nothing, and the tree lists no links.
+  if (args.includes(read('manifest.json').commit)) process.exit(args[0] === 'grep' ? 1 : 0);
+  throw new Error('Unexpected git command');
+} else if (tool === 'gh') {
   if (args[0] === 'attestation') {
     // The chart package has no release attestation in this scenario; images keep theirs.
     if (process.env.CHART_ATTESTATION_MISSING === 'true' && args[2].endsWith('.tgz')) { console.error('no matching attestations found'); process.exit(1); }
@@ -265,7 +269,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 	await symlink(path.join(root, "deploy"), path.join(directory, "deploy"), "dir");
 	const json = async (name: string, value: unknown) =>
 		writeFile(path.join(archive, name), JSON.stringify(value));
-	for (const tool of ["gh", "cosign", "docker", "helm"]) {
+	for (const tool of ["gh", "cosign", "docker", "helm", "git"]) {
 		await writeFile(path.join(bin, tool), transport, { mode: 0o755 });
 	}
 	const environment = {
@@ -586,7 +590,7 @@ async function fixture(directory: string, source = commit, tag = release) {
 			),
 		);
 	};
-	return { archive, smoke, json, run, assets, manifest };
+	return { archive, smoke, json, run, assets, manifest, environment };
 }
 
 const authorityRefusal = /Only the current stable release/u;
@@ -1336,17 +1340,28 @@ void test(
 	async (t) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "release-bundle-coverage-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
-		const { archive, json } = await fixture(directory);
+		const { archive, json, environment } = await fixture(directory);
+		// A child process, so the owned-code scan reaches the fixture's git instead of this checkout's.
+		const verify = (pattern: RegExp) => {
+			const result = spawnSync(
+				process.execPath,
+				[
+					"--input-type=module",
+					"-e",
+					`import {verifyReleaseEvidence} from ${JSON.stringify(pathToFileURL(path.join(root, "scripts/verify-release-evidence.ts")).href)}; verifyReleaseEvidence(${JSON.stringify(archive)}, "write-validation");`,
+				],
+				{ env: environment, encoding: "utf8" },
+			);
+			assert.notEqual(result.status, 0);
+			assert.match(result.stderr, pattern);
+		};
 		const scanFile = "webapp-linux-amd64.trivy.json";
 		const scan = asRecord(
 			parseJson(await readFile(path.join(archive, scanFile), "utf8")),
 			"Trivy report",
 		);
 		await json(scanFile, { ...scan, Results: [] });
-		assert.throws(
-			() => verifyReleaseEvidence(archive, "write-validation"),
-			/Trivy omitted bundled npm/u,
-		);
+		verify(/Trivy omitted bundled npm/u);
 		await json(scanFile, scan);
 
 		const file = "webapp-linux-amd64.syft.json";
@@ -1355,7 +1370,7 @@ void test(
 			"Syft inventory",
 		);
 		await json(file, { ...native, files: [] });
-		assert.throws(() => verifyReleaseEvidence(archive, "write-validation"), /no bundled npm/u);
+		verify(/no bundled npm/u);
 	},
 );
 

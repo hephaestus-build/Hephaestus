@@ -1,13 +1,13 @@
-# Owned fork of `@earendil-works/pi-ai` 1.0.0
+# Owned fork of `@earendil-works/pi-ai` 1.4.0
 
-`@earendil-works__pi-ai@1.0.0.patch` changes the compiled adapters of `@earendil-works/pi-ai` 1.0.0, which the Pi SDK installs in the agent image.
+`@earendil-works__pi-ai@1.4.0.patch` changes the compiled adapters of `@earendil-works/pi-ai` 1.4.0, which the Pi SDK installs in the agent image.
 It is owned code: the upstream release does not contain these changes, and no Renovate update carries them.
 
-Owned from: https://github.com/earendil-works/pi/tree/a13d35a742c6ef8462812a28fbe1d8c8b7431c32/packages/ai
-Package: pkg:npm/%40earendil-works/pi-ai@1.0.0
+Owned from: https://github.com/earendil-works/pi/tree/4a080252f06caf63a525d7873c5d94d3c23887e0/packages/ai
+Package: pkg:npm/%40earendil-works/pi-ai@1.4.0
 License: MIT
 Changes: Adds closed failure facts, call timing and validated OpenAI-compatible token usage to the provider adapters.
-Files: ["@earendil-works__pi-ai@1.0.0.patch"]
+Files: ["@earendil-works__pi-ai@1.4.0.patch"]
 
 ## What changes and why
 
@@ -22,7 +22,7 @@ Files: ["@earendil-works__pi-ai@1.0.0.patch"]
 
 - The pull request that moves the Pi SDK owns this patch. Renovate's `Pi SDK` group moves the SDK, the overrides of its own packages and the Dockerfile pin together.
 - A new `pi-ai` version fails the install with `ERR_PNPM_UNUSED_PATCH` until the patch is made again for it, in both `pnpm-workspace.yaml` files.
-- Make the patch again with `pnpm patch @earendil-works/pi-ai@<version>`. Drop a hunk that the new release already contains. Then run `vp run test:agents`, and update `Owned from:`, `Package:` and `Changes:` above.
+- Make the patch again with `pnpm patch @earendil-works/pi-ai@<version>`. Drop a hunk that the new release already contains. Then run `vp run test:agents`, and update `Owned from:`, `Package:`, `Changes:` and `Files:` above. `vp run gate:owned-code` fails until `Package:` and `Files:` name the new release.
 - Upstream: the failure facts and the usage validation are candidates for `earendil-works/pi`. A hunk that upstream accepts leaves this patch in the next SDK update.
 
 ## License
