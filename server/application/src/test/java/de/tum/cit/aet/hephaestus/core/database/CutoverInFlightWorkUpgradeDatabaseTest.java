@@ -20,7 +20,7 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
  */
 @Tag("database")
 class CutoverInFlightWorkUpgradeDatabaseTest {
-    private static final String CHANGELOG = "20261101014846-cutover-in-flight-work.xml";
+    private static final String CHANGELOG = "20261101080314-cutover-in-flight-work.xml";
     private static final String INTERRUPTED = "FAILED|Hephaestus was updated before it could answer. Ask again."
             + "|an upgrade to 1.0 stopped it before it ended|true|true";
 

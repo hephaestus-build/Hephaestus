@@ -291,7 +291,10 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
                 turn.getAttempt(),
                 Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnService.Ending(
-                        MentorTurn.Status.DONE, List.of(compaction(kept), searchResult(secret.question())), null, null)));
+                        MentorTurn.Status.DONE,
+                        List.of(compaction(kept), searchResult(secret.question())),
+                        null,
+                        null)));
         CompletableFuture<Void> deletion = CompletableFuture.runAsync(
                 () -> entries.deleteMessage(workspace.getId(), secret.question().getId()));
 

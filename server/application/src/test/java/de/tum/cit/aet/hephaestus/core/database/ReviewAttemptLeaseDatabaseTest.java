@@ -20,7 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("database")
 class ReviewAttemptLeaseDatabaseTest {
-    private static final String CHANGELOG = "20261031194020-review-attempt-leases.xml";
+    private static final String CHANGELOG = "20261101080313-review-attempt-leases.xml";
     private static final String CHANGE_SET = "1793475620791-1";
 
     @ParameterizedTest

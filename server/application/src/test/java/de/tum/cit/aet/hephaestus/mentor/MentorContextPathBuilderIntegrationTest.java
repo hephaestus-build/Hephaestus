@@ -281,7 +281,8 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                                         "call-1",
                                         "fetch_context",
                                         "colleague data",
-                                        false)), null,
+                                        false)),
+                        null,
                         null));
         MentorEntry toolResult = entryRepository
                 .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(

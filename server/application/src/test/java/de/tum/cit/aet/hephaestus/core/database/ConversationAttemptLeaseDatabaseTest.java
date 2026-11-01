@@ -21,7 +21,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("database")
 class ConversationAttemptLeaseDatabaseTest {
-    private static final String CHANGELOG = "20261031185342-runtime-rt2-conversation-loop.xml";
+    private static final String CHANGELOG = "20261101080312-runtime-rt2-conversation-loop.xml";
     private static final String CHANGE_SET = "1793472822102-1";
 
     @ParameterizedTest

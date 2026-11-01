@@ -247,7 +247,8 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         slackLease,
                         new MentorTurnService.Ending(
                                 MentorTurn.Status.DONE,
-                                List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "A stale answer")), null,
+                                List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "A stale answer")),
+                                null,
                                 null)))
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThat(events.stream(MentorLedgerEvents.AttemptTakenBack.class))

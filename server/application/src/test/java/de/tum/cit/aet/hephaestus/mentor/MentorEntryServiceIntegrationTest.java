@@ -169,7 +169,8 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
-                        List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")), null,
+                        List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")),
+                        null,
                         null));
 
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId()))
@@ -522,7 +523,8 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                                         "link-failed",
                                         "link_problem",
                                         "No such problem",
-                                        true)), null,
+                                        true)),
+                        null,
                         null));
         List<MentorEntry> answers = entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                 workspace.getId(), turn.getId(), MentorEntry.Kind.HEPH);

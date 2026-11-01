@@ -33,7 +33,6 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class MentorTurnService {
 
-
     /** One automatic retry after a lost lease. */
     static final int MAX_ATTEMPTS = 2;
 

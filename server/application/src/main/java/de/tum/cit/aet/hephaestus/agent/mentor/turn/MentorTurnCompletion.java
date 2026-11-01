@@ -115,8 +115,7 @@ public class MentorTurnCompletion {
                 turnId,
                 attempt,
                 leaseId,
-                new MentorTurnService.Ending(
-                        ending.outcome(), ending.entries(), ending.lastPartial(), ending.error()));
+                new MentorTurnService.Ending(ending.outcome(), ending.entries(), ending.lastPartial(), ending.error()));
         MentorTurn turn = ended.turn();
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
             turns.recordFailure(turn, ending.cause(), ending.lastFailedCall());

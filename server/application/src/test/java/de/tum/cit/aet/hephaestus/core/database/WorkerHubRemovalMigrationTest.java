@@ -31,7 +31,7 @@ class WorkerHubRemovalMigrationTest {
      * The later cutover change set requeues these claims and takes the drain back, as its own test proves
      * ({@link CutoverInFlightWorkUpgradeDatabaseTest}); these tests stop before it.
      */
-    private static final String CUTOVER = "20261101014846-cutover-in-flight-work.xml";
+    private static final String CUTOVER = "20261101080314-cutover-in-flight-work.xml";
 
     @Test
     void shouldCountOnlyALeaselessClaimedAttemptAsADrainAndDropTheTokenDenylist() throws Exception {

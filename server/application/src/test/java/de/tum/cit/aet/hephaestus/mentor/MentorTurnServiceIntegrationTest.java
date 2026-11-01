@@ -111,7 +111,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
-                        List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Words about the developer")), null,
+                        List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Words about the developer")),
+                        null,
                         null));
 
         assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId()))
@@ -528,7 +529,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                         List.of(
                                 MentorLedgerFixtures.thinkingLevel(MentorLedgerFixtures.piId()),
                                 MentorLedgerFixtures.user(userPiId, "rendered prompt"),
-                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Answer")), null,
+                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Answer")),
+                        null,
                         null));
 
         List<MentorEntry> stored = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId());
@@ -564,7 +566,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                                         "The summary.",
                                         MentorLedgerFixtures.piIdOf(submission.question())),
                                 MentorLedgerFixtures.user(MentorLedgerFixtures.piId(), "rendered prompt"),
-                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "PARTIAL-ANSWER-NOT-STORED")), null,
+                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "PARTIAL-ANSWER-NOT-STORED")),
+                        null,
                         "its Hephaestus host reported ERROR"));
 
         List<MentorEntry> stored = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId());
@@ -586,7 +589,10 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 running.getAttempt(),
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
-                        MentorTurn.Status.STOPPED, answerThatReadContext("Half an answer about the secret"), null, null));
+                        MentorTurn.Status.STOPPED,
+                        answerThatReadContext("Half an answer about the secret"),
+                        null,
+                        null));
 
         MentorEntry question =
                 entryRepository.findById(submission.question().getId()).orElseThrow();
@@ -702,7 +708,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 Objects.requireNonNull(running.getLeaseId()),
                 new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
-                        List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Partial answer")), null,
+                        List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Partial answer")),
+                        null,
                         null));
 
         MentorTurn ended = stored(running);
@@ -841,7 +848,8 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                                         MentorLedgerFixtures.piId(), "call-1", "show_feedback", "Shown", false),
                                 MentorLedgerFixtures.toolResult(
                                         MentorLedgerFixtures.piId(), "call-2", "show_feedback", "Refused", true),
-                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Done")), null,
+                                MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Done")),
+                        null,
                         null));
 
         MentorTurnService.Answer answer = turns.answer(workspace.getId(), running.getId());
