@@ -273,6 +273,8 @@ export const PickADateRange: Story = {
 		await canvas.findByText("16 observations.");
 		await userEvent.click(canvas.getByRole("button", { name: "Recorded" }));
 		const dialog = await screen.findByRole("dialog");
+		// The facet disables days after today, so the range comes from last month, which is all in the past.
+		await userEvent.click(within(dialog).getByRole("button", { name: "Go to the Previous Month" }));
 		// Testing Library exposes calendar td elements as cells even inside a grid.
 		const grid = await within(dialog).findByRole("grid");
 		const days = within(grid).getAllByRole("button");
