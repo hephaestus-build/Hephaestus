@@ -201,6 +201,8 @@ If you have no CA, make one with OpenSSL.
 The server certificate needs the name above as a DNS subject alternative name, and the `serverAuth` extended key usage.
 This example makes a CA that is valid for ten years, and a server certificate that is valid for one year.
 Change `RELEASE` and `NAMESPACE` if your release differs.
+If `<release>-postgresql` has more than 52 characters, the chart shortens the Service name, as [Install](#install) describes.
+Then set `HOST` to that shortened name with `.<namespace>.svc`.
 
 ```bash
 RELEASE=hephaestus NAMESPACE=hephaestus
@@ -262,8 +264,30 @@ spec:
         enabled: true
     gateway:
       enabled: true
+      listeners:
+        web:
+          port: 8000
+          protocol: HTTP
+          namespacePolicy:
+            from: Selector
+            selector:
+              matchLabels:
+                kubernetes.io/metadata.name: hephaestus
+        websecure:
+          port: 8443
+          protocol: HTTPS
+          certificateRefs:
+            - name: hephaestus-tls
+          namespacePolicy:
+            from: Selector
+            selector:
+              matchLabels:
+                kubernetes.io/metadata.name: hephaestus
 ```
 
+Traefik creates the HTTPS listener only when `certificateRefs` names a TLS Secret.
+Create `hephaestus-tls` in `kube-system`, the namespace of this Gateway, from the certificate of your host name.
+Change `hephaestus` in the selector if your release namespace differs.
 The one-host install sets up its own Traefik, so it needs none of this.
 
 A Gateway accepts a route from another namespace only if its listener allows that namespace.
@@ -1462,6 +1486,15 @@ The volume of PostgreSQL is `data-<release>-postgresql-0`, and the volume of NAT
    ```
 
 3. Wait until `kubectl --namespace hephaestus get pvc` shows the new capacity.
+   If the capacity stays at the old size, check the conditions of the volume:
+
+   ```bash
+   kubectl --namespace hephaestus get pvc data-hephaestus-nats-0 -o jsonpath='{.status.conditions[*].type}'
+   ```
+
+   `FileSystemResizePending` means that the storage driver resizes the file system only when the Pod starts again.
+   Then continue with steps 4 and 5, and after step 5 delete the Pod: `kubectl --namespace hephaestus delete pod hephaestus-nats-0`.
+   The StatefulSet starts it again with the larger volume.
 4. Delete the StatefulSet and keep its Pods and volumes:
 
    ```bash
