@@ -30,7 +30,7 @@ export function renderDeployTopology(root = REPO_ROOT, workerEnabled = true): st
 			]),
 		),
 		host: "hephaestus.example.com",
-		trustedProxies: "10\\.42\\..*",
+		trustedProxies: String.raw`10\.42\..*`,
 		secret: { name: "hephaestus-secrets" },
 		route: { parentRefs: [{ name: "edge", namespace: "gateway-system", sectionName: "https" }] },
 		networkPolicy: {

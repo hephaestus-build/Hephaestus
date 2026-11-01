@@ -1060,7 +1060,7 @@ void test("a quote is recorded as the sourceFile spells it: JSON escapes and non
 	const serialized =
 		'{\n  "body" : "## Criteria\\n- [x] stored in `diagrams/`\\n- say \\"hi\\""\n}\n';
 	assert.deepEqual(resolveQuote({ ...citation, quote: '- say "hi"' }, serialized), {
-		quote: '- say \\"hi\\"',
+		quote: String.raw`- say \"hi\"`,
 	});
 	assert.deepEqual(
 		resolveQuote({ ...citation, quote: "- [x] stored in `diagrams/`" }, serialized),
@@ -1090,7 +1090,7 @@ void test("a quote is recorded as the sourceFile spells it: JSON escapes and non
 	assert.match(mismatch(resolveQuote({ ...first, quote: "" }, nbsp)), /has no quote/u);
 	assert.match(mismatch(resolveCapturedText({ ...first, quote: " " }, nbsp)), /has no quote/u);
 	assert.deepEqual(resolveQuote({ ...citation, quote: "## Criteria\n- [x] stored" }, serialized), {
-		quote: "## Criteria\\n- [x] stored",
+		quote: String.raw`## Criteria\n- [x] stored`,
 	});
 });
 

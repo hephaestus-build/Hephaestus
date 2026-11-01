@@ -104,7 +104,7 @@ function offGrammar(svg: string): string[] {
 /** The words of every text element, with the markup of a tspan removed. */
 function wordsOf(svg: string): string[] {
 	return [...svg.matchAll(TEXT)].flatMap(({ groups }) =>
-		(groups?.content ?? "").replace(TAG, " ").split(/\s+/u).filter(Boolean),
+		(groups?.content ?? "").replaceAll(TAG, " ").split(/\s+/u).filter(Boolean),
 	);
 }
 

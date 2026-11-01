@@ -201,7 +201,7 @@ export function validateDraft(draftXml: string): void {
 		throw new Error("The draft contains no change sets, or one without a closing tag");
 	}
 	const outside = draftXml
-		.replace(changeSetPattern, "")
+		.replaceAll(changeSetPattern, "")
 		.replace(/^<\?xml[^>]*\?>/u, "")
 		.replaceAll(/<databaseChangeLog\b[^>]*>|<\/databaseChangeLog>/gu, "")
 		.trim();

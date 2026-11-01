@@ -675,30 +675,28 @@ if (scenario !== undefined && scenario !== "") {
 										text: "Evidence remains unresolved; no result was submitted.",
 									});
 								}
-							} else {
-								if (requests === 1) {
-									if (sessionNumber === 2) {
-										await firstProblemSaved.promise;
-										content.push(submitCall("sibling-key", { ...result, problemKeys: [a.key] }));
-									} else {
-										content.push(modelToolCall("upsert_problem", "unused-a", a));
-									}
+							} else if (requests === 1) {
+								if (sessionNumber === 2) {
+									await firstProblemSaved.promise;
+									content.push(submitCall("sibling-key", { ...result, problemKeys: [a.key] }));
 								} else {
-									assert.equal(requests, 2);
-									if (sessionNumber === 1) {
-										firstProblemSaved.resolve(undefined);
-										await siblingSelectionFinished.promise;
-									}
-									content.push(
-										submitCall("met-no-leak", {
-											outcome: "MET",
-											summary: `Checked authentication of ${slug}`,
-											explanation: "The captured change supplies the checked work.",
-											citations: [changeCitation],
-											evidence: {},
-										}),
-									);
+									content.push(modelToolCall("upsert_problem", "unused-a", a));
 								}
+							} else {
+								assert.equal(requests, 2);
+								if (sessionNumber === 1) {
+									firstProblemSaved.resolve(undefined);
+									await siblingSelectionFinished.promise;
+								}
+								content.push(
+									submitCall("met-no-leak", {
+										outcome: "MET",
+										summary: `Checked authentication of ${slug}`,
+										explanation: "The captured change supplies the checked work.",
+										citations: [changeCitation],
+										evidence: {},
+									}),
+								);
 							}
 						} else if (
 							scenario === "scope-native-evidence-correction" ||

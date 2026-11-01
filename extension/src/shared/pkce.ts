@@ -8,7 +8,7 @@ export function base64Url(bytes: Uint8Array): string {
 	for (const byte of bytes) {
 		binary += String.fromCodePoint(byte);
 	}
-	return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+	return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/[=]+$/u, "");
 }
 
 export function randomToken(byteLength = 32): string {

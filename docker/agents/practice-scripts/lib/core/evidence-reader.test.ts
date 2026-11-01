@@ -214,7 +214,7 @@ void describe("listings and searches", () => {
 		await writeFile(path.join(repo, "src", "total.ts"), "count\ncount\n");
 		const found = await reader.answer({
 			op: "grep",
-			pattern: "count \\+=",
+			pattern: String.raw`count \+=`,
 			glob: "*.ts",
 		});
 		assert.deepEqual(found, {
