@@ -3,7 +3,7 @@ import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.
 
 /**
  * The patched OpenAI Chat Completions, Responses and Anthropic Messages adapters attach these diagnostics
- * (docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch). Each protocol writes `*_failure` on a failed call
+ * (docker/agents/pi/patches/@earendil-works__pi-ai@1.4.0.patch). Each protocol writes `*_failure` on a failed call
  * and `*_call` on every call whose SDK request began. The image's gateway-run.ts reads the same session contract.
  */
 export const MODEL_FAILURE_KINDS = [

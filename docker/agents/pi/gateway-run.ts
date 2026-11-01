@@ -170,7 +170,7 @@ export interface SessionSummary {
 
 /**
  * The patched chat adapters' failure and call diagnostics
- * (patches/@earendil-works__pi-ai@1.0.0.patch). The runner reads the same contract in its own tree
+ * (patches/@earendil-works__pi-ai@1.4.0.patch). The runner reads the same contract in its own tree
  * (server/application/src/main/resources/agent/pi-model-failure.ts): this image and that staged runner are delivered
  * separately, so neither can import the other.
  */

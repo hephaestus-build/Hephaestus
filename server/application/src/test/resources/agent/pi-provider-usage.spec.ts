@@ -7,7 +7,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	createReadToolDefinition,
+	ModelRuntime,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
 import {
 	ATTEMPT_ENDED,
@@ -103,11 +107,14 @@ async function complete(protocol: Protocol, usages: Raw[], incomplete = false) {
 	return completeWith(protocol, (response) => send(response, reply(protocol, usages, incomplete)));
 }
 
-/** One completion against a local server that answers with `respond`. */
+type Context = Parameters<ModelRuntime["completeSimple"]>[1];
+
+/** One completion of `modelId` with `tools` against a local server that answers with `respond`. */
 async function completeWith(
 	protocol: ChatProtocol,
 	respond: (response: ServerResponse) => void,
 	options?: Parameters<ModelRuntime["completeSimple"]>[2],
+	{ modelId = "gpt-5", tools }: { modelId?: string; tools?: Context["tools"] } = {},
 ) {
 	const server = createServer((request, response) => {
 		request.resume();
@@ -130,16 +137,19 @@ async function completeWith(
 		assert.ok(
 			registerHephaestusProvider(
 				runtime,
-				{ apiProtocol: protocol, modelId: "gpt-5" },
+				{ apiProtocol: protocol, modelId },
 				{ LLM_PROXY_URL: `http://127.0.0.1:${String(address.port)}/v1`, LLM_PROXY_TOKEN: "t" },
 			),
 		);
-		const model = runtime.getModel("hephaestus", "gpt-5");
+		const model = runtime.getModel("hephaestus", modelId);
 		assert.ok(model);
 		process.env.LLM_PROXY_TOKEN = "t";
 		return await runtime.completeSimple(
 			model,
-			{ messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
+			{
+				messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+				...(tools === undefined ? {} : { tools }),
+			},
 			options,
 		);
 	} finally {
@@ -844,3 +854,93 @@ void test("native stream errors retain their response-stage diagnostic", async (
 	);
 	assert.equal(refusesAttempt(message), false);
 });
+
+/** A model with strict tools and a tool that prefers them, so a strict-limit 400 makes the adapter resend without. */
+const STRICT_FALLBACK = {
+	modelId: "claude-fable-5",
+	tools: [createReadToolDefinition("/workspace")],
+};
+
+for (const resend of ["succeeds", "fails"] as const) {
+	void test(`anthropic-messages times a call from its first request when the strict-tools resend ${resend}`, async () => {
+		let requests = 0;
+		const message = await completeWith(
+			"anthropic-messages",
+			(response) => {
+				requests += 1;
+				if (requests === 1) {
+					setTimeout(() => {
+						response.writeHead(400, { "content-type": "application/json" });
+						response.end(
+							JSON.stringify({
+								type: "error",
+								error: { type: "invalid_request_error", message: "Too many strict tools (21)" },
+							}),
+						);
+					}, 80);
+					return;
+				}
+				if (resend === "fails") {
+					response.writeHead(500, {
+						"content-type": "application/json",
+						"x-should-retry": "false",
+					});
+					response.end(JSON.stringify({ error: { message: SECRET } }));
+					return;
+				}
+				response.writeHead(200, { "content-type": "text/event-stream" });
+				for (const event of [
+					{
+						type: "message_start",
+						message: {
+							id: "m",
+							type: "message",
+							role: "assistant",
+							model: "claude-fable-5",
+							content: [],
+							stop_reason: null,
+							usage: { input_tokens: 1, output_tokens: 0 },
+						},
+					},
+					{ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+					{ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "ok" } },
+					{ type: "content_block_stop", index: 0 },
+					{
+						type: "message_delta",
+						delta: { stop_reason: "end_turn" },
+						usage: { output_tokens: 1 },
+					},
+					{ type: "message_stop" },
+				]) {
+					response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+				}
+				response.end();
+			},
+			{ maxRetries: 0 },
+			STRICT_FALLBACK,
+		);
+		assert.equal(requests, 2);
+		assert.deepEqual(
+			message.diagnostics?.map((diagnostic) => diagnostic.type),
+			resend === "succeeds"
+				? ["anthropic_strict_tools_fallback", "anthropic_messages_call"]
+				: [
+						"anthropic_strict_tools_fallback",
+						"anthropic_messages_failure",
+						"anthropic_messages_call",
+					],
+		);
+		if (resend === "fails") {
+			assert.equal(message.stopReason, "error");
+			assert.deepEqual(
+				{ ...modelFailure(message), at: null },
+				{ kind: "HTTP_ERROR", source: "ADAPTER", phase: "request", status: 500, at: null },
+			);
+		} else {
+			assert.equal(message.stopReason, "stop");
+		}
+		const { elapsedMs } = assertCall(message, resend === "succeeds", "anthropic-messages");
+		assert.ok(elapsedMs >= 80, "the rejected strict request is part of the call");
+		assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
+	});
+}

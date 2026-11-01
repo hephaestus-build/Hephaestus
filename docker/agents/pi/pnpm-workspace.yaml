@@ -16,32 +16,11 @@ trustPolicyIgnoreAfter: 43200
 strictDepBuilds: true
 # Only direct dependencies can come from a Git repository or a tarball URL (pnpm.io/settings).
 blockExoticSubdeps: true
-# Explicitly requested adoption of Pi 1.0; keep the age policy for every other version.
-minimumReleaseAgeExclude:
-  - "@earendil-works/chord@1.0.0"
-  - "@earendil-works/pi-agent-core@1.0.0"
-  - "@earendil-works/pi-ai@1.0.0"
-  - "@earendil-works/pi-codemode@1.0.0"
-  - "@earendil-works/pi-coding-agent@1.0.0"
-  - "@earendil-works/pi-mcp@1.0.0"
-  - "@earendil-works/pi-telemetry@1.0.0"
-  - "@earendil-works/pi-tui@1.0.0"
-
 overrides:
-  # Pi SDK 1.0.0 accepts any 1.x of its own packages. A fresh resolve, such as lockfile maintenance,
-  # would move them past the SDK version, which the pi-ai patch and the agent image expect.
-  # gate:agent-runtime-pins holds each one to the SDK version.
-  "@earendil-works/chord": 1.0.0
-  "@earendil-works/pi-agent-core": 1.0.0
-  "@earendil-works/pi-ai": 1.0.0
-  "@earendil-works/pi-codemode": 1.0.0
-  "@earendil-works/pi-mcp": 1.0.0
-  "@earendil-works/pi-telemetry": 1.0.0
-  "@earendil-works/pi-tui": 1.0.0
   # @earendil-works/pi-coding-agent pins undici exactly; take undici security fixes without a new agent.
   "undici@>=8.0.0 <8.12.2": 8.12.2
 
 # OpenAI-compatible proxies may name cache writes created_cache_tokens; read it like cache_write_tokens.
 # The repository root workspace applies the same file.
 patchedDependencies:
-  "@earendil-works/pi-ai@1.0.0": patches/@earendil-works__pi-ai@1.0.0.patch
+  "@earendil-works/pi-ai@1.4.0": patches/@earendil-works__pi-ai@1.4.0.patch

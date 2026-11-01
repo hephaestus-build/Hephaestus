@@ -33,7 +33,7 @@ RUN groupmod --new-name agent node && \
     usermod --login agent --home /home/agent --move-home --shell /bin/bash node
 
 # renovate: datasource=npm depName=@earendil-works/pi-coding-agent
-ARG PI_VERSION=1.0.0
+ARG PI_VERSION=1.4.0
 COPY --from=dependencies /opt/pi-sdk /opt/pi-sdk
 RUN test -d /opt/pi-sdk/node_modules/@earendil-works/pi-coding-agent \
       || (echo "Pi SDK not found at /opt/pi-sdk/node_modules" >&2; exit 1) && \
