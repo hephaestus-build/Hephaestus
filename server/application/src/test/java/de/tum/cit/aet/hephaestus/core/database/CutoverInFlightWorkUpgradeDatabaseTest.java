@@ -117,14 +117,15 @@ class CutoverInFlightWorkUpgradeDatabaseTest {
         assertThat(column(
                         database,
                         "SELECT id::text || '|' || status || '|' || coalesce(error,'-') || '|'"
-                                + " || (leased_until IS NULL) || '|' || to_char(finished_at AT TIME ZONE 'UTC','HH24:MI')"
+                                + " || (leased_until IS NULL) || '|' || (lease_id IS NULL) || '|'"
+                                + " || to_char(finished_at AT TIME ZONE 'UTC','HH24:MI')"
                                 + " FROM mentor_turn WHERE id IN ('" + STOPPING + "','" + STOPPED + "','" + DONE
                                 + "') ORDER BY id"))
-                .as("the developer's own Stop stays; the reaper takes back the lease that its attempt holds")
+                .as("the developer's own Stop stays; the reaper finds the lease that its attempt holds by its id")
                 .containsExactly(
-                        STOPPING + "|STOPPED|-|false|22:30",
-                        STOPPED + "|STOPPED|-|true|22:20",
-                        DONE + "|DONE|-|true|22:00");
+                        STOPPING + "|STOPPED|-|false|false|22:30",
+                        STOPPED + "|STOPPED|-|true|true|22:20",
+                        DONE + "|DONE|-|true|true|22:00");
     }
 
     @ParameterizedTest
