@@ -40,7 +40,7 @@ class ReviewStagingMigrationTest {
                     "INSERT INTO review_composition_basis VALUES ('00000000-0000-4000-8000-000000000001',repeat('a',64))");
 
             try (var migration = new Liquibase(
-                    "db/changelog/next/20261031185423-durable-practice-staging.xml",
+                    "db/changelog/next/20261101110000-durable-practice-staging.xml",
                     new ClassLoaderResourceAccessor(),
                     DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
                 migration.update(new Contexts("prod"));
