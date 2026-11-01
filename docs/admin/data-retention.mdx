@@ -105,7 +105,7 @@ No container writes an HTTP access log.
 
 | Data | Retention | Where to change it |
 | --- | --- | --- |
-| pgBackRest backups, when enabled in the chart | Two full backups, with their differential backups and WAL. [Backup & restore](./backup-restore#automated-off-host-backup) gives the schedule. | `postgresql.backup.retentionFull` in site values |
+| pgBackRest backups, when enabled in the chart | Two full backups, with their differential backups and WAL. [Backup and restore on Kubernetes](./kubernetes#backup-and-restore) gives the schedule. | `postgresql.backup.retentionFull` in site values |
 | A plain `pg_dump` file | No automatic deletion | Delete the file yourself |
 
 A backup contains the whole database, so it also contains data that the instance deleted later.

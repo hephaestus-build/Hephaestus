@@ -164,7 +164,7 @@ Then roll forward to a release that fixes the problem.
 
 A failed migration stops at a change set boundary.
 The previous release can run on that partly migrated schema, but only if the release has no **Stop every role** entry in its migration guide.
-Keep the failed migration Job and its logs for diagnosis.
+Save the failed migration Job's log for diagnosis: `kubectl -n hephaestus logs job/<migration-job> -c migration > migration.log`. The chart deletes a finished Job after 24 hours.
 Correct the cause and follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) before retrying the verified chart.
 A failed Helm status does not mean that the Job has stopped.
 

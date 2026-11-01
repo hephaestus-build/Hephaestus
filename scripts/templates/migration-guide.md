@@ -102,7 +102,7 @@ and review the release notes for endpoint changes.
 
 1. Check the release notes and the [Production Setup](https://docs.hephaestus.build/admin/production-setup) guide for new variables
 2. Set the corresponding chart values and protected Secret keys
-3. Restart services
+3. Run `helm upgrade` with the changed values, then restart the Pods that read a changed Secret key
 
 ### Database Schema Changed
 
