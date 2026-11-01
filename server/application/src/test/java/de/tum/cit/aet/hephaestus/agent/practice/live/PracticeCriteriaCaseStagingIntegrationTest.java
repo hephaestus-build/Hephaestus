@@ -138,12 +138,17 @@ class PracticeCriteriaCaseStagingIntegrationTest {
             }
         }
         var statuses = new HashMap<String, String>();
+        // The change detects renames: one entry under the new path names the removed path.
+        var renamedTo = new HashMap<String, String>();
         for (var file : files) {
             statuses.put(file.path("path").asString(), file.path("status").asString());
+            if (file.has("oldPath")) {
+                renamedTo.put(file.path("oldPath").asString(), file.path("path").asString());
+            }
         }
-        assertThat(statuses.keySet())
-                .as("changed files in %s", scenario.path("id"))
-                .isEqualTo(changed);
+        var changedPaths = new HashSet<>(statuses.keySet());
+        changedPaths.addAll(renamedTo.keySet());
+        assertThat(changedPaths).as("changed files in %s", scenario.path("id")).isEqualTo(changed);
         // The supplied before-state is committed; a base file the case leaves out is deleted at head.
         var change = mapper.readTree(workspace.resolve("context/change.json").toFile());
         Path repo = workspace.resolve(SandboxLayout.REPO_MOUNT_RELATIVE);
@@ -171,7 +176,15 @@ class PracticeCriteriaCaseStagingIntegrationTest {
                                 "--",
                                 path))
                         .startsWith("D\t");
-                assertThat(statuses.get(path)).as("change status of %s", path).isEqualTo("D");
+                if (renamedTo.containsKey(path)) {
+                    assertThat(statuses.get(renamedTo.get(path)))
+                            .as("change status of %s", path)
+                            .isEqualTo("R");
+                } else {
+                    assertThat(statuses.get(path))
+                            .as("change status of %s", path)
+                            .isEqualTo("D");
+                }
             }
         }
         for (var entry : supplied.properties()) {

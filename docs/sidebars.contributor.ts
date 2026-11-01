@@ -84,6 +84,7 @@ const sidebars: SidebarsConfig = {
 				"evaluation-provenance",
 				"feedback-quality-evals",
 				"label-feedback-quality",
+				"composition-label-rubric",
 			],
 		},
 		{
