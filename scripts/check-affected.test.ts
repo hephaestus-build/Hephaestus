@@ -340,7 +340,7 @@ await test("fails closed for shared, generated, contract, tooling, and unknown i
 		"webapp/tools/oxlint/index.ts",
 		"docs/contributor/erd/integration.mmd",
 		".vite-hooks/pre-push",
-		"docker/compose.app.yaml",
+		"docker/docker-bake.hcl",
 		"webapp/CLAUDE.md",
 		"some-new-root-input.txt",
 	]) {

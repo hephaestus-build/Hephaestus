@@ -33,8 +33,8 @@ public record SecurityProperties(
         @DefaultValue("100") int credentialRotationBatchSize) {
 
     public SecurityProperties {
-        // The Compose files forward these keys with an empty default, so an operator who set
-        // neither still hands the container `HEPHAESTUS_SECURITY_…_KEY=""`. Blank is how "unset"
+        // An environment source can supply an empty key, so an operator who set
+        // neither can still hand the container `HEPHAESTUS_SECURITY_…_KEY=""`. Blank is how "unset"
         // arrives here — a String binds it as "" while the paired Integer version binds it as null,
         // so comparing the raw values would read a fresh install as a half-finished key rotation and
         // refuse to boot. Normalize first; every rule below then reads one notion of "configured".

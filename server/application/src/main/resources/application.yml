@@ -162,7 +162,7 @@ spring:
 
     # Graceful shutdown drains in-flight requests before terminating; pairs with server.shutdown
     # below. The container's stop grace must exceed it plus any preStop pause: the chart's
-    # terminationGracePeriodSeconds, or Compose's stop_grace_period.
+    # terminationGracePeriodSeconds.
     lifecycle:
         timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:20s}
 
@@ -409,7 +409,7 @@ hephaestus:
     #     The webhook-server production container deploys with server=false + worker=false
     #     + webhook=true so it runs webhook reception in isolation — restart-independent
     #     from application-server. See ADR 0008.
-    # All three default true → single-JVM monolith (the dev topology; the shipped Compose stacks split them).
+    # All three default true → single-JVM monolith (the dev topology; the Helm chart splits them).
     runtime:
         server:
             enabled: ${HEPHAESTUS_RUNTIME_SERVER_ENABLED:true}
@@ -797,7 +797,7 @@ hephaestus:
         shutdown:
             # Drain budget for in-flight publishes after HTTP closes. Docker stop_grace_period
             # must cover: Spring HTTP drain (server.shutdown=graceful + lifecycle timeout 20s)
-            # + this drain + small margin. Compose pins stop_grace_period: 40s.
+            # + this drain + small margin. The chart owns terminationGracePeriodSeconds.
             drain-timeout: 15s
         http:
             # Hard cap enforced by WebhookPayloadSizeFilter (Content-Length check before

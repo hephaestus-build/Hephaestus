@@ -49,8 +49,6 @@ dist/
 # Django stuff:
 .dmypy.json
 dmypy.json
-docker/letsencrypt/
-docker/self-host/letsencrypt/
 docs/_build/
 downloads/
 .DS_Store

@@ -77,7 +77,7 @@ Entries exist only for releases that need operator action. Everything else is in
 |-----------|-----|-------|
 | Database cutover | Follow the target release's migration entry | Complete any required procedure before starting the new runtime roles |
 | Environment variables | Check release notes | New config may be required |
-| Docker compose | Check `docker/` files | Image versions may change |
+| Helm chart | Check the chart values of the target release | Values may be added or renamed |
 
 ---
 
@@ -102,7 +102,7 @@ and review the release notes for endpoint changes.
 
 1. Check the release notes and the [Production Setup](https://docs.hephaestus.build/admin/production-setup) guide for new variables
 2. Set the corresponding chart values and protected Secret keys
-3. Restart services
+3. Run `helm upgrade` with the changed values, then restart the Pods that read a changed Secret key
 
 ### Database Schema Changed
 

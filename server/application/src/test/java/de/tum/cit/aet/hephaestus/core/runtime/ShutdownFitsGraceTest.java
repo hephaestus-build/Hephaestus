@@ -15,9 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.convert.DurationStyle;
 
 /**
- * Each role stops within the grace that Kubernetes and Compose give it: the preStop pause, every shutdown phase at
+ * Each role stops within the grace that Kubernetes gives it: the preStop pause, every shutdown phase at
  * its timeout, the waits that run after the phases, and a margin for JPA, Hikari and the JVM's exit. The grace values
- * live in the chart and the Compose files, the phases in the code and {@code application.yml}; this test keeps them
+ * live in the chart, the phases in the code and {@code application.yml}; this test keeps them
  * together.
  */
 class ShutdownFitsGraceTest extends BaseUnitTest {
@@ -33,8 +33,6 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
 
         assertThat(chartGrace("server.yaml"))
                 .isGreaterThanOrEqualTo(preStop("server.yaml").plus(stop));
-        assertThat(composeGrace("docker/compose.app.yaml", "application-server"))
-                .isGreaterThanOrEqualTo(stop);
     }
 
     @Test
@@ -43,7 +41,6 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
 
         assertThat(chartGrace("webhook.yaml"))
                 .isGreaterThanOrEqualTo(preStop("webhook.yaml").plus(stop));
-        assertThat(composeGrace("docker/compose.core.yaml", "webhook-server")).isGreaterThanOrEqualTo(stop);
     }
 
     @Test
@@ -60,16 +57,6 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
                 .plus(httpPhase())
                 .plus(MARGIN);
         assertThat(Duration.ofSeconds(Long.parseLong(grace.group(1)))).isGreaterThanOrEqualTo(beyondDrain);
-
-        Matcher drain = Pattern.compile(
-                        "HEPHAESTUS_WORKER_DRAIN_TIMEOUT: \\$\\{HEPHAESTUS_WORKER_DRAIN_TIMEOUT:-([^}]+)}")
-                .matcher(read("docker/compose.app.yaml"));
-        assertThat(drain.find()).isTrue();
-        assertThat(composeGrace("docker/compose.app.yaml", "application-worker"))
-                .isGreaterThanOrEqualTo(
-                        WorkerPropertiesConfiguration.drainPhaseTimeout(DurationStyle.detectAndParse(drain.group(1)))
-                                .plus(httpPhase())
-                                .plus(MARGIN));
     }
 
     /** The timeout of each shutdown phase except the worker's drain: {@code SHUTDOWN_TIMEOUT}'s default. */
@@ -103,17 +90,6 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
                 .matcher(read("deploy/chart/hephaestus/templates/" + template));
         assertThat(matcher.find()).as(template).isTrue();
         return Duration.ofSeconds(Long.parseLong(matcher.group(1)));
-    }
-
-    private static Duration composeGrace(String file, String service) throws IOException {
-        String compose = read(file);
-        int start = compose.indexOf("\n  " + service + ":\n");
-        assertThat(start).as(service + " in " + file).isNotNegative();
-        Matcher next = Pattern.compile("\\n  [a-z][a-z-]*:\\n").matcher(compose);
-        int end = next.find(start + 1) ? next.start() : compose.length();
-        Matcher grace = Pattern.compile("stop_grace_period: (\\S+)").matcher(compose.substring(start, end));
-        assertThat(grace.find()).as(service + " stop_grace_period").isTrue();
-        return DurationStyle.detectAndParse(grace.group(1));
     }
 
     private static String read(String path) throws IOException {

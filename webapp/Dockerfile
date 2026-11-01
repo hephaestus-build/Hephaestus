@@ -43,9 +43,6 @@ COPY webapp/docker/nginx-http.conf /etc/nginx/hephaestus/http.conf
 COPY webapp/docker/nginx-main.conf /etc/nginx/nginx.conf
 COPY webapp/docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY webapp/docker/security-headers.conf /etc/nginx/security-headers.conf
-# The maintenance page mode, which docker/compose.proxy.yaml runs with `nginx -c`.
-COPY webapp/docker/nginx-maintenance.conf /etc/nginx/hephaestus/maintenance.conf
-COPY webapp/docker/maintenance.html /usr/share/nginx/maintenance/index.html
 COPY webapp/src/environment/index.ts /app/src/environment/index.ts
 RUN chmod +x /entrypoint.sh
 # The base image's nginx user. Numeric, so Kubernetes can verify runAsNonRoot. Root owns every

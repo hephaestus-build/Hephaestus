@@ -331,17 +331,10 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'scripts/run-gradlew.ts'
-              # gate:env validates these deployment inputs against application.yml.
-              - 'docker/compose.app.yaml'
-              - 'docker/compose.core.yaml'
-              # The generated configuration reference reads these, and its drift check runs on this leg.
+              # The generated configuration reference has a drift check on this leg.
               # It renders the chart to learn which runtime role sets each variable.
               - 'deploy/chart/**'
               - 'scripts/lib/deploy-topology.ts'
-              - 'docker/compose.proxy.yaml'
-              - 'docker/self-host/compose*.yaml'
-              - 'docker/self-host/.env.example'
-              - 'docker/observability/compose.journald.yaml'
               - 'docs/admin/configuration-reference.mdx'
               - 'scripts/generate-configuration-reference.ts'
               - 'scripts/lib/configuration-reference.ts'
@@ -1010,15 +1003,6 @@ jobs:
     permissions:
       contents: read
 
-  Compose:
-    needs: [detect-changes, Security-merge-group]
-    if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
-      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true')
-    uses: ./.github/workflows/ci-compose-validate.yml
-    permissions:
-      contents: read
-
   # Every image of the run: one build job per platform and one manifest job. The application-server
   # image is built from the package job's executable JAR, so the job waits for it.
   # The `preview` label and the Kubernetes cluster jobs need every image at the head tag; unchanged images
@@ -1199,7 +1183,6 @@ jobs:
         Security-merge-group,
         Test,
         Changesets,
-        Compose,
         Docker,
         Kubernetes-chart,
         Kubernetes,
@@ -1228,7 +1211,6 @@ jobs:
           echo "Security (merge group): ${{ needs.Security-merge-group.result }}"
           echo "Test:           ${{ needs.Test.result }}"
           echo "Changesets:     ${{ needs.Changesets.result }}"
-          echo "Compose:        ${{ needs.Compose.result }}"
           echo "Docker:         ${{ needs.Docker.result }}"
           echo "Chart:          ${{ needs.Kubernetes-chart.result }}"
           echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
@@ -1441,14 +1423,6 @@ jobs:
     name: "Fail fast: Test"
     needs: [Test]
     if: ${{ always() && github.event_name == 'merge_group' && needs.Test.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
-
-  fail-fast-Compose:
-    name: "Fail fast: Compose"
-    needs: [Compose]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Compose.result == 'failure' }}
     uses: ./.github/workflows/fail-fast.yml
     permissions:
       actions: write # cancel this run

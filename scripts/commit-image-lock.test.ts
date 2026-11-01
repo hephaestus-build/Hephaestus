@@ -1,40 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
 
-import {
-	environmentKey,
-	parseInventory,
-	readInventory,
-	resolveImages,
-} from "./commit-image-lock.ts";
+import { environmentKey, parseInventory, resolveImages } from "./commit-image-lock.ts";
 
 const commit = "c".repeat(40);
 const digest = `sha256:${"1".repeat(64)}`;
 const resolver = async () => digest;
-
-await test("a commit channel pins every image the stacks actually read", async () => {
-	const inventory = await readInventory(
-		fileURLToPath(new URL("../security/release-images.json", import.meta.url)),
-	);
-	const images = await resolveImages(inventory, commit, "hephaestus-build", resolver);
-
-	const referenced = new Set<string>();
-	for (const stack of ["app", "core", "proxy"]) {
-		const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
-		for (const match of file.matchAll(/\$\{(?<name>HEPHAESTUS_IMAGE_[A-Z0-9_]+)/gu)) {
-			const name = match.groups?.name;
-			if (name !== undefined) {
-				referenced.add(name);
-			}
-		}
-	}
-	assert.ok(referenced.size > 0, "the stacks reference no images at all");
-	for (const name of referenced) {
-		assert.ok(name in images, `${name} is read by a stack but not pinned for a commit deploy`);
-	}
-});
 
 await test("an upstream image is pinned as the commit pins it, not looked up", async () => {
 	const inventory = parseInventory({
@@ -79,7 +50,7 @@ await test("anything that is not a digest is refused rather than deployed", asyn
 	);
 });
 
-await test("the environment name is the one the Compose files read", () => {
+await test("the image environment key uses the canonical image name", () => {
 	assert.equal(environmentKey("application-server"), "HEPHAESTUS_IMAGE_APPLICATION_SERVER");
 	assert.equal(environmentKey("agent-pi"), "HEPHAESTUS_IMAGE_AGENT_PI");
 });

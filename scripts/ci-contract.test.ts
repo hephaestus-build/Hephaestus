@@ -1102,7 +1102,7 @@ void describe("CI contract", () => {
 			}),
 			"false",
 		);
-		// A pull request builds images only for its preview, the host boot smoke or release evidence;
+		// A pull request builds images only for its preview, the Kubernetes jobs or release evidence;
 		// the merge group builds every other changed image. An unreadable label builds them, except on
 		// a draft. A fork builds none.
 		const ready = { head: { repo: { full_name: "owner/repo" } } };
@@ -2181,13 +2181,11 @@ void describe("CI contract", () => {
 			"upstream-images",
 			"Security",
 			"Test",
-			"Compose",
 		]) {
 			const needs = {
 				"upstream-images": /needs: \[detect-changes, vulnerability-database\]/u,
 				Test: /needs: \[detect-changes, server-package, Security-merge-group\]/u,
 				Quality: /needs: \[detect-changes, Security-merge-group\]/u,
-				Compose: /needs: \[detect-changes, Security-merge-group\]/u,
 			}[name];
 			assert.match(job(source, name), needs ?? /needs: \[detect-changes\]/u);
 			assert.match(
@@ -2203,14 +2201,7 @@ void describe("CI contract", () => {
 		for (const gate of ["contracts_changed", "e2e_changed", "extension_e2e_changed"]) {
 			assert.match(build, new RegExp(`^\\s+${gate}:.*version-bump == 'true'`, "mu"));
 		}
-		assertNeeds(source, "all-ci-passed", "Compose", "Docker");
-
-		const compose = await readFile(".github/workflows/ci-compose-validate.yml", "utf8");
-		assert.match(compose, /on:\n {2}workflow_call:\n/u);
-		assert.match(
-			job(source, "Compose"),
-			/uses: \.\/\.github\/workflows\/ci-compose-validate\.yml/u,
-		);
+		assertNeeds(source, "all-ci-passed", "Docker");
 	});
 
 	void test("reports a failed merge-group run on its pull request, and only a failure", async () => {
@@ -5217,38 +5208,6 @@ void test("the prose gate ratchets on Linux and Windows with the base history", 
 	);
 });
 
-void test("the log collection example reads only tagged entries and indexes only static labels", async () => {
-	const alloy = await readFile("docker/observability/config.alloy", "utf8");
-	// A Docker socket is root on the host, whatever its mount mode; the journal needs none.
-	for (const forbidden of [/docker\.sock/u, /loki\.source\.docker/u, /discovery\.docker/u]) {
-		assert.doesNotMatch(alloy, forbidden);
-	}
-	assert.match(alloy, /matches\s*=\s*"CONTAINER_TAG=hephaestus-runtime"/u);
-	// The webapp's nginx error log can name a client address and a query string; it is not collected.
-	assert.doesNotMatch(alloy.replaceAll(/^\s*\/\/.*$/gmu, ""), /webapp/u);
-	const overlay = await readFile("docker/observability/compose.journald.yaml", "utf8");
-	assert.deepEqual(
-		[...overlay.matchAll(/^ {2}(?<service>[a-z-]+):$/gmu)].map((match) => match.groups?.service),
-		["application-server", "application-worker", "webhook-server"],
-	);
-	// Index labels stay bounded: a service from a fixed set and the deployment's name. Per-request
-	// and per-person values go to structured metadata or stay in the line.
-	const targets = [...alloy.matchAll(/target_label\s*=\s*"(?<label>[^"]+)"/gu)].map(
-		(match) => match.groups?.label,
-	);
-	assert.deepEqual(targets, ["service_name"]);
-	const sourceLabels = /\blabels\s*=\s*\{(?<labels>[^}]*)\}/u.exec(alloy)?.groups?.labels ?? "";
-	assert.deepEqual(
-		[...sourceLabels.matchAll(/^\s*(?<label>\w+)\s*=/gmu)].map((match) => match.groups?.label),
-		["deployment_environment"],
-	);
-	assert.match(
-		alloy,
-		/stage\.structured_metadata\s*\{\s*values\s*=\s*\{\s*trace_id\s*=\s*"",?\s*\}/u,
-	);
-	assert.doesNotMatch(alloy, /stage\.labels/u);
-});
-
 /**
  * The SHA-256 that get.helm.sh publishes beside each v4.3.1 archive (`<archive>.sha256sum`), keyed
  * by the runner platform the installer maps to it.
@@ -5637,7 +5596,6 @@ const FAIL_FAST = "./.github/workflows/fail-fast.yml";
 const HEAVY_LEGS = [
 	"server-package",
 	"Quality",
-	"Compose",
 	"Build",
 	"Test",
 	"Docker",
@@ -5653,7 +5611,6 @@ const RUN_ORDER = [
 	"Security-merge-group",
 	"server-package",
 	"Quality",
-	"Compose",
 	"upstream-images",
 	"Test",
 	"Build",

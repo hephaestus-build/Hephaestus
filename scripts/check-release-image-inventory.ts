@@ -1,7 +1,5 @@
 import { readFileSync } from "node:fs";
 
-import { parse } from "yaml";
-
 import { chartImages } from "./kubernetes-chart.ts";
 import {
 	renderDeployTopology,
@@ -104,7 +102,7 @@ export function validateChartConsumers(
 	schemaImages: readonly string[],
 	inventoried: ReadonlySet<string>,
 ): void {
-	for (const name of new Set([...consumers, ...schemaImages, ...chartImages])) {
+	for (const name of new Set([...consumers, ...schemaImages, ...chartImages, ...inventoried])) {
 		if (!chartImages.some((image) => image === name)) {
 			throw new Error(`unexpected chart image ${name}`);
 		}
@@ -116,45 +114,6 @@ export function validateChartConsumers(
 		}
 		if (!inventoried.has(name)) {
 			throw new Error(`${name}: missing evidence`);
-		}
-	}
-}
-
-/** Preserve verification of the 0.95 host bundle until its consumers and evidence retire together. */
-export function composeImageConsumers(
-	text: string,
-	file: string,
-	known: ReadonlySet<string>,
-): Set<string> {
-	const document: unknown = parse(text, { merge: true });
-	const services = asRecord(asRecord(document, file).services, `${file} services`);
-	if (Object.keys(services).length === 0) {
-		throw new Error(`${file} has no services`);
-	}
-	const consumers = new Set<string>();
-	for (const [name, raw] of Object.entries(services)) {
-		const service = asRecord(raw, `${file}:${name}`);
-		const variable =
-			typeof service.image === "string"
-				? /^\$\{HEPHAESTUS_IMAGE_(?<name>[A-Z0-9_]+):\?[^}]+\}$/u.exec(service.image)?.groups?.name
-				: undefined;
-		const image = variable?.toLowerCase().replaceAll("_", "-");
-		if (image === undefined || !known.has(image)) {
-			throw new Error(`${file}:${name} bypasses the verified release lock`);
-		}
-		consumers.add(image);
-	}
-	return consumers;
-}
-
-export function validateRetained(
-	known: ReadonlySet<string>,
-	chart: readonly string[],
-	retained: ReadonlySet<string>,
-): void {
-	for (const name of known) {
-		if (!chart.includes(name) && !retained.has(name)) {
-			throw new Error(`release image ${name} has no evidenced deployment consumer`);
 		}
 	}
 }
@@ -198,23 +157,5 @@ if (import.meta.main) {
 		Object.keys(asRecord(images.properties, "chart image properties")),
 		known,
 	);
-	// The 0.95 release still evidences the proxy and volume initializer. CT-1 removes their consumers
-	// and inventory entries together; the chart never treats those images as chart values.
-	const retained = new Set<string>();
-	for (const file of [
-		"docker/compose.app.yaml",
-		"docker/compose.core.yaml",
-		"docker/compose.proxy.yaml",
-	]) {
-		for (const name of composeImageConsumers(readFileSync(file, "utf8"), file, known)) {
-			if (!consumers.includes(name)) {
-				retained.add(name);
-			}
-		}
-	}
-
-	validateRetained(known, consumers, retained);
-	console.log(
-		`release image inventory: ${consumers.length} chart consumers, ${retained.size} retained release consumers`,
-	);
+	console.log(`release image inventory: ${consumers.length} chart consumers`);
 }

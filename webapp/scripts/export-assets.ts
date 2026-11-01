@@ -25,7 +25,6 @@ const publicDirectory = path.resolve(webappDirectory, "public");
 const docsImageDirectory = path.resolve(webappDirectory, "../docs/static/img");
 const docsBrandDirectory = path.resolve(docsImageDirectory, "brand");
 const readmeImageDirectory = path.resolve(webappDirectory, "../docs/images/readme");
-const maintenancePagePath = path.resolve(webappDirectory, "docker/maintenance.html");
 const markSvg = await readFile(path.resolve(sourceDirectory, "hephaestus-mark.svg"), "utf8");
 const applicationMarkSvg = markSvg.replace(
 	'transform="translate(24 20) scale(3.3333)"',
@@ -115,22 +114,6 @@ async function render(): Promise<void> {
 			path.resolve(sourceDirectory, "hephaestus-mark.svg"),
 			await output(path.resolve(publicDirectory, "brand/hephaestus-mark.svg")),
 		);
-
-		const maintenancePage = await readFile(maintenancePagePath, "utf8");
-		const maintenanceMark = markSvg
-			.replace(
-				'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title"><title id="title">Hephaestus</title>',
-				'<svg class="brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Hephaestus">',
-			)
-			.trim();
-		const nextMaintenancePage = maintenancePage.replace(
-			/<svg class="brand" xmlns="http:\/\/www\.w3\.org\/2000\/svg".*<\/svg>/u,
-			maintenanceMark,
-		);
-		if (nextMaintenancePage === maintenancePage && !maintenancePage.includes(maintenanceMark)) {
-			throw new Error("The maintenance-page brand mark could not be updated.");
-		}
-		await writeFile(await output(maintenancePagePath), nextMaintenancePage);
 	}
 
 	const browser = await chromium.launch();
