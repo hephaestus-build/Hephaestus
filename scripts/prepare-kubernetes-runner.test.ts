@@ -30,10 +30,9 @@ void test("disk checks report sufficient space and fail early on low or unreadab
 
 void test("a change to runner disk preparation selects cluster verification", async () => {
 	const source = await readFile(".github/workflows/cicd.yml", "utf8");
-	assert.equal(
-		touchesCluster(["scripts/prepare-kubernetes-runner.ts"], clusterGlobs(source)),
-		true,
-	);
+	for (const file of ["scripts/prepare-kubernetes-runner.ts", "scripts/lib/runner-disk.ts"]) {
+		assert.equal(touchesCluster([file], clusterGlobs(source)), true, file);
+	}
 });
 
 void test(
