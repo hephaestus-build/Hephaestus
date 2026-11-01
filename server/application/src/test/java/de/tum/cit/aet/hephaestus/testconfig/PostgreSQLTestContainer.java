@@ -177,6 +177,10 @@ public final class PostgreSQLTestContainer {
                 .withDatabaseName(DEFAULT_TEST_DB)
                 .withUsername(DEFAULT_TEST_USER)
                 .withPassword(DEFAULT_TEST_PASSWORD)
+                // Up to 32 cached test contexts each hold a pool of up to 10 connections, and one running test
+                // can add pools of its own (role contexts up to the worker's 32, two replicas of 4). PostgreSQL's
+                // default of 100 is below that bound.
+                .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=400")
                 .withTmpFs(Map.of("/var/lib/postgresql", "rw"));
 
         newContainer.start();
