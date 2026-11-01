@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.ProductFeedbackUpdateEmailRequested;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -70,6 +72,19 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private InstanceSettingsService instanceSettings;
+
+    /** Another class on this context can leave Silent Mode engaged, and it withholds every email. */
+    @BeforeEach
+    void releaseSilentMode() {
+        var current = instanceSettings.get();
+        if (current.isSilentModeEngaged()) {
+            instanceSettings.updateSilentMode(
+                    false, null, null, EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
+        }
+    }
 
     @AfterEach
     void restoreMailTransport() {

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.notification.email.EmailUnsubscribeLinks;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackNotificationQuery;
+import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackUpdatedEvent;
 import java.time.Clock;
 import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
@@ -62,8 +63,11 @@ public class ProductFeedbackUpdateEmailListener {
         // A private issue's address names the private repository; the reporter gets only the instance page.
         String issueUrl = event.issueUrl();
         if (event.publicIssue() && issueUrl != null) model.put("issueUrl", issueUrl);
+        // A duplicate's detail is the original issue's address; a release name is never one.
         String detail = event.detail();
-        if (event.publicIssue() && detail != null) model.put("detail", detail);
+        if (detail != null
+                && (event.publicIssue() || event.kind() == ProductFeedbackUpdatedEvent.Kind.INCLUDED_IN_RELEASE))
+            model.put("detail", detail);
         var rendered = renderer.render(EmailKind.PRODUCT_FEEDBACK_UPDATE, model);
         var result = gateway.send(new EmailMessage(
                 EmailKind.PRODUCT_FEEDBACK_UPDATE,

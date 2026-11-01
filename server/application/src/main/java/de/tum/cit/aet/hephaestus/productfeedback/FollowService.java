@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +76,7 @@ class FollowService {
     }
 
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT90S")
+    @SchedulerLock(name = "product-feedback-follow", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
     void followDue() {
         Instant now = clock.instant();
         List<ProductFeedbackFiling> due =

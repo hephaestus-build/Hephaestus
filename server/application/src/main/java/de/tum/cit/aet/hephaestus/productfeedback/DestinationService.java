@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,6 +111,7 @@ class DestinationService {
 
     /** Reads the public repository's open issues for duplicate suggestions. */
     @Scheduled(fixedDelayString = "PT15M", initialDelayString = "PT1M")
+    @SchedulerLock(name = "product-feedback-snapshot", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
     @WorkspaceAgnostic("The instance's one destination row; no workspace")
     void refreshSnapshot() {
         String name = settings.current().getPublicRepository();
