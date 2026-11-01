@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -261,6 +262,6 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         problem.setInstance(URI.create(request.getRequestURI()));
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(problem));
+        response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));
     }
 }

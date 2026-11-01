@@ -102,8 +102,10 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
         ProblemDetail problem = jsonCallback(target, stranger);
 
         assertThat(problem.getDetail()).isEqualTo(GENERIC_CONFLICT);
+        // The error code and the request reference that every problem carries; nothing names the owner's workspace.
         assertThat(problem.getProperties())
-                .containsExactlyInAnyOrderEntriesOf(Map.of("callbackError", "connected_elsewhere"));
+                .containsOnlyKeys("callbackError", "requestId")
+                .containsEntry("callbackError", "connected_elsewhere");
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();
         assertThat(connectionRepository.findActive(source.getId(), IntegrationKind.SLACK))

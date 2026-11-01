@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -39,8 +40,7 @@ class RequestCorrelationFilterTest {
         new RequestCorrelationFilter(provider(tracer), provider(propagator))
                 .doFilter(new MockHttpServletRequest(), response, new MockFilterChain());
 
-        assertThat(response.getHeader(RequestCorrelationFilter.HEADER_NAME))
-                .isEqualTo("0123456789abcdef0123456789abcdef");
+        assertThat(response.getHeader(RequestReference.HEADER)).isEqualTo("0123456789abcdef0123456789abcdef");
     }
 
     @Test
@@ -51,7 +51,7 @@ class RequestCorrelationFilterTest {
         new RequestCorrelationFilter(provider((Tracer) null), provider((Propagator) null))
                 .doFilter(new MockHttpServletRequest(), response, chain);
 
-        assertThat(response.getHeader(RequestCorrelationFilter.HEADER_NAME)).isNull();
+        assertThat(response.getHeader(RequestReference.HEADER)).isNull();
         assertThat(chain.getRequest()).isNotNull();
     }
 

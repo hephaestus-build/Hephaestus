@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
 import io.swagger.v3.core.converter.ModelConverters;
@@ -161,7 +162,23 @@ public class OpenAPIConfiguration {
             normalizeDiscriminatedUnions(openApi);
             declareExactDecimals(openApi);
             declareProviderIdentityKinds(openApi);
+            declareProblemRequestId(openApi);
         };
+    }
+
+    /**
+     * Spring writes a problem's extension properties at the top level, and every problem names its
+     * request ({@link RequestReference}). With tracing off there is no id, so the field is optional.
+     */
+    private static void declareProblemRequestId(OpenAPI openApi) {
+        Schema<?> problem = openApi.getComponents().getSchemas().get("ProblemDetail");
+        if (problem != null) {
+            problem.addProperty(
+                    RequestReference.PROPERTY,
+                    new StringSchema()
+                            .pattern("^[0-9a-f]{32}$")
+                            .description("The request's trace id, the same as the X-Request-Id header"));
+        }
     }
 
     private void includeSpringDataPageMetadata(OpenAPI openApi) {

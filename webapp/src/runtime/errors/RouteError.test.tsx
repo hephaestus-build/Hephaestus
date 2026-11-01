@@ -64,13 +64,13 @@ it("runs a failed route again on retry and shows the page once it renders", asyn
 	}
 });
 
-function renderGuardedRoute(status: number) {
+function renderGuardedRoute(status: number, problem: object = {}) {
 	const rootRoute = createRootRoute();
 	const route = createRoute({
 		getParentRoute: () => rootRoute,
 		path: "/",
 		beforeLoad: () => {
-			throw Object.assign(new Error("private detail"), { status });
+			throw Object.assign(new Error("private detail"), { status, ...problem });
 		},
 		component: () => <h1>Guarded page</h1>,
 	});
@@ -111,4 +111,19 @@ it("offers no retry for a request the server refused, which would be refused aga
 
 	await screen.findByRole("alert");
 	expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+});
+
+it("names the reference of a failed request, so the reader can quote it", async () => {
+	renderGuardedRoute(503, { requestId: "4bf92f3577b34da6a3ce929d0e0e4736" });
+
+	await screen.findByRole("alert");
+	expect(screen.getByText("4bf92f35").textContent).toBe("4bf92f35");
+	screen.getByRole("button", { name: "Copy reference" });
+});
+
+it("names no reference for a failure without one, or with a value that is not a request id", async () => {
+	renderGuardedRoute(503, { requestId: "not-an-id" });
+
+	await screen.findByRole("alert");
+	expect(screen.queryByRole("button", { name: "Copy reference" })).toBeNull();
 });

@@ -1520,7 +1520,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         private String error(String slug) {
-            return Objects.requireNonNull(webTestClient
+            String body = Objects.requireNonNull(webTestClient
                     .get()
                     .uri("/public/workspaces/{slug}/activity", slug)
                     .exchange()
@@ -1531,6 +1531,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(String.class)
                     .returnResult()
                     .getResponseBody());
+            // Each response names its own request; everything else must be the same in every case.
+            String requestId = "\"requestId\":\"[0-9a-f]{32}\"";
+            assertThat(body).containsPattern(requestId);
+            return body.replaceFirst(requestId, "");
         }
 
         private PublicActivityDTO page() {
