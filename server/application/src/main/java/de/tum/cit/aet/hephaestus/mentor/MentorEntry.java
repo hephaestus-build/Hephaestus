@@ -187,7 +187,7 @@ public class MentorEntry implements Persistable<UUID> {
     private boolean fresh;
 
     MentorEntry(MentorConversation conversation, long seq, MentorEntryDraft draft, Instant now) {
-        this.id = UUID.randomUUID();
+        this.id = MentorIds.next();
         this.workspaceId = conversation.getWorkspaceId();
         this.conversationId = conversation.getId();
         this.seq = seq;

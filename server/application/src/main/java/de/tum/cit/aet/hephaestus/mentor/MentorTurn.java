@@ -219,7 +219,7 @@ public class MentorTurn implements Persistable<UUID> {
             Surface surface,
             @Nullable String pageContext,
             Instant now) {
-        this.id = UUID.randomUUID();
+        this.id = MentorIds.next();
         this.workspaceId = conversation.getWorkspaceId();
         this.conversationId = conversation.getId();
         this.requestId = requestId;
