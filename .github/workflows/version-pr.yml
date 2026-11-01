@@ -2,7 +2,7 @@ name: Release / Version PR
 
 # Versioning contract: docs/contributor/release-management.mdx.
 on:
-  workflow_run: # zizmor: ignore[dangerous-triggers] Only successful same-repository main pushes start maintenance, and it versions a validated main commit, never the event's ref.
+  workflow_run: # zizmor: ignore[dangerous-triggers] Only successful same-repository main pushes start maintenance. It runs main's tip and versions a validated main commit, never the event's ref.
     workflows: ["CI/CD"]
     types: [completed]
     branches: [main]
@@ -30,30 +30,14 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
-      # Main moves faster than its CI, so its tip is rarely validated when a run completes.
-      # Version the newest first-parent commit whose push CI/CD succeeded instead.
-      - name: Select the newest validated main commit
-        id: base
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          validated=$(gh api "repos/$REPOSITORY/actions/workflows/cicd.yml/runs?branch=main&event=push&status=success&per_page=100" \
-            --jq '.workflow_runs[] | select(.head_repository.full_name == env.REPOSITORY) | .head_sha')
-          base=$(git rev-list --first-parent HEAD | grep -Fx -m 1 -f <(printf '%s\n' "$validated")) || {
-            echo "No recent main commit has a successful push CI/CD run." >&2
-            exit 1
-          }
-          git checkout --detach "$base"
-          echo "sha=$base" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
+      # Main moves faster than its CI, so its tip is rarely validated when a run completes. The
+      # script runs from the tip and versions the newest first-parent commit whose push run succeeded.
       - name: Maintain Version PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION_BASE: ${{ steps.base.outputs.sha }}
         run: node scripts/maintain-version-pr.ts
 
   # A failed maintenance leaves the Version PR stale without any other signal.
@@ -75,7 +59,8 @@ jobs:
         run: |
           set -euo pipefail
           title="Version PR maintenance failed"
-          number=$(gh issue list -R "$REPOSITORY" --state open --search "\"$title\" in:title" --json number,title |
+          # A listing, not the search index, so a failure right after another finds its issue.
+          number=$(gh issue list -R "$REPOSITORY" --state open --limit 500 --json number,title |
             jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
           if [ "$RESULT" = success ]; then
             if [ -n "$number" ]; then

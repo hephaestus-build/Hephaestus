@@ -267,7 +267,11 @@ Thus, only a validated commit changes the Version PR, and maintenance does not w
 
 The run makes no change when the Version PR already versions that commit.
 It also makes no change when `main` released a newer version after that commit, because the release consumed its changesets.
-`scripts/maintain-version-pr.ts` makes the commit on a staging branch, then moves the Version PR's branch to it.
+It makes no change when the Version PR already versions a newer validated commit.
+It checks the release and the branch again just before it moves the branch.
+
+`scripts/maintain-version-pr.ts` runs from the tip of `main` and versions the selected commit in a separate worktree, without a token.
+It makes the commit on a staging branch, then moves the Version PR's branch to it.
 Resetting the branch to a `main` commit first would make GitHub mark the pull request merged.
 
 A failed maintenance run opens or comments on the `Version PR maintenance failed` issue, and the next successful run closes it.

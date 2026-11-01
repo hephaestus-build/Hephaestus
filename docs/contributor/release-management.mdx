@@ -58,9 +58,7 @@ sequenceDiagram
    Updates use `GITHUB_TOKEN`.
    The pull request's own CI/CD run validates its updated head, with approval when GitHub requests it.
    [The Version PR trigger contract](./ci-cd.mdx#merge-policy) owns approval, reruns and manual recovery.
-   Only a validated commit changes the Version PR.
-   A failed maintenance run opens the `Version PR maintenance failed` issue, and the next successful run closes it.
-   Overtaken completions stop before versioning, so release validation does not start beside the same commit's main validation.
+   [Merge policy](./ci-cd.mdx#merge-policy) owns which commit it versions and how a failed run is reported.
 
    Every CI/CD run on that branch includes the **release evidence preflight** below, regardless of its start event.
    `CI Status Gate` fails unless the same run's preflight succeeds.

@@ -3091,30 +3091,11 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(trigger.includes(guard), guard);
 		}
-		// It versions the newest first-parent main commit that a successful push run validated, not
-		// the tip, which main's merge rate rarely lets CI finish in time. The toolchain installs there.
-		const select = namedStep(versioning, maintainer, "Select the newest validated main commit");
-		const selection = asString(select.get("run"), "selection script");
-		assert.match(
-			selection,
-			/actions\/workflows\/cicd\.yml\/runs\?branch=main&event=push&status=success/u,
-		);
-		assert.match(selection, /select\(\.head_repository\.full_name == env\.REPOSITORY\)/u);
-		assert.match(selection, /git rev-list --first-parent HEAD/u);
-		assert.match(selection, /git checkout --detach "\$base"/u);
+		// `scripts/maintain-version-pr.ts` picks the validated commit and owns its tests.
 		const steps = versioning.getIn([...maintainer, "steps"]);
 		assert.ok(isSeq(steps));
-		const order = steps.items.map((item) => {
-			assert.ok(isMap(item));
-			return String(item.get("name") ?? item.get("uses"));
-		});
-		assert.ok(
-			order.indexOf("Select the newest validated main commit") <
-				order.indexOf("./.github/actions/setup-toolchain"),
-		);
 		const maintain = namedStep(versioning, maintainer, "Maintain Version PR");
 		assert.equal(maintain.get("run"), "node scripts/maintain-version-pr.ts");
-		assert.equal(maintain.getIn(["env", "VERSION_BASE"]), `\${{ steps.base.outputs.sha }}`);
 		assert.doesNotMatch(
 			await readFile(".github/workflows/version-pr.yml", "utf8"),
 			/changesets\/action/u,
@@ -3136,7 +3117,7 @@ void describe("CI contract", () => {
 			}
 		}
 		const maintainerSource = await readFile("scripts/maintain-version-pr.ts", "utf8");
-		assert.doesNotMatch(maintainerSource, /workflow run|dispatch/u);
+		assert.doesNotMatch(maintainerSource, /"workflow",\s*"run"|\/dispatches/u);
 
 		// A failed run reopens nothing by itself, so it reports on one tracking issue, which the
 		// next successful run closes. A run that the concurrency group replaces reports nothing.
