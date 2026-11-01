@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -206,7 +207,7 @@ public class LlmUsageRecorder {
         BigDecimal cost = computed.usd();
         reportClamp(sample, computed);
         int inserted = usageRepository.insertIfAbsent(new LlmUsageInsert(
-                UUID.randomUUID(),
+                TimeOrderedIds.next(),
                 workspaceId,
                 sample.reviewId(),
                 sample.jobType(),
