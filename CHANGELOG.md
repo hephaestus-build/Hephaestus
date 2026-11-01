@@ -1,5 +1,264 @@
 # Changelog
 
+## 1.0.0-rc.1
+
+### Major Changes
+
+- Hephaestus 1.0 starts the 1.x upgrade guarantee. Self-hosting uses the Helm chart on Kubernetes or k3s. Docker Compose is for local development only. Reviews interrupted by the cutover resume with their stored results. An answer in progress ends with “Ask again”.
+
+  **Operators:** Install 0.95.x on the Helm chart first, then follow [Upgrade from 0.x to 1.0](https://docs.hephaestus.build/admin/upgrade-to-1-0). Stop the application writers and their sandboxes before migration. Export survey results before the migration removes them. This cutover cannot run old application roles on the new schema. After 1.0, an upgrade that skips a release also stops every role.
+
+### Minor Changes
+
+- **Administration** now lists **Practices** first, so the count of feedback awaiting approval is at the top of the list. Under **Practices**, **Scans** now comes last. **Members**, **Team setup** and **Member onboarding** follow **Practices**, then **Integrations**, **AI models**, **AI usage** and **Audit log**. **Settings** is now called **Workspace settings**, the name its page already uses, and it is the last entry.
+- Workspace admins see a **Setup summary** at the top of **Administration → Settings**.
+  It shows whether members can get practice reviews.
+  Its rows are repositories and their first sync, practice reviews, practices, a review model for each AI choice, the feedback mode, and the first review.
+  Each row links to the page that changes it.
+  A row that Hephaestus cannot read shows **Unknown**.
+
+  **No workspace** offers **Create workspace** only to people whom the creation policy permits.
+  Other people see that they must ask an instance admin.
+
+- Conversation credentials bind to one live attempt. An expired credential cannot renew or finish an answer.
+
+  **Operators:** Stop all roles before the 1.0 upgrade. Apply the database migration before you start the new release. Restore the verified backup to return to the previous release.
+
+- A new conversation with Hephaestus offers three example questions about your workspace's practices. Selecting one puts it in the message field to change or send, so you see what you can ask before your first review.
+- The single-node Kubernetes profiles now admit up to 32 conversation turns from the declared CPU budget. Provider calls keep their shared pool limits. Tools start on demand within the unchanged quota of ten tools Pods, including up to two warm Pods. Turns that wait for tools show their progress and record a wait duration.
+
+  **Operators:** The `small` profile now stops the old worker before starting its replacement. The `small-16gib` profile keeps that strategy. Reviews and conversations pause during the drain and restart. Budget this deployment outage against the 99.5% availability target. An explicit conversation-turn count still overrides the automatic value. No Pod request or limit is reduced.
+
+- **Operators:** Self-hosting uses the signed Helm chart on Kubernetes or k3s. The Compose installation files, backup units and deployment checks are removed. Move an existing installation with the 0.95 migration guide and install 0.95.1 before this upgrade.
+- Release channels now apply only the verified Helm chart on k3s or Kubernetes.
+  The reconciler no longer applies Compose stacks or manages Docker images.
+
+  **Operators:** Move Compose installations to Helm before upgrading to 1.0.
+  Install the 0.95.1 reconciler before promoting 1.0.
+  Replace stack environment files with your chart values and cluster Secrets.
+  Remove `HEPHAESTUS_STACKS` and `HEPHAESTUS_MIN_FREE_GIB` from the reconcile environment.
+
+- Each release now publishes one signed chart lock, `release-vX.Y.Z.chart.json`, that names the chart digest, every image digest and the source commit.
+
+  **Operators:** Move to the Helm installation on k3s or Kubernetes before you upgrade. If your own tooling reads release assets, switch it to `release-vX.Y.Z.chart.json` and its signature bundle: the image-only `release-vX.Y.Z.json` lock is no longer published. The release verification tools no longer check releases older than 0.75.0.
+
+- Existing databases must complete the 0.95.0 migrations before this upgrade. Fresh databases still initialize automatically.
+
+  **Operators:** Upgrade older databases to 0.95.0 with that release's signed images and upgrade instructions first. Do not use changelog synchronization to skip missing migrations.
+
+- pgBackRest configuration now lives in `deploy/postgresql/pgbackrest.conf`.
+
+  **Operators:** If you edited `docker/self-host/pgbackrest.conf`, move those edits to the new path before upgrading.
+
+- Accidental node drains now stop before they evict the bundled database, broker, server, or only worker. Multiple workers still allow one eviction at a time. Workers normally drain for thirty minutes, with two more minutes for shutdown; the 16 GiB profile keeps its ten-minute drain.
+
+  **Operators:** Use the planned node maintenance procedure to drain workers before you remove the release's disruption budgets. Reapply the verified release afterward to restore the budgets and replica counts.
+
+- Webhook events now wait through database and provider outages without exhausting a retry budget. Permanent failures and exhausted unknown failures have a durable replay record. Workspace admins can replay their workspace's events through the API.
+
+  **Operators:** Remove `hephaestus.integration.consumer.max-ack-pending` from your configuration. Each workspace and stream now processes one event at a time, with unlimited retries for temporary failures. Set retry base and maximum delays to at least one second. Unknown failures use `hephaestus.integration.consumer.poison.max-redeliver` (default 10). Apply the database migration before the server starts. Replay reads the original event from NATS and must finish within the stream retention period.
+
+- Sandbox work now runs only in Kubernetes. Reviews and Heph use the chart worker and the cluster's sandbox resource limits. Large sandbox command output now arrives with its exit status and stays within the output limit.
+
+  **Operators:** Stop every role and take a verified database backup before this upgrade. Run the new release through the Helm chart. Remove `HEPHAESTUS_SANDBOX_RUNTIME`, all `SANDBOX_DOCKER_*` keys, `DOCKER_GROUP_ID`, `SANDBOX_MEMORY_BYTES`, and `SANDBOX_PIDS_LIMIT`. The migration removes the unused internet-access flag from version 8 review configurations without changing their frozen models or prices. To return to the previous release, restore the backup.
+
+- Practice reviews wait in the queue when their review quota has no room or their model endpoint has background calls waiting. Queued reviews no longer hold an unused provider grant. The parent review starts in the transaction that claims and leases its job. Claims prefer workspaces with fewer running reviews and requested reviews, while aging keeps old backfill eligible.
+
+  **Operators:** Use the stopped rc.1 cutover: stop every runtime role before database migration, then start only the new release. The migration retires unused claim reservations. Do not restart older workers against the migrated database.
+
+- The REST API now reports every error the same way. A client tells problems apart by the RFC 9457 `type`, which is an address such as `https://docs.hephaestus.build/contributor/api-error-handling#step-up-required`. The `code`, `reason`, `kind`, `reasonCode` and `error` members that named the kind of error are gone from error bodies, and the relative `/problems/…` and `urn:hephaestus:csrf` types are replaced. Members that carry data about one problem, such as `withholdingReason` and `callbackError`, stay. Workspace creation no longer accepts `ownerUserId`: the signed-in creator owns the workspace. The internal sandbox endpoints are no longer in the published API description, and the feature flags in `GET /user/features` are always present.
+
+  **Operators:** before you upgrade, update each API client or script that reads a removed member. The migration guide names the member to read instead.
+
+- Stored connection secrets and JWT signing keys are encrypted during the upgrade. Existing JWT signing identities and connection credentials stay the same. The server refuses plaintext secrets after the conversion.
+
+  **Operators:** Keep the existing system encryption key and the active credential key and version. Configure any missing keys before the migration runs. Keep the prior credential key if any stored credentials still use it. Stop all database writers for the upgrade. Back up the database and the keys first.
+
+- Operators can turn on page experience metrics to see how fast pages load and respond for signed-in readers. The setting is off by default. Turn it on with `PAGE_EXPERIENCE_METRICS=true`, or `config.pageExperienceMetrics: true` in the Helm chart. In the EU, this can require consent or a documented legal basis, so read [Page experience](https://docs.hephaestus.build/admin/legal-pages#page-experience) first.
+
+  When it is on, the web app reports each visit's largest contentful paint, interaction to next paint, layout shift and time to first byte. The server exposes them as `web_vital_duration_seconds` and `web_vital_layout_shift_thousandths`. A report names no person, workspace or page address. [Page experience metrics](https://docs.hephaestus.build/admin/observability#page-experience-metrics) lists the series.
+
+- Page experience metrics now measure each page that a reader opens, not only the first page of a visit. `web_vital_duration_seconds` and `web_vital_layout_shift_thousandths` have a new `navigation` tag. It is `load` for the first page of a page load, and `route` for each page that the reader opened after it. Chromium 151 and later report route views. In other browsers, `load` covers the whole visit. Update the dashboards and alerts that read these series to group or filter by `navigation`.
+
+  Before, INP and layout shift covered every page of a visit but named only its first page. The interactions of a reader after they returned to a tab were lost. Now the browser also sends new measurements when the reader leaves a page again. If your privacy notice uses the text from [Page experience](https://docs.hephaestus.build/admin/legal-pages#page-experience), update it to the new text.
+
+  Each account can now send 30 reports a minute. `HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_CAPACITY` and `HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_PERIOD` set the limit. `PAGE_EXPERIENCE_METRICS` is no longer in the Compose example files.
+
+- The small Kubernetes profile bounds PostgreSQL buffers and query memory, and sets server, worker, and migration connection pools separately. A worker surge fits within the 80-connection budget with maintenance and operator reserves. The PostgreSQL process and resident backup sidecar reserve their existing memory limits, so their memory cannot exceed the request. Lower ceilings require separate loaded qualification.
+
+  Optional chart values `postgresql.parameters` and each role's `databasePool` control the settings. The chart rejects invalid pools and an explicit database connection ceiling that cannot hold the configured roles and one worker surge.
+
+  **Operators:** Recalculate the PostgreSQL connection budget for custom worker replicas or pool settings before upgrading. Ensure node memory has room for the full PostgreSQL and backup requests. Set the role pools and `postgresql.parameters.max_connections` together, through stopped database maintenance.
+
+- Your Practice profile now explains itself before your first feedback. It lists what starts a review in your workspace, shows when your first review is waiting or running, and says when an admin approves feedback before it is posted. If no review can run on your work, for example after you chose No AI or when practice reviews are off, the page names the reason and the way to change it. "How to read this page" now starts closed and says who can see your feedback. The page for one piece of work links to all your feedback.
+- If you are a workspace admin and a setting keeps reviews from running on your work, your Practice profile now links to where you change it: the setup summary in the workspace settings, or the review scope for work outside it. Members see the same reason without the link.
+- Members and other people who signed in, and who had not answered the public activity question, are now hidden from public activity pages until they choose to show.
+  This includes members from the provider roster who have not signed in yet.
+  A **Show me on public activity pages** that a member turned on only in User settings counts as no answer.
+  Answers that members gave in a workspace stay as they are.
+
+  After the upgrade, public pages list fewer people and lower totals.
+  Pages that search engines already indexed update when the search engines crawl them again.
+
+  Members now see the question as a notice at the top of their workspace pages instead of a dialog.
+  On **Members** in the workspace administration, the **Public activity** column shows which members have not answered the question of this workspace yet.
+  The Members page does not show which way anyone chose.
+
+- A burst of pushes and edits on the same pull request now gets one review instead of one review for each event. Events on the same work wait in a quiet window that closes 2 minutes after the newest event, and at most 10 minutes after the first. The review covers every practice that the events select. Merged, closed and a submitted pull request review still start at once.
+
+  A push or an edit now reviews only the practices that have no current observation. Opened, ready and a review request still measure every practice that they select. While an earlier review of the same work, queued or running, still includes a practice that the newer events select, they wait until that review ends and are then decided again.
+
+  A practice that needs the checks of a pull request (its checks source is Required or Complete) now waits until they finish. Its review shows why it was not reviewed yet, and the practice runs after the checks finish. A practice that reads the checks as Optional never waits.
+
+  A practice whose evidence settings name a source that Hephaestus cannot read for that kind of work is no longer selected. Before, it was withheld on every review and left the review Partial. Fix its evidence settings, or take the offered catalog update, to review it again.
+
+  The optional settings `ITEM_EVENT_LEDGER_QUIET_WINDOW` (default `2m`) and `ITEM_EVENT_LEDGER_QUIET_WINDOW_CAP` (default `10m`) set the window.
+
+- Rate limits on sign-in and other sensitive endpoints are always shared across server replicas, because PostgreSQL is now their only store.
+  `HEPHAESTUS_AUTH_RATE_LIMIT_POSTGRES_BACKED` (`hephaestus.auth.rate-limit.postgres-backed`) is gone.
+  The limits and their defaults do not change.
+  **Operators:** remove `HEPHAESTUS_AUTH_RATE_LIMIT_POSTGRES_BACKED` from your configuration if you set it. It no longer has any effect.
+
+  The sign-in page takes each provider's type only from the provider an administrator configured, and no longer guesses it from the provider's address.
+
+- The 21 API operations that 0.95.0 deprecated are removed. The web app and the browser extension already use the operations that remain. Stored teams, memberships, reviews, evidence, usage and provider records do not change. The immediate scan and the removal of a workspace member stay available. Old workspace addresses still redirect to the current one.
+
+  **Operators:** before you upgrade, update each API client or script that calls a removed operation. The migration guide names the operation that replaces each one.
+
+- GitHub Discussions and Projects V2 are no longer synchronized. Their stored content and activity entries are removed during upgrade. Pull requests, issues, reviews, and GitLab merge request threads continue to synchronize.
+
+  **Operators:** Back up the database and verify a restore before upgrade. Remove the Discussions and Projects V2 sync settings and GitHub permissions and event subscriptions. Recovery of removed content requires the pre-upgrade backup. See the migration guide.
+
+- Product feedback keeps its submission form and private admin inbox. Surveys, their email invitations and summaries, and their notification preferences are removed. Research participation still controls practice research.
+
+  **Operators:** Export survey results with the existing admin CSV export before upgrading. The upgrade permanently deletes survey definitions, answers, declines, and invitation records. Restore a verified pre-upgrade database backup to recover them. Existing research grants remain valid for the same organization because removing survey answers narrows the existing purpose and adds no new use. New consent decisions record the revised wording.
+
+- GitLab workspace creation is available whenever GitLab is enabled, to the people who may create workspaces. Unused switches and alternative setting names are removed: the GitLab workspace-creation and notification-access feature flags, the `webhook-server` and `worker-node` profile names, the NATS switch (the runtime role decides it), the unused GitHub metadata token, the Slack login-provider aliases, and two unused integration switches. Stored GitLab connections keep working.
+
+  **Operators:** before you upgrade, remove the settings that this release no longer reads, and rename the Slack login settings. The migration guide lists each one.
+
+- A practice review attempt now holds a lease of its own, not a worker's. Model calls, results and status changes of an attempt that lost its lease are refused on every worker, so a requeued or recovered review never runs twice. Workers no longer need a stable worker id for reviews.
+
+  **Operators:** Stop all roles before the 1.0 upgrade. Apply the database migration before you start the new release. A review that was running when you stopped the previous release is recovered and runs again. Restore the verified backup to return to the previous release.
+
+- Old webapp addresses from before 1.0 no longer redirect, so replace any bookmarks with links copied from the current pages.
+
+  - `/landing` no longer works. Use `/`.
+  - `/w/<workspace>/user/<username>` no longer works. To see a person, open them from **Workspace activity**.
+  - `/w/<workspace>/user/<username>/practice-groups/<group>` no longer works. To see a practice group, open it on your **Practice profile**.
+  - Old review addresses under **Practice reviews**, `…/admin/practices/reviews/review/<review>` and its `?focus=` steps, no longer work. Open the review from the **Reviews** tab.
+  - `range=1y` on the **Practice reviews** overview now opens the last 30 days. Use `range=all` for all time.
+
+  If you chose a theme before the theme followed you across workspace addresses, choose it once more. Hephaestus no longer reads that earlier choice.
+
+  The webapp image no longer ships the development mock service worker.
+
+### Patch Changes
+
+- The header and sidebar now give each place one name. The account menu holds only **User settings** and **Sign out**, because **Activity** is already in the sidebar. The sidebar footer link for instance admins, the browser tab titles of its pages, and the admin guide now say **Instance administration**, and the header button for ideas and bug reports now reads **Product feedback**, so it is not confused with the practice feedback that Hephaestus gives on your work.
+- Screen readers now hear exactly one current page in both Administration sidebars, in every sidebar state. When the sidebar is folded to icons, or you close a section, the section that holds that page is announced as current. In instance administration, Overview is no longer announced as current on every other page.
+- Administration screens now describe reviews in plain words instead of internal runtime names.
+  A review's trace shows **Timing**, and a waiting review says it waits for capacity.
+  A repository scan schedule's budget now says that it covers all repositories of each scheduled check.
+  AI usage groups spend **By use** and counts **Uses**. Integration pages show **Sync history** and count **Records**.
+  A workspace's URL name is its **Short name**, and the practice drawer shows the practice's **Identifier**.
+- The count of feedback awaiting approval beside **Practice reviews** now opens the **Overview** tab, where that feedback is listed under **Needs you**. Before, it opened the **Reviews** list, which does not show approvals. The Overview tab also has its own browser tab title.
+- Practice reviews no longer remain running without a queued job if the server stops while accepting the review request.
+- Release SBOMs list the npm packages that Vite identifies in the webapp JavaScript chunks, with their versions and licenses.
+  The release vulnerability and license policy also checks these packages.
+- Buttons no longer flicker when the area that holds them appears. A button that becomes unavailable dims at once instead of fading.
+- Hephaestus now says so when a link points to a workspace that you cannot open. Before, it opened another workspace and gave no message, so you could think it was the linked one.
+- The Helm chart can now send traces to an OpenTelemetry collector inside the cluster. Before, its network policy blocked that path, so `config.tracing.otlpEnabled: true` exported nothing to an in-cluster collector. Set `networkPolicy.traceCollector` to the collector's namespace and pod labels. The server, worker and webhook then reach it on the port of `config.tracing.otlpEndpoint`.
+
+  Run the collector in the cluster. Outside the cluster, only the server and the worker reach a collector, and only on port 443. See [Exporting OpenTelemetry traces](https://docs.hephaestus.build/admin/observability#exporting-opentelemetry-traces).
+
+- A commit rollback now stops if it does not descend from a recorded 1.0 or later release, even when rollback is enabled. The recovery guide states which restore steps must finish before you resume the updater.
+- A short network outage no longer sends you to the setup page after you completed it. You stay in the app, and its pages say what they could not load.
+- The first sign-in page introduces Hephaestus by its full name, and it no longer calls Hephaestus a mentor.
+- Hephaestus can now end an answer right after the observation or feedback that it cites, in the app and in Slack, and it is told not to remark on its own answer. Before, an answer could end with a remark such as "My previous answer already covered this", and an answer that ended at its citation failed.
+- A conversation opens in the same place every time. When its last question and answer fit on screen, it opens at the end. Otherwise it opens at the start of that last answer. Before, the place depended on how fast the browser laid out the messages.
+- A streaming answer in a conversation no longer rewrites itself in the database while Hephaestus writes it. The answer is stored once, when it ends, and the words in between reach the page and Slack without a database write. A long answer now writes about as much to the database's write-ahead log as its own size.
+- In a long conversation, Hephaestus no longer summarises the conversation in the middle of an answer, unless the AI model runs out of room during that answer. The summary now happens before your next question. Before, a summary in the middle of an answer could replace the files that Hephaestus had just read. Hephaestus also says when it has not read a test or the code that a change calls, instead of describing them.
+- When you ask Hephaestus whether your work still waits for a review, it says it in plain words, such as "not approved yet", and gives each date with the record it belongs to. Before, an answer could quote an internal code such as `REVIEW_REQUIRED`, talk about "readiness data" that you never see, or say "last Monday" for one record and "Sunday" for another.
+- After the upgrade to 1.0, no work of the old release is left half done. A practice review that a worker had started goes back to the queue. It spends no retry and keeps the results it already admitted. A reply that Hephaestus was still writing, or that was still waiting, ends with "Hephaestus was updated before it could answer. Ask again." A reply that was being written counts only the usage it measured. A reply that the developer stopped stays stopped.
+- Person erasure no longer fails for three groups of people.
+  Before, the request ended as failed and kept the person's data.
+  - A person with a result that did not meet a practice. Erasure now removes these results with their problems.
+  - An administrator who removed a mark on another person's result. The mark stays, with a fixed removal reason.
+  - An administrator who decided on another person's feedback. The decision stays, with a fixed reason and no note.
+
+  Person erasure now also clears the login of the commit signature on the commits that the person authored or committed.
+  Person exports now include that login.
+
+  The upgrade replaces the database function that keeps feedback decisions append-only, so that it admits this redaction.
+  It needs no operator action.
+
+- Migrated reviews remain available as read-only history. Their display, delivery eligibility, and counts do not change.
+- The browser extension of a pre-release, such as 1.0.0-rc.1, loads in Chrome again: its manifest carries the numeric version Chrome requires and shows the full release name.
+- Keyboard focus stays visible in Windows high contrast and other forced-colors modes on links, table rows and the review trace.
+- GitHub and GitLab commit backfills no longer fail with an error when a repository's address changes shortly after its last sync.
+- The Feedback button in the header no longer grows and tilts when you point at it. With reduced motion turned on, the theme button swaps its icon at once instead of spinning it.
+- The configuration reference now lists Helm values and the application settings that the chart delivers to each runtime role. Set deployment options in the Helm values file and the referenced Kubernetes Secret.
+- The Hephaestus mark no longer floats, wobbles or blinks when a page or the Ask Hephaestus panel opens. It stays still everywhere it appears.
+- Workspace admins find people they hid in one place. Workspace settings now has a **Hidden people** section with **Show again** for each person without a membership whom an admin hid. The hide dialog and the Activity capability point to it, and to **Members** and **Team setup** for members and teams. Team setup now says that it chooses what counts in workspace activity, and the Teams page says that it groups members.
+- The one-host installer now ends with a plain warning and the command that backs up your encryption keys. Hephaestus cannot make these keys again: without them, sign-in stops and the stored provider secrets, AI keys and integration credentials are lost. The command copies the keys from the release Secret into a file that only you can read, and prints no key. The admin docs give the same command for every install, on the Secret custody page.
+- The agent images install their packages under the same release-age and publisher-trust checks as the rest of the build. A package version published with less evidence than its earlier releases stops the build.
+- **API:** item event reasons have three new values: `QUIET_WINDOW`, `REVIEW_IN_PROGRESS` and `ALREADY_CURRENT`. They appear in the item events, item trace, review request and review responses. A client that switches exhaustively over these reasons must handle them.
+- Your first visit downloads less shared app code. Charts and table tools now load only with the pages that use them.
+- A message that says something failed, and a message that offers Undo, now stays until you close it. A message you can close has a close button. Press Alt+T, then Tab, to reach it from the keyboard. A change to several practices at once that fails reports once, in one summary message. A message that only confirms a success still leaves after a few seconds.
+- The database migration Job's log records now name the release that runs, in `service.version`, and the deployment environment, in `service.environment`, like the server, worker and webhook. Before, they named the development version `0.0.0-development` and the environment `local`. A log search by release now finds the migration of that release too.
+- A worker that resumes after a pause now detects an expired model-call lease when it checks a new or retried request. It cancels that request without waiting for the periodic check.
+- Agent connections to model providers no longer trust the eMudhra intermediate certificates that were revoked in October 2026.
+  The agent image and the webapp build run Node.js 24.22.1, a security release.
+- Instance admins can open any active workspace's administration from **Workspaces** with **Open administration**, also when they are not a member. The address of a workspace's administration opens its settings instead of an empty page. The support action in the same row is now called **View as user**, like the page it opens.
+- Each page now has the title of the link that opens it. Browser tabs read **Practice setup**, **GitHub** or **GitLab**, **Instance overview** and **Your AI choice**. The practice update inbox is now **Catalog updates** everywhere: on the Practice setup button, on its own page and in a practice whose catalog update waits, which now links to it. The AI models page links to **Open Review settings**. After you connect an integration outside a workspace, **Open integrations** opens the workspace's integrations, and **Create workspace** goes **Back to app**.
+- See when only part of your feedback reached the work, instead of seeing it marked as fully delivered. Admins find this feedback in a Partly delivered row beside the delivered feedback, and can filter the feedback list to it. Feedback that earlier releases marked as delivered while one of its copies failed or never posted now reads Partly delivered too.
+- Person erasure now removes references that it used to leave behind.
+  It clears the person as the author of practice versions and keeps the practice definitions.
+  Before, the database refused that change.
+  It deletes the rate-limit buckets of the person's account and keeps IP address buckets.
+
+  The upgrade changes the database schema in two ways, with no operator action.
+  It drops the unused author columns of model prices and model grants.
+  It replaces the database function that guards practice versions, so that it accepts a cleared author.
+
+  Person exports now list the practice versions that the person saved and the person's rate-limit buckets.
+  They also list the workspaces that are installed on the person's own GitHub or GitLab account.
+  The login of such an installation stays as the workspace's name.
+
+  The server and each worker now remove their own Git mirrors of a repository that a workspace removes.
+  They also remove all mirrors of a purged workspace.
+  Before, workers kept them.
+  The server kept a workspace's mirror while another workspace monitored the same repository.
+
+- Practice reviews run on Pi 1.4. A review's tool call with malformed arguments is now refused and shown to the model, instead of running with only part of its arguments. More transient provider and gateway errors are retried. Operators need no step: the agent image changes with the release.
+- The bundled PostgreSQL compresses the full-page images in its write-ahead log with lz4, so streamed answers write about a third less log. It costs a little CPU for each full-page image. If you run your own PostgreSQL, set `wal_compression = lz4` (or `zstd`) on it.
+- When your Practice profile cannot load, the page keeps its title and introduction above the message, so you still know which page failed.
+- Model pools support a lowest-priority class for product feedback. Its calls cannot pass queued reviews, compositions, or Heph calls. Each endpoint admits at most one product feedback call, which leaves the conversation reserve free. An active call keeps its grant until its transport closes.
+- Security reports and conduct reports go to security@hephaestus.build, and the API description names that address and the project as its contact instead of a person.
+- Feedback about code is now instructed to describe a quoted block as its text shows it and omit descriptions that contradict it.
+- Repositories in a workspace without an active GitHub or GitLab connection are no longer scheduled for synchronization. Before, they were scheduled with placeholder credentials that could only fail.
+- In Practice reviews, **Request review** asks for the review on one press, as it does on Activity. No confirmation opens first. The button says "Requesting review…" until the answer arrives, also to screen readers. When the workspace's monthly AI budget stops a review, the message now tells you where to see why and how to resume: **AI usage**.
+- Review settings shows Sending feedback in the Feedback mode tab, so one place answers when feedback reaches developers. Members links its Review scope column to the review scope in Review settings.
+- The worker's `sandbox.exited` log record no longer copies text from inside a review sandbox. Before, its `sandbox.stderr.tail` field could quote a tool result, a provider's error message or a review's refusal reason. Such text can hold reviewed code or a credential. The review runtime now writes only coded diagnostic lines of counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`. A practice is named by its position in the review, not by its name. The worker keeps a line only when every part of it is in the runtime's diagnostic vocabulary, also from an older runtime image. It counts every other line in the new field `sandbox.stderr.dropped`.
+
+  If you ship worker logs to a log store, records written before this release can still hold such text. Apply your store's retention to them, or delete them.
+
+- After you delete your account, Hephaestus now opens the sign-in page and shows that the deletion is scheduled. The notice says that you are signed out on all devices and that you can contact your instance operator if the request was a mistake. It stays on the page until you leave. Before, you went to the home page, and no notice stayed on screen. The Danger zone no longer says that the deletion finishes after about 48 hours, because your instance operator sets the waiting period.
+- When you ask Hephaestus a question in a Slack direct message, it now says what it is doing while it works, such as "Reading your pull requests…", and removes that note when the answer arrives. Before, only the 👀 reaction showed until the whole answer was posted, which could take minutes.
+- The Slack integration page now names each permission that the Slack app's token lacks and asks you to reconnect Slack. Before, a Slack app installed before Hephaestus asked for `reactions:write` showed no sign that Hephaestus was working on a question in a direct message, and the page still said **Connected**.
+- A page that takes long to open now shows that it is loading. Before, the previous page stayed on screen under the new address until the new page arrived.
+- Typing inside the URL slug of a new workspace no longer moves the cursor to the end. The field keeps what you type and shows the final slug, in lowercase with hyphens, when you leave it.
+- Labels now match what they open. On a practice, the **Observations** tab says that it lists observations about your work. In User settings, the section links read **Connected accounts** and **Danger zone**, like the sections they lead to, and **Connect an account** on Activity opens Connected accounts. In a workspace's AI models, **Add provider** opens an **Add provider** dialog. A scan that you cancel shows **Canceling scan…** while it stops.
+- Release evidence includes separate source SBOMs in Syft, SPDX and CycloneDX formats for npm dependencies, Gradle dependencies and build plugins, and GitHub Actions.
+  Signed checksums protect these inventories, which label the exact release commit.
+  New release manifests declare that all three files are required.
+- The server package no longer contains source-use contract versions 1.0.0 to 2.0.0. Nothing loaded them since every practice moved to contract 3.0.0, and stored history keeps its version names. No operator action.
+- A streaming answer in Ask Hephaestus fades in paragraph by paragraph instead of word by word, so long answers stay smooth on slower devices. With reduced motion, the words appear at once.
+- Conversations write much less to the database while an answer streams. New conversations, replies and their entries take ids in the order they are made, so the database adds each one to the end of its indexes. Existing ids keep working.
+- The server image no longer ships the unused Jakarta REST API library.
+- A worker that starts while the sandbox quota is full, for example during a rolling update, now waits for room for its isolation probe and stays not ready. It no longer exits and restarts. A probe that runs and fails still stops the worker.
+
 ## 0.95.1
 
 ### Patch Changes

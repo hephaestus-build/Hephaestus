@@ -63,6 +63,246 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
+### v1.0.0-rc.1
+
+#### 🔴 Stop every role before the conversation lease cutover
+
+Stop all roles before the 1.0 upgrade. Apply the database migration before you start the new release.
+Conversation turns now use a lease ID for each attempt. The migration removes the worker ID from these rows.
+Old attempt credentials cannot resume an answer. Restore the verified pre-upgrade database backup before you start the previous release.
+
+#### 🔴 Account for the single-node worker deployment outage
+
+The `small` profile now uses `Recreate` for the worker. The `small-16gib` profile keeps `Recreate`. Each upgrade drains and stops the old worker before starting its replacement. Reviews and conversation turns pause in that interval. Measure the outage against the 99.5% availability budget before promotion.
+
+Both profiles admit 32 resident turns from the declared CPU budget. The conversations quota keeps its existing ten tools-Pod slots, including up to two warm Pods. A turn uses tools only on demand and waits when that quota is full. No Pod request or limit is reduced. An explicit `worker.conversationTurns` still overrides the automatic count.
+
+#### 🔴 Move an existing installation to Helm before upgrading
+
+Follow the [0.95 migration guide](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/compose-to-kubernetes.mdx), then install 0.95.1 before upgrading to 1.0. Keep the matching database backup, broker recovery material, encryption keys and signed release lock together. The [Kubernetes guide](https://docs.hephaestus.build/admin/kubernetes) owns installation, backup and recovery. Compose remains only for local development infrastructure.
+
+#### 🔴 Move release reconciliation to Helm
+
+Before upgrading to 1.0, move Compose installations to the Helm chart on k3s or Kubernetes.
+Follow the [versioned migration guide](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/compose-to-kubernetes.mdx).
+Keep the application version at 0.95.0 during that move.
+
+Install the 0.95.1 reconciler before promoting 1.0, as [pull-based deployment](https://docs.hephaestus.build/admin/pull-based-deployment#follow-a-channel-with-the-chart) describes.
+Pause reconciliation and wait for its active run to finish before replacing the units and tooling link.
+Put site values in `/etc/hephaestus/chart.yaml` and credentials in cluster Secrets.
+Keep the existing database credentials, encryption keys, auth keys and provider credentials.
+Remove `HEPHAESTUS_STACKS` and `HEPHAESTUS_MIN_FREE_GIB` from `/etc/hephaestus/reconcile.env`.
+Set `HEPHAESTUS_WAIT_TIMEOUT=1200`, or keep a larger timeout that your deployment needs.
+The reconciler now uses Helm for every deployment.
+
+For the major upgrade, follow [Database maintenance](https://docs.hephaestus.build/admin/kubernetes#database-maintenance) with all writers stopped.
+If the cutover stops, keep reconciliation paused and follow [Recover a stopped cutover](https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover).
+A rollback across the 1.0 schema boundary requires a database restore, even with `allowRollback`.
+
+#### 🔴 Use the chart release lock
+
+Before upgrading, move Compose deployments to the supported Helm installation on k3s or Kubernetes.
+Update custom release consumers to download `release-vX.Y.Z.chart.json` and `release-vX.Y.Z.chart.json.sigstore.json`.
+The schema-2 lock covers the chart digest, image digests, and source commit.
+The release no longer publishes the schema-1 `release-vX.Y.Z.json` asset or its signature bundle.
+
+Replace the positional environment-output command with `release-image-lock.ts verify <lock.json> <manifest.json> <release>`.
+This command verifies the joint lock against the evidence manifest and writes no environment file.
+The `projection` command is removed.
+
+Current release tools refuse versions before 0.75.0 because the supported identity map no longer contains their namespace and signing repository.
+Use the tooling from those original releases when you must inspect their archived artifacts.
+
+#### 🔴 Complete the 0.95.0 database upgrade first
+
+If your database is older than 0.95.0, upgrade it to 0.95.0 with that release's signed image lock and [versioned upgrade guide](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/upgrade.mdx). Run that release to completion before you start the target release.
+
+The target release checks the final 0.95.0 migration identity before update or synchronization. It refuses an older history. Do not synchronize to bypass this check. Fresh databases need no intermediate release.
+
+#### 🔴 Move custom pgBackRest configuration
+
+If you edited `docker/self-host/pgbackrest.conf`, move those edits to `deploy/postgresql/pgbackrest.conf` before upgrading.
+The backup and restore overlays now mount that file.
+The PITR drill uses the same configuration.
+
+#### 🔴 Plan node drains before removing disruption budgets
+
+The chart now blocks voluntary eviction of bundled PostgreSQL and NATS, the server, and a singleton worker. A node drain waits until you remove those budgets for planned maintenance.
+
+Pause reconciliation, record the replica counts, and back up the database and broker. Cordon the node, scale workers to zero, and wait for their Pods and sandboxes to stop while the database and broker remain available. Then stop the server and receiver, remove only this release's PodDisruptionBudgets, and drain the node. After maintenance, uncordon the node and reapply the verified release with its saved values to restore the replicas and budgets. Verify them before you resume reconciliation.
+
+Follow [Planned node maintenance](https://docs.hephaestus.build/admin/kubernetes#planned-node-maintenance) for the commands. The default worker drain is now thirty minutes, with termination grace of drain plus 120 seconds. The 16 GiB profile keeps its ten-minute drain and Recreate updates. A host shutdown still has only five minutes, so it relies on durable retry for interrupted reviews.
+
+#### 🔴 Remove the obsolete webhook concurrency setting
+
+Remove `hephaestus.integration.consumer.max-ack-pending` from your configuration. The consumer now enforces one outstanding event per workspace and stream. Temporary failures retry without a delivery limit. Set retry base and maximum delays to at least one second. Unknown failures use `hephaestus.integration.consumer.poison.max-redeliver` (default 10). Apply the database migration before starting the server. Dead-letter records contain metadata only; replay reads the original event from NATS before its retention expires. A database rollback is blocked if installation replay audit records exist. Otherwise, it drops the dead-letter table and destroys its pending replay records. Back up the table before a rollback.
+
+#### 🔴 Stop every role before the Kubernetes-only sandbox cutover
+
+Stop the server, worker, and webhook roles. Take a verified database backup. Apply the migration, then start all roles from the same release through the Helm chart. The old runtime must not run on the new schema.
+
+Remove `HEPHAESTUS_SANDBOX_RUNTIME`, all `SANDBOX_DOCKER_*` keys, `DOCKER_GROUP_ID`, `SANDBOX_MEMORY_BYTES`, and `SANDBOX_PIDS_LIMIT`. The Docker sandbox backend and socket access are removed. The chart's Pod-kind resource table sets sandbox memory and storage; the node enforces the process limit.
+
+The migration promotes version 8 review configurations and removes their unused `allowInternet: false` field. It preserves every other frozen field and rejects a version 8 row with a different internet-access value. Older snapshot formats remain unchanged. For rollback, stop every role and restore the database backup taken before the upgrade.
+
+Local development runs the server and worker in the host JVM through `vp run dev`. Each worktree has its own restricted sandbox namespace and quota in the shared k3d cluster. Use `vp run dev:kubernetes` for the one on-demand chart qualification release. See the contributor local-development guide.
+
+#### 🔴 Stop every role before the rc.1 admission cutover
+
+Include this change in the stopped rc.1 upgrade. Stop every runtime role before you run the migration. The migration removes claim-only waiters and closes unused provider grants. It preserves actual calls, their rate debits, and scheduling history. Then start every role from the new release. Older workers must stay stopped because they can recreate the retired reservations.
+
+Keep the verified pre-upgrade backup until the cutover is complete. To return to the older release, stop every role and restore that backup before you start it. Do not roll the data migration back in place.
+
+#### 🔴 Update API clients that read error codes
+
+This release reports every API error in one RFC 9457 problem model.
+A client tells problems apart by the `type` member.
+Stored data does not change.
+
+Each `type` is an absolute address of the form `https://docs.hephaestus.build/contributor/api-error-handling#<slug>`.
+[API error handling](https://docs.hephaestus.build/contributor/api-error-handling#problem-types) lists every slug.
+A problem without its own kind keeps `about:blank`, so its HTTP status is its kind.
+
+Before you upgrade, find each place where your API clients or scripts read an error body.
+Replace each removed member in the first column with the member in the second column.
+
+| Removed | Read instead |
+| --- | --- |
+| `code`, `reason`, `kind` or `reasonCode` that names the kind of error | `type` |
+| `code` on a refused feedback approval | `type` `…#feedback-withheld` and `withholdingReason` |
+| `error` on a failed OAuth callback | `type` `…#oauth-callback-failed` and `callbackError` |
+| The relative `/problems/<slug>` types and `urn:hephaestus:csrf` | The absolute `type` with the same slug, and `…#csrf-token-rejected` |
+| The `{ "error": "…" }` body | The problem body |
+| `ownerUserId` in the request that creates a workspace | Nothing. The signed-in creator owns the workspace. |
+
+The `/internal/**` sandbox endpoints are no longer in the published API description.
+Only the sandboxes call them.
+
+#### 🔴 Convert stored secrets before you start the new server
+
+Back up the database and encryption keys. Stop all database writers, then run the database migration with the existing `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`. Keep the active credential key version. Configure a key only if it is missing. Keep the prior credential key and its version configured if stored credentials still use them.
+
+For chart hosts, use [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades).
+
+The migration encrypts plaintext login-provider and LLM connection secrets. It seals active and inactive JWT private keys without changing their signing identity. It authenticates integration credentials with no key version against the configured active, prior and legacy system keys, then encrypts them with the active credential key and records its version.
+
+If a key is missing or cannot decrypt a stored credential, the conversion stops and rolls back. Keep writers stopped, correct the key configuration, and retry. Start the server only after the migration succeeds. The new server cannot read or write plaintext secrets.
+
+#### 🔴 Recalculate custom PostgreSQL connection budgets
+
+The small profile now has an explicit PostgreSQL connection ceiling and separate role pools.
+Apply the change through the existing [stopped database-maintenance procedure](https://docs.hephaestus.build/admin/kubernetes#database-maintenance).
+Do not lower the database ceiling while older, larger pools are still running.
+For custom worker replica counts or pool sizes, set `postgresql.parameters.max_connections` and each role's `databasePool` values together before upgrading.
+The chart rejects a ceiling that cannot hold the configured worker overlap and maintenance reserves.
+See [Database connections](https://docs.hephaestus.build/admin/sizing#database-connections) for the calculation.
+
+Check node capacity against the full `postgresql.resources` and `postgresql.backup.resources` memory requests before upgrading.
+Count the resident backup sidecar and each backup or stanza Job separately.
+Existing memory limits remain in place until representative load qualifies lower ceilings.
+
+#### 🔴 Remove the auth rate-limit store setting
+
+Rate limits on sign-in and other sensitive endpoints now always use PostgreSQL, so all server replicas share them.
+The limits and their defaults do not change.
+
+| Removed | Action |
+| --- | --- |
+| `HEPHAESTUS_AUTH_RATE_LIMIT_POSTGRES_BACKED` (`hephaestus.auth.rate-limit.postgres-backed`) | Remove it from your configuration. It no longer has any effect. |
+
+#### 🔴 Stop every role for the upgrade to 1.0
+
+Upgrade to 0.95.x on the Helm chart first. Follow [Upgrade from 0.x to 1.0](https://docs.hephaestus.build/admin/upgrade-to-1-0). Back up PostgreSQL and JetStream, verify the restore, and export each survey's results before migration.
+
+Apply ADR 0070’s cutover order: stop the server and workers and wait until their sandbox Pods and Jobs are gone. Keep the database-free 0.95.x webhook receiver accepting into JetStream during this drain. The 1.0 chart then replaces that receiver and runs the migration with workers stopped. Start the new server alone, then restore the recorded replica counts from the selected chart. The webhook receiver exception applies only to this cutover’s drain; no old database writer runs during or after migration. Do not run old application writers on the new schema or use an automatic Helm rollback after migration.
+
+Claimed reviews resume without spending a retry and keep their admitted and staged results. A conversation turn in progress ends with “Ask again” and is not retried silently. Recovery after a failed migration requires the verified paired backup and the previous release. Preserve encryption keys and their versions, and apply the individual setting and data steps in this release guide before starting the new roles.
+
+#### 🔴 Update API clients that call the removed operations
+
+This release removes the 21 API operations that 0.95.0 deprecated.
+A request to a removed operation now fails.
+Stored data does not change.
+
+Before you upgrade, find each removed operation in your API clients and scripts.
+Replace it with the operation in the second column.
+Paths are relative to the API base URL.
+
+| Removed operation | Use instead |
+| --- | --- |
+| `renameSlug` (`PATCH /workspaces/{workspaceSlug}/slug`) | None. Old workspace addresses keep redirecting to the current one. |
+| `getTeamSettings`, `getLabelFilters`, `getRepositorySettings` | `getAllTeams` (`GET /workspaces/{workspaceSlug}/team`) |
+| `updateTeamSettings` | `updateTeamVisibility` (`POST /workspaces/{workspaceSlug}/team/{id}/visibility`) |
+| `addLabelFilter` | `addLabelToTeam` (`POST /workspaces/{workspaceSlug}/teams/{teamId}/labels/{repositoryId}/{label}`) |
+| `removeLabelFilter` | `removeLabelFromTeam` (`DELETE /workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}`) |
+| `updateRepositorySettings` | `updateRepositoryVisibility` (`POST /workspaces/{workspaceSlug}/team/{teamId}/repositories/{repositoryId}/visibility`) |
+| `getMembership` | `listMemberships` (`GET /workspaces/{workspaceSlug}/members`), or `getOwnMembership` (`GET /workspaces/{workspaceSlug}/members/me`) for your own membership |
+| `reorderPractices` | None |
+| `getReviewBatch` | `listReviewBatches` (`GET /workspaces/{workspaceSlug}/practices/review-batches`) |
+| `getReviewEvidenceOutcomes` | None |
+| `getReviewUsage` | The `usage` field of `getReview` (`GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}`) |
+| `listReviewPracticeScripts` | The `practices[].script` field of `getReview` |
+| `getReviewItem` | The `item` field of `getItemFacts` (`GET /workspaces/{workspaceSlug}/practices/items/{itemId}/facts`) or `getItemTrace` |
+| `listItemEvents` | The `events` field of `getItemTrace` (`GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace`) |
+| `getOutlineCollection` | `listOutlineCollections` (`GET /workspaces/{workspaceSlug}/outline/collections`) |
+| `adminGetLlmConnection`, `adminGetLlmModel` | `adminListLlmConnections` (`GET /admin/llm/connections`), `adminListLlmModels` (`GET /admin/llm/models`) |
+| `workspaceGetLlmConnection`, `workspaceGetLlmModel` | `workspaceListLlmConnections` (`GET /workspaces/{workspaceSlug}/llm/connections`), `workspaceListLlmModels` (`GET /workspaces/{workspaceSlug}/llm/models`) |
+
+#### 🔴 GitHub Discussions and Projects V2 are removed
+
+Hephaestus no longer synchronizes GitHub Discussions or Projects V2.
+The upgrade drops their nine mirror tables and removes their activity entries.
+It also removes the Discussions sync cursor and timestamps and the repository capability flag.
+GitLab merge request threads and GitLab projects (repositories) remain supported.
+
+Before upgrade:
+
+1. Stop all Hephaestus runtime roles.
+2. Back up PostgreSQL and verify a restore. Follow [Backup and restore](https://docs.hephaestus.build/admin/backup-restore).
+3. Remove `HEPHAESTUS_SYNC_DISCUSSIONS_ENABLED`, `HEPHAESTUS_SYNC_PROJECTS_ENABLED`, `hephaestus.sync.discussions`, `hephaestus.sync.projects`, and `hephaestus.sync.filters.allowed-projects` from deployment configuration.
+4. Remove the GitHub `discussions` and `organization_projects` permissions, the classic token scope `read:project`, and the `discussion`, `discussion_comment`, `projects_v2`, `projects_v2_item`, and `projects_v2_status_update` event subscriptions. Remove organization webhooks used only for those events.
+5. Upgrade all runtime roles together, then start them.
+
+The migration does not copy or retain the removed content.
+A schema rollback cannot recreate it. To recover it, stop all roles, restore the verified pre-upgrade database backup, and start the previous release against that database.
+
+#### 🔴 Stop every role and export survey results before upgrading
+
+Before you upgrade, open **Instance administration → Product feedback → Surveys** in the current release. Open each survey’s results and download its CSV export. Store the exports under your retention and access rules for personal data.
+
+Stop all roles before the upgrade. The database migration permanently deletes survey definitions, answers, declines, invitation records, survey notification subscriptions, and pending survey events. There is no in-place rollback. Recovery requires a verified pre-upgrade database backup and the previous release.
+
+Product feedback submissions and the private admin inbox remain available. Research consent and practice research remain available. Existing research grants and refusals remain valid for the same organization. Removing survey answers narrows the existing scope and adds no new purpose, so this upgrade requires no renewed consent. New consent decisions record the revised wording.
+
+Pre-upgrade backups and CSV exports still contain survey answers. Keep them under your retention and access rules until they expire.
+
+#### 🔴 Remove settings that 1.0 no longer reads
+
+This release removes switches and alternative names for settings.
+Before you upgrade, make these changes in your Helm values and environment.
+
+| Remove or change | Action |
+| --- | --- |
+| Helm value `config.gitlab.workspaceCreation` and env `GITLAB_WORKSPACE_CREATION` | Remove them. GitLab workspace creation is available whenever GitLab is enabled (`GITLAB_ENABLED`). The chart refuses the old Helm value. |
+| `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_CLIENT_SECRET` | Set `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID` and `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET` instead. The Slack login provider reads only these names. |
+| `GH_AUTH_TOKEN` as `hephaestus.integration.github.meta.auth-token` | Nothing reads that key. `GH_AUTH_TOKEN` still sets `hephaestus.contributors.github.auth-token`. |
+| `SPRING_PROFILES_ACTIVE=webhook-server` or `worker-node` | Use `prod,webhook` or `prod,worker`. The chart already does. The old names now activate nothing, so the process would start without the production profile. |
+| `hephaestus.integration.github.enabled`, `hephaestus.mentor.slack.projector.enabled` | Remove them. Nothing reads them. |
+
+`WEBHOOK_EXTERNAL_URL`, `HEPHAESTUS_WEBAPP_URL` and `GITLAB_DEFAULT_SERVER_URL` still work.
+When they are unset, they take the application URL or the GitLab login URL from the setting itself, not from a second environment variable.
+
+The runtime role now decides whether a process uses NATS: the server and webhook roles do, and the worker role does not.
+Remove `NATS_ENABLED` and `HEPHAESTUS_SYNC_NATS_ENABLED`.
+The chart now passes the broker address to the webhook role as `NATS_SERVER`, like the server role.
+
+#### 🔴 Stop every role before the review lease cutover
+
+Stop all roles before the 1.0 upgrade. Apply the database migration before you start the new release.
+Practice review attempts now use a lease ID for each attempt. The migration removes the worker ID from these rows.
+A review that was running when you stopped the previous release gets a lease that no worker holds. When that lease expires, the review runs again.
+Restore the verified pre-upgrade database backup before you start the previous release.
+
 ### v0.95.1
 
 #### 🔴 Update the installed reconciler before the 1.0 chart upgrade
@@ -2693,7 +2933,7 @@ HEPHAESTUS_MENTOR_AGENT_PULL_POLICY=IF_NOT_PRESENT
 |-----------|-----|-------|
 | Database cutover | Follow the target release's migration entry | Complete any required procedure before starting the new runtime roles |
 | Environment variables | Check release notes | New config may be required |
-| Docker compose | Check `docker/` files | Image versions may change |
+| Helm chart | Check the chart values of the target release | Values may be added or renamed |
 
 ---
 
@@ -2717,18 +2957,17 @@ and review the release notes for endpoint changes.
 ### New Required Environment Variable
 
 1. Check the release notes and the [Production Setup](https://docs.hephaestus.build/admin/production-setup) guide for new variables
-2. Add them to your deployment's environment (see the `docker/compose.app.yaml` env block)
-3. Restart services
+2. Set the corresponding chart values and protected Secret keys
+3. Run `helm upgrade` with the changed values, then restart the Pods that read a changed Secret key
 
 ### Database Schema Changed
 
 First follow the [database migration instructions](https://docs.hephaestus.build/admin/compatibility-policy#database-migrations).
-For a migration run at startup, a failure prevents the application context from starting.
-The container exits, and the orchestrator may restart it.
-Capture the first failed startup log before retrying:
+The chart's migration Job must complete before application roles start.
+Save its first failure log before retrying:
 
 ```bash
-docker compose logs application-server | grep -i -m5 liquibase
+kubectl -n hephaestus logs job/<migration-job> -c migration > migration.log
 ```
 
 Liquibase normally runs each changeset in a transaction. A changeset with `runInTransaction="false"`
@@ -2737,7 +2976,7 @@ Do not assume that a failed upgrade rolled back or that the previous application
 
 | Symptom in the log | What it means | What to do |
 | --- | --- | --- |
-| `Could not acquire change log lock` | A migration is active, or an interrupted process left its lock. | Follow [stale lock recovery](https://docs.hephaestus.build/admin/liquibase-baseline-runbook#stale-lock-recovery) with the target release image. Never clear an active migration process's lock. |
+| `Could not acquire change log lock` | A migration is active, or an interrupted process left its lock. | Follow [stale lock recovery](https://docs.hephaestus.build/admin/runtime-roles#one-migration-at-a-time) with the target release image. Never clear an active migration process's lock. |
 | `Validation Failed: … checksums do not match` | A changelog file that already ran was edited. Released changelogs are immutable for exactly this reason. | Restore the file to its released content and fix forward with a *new* changelog. Do not `clearCheckSums` on production to make the error go away — it tells Liquibase to trust a file whose applied effect you no longer know. |
 | A constraint or `NOT NULL` addition fails | Existing rows violate the new constraint. Migration tests do not cover every installed dataset. | Report the failing changeset and follow the release's recovery instructions. Do not bypass the constraint or mark a failed changeset as applied. |
 | `permission denied` / `must be owner of` | The migration user lacks the required rights on an existing object. | Have the database owner restore the required ownership or permissions before retrying. |
