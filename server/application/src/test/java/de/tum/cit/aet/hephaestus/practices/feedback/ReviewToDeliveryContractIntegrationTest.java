@@ -817,8 +817,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var own = claimedReview(FeedbackMode.AUTOMATIC);
                 var other = claimedReview(FeedbackMode.AUTOMATIC)) {
             assertThat(own.workspaceId()).isNotEqualTo(other.workspaceId());
-            var ownResults = admission.admit(own.identity(), request(own));
-            var foreignResults = admission.admit(other.identity(), request(other));
+            var ownResults = admitStaged(own.identity(), request(own));
+            var foreignResults = admitStaged(other.identity(), request(other));
             var foreign = foreignResults.admitted().getFirst();
             var context = admission.publicFeedbackHistory(own.identity()).publicationContext();
             var forged = composition(own, foreignResults, SUMMARY, context);
