@@ -191,3 +191,35 @@ void test("local files retain the existing release and migration refusals", asyn
 	);
 	await verifyLocalChangesets(root);
 });
+
+const migrationGuide = (candidate: string) =>
+	`# Migration guide\n\n### Next release\n\n### v1.0.0-rc.1\n\n${candidate}### v0.95.1\n\n#### 🔴 Older entry\n\nDone.\n`;
+
+void test("a changeset consumed in pre mode needs its entry in the candidate's migration section", async (t) => {
+	const root = await mkdtemp(path.join(tmpdir(), "consumed-prerelease-"));
+	t.after(async () => rm(root, { recursive: true, force: true }));
+	await mkdir(path.join(root, ".changeset", "pre"), { recursive: true });
+	await writeFile(path.join(root, "package.json"), JSON.stringify({ version: "1.0.0-rc.1" }));
+	await writeFile(
+		path.join(root, ".changeset", "pre", "lease.md"),
+		'---\n"hephaestus": minor\n---\n\nAttempts use leases.\n\n**Operators:** stop every role first.\n',
+	);
+	await writeFile(
+		path.join(root, "MIGRATION.md"),
+		migrationGuide("#### 🔴 Stop every role before the lease cutover\n\nStop all roles.\n\n"),
+	);
+	await verifyLocalChangesets(root);
+	// The 0.95.1 entry belongs to another release and does not count for the candidate.
+	await writeFile(path.join(root, "MIGRATION.md"), migrationGuide("Nothing to do.\n\n"));
+	await assert.rejects(
+		verifyLocalChangesets(root),
+		/\.changeset\/pre\/lease\.md: \*\*Operators:\*\* was consumed in pre mode, but MIGRATION\.md's 1\.0\.0 candidate sections hold 0 #### 🔴 entries for 1/u,
+	);
+	// A pending fragment still satisfies the rule, as on main before the Version PR.
+	await mkdir(path.join(root, ".migration"));
+	await writeFile(
+		path.join(root, ".migration", "lease.md"),
+		"#### 🔴 Stop every role before the lease cutover\n\nStop all roles.\n",
+	);
+	await verifyLocalChangesets(root);
+});

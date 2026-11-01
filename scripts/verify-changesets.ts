@@ -5,7 +5,9 @@ import { readChangesets } from "@changesets/read";
 
 import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { migrationGuideSections } from "./lib/migration-guide.ts";
 import { CLAUDE_SESSION_PATTERN } from "./lib/model-attribution.ts";
+import { parseVersion } from "./lib/release-version.ts";
 
 const changesetEntries = (status: unknown): Map<string, Record<string, unknown>> => {
 	const entries = asArray(
@@ -117,19 +119,76 @@ async function verifyParsedChangesets(
 	const root = asRecord(await readJsonFile(path.join(rootDir, "package.json")), "package.json");
 	verifyChangesets(status, files, asString(root.version, "package.json version").startsWith("0."));
 	const entries = changesetEntries(status);
+	const consumed: string[] = [];
 	for (const file of files) {
 		const entry = entries.get(changesetId(file));
 		if (entry) {
 			const summary = asString(entry.summary, `${file} summary`);
 			const fragmentFile = path.join(rootDir, ".migration", path.basename(file));
-			verifyChangesetMigration(
-				file,
-				summary,
-				existsSync(fragmentFile) ? readFileSync(fragmentFile, "utf8") : undefined,
-			);
+			const fragment = existsSync(fragmentFile) ? readFileSync(fragmentFile, "utf8") : undefined;
+			// In pre mode, the Version PR keeps each consumed changeset under .changeset/pre/ and moves its
+			// fragment into the candidate's MIGRATION.md section, so that section must hold its entry.
+			if (
+				isConsumedPrerelease(file) &&
+				fragment === undefined &&
+				summary.includes("**Operators:**")
+			) {
+				consumed.push(file);
+				continue;
+			}
+			verifyChangesetMigration(file, summary, fragment);
 		}
 	}
+	if (consumed.length > 0) {
+		verifyConsumedMigrationEntries(
+			consumed,
+			asString(root.version, "package.json version"),
+			readFileSync(path.join(rootDir, "MIGRATION.md"), "utf8"),
+		);
+	}
 }
+
+const isConsumedPrerelease = (file: string): boolean => changesetId(file).startsWith("pre/");
+
+/**
+ * Each fragment holds exactly one `#### 🔴` entry, and `release:version` moves each one into the
+ * `### v<version>` section of its candidate. MIGRATION.md keeps no slug, so this counts: the candidate
+ * sections of the current prerelease line must hold an entry for every consumed operator changeset.
+ */
+export const verifyConsumedMigrationEntries = (
+	files: readonly string[],
+	version: string,
+	migration: string,
+): void => {
+	const current = parseVersion(version);
+	if (current?.rc === undefined) {
+		throw new Error(
+			`${files[0] ?? ".changeset/pre"}: a consumed prerelease changeset needs a prerelease package version, not ${version}`,
+		);
+	}
+	const base = `${current.major}.${current.minor}.${current.patch}`;
+	const entries = migrationGuideSections(migration)
+		.filter((section) => {
+			const candidate = section.heading.startsWith("### v")
+				? parseVersion(section.heading.slice(5))
+				: undefined;
+			return (
+				candidate?.rc !== undefined &&
+				`${candidate.major}.${candidate.minor}.${candidate.patch}` === base
+			);
+		})
+		.flatMap((section) =>
+			section.content
+				.replaceAll(/^```[^\n]*\n[\s\S]*?^```[^\S\n]*$/gmu, "")
+				.split("\n")
+				.filter((line) => line.startsWith("#### 🔴 ")),
+		);
+	if (entries.length < files.length) {
+		throw new Error(
+			`${files.join(", ")}: **Operators:** was consumed in pre mode, but MIGRATION.md's ${base} candidate sections hold ${entries.length} #### 🔴 entries for ${files.length} consumed operator changesets`,
+		);
+	}
+};
 
 export async function verifyLocalChangesets(rootDir: string): Promise<void> {
 	const changesets = await readChangesets(rootDir);
