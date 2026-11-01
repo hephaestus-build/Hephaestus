@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -187,7 +188,7 @@ public class MentorEntry implements Persistable<UUID> {
     private boolean fresh;
 
     MentorEntry(MentorConversation conversation, long seq, MentorEntryDraft draft, Instant now) {
-        this.id = MentorIds.next();
+        this.id = TimeOrderedIds.next();
         this.workspaceId = conversation.getWorkspaceId();
         this.conversationId = conversation.getId();
         this.seq = seq;

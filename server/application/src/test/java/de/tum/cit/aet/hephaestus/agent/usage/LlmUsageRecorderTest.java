@@ -14,6 +14,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -91,6 +93,27 @@ class LlmUsageRecorderTest extends BaseUnitTest {
         assertThat(captured(event).costUsd()).isEqualByComparingTo("7.500000");
         assertThat(captured(event).appliedWorkspaceModelId()).isEqualTo(42L);
         assertThat(captured(event).appliedPer1mInputUsd()).isEqualTo(new BigDecimal("1"));
+    }
+
+    @Test
+    void shouldGiveUsageRecordsTimeOrderedIdsInTheOrderTheyAreRecorded() {
+        List<UUID> ids = new ArrayList<>();
+        LlmUsageEventRepository repository = mock(LlmUsageEventRepository.class, invocation -> {
+            if (invocation.getMethod().getName().equals("insertIfAbsent")) {
+                ids.add(((LlmUsageInsert) invocation.getArgument(0)).id());
+                return 1;
+            }
+            return Answers.RETURNS_DEFAULTS.answer(invocation);
+        });
+        LlmUsageRecorder recorder = recorder(repository);
+
+        for (int attempt = 1; attempt <= 20; attempt++) {
+            recorder.record(7L, sample(priced(), attempt));
+        }
+
+        assertThat(ids).hasSize(20).allSatisfy(id -> assertThat(id.version()).isEqualTo(7));
+        // The canonical form orders as the bytes do, which is how the database orders the id index.
+        assertThat(ids.stream().map(UUID::toString).toList()).isSorted().doesNotHaveDuplicates();
     }
 
     /**

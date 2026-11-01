@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793570766000-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <indexExists tableName="mentor_turn" indexName="idx_mentor_turn_leased_until"/>
+        </preConditions>
+        <comment>No index covers the lease end of a conversation turn, so a lease renewal rewrites the row in place (a HOT update) and adds no entry to the turn's indexes. The lease reaper finds its turns by status.</comment>
+        <dropIndex tableName="mentor_turn" indexName="idx_mentor_turn_leased_until"/>
+        <rollback>
+            <sql>CREATE INDEX idx_mentor_turn_leased_until ON mentor_turn (leased_until) WHERE leased_until IS NOT NULL</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

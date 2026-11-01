@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -99,7 +100,7 @@ public class MentorConversation implements Persistable<UUID> {
             @Nullable UUID parentConversationId,
             @Nullable UUID parentEntryId,
             Instant now) {
-        this.id = MentorIds.next();
+        this.id = TimeOrderedIds.next();
         this.workspaceId = workspaceId;
         this.accountId = accountId;
         this.parentConversationId = parentConversationId;

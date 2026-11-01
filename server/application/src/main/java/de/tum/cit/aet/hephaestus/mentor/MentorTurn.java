@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.core.TimeOrderedIds;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -219,7 +220,7 @@ public class MentorTurn implements Persistable<UUID> {
             Surface surface,
             @Nullable String pageContext,
             Instant now) {
-        this.id = MentorIds.next();
+        this.id = TimeOrderedIds.next();
         this.workspaceId = conversation.getWorkspaceId();
         this.conversationId = conversation.getId();
         this.requestId = requestId;

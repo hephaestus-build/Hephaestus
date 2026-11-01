@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793573592092-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <not>
+                <indexExists tableName="mentor_turn" indexName="idx_mentor_turn_lease"/>
+            </not>
+        </preConditions>
+        <comment>The lease reaper and the held-slot count find leased turns by their lease id, so they read only the leased rows, not every stopped turn. The lease id changes only when an attempt starts or ends, so a lease renewal stays a HOT update. A stopped turn that 0.95 left leased gets a lease id; no host holds it.</comment>
+        <sql>UPDATE mentor_turn SET lease_id = gen_random_uuid() WHERE lease_id IS NULL AND leased_until IS NOT NULL AND status IN ('RUNNING', 'STOPPED')</sql>
+        <sql>ALTER TABLE mentor_turn ADD CONSTRAINT ck_mentor_turn_leased_until CHECK (leased_until IS NULL OR lease_id IS NOT NULL)</sql>
+        <sql>CREATE INDEX idx_mentor_turn_lease ON mentor_turn (lease_id) WHERE lease_id IS NOT NULL</sql>
+        <rollback>
+            <sql>DROP INDEX idx_mentor_turn_lease</sql>
+            <sql>ALTER TABLE mentor_turn DROP CONSTRAINT ck_mentor_turn_leased_until</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
