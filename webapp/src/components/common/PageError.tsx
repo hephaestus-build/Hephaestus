@@ -3,13 +3,14 @@ import { AlertCircleIcon, LockIcon, SearchXIcon } from "lucide-react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { copyToClipboard } from "@/lib/clipboard";
 import { PROBLEM_COPY } from "@/lib/problem-detail";
 
 /** Why the page cannot be shown. Only a failed load offers a retry, and only where one can help. */
 export type PageErrorProps =
 	| { cause: "not-found" }
 	| { cause: "no-access" }
-	| { cause: "failed"; onRetry?: () => void };
+	| { cause: "failed"; onRetry?: () => void; reference?: string };
 
 const NOT_FOUND = PROBLEM_COPY["not-found"];
 const NO_ACCESS = PROBLEM_COPY["no-access"];
@@ -52,17 +53,35 @@ function copyOf(props: PageErrorProps) {
  */
 export function PageError(props: PageErrorProps) {
 	const onRetry = props.cause === "failed" ? props.onRetry : undefined;
+	const reference = props.cause === "failed" ? props.reference : undefined;
 	return (
 		<EmptyState
 			variant="plain"
 			headingLevel={1}
 			{...copyOf(props)}
 			action={
-				<div className="flex flex-wrap justify-center gap-2">
-					{onRetry && <Button onClick={onRetry}>Retry</Button>}
-					<Link to="/" className={buttonVariants({ variant: onRetry ? "outline" : "default" })}>
-						Go to the home page
-					</Link>
+				<div className="flex flex-col items-center gap-3">
+					<div className="flex flex-wrap justify-center gap-2">
+						{onRetry && <Button onClick={onRetry}>Retry</Button>}
+						<Link to="/" className={buttonVariants({ variant: onRetry ? "outline" : "default" })}>
+							Go to the home page
+						</Link>
+					</div>
+					{reference !== undefined && (
+						// The first eight characters are enough to read out; the copy is the whole reference.
+						<p className="flex items-center gap-1 text-sm text-muted-foreground">
+							Reference <span className="font-mono">{reference.slice(0, 8)}</span>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									copyToClipboard(reference, "Reference copied");
+								}}
+							>
+								Copy reference
+							</Button>
+						</p>
+					)}
 				</div>
 			}
 		/>

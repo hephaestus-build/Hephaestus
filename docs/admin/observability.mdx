@@ -570,14 +570,20 @@ Join the request and subsequent lifecycle by `job.id`. Do not assume every log f
 request's trace ID. Sandbox proxy calls propagate the execution trace. The
 [trace export contract](#exporting-opentelemetry-traces) describes the separate submission attribute.
 
-No collector or log aggregator is necessary.
-From the deployment namespace:
+Every problem response also carries the ID in its body as `requestId`.
+The web app's error page shows the first eight characters as **Reference**, and its **Copy reference** button copies the whole ID.
+A reader who reports a failure can quote either one.
 
-1. Take the ID a user reports, or the `X-Request-Id` from a failed response.
-2. Search the container logs:
+No collector or log aggregator is necessary.
+On Kubernetes:
+
+1. Take the reference that a reader reports, or the `X-Request-Id` from a failed response.
+2. Search the logs of the release's Pods. Eight characters match the start of the ID.
+   Without `--tail=-1`, a selector returns only the last 10 lines of each container:
 
    ```bash
-   kubectl -n hephaestus logs -l app.kubernetes.io/instance=hephaestus --all-containers --prefix --tail=-1 | grep '"traceId":"<the-id>"'
+   kubectl logs --namespace <namespace> --selector app.kubernetes.io/name=hephaestus,app.kubernetes.io/instance=<release> \
+     --all-containers --prefix --since=24h --tail=-1 | grep '"traceId":"<the-reference>'
    ```
 
    That command finds records in the matching trace scope.

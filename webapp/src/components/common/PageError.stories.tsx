@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
+import { toast } from "@/lib/toast";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { PageError } from "./PageError";
@@ -14,6 +15,12 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
 	args: { cause: "failed", onRetry: fn() },
+	// The preview's Toaster and the page's navigator outlive a story: a message left open or a stubbed
+	// clipboard would reach the next story in the same page.
+	beforeEach: () => () => {
+		toast.dismiss();
+		Reflect.deleteProperty(navigator, "clipboard");
+	},
 } satisfies Meta<typeof PageError>;
 
 export default meta;
@@ -32,6 +39,49 @@ export const Default: Story = {
 			"href",
 			"/",
 		);
+	},
+};
+
+const REFERENCE = "4bf92f3577b34da6a3ce929d0e0e4736";
+
+/** Answers each of the page's clipboard writes with `written`, and returns the spy that records them. */
+function clipboardAnswering(written: () => Promise<void>) {
+	const writeText = fn(written);
+	Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+	return writeText;
+}
+
+/**
+ * A failed request names its reference, the server's id for it. The reader reads out the first
+ * eight characters, or copies the whole reference for the operator.
+ */
+export const WithReference: Story = {
+	args: { cause: "failed", onRetry: fn(), reference: REFERENCE },
+	play: async ({ canvas, userEvent }) => {
+		const writeText = clipboardAnswering(async () => undefined);
+		await expect(canvas.getByText("4bf92f35")).toBeVisible();
+
+		await userEvent.click(canvas.getByRole("button", { name: "Copy reference" }));
+
+		await expect(writeText).toHaveBeenCalledWith(REFERENCE);
+		await expect(await within(document.body).findByText("Reference copied")).toBeVisible();
+	},
+};
+
+/** A refused clipboard write tells the reader, who can still read the reference out. */
+export const ReferenceNotCopied: Story = {
+	args: { cause: "failed", reference: REFERENCE },
+	play: async ({ canvas, userEvent }) => {
+		clipboardAnswering(async () => {
+			throw new DOMException("Denied", "NotAllowedError");
+		});
+
+		await userEvent.click(canvas.getByRole("button", { name: "Copy reference" }));
+
+		await expect(
+			await within(document.body).findByText("We could not copy that to the clipboard. Try again."),
+		).toBeVisible();
+		await expect(canvas.getByText("4bf92f35")).toBeVisible();
 	},
 };
 
@@ -83,8 +133,9 @@ export const NoAccess: Story = {
 
 export const Dark: Story = { globals: { theme: "dark" } };
 
-/** Retry and the way home wrap rather than push the page sideways. */
+/** Retry, the way home and the reference wrap rather than push the page sideways. */
 export const OnAPhone: Story = {
+	args: { cause: "failed", onRetry: fn(), reference: REFERENCE },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: expectNoPageOverflow,
 };

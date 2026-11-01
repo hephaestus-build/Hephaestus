@@ -12,7 +12,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
-import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
+import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceOriginPolicy;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -307,7 +307,8 @@ public class SecurityConfig {
                                 var problem = ProblemDetail.forStatus(403);
                                 problem.setType(ProblemType.CSRF_TOKEN_REJECTED.uri());
                                 problem.setTitle("Invalid CSRF token");
-                                objectMapper.writeValue(response.getOutputStream(), problem);
+                                objectMapper.writeValue(
+                                        response.getOutputStream(), RequestReference.name(problem, response));
                             });
                         }
                         return filter;
@@ -524,7 +525,7 @@ public class SecurityConfig {
                 // Every endpoint that hands out an ETag reads it back from If-Match (EntityTagPrecondition); a
                 // header not listed here never leaves the browser when the SPA runs on another origin, as in dev.
                 HttpHeaders.IF_MATCH));
-        configuration.setExposedHeaders(List.of(RequestCorrelationFilter.HEADER_NAME));
+        configuration.setExposedHeaders(List.of(RequestReference.HEADER));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

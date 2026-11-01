@@ -41,6 +41,17 @@ export function isProblemType(err: unknown, slug: ProblemTypeSlug): boolean {
 	return isRecord(err) && err.type === problemType(slug);
 }
 
+const requestIdSchema = z.object({ requestId: z.string().regex(/^[0-9a-f]{32}$/u) });
+
+/**
+ * The server's name for the request that failed, which every problem body carries as `requestId`.
+ * A reader quotes it, and it finds every log record of that request.
+ */
+export function requestIdOf(err: unknown): string | undefined {
+	const parsed = requestIdSchema.safeParse(err);
+	return parsed.success ? parsed.data.requestId : undefined;
+}
+
 /**
  * The refusal that asks for a fresh sign-in, as the server states it in the RFC 9457 body. The
  * thrown value is untyped, so it is validated rather than read: a problem of another type is not a

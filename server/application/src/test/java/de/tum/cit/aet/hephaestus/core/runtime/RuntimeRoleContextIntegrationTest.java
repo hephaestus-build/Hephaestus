@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionPurge
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackWebhookSignatureVerifier;
+import de.tum.cit.aet.hephaestus.observability.ProblemRequestIdAdvice;
 import de.tum.cit.aet.hephaestus.practices.result.ResultAdmissionPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
@@ -229,6 +230,8 @@ class RuntimeRoleContextIntegrationTest {
             }
             if (role == RuntimeRole.WEBHOOK) {
                 assertThat(application).hasSingleBean(JetStreamPublisher.class);
+                // A webhook problem names its request, as the server's do.
+                assertThat(application).hasSingleBean(ProblemRequestIdAdvice.class);
                 assertThat(application).doesNotHaveBean(ResultAdmissionPolicy.class);
                 assertThat(application).doesNotHaveBean(ResultMarkService.class);
                 assertThat(application).doesNotHaveBean(CitedSourceAccess.class);
