@@ -510,6 +510,7 @@ jobs:
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
               - 'scripts/prepare-kubernetes-runner.ts'
+              - 'scripts/lib/runner-disk.ts'
               - 'server/application/build.gradle.kts'
               - 'server/application/src/test/java/**/kubernetes/KubernetesSandboxLiveTest.java'
               - 'server/application/src/test/java/**/kubernetes/KubernetesLiveSuite.java'
@@ -597,6 +598,8 @@ jobs:
             docker-config:
               - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
+              - 'scripts/prepare-image-scan-runner.ts'
+              - 'scripts/lib/runner-disk.ts'
               - 'docker/docker-bake.hcl'
             pmd-canary:
               - 'scripts/check-pmd-canary.ts'
