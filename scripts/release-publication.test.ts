@@ -49,8 +49,9 @@ const upstream = ["agent-pi", "application-server", "nats", "postgres"].map((nam
 /** The release image inventory of the fixture checkout and its evidence. */
 const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
 const jointLock = `release-${release}.chart.json`;
-/** The k3s platform assets, in the job's workspace as release.yml collects them. */
-const platformAssets = ["k3s-platform.yaml", "k3s-values.yaml"];
+/** The k3s bundle, in the job's workspace as release.yml builds it: the only k3s asset of a release. */
+const k3sBundleFor = (tag: string) => `hephaestus-k3s-${tag.slice(1)}.tar.gz`;
+const k3sBundle = k3sBundleFor(release);
 /** A synthetic Cosign bundle: a JSON object naming the signed bytes. It proves nothing about Sigstore. */
 const bundle = (bytes: string | Uint8Array) => JSON.stringify({ sha256: hash(bytes) });
 const sign = async (file: string) =>
@@ -473,15 +474,13 @@ async function fixture(directory: string, source = commit, tag = release) {
 	for (const file of ["SHA256SUMS", fixtureJointLock]) {
 		await sign(path.join(archive, file));
 	}
-	// The k3s platform assets: collected in the job's workspace, where the producer signs them, and
-	// published beside the locks. They are not evidence.
-	await mkdir(path.join(directory, "k3s-platform"));
-	for (const name of platformAssets) {
-		for (const folder of [path.join(directory, "k3s-platform"), archive]) {
-			await writeFile(path.join(folder, name), `# ${name} of ${source}\n`);
-		}
-		await sign(path.join(archive, name));
+	// The k3s bundle: built in the job's workspace, where the producer signs it, and published beside
+	// the locks. It is not evidence.
+	const bundleName = k3sBundleFor(fixtureRelease);
+	for (const folder of [directory, archive]) {
+		await writeFile(path.join(folder, bundleName), `k3s bundle of ${source}\n`);
 	}
+	await sign(path.join(archive, bundleName));
 	// The chart is not evidence: the registry, not the release, holds the package and its signature.
 	// Its values pin the images of the lock that the evidence makes.
 	const pinned = releaseValuesLines(
@@ -594,6 +593,8 @@ const refusalReasons = new Map([
 	["wrong-commit", /qualified source commit/u],
 	["tampered-policy", /sha256sum failed/u],
 	["missing-sbom", /sha256sum failed/u],
+	["tampered-k3s-bundle", /Signature mismatch/u],
+	["missing-k3s-bundle", /The release has no hephaestus-k3s-0\.93\.0\.tar\.gz/u],
 	["authority-unavailable", /Release authority unavailable/u],
 	["newer-patch", authorityRefusal],
 	["newer-minor", authorityRefusal],
@@ -610,6 +611,16 @@ const refusalReasons = new Map([
 	["foreign-chart-version", /is not the hephaestus chart 0\.93\.0/u],
 	["chart-attestation-missing", /no matching attestations found/u],
 ]);
+
+/** The k3s bundle of a published release, changed as the bundle scenarios need. Other scenarios change none. */
+async function tamperK3sBundle(scenario: string, archive: string): Promise<void> {
+	if (scenario === "tampered-k3s-bundle") {
+		await writeFile(path.join(archive, k3sBundle), "a bundle that was not signed\n");
+	}
+	if (scenario === "missing-k3s-bundle") {
+		await rm(path.join(archive, k3sBundle));
+	}
+}
 
 /**
  * The chart half of a published release, changed the way each chart scenario needs before the
@@ -675,6 +686,8 @@ for (const scenario of [
 	"missing-smoke",
 	"tampered-policy",
 	"missing-sbom",
+	"tampered-k3s-bundle",
+	"missing-k3s-bundle",
 	"wrong-commit",
 	"mutable-publication",
 	"newer-patch",
@@ -769,6 +782,7 @@ for (const scenario of [
 			if (scenario === "missing-sbom") {
 				await rm(path.join(archive, "webapp-linux-arm64.spdx.json"));
 			}
+			await tamperK3sBundle(scenario, archive);
 			if (scenario === "wrong-commit") {
 				const lock = path.join(archive, jointLock);
 				const contents = await readFile(lock, "utf8");
@@ -868,14 +882,13 @@ async function laterEvidence(directory: string) {
 	const evidence = path.join(directory, "evidence");
 	await mkdir(evidence);
 	for (const file of await readdir(archive)) {
-		if (!remoteState.has(file)) {
+		// The bundle is built in the workspace, not downloaded evidence.
+		if (!remoteState.has(file) && !file.startsWith("hephaestus-k3s-")) {
 			await copyFile(path.join(archive, file), path.join(evidence, file));
 		}
 	}
 	// What the producer signed in the job's workspace before the writer uploads it.
-	for (const name of platformAssets) {
-		await sign(path.join(directory, "k3s-platform", name));
-	}
+	await sign(path.join(directory, k3sBundle));
 	const notes = `## ${release.slice(1)}\n\nComplete release notes.\n`;
 	const notesDirectory = path.join(directory, "release-notes");
 	await mkdir(notesDirectory);
@@ -896,6 +909,7 @@ async function laterEvidence(directory: string) {
 		SHA: later,
 		ATTESTATION: attestation,
 		JOINT: `evidence/${jointLock}`,
+		K3S_BUNDLE: k3sBundle,
 		MIGRATIONS: "false",
 	};
 }
@@ -969,6 +983,18 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 				assert.deepEqual(
 					await readFile(path.join(archive, jointLock)),
 					await readFile(path.join(directory, evidence.JOINT)),
+				);
+				// The k3s bundle and its signature are the only k3s assets that the release gets.
+				for (const file of [k3sBundle, `${k3sBundle}.sigstore.json`]) {
+					assert.deepEqual(
+						await readFile(path.join(archive, file)),
+						await readFile(path.join(directory, file)),
+					);
+				}
+				const archived = await readdir(archive);
+				assert.deepEqual(
+					archived.filter((file) => file.startsWith("k3s-")),
+					[],
 				);
 				return;
 			}
@@ -1247,6 +1273,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 				REGISTRY_TOKEN: "registry-token",
 				GITHUB_OUTPUT: path.join(directory, "outputs"),
 				JOINT: jointLock,
+				K3S_BUNDLE: k3sBundle,
 				CHART_PACKAGE: path.join(directory, "chart", chartPackage),
 			},
 			producer,
@@ -1320,7 +1347,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			`${chart.repository}@${chart.digest}`,
 			pushed,
 		]);
-		for (const file of [jointLock, ...platformAssets.map((name) => `k3s-platform/${name}`)]) {
+		for (const file of [jointLock, k3sBundle]) {
 			const signature = asRecord(
 				parseJson(await readFile(path.join(directory, `${file}.sigstore.json`), "utf8")),
 				file,

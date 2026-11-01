@@ -216,6 +216,48 @@ await test("release publication requires native k3s smokes and receipts for both
 	assert.doesNotMatch(release, /docker compose|supported-host-smoke:|sandbox-isolation-probe\.ts/u);
 });
 
+await test("a release publishes one signed k3s bundle, and the smoke runs what operators unpack", () => {
+	const workflow: unknown = parseDocument(release).toJS();
+	const step = (name: string) =>
+		asString(
+			asRecord(
+				asArray(at(workflow, ["jobs", "tag-images", "steps"], "tag-images"), "steps")
+					.map((value, index) => asRecord(value, `steps[${index}]`))
+					.find((candidate) => candidate.name === name),
+				name,
+			).run,
+			name,
+		);
+	// Built from the deploy/platform folder and covered by the release attestation.
+	assert.match(
+		step("Build the k3s bundle"),
+		/package-k3s-bundle\.ts "\$bundle" "\$\(git log -1 --format=%ct\)"/u,
+	);
+	assert.match(step("Generate subject checksums"), /sha256sum "\$K3S_BUNDLE" >> subjects\.sha256/u);
+	// Signed and verified with the release identity, then uploaded with its signature.
+	assert.match(
+		step("Sign release image lock"),
+		/for lock in "\$JOINT" "\$K3S_BUNDLE"; do\n\s+node scripts\/keyless-sign\.ts sign-blob/u,
+	);
+	assert.match(
+		step("Verify signature with the deploy-side identity (fail fast)"),
+		/for lock in "\$JOINT" "\$K3S_BUNDLE"; do\n\s+cosign verify-blob/u,
+	);
+	assert.match(
+		step("Upload release image lock to GitHub Release"),
+		/"\$K3S_BUNDLE" "\$\{K3S_BUNDLE\}\.sigstore\.json" evidence\/\*/u,
+	);
+	// No loose k3s file is collected, signed or uploaded.
+	assert.doesNotMatch(release, /k3s-platform\/|cp deploy\/platform|find evidence -name 'k3s-/u);
+	// The smoke downloads the bundle, checks its signature, and unpacks it before the installer runs.
+	const smoke = readFileSync(".github/workflows/release-host-smoke.yml", "utf8");
+	assert.match(smoke, /bundle="hephaestus-k3s-\$\{TAG#v\}\.tar\.gz"/u);
+	assert.match(release, /gh attestation verify "\$k3s"/u);
+	assert.match(smoke, /cosign verify-blob --bundle "k3s-download\/\$bundle\.sigstore\.json"/u);
+	assert.match(smoke, /tar -xzf "k3s-download\/\$bundle" -C k3s-assets/u);
+	assert.doesNotMatch(smoke, /--pattern 'k3s-\*'/u);
+});
+
 await test("release evidence waits for the digest-bound sandbox check", () => {
 	const workflow: unknown = parseDocument(release).toJS();
 	const steps = asArray(

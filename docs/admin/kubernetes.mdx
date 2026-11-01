@@ -747,9 +747,11 @@ That run differs from your install in these points:
 
 ### The platform files
 
-Each release publishes the files of the one-host install as signed assets.
+Each release publishes the files of the one-host install as one signed bundle, `hephaestus-k3s-<version>.tar.gz`, with its signature `hephaestus-k3s-<version>.tar.gz.sigstore.json`.
+[Get the release files](#1-get-the-release-files) verifies and unpacks it.
+The bundle holds these files:
 
-| Asset | What it is |
+| File | What it is |
 | --- | --- |
 | `k3s-install.sh` | The installer. It is a POSIX shell script, and it needs no Node.js and no checkout of the repository. |
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
@@ -880,19 +882,25 @@ If your network cannot reach its own public address, the DNS check fails. Then r
    mkdir -p ~/hephaestus && cd ~/hephaestus
    ```
 
-2. Download each asset and its signature, and verify the signature. Cosign stops with an error if a file does not come from the release workflow:
+2. Download the bundle of the release and its signature:
 
    ```bash
    release="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
-   for file in k3s-install.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
-     curl -fsSLO "$release/$file"
-     curl -fsSLO "$release/$file.sigstore.json"
-     cosign verify-blob --bundle "$file.sigstore.json" \
-       --certificate-identity https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main \
-       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-       "$file"
-   done
+   curl -fsSLO "$release/hephaestus-k3s-$VERSION.tar.gz"
+   curl -fsSLO "$release/hephaestus-k3s-$VERSION.tar.gz.sigstore.json"
    ```
+
+3. Verify the signature, then unpack the bundle. Cosign stops with an error if the bundle does not come from the release workflow, and then `tar` does not run:
+
+   ```bash
+   cosign verify-blob --bundle "hephaestus-k3s-$VERSION.tar.gz.sigstore.json" \
+     --certificate-identity https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+     "hephaestus-k3s-$VERSION.tar.gz" &&
+     tar xzf "hephaestus-k3s-$VERSION.tar.gz"
+   ```
+
+   Do not run any file of the bundle before this step succeeds.
 
 ### 2. Run the installer
 
