@@ -57,7 +57,6 @@ export const MixedFlags: Story = {
 	args: {
 		flags: mockFeatureFlags({
 			ADMIN: true,
-			GITLAB_WORKSPACE_CREATION: true,
 		}),
 		isLoading: false,
 	},
@@ -69,9 +68,7 @@ export const MixedFlags: Story = {
 export const AllEnabled: Story = {
 	args: {
 		flags: mockFeatureFlags({
-			NOTIFICATION_ACCESS: true,
 			ADMIN: true,
-			GITLAB_WORKSPACE_CREATION: true,
 		}),
 		isLoading: false,
 	},

@@ -286,8 +286,6 @@ services:
       GH_APP_INSTALLATION_URL: ${GH_APP_INSTALLATION_URL:-}
       GH_APP_CLIENT_ID: ${GH_APP_CLIENT_ID:-}
       GH_APP_CLIENT_SECRET: ${GH_APP_CLIENT_SECRET:-}
-      # Default on: the integration event flow needs NATS in prod (the code-level fallback is off for local dev).
-      NATS_ENABLED: ${NATS_ENABLED:-true}
       NATS_DURABLE_CONSUMER_NAME: ${NATS_DURABLE_CONSUMER_NAME:-hephaestus}
       # How long this deployment's durables may go with nothing bound to them before JetStream
       # deletes them. See docker/.env.example for what to set it to and when.
@@ -358,8 +356,7 @@ services:
       # The agent image every role pins to (ADR 0031); sandboxes themselves run on application-worker.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
-      # Agent job queue (practice review). The queue runs on PostgreSQL — no NATS involved. NATS
-      # stays required elsewhere on this pod for webhook-driven sync consumption (NATS_ENABLED above).
+      # Agent job queue (practice review). The queue runs on PostgreSQL — no NATS involved.
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
       HEPHAESTUS_FABRIC_ROOT: /data/git-repos
       # Instance-wide LLM knobs. Providers, models, prices and credentials are NOT here — they are
@@ -384,7 +381,6 @@ services:
       <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
       # Only the server role asks GitHub for newer releases; set false on an air-gapped host.
       HEPHAESTUS_RELEASE_CHECK_ENABLED: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:-true}
-      GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
       # thc probes liveness on the application listener, independently of management.

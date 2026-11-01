@@ -13,12 +13,6 @@ import org.springframework.validation.annotation.Validated;
  *
  * <p>Prefix: {@code hephaestus.contributors.github}
  *
- * <p>Backwards compatibility: the legacy key {@code hephaestus.integration.github.meta.auth-token}
- * is still bound by {@code GitHubProperties.meta().authToken()} but is no longer read by
- * {@link ContributorService}. Deployments should migrate to
- * {@code hephaestus.contributors.github.auth-token}; the legacy key will be removed once
- * all environments have been updated.
- *
  * @param authToken Use a personal access token or fine-grained token to read this application's contributor list from GitHub.
  */
 @Validated

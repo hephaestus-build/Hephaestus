@@ -1490,13 +1490,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             boolean gitlab = provider.getType() == IdentityProviderType.GITLAB;
             IntegrationKind kind = gitlab ? IntegrationKind.GITLAB : IntegrationKind.GITHUB;
             ConnectionConfig config = gitlab
-                    ? new ConnectionConfig.GitLabConfig(
-                            provider.getServerUrl(),
-                            null,
-                            null,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null)
+                    ? new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null)
                     : new ConnectionConfig.GitHubAppConfig(
                             9302L, workspace.getAccountLogin(), provider.getServerUrl(), Set.of());
             retireScmSources();
@@ -3212,13 +3206,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             workspace,
                             IntegrationKind.GITLAB,
                             "activity-gitlab",
-                            new ConnectionConfig.GitLabConfig(
-                                    provider.getServerUrl(),
-                                    null,
-                                    null,
-                                    ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                    Set.of(),
-                                    null)));
+                            new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null)));
                     connectionService.transition(
                             connection,
                             new ConnectionService.TransitionRequest(

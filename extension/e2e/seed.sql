@@ -49,7 +49,7 @@ WHERE NOT EXISTS (SELECT 1 FROM workspace existing WHERE existing.id = w.column1
 
 INSERT INTO connection (workspace_id, kind, instance_key, state, config, created_at, updated_at, version)
 SELECT workspace_id, 'GITLAB', 'https://gitlab.example.test:', 'ACTIVE',
-  '{"type":"GITLAB","serverUrl":"https://gitlab.example.test","gitlabGroupId":null,"gitlabWebhookId":null,"signingMode":"PLAINTEXT","enabledStreams":[]}'::jsonb,
+  '{"type":"GITLAB","serverUrl":"https://gitlab.example.test","gitlabGroupId":null,"gitlabWebhookId":null,"enabledStreams":[]}'::jsonb,
   now(), now(), 0
 FROM (VALUES (20), (21)) AS workspaces(workspace_id)
 ON CONFLICT (workspace_id, kind, instance_key) DO NOTHING;

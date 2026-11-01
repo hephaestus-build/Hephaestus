@@ -62,8 +62,7 @@ public class ReviewLookupData {
         var kind = IntegrationKind.valueOf(type.name());
         ConnectionConfig config = type == IdentityProviderType.GITHUB
                 ? new ConnectionConfig.GitHubPatConfig(null, server, Set.of())
-                : new ConnectionConfig.GitLabConfig(
-                        server, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
+                : new ConnectionConfig.GitLabConfig(server, null, null, Set.of(), null);
         var connection = new Connection(workspace, kind, server, config);
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);

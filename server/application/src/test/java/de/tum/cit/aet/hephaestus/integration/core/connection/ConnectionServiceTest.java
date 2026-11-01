@@ -311,13 +311,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         Connection gitLab = connection(
                 56L,
                 IntegrationKind.GITLAB,
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.example",
-                        12L,
-                        34L,
-                        ConnectionConfig.GitLabConfig.SigningMode.WHSEC,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.example", 12L, 34L, Set.of(), null));
         Connection outline = connection(
                 57L,
                 IntegrationKind.OUTLINE,

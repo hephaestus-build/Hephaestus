@@ -115,7 +115,7 @@ public class SecurityConfig {
     AuthoritiesConverter rolesAuthoritiesConverter() {
         return claims -> {
             // Flat `roles` claim on the Hephaestus-issued JWT (ADR 0017). The role strings
-            // ("app_admin", "notification_access", …) map 1:1 to granted authorities consumed by @PreAuthorize.
+            // ("app_admin", …) map 1:1 to granted authorities consumed by @PreAuthorize.
             final var roles = Optional.ofNullable((List<String>) claims.get("roles"));
             Stream<GrantedAuthority> granted = roles.map(List::stream)
                     .orElse(Stream.empty())

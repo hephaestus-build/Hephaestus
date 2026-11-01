@@ -579,13 +579,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                         workspace,
                         IntegrationKind.GITLAB,
                         workspace.getAccountLogin(),
-                        new ConnectionConfig.GitLabConfig(
-                                "https://gitlab.com",
-                                null,
-                                null,
-                                ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of(),
-                                null));
+                        new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         return connection;
     }

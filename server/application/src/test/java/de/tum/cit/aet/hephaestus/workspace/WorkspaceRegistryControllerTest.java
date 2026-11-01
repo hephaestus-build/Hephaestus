@@ -8,8 +8,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
-import de.tum.cit.aet.hephaestus.feature.FeatureFlagService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
@@ -41,9 +39,6 @@ class WorkspaceRegistryControllerTest {
 
     @Mock
     private WorkspaceQueryService workspaceQueryService;
-
-    @Mock
-    private FeatureFlagService featureFlagService;
 
     private WorkspaceRegistryController controller;
 
@@ -90,26 +85,11 @@ class WorkspaceRegistryControllerTest {
         assertThat(response.getHeaders().getLocation()).hasPath("/workspaces/test-workspace");
     }
 
-    @Test
-    void shouldRejectGitLabWorkspaceWhenFeatureIsDisabled() {
-        controller = controller(WorkspaceProperties.CreationPolicy.SELF_SERVICE);
-        authenticate(List.of());
-        when(featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION))
-                .thenReturn(false);
-
-        assertThatThrownBy(() -> controller.createWorkspace(request(IntegrationKind.GITLAB)))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        exception -> assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
-        verifyNoInteractions(workspaceService);
-    }
-
     private WorkspaceRegistryController controller(WorkspaceProperties.CreationPolicy policy) {
         return new WorkspaceRegistryController(
                 mock(AdminPasskeyAccess.class),
                 workspaceService,
                 workspaceQueryService,
-                featureFlagService,
                 new WorkspaceProperties(false, null, false, null, policy));
     }
 

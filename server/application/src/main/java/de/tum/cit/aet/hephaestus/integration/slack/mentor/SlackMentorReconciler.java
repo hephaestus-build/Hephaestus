@@ -24,8 +24,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-// The integration tests turn Slack on suite-wide and build their own projector.
-@ConditionalOnProperty(name = "hephaestus.mentor.slack.projector.enabled", havingValue = "true", matchIfMissing = true)
 public class SlackMentorReconciler {
 
     private static final Logger log = LoggerFactory.getLogger(SlackMentorReconciler.class);

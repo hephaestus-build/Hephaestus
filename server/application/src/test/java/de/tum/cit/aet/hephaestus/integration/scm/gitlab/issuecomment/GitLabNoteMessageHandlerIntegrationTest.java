@@ -1065,13 +1065,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 workspace,
                 IntegrationKind.GITLAB,
                 "note-fixture",
-                new ConnectionConfig.GitLabConfig(
-                        savedProvider.getServerUrl(),
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig(savedProvider.getServerUrl(), null, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         var monitor = new RepositoryToMonitor();

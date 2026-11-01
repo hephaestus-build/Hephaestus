@@ -3,9 +3,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.feature.FeatureFlag;
-import de.tum.cit.aet.hephaestus.feature.FeatureFlagService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceListItemDTO;
@@ -43,7 +40,6 @@ public class WorkspaceRegistryController {
     private final AdminPasskeyAccess passkeyAccess;
     private final WorkspaceService workspaceService;
     private final WorkspaceQueryService workspaceQueryService;
-    private final FeatureFlagService featureFlagService;
     private final WorkspaceProperties workspaceProperties;
 
     @GetMapping("/providers")
@@ -65,7 +61,7 @@ public class WorkspaceRegistryController {
             content = @Content(schema = @Schema(implementation = WorkspaceDTO.class)))
     public ResponseEntity<WorkspaceDTO> createWorkspace(
             @Valid @RequestBody CreateWorkspaceRequestDTO createWorkspaceRequest) {
-        // Actor gate; orthogonal to per-provider availability (the GitLab feature flag below).
+        // Actor gate; per-provider availability is checked where the provider is resolved.
         if (workspaceProperties.creationPolicy() == WorkspaceProperties.CreationPolicy.ADMIN_ONLY
                 && !SecurityUtils.isSuperAdmin()) {
             throw new ResponseStatusException(
@@ -74,11 +70,6 @@ public class WorkspaceRegistryController {
 
         passkeyAccess.requireWorkspaceAdmin(
                 false, workspaceProperties.creationPolicy() == WorkspaceProperties.CreationPolicy.ADMIN_ONLY, true);
-
-        if (createWorkspaceRequest.kind() == IntegrationKind.GITLAB
-                && !featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "GitLab workspace creation is not enabled.");
-        }
 
         Workspace workspace = workspaceService.createWorkspaceWithInitialization(createWorkspaceRequest);
 

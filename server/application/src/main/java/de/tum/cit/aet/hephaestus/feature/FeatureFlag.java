@@ -21,15 +21,13 @@ package de.tum.cit.aet.hephaestus.feature;
  * @see FeatureFlagsDTO
  */
 public enum FeatureFlag {
-    // ── Authorization flags (account_feature role flags) ──────────────────────
-    NOTIFICATION_ACCESS(Kind.ROLE, "notification_access"),
+    // ── Authorization flags ──────────────────────
     // Reports instance-admin status: the authority key is the namespaced `app_admin` the issuer mints
     // for Account.AppRole APP_ADMIN. NOT a grantable escalation — JwtPrincipalFactory strips
     // `app_admin`/`admin` from account_feature rows, so this reflects appRole only.
     ADMIN(Kind.ROLE, "app_admin"),
 
     // Operational/development flags (Spring Boot config)
-    GITLAB_WORKSPACE_CREATION(Kind.CONFIG, "gitlab-workspace-creation"),
     PAGE_EXPERIENCE_METRICS(Kind.CONFIG, "page-experience-metrics");
 
     private final Kind kind;

@@ -67,6 +67,10 @@ hephaestus:
     webapp:
         url: ${APPLICATION_HOST_URL}
 
+    webhook:
+        # Production registers GitLab hooks against its own origin unless WEBHOOK_EXTERNAL_URL names another.
+        external-url: ${WEBHOOK_EXTERNAL_URL:${hephaestus.host-url}}
+
     workspace:
         init-default: false
         # NEVER auto-seed ADMIN membership in production — a first-visitor of an empty-membership
@@ -101,8 +105,6 @@ hephaestus:
                 id: ${GH_APP_ID:0}
                 privateKeyLocation: ${GH_APP_PRIVATE_KEY_LOCATION:}
                 privateKey: ${GH_APP_PRIVATE_KEY:}
-            meta:
-                auth-token: ${GH_AUTH_TOKEN:}
 
     sync:
         run-on-startup: ${MONITORING_RUN_ON_STARTUP:true}
@@ -115,7 +117,8 @@ hephaestus:
             rate-limit-threshold: ${MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD:500}
             interval-seconds: ${MONITORING_BACKFILL_INTERVAL_SECONDS:60}
         nats:
-            enabled: ${NATS_ENABLED:false}
+            # The server role consumes provider events; the worker profile turns this off.
+            enabled: true
             server: ${NATS_SERVER:}
             durable-consumer-name: ${NATS_DURABLE_CONSUMER_NAME:hephaestus}
 

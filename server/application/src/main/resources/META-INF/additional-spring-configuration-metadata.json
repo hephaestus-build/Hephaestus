@@ -334,12 +334,6 @@
       "description": "Origin of the Outline instance for account linking, such as https://wiki.example.com. Required when the client ID is set. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
-      "name": "hephaestus.features.flags.gitlab-workspace-creation",
-      "type": "java.lang.Boolean",
-      "sourceType": "de.tum.cit.aet.hephaestus.feature.FeatureProperties",
-      "description": "Lets admins create GitLab workspaces in the UI and the API."
-    },
-    {
       "name": "hephaestus.features.flags.page-experience-metrics",
       "type": "java.lang.Boolean",
       "sourceType": "de.tum.cit.aet.hephaestus.feature.FeatureProperties",

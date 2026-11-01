@@ -43,8 +43,6 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .isOk()
                     .expectBody()
                     .jsonPath("$.ADMIN")
-                    .isEqualTo(true)
-                    .jsonPath("$.GITLAB_WORKSPACE_CREATION")
                     .isEqualTo(true);
         }
 
@@ -60,8 +58,6 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .isOk()
                     .expectBody()
                     .jsonPath("$.ADMIN")
-                    .isEqualTo(false)
-                    .jsonPath("$.NOTIFICATION_ACCESS")
                     .isEqualTo(false);
         }
 
@@ -78,11 +74,9 @@ class FeatureFlagControllerIntegrationTest extends BaseIntegrationTest {
                     .expectBody()
                     .jsonPath("$.length()")
                     .isEqualTo(FeatureFlag.values().length)
-                    .jsonPath("$.NOTIFICATION_ACCESS")
-                    .exists()
                     .jsonPath("$.ADMIN")
                     .exists()
-                    .jsonPath("$.GITLAB_WORKSPACE_CREATION")
+                    .jsonPath("$.PAGE_EXPERIENCE_METRICS")
                     .exists();
         }
     }

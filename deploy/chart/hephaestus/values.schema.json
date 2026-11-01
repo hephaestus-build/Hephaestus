@@ -774,19 +774,12 @@
 				"gitlab": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": [
-						"enabled",
-						"oauthClientId",
-						"oauthBaseUrl",
-						"oauthDisplayName",
-						"workspaceCreation"
-					],
+					"required": ["enabled", "oauthClientId", "oauthBaseUrl", "oauthDisplayName"],
 					"properties": {
 						"enabled": { "type": "boolean" },
 						"oauthClientId": { "$ref": "#/definitions/text" },
 						"oauthBaseUrl": { "type": "string", "pattern": "^https://" },
-						"oauthDisplayName": { "$ref": "#/definitions/text" },
-						"workspaceCreation": { "type": "boolean" }
+						"oauthDisplayName": { "$ref": "#/definitions/text" }
 					}
 				},
 				"slack": {

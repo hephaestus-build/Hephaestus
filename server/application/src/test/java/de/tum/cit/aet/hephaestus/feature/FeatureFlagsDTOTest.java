@@ -90,13 +90,13 @@ class FeatureFlagsDTOTest extends BaseUnitTest {
                 if (f.kind() == FeatureFlag.Kind.CONFIG) {
                     lenient()
                             .when(featureProperties.isEnabled(f.key()))
-                            .thenReturn(f == FeatureFlag.GITLAB_WORKSPACE_CREATION);
+                            .thenReturn(f == FeatureFlag.PAGE_EXPERIENCE_METRICS);
                 }
             }
 
             FeatureFlagsDTO dto = FeatureFlagsDTO.from(featureFlagService);
 
-            assertThat(dto.GITLAB_WORKSPACE_CREATION()).isTrue();
+            assertThat(dto.PAGE_EXPERIENCE_METRICS()).isTrue();
         }
     }
 }

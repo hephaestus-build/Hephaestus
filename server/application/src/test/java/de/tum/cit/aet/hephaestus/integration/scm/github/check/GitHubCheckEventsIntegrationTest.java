@@ -248,8 +248,7 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
                 pullRequestRepository,
                 checkRuns,
                 checkRunsRecorder,
-                new GitHubProperties(
-                        new GitHubProperties.App(4242, null, null, null, null, null), new GitHubProperties.Meta(null)),
+                new GitHubProperties(new GitHubProperties.App(4242, null, null, null, null, null)),
                 deserializer,
                 transactionTemplate);
         var own = (ObjectNode) objectMapper.readTree(

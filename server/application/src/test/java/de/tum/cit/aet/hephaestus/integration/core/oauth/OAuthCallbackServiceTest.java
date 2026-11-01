@@ -416,14 +416,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         ws.setId(workspaceId);
         ConnectionConfig cfg = switch (kind) {
             case GITHUB -> new ConnectionConfig.GitHubAppConfig(null, null, null, Set.of());
-            case GITLAB ->
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null);
+            case GITLAB -> new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null);
             case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
             case OUTLINE -> new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
         };

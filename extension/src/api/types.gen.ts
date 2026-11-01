@@ -1438,14 +1438,6 @@ export type FeatureFlags = {
      */
     ADMIN?: boolean;
     /**
-     * GitLab workspace creation feature is enabled
-     */
-    GITLAB_WORKSPACE_CREATION?: boolean;
-    /**
-     * User can receive notifications
-     */
-    NOTIFICATION_ACCESS?: boolean;
-    /**
      * The browser measures and reports how page visits feel to the reader
      */
     PAGE_EXPERIENCE_METRICS?: boolean;

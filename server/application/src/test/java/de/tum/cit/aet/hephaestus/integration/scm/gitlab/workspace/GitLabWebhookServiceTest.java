@@ -160,15 +160,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     private void storeHook(WebhookInfo hook) {
         hooks.add(hook);
-        bindGitLabConfig(
-                1L,
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        42L,
-                        hook.id(),
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+        bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, hook.id(), Set.of(), null));
     }
 
     private void storeHook(long webhookId, String url) {
@@ -197,15 +189,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         // Default: workspace is a GitLab workspace with a token. Tests that need
         // to flip this out (non-GitLab, missing token) override per-test.
-        bindGitLabConfig(
-                1L,
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+        bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null));
         gitLabBearerTokens.put(1L, new BearerToken("glpat-test-token", null));
 
         // lenient() — each Nested test exercises a different code path, so a shared setUp stub may go
@@ -541,15 +525,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldDeregisterAndClearFields() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+            bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
 
@@ -562,15 +538,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldClearFieldsOnError() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+            bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
 
@@ -585,15 +553,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldClearFieldsWhenClientUnavailable() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+            bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(null);
 
@@ -609,15 +569,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
         @Test
         void shouldDeregisterForExistingWorkspace() {
-            bindGitLabConfig(
-                    1L,
-                    new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+            bindGitLabConfig(1L, new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
 
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
@@ -646,13 +598,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         void deletesByConnectionIdRegardlessOfState() {
             var connection = mock(Connection.class);
             when(connection.getConfig())
-                    .thenReturn(new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+                    .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
@@ -667,13 +613,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         void bestEffortSwallowsAuthFailurePostPurge() {
             var connection = mock(Connection.class);
             when(connection.getConfig())
-                    .thenReturn(new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+                    .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
@@ -692,13 +632,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         void preparedDeregistrationCallsGitLabOnlyWhenRun() {
             var connection = mock(Connection.class);
             when(connection.getConfig())
-                    .thenReturn(new ConnectionConfig.GitLabConfig(
-                            "https://gitlab.com",
-                            42L,
-                            99L,
-                            ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of(),
-                            null));
+                    .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, 99L, Set.of(), null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));

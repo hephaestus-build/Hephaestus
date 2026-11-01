@@ -116,7 +116,6 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
                 "--spring.datasource.hikari.maximum-pool-size=4",
                 "--server.port=0",
                 "--management.server.port=0",
-                "--hephaestus.features.flags.gitlab-workspace-creation=true",
                 "--hephaestus.llm.display-currency=",
                 "--spring.main.banner-mode=off");
     }

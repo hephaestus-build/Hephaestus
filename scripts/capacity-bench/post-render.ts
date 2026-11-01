@@ -94,9 +94,6 @@ for (const resource of resources) {
 			const explicit = structuredClone(production);
 			const hephaestus = asRecord(explicit.hephaestus, "hephaestus");
 			asRecord(hephaestus.workspace, "workspace")["creation-policy"] = "ADMIN_ONLY";
-			hephaestus.features = {
-				flags: { "gitlab-workspace-creation": `\${GITLAB_WORKSPACE_CREATION:false}` },
-			};
 			hephaestus.dev = { "trigger-enabled": `\${HEPHAESTUS_DEV_TRIGGER_ENABLED:false}` };
 			hephaestus.llm = {
 				egress: { "allow-loopback": `\${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:false}` },
@@ -106,6 +103,8 @@ for (const resource of resources) {
 				"credential-encryption-key": `\${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY}`,
 			};
 			asRecord(hephaestus.agent, "agent").enabled = `\${AGENT_ENABLED:false}`;
+			// The prod profile turns NATS on for the server role; the worker role has no broker.
+			asRecord(asRecord(hephaestus.sync, "sync").nats, "nats").enabled = role === "server";
 			asRecord(hephaestus.integration, "integration").gitlab = {
 				enabled: `\${GITLAB_ENABLED:false}`,
 			};

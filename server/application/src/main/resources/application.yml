@@ -3,14 +3,6 @@ spring:
         name: Hephaestus
         version: "${APP_VERSION:0.0.0-development}"
 
-    # Deploy-role aliases (see docker/compose.core.yaml + ADR 0008). Activating a group
-    # name expands to its member profiles, so SPRING_PROFILES_ACTIVE=webhook-server is
-    # equivalent to prod,webhook (and worker-node to prod,worker).
-    profiles:
-        group:
-            webhook-server: prod,webhook
-            worker-node: prod,worker
-
     config:
         # `bootRun` runs in the application module, so `../` is `server/`, where `.env.example` and the
         # compose file the local profile starts both live.
@@ -342,8 +334,8 @@ hephaestus:
             slack:
                 type: SLACK
                 display-name: ${SLACK_OAUTH_DISPLAY_NAME:Slack}
-                client-id: ${SLACK_OAUTH_CLIENT_ID:${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID:}}
-                client-secret: ${SLACK_OAUTH_CLIENT_SECRET:${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET:}}
+                client-id: ${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID:}
+                client-secret: ${HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET:}
             # Link-only provider (like Slack): it attaches an Outline identity to an already signed-in
             # account, it is never a sign-in button. Self-hosted, so the base URL is the wiki's origin.
             # Scopes are pinned to `read` by type (LoginProviderService.OUTLINE_SCOPES) — Outline is plain
@@ -499,7 +491,7 @@ hephaestus:
         max-snapshot-bytes: ${GIT_MAX_SNAPSHOT_BYTES:8589934592}
 
     webapp:
-        url: ${HEPHAESTUS_WEBAPP_URL:${APPLICATION_HOST_URL:http://localhost:4200}}
+        url: ${HEPHAESTUS_WEBAPP_URL:${hephaestus.host-url}}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # EMAIL — sender identity for the notification module (notification.email.EmailProperties).
@@ -544,14 +536,11 @@ hephaestus:
     # FEATURE FLAGS (operational / development toggles)
     # ═══════════════════════════════════════════════════════════════════════════
     # CONFIG-backed feature flags evaluated by FeatureFlagService.
-    # ROLE-backed flags (notification_access, etc.) are stored per account in the account_feature table.
-    # Each flag names its own env var so the SHORT name works everywhere: docker/.env, the compose files
-    # and the admin docs all say GITLAB_WORKSPACE_CREATION. The long
-    # relaxed-binding form (HEPHAESTUS_FEATURES_FLAGS_GITLAB_WORKSPACE_CREATION) also reaches these keys
-    # and still wins when both are set. Pinned by FeatureFlagEnvBindingTest.
+    # Each flag names its own short env var. The long relaxed-binding form
+    # (HEPHAESTUS_FEATURES_FLAGS_<FLAG>) also reaches these keys and wins when both are set.
+    # Pinned by FeatureFlagEnvBindingTest.
     features:
         flags:
-            gitlab-workspace-creation: ${GITLAB_WORKSPACE_CREATION:false}
             page-experience-metrics: ${PAGE_EXPERIENCE_METRICS:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -738,10 +727,10 @@ hephaestus:
     #     publish/stream/http blocks for the inbound receiver.
     # `secret` is shared by design — same value registered with the provider and used
     # to verify incoming bodies. The receiver runs in the `webhook-server` container.
-    # external-url defaults to the app's own origin (APPLICATION_HOST_URL); set WEBHOOK_EXTERNAL_URL
-    # only when the receiver is fronted at a different origin than the app (e.g. preview).
+    # external-url is empty outside production, so local runs register no provider hook; the prod profile
+    # defaults it to the app's own origin. Set WEBHOOK_EXTERNAL_URL when the receiver is fronted elsewhere.
     webhook:
-        external-url: ${WEBHOOK_EXTERNAL_URL:${APPLICATION_HOST_URL:}}
+        external-url: ${WEBHOOK_EXTERNAL_URL:}
         secret: ${WEBHOOK_SECRET:}
         # Signs each GitLab connection's own hook token; independent of WEBHOOK_SECRET. The previous key stays
         # accepted while its hooks are replaced during a rotation.
@@ -851,10 +840,6 @@ hephaestus:
                 # workspace exchanges the code GitHub returns with them, to prove the admin controls it.
                 client-id: ${GH_APP_CLIENT_ID:}
                 client-secret: ${GH_APP_CLIENT_SECRET:}
-            meta:
-                # Deprecated: bound by GitHubProperties.meta and read by nothing. The contributor endpoint
-                # reads hephaestus.contributors.github.auth-token.
-                auth-token: ${GH_AUTH_TOKEN:}
             # GitHub-specific sync tuning (GitHubSyncProperties). Provider-agnostic scheduler
             # knobs (run-on-startup, cron, cooldown, backfill, filters, …) stay under
             # hephaestus.sync (SyncSchedulerProperties).
@@ -876,7 +861,7 @@ hephaestus:
             # Default GitLab server URL (used when workspace has no custom serverUrl).
             # Falls back to the native-auth GitLab login base URL so deployments with GitLab login
             # automatically use the same instance for workspace creation.
-            default-server-url: ${GITLAB_DEFAULT_SERVER_URL:${GITLAB_OAUTH_BASE_URL:https://gitlab.com}}
+            default-server-url: ${GITLAB_DEFAULT_SERVER_URL:${hephaestus.auth.login-providers.gitlab.base-url}}
             # Timeout for standard GraphQL operations (default: 30s)
             graphql-timeout: ${GITLAB_GRAPHQL_TIMEOUT:30s}
             # Extended timeout for complex operations (default: 60s)

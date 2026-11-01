@@ -77,12 +77,6 @@ class GitLabCredentialProviderTest extends BaseUnitTest {
                 ws,
                 IntegrationKind.GITLAB,
                 "200",
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.example.com",
-                        200L,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.example.com", 200L, null, Set.of(), null));
     }
 }

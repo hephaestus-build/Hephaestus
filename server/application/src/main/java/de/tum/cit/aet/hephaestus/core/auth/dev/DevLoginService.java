@@ -69,9 +69,8 @@ public class DevLoginService {
         this.clock = clock;
         this.sessionMaxLifetime = authProperties.sessionMaxLifetime();
 
-        // acceptsProfiles (not a raw spring.profiles.active string-split) so the guard also fires when
-        // prod is activated via a deploy-role GROUP alias — webhook-server/worker-node expand to include
-        // prod (application.yml). The same idiom guards JwtSigningKeyService / AuthSecurityConfig.
+        // acceptsProfiles (not a raw spring.profiles.active string-split) so the guard fires for every
+        // activation that expands to prod. The same idiom guards JwtSigningKeyService / AuthSecurityConfig.
         if (enabled && environment.acceptsProfiles(Profiles.of("prod"))) {
             throw new IllegalStateException(
                     "hephaestus.auth.dev-login-enabled must not be true under the 'prod' profile. "

@@ -136,8 +136,7 @@ class PracticeReviewItemFactsIntegrationTest extends BaseIntegrationTest {
                 .orElseGet(() -> providers.saveAndFlush(new IdentityProvider(type, origin)));
         ConnectionConfig config = type == IdentityProviderType.GITHUB
                 ? new ConnectionConfig.GitHubAppConfig(123L, "pilot", null, Set.of())
-                : new ConnectionConfig.GitLabConfig(
-                        origin, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
+                : new ConnectionConfig.GitLabConfig(origin, null, null, Set.of(), null);
         var connection = new Connection(scenario.workspace(), provider.kind(), "pilot", config);
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);

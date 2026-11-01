@@ -57,8 +57,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-// The integration tests turn Slack on suite-wide and build their own projector.
-@ConditionalOnProperty(name = "hephaestus.mentor.slack.projector.enabled", havingValue = "true", matchIfMissing = true)
 @WorkspaceAgnostic("Projects ledger notifications of every workspace; each turn is read with its own workspace")
 public class SlackMentorProjector implements MentorLedgerNotifications.Listener {
 

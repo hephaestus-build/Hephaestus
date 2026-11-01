@@ -48,12 +48,11 @@ public sealed interface ConnectionConfig
             @Nullable String orgLogin, @Nullable String serverUrl, Set<String> enabledStreams)
             implements ConnectionConfig {}
 
-    /** GitLab — supports both legacy plaintext token verifier and 19.0+ HMAC whsec_*. */
+    /** GitLab. */
     record GitLabConfig(
             @Nullable String serverUrl,
             @Nullable Long gitlabGroupId,
             @Nullable Long gitlabWebhookId,
-            SigningMode signingMode,
             Set<String> enabledStreams,
             @Nullable GitLabTokenMetadata tokenMetadata,
             GitLabProjectExclusions projectExclusions)
@@ -66,14 +65,12 @@ public sealed interface ConnectionConfig
                 @Nullable String serverUrl,
                 @Nullable Long gitlabGroupId,
                 @Nullable Long gitlabWebhookId,
-                SigningMode signingMode,
                 Set<String> enabledStreams,
                 @Nullable GitLabTokenMetadata tokenMetadata) {
             this(
                     serverUrl,
                     gitlabGroupId,
                     gitlabWebhookId,
-                    signingMode,
                     enabledStreams,
                     tokenMetadata,
                     GitLabProjectExclusions.empty());
@@ -81,23 +78,12 @@ public sealed interface ConnectionConfig
 
         public GitLabConfig withTokenMetadata(@Nullable GitLabTokenMetadata metadata) {
             return new GitLabConfig(
-                    serverUrl,
-                    gitlabGroupId,
-                    gitlabWebhookId,
-                    signingMode,
-                    enabledStreams,
-                    metadata,
-                    projectExclusions);
+                    serverUrl, gitlabGroupId, gitlabWebhookId, enabledStreams, metadata, projectExclusions);
         }
 
         public GitLabConfig withProjectExclusions(GitLabProjectExclusions exclusions) {
             return new GitLabConfig(
-                    serverUrl, gitlabGroupId, gitlabWebhookId, signingMode, enabledStreams, tokenMetadata, exclusions);
-        }
-
-        public enum SigningMode {
-            PLAINTEXT,
-            WHSEC,
+                    serverUrl, gitlabGroupId, gitlabWebhookId, enabledStreams, tokenMetadata, exclusions);
         }
 
         /**
@@ -107,7 +93,7 @@ public sealed interface ConnectionConfig
          */
         public GitLabConfig withGitlabWebhookId(@Nullable Long webhookId) {
             return new GitLabConfig(
-                    serverUrl, gitlabGroupId, webhookId, signingMode, enabledStreams, tokenMetadata, projectExclusions);
+                    serverUrl, gitlabGroupId, webhookId, enabledStreams, tokenMetadata, projectExclusions);
         }
 
         /**
@@ -116,7 +102,7 @@ public sealed interface ConnectionConfig
          */
         public GitLabConfig withGitlabGroupId(@Nullable Long groupId) {
             return new GitLabConfig(
-                    serverUrl, groupId, gitlabWebhookId, signingMode, enabledStreams, tokenMetadata, projectExclusions);
+                    serverUrl, groupId, gitlabWebhookId, enabledStreams, tokenMetadata, projectExclusions);
         }
     }
 

@@ -593,8 +593,7 @@ class GitLabRouteAdmissionTest {
     }
 
     private static ConnectionConfig.GitLabConfig config(String serverUrl, long groupId) {
-        return new ConnectionConfig.GitLabConfig(
-                serverUrl, groupId, 99L, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
+        return new ConnectionConfig.GitLabConfig(serverUrl, groupId, 99L, Set.of(), null);
     }
 
     private Repository repository(long nativeId, String nameWithOwner) {

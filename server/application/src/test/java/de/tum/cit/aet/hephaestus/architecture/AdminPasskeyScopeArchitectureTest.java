@@ -28,8 +28,7 @@ class AdminPasskeyScopeArchitectureTest extends HephaestusArchitectureTest {
             "isAuthenticated()",
             "@workspaceSecure.isMember()",
             "@workspaceSecure.isMemberWithoutElevation()",
-            "isAuthenticated() && @workspaceSecure.isMember()",
-            "@featureFlagService.isEnabled(T(de.tum.cit.aet.hephaestus.feature.FeatureFlag).GITLAB_WORKSPACE_CREATION)");
+            "isAuthenticated() && @workspaceSecure.isMember()");
 
     @Test
     void shouldCarryAssuranceScopeWhenAnAnnotationComposesAdministrativeAccess() {

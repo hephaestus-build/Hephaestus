@@ -62,9 +62,7 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
 
     private GitHubConnectionStrategy strategy(@Nullable String installationUrl) {
         return new GitHubConnectionStrategy(
-                new GitHubProperties(
-                        new GitHubProperties.App(123, null, null, installationUrl, null, null),
-                        new GitHubProperties.Meta(null)),
+                new GitHubProperties(new GitHubProperties.App(123, null, null, installationUrl, null, null)),
                 oauthStateService,
                 connectionService,
                 appTokenService,

@@ -941,8 +941,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                 target,
                 IntegrationKind.GITLAB,
                 "GITLAB",
-                new ConnectionConfig.GitLabConfig(
-                        serverUrl, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null));
+                new ConnectionConfig.GitLabConfig(serverUrl, null, null, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
     }

@@ -129,8 +129,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 "initial-group",
                 AccountType.ORG,
                 persistUser("initial-owner"));
-        gitLabConfig = new ConnectionConfig.GitLabConfig(
-                "https://gitlab.com", null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
+        gitLabConfig = new ConnectionConfig.GitLabConfig("https://gitlab.com", null, null, Set.of(), null);
         connection = new Connection(workspace, IntegrationKind.GITLAB, "initial-group", gitLabConfig);
         connection.setState(IntegrationState.ACTIVE);
         connection = connectionRepository.saveAndFlush(connection);

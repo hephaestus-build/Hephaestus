@@ -84,14 +84,9 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void gitLabConfig_plaintext_roundTrips() {
+    void gitLabConfig_roundTrips() {
         ConnectionConfig.GitLabConfig original = new ConnectionConfig.GitLabConfig(
-                "https://gitlab.example.com",
-                1234L,
-                5678L,
-                ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                Set.of("merge_requests"),
-                null);
+                "https://gitlab.example.com", 1234L, 5678L, Set.of("merge_requests"), null);
         Long id = persistAndClear(IntegrationKind.GITLAB, "https://gitlab.example.com", original);
 
         Connection reloaded = connectionRepository.findById(id).orElseThrow();
@@ -100,26 +95,9 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         assertThat(cfg.serverUrl()).isEqualTo("https://gitlab.example.com");
         assertThat(cfg.gitlabGroupId()).isEqualTo(1234L);
         assertThat(cfg.gitlabWebhookId()).isEqualTo(5678L);
-        assertThat(cfg.signingMode()).isEqualTo(ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT);
         assertThat(cfg.enabledStreams()).containsExactly("merge_requests");
 
         assertDiscriminator(id, "GITLAB");
-    }
-
-    @Test
-    void gitLabConfig_whsec_roundTrips() {
-        ConnectionConfig.GitLabConfig original = new ConnectionConfig.GitLabConfig(
-                "https://gitlab.example.com",
-                null,
-                null,
-                ConnectionConfig.GitLabConfig.SigningMode.WHSEC,
-                Set.of(),
-                null);
-        Long id = persistAndClear(IntegrationKind.GITLAB, "https://gitlab.example.com/whsec", original);
-
-        Connection reloaded = connectionRepository.findById(id).orElseThrow();
-        ConnectionConfig.GitLabConfig cfg = (ConnectionConfig.GitLabConfig) reloaded.getConfig();
-        assertThat(cfg.signingMode()).isEqualTo(ConnectionConfig.GitLabConfig.SigningMode.WHSEC);
     }
 
     @Test
@@ -127,13 +105,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         Long id = persistAndClear(
                 IntegrationKind.GITLAB,
                 "https://gitlab.example.test",
-                new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.example.test",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of("issues"),
-                        null));
+                new ConnectionConfig.GitLabConfig("https://gitlab.example.test", null, null, Set.of("issues"), null));
         entityManager
                 .createNativeQuery("""
                 UPDATE connection SET config = CAST(:config AS jsonb)
@@ -191,13 +163,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         Long id = persistAndClear(
                 IntegrationKind.GITLAB,
                 "https://gitlab.example.test",
-                new ConnectionConfig.GitLabConfig(
-                                "https://gitlab.example.test",
-                                null,
-                                null,
-                                ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of("issues"),
-                                null)
+                new ConnectionConfig.GitLabConfig("https://gitlab.example.test", null, null, Set.of("issues"), null)
                         .withProjectExclusions(exclusions));
 
         Connection connection = connectionRepository.findById(id).orElseThrow();

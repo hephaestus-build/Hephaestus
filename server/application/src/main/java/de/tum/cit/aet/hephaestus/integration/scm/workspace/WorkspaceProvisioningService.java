@@ -251,12 +251,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 IntegrationKind.GITLAB,
                 instanceKey,
                 new ConnectionConfig.GitLabConfig(
-                        serverUrl,
-                        /* gitlabGroupId */ null,
-                        /* gitlabWebhookId */ null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null),
+                        serverUrl, /* gitlabGroupId */ null, /* gitlabWebhookId */ null, Set.of(), null),
                 token,
                 "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
 

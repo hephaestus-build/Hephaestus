@@ -112,12 +112,7 @@ class NativeHibernateJsonPersistenceIntegrationTest extends BaseIntegrationTest 
         var metadata = new ConnectionConfig.GitLabTokenMetadata(
                 LocalDate.of(2027, 1, 1), Instant.parse("2026-10-01T12:00:00Z"));
         var config = new ConnectionConfig.GitLabConfig(
-                "https://typed.example",
-                42L,
-                null,
-                ConnectionConfig.GitLabConfig.SigningMode.WHSEC,
-                Set.of("merge_requests"),
-                metadata);
+                "https://typed.example", 42L, null, Set.of("merge_requests"), metadata);
         var connection = new Connection(workspace, IntegrationKind.GITLAB, "typed-fixture", config);
         currentEntityManager.persist(connection);
         var node = mapper.readTree("{\"hash\":\"sha256:abc\",\"nested\":[1,true,null,\"雪\"]}");

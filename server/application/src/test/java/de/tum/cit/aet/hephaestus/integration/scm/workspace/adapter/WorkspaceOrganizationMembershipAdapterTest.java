@@ -193,13 +193,8 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
     /** The workspace's GitLab connection is active once its lifecycle lock is held, and it stores this selection. */
     private void connectedWithSelection(long workspaceId, RepositorySelection selection) {
         when(connections.lockActiveConfig(workspaceId, IntegrationKind.GITLAB))
-                .thenReturn(Optional.of(new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.lrz.de",
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null)));
+                .thenReturn(Optional.of(
+                        new ConnectionConfig.GitLabConfig("https://gitlab.lrz.de", null, null, Set.of(), null)));
         WorkspaceRepository.MonitorPolicy policy = mock(WorkspaceRepository.MonitorPolicy.class);
         lenient().when(policy.getRepositorySelection()).thenReturn(selection);
         when(workspaceRepository.findMonitorPolicy(workspaceId)).thenReturn(Optional.of(policy));

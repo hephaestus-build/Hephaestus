@@ -33,6 +33,8 @@ tags:
   name: Feedback Response
 - description: "User account management (settings, deletion)"
   name: Account
+- description: GitLab-specific REST endpoints used during the workspace creation wizard.
+  name: git-lab-preflight-controller
 - description: Instance-admin account management
   name: Admin
 - description: Current user's Slack privacy preferences
@@ -114,10 +116,6 @@ tags:
   name: Workspace LLM
 - description: Active sessions
   name: Account
-- description: |-
-    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
-     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
-  name: git-lab-preflight-controller
 - description: Instance-admin LLM connection and settings management
   name: Admin LLM
 - description: Public JWK set for verifying Hephaestus session JWTs
@@ -14485,12 +14483,6 @@ components:
         ADMIN:
           type: boolean
           description: User has admin privileges
-        GITLAB_WORKSPACE_CREATION:
-          type: boolean
-          description: GitLab workspace creation feature is enabled
-        NOTIFICATION_ACCESS:
-          type: boolean
-          description: User can receive notifications
         PAGE_EXPERIENCE_METRICS:
           type: boolean
           description: The browser measures and reports how page visits feel to the

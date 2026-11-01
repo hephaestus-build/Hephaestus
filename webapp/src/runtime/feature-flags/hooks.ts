@@ -18,8 +18,6 @@ type FeatureFlagsResponse = Record<FeatureFlagName, boolean>;
  */
 const featureFlagsSchema = z.object({
 	ADMIN: z.boolean().catch(false),
-	GITLAB_WORKSPACE_CREATION: z.boolean().catch(false),
-	NOTIFICATION_ACCESS: z.boolean().catch(false),
 	PAGE_EXPERIENCE_METRICS: z.boolean().catch(false),
 });
 
@@ -35,8 +33,6 @@ async function fetchFeatureFlags(): Promise<FeatureFlagsResponse> {
 // The administrator's flags never apply in a view.
 const USER_VIEW_FLAGS: FeatureFlagsResponse = {
 	ADMIN: false,
-	GITLAB_WORKSPACE_CREATION: false,
-	NOTIFICATION_ACCESS: false,
 	PAGE_EXPERIENCE_METRICS: false,
 };
 

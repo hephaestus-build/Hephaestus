@@ -1093,8 +1093,6 @@ export const zExternalDelivery = z.object({
  */
 export const zFeatureFlags = z.object({
     ADMIN: z.boolean().optional(),
-    GITLAB_WORKSPACE_CREATION: z.boolean().optional(),
-    NOTIFICATION_ACCESS: z.boolean().optional(),
     PAGE_EXPERIENCE_METRICS: z.boolean().optional()
 });
 

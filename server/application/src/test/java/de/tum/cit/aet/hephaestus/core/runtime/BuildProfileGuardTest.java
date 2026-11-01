@@ -33,10 +33,10 @@ class BuildProfileGuardTest extends BaseUnitTest {
     @ValueSource(
             strings = {
                 "prod,specs", "prod,cds-training",
-                "worker-node,specs", "worker-node,cds-training",
-                "webhook-server,specs", "webhook-server,cds-training"
+                "prod,worker,specs", "prod,worker,cds-training",
+                "prod,webhook,specs", "prod,webhook,cds-training"
             })
-    void shouldRejectProductionBuildProfileCombinationsEvenThroughGroups(String profiles) {
+    void shouldRejectProductionBuildProfileCombinations(String profiles) {
         runner.withPropertyValues("spring.profiles.active=" + profiles).run(context -> {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure())
@@ -46,7 +46,7 @@ class BuildProfileGuardTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"prod", "worker-node", "webhook-server", "specs", "cds-training", "test"})
+    @ValueSource(strings = {"prod", "prod,worker", "prod,webhook", "specs", "cds-training", "test"})
     void shouldAllowRuntimeAndArtifactProfilesSeparately(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile)
                 .run(context -> assertThat(context).hasNotFailed());

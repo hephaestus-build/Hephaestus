@@ -356,7 +356,6 @@ config:
     oauthClientId: ""
     oauthBaseUrl: https://gitlab.com
     oauthDisplayName: GitLab
-    workspaceCreation: false
   slack:
     enabled: false
     clientId: ""

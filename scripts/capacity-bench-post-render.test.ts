@@ -70,6 +70,30 @@ await test("the test overlay retains role resources and database settings while 
 	assert.equal(asRecord(spring.datasource, "datasource").url, `jdbc:\${DATABASE_URL}`);
 });
 
+await test("only the server role keeps the production NATS consumer on", () => {
+	const worker = structuredClone(deployment);
+	worker.metadata.name = "bench-worker";
+	worker.spec.template.metadata.labels["app.kubernetes.io/component"] = "worker";
+	const result = render([deployment, worker]);
+	assert.equal(result.status, 0, result.stderr);
+	const natsEnabled = (index: number) => {
+		const resource = asRecord(parseAllDocuments(result.stdout)[index]?.toJSON(), "deployment");
+		const pod = asRecord(
+			asRecord(asRecord(resource.spec, "spec").template, "template").spec,
+			"pod",
+		);
+		const env = asArray(asRecord(asArray(pod.containers, "containers")[0], "container").env, "env");
+		const json = env
+			.map((row) => asRecord(row, "env"))
+			.find((row) => row.name === "SPRING_APPLICATION_JSON");
+		const explicit = asRecord(parseJson(String(json?.value)), "properties");
+		const sync = asRecord(asRecord(explicit.hephaestus, "hephaestus").sync, "sync");
+		return asRecord(sync.nats, "nats").enabled;
+	};
+	assert.equal(natsEnabled(0), true);
+	assert.equal(natsEnabled(1), false);
+});
+
 await test("the overlay removes public routes and Internet egress but keeps the database path", () => {
 	const route = {
 		apiVersion: "gateway.networking.k8s.io/v1",

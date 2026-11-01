@@ -17,8 +17,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Per-account feature opt-ins. These are the app's authorization flags (where
- * {@code notification_access} lives; replaces the former Keycloak realm roles, ADR 0017).
+ * Per-account feature opt-ins: the app's authorization flags, which replace the former Keycloak
+ * realm roles (ADR 0017).
  *
  * <p>Composite PK {@code (account_id, flag)} — natural fit for "is this flag enabled
  * for this account?" lookups. The {@code FeatureFlag} enum remains the canonical

@@ -32,7 +32,6 @@ services:
       HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       SPRING_LIQUIBASE_ENABLED: "false"
       # NATS — reuses the existing `natsConnection` bean to publish inbound events.
-      HEPHAESTUS_SYNC_NATS_ENABLED: "true"
       HEPHAESTUS_SYNC_NATS_SERVER: "nats://nats-server:4222"
       NATS_USERNAME: ${NATS_USERNAME:?Set NATS_USERNAME}
       NATS_PASSWORD: ${NATS_PASSWORD:?Set NATS_PASSWORD}

@@ -15,14 +15,12 @@ type FeatureFlags = Record<FeatureFlagName, boolean>;
  * });
  *
  * // For mocking the full flags endpoint
- * const flags = mockFeatureFlags({ NOTIFICATION_ACCESS: true, ADMIN: true });
+ * const flags = mockFeatureFlags({ ADMIN: true });
  * ```
  */
 export function mockFeatureFlags(overrides?: Partial<FeatureFlags>): FeatureFlags {
 	return {
-		NOTIFICATION_ACCESS: false,
 		ADMIN: false,
-		GITLAB_WORKSPACE_CREATION: false,
 		PAGE_EXPERIENCE_METRICS: false,
 		...overrides,
 	};

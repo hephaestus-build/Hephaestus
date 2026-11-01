@@ -42,7 +42,6 @@ class GitHubPropertiesTest {
                 // Verify defaults
                 assertThat(props.app()).isNotNull();
                 assertThat(props.app().id()).isEqualTo(0L); // disabled by default
-                assertThat(props.meta()).isNotNull();
             });
         }
 
@@ -58,18 +57,6 @@ class GitHubPropertiesTest {
 
                         assertThat(props.app().id()).isEqualTo(123456L);
                         assertThat(props.app().privateKey()).isEqualTo("-----BEGIN RSA PRIVATE KEY-----");
-                    });
-        }
-
-        @Test
-        @DisplayName("should bind meta auth token when provided")
-        void metaConfig_boundCorrectly() {
-            contextRunner()
-                    .withPropertyValues("hephaestus.integration.github.meta.auth-token=ghp_test_token_12345")
-                    .run(context -> {
-                        GitHubProperties props = context.getBean(GitHubProperties.class);
-
-                        assertThat(props.meta().authToken()).isEqualTo("ghp_test_token_12345");
                     });
         }
 
@@ -114,14 +101,6 @@ class GitHubPropertiesTest {
             contextRunner().run(context -> {
                 GitHubProperties props = context.getBean(GitHubProperties.class);
                 assertThat(props.app()).isNotNull();
-            });
-        }
-
-        @Test
-        void nestedMeta_neverNull() {
-            contextRunner().run(context -> {
-                GitHubProperties props = context.getBean(GitHubProperties.class);
-                assertThat(props.meta()).isNotNull();
             });
         }
     }

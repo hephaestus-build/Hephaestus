@@ -31,27 +31,6 @@ class FeatureFlagServiceTest extends BaseUnitTest {
     class RoleFlags {
 
         @Test
-        void returnsTrueWhenUserHasRole() {
-            setSecurityContext("testuser", FeatureFlag.NOTIFICATION_ACCESS.key());
-
-            assertThat(featureFlagService.isEnabled(FeatureFlag.NOTIFICATION_ACCESS))
-                    .isTrue();
-        }
-
-        @Test
-        void returnsFalseWhenUserLacksRole() {
-            setSecurityContext("testuser", FeatureFlag.NOTIFICATION_ACCESS.key());
-
-            assertThat(featureFlagService.isEnabled(FeatureFlag.ADMIN)).isFalse();
-        }
-
-        @Test
-        void returnsFalseWithNoSecurityContext() {
-            assertThat(featureFlagService.isEnabled(FeatureFlag.NOTIFICATION_ACCESS))
-                    .isFalse();
-        }
-
-        @Test
         void returnsTrueForAdminUser() {
             setSecurityContext("admin", FeatureFlag.ADMIN.key());
 
@@ -59,12 +38,15 @@ class FeatureFlagServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void returnsCorrectFlagsWithMultipleAuthorities() {
-            setSecurityContext("poweruser", FeatureFlag.ADMIN.key(), FeatureFlag.NOTIFICATION_ACCESS.key());
+        void returnsFalseWhenUserLacksRole() {
+            setSecurityContext("testuser", "some_other_role");
 
-            assertThat(featureFlagService.isEnabled(FeatureFlag.ADMIN)).isTrue();
-            assertThat(featureFlagService.isEnabled(FeatureFlag.NOTIFICATION_ACCESS))
-                    .isTrue();
+            assertThat(featureFlagService.isEnabled(FeatureFlag.ADMIN)).isFalse();
+        }
+
+        @Test
+        void returnsFalseWithNoSecurityContext() {
+            assertThat(featureFlagService.isEnabled(FeatureFlag.ADMIN)).isFalse();
         }
     }
 
@@ -73,19 +55,19 @@ class FeatureFlagServiceTest extends BaseUnitTest {
 
         @Test
         void returnsTrueWhenConfigEnabled() {
-            when(featureProperties.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION.key()))
+            when(featureProperties.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS.key()))
                     .thenReturn(true);
 
-            assertThat(featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION))
+            assertThat(featureFlagService.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS))
                     .isTrue();
         }
 
         @Test
         void returnsFalseWhenConfigDisabled() {
-            when(featureProperties.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION.key()))
+            when(featureProperties.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS.key()))
                     .thenReturn(false);
 
-            assertThat(featureFlagService.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION))
+            assertThat(featureFlagService.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS))
                     .isFalse();
         }
     }
@@ -96,20 +78,20 @@ class FeatureFlagServiceTest extends BaseUnitTest {
         @Test
         void returnsTrueWhenAllEnabled() {
             setSecurityContext("admin", FeatureFlag.ADMIN.key());
-            when(featureProperties.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION.key()))
+            when(featureProperties.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS.key()))
                     .thenReturn(true);
 
-            assertThat(featureFlagService.allEnabled(FeatureFlag.ADMIN, FeatureFlag.GITLAB_WORKSPACE_CREATION))
+            assertThat(featureFlagService.allEnabled(FeatureFlag.ADMIN, FeatureFlag.PAGE_EXPERIENCE_METRICS))
                     .isTrue();
         }
 
         @Test
         void returnsFalseWhenOneDisabled() {
             setSecurityContext("admin", FeatureFlag.ADMIN.key());
-            when(featureProperties.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION.key()))
+            when(featureProperties.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS.key()))
                     .thenReturn(false);
 
-            assertThat(featureFlagService.allEnabled(FeatureFlag.ADMIN, FeatureFlag.GITLAB_WORKSPACE_CREATION))
+            assertThat(featureFlagService.allEnabled(FeatureFlag.ADMIN, FeatureFlag.PAGE_EXPERIENCE_METRICS))
                     .isFalse();
         }
 
@@ -127,7 +109,7 @@ class FeatureFlagServiceTest extends BaseUnitTest {
             // ADMIN role flag is checked first and returns true (short-circuits)
             setSecurityContext("admin", FeatureFlag.ADMIN.key());
 
-            assertThat(featureFlagService.anyEnabled(FeatureFlag.ADMIN, FeatureFlag.GITLAB_WORKSPACE_CREATION))
+            assertThat(featureFlagService.anyEnabled(FeatureFlag.ADMIN, FeatureFlag.PAGE_EXPERIENCE_METRICS))
                     .isTrue();
         }
 
@@ -135,7 +117,7 @@ class FeatureFlagServiceTest extends BaseUnitTest {
         void returnsFalseWhenNoneEnabled() {
             // No security context → ROLE flags return false
             // CONFIG flags also return false (Mockito defaults unstubbed boolean to false)
-            assertThat(featureFlagService.anyEnabled(FeatureFlag.ADMIN, FeatureFlag.GITLAB_WORKSPACE_CREATION))
+            assertThat(featureFlagService.anyEnabled(FeatureFlag.ADMIN, FeatureFlag.PAGE_EXPERIENCE_METRICS))
                     .isFalse();
         }
 
@@ -150,16 +132,15 @@ class FeatureFlagServiceTest extends BaseUnitTest {
 
         @Test
         void returnsAllFlags() {
-            setSecurityContext("testuser", FeatureFlag.NOTIFICATION_ACCESS.key());
-            when(featureProperties.isEnabled(FeatureFlag.GITLAB_WORKSPACE_CREATION.key()))
+            setSecurityContext("testuser", FeatureFlag.ADMIN.key());
+            when(featureProperties.isEnabled(FeatureFlag.PAGE_EXPERIENCE_METRICS.key()))
                     .thenReturn(true);
 
             Map<FeatureFlag, Boolean> result = featureFlagService.evaluateAll();
 
             assertThat(result).hasSize(FeatureFlag.values().length);
-            assertThat(result.get(FeatureFlag.NOTIFICATION_ACCESS)).isTrue();
-            assertThat(result.get(FeatureFlag.ADMIN)).isFalse();
-            assertThat(result.get(FeatureFlag.GITLAB_WORKSPACE_CREATION)).isTrue();
+            assertThat(result.get(FeatureFlag.ADMIN)).isTrue();
+            assertThat(result.get(FeatureFlag.PAGE_EXPERIENCE_METRICS)).isTrue();
         }
     }
 

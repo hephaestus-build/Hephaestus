@@ -1146,13 +1146,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 workspace,
                 IntegrationKind.GITLAB,
                 old.getServerUrl(),
-                new ConnectionConfig.GitLabConfig(
-                        old.getServerUrl(),
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null)));
+                new ConnectionConfig.GitLabConfig(old.getServerUrl(), null, null, Set.of(), null)));
         monitor(workspace, NATIVE_ID);
         assertThat(repositories.findAllByWorkspaceMonitors(workspace.getId())).isEmpty();
         assertNoWorkFacts(workspace, issue(oldRepository));
@@ -1471,13 +1465,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 workspace,
                 IntegrationKind.GITLAB,
                 provider.getServerUrl(),
-                new ConnectionConfig.GitLabConfig(
-                        provider.getServerUrl(),
-                        null,
-                        null,
-                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of(),
-                        null));
+                new ConnectionConfig.GitLabConfig(provider.getServerUrl(), null, null, Set.of(), null));
         // A synthetic token, so an explicit Add can ask GitLab with the token and server its connection stores.
         String token = "synthetic-token-" + workspace.getWorkspaceSlug();
         unsaved.setCredentials(new BearerToken(token, null), credentialConverter);

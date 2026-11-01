@@ -78,8 +78,6 @@ spec:
             # The buildpack's 10M direct-memory default sits below this role's NATS and HTTP footprint.
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M
-            - name: NATS_ENABLED
-              value: "true"
             - name: NATS_SERVER
               value: {{ include "hephaestus.natsUrl" . | quote }}
             - name: HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD
@@ -144,8 +142,6 @@ spec:
               value: {{ $config.gitlab.oauthBaseUrl | quote }}
             - name: GITLAB_OAUTH_DISPLAY_NAME
               value: {{ $config.gitlab.oauthDisplayName | quote }}
-            - name: GITLAB_WORKSPACE_CREATION
-              value: {{ $config.gitlab.workspaceCreation | quote }}
             - name: PAGE_EXPERIENCE_METRICS
               value: {{ $config.pageExperienceMetrics | quote }}
             - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
