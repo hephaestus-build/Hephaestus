@@ -16,3 +16,6 @@ trustPolicyIgnoreAfter: 43200
 strictDepBuilds: true
 # Only direct dependencies can come from a Git repository or a tarball URL (pnpm.io/settings).
 blockExoticSubdeps: true
+minimumReleaseAgeExclude:
+  # Renovate security update: minimatch@11.0.1
+  - minimatch@11.0.1
