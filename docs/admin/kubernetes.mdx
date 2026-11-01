@@ -1180,6 +1180,12 @@ priorityClasses:
 
 The chart refuses a name while `create` is true, and a missing name while it is false.
 
+The roles can preempt any Pod of a lower priority on the same nodes.
+With the classes that the chart creates, the roles' priority is 100000.
+Give every add-on that shares those nodes, such as a log collector or a metrics stack, a priority of at least the roles' value.
+Otherwise a restore or an upgrade can stop it.
+The one-host platform runs Traefik and cert-manager as `system-cluster-critical`.
+
 The workers remove what no attempt and no worker uses in the sandbox namespace.
 Do not share it with another release or another application.
 
