@@ -566,7 +566,7 @@ Thus, without this producer, nothing would refresh the dependencies that consume
 Consumers would download them from Maven Central in every job.
 
 The Gradle action prefers an older entry of the same job to a newer entry of another job
-([restore order](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#finding-a-matching-cache-entry)).
+([restore order](https://github.com/gradle/actions/blob/v6.4.1/docs/setup-gradle.md#finding-a-matching-cache-entry)).
 Thus, a second writer would pin consumers to its stale snapshot, even if it writes only when reuse fails.
 
 The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
@@ -604,8 +604,8 @@ sources and compilation can also be restored. Test tasks always execute. Their r
 The [local verification contract](./local-verification.mdx#java-checks-and-caching) describes the shared
 local/CI command and how to distinguish Vite, Gradle build and Gradle configuration caches.
 
-Gradle's official action explicitly uses its [enhanced cache provider](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#enhanced-caching).
-Its proprietary caching helper is [free for public repositories](https://github.com/gradle/actions/blob/v6.3.0/DISTRIBUTION.md).
+Gradle's official action explicitly uses its [enhanced cache provider](https://github.com/gradle/actions/blob/v6.4.1/docs/setup-gradle.md#enhanced-caching).
+Its proprietary caching helper is [free for public repositories](https://github.com/gradle/actions/blob/v6.4.1/DISTRIBUTION.md).
 It retains dependency fallback and deduplicated build outputs. The OSS basic provider's immutable,
 exact-match cache cannot refresh build outputs after source-only changes. Configuration-cache
 reuse remains within a job: no encryption key is configured, so the
