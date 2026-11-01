@@ -20,7 +20,7 @@
 		"@tanstack/react-query": "5.102.8",
 		"@wxt-dev/browser": "0.3.0",
 		"cn": "0.2.6",
-		"lucide-react": "1.41.0",
+		"lucide-react": "1.64.0",
 		"react": "19.2.8",
 		"react-dom": "19.2.8",
 		"zod": "4.6.6"

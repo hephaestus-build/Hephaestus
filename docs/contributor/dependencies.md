@@ -41,6 +41,15 @@ Examples are a Node built-in such as `util.parseArgs`, `util.styleText`, `fs.glo
 In `webapp/` and `server/`, ask a maintainer before you add a dependency.
 Their package guides say so.
 
+### Exceptions to the bar
+
+Only a maintainer can accept a package that fails an item.
+Each accepted exception has a row here, with the condition that makes us examine it again.
+
+| Package | Item | Reason | Examine again when |
+|---|---|---|---|
+| `@isaacs/nonrecursive-glob-match@1.0.3` | 5. Maintainers | `minimatch` 11 needs it, and only `minimatch` 11 fixes GHSA-g3hv-75wg-m249. The single maintainer of `minimatch` released this code from the `minimatch` tree. We already ship `minimatch` with the same single maintainer. Thus, the trust boundary stays the same. The package has no dependencies, no install script and a permissive license. | `minimatch` gets an organization or a second maintainer, or npm provenance. |
+
 ## When to own code instead
 
 Own the code when all of these are true:
