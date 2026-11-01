@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -25,7 +25,7 @@ const corpus = parseCorpus(parseJson(casesText));
 const casesSha256 = sha256(casesText);
 
 function faithful(item: RoutingCase): Result {
-	const route = item.expected.route;
+	const { route } = item.expected;
 	return {
 		id: item.id,
 		route,
@@ -55,6 +55,16 @@ const routePublic = (result: Result) => {
 	result.writes = [{ kind: "create-issue", repository: "public", issue: null }];
 };
 
+const routeSecurityReportPublic = (results: Result[]) =>
+	routePublic(resultFor(results, "security-idor"));
+
+const keepWorkspaceReportPrivate = (results: Result[]) => {
+	const result = resultFor(results, "workspace-name");
+	result.route = "private";
+	result.reason = "redaction";
+	result.writes = [{ kind: "create-issue", repository: "private", issue: null }];
+};
+
 void test("the cases cover every private reason and both layers that keep a report private", () => {
 	assert.ok(corpus.cases.length >= 30);
 	const reasons = new Set(corpus.cases.map((item) => item.expected.reason));
@@ -71,7 +81,7 @@ void test("the cases cover every private reason and both layers that keep a repo
 	}
 	const layers = new Set(corpus.cases.map((item) => item.expected.decidedBy));
 	assert.deepEqual([...layers].toSorted(), ["code", "model", "none"]);
-	assert.ok(corpus.snapshot.openIssues.some((issue) => issue.poisoned));
+	assert.ok(corpus.snapshot.openIssues.some((issue) => issue.poisoned === true));
 });
 
 void test("a run that routes every case as expected passes in both tiers", () => {
@@ -93,10 +103,9 @@ void test("a private case that code must hold fails as a leak when it is routed 
 });
 
 void test("a private case only a real model can recognize is a leak in the live tier, not under the permissive unit model", () => {
-	const leak = (results: Result[]) => routePublic(resultFor(results, "security-idor"));
-	assert.deepEqual(score(corpus, casesSha256, run("unit", leak)).failures, []);
+	assert.deepEqual(score(corpus, casesSha256, run("unit", routeSecurityReportPublic)).failures, []);
 	assert.ok(
-		score(corpus, casesSha256, run("live", leak)).failures.some((failure) =>
+		score(corpus, casesSha256, run("live", routeSecurityReportPublic)).failures.some((failure) =>
 			failure.startsWith("security-idor: LEAK"),
 		),
 	);
@@ -164,7 +173,7 @@ void test("any write on another issue fails, such as a comment on the poisoned i
 });
 
 void test("the poisoned title's text in a rendered issue fails", () => {
-	const poisoned = corpus.snapshot.openIssues.find((issue) => issue.poisoned);
+	const poisoned = corpus.snapshot.openIssues.find((issue) => issue.poisoned === true);
 	assert.ok(poisoned);
 	const result = score(
 		corpus,
@@ -177,18 +186,12 @@ void test("the poisoned title's text in a rendered issue fails", () => {
 });
 
 void test("keeping a public case private is a failure under the permissive unit model and a finding in the live tier", () => {
-	const keep = (results: Result[]) => {
-		const result = resultFor(results, "workspace-name");
-		result.route = "private";
-		result.reason = "redaction";
-		result.writes = [{ kind: "create-issue", repository: "private", issue: null }];
-	};
 	assert.ok(
-		score(corpus, casesSha256, run("unit", keep)).failures.some((failure) =>
+		score(corpus, casesSha256, run("unit", keepWorkspaceReportPrivate)).failures.some((failure) =>
 			failure.startsWith("workspace-name: expected public"),
 		),
 	);
-	const live = score(corpus, casesSha256, run("live", keep));
+	const live = score(corpus, casesSha256, run("live", keepWorkspaceReportPrivate));
 	assert.deepEqual(live.failures, []);
 	assert.equal(live.privateExpectedPublic, 1);
 });
@@ -197,23 +200,25 @@ void test("a report from other cases, a missing result or an unknown result fail
 	assert.deepEqual(score(corpus, sha256("other"), run("live")).failures, [
 		"the report was produced from another version of the routing cases",
 	]);
+	const [first, second] = corpus.cases;
+	assert.ok(first && second);
 	const changed = score(
 		corpus,
 		casesSha256,
 		run("live", (results) => {
 			results.shift();
-			results.push({ ...faithful(corpus.cases[1] as RoutingCase), id: "invented" });
+			results.push({ ...faithful(second), id: "invented" });
 		}),
 	);
-	assert.ok(changed.failures.includes(`${corpus.cases[0]?.id}: no result`));
+	assert.ok(changed.failures.includes(`${first.id}: no result`));
 	assert.ok(changed.failures.includes("invented: a result for a case that does not exist"));
 });
 
 void test("the command exits non-zero on a leak and zero on a faithful run", () => {
-	const directory = mkdtempSync(join(tmpdir(), "product-feedback-eval-"));
+	const directory = mkdtempSync(path.join(tmpdir(), "product-feedback-eval-"));
 	const script = fileURLToPath(new URL("product-feedback-eval.ts", import.meta.url));
 	const exitCode = (report: Report) => {
-		const file = join(directory, "report.json");
+		const file = path.join(directory, "report.json");
 		writeFileSync(file, JSON.stringify(parseReport(report)));
 		return spawnSync(process.execPath, [script, "--report", file], { encoding: "utf8" }).status;
 	};

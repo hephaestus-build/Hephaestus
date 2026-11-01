@@ -164,6 +164,7 @@ export const EmailNotConfigured: Story = {
 				...meta.args.emailPreferencesProps.state,
 				preferences: {
 					...meta.args.emailPreferencesProps.state.preferences,
+					productFeedbackUpdates: false,
 					deliveryConfigured: false,
 				},
 			},

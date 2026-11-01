@@ -423,7 +423,7 @@ public class GitHubProductFeedbackIssues implements ProductFeedbackIssues, Produ
             for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
                 if (cause instanceof WebClientResponseException response) {
                     if (response.getStatusCode().value() == 404) return Optional.empty();
-                    throw httpFailure(response.getStatusCode().value(), response.getHeaders());
+                    throw httpFailure(response.getStatusCode().value(), response.getHeaders(), failure);
                 }
             }
             throw new Unknown("GitHub installation authentication is unavailable.", failure);
@@ -455,7 +455,7 @@ public class GitHubProductFeedbackIssues implements ProductFeedbackIssues, Produ
                 if (allowMissing && status == 404)
                     return ResponseEntity.status(404).build();
                 HttpHeaders headers = response.getHeaders();
-                if (status < 200 || status >= 300) throw httpFailure(status, headers);
+                if (status < 200 || status >= 300) throw httpFailure(status, headers, null);
                 return ResponseEntity.status(status).headers(headers).body(response.bodyTo(JsonNode.class));
             });
         } catch (RestClientException failure) {
@@ -463,15 +463,19 @@ public class GitHubProductFeedbackIssues implements ProductFeedbackIssues, Produ
         }
     }
 
-    private static RuntimeException httpFailure(int status, HttpHeaders headers) {
+    private static RuntimeException httpFailure(int status, HttpHeaders headers, @Nullable Throwable cause) {
         if (status == 429
                 || (status == 403
                         && (headers.containsHeader(HttpHeaders.RETRY_AFTER)
                                 || "0".equals(headers.getFirst("x-ratelimit-remaining"))))) {
-            return new Unknown("GitHub rate limit reached. Retry at " + retryAt(headers) + ".", null);
+            return new Unknown("GitHub rate limit reached. Retry at " + retryAt(headers) + ".", cause);
         }
-        if (status >= 400 && status < 500) return new Refused("GitHub refused the request (HTTP " + status + ").");
-        return new Unknown("GitHub request outcome is unknown (HTTP " + status + ").", null);
+        if (status >= 400 && status < 500) {
+            var refused = new Refused("GitHub refused the request (HTTP " + status + ").");
+            if (cause != null) refused.initCause(cause);
+            return refused;
+        }
+        return new Unknown("GitHub request outcome is unknown (HTTP " + status + ").", cause);
     }
 
     private JsonNode graphQl(String token, String query, Map<String, Object> variables, boolean allowMissingNodes) {
@@ -481,7 +485,7 @@ public class GitHubProductFeedbackIssues implements ProductFeedbackIssues, Produ
         if (!errors.isMissingNode()) {
             for (JsonNode error : array(errors)) {
                 String type = error.path("type").asString("");
-                if (type.equals("RATE_LIMITED")) throw httpFailure(429, httpResponse.getHeaders());
+                if (type.equals("RATE_LIMITED")) throw httpFailure(429, httpResponse.getHeaders(), null);
                 if (allowMissingNodes
                         && type.equals("NOT_FOUND")
                         && error.path("path").path(0).asString("").equals("nodes")) continue;

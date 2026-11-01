@@ -196,7 +196,7 @@ export const PrivateRepositoryOnly: Story = {
 	args: { sharing: { status: "private" } },
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		await expect(dialog.getByText(/private GitHub issue from your report/u)).toBeVisible();
+		await expectSettledVisible(dialog.getByText(/private GitHub issue from your report/u));
 		await expect(dialog.queryByRole("switch", { name: "Public GitHub issue" })).toBeNull();
 		await expect(dialog.queryByRole("radio", { name: /share it publicly/u })).toBeNull();
 		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Private note.");

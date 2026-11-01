@@ -66,6 +66,7 @@ record Draft(
      * Reads the model's answer. The JSON object may sit in a code fence or among prose; anything outside the first
      * object is ignored. {@code related} must name an open issue of the snapshot, or it is dropped.
      */
+    @SuppressWarnings("PMD.PreserveStackTrace") // The cause quotes the model answer, which holds report text.
     static Draft parse(String answer, ObjectMapper mapper, Set<Long> openIssues) throws Invalid {
         int start = answer.indexOf('{');
         int end = answer.lastIndexOf('}');
@@ -103,6 +104,7 @@ record Draft(
                 enumOf(Confidence.class, node.path("confidence"), "confidence"));
     }
 
+    @SuppressWarnings("PMD.PreserveStackTrace") // The cause quotes the model answer, which holds report text.
     private static <E extends Enum<E>> E enumOf(Class<E> type, JsonNode node, String field) throws Invalid {
         if (!node.isString()) throw new Invalid("The field " + field + " is missing.");
         try {
