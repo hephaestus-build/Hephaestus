@@ -48,7 +48,7 @@ jobs:
       server-tests: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       tooling: ${{ steps.filter.outputs.tooling }}
       windows: ${{ steps.filter.outputs.windows }}
-      application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' }}
+      application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' || steps.filter.outputs.image-scan == 'true' }}
       e2e: ${{ steps.filter.outputs.e2e }}
       extension-e2e: ${{ steps.filter.outputs.extension-e2e }}
       api-clients: ${{ steps.filter.outputs.api-clients }}
@@ -510,6 +510,7 @@ jobs:
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
               - 'scripts/prepare-kubernetes-runner.ts'
+              - 'scripts/lib/runner-disk.ts'
               - 'server/application/build.gradle.kts'
               - 'server/application/src/test/java/**/kubernetes/KubernetesSandboxLiveTest.java'
               - 'server/application/src/test/java/**/kubernetes/KubernetesLiveSuite.java'
@@ -598,6 +599,11 @@ jobs:
               - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
               - 'docker/docker-bake.hcl'
+            # The scan's runner preparation changes no image, so it builds and scans the App Server
+            # image, the largest scan, without marking the other images changed.
+            image-scan:
+              - 'scripts/prepare-image-scan-runner.ts'
+              - 'scripts/lib/runner-disk.ts'
             pmd-canary:
               - 'scripts/check-pmd-canary.ts'
               - 'scripts/check-pmd-canary.test.ts'

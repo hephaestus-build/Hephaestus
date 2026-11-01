@@ -1,16 +1,10 @@
 import { appendFile, statfs } from "node:fs/promises";
 
 import { output, run } from "./lib/process.ts";
+import { removeUnusedSdks, requireHostedRunner } from "./lib/runner-disk.ts";
 
 // Node containers unpack separate copies of the application and sandbox images on Docker's filesystem.
 const MINIMUM_FREE_BYTES = 25 * 1024 ** 3;
-const UNUSED_SDKS = [
-	"/usr/local/lib/android",
-	"/usr/share/dotnet",
-	"/usr/local/.ghcup",
-	"/opt/ghc",
-	"/opt/hostedtoolcache/CodeQL",
-];
 
 export function checkFreeSpace(available: number): string {
 	if (!Number.isSafeInteger(available) || available < 0) {
@@ -24,20 +18,14 @@ export function checkFreeSpace(available: number): string {
 }
 
 async function main(): Promise<void> {
-	if (
-		process.platform !== "linux" ||
-		process.env.GITHUB_ACTIONS !== "true" ||
-		process.env.RUNNER_ENVIRONMENT !== "github-hosted"
-	) {
-		throw new Error("Disk cleanup requires a GitHub-hosted Linux runner");
-	}
+	requireHostedRunner();
 	const dockerRoot = await output("docker", ["info", "--format", "{{.DockerRootDir}}"]);
 	const root = dockerRoot.trim();
 	if (!root.startsWith("/") || root.includes("\n")) {
 		throw new Error("Docker did not return an absolute data directory");
 	}
 	await run("df", ["-h", "--", root]);
-	await run("sudo", ["rm", "-rf", "--", ...UNUSED_SDKS]);
+	await removeUnusedSdks();
 	await run("df", ["-h", "--", root]);
 	const { bavail, bsize } = await statfs(root);
 	const message = checkFreeSpace(bavail * bsize);
