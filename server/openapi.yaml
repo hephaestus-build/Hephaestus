@@ -36,6 +36,8 @@ tags:
   name: Feedback Response
 - description: "User account management (settings, deletion)"
   name: Account
+- description: GitLab-specific REST endpoints used during the workspace creation wizard.
+  name: git-lab-preflight-controller
 - description: Instance-admin account management
   name: Admin
 - description: Current user's Slack privacy preferences
@@ -117,10 +119,6 @@ tags:
   name: Workspace LLM
 - description: Active sessions
   name: Account
-- description: |-
-    GitLab-specific REST endpoints used during the workspace creation wizard. Gated on the
-     <code>GITLAB_WORKSPACE_CREATION</code> feature flag.
-  name: git-lab-preflight-controller
 - description: A person's own product feedback reports and their choice about public
     issues.
   name: my-product-feedback-controller
@@ -209,6 +207,7 @@ paths:
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
+            - INSTALLATION_EVENT_REPLAYED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -302,6 +301,7 @@ paths:
             - APP_ROLE_CHANGED
             - RESEARCH_CONSENT_REVOKED
             - WORKSPACE_ELEVATION
+            - INSTALLATION_EVENT_REPLAYED
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -499,6 +499,50 @@ paths:
       summary: Send a test email
       tags:
       - Instance Email
+  /admin/integration/dead-letters:
+    get:
+      operationId: listInstallationDeadLetters
+      parameters:
+      - in: query
+        name: after
+        required: false
+        schema:
+          type: integer
+          format: int64
+          default: 0
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: List unassigned installation dead letters
+      tags:
+      - installation-dead-letter
+  /admin/integration/dead-letters/{id}/replays:
+    post:
+      operationId: replayInstallationDeadLetter
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: Replay an unassigned installation dead letter
+      tags:
+      - installation-dead-letter
   /admin/llm/call-pools:
     get:
       operationId: adminListLlmCallPools
@@ -5051,6 +5095,68 @@ paths:
       summary: Update workspace feature flags
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/integrations/dead-letters:
+    get:
+      operationId: listConsumerDeadLetters
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: query
+        name: after
+        required: false
+        schema:
+          type: integer
+          format: int64
+          default: 0
+          minimum: 0
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: List this workspace's dead letters
+      tags:
+      - consumer-dead-letter
+  /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays:
+    post:
+      operationId: replayConsumerDeadLetter
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerDeadLetter"
+          description: OK
+      summary: Replay a dead letter in this workspace
+      tags:
+      - consumer-dead-letter
   /workspaces/{workspaceSlug}/llm/available-models:
     get:
       operationId: workspaceListAvailableLlmModels
@@ -13298,6 +13404,38 @@ components:
       - completed
       - noticeVersion
       - participateInResearch
+    ConsumerDeadLetter:
+      type: object
+      properties:
+        errorClass:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
+        id:
+          type: integer
+          format: int64
+        receivedAt:
+          type: string
+          format: date-time
+        replayedAt:
+          type: string
+          format: date-time
+        replayedBy:
+          type: integer
+          format: int64
+        sequence:
+          type: integer
+          format: int64
+        stream:
+          type: string
+      required:
+      - errorClass
+      - failedAt
+      - id
+      - receivedAt
+      - sequence
+      - stream
     Contributor:
       type: object
       description: Information about a contributor to the Hephaestus project
@@ -14245,12 +14383,6 @@ components:
         ADMIN:
           type: boolean
           description: User has admin privileges
-        GITLAB_WORKSPACE_CREATION:
-          type: boolean
-          description: GitLab workspace creation feature is enabled
-        NOTIFICATION_ACCESS:
-          type: boolean
-          description: User can receive notifications
         PAGE_EXPERIENCE_METRICS:
           type: boolean
           description: The browser measures and reports how page visits feel to the
@@ -15546,6 +15678,9 @@ components:
           - ITEM_GONE
           - LEGACY_REVIEW_UNBOUND
           - OCCASION_EVIDENCE_UNAVAILABLE
+          - QUIET_WINDOW
+          - REVIEW_IN_PROGRESS
+          - ALREADY_CURRENT
           - null
         reviewId:
           type:
@@ -22996,6 +23131,9 @@ components:
           - ITEM_GONE
           - LEGACY_REVIEW_UNBOUND
           - OCCASION_EVIDENCE_UNAVAILABLE
+          - QUIET_WINDOW
+          - REVIEW_IN_PROGRESS
+          - ALREADY_CURRENT
           - null
         reviewId:
           type:
