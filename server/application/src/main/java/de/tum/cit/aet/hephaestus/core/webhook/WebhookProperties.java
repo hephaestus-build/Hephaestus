@@ -19,7 +19,9 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param externalUrl Set the public base URL used to register this instance's GitLab webhooks.
  *     GitLab webhook registration is skipped when it is unset.
- * @param secret Shared secret that verifies GitHub webhook signatures. Must differ from both routing secrets.
+ * @param secret Shared secret that verifies GitHub webhook signatures. The server and webhook roles require at least
+ *     32 printable ASCII characters without spaces, also on an instance without GitHub. Must differ from both routing
+ *     secrets.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.webhook")
