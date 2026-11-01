@@ -45,7 +45,10 @@ describe("product feedback sent from a workspace page", () => {
 			await screen.findByRole("button", { name: "Product feedback" }, ROUTE_RENDER_WAIT),
 		);
 		await user.click(await screen.findByRole("menuitem", { name: "Report a bug" }));
-		await user.type(screen.getByRole("textbox", { name: "What happened?" }), "The list is empty.");
+		await user.type(
+			await screen.findByRole("textbox", { name: "What happened?" }),
+			"The list is empty.",
+		);
 		screen.getByText("/w/$workspaceSlug/activity");
 		await user.click(screen.getByRole("button", { name: "Send" }));
 
@@ -68,7 +71,7 @@ async function composeIdea(user: ReturnType<typeof userEvent.setup>) {
 		await screen.findByRole("button", { name: "Product feedback" }, ROUTE_RENDER_WAIT),
 	);
 	await user.click(await screen.findByRole("menuitem", { name: "Share an idea" }));
-	await user.type(screen.getByRole("textbox", { name: "Your idea" }), "Pin a practice.");
+	await user.type(await screen.findByRole("textbox", { name: "Your idea" }), "Pin a practice.");
 }
 
 describe("product feedback that can become a public GitHub issue", () => {

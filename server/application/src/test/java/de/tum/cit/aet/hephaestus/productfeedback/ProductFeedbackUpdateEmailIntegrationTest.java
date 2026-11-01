@@ -88,7 +88,7 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
 
         MimeMessage message = sentTo(reporter).getFirst();
         String expected = switch (kind) {
-            case FILED -> "Your product feedback is now issue on GitHub";
+            case FILED -> "Your product feedback is now an issue on GitHub";
             case PUBLISHED -> "A maintainer made your report public";
             case COMMENTED -> "A new comment on your issue";
             case CLOSED_COMPLETED -> "Your issue was closed as completed";
@@ -109,11 +109,11 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
         var alternatives = (MimeMultipart) mixed.getBodyPart(0).getContent();
         for (int i = 0; i < alternatives.getCount(); i++) {
             String body = alternatives.getBodyPart(i).getContent().toString();
+            // A private issue's address never reaches the reporter's mailbox.
             assertThat(body)
-                    .contains(expected, ISSUE, "/product-feedback", "Your product feedback")
-                    .doesNotContain("private-feedback-content", "a maintainer replied", "fixed");
+                    .contains(expected, "/product-feedback", "Your product feedback")
+                    .doesNotContain(ISSUE, ORIGINAL, "private-feedback-content", "a maintainer replied", "fixed");
             if (kind == Kind.FILED) assertThat(body).contains("The maintainers can see it");
-            if (kind == Kind.DUPLICATE) assertThat(body).contains(ORIGINAL);
         }
         assertThat(publications(id)).isEmpty();
 
@@ -138,6 +138,18 @@ class ProductFeedbackUpdateEmailIntegrationTest extends BaseIntegrationTest {
             assertThat(alternatives.getBodyPart(i).getContent().toString())
                     .contains(ISSUE)
                     .doesNotContain("The maintainers can see it");
+        }
+    }
+
+    @Test
+    void shouldLinkTheOriginalOfAPublicDuplicate() throws Exception {
+        Account reporter = reporter();
+        publish(report(reporter), reporter, Kind.DUPLICATE, true);
+
+        var mixed = (MimeMultipart) sentTo(reporter).getFirst().getContent();
+        var alternatives = (MimeMultipart) mixed.getBodyPart(0).getContent();
+        for (int i = 0; i < alternatives.getCount(); i++) {
+            assertThat(alternatives.getBodyPart(i).getContent().toString()).contains(ISSUE, ORIGINAL);
         }
     }
 

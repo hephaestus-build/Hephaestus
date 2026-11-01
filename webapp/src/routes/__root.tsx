@@ -35,13 +35,7 @@ import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/App
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
-import {
-	PAGE_PATH_MAX_LENGTH,
-	ProductFeedbackDialog,
-	USER_AGENT_MAX_LENGTH,
-} from "@/components/product-feedback/ProductFeedbackDialog";
 import { ProductFeedbackMenu } from "@/components/product-feedback/ProductFeedbackMenu";
-import { ProductFeedbackReceipt } from "@/components/product-feedback/ProductFeedbackReceipt";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
@@ -50,12 +44,6 @@ import environment from "@/environment";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import {
-	useFollowedProductFeedback,
-	useMyProductFeedbackActions,
-	useProductFeedbackSharing,
-	useSubmitProductFeedback,
-} from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
@@ -203,25 +191,13 @@ function RootRoute() {
 	);
 }
 
-/**
- * The page a report is sent from, as its route: `/w/$workspaceSlug/practices`, never `/w/acme/practices`.
- * The route names the screen without the workspace, ids or search that the address carries.
- */
-function routeOf(fullPath: string | undefined): string {
-	if (fullPath === undefined || fullPath === "/") {
-		return "/";
-	}
-	return fullPath.endsWith("/") ? fullPath.slice(0, -1) : fullPath;
-}
+/** The dialog, its receipt and their queries load on the first open, so the shell does not carry them. */
+const ProductFeedbackPanel = lazy(async () => import("./-ProductFeedbackPanel"));
 
 function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) {
-	const route = useMatches({ select: (matches) => routeOf(matches.at(-1)?.fullPath) });
-	const feedback = useSubmitProductFeedback(workspaceSlug);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
+	const [opened, setOpened] = useState(false);
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
-	const { sharing, publicRepository } = useProductFeedbackSharing(feedbackOpen);
-	const report = useFollowedProductFeedback(feedback.receipt, feedbackOpen);
-	const actions = useMyProductFeedbackActions();
 	return (
 		<>
 			<ProductFeedbackMenu
@@ -229,39 +205,20 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 				onSendFeedback={(kind) => {
 					setFeedbackKind(kind);
 					setFeedbackOpen(true);
+					setOpened(true);
 				}}
 			/>
-			<ProductFeedbackDialog
-				open={feedbackOpen}
-				onOpenChange={(open) => {
-					if (!open) {
-						feedback.reset();
-					}
-					setFeedbackOpen(open);
-				}}
-				kind={feedbackKind}
-				onKindChange={setFeedbackKind}
-				context={{
-					pagePath: route.slice(0, PAGE_PATH_MAX_LENGTH),
-					userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
-				}}
-				sharing={sharing}
-				workspaceSlug={workspaceSlug}
-				isSubmitting={feedback.isPending}
-				error={feedback.error}
-				onSubmit={feedback.submit}
-				confirmation={
-					report === undefined ? undefined : (
-						<ProductFeedbackReceipt
-							report={report}
-							publicRepository={publicRepository}
-							pending={actions.pendingFor(report.id)}
-							onKeepPrivate={() => actions.keepPrivate(report.id)}
-							onEdit={async (draft) => actions.edit(report.id, draft)}
-						/>
-					)
-				}
-			/>
+			{opened && (
+				<Suspense fallback={null}>
+					<ProductFeedbackPanel
+						open={feedbackOpen}
+						onOpenChange={setFeedbackOpen}
+						kind={feedbackKind}
+						onKindChange={setFeedbackKind}
+						workspaceSlug={workspaceSlug}
+					/>
+				</Suspense>
+			)}
 		</>
 	);
 }
