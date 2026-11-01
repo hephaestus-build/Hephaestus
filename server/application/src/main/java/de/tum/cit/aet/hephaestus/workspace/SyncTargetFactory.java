@@ -27,9 +27,10 @@ public final class SyncTargetFactory {
      * @param workspace the workspace containing the repository monitor
      * @param rtm the repository to monitor entity
      * @param connectionService authoritative source for the workspace's active Connection
-     * @return a SyncTarget instance for use with sync services
+     * @return the SyncTarget, or empty when the workspace has no active SCM connection to authenticate with
      */
-    public static SyncTarget create(Workspace workspace, RepositoryToMonitor rtm, ConnectionService connectionService) {
+    public static Optional<SyncTarget> create(
+            Workspace workspace, RepositoryToMonitor rtm, ConnectionService connectionService) {
         long workspaceId = workspace.getId();
         var gitHubApp = connectionService.findActiveGitHubAppConfig(workspaceId);
         var gitHubPat = connectionService.findActiveGitHubPatConfig(workspaceId);
@@ -49,12 +50,10 @@ public final class SyncTargetFactory {
             authMode = AuthMode.PERSONAL_ACCESS_TOKEN;
             personalAccessToken = resolveBearerToken(connectionService, workspaceId, IntegrationKind.GITLAB);
         } else {
-            // No SCM connection bound — caller is responsible for filtering these out
-            // before scheduling work; default to INSTALLATION_APP for backward-compat shape.
-            authMode = AuthMode.INSTALLATION_APP;
+            return Optional.empty();
         }
 
-        return new SyncTarget(
+        return Optional.of(new SyncTarget(
                 rtm.getId(),
                 workspaceId,
                 installationId,
@@ -74,7 +73,7 @@ public final class SyncTargetFactory {
                 rtm.getBackfillLastRunAt(),
                 rtm.getIssueSyncCursor(),
                 rtm.getPullRequestSyncCursor(),
-                rtm.getNativeId());
+                rtm.getNativeId()));
     }
 
     private static @Nullable String resolveBearerToken(

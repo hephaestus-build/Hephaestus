@@ -152,6 +152,17 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReturnNoSyncTargetsWhenWorkspaceHasNoActiveConnection() {
+        Workspace unconnected = workspace(7);
+        when(workspaceRepository.findById(7L)).thenReturn(Optional.of(unconnected));
+        when(repositoryToMonitorRepository.findById(70L))
+                .thenReturn(unconnected.getRepositoriesToMonitor().stream().findFirst());
+
+        assertThat(provider.getSyncTargetsForScope(7L)).isEmpty();
+        assertThat(provider.findSyncTargetById(70L)).isEmpty();
+    }
+
+    @Test
     void shouldReturnOwnSessionWhenAnotherWorkspaceCredentialIsUnreadable() {
         when(workspaceRepository.findById(9L)).thenReturn(Optional.of(workspace(9)));
         when(workspaceScopeFilter.isWorkspaceAllowed(any(Workspace.class))).thenReturn(true);

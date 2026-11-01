@@ -278,6 +278,7 @@ class GitLabDetachedSyncIntegrationTest extends BaseIntegrationTest {
                 null,
                 "a".repeat(40),
                 "b".repeat(40),
+                null,
                 NOTE_AT,
                 NOTE_AT);
         var context = new GitLabPullRequestReviewCommentProcessor.CommentContext(

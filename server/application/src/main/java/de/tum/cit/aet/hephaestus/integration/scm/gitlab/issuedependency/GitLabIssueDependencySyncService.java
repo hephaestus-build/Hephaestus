@@ -185,13 +185,6 @@ public class GitLabIssueDependencySyncService {
         return admission.current(read) ? SyncResult.completed(totalDeps) : SyncResult.completed(0);
     }
 
-    /**
-     * Overload for backward compatibility — delegates to full sync (no incremental filter).
-     */
-    public SyncResult syncDependenciesForRepository(Long scopeId, Repository repository) {
-        return syncDependenciesForRepository(scopeId, repository, null);
-    }
-
     @SuppressWarnings("unchecked")
     private int processIssueDependencies(
             long scopeId,

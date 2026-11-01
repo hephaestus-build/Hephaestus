@@ -165,49 +165,6 @@ public class GitHubPullRequestSyncService {
     }
 
     /**
-     * Synchronizes all pull requests for a repository without cursor persistence.
-     * <p>
-     * Reviews are fetched inline with PRs (first 10 per PR) to eliminate N+1 queries.
-     * Only PRs with more than 10 reviews require additional API calls for pagination.
-     * <p>
-     * This method is kept for backward compatibility. For resumable sync with
-     * cursor persistence, use {@link #syncForRepository(Long, Long, Long, String)}.
-     * <p>
-     * Note: This method intentionally does NOT use @Transactional to avoid long-running
-     * transactions. Each page of PRs is processed in its own transaction.
-     *
-     * @param scopeId      the scope ID for authentication
-     * @param repositoryId the repository ID to sync pull requests for
-     * @return sync result containing status and count of pull requests synced
-     */
-    public SyncResult syncForRepository(Long scopeId, Long repositoryId) {
-        return syncForRepository(scopeId, repositoryId, null, null, null);
-    }
-
-    /**
-     * Synchronizes all pull requests for a repository with cursor persistence support.
-     * <p>
-     * Reviews are fetched inline with PRs (first 10 per PR) to eliminate N+1 queries.
-     * Only PRs with more than 10 reviews require additional API calls for pagination.
-     * <p>
-     * When {@code syncTargetId} is provided, the pagination cursor is persisted after
-     * each successfully processed page. This allows sync to resume from where it left
-     * off if the process is interrupted (e.g., crash, timeout, deployment).
-     * <p>
-     * On successful completion, the cursor is cleared to indicate sync finished.
-     *
-     * @param scopeId       the scope ID for authentication
-     * @param repositoryId  the repository ID to sync pull requests for
-     * @param syncTargetId  the sync target ID for cursor persistence (null to disable)
-     * @param initialCursor the cursor to resume from (null to start from beginning)
-     * @return sync result containing status and count of pull requests synced
-     */
-    public SyncResult syncForRepository(
-            Long scopeId, Long repositoryId, @Nullable Long syncTargetId, @Nullable String initialCursor) {
-        return syncForRepository(scopeId, repositoryId, syncTargetId, initialCursor, null);
-    }
-
-    /**
      * Synchronizes pull requests for a repository with incremental sync support.
      * <p>
      * When {@code lastSyncTimestamp} is provided and incremental sync is enabled,

@@ -121,43 +121,6 @@ public class GitHubIssueSyncService {
     }
 
     /**
-     * Synchronizes all issues for a repository without cursor persistence.
-     * <p>
-     * This method is kept for backward compatibility. For resumable sync with
-     * cursor persistence, use {@link #syncForRepository(Long, Long, Long, String)}.
-     * <p>
-     * Note: This method intentionally does NOT use @Transactional to avoid long-running
-     * transactions. Each page of issues is processed in its own transaction.
-     *
-     * @param scopeId      the scope ID for authentication
-     * @param repositoryId the repository ID to sync issues for
-     * @return sync result containing status and count of issues synced
-     */
-    public SyncResult syncForRepository(Long scopeId, Long repositoryId) {
-        return syncForRepository(scopeId, repositoryId, null, null, null);
-    }
-
-    /**
-     * Synchronizes all issues for a repository with cursor persistence support.
-     * <p>
-     * When {@code syncTargetId} is provided, the pagination cursor is persisted after
-     * each successfully processed page. This allows sync to resume from where it left
-     * off if the process is interrupted (e.g., crash, timeout, deployment).
-     * <p>
-     * On successful completion, the cursor is cleared to indicate sync finished.
-     *
-     * @param scopeId       the scope ID for authentication
-     * @param repositoryId  the repository ID to sync issues for
-     * @param syncTargetId  the sync target ID for cursor persistence (null to disable)
-     * @param initialCursor the cursor to resume from (null to start from beginning)
-     * @return sync result containing status and count of issues synced
-     */
-    public SyncResult syncForRepository(
-            Long scopeId, Long repositoryId, @Nullable Long syncTargetId, @Nullable String initialCursor) {
-        return syncForRepository(scopeId, repositoryId, syncTargetId, initialCursor, null);
-    }
-
-    /**
      * Synchronizes issues for a repository with incremental sync support.
      * <p>
      * When {@code lastSyncTimestamp} is provided and incremental sync is enabled,

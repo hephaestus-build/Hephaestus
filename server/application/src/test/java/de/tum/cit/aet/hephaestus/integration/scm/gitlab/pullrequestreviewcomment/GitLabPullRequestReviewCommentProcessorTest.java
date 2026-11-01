@@ -364,31 +364,6 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
         assertThat(stored.getInReplyTo()).isSameAs(root);
     }
 
-    // DiffNoteData backward-compat constructor
-
-    @Nested
-    class DiffNoteDataBackwardCompat {
-
-        @Test
-        void shouldDefaultStartShaToNullFor12ArgCallers() {
-            var data = new GitLabPullRequestReviewCommentProcessor.DiffNoteData(
-                    "gid://gitlab/DiffNote/1",
-                    "body",
-                    "https://example",
-                    "src/Foo.ts",
-                    10,
-                    null,
-                    "src/Foo.ts",
-                    null,
-                    "head-sha",
-                    "base-sha",
-                    Instant.EPOCH,
-                    Instant.EPOCH);
-            assertThat(data.startSha()).isNull();
-            assertThat(data.baseSha()).isEqualTo("base-sha");
-        }
-    }
-
     // Helpers
 
     private static GitLabPullRequestReviewCommentProcessor.DiffNoteData buildDiffNoteData(

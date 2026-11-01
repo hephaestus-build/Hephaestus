@@ -83,40 +83,7 @@ public class GitLabPullRequestReviewCommentProcessor {
             @Nullable String baseSha,
             @Nullable String startSha,
             @Nullable Instant createdAt,
-            @Nullable Instant updatedAt) {
-        /**
-         * Backward-compatible constructor for callers that don't carry {@code startSha}
-         * (e.g., older webhook paths). Passes {@code null} for the new field.
-         */
-        public DiffNoteData(
-                String noteGlobalId,
-                @Nullable String body,
-                @Nullable String url,
-                @Nullable String filePath,
-                @Nullable Integer newLine,
-                @Nullable Integer oldLine,
-                @Nullable String newPath,
-                @Nullable String oldPath,
-                @Nullable String headSha,
-                @Nullable String baseSha,
-                @Nullable Instant createdAt,
-                @Nullable Instant updatedAt) {
-            this(
-                    noteGlobalId,
-                    body,
-                    url,
-                    filePath,
-                    newLine,
-                    oldLine,
-                    newPath,
-                    oldPath,
-                    headSha,
-                    baseSha,
-                    null,
-                    createdAt,
-                    updatedAt);
-        }
-    }
+            @Nullable Instant updatedAt) {}
 
     /**
      * Groups the contextual parameters needed to find or create a review comment.

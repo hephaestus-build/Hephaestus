@@ -285,7 +285,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                     "cursor-end");
             stubSinglePrPage(createGHPullRequest(comments));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
 
             // Routed through the same processor (and therefore the same issue_comment table) that issue
             // comments use, keyed by the PR's number.
@@ -312,7 +312,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                     "cursor-page-1");
             stubSinglePrPage(createGHPullRequest(comments));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
 
             // The tail is drained from the embedded page's cursor, reusing the issue-comment sync service
             // rather than a parallel PR-only implementation.
@@ -329,7 +329,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                     createCommentConnection(List.of(createGHComment(1001L, "only comment")), 1, false, "cursor-end");
             stubSinglePrPage(createGHPullRequest(comments));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
 
             verify(issueCommentSyncService, never()).syncRemainingComments(any(), any(), any());
         }
@@ -341,7 +341,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             when(pullRequestProcessor.process(any(), any())).thenReturn(entity);
             stubSinglePrPage(createGHPullRequest(createCommentConnection(List.of(), 0, false, null)));
 
-            service.syncForRepository(SCOPE_ID, REPO_ID);
+            service.syncForRepository(SCOPE_ID, REPO_ID, null, null, null);
 
             verify(issueCommentProcessor, never()).process(any(), anyInt(), any());
             verify(issueCommentSyncService, never()).syncRemainingComments(any(), any(), any());
