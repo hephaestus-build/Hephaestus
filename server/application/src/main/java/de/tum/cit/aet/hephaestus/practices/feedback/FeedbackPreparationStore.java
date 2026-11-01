@@ -78,15 +78,39 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
     private final FeedbackContentDigest digests;
     private final FeedbackDeliveryPolicy policy;
 
-    public PreparedPackage prepareAll(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
+    @Transactional(readOnly = true)
+    public void checkPackage(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
+        validateBatch(workspaceId, reviewId, drafts);
+        var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Review", reviewId.toString()));
+        if (review.getKind() != ReviewKind.ITEM) throw conflict("A scan cannot publish developer feedback.");
+        for (var draft : drafts) {
+            var existing = feedback.findByIdAndWorkspaceId(draft.id(), workspaceId);
+            if (review.getStatus() != ReviewStatus.RUNNING && existing.isEmpty())
+                throw conflict("This review is no longer running.");
+            // Builds and discards the rows that publication would write, so a check refuses what publication refuses.
+            draft.copies().forEach(input -> planned(draft, input, null));
+            var checked = preparation.prepare(draft, existing);
+            if (!checked.withheldCopies().isEmpty())
+                throw conflict("Some entries are no longer publishable: " + checked.withheldCopies());
+            if (draft.state() != FeedbackState.WITHHELD && checked.draft().state() == FeedbackState.WITHHELD)
+                throw conflict("This package is no longer publishable: "
+                        + checked.draft().stopReason());
+        }
+    }
+
+    private static void validateBatch(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
         if (workspaceId <= 0
                 || drafts.size() > 30
                 || drafts.stream()
                         .anyMatch(draft -> draft.workspaceId() != workspaceId
                                 || !draft.reviewId().equals(reviewId))
                 || drafts.stream().map(FeedbackDraft::id).distinct().count() != drafts.size())
-            throw new IllegalArgumentException(
-                    "A preparation batch needs one workspace/review and distinct feedback ids.");
+            throw new IllegalArgumentException("A package needs one workspace/review and distinct feedback ids.");
+    }
+
+    public PreparedPackage prepareAll(long workspaceId, UUID reviewId, List<FeedbackDraft> drafts) {
+        validateBatch(workspaceId, reviewId, drafts);
         var review = reviews.lockByIdAndWorkspaceId(reviewId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Review", reviewId.toString()));
         if (review.getKind() != ReviewKind.ITEM) throw conflict("A scan cannot prepare developer feedback.");

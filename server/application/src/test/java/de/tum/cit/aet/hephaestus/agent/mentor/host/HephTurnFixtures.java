@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -33,11 +33,12 @@ final class HephTurnFixtures {
 
     /** The worker's turn contexts, from beans that exist without the worker role. */
     static HephTurnContexts contexts(ApplicationContext beans) {
-        return contexts(beans, beans.getBean(ResultHistoryQuery.class), beans.getBean(FeedbackStore.class));
+        return contexts(beans, beans.getBean(ResultHistoryQuery.class), beans.getBean(ConversationClaims.class));
     }
 
     /** The worker's turn contexts with the results and the feedback store a test chooses. */
-    static HephTurnContexts contexts(ApplicationContext beans, ResultHistoryQuery results, FeedbackStore feedback) {
+    static HephTurnContexts contexts(
+            ApplicationContext beans, ResultHistoryQuery results, ConversationClaims feedback) {
         return contexts(
                 beans,
                 results,
@@ -47,7 +48,8 @@ final class HephTurnFixtures {
 
     /** The worker's turn contexts with the context folder a test chooses. */
     static HephTurnContexts contexts(ApplicationContext beans, TurnContextFolder folder) {
-        return contexts(beans, beans.getBean(ResultHistoryQuery.class), beans.getBean(FeedbackStore.class), folder);
+        return contexts(
+                beans, beans.getBean(ResultHistoryQuery.class), beans.getBean(ConversationClaims.class), folder);
     }
 
     /** A context folder on these sandboxes, with the context loaders of the test context. */
@@ -56,7 +58,10 @@ final class HephTurnFixtures {
     }
 
     private static HephTurnContexts contexts(
-            ApplicationContext beans, ResultHistoryQuery results, FeedbackStore feedback, TurnContextFolder folder) {
+            ApplicationContext beans,
+            ResultHistoryQuery results,
+            ConversationClaims feedback,
+            TurnContextFolder folder) {
         return contexts(beans, results, feedback, folder, new TurnContextGenerations());
     }
 
@@ -65,7 +70,7 @@ final class HephTurnFixtures {
         return contexts(
                 beans,
                 beans.getBean(ResultHistoryQuery.class),
-                beans.getBean(FeedbackStore.class),
+                beans.getBean(ConversationClaims.class),
                 folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0, new SimpleMeterRegistry())),
                 generations);
     }
@@ -73,7 +78,7 @@ final class HephTurnFixtures {
     private static HephTurnContexts contexts(
             ApplicationContext beans,
             ResultHistoryQuery results,
-            FeedbackStore feedback,
+            ConversationClaims feedback,
             TurnContextFolder folder,
             TurnContextGenerations generations) {
         return new HephTurnContexts(

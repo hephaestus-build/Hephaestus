@@ -131,8 +131,6 @@ const TOOL_NAMES = new Set([
 	"remove_problem",
 	"read_problem",
 	"submit_result",
-	"report_feedback",
-	"report_review",
 ]);
 
 /**

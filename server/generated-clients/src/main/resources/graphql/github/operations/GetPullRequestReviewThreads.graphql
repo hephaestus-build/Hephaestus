@@ -29,6 +29,7 @@ query GetPullRequestReviewThreads(
                     id
                     isResolved
                     isOutdated
+                    subjectType
                     diffSide
                     startDiffSide
                     comments(first: 1) {

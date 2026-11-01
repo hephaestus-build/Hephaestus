@@ -63,6 +63,10 @@ public final class ScriptedCommentThreads {
         return id;
     }
 
+    public void publish(String thread, String id, String body) {
+        threads.computeIfAbsent(thread, ignored -> new CopyOnWriteArrayList<>()).add(new Comment(id, body));
+    }
+
     public Mono<ClientGraphQlResponse> read(String thread, Function<List<Comment>, Map<String, ?>> response) {
         return lookupsFail
                 ? Mono.error(new IllegalStateException("provider unavailable"))

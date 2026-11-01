@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.GRAPHQL_TIMEOUT;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -22,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
@@ -40,11 +40,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -58,8 +56,9 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
-// Fence each physical copy before creating it, and preserve its marker during correction.
+// Stages a package as private draft notes, then one bulk publication with the summary is the only notifying write.
 @Component
 @ConditionalOnServerRole
 @OutboundEgressGateway
@@ -67,6 +66,8 @@ import tools.jackson.databind.JsonNode;
 public class GitLabLineNoteWriter implements LineNoteWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabLineNoteWriter.class);
+
+    private static final JsonMapper MAPPER = new JsonMapper();
 
     private static final int DISCUSSIONS_PAGE_SIZE = 100;
 
@@ -119,316 +120,188 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     @Override
-    public CopyWriteResult postImmutablePackage(
-            FeedbackTarget target, List<LineNote> feedbackItems, CopyWriteFence fence) {
-        if (feedbackItems.isEmpty()) {
-            return CopyWriteResult.of(List.of());
-        }
-        Footer footer;
+    public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
+        if (publication.copyIds().isEmpty()) return CopyWriteResult.of(List.of());
+        long workspace = target.item().workspaceId();
+        if (gitLabProvider.isRateLimitCritical(workspace)) return publication.notSent();
+        boolean fenced = false;
         try {
-            footer = formatter.footer(target.item());
-        } catch (RuntimeException unavailable) {
-            return CopyWriteResult.of(notSent(feedbackItems));
+            var footer = formatter.footer(target.item());
+            var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
+            String revision = ScmVersion.reviewedHead(target.version());
+            if (revision == null || !COMMIT_SHA.matcher(revision).matches()) return publication.notSent();
+            String project = projectUrl(workspace, mr);
+            var scan = indexCopies(workspace, mr, publication.notes(), target, project, footer);
+            var found = packageReceipts(workspace, mr, publication, scan, footer);
+            if (!found.isEmpty()) {
+                // Even a partial submitted package is never followed by a second notification.
+                // A receipt is recorded only on a fenced copy.
+                if (!fence.beforeCreate(publication.copyIds(), List.of())) return publication.notSent();
+                return CopyWriteResult.of(found);
+            }
+            var version =
+                    publication.notes().stream().anyMatch(note -> note.anchor().endLine() != null)
+                            ? diffVersions.read(workspace, mr, target.version())
+                            : null;
+            var expected = new LinkedHashMap<String, Map<String, Object>>();
+            for (var note : publication.notes()) {
+                var position = version == null ? null : GitLabDiffPositions.build(version, note.anchor());
+                if (note.anchor().endLine() != null && position == null) return publication.notSent();
+                String anchorVersion = note.anchor().side() == CitationSide.OLD
+                        ? target.version().baseVersion()
+                        : revision;
+                if (anchorVersion == null) return publication.notSent();
+                var fields = new LinkedHashMap<String, Object>();
+                fields.put(
+                        "note",
+                        position == null
+                                ? locationBody(footer, project, anchorVersion, note.anchor(), note)
+                                : lineBody(footer, note));
+                if (position != null) fields.put("position", position.request());
+                expected.put(note.writeKey(), fields);
+            }
+            String api = GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr);
+            var pending = ownDrafts(workspace, api, scan.author(), expected);
+            egressGuard.requireDeliveryAllowed("gitlab.publish-feedback-package");
+            // A refused fence started nothing: the copies stay as they were.
+            if (!fence.beforeCreate(publication.copyIds(), List.of())) return CopyWriteResult.of(List.of());
+            fenced = true;
+            for (var entry : expected.entrySet()) {
+                if (pending.contains(entry.getKey())) continue;
+                if (gitLabProvider.isRateLimitCritical(workspace) || !fence.beforeCreate(List.of(), List.of()))
+                    return publication.notSent();
+                var created = exchange(
+                        workspace,
+                        HttpMethod.POST,
+                        authorized(workspace, URI.create(api + "/draft_notes")),
+                        entry.getValue());
+                if (created.status() < 200 || created.status() >= 300) return publication.notSent();
+            }
+            // Bulk publish includes every draft of this token. Refuse drafts outside this exact checked package.
+            if (ownDrafts(workspace, api, scan.author(), expected).size() != expected.size()
+                    || !fence.beforeCreate(List.of(), List.of())) return publication.notSent();
+            egressGuard.requireDeliveryAllowed("gitlab.submit-feedback-package");
+            var summary = publication.summary();
+            var fields = summary == null
+                    ? Map.<String, Object>of()
+                    : Map.<String, Object>of("note", footer.summary(summary));
+            var submitted = exchange(
+                    workspace,
+                    HttpMethod.POST,
+                    authorized(workspace, URI.create(api + "/draft_notes/bulk_publish")),
+                    fields);
+            if (submitted.status() < 200 || submitted.status() >= 300) return publication.attempted();
+            var posted = findPosted(target, publication);
+            return posted == null || posted.size() != publication.copyIds().size()
+                    ? publication.attempted()
+                    : CopyWriteResult.of(posted);
+        } catch (OutboundEgressSuppressedException suppressed) {
+            throw suppressed;
+        } catch (RuntimeException unknown) {
+            return fenced ? publication.attempted() : publication.notSent();
         }
-        long scopeId = target.integration().workspaceId();
-        String revision;
-        try {
-            revision = ScmVersion.reviewedHead(target.version());
-        } catch (IllegalArgumentException unavailable) {
-            return CopyWriteResult.of(notSent(feedbackItems));
-        }
-        boolean rateLimited = gitLabProvider.isRateLimitCritical(scopeId);
-        if (rateLimited || revision == null || !COMMIT_SHA.matcher(revision).matches()) {
-            // Without the reviewed commit no comment can link to the code the review read.
-            log.warn(
-                    "GitLab location comments not requested: workspaceId={}, rateLimited={}, reviewedRevision={}",
-                    scopeId,
-                    rateLimited,
-                    sanitizeForLog(revision));
-            return CopyWriteResult.of(notSent(feedbackItems));
-        }
-        MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITLAB));
-        String projectUrl = projectUrl(scopeId, mr);
-        Scan scan = indexCopies(scopeId, mr, feedbackItems, target, projectUrl, footer);
-        Map<String, Copy> copies = scan.copies();
+    }
 
-        // An unread diff version stops the package before any create instead of posting plain comments.
-        boolean positioned = feedbackItems.stream()
-                .anyMatch(item -> !item.body().isBlank()
-                        && item.anchor().endLine() != null
-                        && item.anchor().side() != null
-                        && !copies.containsKey(item.writeKey()));
-        var pinnedDiff = positioned ? diffVersions.read(scopeId, mr, target.version()) : null;
-        List<CopyReceipt> completed = new ArrayList<>(feedbackItems.size());
-        Set<String> processedKeys = new HashSet<>();
-        for (int index = 0; index < feedbackItems.size(); index++) {
-            LineNote item = feedbackItems.get(index);
-            String key = item.writeKey();
-            if (key != null && !processedKeys.add(key)) {
-                continue;
-            }
-            FeedbackAnchor diff = item.anchor();
-            if (item.body().isBlank() || (diff.endLine() != null && diff.side() == null)) {
-                completed.add(CopyReceipt.notSent(item.copyId()));
-                continue;
-            }
-            Copy copy = copies.get(key);
-            if (copy != null) {
-                // A copy that does not verify proves neither delivery nor absence: nothing is
-                // created next to it.
-                completed.add(copy.verified() ? copy.preserved(item) : CopyReceipt.notSent(item.copyId()));
-                continue;
-            }
-            String anchorVersion =
-                    diff.side() == CitationSide.OLD ? target.version().baseVersion() : revision;
-            if (anchorVersion == null || !COMMIT_SHA.matcher(anchorVersion).matches()) {
-                completed.add(CopyReceipt.notSent(item.copyId()));
-                continue;
-            }
-            List<LineNote> rest = feedbackItems.subList(index, feedbackItems.size());
-            try {
-                egressGuard.requireDeliveryAllowed("gitlab.post-inline-feedback");
-            } catch (OutboundEgressSuppressedException e) {
-                completed.addAll(unrequested(rest, copies));
-                return CopyWriteResult.withheld(completed, deliveryKeys(rest));
-            }
-            var position = pinnedDiff == null ? null : GitLabDiffPositions.build(pinnedDiff, diff);
-            Request request;
-            try {
-                request = request(scopeId, mr);
-            } catch (RuntimeException unavailable) {
-                // Resolved before the fence, so no provider request was made for this copy or the rest.
-                log.warn("GitLab feedback request could not be prepared: workspaceId={}", scopeId, unavailable);
-                completed.addAll(unrequested(rest, copies));
-                return CopyWriteResult.of(completed);
-            }
-            if (!fence.beforeCreate(List.of(item.copyId()), List.copyOf(completed))) {
-                completed.addAll(unrequested(rest, copies));
-                return CopyWriteResult.of(completed);
-            }
-            Attempt attempt = position == null
-                    ? null
-                    : createDiffThread(footer, request, mr, projectUrl, scan.author(), item, position);
-            if (attempt == null) {
-                // The committed copy fence covers the fallback after a confirmed position rejection.
-                if (position != null) {
-                    try {
-                        egressGuard.requireDeliveryAllowed("gitlab.post-inline-feedback");
-                    } catch (OutboundEgressSuppressedException e) {
-                        completed.addAll(unrequested(rest, copies));
-                        return CopyWriteResult.withheld(completed, deliveryKeys(rest));
-                    }
-                }
-                attempt = createLocationThread(
-                        scopeId,
-                        request,
-                        mr,
-                        projectUrl,
-                        scan.author(),
-                        locationBody(footer, projectUrl, anchorVersion, diff, item),
-                        diff,
-                        item.copyId());
-            }
-            completed.add(attempt.receipt());
-            if (attempt.stop()) {
-                completed.addAll(unrequested(feedbackItems.subList(index + 1, feedbackItems.size()), copies));
-                break;
+    /** Reads all this token's drafts, adopting only exact bodies and positions from this package. */
+    private Set<String> ownDrafts(long workspace, String api, long author, Map<String, Map<String, Object>> expected) {
+        var found = new HashSet<String>();
+        for (var draft : pages(workspace, api + "/draft_notes")) {
+            String body = draft.path("note").asString("");
+            String key = ScmFeedbackFormatter.lastDeliveryKey(body);
+            var fields = key == null ? null : expected.get(key);
+            if (fields == null
+                    || !body.equals(fields.get("note"))
+                    || !found.add(key)
+                    || !draft.path("author_id").isIntegralNumber()
+                    || draft.path("author_id").longValue() != author
+                    || !draft.path("id").isIntegralNumber()
+                    || draft.path("id").longValue() <= 0
+                    || !draft.path("discussion_id").isNull()
+                    || !sameDraftPosition(draft.path("position"), fields.get("position")))
+                throw new FeedbackDeliveryException("Unrelated or changed draft notes prevent bulk publication");
+        }
+        return found;
+    }
+
+    private static boolean sameDraftPosition(JsonNode actual, @Nullable Object expected) {
+        if (expected == null)
+            return actual.isNull()
+                    || actual.isMissingNode()
+                    || (actual.isObject()
+                            && actual.properties().stream()
+                                    .allMatch(entry -> entry.getValue().isNull()));
+        var wanted = MAPPER.valueToTree(expected);
+        return wanted.properties().stream().allMatch(entry -> entry.getValue().equals(actual.path(entry.getKey())));
+    }
+
+    private List<JsonNode> pages(long workspace, String endpoint) {
+        var result = new ArrayList<JsonNode>();
+        for (int page = 1; page <= MAX_DISCUSSION_PAGES; page++) {
+            var response = exchange(
+                    workspace,
+                    HttpMethod.GET,
+                    authorized(workspace, URI.create(endpoint + "?per_page=100&page=" + page)),
+                    null);
+            var rows = response.json();
+            if (response.status() != 200 || rows == null || !rows.isArray())
+                throw new FeedbackDeliveryException("GitLab pending notes were not read completely");
+            rows.forEach(result::add);
+            if (rows.size() < 100) return List.copyOf(result);
+        }
+        throw new FeedbackDeliveryException("GitLab pending note pagination did not reach its end");
+    }
+
+    private List<CopyReceipt> packageReceipts(
+            long workspace, MrCoordinates mr, OnWorkPackage publication, Scan scan, Footer footer) {
+        var result = new ArrayList<CopyReceipt>();
+        for (var note : publication.notes()) {
+            var copy = scan.copies().get(note.writeKey());
+            if (copy != null && !copy.verified())
+                throw new FeedbackDeliveryException("Existing copy conflicts with the package");
+            if (copy != null) result.add(copy.preserved(note));
+        }
+        var summary = publication.summary();
+        if (summary != null) {
+            String api = GitLabDiffVersionReader.mergeRequestApi(tokenService.resolveServerUrl(workspace), mr);
+            for (var note : pages(workspace, api + "/notes")) {
+                String body = note.path("body").asString("");
+                if (summary.writeMarker() == null || !body.contains(summary.writeMarker())) continue;
+                if (!body.equals(footer.summary(summary))
+                        || note.path("author").path("id").longValue() != scan.author()
+                        || !note.path("id").isIntegralNumber()
+                        || note.path("id").longValue() <= 0
+                        || note.path("system").asBoolean(true))
+                    throw new FeedbackDeliveryException("Existing summary conflicts with the package");
+                if (result.stream().anyMatch(receipt -> receipt.copyId().equals(summary.copyId())))
+                    throw new FeedbackDeliveryException("Duplicate summary markers prevent acknowledgement");
+                String id = Long.toString(note.path("id").longValue());
+                result.add(new CopyReceipt(
+                        summary.copyId(),
+                        CopyDisposition.PRESERVED_EXISTING,
+                        "gid://gitlab/Note/" + id,
+                        projectUrl(workspace, mr) + "/-/merge_requests/" + mr.iid() + "#note_" + id,
+                        true,
+                        null));
             }
         }
-        return CopyWriteResult.of(completed);
+        return List.copyOf(result);
     }
 
     @Override
-    public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, List<LineNote> feedbackItems) {
-        if (feedbackItems.isEmpty()) {
-            return List.of();
-        }
-        long scopeId = target.integration().workspaceId();
-        if (gitLabProvider.isRateLimitCritical(scopeId)
-                || feedbackItems.stream().anyMatch(item -> item.writeKey() == null)) {
-            return null;
-        }
+    public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
+        long workspace = target.item().workspaceId();
+        if (gitLabProvider.isRateLimitCritical(workspace)) return null;
         try {
-            Footer footer = formatter.footer(target.item());
-            MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, IntegrationKind.GITLAB));
-            Map<String, Copy> copies = indexCopies(scopeId, mr, feedbackItems, target, projectUrl(scopeId, mr), footer)
-                    .copies();
-            List<CopyReceipt> found = new ArrayList<>();
-            for (LineNote item : feedbackItems) {
-                Copy copy = copies.get(item.writeKey());
-                if (copy != null && copy.verified()) {
-                    found.add(copy.preserved(item));
-                }
-            }
-            return found;
-        } catch (RuntimeException e) {
+            var footer = formatter.footer(target.item());
+            var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
+            var scan = indexCopies(workspace, mr, publication.notes(), target, projectUrl(workspace, mr), footer);
+            return packageReceipts(workspace, mr, publication, scan, footer);
+        } catch (RuntimeException unknown) {
             return null;
         }
     }
 
-    // Only an explicit position rejection proves that a fallback cannot duplicate a created note.
-    private @Nullable Attempt createDiffThread(
-            Footer footer,
-            Request request,
-            MrCoordinates mr,
-            String projectUrl,
-            long author,
-            LineNote item,
-            GitLabDiffPositions.Position position) {
-        long scopeId = footer.workspaceId();
-        String body = lineBody(footer, item);
-        Answer answer;
-        try {
-            answer = exchange(scopeId, HttpMethod.POST, request, Map.of("body", body, "position", position.request()));
-        } catch (RuntimeException failure) {
-            log.warn(
-                    "GitLab diff thread outcome unknown: workspaceId={}, file={}, line={}",
-                    scopeId,
-                    sanitizeForLog(item.anchor().path()),
-                    item.anchor().endLine(),
-                    failure);
-            return new Attempt(CopyReceipt.attempted(item.copyId()), isRateLimitError(failure));
-        }
-        JsonNode note = answer.created() ? createdNote(answer.json(), "DiffNote", body, author) : null;
-        if (note != null && placed(note.path("position"), position))
-            return posted(item.copyId(), note, "DiffNote", projectUrl, mr, CopyForm.LINE_NOTE);
-        if (answer.status() == 400 && positionError(answer.text())) return null;
-        log.warn(
-                "GitLab diff thread was not confirmed: workspaceId={}, file={}, line={}, status={}",
-                scopeId,
-                sanitizeForLog(item.anchor().path()),
-                item.anchor().endLine(),
-                answer.status());
-        return new Attempt(CopyReceipt.attempted(item.copyId()), answer.status() == 429);
-    }
-
-    private static boolean positionError(String text) {
-        String message = text.toLowerCase(Locale.ROOT);
-        return message.contains("position")
-                || message.contains("line code")
-                || message.contains("line_code")
-                || message.contains("line_range")
-                || message.contains("diff refs")
-                || message.contains("diff_refs");
-    }
-
-    // A failed request can still create a thread; only a confirmed answer proves the copy and its form.
-    private Attempt createLocationThread(
-            long scopeId,
-            Request request,
-            MrCoordinates mr,
-            String projectUrl,
-            long author,
-            String body,
-            FeedbackAnchor diff,
-            UUID copyId) {
-        Answer answer;
-        try {
-            answer = exchange(scopeId, HttpMethod.POST, request, Map.of("body", body));
-        } catch (RuntimeException failure) {
-            log.warn(
-                    "GitLab location thread outcome unknown: workspaceId={}, file={}, line={}",
-                    scopeId,
-                    sanitizeForLog(diff.path()),
-                    diff.endLine(),
-                    failure);
-            return new Attempt(CopyReceipt.attempted(copyId), isRateLimitError(failure));
-        }
-        JsonNode note = answer.created() ? createdNote(answer.json(), "DiscussionNote", body, author) : null;
-        if (note != null
-                && (note.path("position").isMissingNode()
-                        || note.path("position").isNull()))
-            return posted(copyId, note, "DiscussionNote", projectUrl, mr, CopyForm.FILE_NOTE);
-        log.warn(
-                "GitLab location thread was not confirmed: workspaceId={}, file={}, line={}, status={}",
-                scopeId,
-                sanitizeForLog(diff.path()),
-                diff.endLine(),
-                answer.status());
-        return new Attempt(CopyReceipt.attempted(copyId), answer.status() == 429);
-    }
-
-    // The first note of the created thread must be this copy, written by this token, of the expected kind.
-    private static @Nullable JsonNode createdNote(
-            @Nullable JsonNode discussion, String type, String body, long author) {
-        if (discussion == null
-                || !discussion.path("id").isString()
-                || !SEGMENT.matcher(discussion.path("id").asString()).matches()
-                || !discussion.path("notes").isArray()
-                || discussion.path("notes").isEmpty()) return null;
-        JsonNode note = discussion.path("notes").get(0);
-        boolean own = note.path("id").isIntegralNumber()
-                && note.path("id").longValue() > 0
-                && note.path("type").isString()
-                && type.equals(note.path("type").asString())
-                && note.path("system").isBoolean()
-                && !note.path("system").booleanValue()
-                && note.path("body").isString()
-                && body.equals(note.path("body").asString())
-                && note.path("author").path("id").isIntegralNumber()
-                && note.path("author").path("id").longValue() == author;
-        return own ? note : null;
-    }
-
-    // GitLab names a note by its model and REST id; the receipt carries the same global id the scan reads.
-    private static Attempt posted(
-            UUID copyId, JsonNode note, String type, String projectUrl, MrCoordinates mr, CopyForm form) {
-        long id = note.path("id").longValue();
-        return new Attempt(
-                new CopyReceipt(
-                        copyId,
-                        CopyDisposition.POSTED,
-                        "gid://gitlab/" + type + "/" + id,
-                        projectUrl + "/-/merge_requests/" + mr.iid() + "#note_" + id,
-                        true,
-                        form),
-                false);
-    }
-
-    // The created thread must hold the requested place, including both ends of a range.
-    private static boolean placed(JsonNode actual, GitLabDiffPositions.Position expected) {
-        if (!actual.isObject()
-                || !"text".equals(text(actual, "position_type"))
-                || !expected.base().equals(text(actual, "base_sha"))
-                || !expected.start().equals(text(actual, "start_sha"))
-                || !expected.head().equals(text(actual, "head_sha"))
-                || !expected.oldPath().equals(text(actual, "old_path"))
-                || !expected.newPath().equals(text(actual, "new_path"))
-                || !Objects.equals(expected.oldLine(), line(actual, "old_line"))
-                || !Objects.equals(expected.newLine(), line(actual, "new_line"))) return false;
-        JsonNode range = actual.path("line_range");
-        var requested = expected.range();
-        if (requested == null)
-            return range.isMissingNode()
-                    || range.isNull()
-                    || (endpoint(range.path("start"), expected.oldLine(), expected.newLine())
-                            && endpoint(range.path("end"), expected.oldLine(), expected.newLine()));
-        return endpoint(range.path("start"), requested.start()) && endpoint(range.path("end"), requested.end());
-    }
-
-    private static boolean endpoint(JsonNode actual, GitLabDiffPositions.Point expected) {
-        return expected.type().equals(text(actual, "type")) && endpoint(actual, expected.oldLine(), expected.newLine());
-    }
-
-    private static boolean endpoint(JsonNode actual, @Nullable Integer oldLine, @Nullable Integer newLine) {
-        return actual.isObject()
-                && Objects.equals(oldLine, line(actual, "old_line"))
-                && Objects.equals(newLine, line(actual, "new_line"));
-    }
-
-    private static @Nullable String text(JsonNode node, String field) {
-        return node.path(field).isString() ? node.path(field).asString() : null;
-    }
-
-    private static @Nullable Integer line(JsonNode node, String field) {
-        return node.path(field).isIntegralNumber() ? node.path(field).intValue() : null;
-    }
-
-    private record Answer(int status, @Nullable JsonNode json, String text) {
-        boolean created() {
-            return status >= 200 && status < 300 && json != null;
-        }
-    }
+    private record Answer(int status, @Nullable JsonNode json, String text) {}
 
     // A status is an answer; only transport failures and timeouts leave the outcome unknown to the caller.
     private Answer exchange(long scopeId, HttpMethod method, Request target, @Nullable Map<String, Object> body) {
@@ -442,13 +315,12 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         Answer answer = spec.exchangeToMono(response -> {
                     gitLabProvider.updateRateLimit(scopeId, response.headers().asHttpHeaders());
                     int status = response.statusCode().value();
-                    return response.statusCode().is2xxSuccessful()
-                            ? response.bodyToMono(JsonNode.class)
-                                    .map(json -> new Answer(status, json, ""))
-                                    .defaultIfEmpty(new Answer(status, null, ""))
-                            : response.bodyToMono(String.class)
-                                    .defaultIfEmpty("")
-                                    .map(text -> new Answer(status, null, text));
+                    // A 204 such as bulk_publish's carries no body, so only a non-empty success body is JSON.
+                    boolean success = response.statusCode().is2xxSuccessful();
+                    return response.bodyToMono(String.class)
+                            .defaultIfEmpty("")
+                            .map(text -> new Answer(
+                                    status, success && !text.isBlank() ? MAPPER.readTree(text) : null, text));
                 })
                 .block(GRAPHQL_TIMEOUT);
         if (answer == null) throw new IllegalStateException("GitLab answered without a response");
@@ -458,10 +330,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     private record Request(URI uri, String authorization) {}
 
     // The address and credential are local facts; resolving them is never part of a provider request.
-    private Request request(long scopeId, MrCoordinates mr) {
-        return request(scopeId, mr, null);
-    }
-
     private Request request(long scopeId, MrCoordinates mr, @Nullable String discussion) {
         return authorized(scopeId, discussions(scopeId, mr, discussion));
     }
@@ -618,24 +486,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         return lineCopy ? CopyForm.LINE_NOTE : null;
     }
 
-    // Stopping a package must preserve receipts for copies already verified at the provider.
-    private static List<CopyReceipt> unrequested(List<LineNote> items, Map<String, Copy> copies) {
-        return items.stream()
-                .map(item -> {
-                    Copy copy = item.writeKey() == null ? null : copies.get(item.writeKey());
-                    return copy != null && copy.verified() ? copy.preserved(item) : CopyReceipt.notSent(item.copyId());
-                })
-                .toList();
-    }
-
-    private static List<CopyReceipt> notSent(List<LineNote> items) {
-        return items.stream().map(item -> CopyReceipt.notSent(item.copyId())).toList();
-    }
-
-    private static List<UUID> deliveryKeys(List<LineNote> feedbackItems) {
-        return feedbackItems.stream().map(LineNote::copyId).toList();
-    }
-
     // Encode each project segment independently so namespace slashes retain their structure.
     private String projectUrl(long scopeId, MrCoordinates mr) {
         String serverUrl = tokenService.resolveServerUrl(scopeId);
@@ -740,13 +590,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     private record Scan(Map<String, Copy> copies, long author) {}
-
-    private record Attempt(CopyReceipt receipt, boolean stop) {}
-
-    private static boolean isRateLimitError(Exception e) {
-        String message = e.getMessage();
-        return message != null && (message.contains("rate limit") || message.contains("429"));
-    }
 
     // GitLab has no node(id:) root field; its merge request notes API reads and edits every note type by REST id.
     @Override
@@ -889,5 +732,13 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     private static CopyUpdateReceipt unsupported(CopyReceipt copy, String reason) {
         return new CopyUpdateReceipt(
                 copy.copyId(), CopyUpdateKind.UNSUPPORTED, copy.externalRef(), copy.externalUrl(), reason);
+    }
+
+    private static @Nullable Integer line(JsonNode node, String field) {
+        return node.path(field).isIntegralNumber() ? node.path(field).intValue() : null;
+    }
+
+    private static @Nullable String text(JsonNode node, String field) {
+        return node.path(field).isString() ? node.path(field).asString() : null;
     }
 }

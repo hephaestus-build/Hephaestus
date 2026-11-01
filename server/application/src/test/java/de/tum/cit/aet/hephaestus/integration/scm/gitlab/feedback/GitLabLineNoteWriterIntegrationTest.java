@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
@@ -35,7 +36,7 @@ import reactor.core.publisher.Mono;
 class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void shouldPersistPlacementAndReconcileCopiesThroughGitLabDiscussions(boolean rejected) {
+    void shouldPublishTheCompleteCheckedPackageOrKeepRejectedPlacementsPrivate(boolean rejected) {
         String base = "a".repeat(40);
         String head = "c".repeat(40);
         String start = "b".repeat(40);
@@ -80,9 +81,17 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 transactions, resolution, List.of(gitlab.channel()), List.of(writer), corrector);
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
+        if (rejected) {
+            assertThat(current().getState()).isNotEqualTo(FeedbackState.DELIVERED);
+            assertThat(gitlab.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
+                    .isEmpty();
+            assertThat(gitlab.bulkPublications()).isZero();
+            return;
+        }
         assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(gitlab.bulkPublications()).isEqualTo(1);
         var copy = children().get(1);
-        assertThat(copy.getKind()).isEqualTo(rejected ? FeedbackCopyKind.FILE_NOTE : FeedbackCopyKind.LINE_NOTE);
+        assertThat(copy.getKind()).isEqualTo(FeedbackCopyKind.LINE_NOTE);
         assertThat(copy.getWriteStartedAt()).isNotNull();
         assertThat(reads.get()).isEqualTo(2);
         var note = new LineNote(
@@ -92,18 +101,18 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 Objects.requireNonNull(copy.getBody()),
                 Objects.requireNonNull(copy.getWriteKey()),
                 Objects.requireNonNull(copy.getWriteMarker()));
-        assertThat(writer.findPosted(target, List.of(note))).singleElement().satisfies(receipt -> {
-            assertThat(receipt.externalRef()).isEqualTo(copy.getExternalRef());
-            assertThat(receipt.actualKind()).isEqualTo(rejected ? CopyForm.FILE_NOTE : CopyForm.LINE_NOTE);
-        });
+        assertThat(writer.findPosted(target, new OnWorkPackage(null, List.of(note))))
+                .singleElement()
+                .satisfies(receipt -> {
+                    assertThat(receipt.externalRef()).isEqualTo(copy.getExternalRef());
+                    assertThat(receipt.actualKind()).isEqualTo(CopyForm.LINE_NOTE);
+                });
         assertThat(gitlab.threads().on(ScriptedGitLabNotes.mergeRequest(42))).hasSize(2);
-        // The old-side range 10-12 is one native range thread; a rejected position is an overview thread instead.
-        assertThat(copy.getExternalRef())
-                .startsWith(rejected ? "gid://gitlab/DiscussionNote/" : "gid://gitlab/DiffNote/");
+        // The old-side range 10-12 is one native range thread.
+        assertThat(copy.getExternalRef()).startsWith("gid://gitlab/DiffNote/");
         assertThat(gitlab.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
                 .filteredOn(comment -> comment.id().equals(copy.getExternalRef()))
                 .singleElement()
-                .satisfies(comment -> assertThat(comment.body().contains(GitLabLineNoteWriter.RANGE_PLACEMENT))
-                        .isEqualTo(!rejected));
+                .satisfies(comment -> assertThat(comment.body()).contains(GitLabLineNoteWriter.RANGE_PLACEMENT));
     }
 }

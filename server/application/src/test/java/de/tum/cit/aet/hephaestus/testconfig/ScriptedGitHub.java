@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.testconfig;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -33,6 +36,28 @@ public final class ScriptedGitHub implements ExchangeFunction {
     private static final String COMMENT_ID = "IC_";
 
     private final ScriptedCommentThreads threads = new ScriptedCommentThreads(COMMENT_ID);
+    private final Map<String, PendingReview> reviews = new ConcurrentHashMap<>();
+
+    private record PendingReview(String parent, String id, String body, String commit, AtomicBoolean submitted) {
+        Map<String, Object> fields() {
+            return Map.of(
+                    "id",
+                    id,
+                    "body",
+                    body,
+                    "state",
+                    submitted.get() ? "COMMENTED" : "PENDING",
+                    "viewerDidAuthor",
+                    true,
+                    "commit",
+                    Map.of("oid", commit),
+                    "url",
+                    "https://github.com/review/" + id,
+                    "comments",
+                    Map.of("nodes", List.of(), "pageInfo", Map.of("hasNextPage", false)));
+        }
+    }
+
     private final JsonMapper json = JsonMapper.builder().build();
 
     public ScriptedCommentThreads threads() {
@@ -85,6 +110,48 @@ public final class ScriptedGitHub implements ExchangeFunction {
                         COMMENT_ID,
                         variables.path("body").asString());
                 yield data(Map.of("addComment", Map.of("commentEdge", Map.of("node", Map.of("id", id)))));
+            }
+            case "GetFeedbackReviews" ->
+                data(Map.of(
+                        "repository",
+                        Map.of(
+                                "pullRequest",
+                                Map.of(
+                                        "reviews",
+                                        Map.of(
+                                                "nodes",
+                                                reviews.values().stream()
+                                                        .filter(review -> review.parent()
+                                                                .equals(pullRequest(
+                                                                        path(variables), number(variables))))
+                                                        .map(PendingReview::fields)
+                                                        .toList(),
+                                                "pageInfo",
+                                                Map.of("hasNextPage", false))))));
+            case "GetPullRequestReviewThreads" ->
+                data(Map.of(
+                        "repository",
+                        Map.of(
+                                "pullRequest",
+                                Map.of(
+                                        "reviewThreads",
+                                        Map.of("nodes", List.of(), "pageInfo", Map.of("hasNextPage", false))))));
+            case "AddPullRequestReviewWithThreads" -> {
+                var review = new PendingReview(
+                        variables.path("pullRequestId").asString(),
+                        "PRR_" + UUID.randomUUID(),
+                        variables.path("body").asString(),
+                        variables.path("commitOID").asString(),
+                        new AtomicBoolean());
+                reviews.put(review.id(), review);
+                yield data(Map.of("addPullRequestReview", Map.of("pullRequestReview", review.fields())));
+            }
+            case "SubmitFeedbackReview" -> {
+                var review = reviews.get(variables.path("reviewId").asString());
+                if (review == null) yield Map.of("errors", List.of(Map.of("message", "Unknown review")));
+                if (review.submitted().compareAndSet(false, true))
+                    threads.publish(review.parent(), review.id(), review.body());
+                yield data(Map.of("submitPullRequestReview", Map.of("pullRequestReview", review.fields())));
             }
             case "GetPullRequestCommentsNewest" ->
                 data(Map.of(

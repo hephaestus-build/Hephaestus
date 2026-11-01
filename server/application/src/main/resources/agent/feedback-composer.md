@@ -127,8 +127,7 @@ on its own, so write the card and name no target.
 
 ## Persisting
 
-Call `report_feedback` with every piece you have ready. It takes a list and stores or skips each one, with the
-reason. Call it again if more become ready. Feedback printed as text is not persisted.
+Call `check_package` with the complete package for this destination: a decision for each eligible practice. Checking creates no feedback or delivery work. Correct every refusal and check again. Then call `publish_package` with the returned `draftId` only. The server rechecks and accepts the complete package atomically, once. A changed draft needs a new check. Acceptance retains the approval and delivery states; it does not claim that the provider has delivered the feedback.
 
 Each piece carries `destination`, `practiceSlug`, `basedOn`, `action`, and the words. It takes no outcome, no severity and
 no confidence.

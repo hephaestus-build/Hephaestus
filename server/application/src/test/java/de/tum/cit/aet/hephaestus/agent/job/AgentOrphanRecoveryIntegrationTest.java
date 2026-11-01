@@ -27,9 +27,9 @@ import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
@@ -85,6 +85,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -860,14 +861,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             ReviewJob owned = jobRepository.lockById(jobId).orElseThrow();
             var receipt = privateComposition.prepare(
                     owned,
-                    new PrepareFeedbackRequestDTO(
-                            owned.getReviewId(),
-                            jobId,
-                            0,
-                            Arrays.stream(admitted).map(Result::getId).toList(),
-                            List.of(piece),
-                            false,
-                            null),
+                    new FeedbackPackage(
+                            Arrays.stream(admitted).map(Result::getId).toList(), List.of(piece), false, null),
                     rows,
                     new FeedbackCompositionService.Read(
                             new FeedbackCompositionContext(null, null), List.of(), List.of(), null),
@@ -876,7 +871,10 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             jobRepository.saveAndFlush(owned);
             return receipt;
         }));
-        return accepted.feedbackIds().getFirst();
+        return accepted.pieces().stream()
+                .map(PreparedFeedback::feedbackId)
+                .toList()
+                .getFirst();
     }
 
     private static ComposedFeedback notComposed(FeedbackDestination destination, Result result) {

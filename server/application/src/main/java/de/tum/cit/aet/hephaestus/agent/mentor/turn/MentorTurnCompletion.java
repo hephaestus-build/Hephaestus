@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.CopyWriteFence;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -58,7 +57,6 @@ public class MentorTurnCompletion {
     static final String SLACK_PARTLY = "Slack showed only part of what Hephaestus's answer showed of the feedback.";
 
     private final MentorTurnService turns;
-    private final FeedbackStore feedback;
     private final ConversationClaims conversationClaims;
     private final MentorAttemptUsageService attemptUsage;
     private final MeterRegistry meters;
@@ -307,7 +305,7 @@ public class MentorTurnCompletion {
                         case FAILED -> due.failedReason();
                     });
             try {
-                feedback.recordConversationReceipt(workspaceId, claim, receipt);
+                conversationClaims.recordConversationReceipt(workspaceId, claim, receipt);
             } catch (ResponseStatusException | IllegalArgumentException refused) {
                 // The status or the class: the refusal's text can quote the feedback.
                 log.warn(

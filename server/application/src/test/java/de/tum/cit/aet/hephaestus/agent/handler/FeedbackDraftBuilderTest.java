@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedProblemSnapshot;
@@ -55,10 +55,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 null);
         var drafts = FeedbackDraftBuilder.build(
                 job,
-                new PrepareFeedbackRequestDTO(
-                        job.getReviewId(),
-                        job.getId(),
-                        job.getAttempt(),
+                new FeedbackPackage(
                         List.copyOf(Set.of(resultId)),
                         List.of(piece),
                         piece.destination() == FeedbackDestination.ON_WORK,
@@ -89,10 +86,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 null);
         assertThatThrownBy(() -> FeedbackDraftBuilder.build(
                         job,
-                        new PrepareFeedbackRequestDTO(
-                                job.getReviewId(),
-                                job.getId(),
-                                job.getAttempt(),
+                        new FeedbackPackage(
                                 List.copyOf(Set.of()),
                                 List.of(piece),
                                 piece.destination() == FeedbackDestination.ON_WORK,
@@ -119,10 +113,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 null);
         assertThatThrownBy(() -> FeedbackDraftBuilder.build(
                         job,
-                        new PrepareFeedbackRequestDTO(
-                                job.getReviewId(),
-                                job.getId(),
-                                job.getAttempt(),
+                        new FeedbackPackage(
                                 List.copyOf(Set.of(id)),
                                 List.of(piece),
                                 piece.destination() == FeedbackDestination.ON_WORK,
@@ -160,10 +151,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 null);
         var draft = FeedbackDraftBuilder.build(
                         job,
-                        new PrepareFeedbackRequestDTO(
-                                job.getReviewId(),
-                                job.getId(),
-                                job.getAttempt(),
+                        new FeedbackPackage(
                                 List.copyOf(Set.of(resultId, quietId)),
                                 List.of(piece),
                                 piece.destination() == FeedbackDestination.ON_WORK,
@@ -209,10 +197,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 FeedbackDestination.PRACTICE_PAGE, List.of(resultId), null, List.of(), null, trace, page);
         var draft = FeedbackDraftBuilder.build(
                         job,
-                        new PrepareFeedbackRequestDTO(
-                                job.getReviewId(),
-                                job.getId(),
-                                job.getAttempt(),
+                        new FeedbackPackage(
                                 List.copyOf(Set.of(resultId)),
                                 List.of(piece),
                                 piece.destination() == FeedbackDestination.ON_WORK,
@@ -247,10 +232,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 .withPublicationContext("untrusted-composed-context");
         var piece = new ComposedFeedback(
                 destination, List.of(resultId), "Cover the failure case.", List.of(), null, trace, null);
-        var request = new PrepareFeedbackRequestDTO(
-                job.getReviewId(),
-                job.getId(),
-                job.getAttempt(),
+        var request = new FeedbackPackage(
                 List.of(resultId),
                 List.of(piece),
                 destination == FeedbackDestination.ON_WORK,
@@ -287,7 +269,7 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 resultId, candidate, List.of(new AdmittedProblemSnapshot(problemId, mock(ProblemCandidate.class)))));
         var anchors = Map.of(
                 new ComposedFeedback.Anchor(problemId, 0), new FeedbackAnchor("Export.java", 4, 4, CitationSide.NEW));
-        Function<String, PrepareFeedbackRequestDTO> request = words -> {
+        Function<String, FeedbackPackage> request = words -> {
             @Nullable String summary = field.equals("summary") ? words : null;
             var notes = field.equals("note")
                     ? List.of(new ComposedFeedback.Note(problemId, 0, words))
@@ -326,14 +308,8 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                     null,
                     new FeedbackCompositionTrace(List.of(copy), List.of(), null, resultId),
                     page);
-            return new PrepareFeedbackRequestDTO(
-                    job.getReviewId(),
-                    job.getId(),
-                    job.getAttempt(),
-                    List.of(resultId),
-                    List.of(piece),
-                    destination == FeedbackDestination.ON_WORK,
-                    null);
+            return new FeedbackPackage(
+                    List.of(resultId), List.of(piece), destination == FeedbackDestination.ON_WORK, null);
         };
         assertThat(FeedbackDraftBuilder.build(
                         job, request.apply("Keep the failure cause."), admitted, List.of(), anchors))

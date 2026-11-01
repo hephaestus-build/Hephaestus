@@ -414,13 +414,21 @@ The worker prepares the final public package before the private session starts.
 A private setup failure or deadline does not erase that prepared review.
 The destinations remain independently eligible.
 
-### One bounded session per destination group
+### Checked publication per destination
 
 Each session is one conversation with the attempt's frozen model through the proxy, with the attempt's AI choice, budget and usage rules.
-The review on the work has one tool, `report_review`.
-Private feedback has `report_feedback`.
+Each destination has `check_package` and `publish_package`.
+`check_package` checks the complete proposed package and returns its draft ID.
+It creates no feedback, copies or send request.
+
+`publish_package` takes only that ID, checks the same package again and returns its durable acceptance receipt.
+The receipt means accepted, not delivered: approval and send-time checks still apply.
+A changed attempt fence, permission, source or public history can refuse publication after a successful check.
+A private destination accepts all its pieces in one transaction.
+
 Each turn shows everything its session may use, so no session reads files.
 A session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
+The complete composition run makes at most 12 model calls across all destinations and retries.
 Each call asks for no more than the attempt's output limit.
 
 No call starts after the composition deadline.
@@ -429,10 +437,26 @@ The proxy refuses a later call.
 Provider failures are retried after a pause that doubles each time, within the deadline.
 
 The checks answer each call.
-A refused review or piece goes back to the model with every reason, so that the model can correct it.
-Preparation answers too: a package that the server refuses goes back the same way.
+A refused draft or publication goes back to the model with its reason, so that the model can correct it.
+An unknown draft ID cannot publish a package.
+After a destination accepts one package, another draft cannot replace it.
 A review whose public history changed while it was composed is composed again from a new history read, at most twice.
 A session that ends without a decision for a practice it may carry asks the model once more.
+
+### One notifying provider submission
+
+A pull request gets one GitHub review with its summary and line or file threads.
+A merge request gets one GitLab bulk publication with its summary and draft notes.
+Creating private drafts does not notify the developer.
+An interrupted attempt adopts only drafts with this package's exact words, markers and positions.
+An unrelated pending draft prevents submission.
+No adapter falls back to separate public discussions after a refused position.
+
+Each copy keeps its copy marker.
+After an uncertain submission, recovery reads the provider copies.
+It does not publish again.
+A partial readback does not justify a second notification.
+Withdrawal and correction address the stored provider references in place.
 
 ### Decisions and withholdings
 

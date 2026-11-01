@@ -1045,8 +1045,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 "remove_problem",
                 "read_problem",
                 "submit_result",
-                "report_feedback",
-                "report_review",
                 "other");
         /** The provider adapter's closed failure diagnostic (docker/agents/pi/patches), as the collector keeps it. */
         private static final Set<String> MODEL_FAILURE_KINDS = Set.of(

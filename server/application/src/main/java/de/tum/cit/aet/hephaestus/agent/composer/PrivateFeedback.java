@@ -20,7 +20,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -33,7 +32,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Feedback for the developer's practice pages and the mentor conversation: what it is composed from, the
- * {@code report_feedback} tool it is stored with, and the checks that store or skip each piece.
+ * {@code check_package} tool it is stored with, and the checks that store or skip each piece.
  */
 final class PrivateFeedback {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
@@ -101,7 +100,7 @@ final class PrivateFeedback {
     static final String NUDGE =
             "The admitted results with their problems and the history are in this turn, and nothing else decides a "
                     + "piece. Persist the feedback you have "
-                    + "with report_feedback now — and a WITHHOLD with its reason for each NOT_MET practice you decided "
+                    + "with check_package now, then publish_package with its draftId — and a WITHHOLD with its reason for each NOT_MET practice you decided "
                     + "to stay quiet about. Use tools only from this point onward; no planning prose.";
 
     private PrivateFeedback() {}
@@ -591,7 +590,7 @@ final class PrivateFeedback {
                 + ". Write no piece, not even a WITHHOLD, for a practice on a destination that does not list it.\n"
                 + "A pattern claim needs at least " + request.minDistinctItems + " distinct pieces of work.\n\n"
                 + coverageNote
-                + "Persist the feedback with report_feedback — every piece you have in one call. Writing nothing on a destination is a correct and common outcome; say in one line why, and stop.";
+                + "Check the complete package with check_package, then publish_package using its draftId — every piece you have in one call. Writing nothing on a destination is a correct and common outcome; say in one line why, and stop.";
     }
 
     /** What earlier attempts already decided: one list when both destinations agree, else per destination. */
@@ -630,7 +629,7 @@ final class PrivateFeedback {
                 .collect(Collectors.joining(", "));
         return "## Undecided\nThe turn ended with no piece and no WITHHOLD for these practices, each with a "
                 + "NOT_MET result: " + notMet + ". For each, persist the piece you decided on, or a "
-                + "WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in one report_feedback "
+                + "WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in check_package before publish_package "
                 + "call. Room left for new items: " + room
                 + "; a destination with none left takes only a WITHHOLD. The "
                 + "admitted results and their problems are in the turn above. Use tools only from this "
@@ -640,10 +639,10 @@ final class PrivateFeedback {
     // ---------------------------------------------------------------- the tool
 
     static final String TOOL_DESCRIPTION =
-            "Persist feedback for the developer's practice pages and the mentor conversation, one per "
-                    + "destination and practice. Send every piece you have ready in one call; each is stored or skipped on "
-                    + "its own, with the reason, and a skipped piece can be sent again corrected without re-sending the "
-                    + "stored ones. This is an intervention, not a measurement: it takes no outcome, severity or "
+            "Check the complete package for this private destination without publishing it, one piece per "
+                    + "practice. Include a decision for every eligible practice. A check creates no feedback or delivery. "
+                    + "Correct any refusal and check again; then publish_package using the returned draftId. "
+                    + "This is an intervention, not a measurement: it takes no outcome, severity or "
                     + "confidence, and no citation you typed yourself. "
                     + "Aim for at most 600 characters in a card body, 300 in its nextStep; keep title/body/nextStep separate. "
                     + "Mentor notes aim for 300 per field, 600 for evidenceSummary. "
@@ -652,7 +651,7 @@ final class PrivateFeedback {
                     + "Input example for a practice page: {\"feedback\":[{\"destination\":\"PRACTICE_PAGE\",\"practiceSlug\":\"<admitted practice slug>\",\"basedOn\":[\"<its NOT_MET resultId or problemId>\"],\"action\":\"NEW\",\"title\":\"Name the concern\",\"body\":\"Explain the supported concern.\",\"nextStep\":\"One action that addresses it.\"}]}. "
                     + "For WITHHOLD, send destination, practiceSlug, basedOn, action:\"WITHHOLD\", withholdReason and witnessIds:[]; omit title, body, nextStep and notes.";
 
-    /** The JSON schema of report_feedback's arguments for the open destinations. */
+    /** The JSON schema of check_package's arguments for the open destinations. */
     static ObjectNode toolParameters(List<String> practiceSlugs, Request request) {
         var enabled = request.openPrivate();
         var properties = new LinkedHashMap<String, ObjectNode>();
@@ -821,8 +820,8 @@ final class PrivateFeedback {
 
     // ---------------------------------------------------------------- storing pieces
 
-    /** What one report_feedback call stores and skips, piece by piece. */
-    static final class Store {
+    /** What one check_package call stores and skips, piece by piece. */
+    static final class Draft {
         private final List<String> practiceSlugs;
         private final Request request;
         private final Admission admission;
@@ -830,19 +829,22 @@ final class PrivateFeedback {
         private final List<PreparedTarget> preparedTargets;
         private final Map<String, ReviewOnWork.Witness> deliveredWitnesses;
         private final Map<String, List<String>> routes;
-        private final Function<Piece, @Nullable String> prepare;
         private final Map<String, Integer> used = new LinkedHashMap<>();
         private final Set<String> seen = new HashSet<>();
         final List<Piece> feedback = new ArrayList<>();
+        private boolean complete;
 
-        Store(
+        boolean complete() {
+            return complete;
+        }
+
+        Draft(
                 List<String> practiceSlugs,
                 Request request,
                 Admission admission,
                 List<PreparedTarget> preparedTargets,
                 Map<String, ReviewOnWork.Witness> deliveredWitnesses,
-                Map<String, List<String>> routes,
-                Function<Piece, @Nullable String> prepare) {
+                Map<String, List<String>> routes) {
             this.practiceSlugs = practiceSlugs;
             this.request = request;
             this.admission = admission;
@@ -850,21 +852,21 @@ final class PrivateFeedback {
             this.preparedTargets = preparedTargets;
             this.deliveredWitnesses = deliveredWitnesses;
             this.routes = routes;
-            this.prepare = prepare;
         }
 
         List<PreparedTarget> preparedTargets() {
             return preparedTargets;
         }
 
-        /** The tool's answer to one call or one piece, and how many pieces it stored. */
+        /** The tool's answer to one call or one piece, and how many pieces it validated. */
         record Outcome(String text, int count) {
-            boolean stored() {
+            boolean valid() {
                 return count > 0;
             }
         }
 
         Outcome call(JsonNode raw) {
+            complete = false;
             JsonNode input = ReviewOnWork.unwrapArguments(raw);
             JsonNode listed = isRecord(input) ? input.path("feedback") : JSON.missingNode();
             if (listed.isString()) {
@@ -881,9 +883,11 @@ final class PrivateFeedback {
             var lines = new ArrayList<String>();
             int stored = 0;
             int index = 1;
+            complete = true;
             for (JsonNode piece : listed) {
                 var outcome = store(prepare(piece));
                 stored += outcome.count();
+                if (!outcome.valid()) complete = false;
                 lines.add("#" + index++ + ": " + outcome.text());
             }
             return new Outcome(String.join("\n", lines), stored);
@@ -985,17 +989,11 @@ final class PrivateFeedback {
                     piece.body(),
                     piece.nextStep(),
                     piece.notes());
-            // The server's own checks answer here, while the composer can still correct the piece.
-            String refused = prepare.apply(stored);
-            if (refused != null)
-                return new Outcome(
-                        "the server refused this piece, nothing was stored: " + refused + " Send it again corrected.",
-                        0);
             seen.add(key);
             if (delivers) used.put(piece.destination(), usedHere + 1);
             feedback.add(stored);
             return new Outcome(
-                    "stored a " + piece.destination() + " piece for " + piece.practiceSlug() + " (" + piece.action()
+                    "validated a " + piece.destination() + " piece for " + piece.practiceSlug() + " (" + piece.action()
                             + "); " + used.getOrDefault(piece.destination(), 0) + "/" + bounds
                             + " used on that destination.",
                     1);

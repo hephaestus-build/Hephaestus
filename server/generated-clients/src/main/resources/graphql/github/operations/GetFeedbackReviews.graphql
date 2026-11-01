@@ -1,0 +1,9 @@
+query GetFeedbackReviews($owner:String!, $name:String!, $number:Int!, $first:Int!, $after:String) {
+    repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+        reviews(first:$first,after:$after) { pageInfo { hasNextPage endCursor } nodes {
+            id body state url viewerDidAuthor commit { oid }
+            comments(first:100) { pageInfo { hasNextPage } nodes { body viewerDidAuthor } }
+        } }
+    } }
+    rateLimit { cost limit remaining resetAt }
+}

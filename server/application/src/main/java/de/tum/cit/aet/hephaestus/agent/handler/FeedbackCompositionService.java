@@ -3,11 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopies;
 import de.tum.cit.aet.hephaestus.agent.context.HistoryCopy;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.ConversationEligibilityDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticePageSupportDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
@@ -17,11 +16,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationEligibility;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionContext;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewOnWork;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
@@ -55,9 +56,50 @@ public class FeedbackCompositionService {
     private final HistoryCopies copies;
     private final FeedbackHistoryQuery feedbackHistory;
 
-    public PrepareFeedbackResponseDTO prepare(
+    public PreparedPackage prepare(
             ReviewJob job,
-            PrepareFeedbackRequestDTO request,
+            FeedbackPackage request,
+            List<AdmittedResultSnapshot> rows,
+            Read context,
+            Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors,
+            boolean publicAlreadyAccepted) {
+        var drafts = checkedDrafts(job, request, rows, context, anchors, publicAlreadyAccepted);
+        var prepared = feedback.prepareAll(job.getWorkspaceId(), job.getReviewId(), drafts);
+        if (request.publicComposition()
+                && publicAlreadyAccepted
+                && !prepared.packageDigest().equals(job.getPublicReviewDigest()))
+            throw new AdmissionConflictException();
+        if (request.publicComposition()) {
+            members.publicReviewed(
+                    job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt(), prepared.preparedAt());
+            job.setPublicReviewDigest(prepared.packageDigest());
+        }
+        for (var draft : drafts) {
+            var receipt = prepared.pieces().stream()
+                    .filter(piece -> piece.feedbackId().equals(draft.id()))
+                    .findFirst()
+                    .orElseThrow();
+            if (draft.destination() == FeedbackDestination.PRACTICE_PAGE)
+                job.setPracticePagePreparedAt(receipt.preparedAt());
+            else if (draft.destination() == FeedbackDestination.CONVERSATION)
+                job.setConversationPreparedAt(receipt.preparedAt());
+        }
+        return prepared;
+    }
+
+    public void check(
+            ReviewJob job,
+            FeedbackPackage request,
+            List<AdmittedResultSnapshot> rows,
+            Read context,
+            Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors,
+            boolean publicAlreadyAccepted) {
+        checkedDrafts(job, request, rows, context, anchors, publicAlreadyAccepted);
+    }
+
+    private List<FeedbackDraft> checkedDrafts(
+            ReviewJob job,
+            FeedbackPackage request,
             List<AdmittedResultSnapshot> rows,
             Read context,
             Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors,
@@ -83,30 +125,8 @@ public class FeedbackCompositionService {
                         request.publicationContext());
                 if (refusal.isPresent()) throw new PublicationContextRefusedException(refusal.get());
             }
-        var prepared = feedback.prepareAll(job.getWorkspaceId(), job.getReviewId(), drafts);
-        if (request.publicComposition()
-                && publicAlreadyAccepted
-                && !prepared.packageDigest().equals(job.getPublicReviewDigest()))
-            throw new AdmissionConflictException();
-        if (request.publicComposition()) {
-            members.publicReviewed(
-                    job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt(), prepared.preparedAt());
-            job.setPublicReviewDigest(prepared.packageDigest());
-        }
-        for (var draft : drafts) {
-            var receipt = prepared.pieces().stream()
-                    .filter(piece -> piece.feedbackId().equals(draft.id()))
-                    .findFirst()
-                    .orElseThrow();
-            if (draft.destination() == FeedbackDestination.PRACTICE_PAGE)
-                job.setPracticePagePreparedAt(receipt.preparedAt());
-            else if (draft.destination() == FeedbackDestination.CONVERSATION)
-                job.setConversationPreparedAt(receipt.preparedAt());
-        }
-        return new PrepareFeedbackResponseDTO(
-                prepared.pieces().stream().map(piece -> piece.feedbackId()).toList(),
-                prepared.packageDigest(),
-                prepared.preparedAt());
+        feedback.checkPackage(job.getWorkspaceId(), job.getReviewId(), drafts);
+        return drafts;
     }
 
     /** The review on the work that the job's review prepared, as it was composed. */

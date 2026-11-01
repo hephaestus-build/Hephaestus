@@ -121,12 +121,14 @@ public class GitHubSummaryWriter implements SummaryWriter {
         }
 
         ClientGraphQlResponse response;
+        // A pull request summary is the body of its feedback review; any other summary is an issue comment.
+        boolean review = externalId.startsWith("PRR_");
         try {
-            String body = formatter.footer(target.item()).summary(content);
             egressGuard.requireDeliveryAllowed("github.update-summary");
+            String body = formatter.footer(target.item()).summary(content);
             response = gitHubProvider
                     .forScope(scopeId)
-                    .documentName("UpdateIssueComment")
+                    .documentName(review ? "UpdateFeedbackReview" : "UpdateIssueComment")
                     .variable("id", externalId)
                     .variable("body", body)
                     .execute()
@@ -159,8 +161,10 @@ public class GitHubSummaryWriter implements SummaryWriter {
                             content.copyId(), "GitHub updateIssueComment failed: " + errors);
         }
 
-        String commentNodeId =
-                response.field("updateIssueComment.issueComment.id").getValue();
+        String commentNodeId = response.field(
+                        (review ? "updatePullRequestReview.pullRequestReview" : "updateIssueComment.issueComment")
+                                + ".id")
+                .getValue();
         if (commentNodeId == null) {
             // Neither confirmed gone nor returned an id — transient, don't double-post.
             return CopyUpdateReceipt.transientFailure(content.copyId(), "No comment id in updateIssueComment response");
@@ -170,7 +174,11 @@ public class GitHubSummaryWriter implements SummaryWriter {
                 content.copyId(),
                 new SummaryHandle(
                         commentNodeId,
-                        response.field("updateIssueComment.issueComment.url").getValue()));
+                        response.field((review
+                                                ? "updatePullRequestReview.pullRequestReview"
+                                                : "updateIssueComment.issueComment")
+                                        + ".url")
+                                .getValue()));
     }
 
     /** Search newest-first; a marker without the viewer's exact posted copy cannot establish success or absence. */

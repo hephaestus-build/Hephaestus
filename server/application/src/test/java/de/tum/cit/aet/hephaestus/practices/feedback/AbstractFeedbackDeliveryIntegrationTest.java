@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
@@ -289,29 +290,45 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
             return new CopyUpdateReceipt(id, CopyUpdateKind.EDITED, existing.externalRef(), existing.url(), null);
         }
 
+        /**
+         * Writes the summary, then the notes, each behind its own fence, as an adapter may. Like an adapter it never
+         * throws for a provider failure: a lost answer leaves the copy attempted, so only readback can settle it.
+         */
         @Override
-        public CopyWriteResult postImmutablePackage(FeedbackTarget target, List<LineNote> notes, CopyWriteFence fence) {
+        public CopyWriteResult postPackage(FeedbackTarget target, OnWorkPackage publication, CopyWriteFence fence) {
             var receipts = new ArrayList<CopyReceipt>();
-            var withheld = new ArrayList<UUID>();
-            if (beforeNotes != null) beforeNotes.run();
-            for (var note : notes) {
-                if (!fence.beforeCreate(List.of(note.copyId()), List.copyOf(receipts))) {
-                    withheld.add(note.copyId());
-                    continue;
+            var summary = publication.summary();
+            if (summary != null) {
+                if (!fence.beforeCreate(List.of(summary.copyId()), List.of())) return CopyWriteResult.of(List.of());
+                try {
+                    var handle = postSummary(target, summary);
+                    receipts.add(new CopyReceipt(
+                            summary.copyId(), CopyDisposition.POSTED, handle.externalRef(), handle.url(), true, null));
+                } catch (IllegalStateException unknown) {
+                    receipts.add(CopyReceipt.attempted(summary.copyId()));
                 }
+            }
+            if (beforeNotes != null) beforeNotes.run();
+            var notes = publication.notes();
+            if (notes.isEmpty()) return CopyWriteResult.of(receipts);
+            if (!fence.beforeCreate(notes.stream().map(LineNote::copyId).toList(), List.copyOf(receipts)))
+                return CopyWriteResult.of(receipts);
+            for (var note : notes) {
                 if (noteFailure == Failure.NOT_SENT) {
                     receipts.add(CopyReceipt.notSent(note.copyId()));
                     continue;
                 }
                 committed(note.copyId());
                 noteCreates++;
-                if (noteFailure == Failure.BEFORE_CREATE)
-                    throw new IllegalStateException("Provider request was not received.");
+                if (noteFailure == Failure.BEFORE_CREATE || noteFailure == Failure.AFTER_CREATE) {
+                    if (noteFailure == Failure.AFTER_CREATE) physical.put(note.copyId(), note.body());
+                    receipts.add(CopyReceipt.attempted(note.copyId()));
+                    continue;
+                }
                 physical.put(note.copyId(), note.body());
-                if (noteFailure == Failure.AFTER_CREATE) throw new IllegalStateException("Provider response was lost.");
                 receipts.add(receipt(note.copyId()));
             }
-            return new CopyWriteResult(receipts, withheld);
+            return CopyWriteResult.of(receipts);
         }
 
         private CopyReceipt receipt(UUID id) {
@@ -325,12 +342,27 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         }
 
         @Override
-        public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, List<LineNote> notes) {
+        public @Nullable List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication) {
+            var notes = publication.notes();
             if (this.readback == LookupPresence.UNKNOWN) return null;
-            return notes.stream()
+            var found = new ArrayList<CopyReceipt>();
+            var summary = publication.summary();
+            if (summary != null) {
+                lastSummaryLookupMarker = summary.writeMarker();
+                if (physical.containsKey(summary.copyId()))
+                    found.add(new CopyReceipt(
+                            summary.copyId(),
+                            CopyDisposition.PRESERVED_EXISTING,
+                            summary.copyId().toString(),
+                            "https://example.test/comments/" + summary.copyId(),
+                            true,
+                            null));
+            }
+            notes.stream()
                     .filter(note -> physical.containsKey(note.copyId()))
                     .map(note -> receipt(note.copyId()))
-                    .toList();
+                    .forEach(found::add);
+            return found;
         }
 
         @Override

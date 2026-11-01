@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedExceptio
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RetainedFeedbackTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
@@ -32,7 +33,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SubmittedResultDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -96,6 +96,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -821,8 +822,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var foreignResults = admitStaged(other.identity(), request(other));
             var foreign = foreignResults.admitted().getFirst();
             var context = admission.publicFeedbackHistory(own.identity()).publicationContext();
-            var forged = composition(own, foreignResults, SUMMARY, context);
-            assertThatThrownBy(() -> admission.prepareFeedback(own.identity(), forged))
+            var forged = composition(foreignResults, SUMMARY, context);
+            assertThatThrownBy(() -> admission.checkPackage(own.identity(), forged))
+                    .isInstanceOf(AdmissionConflictException.class);
+            assertThatThrownBy(() -> admission.publishPackage(own.identity(), forged))
                     .isInstanceOf(AdmissionConflictException.class);
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(own.workspaceId(), own.reviewId()))
@@ -834,14 +837,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .extracting(AdmittedResultDTO::resultId)
                     .containsExactly(ownResults.admitted().getFirst().resultId());
             assertThat(resultIds(other)).containsExactly(foreign.resultId());
-            var accepted = admission.prepareFeedback(own.identity(), composition(own, ownResults, SUMMARY, context));
-            assertThat(basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(
-                            own.workspaceId(), accepted.feedbackIds().getFirst()))
+            var accepted = admission.publishPackage(own.identity(), composition(ownResults, SUMMARY, context));
+            var acceptedId = accepted.pieces().getFirst().feedbackId();
+            assertThat(basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(own.workspaceId(), acceptedId))
                     .singleElement()
                     .satisfies(row -> assertThat(row.getResultId())
                             .isEqualTo(ownResults.admitted().getFirst().resultId()));
-            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(
-                            own.workspaceId(), accepted.feedbackIds().getFirst()))
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(own.workspaceId(), acceptedId))
                     .extracting(FeedbackCopy::getKind)
                     .containsExactly(FeedbackCopyKind.SUMMARY);
         }
@@ -925,13 +927,89 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             review.workspaceId(), result.getFirst().getId()))
                     .hasSize(1);
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
-            var prepared =
-                    admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            var prepared = admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
             assertThat(basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(
-                            review.workspaceId(), prepared.feedbackIds().getFirst()))
+                            review.workspaceId(),
+                            prepared.pieces().stream()
+                                    .map(PreparedFeedback::feedbackId)
+                                    .toList()
+                                    .getFirst()))
                     .singleElement()
                     .satisfies(row -> assertThat(row.getResultId())
                             .isEqualTo(result.getFirst().getId()));
+        }
+    }
+
+    @Test
+    void shouldCheckWithoutPreparingFeedbackAndRefusePublicationAfterItsLeaseExpires() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            var proposal = composition(response, SUMMARY, context);
+            admission.checkPackage(review.identity(), proposal);
+            var id = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId()))
+                    .isEmpty();
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), id))
+                    .isEmpty();
+            assertThat(sends.findByFeedbackIdAndWorkspaceId(id, review.workspaceId()))
+                    .isEmpty();
+            assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
+                    .isNull();
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            job.setLeasedUntil(Instant.now().minusSeconds(1));
+            jobs.saveAndFlush(job);
+            assertThatThrownBy(() -> admission.publishPackage(review.identity(), proposal))
+                    .isInstanceOf(ResultAdmissionService.StaleAttemptException.class);
+            assertThat(feedback.findByIdAndWorkspaceId(id, review.workspaceId()))
+                    .isEmpty();
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber())))
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRecheckPublicHistoryWhenPublishingAnAlreadyCheckedDraft() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admitStaged(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            var proposal = composition(response, SUMMARY, context);
+            admission.checkPackage(review.identity(), proposal);
+            var sibling = RetainedFeedbackTestData.onWork(
+                    jdbc, feedback, review.item(), review.developerId(), FeedbackState.DELIVERED);
+            copies.saveAndFlush(RetainedFeedbackTestData.posted(
+                    sibling, FeedbackCopyKind.SUMMARY, 0, "PRR_other", "https://github.com/review/other"));
+            assertThatThrownBy(() -> admission.publishPackage(review.identity(), proposal))
+                    .isInstanceOf(PublicationContextRefusedException.class);
+            assertThat(feedback.findByIdAndWorkspaceId(
+                            FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId()),
+                            review.workspaceId()))
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRefuseComposedOutputThatNamesAnotherWorkspacesCanaryEvidence() {
+        try (var owner = claimedReview(FeedbackMode.AUTOMATIC);
+                var other = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admitStaged(owner.identity(), request(owner));
+            var foreign = admitStaged(other.identity(), request(other));
+            var context = admission.publicFeedbackHistory(owner.identity()).publicationContext();
+            var attack = composition(foreign, "CANARY_OTHER_WORKSPACE_COMPOSED_OUTPUT", context);
+            assertThatThrownBy(() -> admission.checkPackage(owner.identity(), attack))
+                    .isInstanceOf(AdmissionConflictException.class);
+            assertThatThrownBy(() -> admission.publishPackage(owner.identity(), attack))
+                    .isInstanceOf(AdmissionConflictException.class);
+            var id = FeedbackIds.onWork(owner.workspaceId(), owner.reviewId(), owner.developerId());
+            assertThat(feedback.findByIdAndWorkspaceId(id, owner.workspaceId())).isEmpty();
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(owner.workspaceId(), id))
+                    .isEmpty();
+            assertThat(sends.findByFeedbackIdAndWorkspaceId(id, owner.workspaceId()))
+                    .isEmpty();
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(owner.repository(), owner.pullRequestNumber())))
+                    .isEmpty();
+            assertThat(github.threads().on(ScriptedGitHub.pullRequest(other.repository(), other.pullRequestNumber())))
+                    .isEmpty();
         }
     }
 
@@ -1012,8 +1090,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
             var stale = "v1:" + review.developerId() + ":" + "0".repeat(64);
             // Before the review is publicly reviewed, the composition is checked against the history it was read from.
-            assertThatThrownBy(() ->
-                            admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, stale)))
+            assertThatThrownBy(() -> admission.publishPackage(review.identity(), composition(response, SUMMARY, stale)))
                     .isInstanceOfSatisfying(
                             PublicationContextRefusedException.class,
                             refused ->
@@ -1024,22 +1101,28 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isNull();
 
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
-            var prepared =
-                    admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            var prepared = admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
 
-            assertThat(prepared.feedbackIds()).containsExactly(feedbackId);
+            assertThat(prepared.pieces().stream()
+                            .map(PreparedFeedback::feedbackId)
+                            .toList())
+                    .containsExactly(feedbackId);
             assertThat(admission
                             .admittedResponse(
                                     jobs.findById(review.identity().jobId()).orElseThrow())
                             .publicReviewed())
                     .isTrue();
-            var replayed =
-                    admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
-            assertThat(replayed.feedbackIds()).isEqualTo(prepared.feedbackIds());
-            assertThat(replayed.contentDigest()).isEqualTo(prepared.contentDigest());
-            assertThatThrownBy(() -> admission.prepareFeedback(
+            var replayed = admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
+            assertThat(replayed.pieces().stream()
+                            .map(PreparedFeedback::feedbackId)
+                            .toList())
+                    .isEqualTo(prepared.pieces().stream()
+                            .map(PreparedFeedback::feedbackId)
+                            .toList());
+            assertThat(replayed.packageDigest()).isEqualTo(prepared.packageDigest());
+            assertThatThrownBy(() -> admission.publishPackage(
                             review.identity(),
-                            composition(review, response, "Different words for the same observation.", context)))
+                            composition(response, "Different words for the same observation.", context)))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
                             conflict ->
@@ -1072,7 +1155,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                         assertThat(send.getState()).isEqualTo(FeedbackSendState.PENDING);
                     });
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
-                    .isEqualTo(prepared.contentDigest());
+                    .isEqualTo(prepared.packageDigest());
 
             recovery.recover();
 
@@ -1107,13 +1190,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
 
-            assertThatThrownBy(() -> admission.prepareFeedback(
+            assertThatThrownBy(() -> admission.publishPackage(
                             review.identity(),
-                            composition(
-                                    review,
-                                    response,
-                                    SUMMARY + " See [the fix](https://other.example.net/fix).",
-                                    context)))
+                            composition(response, SUMMARY + " See [the fix](https://other.example.net/fix).", context)))
                     .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
                         assertThat(refused.rule()).isEqualTo("LINK");
                         assertThat(refused.field()).isEqualTo("summary");
@@ -1124,9 +1203,13 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
                     .isNull();
-            assertThat(admission
-                            .prepareFeedback(review.identity(), composition(review, response, SUMMARY, context))
-                            .feedbackIds())
+            assertThat(
+                            admission
+                                    .publishPackage(review.identity(), composition(response, SUMMARY, context))
+                                    .pieces()
+                                    .stream()
+                                    .map(PreparedFeedback::feedbackId)
+                                    .toList())
                     .containsExactly(FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId()));
         }
     }
@@ -1176,7 +1259,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
-            admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
             var job = jobs.findById(review.identity().jobId()).orElseThrow();
 
             assertThat(admission.preparedReview(job)).hasValueSatisfying(prepared -> {
@@ -1195,8 +1278,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
-            var composed = composition(review, response, SUMMARY, context);
-            var prepared = admission.prepareFeedback(review.identity(), composed);
+            var composed = composition(response, SUMMARY, context);
+            var prepared = admission.publishPackage(review.identity(), composed);
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
             var sibling = RetainedFeedbackTestData.onWork(
                     jdbc, feedback, review.item(), review.developerId(), FeedbackState.DELIVERED);
@@ -1206,10 +1289,15 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .isNotEqualTo(context);
 
             // An accepted public package replays by its digest; the history it was composed from is not read again.
-            var replayed = admission.prepareFeedback(review.identity(), composed);
+            var replayed = admission.publishPackage(review.identity(), composed);
 
-            assertThat(replayed.feedbackIds()).isEqualTo(prepared.feedbackIds());
-            assertThat(replayed.contentDigest()).isEqualTo(prepared.contentDigest());
+            assertThat(replayed.pieces().stream()
+                            .map(PreparedFeedback::feedbackId)
+                            .toList())
+                    .isEqualTo(prepared.pieces().stream()
+                            .map(PreparedFeedback::feedbackId)
+                            .toList());
+            assertThat(replayed.packageDigest()).isEqualTo(prepared.packageDigest());
 
             recovery.recover();
 
@@ -1234,7 +1322,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
-            admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
             var pull = pullRequests.findById(review.pullRequestId()).orElseThrow();
             pull.setHeadRefOid("d".repeat(40));
@@ -1267,7 +1355,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.APPROVE_FIRST)) {
             var response = admitStaged(review.identity(), request(review));
             var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
-            admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            admission.publishPackage(review.identity(), composition(response, SUMMARY, context));
             var feedbackId = FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId());
             var thread = ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber());
 
@@ -1523,15 +1611,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     /** One summary on the work, composed from the public history named by {@code publicationContext}. */
-    private static PrepareFeedbackRequestDTO composition(
-            ClaimedReview review, AdmissionResponseDTO admitted, String summary, @Nullable String publicationContext) {
+    private static FeedbackPackage composition(
+            AdmissionResponseDTO admitted, String summary, @Nullable String publicationContext) {
         var result = admitted.admitted().getFirst();
         var problem = result.problems().getFirst().id();
         var support = List.of(new FeedbackCompositionTrace.Support(result.resultId(), problem));
-        return new PrepareFeedbackRequestDTO(
-                review.reviewId(),
-                review.identity().jobId(),
-                review.identity().attempt(),
+        return new FeedbackPackage(
                 List.of(result.resultId()),
                 List.of(new ComposedFeedback(
                         FeedbackDestination.ON_WORK,

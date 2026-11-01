@@ -20,7 +20,6 @@ public final class GitHubCorrectionTestFixture {
                 mock(GitHubPrNodeIdResolver.class),
                 mock(OutboundEgressGuard.class),
                 ScmFeedbackFixtures.resolver(),
-                mock(GitHubSummaryWriter.class),
                 ScmFeedbackFixtures.formatter());
     }
 }
