@@ -56,6 +56,20 @@ void test("accepts the production manifest of the release version", () => {
 	);
 });
 
+void test("accepts a pre-release only as its numeric version with the full version name", () => {
+	const prerelease = { ...releasable, version: "1.0.0", version_name: "1.0.0-rc.1" };
+	assert.deepEqual(manifestProblems(prerelease, "1.0.0-rc.1"), []);
+	assert.match(
+		manifestProblems({ ...prerelease, version: "1.0.0-rc.1" }, "1.0.0-rc.1").join("\n"),
+		/version must be 1\.0\.0/u,
+	);
+	const { version_name: _, ...withoutName } = prerelease;
+	assert.match(
+		manifestProblems(withoutName, "1.0.0-rc.1").join("\n"),
+		/version_name must be 1\.0\.0-rc\.1/u,
+	);
+});
+
 void test("rejects what a development or e2e build carries", () => {
 	const cases: [string, Record<string, unknown>][] = [
 		["version", { version: "0.0.0" }],
