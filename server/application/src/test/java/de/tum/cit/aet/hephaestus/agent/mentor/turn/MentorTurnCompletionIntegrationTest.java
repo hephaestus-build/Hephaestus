@@ -490,6 +490,28 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
+    void shouldEndATurnThatTheUpgradeLeftRunningWithoutARetryAndBillItsMeasuredSpendOnce() {
+        // Built directly: the bean's scheduler lock would skip a second sweep within its minimum hold.
+        MentorTurnLeaseReaper reaper = new MentorTurnLeaseReaper(turns, completion, metrics, transactions, waits);
+        MentorTurn interrupted = admittedTurn(Duration.ofMinutes(5));
+        proxyCall(interrupted, 30_000);
+        // The 1.0 upgrade clears the lease of each turn that the old release left running.
+        jdbc.update("UPDATE mentor_turn SET leased_until = NULL, lease_id = NULL WHERE id = ?", interrupted.getId());
+
+        reaper.reap();
+        reaper.reap();
+
+        MentorTurn ended = turnRepository.findById(interrupted.getId()).orElseThrow();
+        assertThat(ended.getStatus()).as("its first attempt is not retried").isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(ended.getError()).isEqualTo("Hephaestus was updated before it could answer. Ask again.");
+        assertThat(ended.getFailureCause()).isEqualTo("an upgrade to 1.0 stopped it before it ended");
+        assertThat(ended.getLeasedUntil()).isNull();
+        assertThat(ledger(interrupted))
+                .extracting(Billed::attempt, Billed::inputTokens)
+                .containsExactly(tuple(1, 30_000L));
+    }
+
+    @Test
     void shouldBillEachLostAttemptFromTheProxyWhenTheReaperTakesItsLeaseBack() {
         // Built directly: the bean's scheduler lock would skip a second sweep within its minimum hold.
         MentorTurnLeaseReaper reaper = new MentorTurnLeaseReaper(turns, completion, metrics, transactions, waits);

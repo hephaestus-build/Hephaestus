@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793497726888-1" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="mentor_turn" columnName="leased_until"/>
+            <columnExists tableName="mentor_turn" columnName="failure_cause"/>
+            <columnExists tableName="mentor_turn" columnName="lease_id"/>
+        </preConditions>
+        <comment>The 1.0 cutover of the conversation turns that the old release left unfinished (ADR 0070 § In-flight work, decision F-15). The upgrade stops every role first, so none of them still runs, and none may answer later without the developer asking. A running turn loses its lease: every claim sets one, so the server's lease reaper knows it by that, ends it with the reply that offers Ask again, and bills its attempt's measured spend, as for any lost attempt. A queued turn has no attempt to bill and would otherwise start, so it ends here with that reply. A stopped turn keeps the Stopped that the developer chose; the reaper takes back a lease that its attempt still holds, as always.</comment>
+        <sql>UPDATE mentor_turn SET leased_until = NULL, lease_id = NULL, started_at = coalesce(started_at, queued_at)
+ WHERE status = 'RUNNING';
+UPDATE mentor_turn
+   SET status = 'FAILED',
+       finished_at = now(),
+       error = 'Hephaestus was updated before it could answer. Ask again.',
+       failure_cause = 'an upgrade to 1.0 stopped it before it ended',
+       failed_call = NULL,
+       failed_call_status = NULL
+ WHERE status = 'QUEUED';</sql>
+        <rollback>
+            <stop>The ended turns cannot resume. To roll back, restore the database backup taken before this upgrade.</stop>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793497726888-2" author="hephaestus">
+        <preConditions onFail="HALT">
+            <columnExists tableName="review_job" columnName="lease_id"/>
+            <columnExists tableName="review_job" columnName="execution_started_at"/>
+            <columnExists tableName="review_job" columnName="admission_digest"/>
+        </preConditions>
+        <comment>The 1.0 cutover of the practice reviews that the old release claimed (ADR 0070 § In-flight work), before any lease recovery sees them: recovery would requeue them as orphans and spend a retry. Each returns to the queue with no owner (its lease id), lease or execution start and its in-flight counters zeroed, as every requeue sets them, and keeps its admitted results, staged capture and measurement. The retries it used, attempt - drain_count - room_refusals, stay the same. An unadmitted review keeps its attempt and drain count, so its next run continues that attempt. An admitted review takes the next attempt with one more drain, as a drain's requeue does, because a claim composes only an attempt after the admitting one.</comment>
+        <sql>UPDATE review_job
+   SET status = 'QUEUED',
+       lease_id = NULL,
+       leased_until = NULL,
+       started_at = NULL,
+       execution_started_at = NULL,
+       available_at = now(),
+       attempt = CASE WHEN admission_digest IS NOT NULL AND admission_attempt IS NOT NULL THEN attempt + 1
+                      ELSE attempt END,
+       drain_count = CASE WHEN admission_digest IS NOT NULL AND admission_attempt IS NOT NULL THEN drain_count + 1
+                          ELSE drain_count END,
+       llm_calls = 0,
+       llm_input_tokens = 0,
+       llm_output_tokens = 0,
+       llm_reasoning_tokens = 0,
+       llm_cache_read_tokens = 0,
+       llm_cache_write_tokens = 0
+ WHERE status = 'RUNNING';</sql>
+        <rollback>
+            <stop>The requeued reviews cannot resume their old attempts. To roll back, restore the database backup taken before this upgrade.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

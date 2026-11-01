@@ -58,6 +58,7 @@ It is the [Database maintenance](../admin/kubernetes.mdx#database-maintenance) p
   The 1.0 migration requeues every `review_job` that is still claimed. It clears the owner and the attempt fence, spends no retry, and keeps every admitted and staged result. This is needed because 1.0 has no `worker_registry` recovery (ADR 0068).
   Stored config snapshots of an older schema version get a new snapshot when the job runs again.
 - **Heph turns.** A turn that runs at phase 1 ends. The 1.0 migration ends each unfinished turn with the visible state "Heph was updated before it could answer. Ask again." It bills only the measured spend. A turn is not run again silently (decision F-15).
+  The migration ends each queued turn so. It clears the lease of each running turn, and the server's lease reaper then ends that turn the same way and bills its attempt. A turn that the developer stopped stays stopped.
 - **Feedback composition and delivery.** These are rows. They continue after phase 4. Uncertain provider writes keep their receipts, so readback decides, as today.
 - **JetStream.** The webhook role keeps its 0.95 version until phase 2 changes it. The 1.0 server must read every message that the 0.95 receiver published. The release-upgrade webhook leg proves this for 1.0, although the schema waiver turns the other previous-release legs off. With no backlog, the operator can also start with empty streams after the drain to zero pending (ADR 0041).
 

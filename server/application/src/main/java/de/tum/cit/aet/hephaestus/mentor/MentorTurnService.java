@@ -42,6 +42,14 @@ public class MentorTurnService {
 
     private static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
 
+    /**
+     * Shown for a turn that the 1.0 upgrade interrupted (ADR 0070 § In-flight work); the upgrade's change set stores
+     * the same reply for the turns that were still queued.
+     */
+    private static final String UPGRADED = "Hephaestus was updated before it could answer. Ask again.";
+
+    private static final String UPGRADED_CAUSE = "an upgrade to 1.0 stopped it before it ended";
+
     private final MentorConversationRepository conversations;
     private final MentorEntryRepository entries;
     private final MentorTurnRepository turns;
@@ -338,6 +346,9 @@ public class MentorTurnService {
     /**
      * Takes an expired lease back. A running turn returns to the queue for its one retry, or fails after it; a stopped
      * turn stays stopped. The lost attempt stored nothing ({@link #end}).
+     *
+     * <p>A running turn without a lease was running when the old release stopped: every claim sets a lease, and the 1.0
+     * upgrade clears it. It ends and never runs again, so it never answers later without the developer asking.
      */
     @Transactional
     public Optional<LostAttempt> expireLease(UUID turnId) {
@@ -348,11 +359,18 @@ public class MentorTurnService {
         MentorTurn turn = locked.get();
         Instant now = turns.databaseClock();
         Instant leasedUntil = turn.getLeasedUntil();
+        if (turn.getStatus() == MentorTurn.Status.RUNNING && leasedUntil == null) {
+            return Optional.of(takeBack(turn, false, now, UPGRADED, UPGRADED_CAUSE));
+        }
         if (!turn.isLeased() || leasedUntil == null || !leasedUntil.isBefore(now)) {
             return Optional.empty();
         }
-        return Optional.of(
-                takeBack(turn, turn.getStatus() == MentorTurn.Status.RUNNING && turn.getAttempt() < MAX_ATTEMPTS, now));
+        return Optional.of(takeBack(
+                turn,
+                turn.getStatus() == MentorTurn.Status.RUNNING && turn.getAttempt() < MAX_ATTEMPTS,
+                now,
+                LEASE_EXPIRED,
+                LEASE_EXPIRED_CAUSE));
     }
 
     /**
@@ -368,7 +386,7 @@ public class MentorTurnService {
                 turns.lockActiveByWorkspaceIdAndConversationId(workspaceId, conversationId).stream()
                         .filter(turn -> turn.getStatus() == MentorTurn.Status.RUNNING)
                         .findFirst()
-                        .map(turn -> takeBack(turn, true, clock.instant()));
+                        .map(turn -> takeBack(turn, true, clock.instant(), LEASE_EXPIRED, LEASE_EXPIRED_CAUSE));
         // Callers move the turn with SQL next, so the row must not stay RUNNING until the next flush.
         turns.flush();
         lost.ifPresent(taken -> events.publishEvent(new MentorLedgerEvents.AttemptTakenBack(
@@ -386,8 +404,10 @@ public class MentorTurnService {
      * Takes a leased attempt back under its turn's lock: requeues the turn for one more attempt, or fails it.
      *
      * @param retry whether the turn returns to the queue; a turn that does not, fails, and a stopped turn stays stopped
+     * @param reply what the developer reads for a turn that fails
+     * @param cause why it failed, for the operator
      */
-    private LostAttempt takeBack(MentorTurn turn, boolean retry, Instant now) {
+    private LostAttempt takeBack(MentorTurn turn, boolean retry, Instant now, String reply, String cause) {
         int attempt = turn.getAttempt();
         JsonNode admission = turn.getAdmission();
         MentorTurnUsage proxyUsage = usage(turn);
@@ -399,8 +419,8 @@ public class MentorTurnService {
         if (retry) {
             turn.requeue(now);
         } else {
-            turn.end(MentorTurn.Status.FAILED, LEASE_EXPIRED, now);
-            turn.recordFailure(LEASE_EXPIRED_CAUSE, null);
+            turn.end(MentorTurn.Status.FAILED, reply, now);
+            turn.recordFailure(cause, null);
         }
         changed(turn, true);
         return new LostAttempt(turn, attempt, admission, proxyUsage, startedAt, lostAt);

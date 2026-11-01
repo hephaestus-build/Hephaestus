@@ -27,13 +27,19 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 class WorkerHubRemovalMigrationTest {
     private static final String CHANGELOG = "1793149793934_changelog.xml";
 
+    /**
+     * The later cutover change set requeues these claims and takes the drain back, as its own test proves
+     * ({@link CutoverInFlightWorkUpgradeDatabaseTest}); these tests stop before it.
+     */
+    private static final String CUTOVER = "20261101014846-cutover-in-flight-work.xml";
+
     @Test
     void shouldCountOnlyALeaselessClaimedAttemptAsADrainAndDropTheTokenDenylist() throws Exception {
         var database = PracticeMigrationFixture.releasedDatabase("dev");
         PracticeMigrationFixture.upgradeBefore(database, "dev", CHANGELOG);
         seedAttempts(database);
 
-        PracticeMigrationFixture.upgrade(database, "dev");
+        PracticeMigrationFixture.upgradeBefore(database, "dev", CUTOVER);
 
         assertThat(PracticeMigrationFixture.column(
                         database,
@@ -100,7 +106,7 @@ class WorkerHubRemovalMigrationTest {
                                     database,
                                     "SELECT count(*)::text FROM information_schema.tables WHERE table_name='worker_token_denylist'"))
                     .containsExactly("0");
-            liquibase.update(contexts, labels);
+            PracticeMigrationFixture.upgradeBefore(database, "dev", CUTOVER);
             assertThat(PracticeMigrationFixture.column(
                             database,
                             "SELECT drain_count::text FROM review_job WHERE id='00000000-0000-0000-0000-000000979001'"))
