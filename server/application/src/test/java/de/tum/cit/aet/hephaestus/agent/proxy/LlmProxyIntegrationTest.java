@@ -395,7 +395,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             strings = {
                 "/internal/llm/chat/completions",
                 "/internal/llm/practice-script/decision/decisions",
-                "/internal/llm/admit-results"
+                "/internal/llm/admit-results",
+                "/internal/llm/stage-result"
             })
     void shouldAuthenticateTheJobsOneTokenWhenItCallsAnyModelRouteOrAdmission(String path) throws Exception {
         ReviewJob job = practiceScriptJob("https://models.example.com/v1");

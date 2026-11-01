@@ -228,8 +228,9 @@ public class ScanReportItemsService {
     }
 
     private static String itemStatus(Review review, ReviewItem item) {
-        return item.getState() == ReviewItemState.LISTED && review.getStatus().isTerminal()
-                ? "NOT_REVIEWED"
+        boolean pending = item.getState() == ReviewItemState.LISTED || item.getState() == ReviewItemState.STAGED;
+        return pending
+                ? review.getStatus().isTerminal() ? "NOT_REVIEWED" : "LISTED"
                 : item.getState().name();
     }
 

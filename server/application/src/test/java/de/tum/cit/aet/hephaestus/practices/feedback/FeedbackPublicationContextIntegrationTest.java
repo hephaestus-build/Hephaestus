@@ -14,10 +14,9 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultProjectionService;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeResultStaging;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.handler.ReviewOutputService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -1061,6 +1060,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
     /** The production service and its own history snapshot; only ownership and late-copy custody are stand-ins. */
     private ResultAdmissionService admissionService(ReviewJob job, FeedbackHistoryQuery query) {
         var jobs = mock(ReviewJobRepository.class);
+        when(jobs.databaseNow()).thenAnswer(call -> Instant.now());
         when(jobs.findByIdAndWorkspaceId(job.getId(), workspace.getId())).thenReturn(Optional.of(job));
         when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), workspace.getId()))
                 .thenReturn(Optional.of(job));
@@ -1096,7 +1096,6 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 mapper);
         return new ResultAdmissionService(
                 jobs,
-                mock(ReviewOutputService.class),
                 mock(AdmittedResultQuery.class),
                 assignments,
                 mock(AdmittedResultProjectionService.class),
@@ -1104,9 +1103,9 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 source,
                 mapper,
                 transactionManager,
-                mock(ReviewCompositionBasisRepository.class),
                 mock(FeedbackCompositionService.class),
-                mock(ReviewWriteGuard.class));
+                mock(ReviewWriteGuard.class),
+                mock(PracticeResultStaging.class));
     }
 
     private static void await(CountDownLatch latch) {

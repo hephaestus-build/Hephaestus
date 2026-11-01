@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793362753961-1" author="hephaestus">
+        <addColumn tableName="review_item">
+            <column name="staged_attempt" type="INTEGER"/>
+        </addColumn>
+        <rollback><dropColumn tableName="review_item" columnName="staged_attempt"/></rollback>
+    </changeSet>
+    <changeSet id="1793362753961-2" author="hephaestus">
+        <addColumn tableName="review_item">
+            <column name="staged_payload" type="JSONB"/>
+        </addColumn>
+        <rollback><dropColumn tableName="review_item" columnName="staged_payload"/></rollback>
+    </changeSet>
+    <changeSet id="1793362753961-3" author="hephaestus">
+    <sql>ALTER TABLE review_item DROP CONSTRAINT ck_review_item_state;
+ALTER TABLE review_item ADD CONSTRAINT ck_review_item_state CHECK (state IN ('LISTED','STAGED','JUDGED','REUSED','WITHHELD'));</sql>
+    <rollback><sql>UPDATE review_item SET state='WITHHELD',reason='EXECUTION_INCOMPLETE' WHERE state='STAGED';
+ALTER TABLE review_item DROP CONSTRAINT ck_review_item_state;
+ALTER TABLE review_item ADD CONSTRAINT ck_review_item_state CHECK (state IN ('LISTED','JUDGED','REUSED','WITHHELD'));</sql></rollback>
+  </changeSet>
+    <changeSet id="1793362753961-4" author="hephaestus">
+        <dropNotNullConstraint columnDataType="varchar(64)" columnName="admission_digest" tableName="review_composition_basis"/>
+    <rollback><sql>DELETE FROM review_composition_basis WHERE admission_digest IS NULL;</sql><addNotNullConstraint tableName="review_composition_basis" columnName="admission_digest" columnDataType="VARCHAR(64)"/></rollback>
+    </changeSet>
+</databaseChangeLog>

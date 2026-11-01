@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.practices.spi.PracticeStagingStore;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -55,6 +56,7 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
         service = new ReviewJobRetentionService(
                 jobRepository,
                 basisRepository,
+                mock(PracticeStagingStore.class),
                 evidenceCopies,
                 AGENT_PROPS,
                 Clock.systemUTC(),

@@ -7,10 +7,11 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -21,6 +22,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.json.JsonMapper;
 
 class ResultAdmissionControllerTest extends BaseUnitTest {
     private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
@@ -28,7 +30,7 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
     @Test
     void shouldRejectCredentialsThatDoNotIdentifyAReviewWorker() {
         var controller = new ResultAdmissionController(mock(ResultAdmissionService.class));
-        var request = new AdmissionRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0, List.of(), List.of());
+        var request = new SealResultsRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0);
         assertThatThrownBy(
                         () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
                 .isInstanceOfSatisfying(
@@ -41,7 +43,7 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
     void shouldReportAnAttemptConflictWithoutAdmittingAnotherPayload(RuntimeException conflict) {
         var admission = mock(ResultAdmissionService.class);
         var id = UUID.randomUUID();
-        var request = new AdmissionRequestDTO(3, UUID.randomUUID(), id, 0, List.of(), List.of());
+        var request = new SealResultsRequestDTO(3, UUID.randomUUID(), id, 0);
         var now = Instant.now();
         var jwt = new AttemptJwt(
                 AttemptJwt.Kind.REVIEW,
@@ -62,6 +64,17 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void shouldUseTheSameSealDigestAsTheRunner() {
+        var request = new SealResultsRequestDTO(
+                SandboxLayout.PRACTICE_CONTRACT_VERSION,
+                UUID.fromString("11111111-1111-4111-8111-111111111111"),
+                UUID.fromString("22222222-2222-4222-8222-222222222222"),
+                1);
+        Assertions.assertThat(ProvenanceDigest.sha256Hex(new JsonMapper().writeValueAsBytes(request)))
+                .isEqualTo("bcfdeaa2d6beeb2c11618f54111222cc92b2ee55b48eef3c586a84b344c9a6a4");
     }
 
     private static Stream<RuntimeException> attemptConflicts() {

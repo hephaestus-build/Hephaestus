@@ -21,7 +21,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         SELECT review_id AS reviewId,practice_id AS practiceId,COUNT(*) AS listed,
           COUNT(*) FILTER(WHERE state IN ('JUDGED','REUSED')) AS reviewed,
           COUNT(*) FILTER(WHERE state='REUSED') AS reused,COUNT(*) FILTER(WHERE state='WITHHELD') AS withheld,
-          COUNT(*) FILTER(WHERE state='LISTED') AS pending FROM review_item
+          COUNT(*) FILTER(WHERE state IN ('LISTED','STAGED')) AS pending FROM review_item
         WHERE workspace_id=:ws AND review_id IN (:ids) GROUP BY review_id,practice_id
         """, nativeQuery = true)
     List<ReviewPracticeCounts> practiceCounts(long ws, Collection<UUID> ids);
@@ -110,12 +110,15 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         """, nativeQuery = true)
     List<Long> executablePracticeIds(long workspaceId, UUID reviewId, long itemId);
 
-    /** The practices that a queued or running review of the item lists and has not judged yet, with that review. */
+    /**
+     * The practices that a queued or running review of the item lists and has not admitted yet, with that review. A
+     * staged result stays the earlier review's until it seals.
+     */
     @Query(value = """
         SELECT m.practice_id AS practiceId, r.id AS reviewId, r.status AS status,
         CAST(r.checks->>'startedAt' AS timestamptz) AS startedAt FROM review_item m
         JOIN review r ON r.id=m.review_id AND r.workspace_id=m.workspace_id WHERE m.workspace_id=:workspaceId
-        AND m.item_id=:itemId AND m.state='LISTED' AND r.kind='ITEM' AND r.status IN ('QUEUED','RUNNING')
+        AND m.item_id=:itemId AND m.state IN ('LISTED','STAGED') AND r.kind='ITEM' AND r.status IN ('QUEUED','RUNNING')
         """, nativeQuery = true)
     List<ListedPractice> listedPractices(long workspaceId, long itemId);
 
@@ -194,6 +197,9 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
             @Param("reviewId") UUID reviewId,
             @Param("practiceId") long practiceId,
             @Param("itemId") long itemId);
+
+    boolean existsByWorkspaceIdAndReviewIdAndJobIdAndState(
+            long workspaceId, UUID reviewId, UUID jobId, ReviewItemState state);
 
     long countByWorkspaceIdAndReviewIdAndState(long workspaceId, UUID reviewId, ReviewItemState state);
 }

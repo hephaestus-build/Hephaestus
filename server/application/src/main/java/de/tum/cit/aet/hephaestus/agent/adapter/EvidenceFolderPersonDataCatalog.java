@@ -638,9 +638,14 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                 originalAttempt,
                 false);
         if (original == null) throw new IllegalStateException("The retained inputs' receipt no longer vouches");
-        capture.receipt().set(INHERITED_IDENTITIES, original.path("identities").deepCopy());
-        capture.receipt()
-                .set(INHERITED_REPOSITORIES, original.path("repositories").deepCopy());
+        var identities = new LinkedHashSet<JsonNode>();
+        capture.receipt().path(INHERITED_IDENTITIES).forEach(identities::add);
+        original.path("identities").forEach(identities::add);
+        capture.receipt().set(INHERITED_IDENTITIES, mapper.valueToTree(identities));
+        var repositories = new LinkedHashSet<JsonNode>();
+        capture.receipt().path(INHERITED_REPOSITORIES).forEach(repositories::add);
+        original.path("repositories").forEach(repositories::add);
+        capture.receipt().set(INHERITED_REPOSITORIES, mapper.valueToTree(repositories));
         capture.receipt().put("inheritedCopy", originalCopyId.toString());
     }
 

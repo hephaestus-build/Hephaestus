@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
@@ -32,7 +30,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.ScanDefinition;
-import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
@@ -62,7 +59,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EmptySource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -82,6 +78,7 @@ class ScanAdmissionTest extends BaseUnitTest {
     private final ClasspathSourceCatalogRegistry catalogs = new ClasspathSourceCatalogRegistry(mapper, clock);
     private final ReviewJobAssignments assignments = mock(ReviewJobAssignments.class);
     private final ResultStore results = mock(ResultStore.class);
+    private List<ResultCandidate> staged = List.of();
     private final ReviewAssignmentStore membership = mock(ReviewAssignmentStore.class);
     private final EvidenceFolderPersonDataCatalog copies = mock(EvidenceFolderPersonDataCatalog.class);
     private @Nullable PreparedJobInputs inputs;
@@ -144,8 +141,7 @@ class ScanAdmissionTest extends BaseUnitTest {
         var assigned = assignment();
         when(assignments.admissible(job)).thenReturn(List.of(assigned));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.SCAN, assigned));
-        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
         var capture = EvidenceSnapshotFixtures.snapshot(mapper, KIND.value());
         var source = EvidenceSnapshotFixtures.availableSource(capture, SOURCE.value(), COMMIT);
         EvidenceSnapshotFixtures.file(capture, source, WITNESS, digest("Pinned tree\n"));
@@ -223,14 +219,16 @@ class ScanAdmissionTest extends BaseUnitTest {
         var assigned = assignment();
         var entry = new SubmittedResultDTO(
                 assigned.practiceSlug(), "2", assigned.version().value(), candidate, receipts);
-        service.prepare(job, new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(entry), List.of()))
+        service.prepareStage(
+                        job,
+                        new AdmissionRequestDTO(3, job.getReviewId(), job.getId(), 0, List.of(entry), List.of()),
+                        (owned, candidates) -> staged = List.copyOf(candidates))
                 .record(job);
     }
 
     private List<ResultCandidate> admitted() {
-        ArgumentCaptor<List<ResultCandidate>> candidates = ArgumentCaptor.captor();
-        verify(results).admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), candidates.capture());
-        return candidates.getValue();
+        verifyNoInteractions(results);
+        return staged;
     }
 
     private void assertWithheld(CandidateRefusal refusal) {

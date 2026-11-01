@@ -76,8 +76,13 @@ public class ReviewJobRecovery {
             return Outcome.CANCELLED;
         }
         Instant availableAt = now.plus(ReviewJobBackoff.compute(owned.spentAttempts() + 1));
-        int changed = owned.spentAttempts() < properties.maxRetries()
-                ? jobs.requeueOrphan(jobId, leaseId, properties.maxRetries(), availableAt)
+        // A retained practice gets a handoff even after the measurement budget: its next claim only seals and
+        // withholds. It never opens another model session. Explicit cancellations keep their existing stop policy.
+        boolean staged = cancellation == null
+                && continuation.map(value -> value.hasStaged(owned)).orElse(false);
+        int retryAllowance = staged ? properties.maxRetries() + 1 : properties.maxRetries();
+        int changed = owned.spentAttempts() < retryAllowance
+                ? jobs.requeueOrphan(jobId, leaseId, retryAllowance, availableAt)
                 : 0;
         // An admitted review is handed on even at the retry limit: the attempt after it composes nothing and only
         // withholds what is still open.

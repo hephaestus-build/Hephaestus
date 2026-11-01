@@ -71,6 +71,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -263,6 +264,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     private double requeuedAfterExit(int exitCode, String cause) {
         var job = admittedJob();
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         recovery = mock(ReviewJobRecovery.class);
         when(recovery.retryUnadmitted(any(), any(UUID.class), anyBoolean())).thenReturn(true);
         var executor = runExecutor(
@@ -855,6 +857,61 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(composer).withholdResumed(any(), any(UUID.class), eq(CompositionStop.NO_AI));
         verify(composer, never()).composeResumed(any(), any(), any());
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+    }
+
+    @Test
+    void shouldKeepStagedResultsAndRecordModelUnavailableForTheRemainingPractices() {
+        var job = configuredJob();
+        job.setAttempt(1);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(assignments.hasStaged(job)).thenReturn(true);
+        when(handler.hasStaged(job)).thenReturn(true);
+        when(jobs.markExecutionStarted(eq(job.getId()), any(UUID.class), eq(1), any()))
+                .thenReturn(1);
+        doAnswer(call -> {
+                    job.setAdmissionAttempt(1);
+                    job.setAdmissionDigest("sealed");
+                    return null;
+                })
+                .when(handler)
+                .finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
+        var composer = mock(WorkerFeedbackComposer.class);
+        var executor = executor(inlinePool());
+        executor.setFeedbackComposer(composer);
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        verify(handler).finishInterrupted(job, ReviewStopReason.MODEL_UNAVAILABLE);
+        verify(composer).withholdResumed(any(), eq(job.getLeaseId()), eq(CompositionStop.MODEL_UNAVAILABLE));
+        verifyNoInteractions(sandbox);
+    }
+
+    @Test
+    void shouldNeitherSealNorInterruptStagedWorkForTheClaimThatTookTheRow() {
+        var job = configuredJob();
+        job.setAttempt(1);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        // By the time the attempt reads its row again, a later claim holds it under another lease.
+        var taken = configuredJob();
+        taken.setId(job.getId());
+        taken.setAttempt(2);
+        taken.setLeaseId(UUID.randomUUID());
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(taken));
+        when(policy.permitsReview(job)).thenReturn(true);
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(assignments.hasStaged(job)).thenReturn(true);
+        var composer = mock(WorkerFeedbackComposer.class);
+        var executor = executor(inlinePool());
+        executor.setFeedbackComposer(composer);
+
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        verify(handler, never()).finishInterrupted(any(), any());
+        verify(handler, never()).completeStaged(any());
+        verifyNoInteractions(composer, sandbox);
     }
 
     /** An admitted job queued again to compose what its lost attempt left open, claimable by this worker. */

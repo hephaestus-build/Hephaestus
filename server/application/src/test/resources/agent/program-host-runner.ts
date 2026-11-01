@@ -109,7 +109,14 @@ export async function mockChange(overrides: Record<string, unknown>) {
 	mock.module(change, { namedExports: { ...derived, ...overrides } });
 }
 
-export type SessionBehaviour = "submit" | "read-change" | "silent" | "hang" | "budget" | "crash";
+export type SessionBehaviour =
+	| "submit"
+	| "read-change"
+	| "silent"
+	| "hang"
+	| "budget"
+	| "crash"
+	| "unreachable";
 
 export interface StagedPractice {
 	slug: string;
@@ -358,6 +365,23 @@ export function capturedLines(cwd: string, name: string): unknown[] {
 		: [];
 }
 
+/** The completed practices actually sent as individual staging requests, in stable practice order. */
+export function stagedRequest(cwd: string): Record<string, unknown> {
+	const requests = capturedLines(cwd, "staging").map((entry) => field(entry, "body"));
+	const outcomes = (name: string) =>
+		requests
+			.flatMap((request) => {
+				const values = field(request, name);
+				assert.ok(Array.isArray(values));
+				return values.map((value: unknown) => value);
+			})
+			.toSorted((a, b) =>
+				String(field(a, "practiceSlug")).localeCompare(String(field(b, "practiceSlug"))),
+			);
+	assert.ok(isJsonObject(requests[0]));
+	return { ...requests[0], results: outcomes("results"), nonResults: outcomes("nonResults") };
+}
+
 const scenario = process.env.PI_HOST_SCENARIO;
 if (scenario !== undefined && scenario !== "") {
 	const firstCompletion = process.env.PI_HOST_FIRST_COMPLETION;
@@ -411,6 +435,19 @@ if (scenario !== undefined && scenario !== "") {
 	const realFetch = globalThis.fetch;
 	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
+		if (url.endsWith("/stage-result")) {
+			assert.ok(typeof init?.body === "string");
+			const request = parseJson(init.body);
+			capture("staging", { body: request });
+			assert.ok(isJsonObject(request));
+			const { results, nonResults } = request;
+			assert.ok(Array.isArray(results) && Array.isArray(nonResults));
+			assert.equal(results.length + nonResults.length, 1);
+			return Response.json({
+				practiceSlug: field(results[0] ?? nonResults[0], "practiceSlug"),
+				digest: "a".repeat(64),
+			});
+		}
 		if (!url.endsWith("/admit-results")) {
 			return realFetch(input, init);
 		}
@@ -684,6 +721,18 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						});
 						if (behaviour === "hang") {
 							await Promise.withResolvers<never>().promise;
+						}
+						if (behaviour === "unreachable") {
+							emit({
+								type: "message_end",
+								message: {
+									role: "assistant",
+									stopReason: "error",
+									content: [],
+									errorMessage: "Provider unavailable",
+								},
+							});
+							return;
 						}
 						// One answered call, then the process fails outside every runner catch.
 						if (behaviour === "crash") {

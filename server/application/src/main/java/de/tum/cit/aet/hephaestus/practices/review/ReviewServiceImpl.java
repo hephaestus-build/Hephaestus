@@ -494,7 +494,9 @@ public class ReviewServiceImpl implements ReviewService {
                                         .stream()
                                         .anyMatch(p -> !Boolean.TRUE.equals(p.getListingComplete()))))
                 || memberships.existsByWorkspaceIdAndReviewIdAndStateIn(
-                        workspaceId, reviewId, List.of(ReviewItemState.WITHHELD, ReviewItemState.LISTED));
+                        workspaceId,
+                        reviewId,
+                        List.of(ReviewItemState.WITHHELD, ReviewItemState.LISTED, ReviewItemState.STAGED));
         boolean cancellationRequested =
                 review.getChecks().path("cancellationRequested").asBoolean();
         var status = cancellationRequested

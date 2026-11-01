@@ -258,14 +258,26 @@ if (scenario !== undefined && scenario !== "") {
 		writeFileSync(nodePath.join(cwd, "captured", name), text);
 	mkdirSync(nodePath.join(cwd, "captured"), { recursive: true });
 	await mockChange({ writeChangeView: () => undefined });
-	mock.method(globalThis, "fetch", async (_input: unknown, init?: RequestInit) => {
+	mock.method(globalThis, "fetch", async (input: unknown, init?: RequestInit) => {
 		assert.ok(typeof init?.body === "string");
 		const posted: unknown = JSON.parse(init.body);
 		assert.ok(typeof posted === "object" && posted !== null);
-		const results: unknown = Reflect.get(posted, "results");
-		assert.ok(Array.isArray(results));
-		if (scenario === "scan" || scenario === "registered-text") {
-			capture("admission.json", JSON.stringify(posted));
+		if (String(input).endsWith("/stage-result")) {
+			const results: unknown = Reflect.get(posted, "results");
+			assert.ok(Array.isArray(results));
+			const nonResults: unknown = Reflect.get(posted, "nonResults");
+			assert.ok(Array.isArray(nonResults));
+			const entry: unknown = results[0] ?? nonResults[0];
+			assert.ok(typeof entry === "object" && entry !== null);
+			if (scenario === "scan" || scenario === "registered-text") {
+				capture("admission.json", JSON.stringify(posted));
+			}
+			const practiceSlug: unknown = Reflect.get(entry, "practiceSlug");
+			assert.ok(typeof practiceSlug === "string");
+			return Response.json({
+				practiceSlug,
+				digest: "a".repeat(64),
+			});
 		}
 		return Response.json({
 			contractVersion: 4,
