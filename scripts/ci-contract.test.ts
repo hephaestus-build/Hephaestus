@@ -3082,7 +3082,7 @@ void describe("CI contract", () => {
 	void test("leaves the Version PR's CI to its own pull_request event and a deliberate dispatch", async () => {
 		const versioning = parseDocument(await readFile(".github/workflows/version-pr.yml", "utf8"));
 		const maintainer = ["jobs", "version-pr"];
-		// Only a successful same-repository push to main, still the branch tip, maintains the PR.
+		// Only a successful same-repository push to main starts maintenance.
 		const trigger = String(versioning.getIn([...maintainer, "if"]));
 		for (const guard of [
 			"github.event.workflow_run.conclusion == 'success'",
@@ -3091,16 +3091,42 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(trigger.includes(guard), guard);
 		}
+		// It versions the newest first-parent main commit that a successful push run validated, not
+		// the tip, which main's merge rate rarely lets CI finish in time. The toolchain installs there.
+		const select = namedStep(versioning, maintainer, "Select the newest validated main commit");
+		const selection = asString(select.get("run"), "selection script");
+		assert.match(
+			selection,
+			/actions\/workflows\/cicd\.yml\/runs\?branch=main&event=push&status=success/u,
+		);
+		assert.match(selection, /select\(\.head_repository\.full_name == env\.REPOSITORY\)/u);
+		assert.match(selection, /git rev-list --first-parent HEAD/u);
+		assert.match(selection, /git checkout --detach "\$base"/u);
+		const steps = versioning.getIn([...maintainer, "steps"]);
+		assert.ok(isSeq(steps));
+		const order = steps.items.map((item) => {
+			assert.ok(isMap(item));
+			return String(item.get("name") ?? item.get("uses"));
+		});
+		assert.ok(
+			order.indexOf("Select the newest validated main commit") <
+				order.indexOf("./.github/actions/setup-toolchain"),
+		);
 		const maintain = namedStep(versioning, maintainer, "Maintain Version PR");
-		assert.equal(maintain.get("if"), "steps.current.outputs.validated == 'true'");
-		assert.match(String(maintain.get("uses")), /^changesets\/action@[0-9a-f]{40}$/u);
-		assert.equal(maintain.getIn(["with", "github-token"]), `\${{ secrets.GITHUB_TOKEN }}`);
+		assert.equal(maintain.get("run"), "node scripts/maintain-version-pr.ts");
+		assert.equal(maintain.getIn(["env", "VERSION_BASE"]), `\${{ steps.base.outputs.sha }}`);
+		assert.doesNotMatch(
+			await readFile(".github/workflows/version-pr.yml", "utf8"),
+			/changesets\/action/u,
+		);
 		// The pull request's own run validates it; maintenance cannot start a second, competing one.
 		const permissions = versioning.getIn([...maintainer, "permissions"]);
 		assert.ok(isMap(permissions));
-		assert.deepEqual(permissions.toJSON(), { contents: "write", "pull-requests": "write" });
-		const steps = versioning.getIn([...maintainer, "steps"]);
-		assert.ok(isSeq(steps));
+		assert.deepEqual(permissions.toJSON(), {
+			actions: "read",
+			contents: "write",
+			"pull-requests": "write",
+		});
 		for (const maintenanceStep of steps.items) {
 			assert.ok(isMap(maintenanceStep));
 			const run = maintenanceStep.get("run");
@@ -3108,6 +3134,27 @@ void describe("CI contract", () => {
 				assert.ok(typeof run === "string");
 				assert.doesNotMatch(run, /workflow run|dispatch/u);
 			}
+		}
+		const maintainerSource = await readFile("scripts/maintain-version-pr.ts", "utf8");
+		assert.doesNotMatch(maintainerSource, /workflow run|dispatch/u);
+
+		// A failed run reopens nothing by itself, so it reports on one tracking issue, which the
+		// next successful run closes. A run that the concurrency group replaces reports nothing.
+		const report = ["jobs", "report"];
+		assert.equal(versioning.getIn([...report, "needs"]), "version-pr");
+		assert.equal(
+			versioning.getIn([...report, "if"]),
+			`\${{ always() && contains(fromJSON('["success", "failure"]'), needs.version-pr.result) }}`,
+		);
+		const reportPermissions = versioning.getIn([...report, "permissions"]);
+		assert.ok(isMap(reportPermissions));
+		assert.deepEqual(reportPermissions.toJSON(), { issues: "write" });
+		const tracking = asString(
+			namedStep(versioning, report, "Open or close the tracking issue").get("run"),
+			"tracking script",
+		);
+		for (const command of ["gh issue create", "gh issue comment", "gh issue close"]) {
+			assert.ok(tracking.includes(command), command);
 		}
 
 		// What remains: the pull_request event, and the manual dispatch an operator runs to recover.

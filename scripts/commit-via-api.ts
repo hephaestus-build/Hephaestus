@@ -97,7 +97,10 @@ const COMMIT_MUTATION = `mutation ($input: CreateCommitOnBranchInput!) {
   }
 }`;
 
-async function createCommit(token: string, input: CommitInput): Promise<string> {
+export async function createCommit(
+	token: string,
+	input: CommitInput,
+): Promise<{ oid: string; description: string }> {
 	const response = await fetch(process.env.GITHUB_GRAPHQL_URL ?? "https://api.github.com/graphql", {
 		method: "POST",
 		headers: { authorization: `bearer ${token}`, "content-type": "application/json" },
@@ -119,7 +122,8 @@ async function createCommit(token: string, input: CommitInput): Promise<string> 
 	const verification = signature
 		? `${asString(signature.state, "signature state")}, signed by GitHub: ${signature.wasSignedByGitHub === true}`
 		: "unsigned";
-	return `${asString(commit.oid, "commit oid")} (${verification})`;
+	const oid = asString(commit.oid, "commit oid");
+	return { oid, description: `${oid} (${verification})` };
 }
 
 async function currentHead(): Promise<string> {
@@ -157,9 +161,8 @@ if (import.meta.main) {
 			),
 		);
 		const token = requiredEnv(process.env, "GH_TOKEN");
-		console.log(
-			`Committed ${await createCommit(token, commitInput(target, contents, changes.deletions))} on ${branch}.`,
-		);
+		const commit = await createCommit(token, commitInput(target, contents, changes.deletions));
+		console.log(`Committed ${commit.description} on ${branch}.`);
 	} else {
 		console.log("Selected paths match HEAD; no commit was created.");
 	}
