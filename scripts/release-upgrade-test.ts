@@ -601,32 +601,15 @@ function keepsHephChatHistory(): boolean {
 	);
 }
 
-/**
- * Every column, constraint, index, trigger and function of the application schema, one sorted line each. Liquibase's
- * own tables and runtime partitions are left out: they are not part of what a changelog decides.
- */
+/** The schema fingerprint query, shared with the server's tests (`db/schema-fingerprint.sql`). */
+const SCHEMA_FINGERPRINT = readFileSync(
+	new URL("../server/application/src/main/resources/db/schema-fingerprint.sql", import.meta.url),
+	"utf8",
+);
+
+/** Every object that the changelog decides in the application schema, one sorted line each. */
 function schemaFingerprint(database: string): string[] {
-	const facts = query(
-		`SELECT line FROM (
-			SELECT 'column|' || table_name || '|' || column_name || '|' || data_type || '|'
-				|| coalesce(character_maximum_length::text, '') || '|' || is_nullable || '|' || coalesce(column_default, '')
-				AS line
-			FROM information_schema.columns WHERE table_schema = 'public'
-			UNION ALL
-			SELECT 'constraint|' || conrelid::regclass || '|' || conname || '|' || pg_get_constraintdef(oid)
-			FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND conrelid <> 0
-			UNION ALL
-			SELECT 'index|' || tablename || '|' || indexname || '|' || indexdef FROM pg_indexes WHERE schemaname = 'public'
-			UNION ALL
-			SELECT 'trigger|' || tgrelid::regclass || '|' || tgname || '|' || pg_get_triggerdef(oid)
-			FROM pg_trigger WHERE NOT tgisinternal
-			UNION ALL
-			SELECT 'function|' || proname || '|' || md5(prosrc) FROM pg_proc WHERE pronamespace = 'public'::regnamespace
-		) facts
-		WHERE line NOT LIKE '%databasechangelog%' AND line !~ '\\|auth_event_(p[0-9]+|default)\\|'
-		ORDER BY line;`,
-		database,
-	);
+	const facts = query(SCHEMA_FINGERPRINT, database);
 	return facts === "" ? [] : facts.split("\n");
 }
 
