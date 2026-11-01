@@ -390,7 +390,7 @@ hephaestus:
             sync-trigger:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_CAPACITY:10}
                 period: ${HEPHAESTUS_RATE_LIMIT_SYNC_TRIGGER_PERIOD:1h}
-            # POST /web-vitals — keyed by account, IP fallback
+            # POST /web-vitals and POST /browser-faults — keyed by account, IP fallback
             browser-reports:
                 capacity: ${HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_CAPACITY:30}
                 period: ${HEPHAESTUS_RATE_LIMIT_BROWSER_REPORTS_PERIOD:1m}
@@ -544,6 +544,7 @@ hephaestus:
     features:
         flags:
             page-experience-metrics: ${PAGE_EXPERIENCE_METRICS:false}
+            browser-fault-reports: ${BROWSER_FAULT_REPORTS:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # PRACTICE REVIEW GATE

@@ -38,7 +38,11 @@ import org.springframework.test.context.TestPropertySource;
 })
 @Tag("integration")
 @TestPropertySource(
-        properties = {"hephaestus.features.flags.page-experience-metrics=true", "hephaestus.llm.display-currency="})
+        properties = {
+            "hephaestus.features.flags.page-experience-metrics=true",
+            "hephaestus.features.flags.browser-fault-reports=true",
+            "hephaestus.llm.display-currency="
+        })
 public abstract class BaseIntegrationTest {
 
     @Autowired

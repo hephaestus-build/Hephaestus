@@ -1376,6 +1376,59 @@ export const zFirstLoginConsent = z.object({
     termsAccepted: z.boolean()
 });
 
+/**
+ * One frame of the stack, in a script that the server's own web app ships
+ */
+export const zFrame = z.object({
+    chunk: z.string().regex(/[A-Za-z0-9_-]{8}/),
+    column: z.int().gte(1).lte(10000000),
+    line: z.int().gte(1).lte(10000000)
+});
+
+/**
+ * One failure that a reader met, counted while its page stayed open
+ */
+export const zBrowserFault = z.object({
+    count: z.int().gte(1).lte(100),
+    errorType: z.enum([
+        'TYPE_ERROR',
+        'REFERENCE_ERROR',
+        'SYNTAX_ERROR',
+        'RANGE_ERROR',
+        'OTHER',
+        'CHUNK',
+        'HTTP_5XX',
+        'NETWORK'
+    ]),
+    frames: z.array(zFrame).min(0).max(10),
+    kind: z.enum([
+        'UNCAUGHT_ERROR',
+        'UNHANDLED_REJECTION',
+        'RENDER_ERROR',
+        'RECOVERED_ERROR',
+        'CHUNK_LOAD_FAILED',
+        'REQUEST_FAILED'
+    ]),
+    page: z.enum([
+        'PRACTICE_PROFILE',
+        'ASK_HEPHAESTUS',
+        'FEEDBACK',
+        'FEEDBACK_APPROVAL',
+        'ACTIVITY',
+        'OTHER'
+    ]),
+    release: z.string().regex(/[0-9a-f]{7,40}|\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,4})?|DEV/),
+    status: z.int().gte(500).lte(599).optional(),
+    traceId: z.string().regex(/[0-9a-f]{32}/).optional()
+});
+
+/**
+ * The failures that one page met since its last report
+ */
+export const zBrowserFaultsReport = z.object({
+    faults: z.array(zBrowserFault).min(1).max(20)
+});
+
 export const zFrozenModel = z.object({
     modelId: z.string(),
     options: z.record(z.string(), z.union([

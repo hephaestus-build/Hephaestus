@@ -674,6 +674,7 @@
 				"researchOrganization",
 				"publicActivity",
 				"pageExperienceMetrics",
+				"browserFaultReports",
 				"monitoring",
 				"credentialKey",
 				"auth",
@@ -709,6 +710,7 @@
 					}
 				},
 				"pageExperienceMetrics": { "type": "boolean" },
+				"browserFaultReports": { "type": "boolean" },
 				"monitoring": {
 					"type": "object",
 					"additionalProperties": false,

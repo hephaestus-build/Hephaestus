@@ -107,6 +107,8 @@ tags:
   name: Practice Catalog Adoption
 - description: Team management within workspace
   name: Teams
+- description: Failures that readers met in the browser
+  name: Browser faults
 - description: Page load and interaction timings from the browser
   name: Web vitals
 - description: Instance-wide email transport verification
@@ -2179,6 +2181,31 @@ paths:
       summary: Renew the browser session
       tags:
       - Auth
+  /browser-faults:
+    post:
+      operationId: reportBrowserFaults
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrowserFaultsReport"
+        required: true
+      responses:
+        "204":
+          description: Faults recorded
+        "400":
+          description: A fault names an unknown value or is out of range
+        "403":
+          description: "The browser sent the report from another site, or the CSRF\
+            \ token is missing"
+        "413":
+          description: The report is larger than 16 KiB
+        "429":
+          description: The reader or address sent too many reports
+      security: []
+      summary: Record the faults that one page met
+      tags:
+      - Browser faults
   /contributors:
     get:
       description: Returns contributors to the Hephaestus project (for the About page)
@@ -12185,6 +12212,86 @@ components:
       - kind
       - model
       - slot
+    BrowserFault:
+      type: object
+      description: "One failure that a reader met, counted while its page stayed open"
+      properties:
+        count:
+          type: integer
+          format: int32
+          description: "How often the same failure happened, at most 100"
+          maximum: 100
+          minimum: 1
+        errorType:
+          type: string
+          enum:
+          - TYPE_ERROR
+          - REFERENCE_ERROR
+          - SYNTAX_ERROR
+          - RANGE_ERROR
+          - OTHER
+          - CHUNK
+          - HTTP_5XX
+          - NETWORK
+        frames:
+          type: array
+          items:
+            $ref: "#/components/schemas/Frame"
+          maxItems: 10
+          minItems: 0
+        kind:
+          type: string
+          enum:
+          - UNCAUGHT_ERROR
+          - UNHANDLED_REJECTION
+          - RENDER_ERROR
+          - RECOVERED_ERROR
+          - CHUNK_LOAD_FAILED
+          - REQUEST_FAILED
+        page:
+          type: string
+          enum:
+          - PRACTICE_PROFILE
+          - ASK_HEPHAESTUS
+          - FEEDBACK
+          - FEEDBACK_APPROVAL
+          - ACTIVITY
+          - OTHER
+        release:
+          type: string
+          description: "The web app's release: a version or a commit"
+          pattern: "[0-9a-f]{7,40}|\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}(-(alpha|beta|rc)\\\
+            .\\d{1,4})?|DEV"
+        status:
+          type: integer
+          format: int32
+          description: "For a failed request: its 5xx status"
+          maximum: 599
+          minimum: 500
+        traceId:
+          type: string
+          description: "For a failed request: the trace id that the server returned\
+            \ as X-Request-Id"
+          pattern: "[0-9a-f]{32}"
+      required:
+      - count
+      - errorType
+      - frames
+      - kind
+      - page
+      - release
+    BrowserFaultsReport:
+      type: object
+      description: The failures that one page met since its last report
+      properties:
+        faults:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrowserFault"
+          maxItems: 20
+          minItems: 1
+      required:
+      - faults
     CancelScanRequest:
       type: object
       properties:
@@ -14806,6 +14913,30 @@ components:
       required:
       - noticeVersion
       - termsAccepted
+    Frame:
+      type: object
+      description: "One frame of the stack, in a script that the server's own web\
+        \ app ships"
+      properties:
+        chunk:
+          type: string
+          description: "The content hash in the script's file name, which names the\
+            \ build"
+          pattern: "[A-Za-z0-9_-]{8}"
+        column:
+          type: integer
+          format: int32
+          maximum: 10000000
+          minimum: 1
+        line:
+          type: integer
+          format: int32
+          maximum: 10000000
+          minimum: 1
+      required:
+      - chunk
+      - column
+      - line
     FrozenModel:
       type: object
       properties:
