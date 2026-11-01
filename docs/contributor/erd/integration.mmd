@@ -90,67 +90,6 @@ erDiagram
         TIMESTAMPTZ replayed_at
     }
 
-    Discussion {
-        BIGINT id PK
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-        INTEGER number UK "NOT NULL"
-        VARCHAR(1024) title
-        TEXT body
-        VARCHAR(512) html_url
-        VARCHAR(16) state
-        VARCHAR(32) state_reason
-        INTEGER upvote_count
-        BOOLEAN is_locked
-        VARCHAR(32) active_lock_reason
-        TIMESTAMPTZ closed_at
-        TIMESTAMPTZ answer_chosen_at
-        INTEGER comment_count
-        TIMESTAMPTZ last_sync_at
-        BIGINT repository_id FK,UK
-        BIGINT author_id FK
-        VARCHAR(128) category_id FK
-        BIGINT answer_chosen_by_id FK
-        BIGINT answer_comment_id FK,UK
-        BIGINT native_id UK "NOT NULL"
-        BIGINT provider_id FK,UK "NOT NULL"
-    }
-
-    DiscussionCategory {
-        VARCHAR(128) id PK
-        VARCHAR(255) name
-        VARCHAR(128) slug UK
-        VARCHAR(32) emoji
-        TEXT description
-        BOOLEAN is_answerable "NOT NULL"
-        BIGINT repository_id FK,UK
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
-
-    DiscussionComment {
-        BIGINT id PK
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-        TEXT body
-        VARCHAR(512) html_url
-        BOOLEAN is_answer "NOT NULL"
-        BOOLEAN is_minimized "NOT NULL"
-        VARCHAR(64) minimized_reason
-        VARCHAR(32) author_association
-        TIMESTAMPTZ last_sync_at
-        BIGINT discussion_id FK
-        BIGINT author_id FK
-        BIGINT parent_comment_id FK
-        BIGINT native_id UK "NOT NULL"
-        BIGINT provider_id FK,UK "NOT NULL"
-    }
-
-    DiscussionLabel {
-        BIGINT discussion_id PK,FK
-        BIGINT label_id PK,FK
-    }
-
     GitCommit {
         BIGINT id PK
         VARCHAR(40) sha UK "NOT NULL"
@@ -420,89 +359,6 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
-    Project {
-        BIGINT id PK
-        VARCHAR(64) node_id UK
-        VARCHAR(32) owner_type UK "NOT NULL"
-        BIGINT owner_id UK "NOT NULL"
-        INTEGER number UK "NOT NULL"
-        VARCHAR(256) title
-        TEXT short_description
-        TEXT readme
-        BOOLEAN template "NOT NULL"
-        VARCHAR(512) url
-        BOOLEAN closed "NOT NULL"
-        TIMESTAMPTZ closed_at
-        BOOLEAN is_public "NOT NULL"
-        BIGINT creator_id FK
-        TIMESTAMPTZ last_sync_at
-        VARCHAR(256) item_sync_cursor
-        TIMESTAMPTZ items_synced_at
-        VARCHAR(256) field_sync_cursor
-        TIMESTAMPTZ fields_synced_at
-        VARCHAR(256) status_update_sync_cursor
-        TIMESTAMPTZ status_updates_synced_at
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-        BIGINT native_id UK "NOT NULL"
-        BIGINT provider_id FK,UK "NOT NULL"
-    }
-
-    ProjectField {
-        VARCHAR(64) id PK
-        BIGINT project_id FK,UK "NOT NULL"
-        VARCHAR(256) name UK "NOT NULL"
-        VARCHAR(32) data_type "NOT NULL"
-        TEXT options
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-    }
-
-    ProjectFieldValue {
-        BIGINT id PK
-        BIGINT item_id FK,UK "NOT NULL"
-        VARCHAR(64) field_id FK,UK "NOT NULL"
-        TEXT text_value
-        DOUBLE number_value
-        DATE date_value
-        VARCHAR(64) single_select_option_id
-        VARCHAR(64) iteration_id
-        TIMESTAMPTZ updated_at
-    }
-
-    ProjectItem {
-        BIGINT id PK
-        VARCHAR(64) node_id UK
-        BIGINT project_id FK,UK "NOT NULL"
-        VARCHAR(32) content_type "NOT NULL"
-        BIGINT issue_id FK
-        BIGINT content_database_id
-        VARCHAR(1024) draft_title
-        TEXT draft_body
-        BOOLEAN archived "NOT NULL"
-        BIGINT creator_id FK
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-        BIGINT native_id UK "NOT NULL"
-        BIGINT provider_id FK,UK "NOT NULL"
-    }
-
-    ProjectStatusUpdate {
-        BIGINT id PK
-        VARCHAR(64) node_id UK
-        BIGINT project_id FK "NOT NULL"
-        TEXT body
-        TEXT body_html
-        DATE start_date
-        DATE target_date
-        VARCHAR(32) status
-        BIGINT creator_id FK
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ updated_at
-        BIGINT native_id UK "NOT NULL"
-        BIGINT provider_id FK,UK "NOT NULL"
-    }
-
     PullRequestClosingIssue {
         BIGINT pull_request_id PK,FK
         BIGINT issue_id PK,FK
@@ -602,7 +458,6 @@ erDiagram
         VARCHAR(255) visibility
         BIGINT organization_id FK
         TIMESTAMPTZ last_sync_at
-        BOOLEAN has_discussions_enabled "NOT NULL"
         BIGINT native_id UK "NOT NULL"
         BIGINT provider_id FK,UK "NOT NULL"
     }
@@ -760,7 +615,6 @@ erDiagram
 
     %% Relationships
     %% One-to-One relationships
-    DiscussionComment ||--|| Discussion : references
     PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
 
     %% One-to-Many relationships
@@ -772,16 +626,6 @@ erDiagram
     Account ||--o{ ConnectionAudit : has
     Workspace ||--o{ ConsumerDeadLetter : has
     Account ||--o{ ConsumerDeadLetter : references
-    User ||--o{ Discussion : references
-    User ||--o{ Discussion : authored_by
-    DiscussionCategory ||--o{ Discussion : has
-    IdentityProvider ||--o{ Discussion : references
-    Repository ||--o{ Discussion : has
-    Repository ||--o{ DiscussionCategory : has
-    User ||--o{ DiscussionComment : commented_on
-    Discussion ||--o{ DiscussionComment : commented_on
-    DiscussionComment ||--o{ DiscussionComment : commented_on
-    IdentityProvider ||--o{ DiscussionComment : commented_on
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
@@ -813,18 +657,6 @@ erDiagram
     Workspace ||--o{ OutlineCollection : has
     Connection ||--o{ OutlineDocument : has
     Workspace ||--o{ OutlineDocument : has
-    User ||--o{ Project : created_by
-    IdentityProvider ||--o{ Project : references
-    Project ||--o{ ProjectField : has
-    ProjectField ||--o{ ProjectFieldValue : has
-    ProjectItem ||--o{ ProjectFieldValue : has
-    User ||--o{ ProjectItem : created_by
-    Issue ||--o{ ProjectItem : has
-    Project ||--o{ ProjectItem : has
-    IdentityProvider ||--o{ ProjectItem : references
-    User ||--o{ ProjectStatusUpdate : created_by
-    Project ||--o{ ProjectStatusUpdate : has
-    IdentityProvider ||--o{ ProjectStatusUpdate : references
     IdentityProvider ||--o{ PullRequestReview : reviewed
     User ||--o{ PullRequestReview : reviewed
     Issue ||--o{ PullRequestReview : reviewed
@@ -857,8 +689,6 @@ erDiagram
     Issue }o--o{ CommitPullRequest : references
     Connection }o--o{ ConnectionActivity : has
     Workspace }o--o{ ConnectionActivity : has
-    Discussion }o--o{ DiscussionLabel : labeled
-    Label }o--o{ DiscussionLabel : labeled
     User }o--o{ IssueAssignee : assigned_to
     Issue }o--o{ IssueAssignee : assigned_to
     Issue }o--o{ IssueBlocking : blocked_issue_id

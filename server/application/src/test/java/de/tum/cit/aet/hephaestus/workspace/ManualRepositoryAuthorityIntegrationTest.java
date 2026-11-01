@@ -583,7 +583,7 @@ class ManualRepositoryAuthorityIntegrationTest extends AbstractWorkspaceIntegrat
     private static HttpGraphQlClient client(String origin, String documents, ExchangeFunction exchange) {
         List<Resource> fragments = documents.equals("graphql/github/")
                 ? List.of(
-                        new ClassPathResource(GitHubGraphQlFragments.PROJECT_FRAGMENTS_RESOURCE),
+                        new ClassPathResource(GitHubGraphQlFragments.ACTOR_FRAGMENTS_RESOURCE),
                         new ClassPathResource(GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE))
                 : List.of(new ClassPathResource("graphql/gitlab/fragments/GitLabUserFields.graphql"));
         return HttpGraphQlClient.builder(WebClient.builder().exchangeFunction(exchange))

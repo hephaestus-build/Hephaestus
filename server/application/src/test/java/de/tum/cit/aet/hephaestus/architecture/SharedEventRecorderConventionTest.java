@@ -27,9 +27,8 @@ class SharedEventRecorderConventionTest {
     private static final String ALLOWED = "RecordingScmEventListener.java";
 
     /** {@code @EventListener} on a method whose parameter is an SCM / GitHub-project domain event. */
-    private static final Pattern PER_CLASS_LISTENER = Pattern.compile(
-            "@EventListener\\b[\\s\\S]{0,200}?\\((?:final\\s+)?(?:ScmDomainEvent|GitHubProjectEvent)\\.",
-            Pattern.DOTALL);
+    private static final Pattern PER_CLASS_LISTENER =
+            Pattern.compile("@EventListener\\b[\\s\\S]{0,200}?\\((?:final\\s+)?ScmDomainEvent\\.", Pattern.DOTALL);
 
     @Test
     void scmDomainEventsAreRecordedViaTheSharedRecorderNotPerClassListeners() {

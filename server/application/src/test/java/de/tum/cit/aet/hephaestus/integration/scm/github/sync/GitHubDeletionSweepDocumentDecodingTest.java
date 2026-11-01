@@ -24,22 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
  * Proves the deletion sweep's listing documents decode into the model types the sweep asks for, using
  * the production Jackson configuration.
  *
- * <p>A pull-request node missing {@code __typename} is the hazard: {@link GHPullRequestConnection}'s
- * nodes are {@code GHPullRequest}, which implements {@code GHProjectV2ItemContent}, whose Jackson mixin
- * declares {@code @JsonTypeInfo(use = NAME, property = "__typename", defaultImpl = GHIssue.class)}.
- * Jackson inherits that type resolver onto the concrete node type, so a node without {@code __typename}
- * resolves to the default {@code GHIssue} — not a {@code GHPullRequest} — and throws
- * {@code InvalidTypeIdException}. The sweep is fail-closed, so it swallows that as "cannot verify,
- * delete nothing": a document that drops {@code __typename} silently disables the pull-request half.
- *
- * <p>A mock-based service test cannot catch this: mocking {@code ClientResponseField.toEntity} to hand
- * back an already-built connection decodes no JSON, so the document's selection set is never exercised.
- * The failure lives in exactly that seam — between the committed document text and the mixin config.
- *
- * <p>The JSON is not hand-maintained: it is derived from the committed document's own node selection
- * set and decoded with the GitHub GraphQL mixins through {@link GitHubGraphQlTestMapper}. Drop
- * {@code __typename} from either document and the derived JSON loses it too, and these tests go red with
- * the production exception — coupling runs document → JSON → mixins with nothing restated by hand.
+ * The JSON comes from the committed document's node selection set and is decoded with
+ * {@link GitHubGraphQlTestMapper} so the test covers the document and the runtime mapper together.
  */
 class GitHubDeletionSweepDocumentDecodingTest extends BaseUnitTest {
 

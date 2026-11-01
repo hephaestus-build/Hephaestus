@@ -89,7 +89,6 @@ public class GitLabProjectProcessor {
         repository.setPrivate("private".equalsIgnoreCase(project.visibility()));
         repository.setArchived(Boolean.TRUE.equals(project.archived()));
         repository.setDisabled(false); // GitLab has no "disabled" concept
-        repository.setHasDiscussionsEnabled(false); // Not applicable to GitLab
         repository.setOrganization(organization);
 
         // Default branch from repository metadata
@@ -163,7 +162,6 @@ public class GitLabProjectProcessor {
         repository.setVisibility(mapVisibilityLevel(projectInfo.visibilityLevel()));
         repository.setPrivate(projectInfo.visibilityLevel() == GitLabPushEventDTO.ProjectInfo.VISIBILITY_PRIVATE);
         repository.setDisabled(false);
-        repository.setHasDiscussionsEnabled(false);
 
         if (projectInfo.defaultBranch() != null) {
             repository.setDefaultBranch(projectInfo.defaultBranch());

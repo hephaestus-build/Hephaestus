@@ -130,9 +130,9 @@ VALUES (9, 940001, 'MEMBER', false, true), (9, 940002, 'MEMBER', true, true)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO repository (id, native_id, provider_id, created_at, updated_at, html_url, is_archived, is_disabled,
-  is_private, name, name_with_owner, visibility, has_discussions_enabled)
+  is_private, name, name_with_owner, visibility)
 SELECT fixture.id, fixture.id, p.id, now(), now(), 'https://github.com/e2e-public/' || fixture.name,
-  false, false, fixture.is_private, fixture.name, 'e2e-public/' || fixture.name, fixture.visibility, false
+  false, false, fixture.is_private, fixture.name, 'e2e-public/' || fixture.name, fixture.visibility
 FROM identity_provider p
 CROSS JOIN (VALUES
   (930001, 'api', false, 'PUBLIC'),

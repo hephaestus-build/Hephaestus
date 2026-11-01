@@ -65,7 +65,6 @@ public final class SyncTargetFactory {
                 rtm.getMilestonesSyncedAt(),
                 rtm.getIssuesSyncedAt(),
                 rtm.getPullRequestsSyncedAt(),
-                rtm.getDiscussionsSyncedAt(),
                 rtm.getCollaboratorsSyncedAt(),
                 rtm.getRepositorySyncedAt(),
                 rtm.getIssueBackfillHighWaterMark(),
@@ -75,7 +74,6 @@ public final class SyncTargetFactory {
                 rtm.getBackfillLastRunAt(),
                 rtm.getIssueSyncCursor(),
                 rtm.getPullRequestSyncCursor(),
-                rtm.getDiscussionSyncCursor(),
                 rtm.getNativeId());
     }
 

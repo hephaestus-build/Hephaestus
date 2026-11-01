@@ -17,15 +17,15 @@ class PracticeV1PeopleMigrationTest {
               SELECT 'column|' || table_name || '|' || column_name || '|' || data_type || '|' ||
                 is_nullable || '|' || coalesce(column_default,'') AS value
               FROM information_schema.columns WHERE table_schema='public'
-                AND table_name IN ('config_audit_event','connection_audit','project_field')
+                AND table_name IN ('config_audit_event','connection_audit')
               UNION ALL
               SELECT 'constraint|' || c.relname || '|' || k.conname || '|' || pg_get_constraintdef(k.oid)
               FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid WHERE c.relnamespace='public'::regnamespace
-                AND c.relname IN ('config_audit_event','connection_audit','project_field') AND k.conname NOT IN ('ck_config_audit_event_entity_type','ck_config_audit_event_scope')
+                AND c.relname IN ('config_audit_event','connection_audit') AND k.conname NOT IN ('ck_config_audit_event_entity_type','ck_config_audit_event_scope')
               UNION ALL
               SELECT 'index|' || tablename || '|' || indexname || '|' || indexdef
               FROM pg_indexes WHERE schemaname='public'
-                AND tablename IN ('config_audit_event','connection_audit','project_field')
+                AND tablename IN ('config_audit_event','connection_audit')
             ) source ORDER BY value
             """;
         var before = PracticeMigrationFixture.column(database, definition);
@@ -42,14 +42,13 @@ class PracticeV1PeopleMigrationTest {
             SELECT table_name || '|' || column_name || '|' || data_type FROM information_schema.columns
             WHERE table_schema='public' AND (table_name,column_name) IN
               (('auth_event','details'),('config_audit_event','old_value'),('config_audit_event','new_value'),
-               ('connection_audit','detail'),('project_field','options')) ORDER BY table_name,column_name
+               ('connection_audit','detail')) ORDER BY table_name,column_name
             """))
                 .containsExactly(
                         "auth_event|details|text",
                         "config_audit_event|new_value|text",
                         "config_audit_event|old_value|text",
-                        "connection_audit|detail|text",
-                        "project_field|options|text");
+                        "connection_audit|detail|text");
     }
 
     @ParameterizedTest

@@ -84,9 +84,6 @@ public class RepositoryToMonitor {
     // The time up to which pull requests have been synced in the recent sync
     private Instant pullRequestsSyncedAt;
 
-    // The time up to which discussions have been synced in the recent sync
-    private Instant discussionsSyncedAt;
-
     @Column(length = 2048)
     private @Nullable String recentSyncError;
 
@@ -155,12 +152,6 @@ public class RepositoryToMonitor {
      * fails mid-pagination. Cleared when sync completes successfully.
      */
     private @Nullable String pullRequestSyncCursor;
-
-    /**
-     * Pagination cursor for discussion sync. Persisted to allow resumption if sync
-     * fails mid-pagination. Cleared when sync completes successfully.
-     */
-    private @Nullable String discussionSyncCursor;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workspace_id", nullable = false)

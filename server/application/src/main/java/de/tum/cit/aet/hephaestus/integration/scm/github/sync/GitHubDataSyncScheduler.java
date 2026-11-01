@@ -4,7 +4,6 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -12,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncStatistics;
@@ -24,15 +22,10 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRunsReread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.Project;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
 import jakarta.annotation.PostConstruct;
@@ -103,10 +96,7 @@ public class GitHubDataSyncScheduler {
     private final GitHubSubIssueSyncService subIssueSyncService;
     private final GitHubIssueTypeSyncService issueTypeSyncService;
     private final GitHubIssueDependencySyncService issueDependencySyncService;
-    private final GitHubProjectSyncService projectSyncService;
-    private final GitHubOrganizationSyncService organizationSyncService;
     private final GitHubTeamSyncService teamSyncService;
-    private final OrganizationRepository organizationRepository;
     private final SyncSchedulerProperties syncSchedulerProperties;
     private final RateLimitTracker rateLimitTracker;
     private final Executor monitoringExecutor;
@@ -122,10 +112,7 @@ public class GitHubDataSyncScheduler {
             GitHubSubIssueSyncService subIssueSyncService,
             GitHubIssueTypeSyncService issueTypeSyncService,
             GitHubIssueDependencySyncService issueDependencySyncService,
-            GitHubProjectSyncService projectSyncService,
-            GitHubOrganizationSyncService organizationSyncService,
             GitHubTeamSyncService teamSyncService,
-            OrganizationRepository organizationRepository,
             SyncSchedulerProperties syncSchedulerProperties,
             RateLimitTracker rateLimitTracker,
             @Qualifier("monitoringExecutor") Executor monitoringExecutor,
@@ -140,10 +127,7 @@ public class GitHubDataSyncScheduler {
         this.subIssueSyncService = subIssueSyncService;
         this.issueTypeSyncService = issueTypeSyncService;
         this.issueDependencySyncService = issueDependencySyncService;
-        this.projectSyncService = projectSyncService;
-        this.organizationSyncService = organizationSyncService;
         this.teamSyncService = teamSyncService;
-        this.organizationRepository = organizationRepository;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.rateLimitTracker = rateLimitTracker;
         this.monitoringExecutor = monitoringExecutor;
@@ -159,14 +143,14 @@ public class GitHubDataSyncScheduler {
     void logSyncConfiguration() {
         log.info(
                 "Incremental sync config: runOnStartup={}, cron={}, timeframeDays={}, cooldownMinutes={} "
-                        + "(syncs repos, issues, PRs, labels, milestones, teams, AND projects)",
+                        + "(syncs repos, issues, PRs, labels, milestones, and teams)",
                 syncSchedulerProperties.runOnStartup(),
                 syncSchedulerProperties.cron(),
                 syncSchedulerProperties.timeframeDays(),
                 syncSchedulerProperties.cooldownMinutes());
         log.info(
                 "Historical backfill config: enabled={}, batchSize={}, intervalSeconds={} "
-                        + "(backfills old issues/PRs only - does NOT affect projects)",
+                        + "(backfills old issues/PRs)",
                 syncSchedulerProperties.backfill().enabled(),
                 syncSchedulerProperties.backfill().batchSize(),
                 syncSchedulerProperties.backfill().intervalSeconds());
@@ -315,15 +299,6 @@ public class GitHubDataSyncScheduler {
                 // exist before repository sync processes issues.
                 syncIssueTypes(session, handle);
 
-                // Projects sync before repositories so embedded project items can be linked.
-                if (syncSchedulerProperties.projects().enabled()) {
-                    reportPhase(handle, SyncPhase.ORGANIZATION, "Syncing organization projects", 0, totalRepos);
-                    syncProjects(session, handle);
-                } else {
-                    log.debug("Skipped project sync: reason=projectsSyncDisabled, scopeId={}", session.scopeId());
-                }
-
-                // Sync repositories (issues/PRs include embedded project items)
                 int reposProcessed = 0;
                 for (SyncTarget target : session.syncTargets()) {
                     // Cooperative cancel checkpoint between repositories (matches the manual runner):
@@ -395,15 +370,6 @@ public class GitHubDataSyncScheduler {
                     for (SyncTarget target : session.syncTargets()) {
                         headCheckRunsReread.reread(session.scopeId(), target.repositoryNameWithOwner());
                     }
-                }
-
-                // Relink orphaned project items now that issues/PRs have been synced.
-                // Project items created before their referenced issues were synced locally
-                // will have NULL issue_id but a valid content_database_id. This fills
-                // in the FK for any items whose issues now exist. Skipped when project
-                // sync is disabled — there are no project items to relink.
-                if (syncSchedulerProperties.projects().enabled()) {
-                    projectSyncService.relinkOrphanedProjectItems();
                 }
 
                 // Sync teams AFTER repositories exist (team repo permissions need repos).
@@ -578,91 +544,6 @@ public class GitHubDataSyncScheduler {
                     session.scopeId(),
                     session.slug(),
                     e);
-            reportWarning(handle);
-        }
-    }
-
-    private void syncProjects(SyncSession session, @Nullable SyncExecutionHandle handle) {
-        String safeAccountLogin = sanitizeForLog(session.accountLogin());
-        try {
-            log.debug(
-                    "Starting projects sync: scopeId={}, scopeSlug={}, accountLogin={}",
-                    session.scopeId(),
-                    session.slug(),
-                    safeAccountLogin);
-
-            // Ensure the organization exists locally before syncing projects
-            Organization organization = organizationRepository
-                    .findByLoginIgnoreCaseAndProvider_Type(session.accountLogin(), IdentityProviderType.GITHUB)
-                    .orElse(null);
-            if (organization == null) {
-                log.info(
-                        "Organization missing before project sync, attempting sync: scopeId={}, orgLogin={}",
-                        session.scopeId(),
-                        safeAccountLogin);
-                organization = organizationSyncService.syncOrganization(session.scopeId(), session.accountLogin());
-            }
-
-            // Sync project list for the organization
-            projectSyncService.syncProjectsForOrganization(session.scopeId(), session.accountLogin());
-
-            if (organization == null) {
-                log.debug("Skipped project items sync: reason=organizationNotFound, orgLogin={}", safeAccountLogin);
-                return;
-            }
-
-            // Sync project items for each project that needs it
-            // This is done separately because project items can be large and
-            // benefit from resumable pagination via cursor persistence
-            List<Project> projects = projectSyncService.getProjectsNeedingItemSync(organization.getId());
-            if (projects.isEmpty()) {
-                log.debug("Skipped project items sync: reason=noProjects, orgLogin={}", safeAccountLogin);
-                return;
-            }
-
-            int totalItemsSynced = 0;
-            int projectsWithItems = 0;
-
-            for (Project project : projects) {
-                try {
-                    SyncResult itemResult = projectSyncService.syncProjectItems(session.scopeId(), project);
-                    totalItemsSynced += itemResult.count();
-                    if (itemResult.count() > 0) {
-                        projectsWithItems++;
-                    }
-
-                    // If rate limited, stop processing more projects
-                    if (itemResult.status() == SyncResult.Status.ABORTED_RATE_LIMIT) {
-                        log.info(
-                                "Stopping project items sync: reason=rateLimited, scopeId={}, projectsProcessed={}",
-                                session.scopeId(),
-                                projectsWithItems);
-                        reportWarning(handle);
-                        break;
-                    }
-                } catch (InstallationNotFoundException e) {
-                    throw e;
-                } catch (Exception e) {
-                    log.warn(
-                            "Failed to sync project items: projectId={}, scopeId={}, error={}",
-                            project.getId(),
-                            session.scopeId(),
-                            e.getClass().getSimpleName());
-                    reportWarning(handle);
-                    // Continue with next project on error
-                }
-            }
-
-            log.debug(
-                    "Completed projects sync: scopeId={}, orgLogin={}, projectCount={}, itemsSynced={}",
-                    session.scopeId(),
-                    safeAccountLogin,
-                    projects.size(),
-                    totalItemsSynced);
-        } catch (InstallationNotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to sync projects: scopeId={}, scopeSlug={}", session.scopeId(), session.slug(), e);
             reportWarning(handle);
         }
     }

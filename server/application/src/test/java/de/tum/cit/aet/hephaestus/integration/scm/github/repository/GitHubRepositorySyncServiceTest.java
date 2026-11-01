@@ -113,7 +113,7 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
         var service = graphQlService("""
                 {"data":{"repository":{"databaseId":123,"name":"project","nameWithOwner":"course/project",
                 "url":"https://github.com/course/project","isPrivate":false,"isArchived":false,
-                "isDisabled":false,"hasDiscussionsEnabled":false,
+                "isDisabled":false,
                 "owner":{"__typename":"Organization","databaseId":33,"login":"course"}}}}
                 """, repositories, organizations);
         var provider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);

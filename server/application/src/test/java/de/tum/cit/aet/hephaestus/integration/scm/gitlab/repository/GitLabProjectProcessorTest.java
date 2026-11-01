@@ -92,7 +92,6 @@ class GitLabProjectProcessorTest extends BaseUnitTest {
             assertThat(result.isArchived()).isFalse();
             assertNotNull(result);
             assertThat(result.isDisabled()).isFalse();
-            assertThat(result.isHasDiscussionsEnabled()).isFalse();
             assertThat(result.getDefaultBranch()).isEqualTo("develop");
             assertThat(result.getOrganization()).isEqualTo(org);
             assertNotNull(result);

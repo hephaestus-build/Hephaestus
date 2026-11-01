@@ -11,8 +11,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.discussion.Discussion;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.discussioncomment.DiscussionComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -481,161 +479,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
     }
 
     @Nested
-    class DiscussionCreatedTests {
-
-        @Test
-        void recordsDiscussionCreated() {
-            Discussion discussion = createDiscussion(30L);
-
-            var event = new ScmDomainEvent.DiscussionCreated(createDiscussionData(discussion), createContext());
-
-            listener.onDiscussionCreated(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_CREATED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(30L));
-        }
-
-        @Test
-        void recordsDiscussionWithNullAuthor() {
-            Discussion discussion = createDiscussion(31L);
-            discussion.setAuthor(null);
-
-            var event = new ScmDomainEvent.DiscussionCreated(createDiscussionData(discussion), createContext());
-
-            listener.onDiscussionCreated(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_CREATED),
-                            any(Instant.class),
-                            isNull(),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(31L));
-        }
-    }
-
-    @Nested
-    class DiscussionClosedTests {
-
-        @Test
-        void recordsDiscussionClosed() {
-            Discussion discussion = createDiscussion(32L);
-            discussion.setClosedAt(Instant.now());
-
-            var event =
-                    new ScmDomainEvent.DiscussionClosed(createDiscussionData(discussion), "resolved", createContext());
-
-            listener.onDiscussionClosed(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_CLOSED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(32L));
-        }
-    }
-
-    @Nested
-    class DiscussionReopenedTests {
-
-        @Test
-        void recordsDiscussionReopened() {
-            Discussion discussion = createDiscussion(33L);
-
-            var event = new ScmDomainEvent.DiscussionReopened(createDiscussionData(discussion), createContext());
-
-            listener.onDiscussionReopened(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_REOPENED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(33L));
-        }
-    }
-
-    @Nested
-    class DiscussionAnsweredTests {
-
-        @Test
-        void recordsDiscussionAnswered() {
-            Discussion discussion = createDiscussion(34L);
-            discussion.setAnswerChosenAt(Instant.now());
-
-            var event = new ScmDomainEvent.DiscussionAnswered(createDiscussionData(discussion), 999L, createContext());
-
-            listener.onDiscussionAnswered(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_ANSWERED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(34L));
-        }
-
-        @Test
-        void recordsDiscussionAnsweredWithNullAuthor() {
-            Discussion discussion = createDiscussion(35L);
-            discussion.setAuthor(null);
-            discussion.setAnswerChosenAt(Instant.now());
-
-            var event = new ScmDomainEvent.DiscussionAnswered(createDiscussionData(discussion), 999L, createContext());
-
-            listener.onDiscussionAnswered(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_ANSWERED),
-                            any(Instant.class),
-                            isNull(),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(35L));
-        }
-    }
-
-    @Nested
-    class DiscussionDeletedTests {
-
-        @Test
-        void recordsDiscussionDeleted() {
-            var event = new ScmDomainEvent.DiscussionDeleted(36L, createContext());
-
-            listener.onDiscussionDeleted(event);
-
-            verify(activityEventService)
-                    .recordDeleted(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_DELETED),
-                            any(Instant.class),
-                            eq(ActivityTargetType.DISCUSSION),
-                            eq(36L));
-        }
-    }
-
-    @Nested
     class ReviewCommentCreatedTests {
 
         @Test
@@ -753,45 +596,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
     }
 
     @Nested
-    class DiscussionCommentCreatedTests {
-
-        @Test
-        void recordsDiscussionCommentCreated() {
-            DiscussionComment comment = createDiscussionComment(37L);
-
-            var event = new ScmDomainEvent.DiscussionCommentCreated(
-                    createDiscussionCommentData(comment),
-                    30L, // discussionId
-                    createContext());
-
-            listener.onDiscussionCommentCreated(event);
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.DISCUSSION_COMMENT_CREATED),
-                            any(Instant.class),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.DISCUSSION_COMMENT),
-                            eq(37L));
-        }
-
-        @Test
-        void skipsCommentWhenAuthorIsNull() {
-            DiscussionComment comment = createDiscussionComment(38L);
-            comment.setAuthor(null);
-
-            var event = new ScmDomainEvent.DiscussionCommentCreated(
-                    createDiscussionCommentData(comment), 30L, createContext());
-
-            listener.onDiscussionCommentCreated(event);
-
-            verifyNoInteractions(activityEventService);
-        }
-    }
-
-    @Nested
     class CommitAuthorsReconciledTests {
 
         @Test
@@ -903,39 +707,5 @@ class ActivityEventListenerTest extends BaseUnitTest {
                 null,
                 UUID.randomUUID().toString(),
                 null);
-    }
-
-    private Discussion createDiscussion(Long id) {
-        Discussion discussion = new Discussion();
-        discussion.setId(id);
-        discussion.setNumber(100);
-        discussion.setTitle("Test Discussion");
-        discussion.setState(Discussion.State.OPEN);
-        discussion.setAuthor(testUser);
-        discussion.setRepository(testRepository);
-        discussion.setCreatedAt(Instant.now());
-        discussion.setUpdatedAt(Instant.now());
-        discussion.setHtmlUrl("https://github.com/test/test-repo/discussions/100");
-        return discussion;
-    }
-
-    private DiscussionComment createDiscussionComment(Long id) {
-        Discussion discussion = createDiscussion(30L);
-        DiscussionComment comment = new DiscussionComment();
-        comment.setId(id);
-        comment.setBody("Test comment");
-        comment.setHtmlUrl("https://github.com/test/test-repo/discussions/100#discussioncomment-" + id);
-        comment.setAuthor(testUser);
-        comment.setDiscussion(discussion);
-        comment.setCreatedAt(Instant.now());
-        return comment;
-    }
-
-    private ScmEventPayload.DiscussionData createDiscussionData(Discussion discussion) {
-        return ScmEventPayload.DiscussionData.from(discussion);
-    }
-
-    private ScmEventPayload.DiscussionCommentData createDiscussionCommentData(DiscussionComment comment) {
-        return ScmEventPayload.DiscussionCommentData.from(comment);
     }
 }

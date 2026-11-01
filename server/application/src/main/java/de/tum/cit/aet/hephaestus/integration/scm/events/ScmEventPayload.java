@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.events;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.discussion.Discussion;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.discussioncomment.DiscussionComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
@@ -309,72 +307,6 @@ public final class ScmEventPayload {
                     commit.getAuthor() != null ? commit.getAuthor().getId() : null,
                     commit.getCommitter() != null ? commit.getCommitter().getId() : null,
                     commit.getRepository().getId());
-        }
-    }
-
-    public record DiscussionData(
-            @NonNull Long id,
-            int number,
-            @NonNull String title,
-            @Nullable String body,
-            Discussion.@NonNull State state,
-            @Nullable String stateReason,
-            boolean isLocked,
-            int commentsCount,
-            @NonNull String htmlUrl,
-            @NonNull RepositoryRef repository,
-            @Nullable Long authorId,
-            @Nullable String categoryName,
-            @Nullable Instant createdAt,
-            @Nullable Instant updatedAt,
-            @Nullable Instant closedAt,
-            @Nullable Instant answerChosenAt) {
-        public static DiscussionData from(Discussion discussion) {
-            return new DiscussionData(
-                    discussion.getId(),
-                    discussion.getNumber(),
-                    discussion.getTitle(),
-                    discussion.getBody(),
-                    discussion.getState(),
-                    discussion.getStateReason() != null
-                            ? discussion.getStateReason().name()
-                            : null,
-                    discussion.isLocked(),
-                    discussion.getCommentsCount(),
-                    discussion.getHtmlUrl(),
-                    Objects.requireNonNull(RepositoryRef.from(discussion.getRepository())),
-                    discussion.getAuthor() != null ? discussion.getAuthor().getId() : null,
-                    discussion.getCategory() != null ? discussion.getCategory().getName() : null,
-                    discussion.getCreatedAt(),
-                    discussion.getUpdatedAt(),
-                    discussion.getClosedAt(),
-                    discussion.getAnswerChosenAt());
-        }
-    }
-
-    public record DiscussionCommentData(
-            @NonNull Long id,
-            @Nullable String body,
-            @Nullable String htmlUrl,
-            boolean isAnswer,
-            @Nullable Long authorId,
-            @Nullable Instant createdAt,
-            @Nullable Instant updatedAt,
-            @Nullable Long discussionId,
-            @Nullable Long repositoryId) {
-        public static DiscussionCommentData from(DiscussionComment comment) {
-            return new DiscussionCommentData(
-                    comment.getId(),
-                    comment.getBody(),
-                    comment.getHtmlUrl(),
-                    comment.isAnswer(),
-                    comment.getAuthor() != null ? comment.getAuthor().getId() : null,
-                    comment.getCreatedAt(),
-                    comment.getUpdatedAt(),
-                    comment.getDiscussion() != null ? comment.getDiscussion().getId() : null,
-                    comment.getDiscussion() != null && comment.getDiscussion().getRepository() != null
-                            ? comment.getDiscussion().getRepository().getId()
-                            : null);
         }
     }
 }

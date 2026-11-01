@@ -34,7 +34,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHPullRequ
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectItemSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.GitHubPullRequestReviewSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentSyncService;
@@ -92,9 +91,6 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
 
     @Mock
     private GitHubIssueCommentSyncService issueCommentSyncService;
-
-    @Mock
-    private GitHubProjectItemSyncService projectItemSyncService;
 
     @Mock
     private BackfillStateProvider backfillStateProvider;
@@ -155,19 +151,10 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
                 reviewCommentSyncService,
                 issueCommentProcessor,
                 issueCommentSyncService,
-                projectItemSyncService,
                 backfillStateProvider,
                 transactionTemplate,
                 syncProperties,
-                new SyncSchedulerProperties(
-                        true,
-                        7,
-                        "0 0 3 * * *",
-                        15,
-                        null,
-                        null,
-                        null,
-                        new SyncSchedulerProperties.ProjectsProperties(true)),
+                new SyncSchedulerProperties(true, 7, "0 0 3 * * *", 15, null, null),
                 exceptionClassifier,
                 graphQlSyncHelper);
     }

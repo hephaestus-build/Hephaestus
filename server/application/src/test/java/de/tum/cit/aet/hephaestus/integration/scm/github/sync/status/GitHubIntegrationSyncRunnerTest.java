@@ -63,9 +63,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new BackfillProperties(true, 50, 100, 60),
-                new FilterProperties(Set.of(), Set.of(), Set.of()),
-                null,
-                null);
+                new FilterProperties(Set.of(), Set.of()));
         runner = new GitHubIntegrationSyncRunner(dataSyncScheduler, syncTargetProvider, backfillService, properties);
         ref = new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, "100");
     }
@@ -113,9 +111,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
                     "0 0 3 * * *",
                     15,
                     new BackfillProperties(false, 50, 100, 60),
-                    new FilterProperties(Set.of(), Set.of(), Set.of()),
-                    null,
-                    null);
+                    new FilterProperties(Set.of(), Set.of()));
             GitHubIntegrationSyncRunner runnerWithCycleDisabled = new GitHubIntegrationSyncRunner(
                     dataSyncScheduler, syncTargetProvider, backfillService, cycleDisabled);
 

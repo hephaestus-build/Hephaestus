@@ -111,8 +111,8 @@ class GitLabDiscussionSyncServiceIntegrationTest extends BaseIntegrationTest {
         providerId = Objects.requireNonNull(
                 providers.saveAndFlush(new IdentityProvider(type, serverUrl)).getId());
         repositoryId = Objects.requireNonNull(jdbc.queryForObject("""
-            INSERT INTO repository(native_id,provider_id,name,name_with_owner,has_discussions_enabled,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
-            VALUES (1,?,'repo',?,false,false,false,false,'https://example.com/repo',now(),'PUBLIC') RETURNING id
+            INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
+            VALUES (1,?,'repo',?,false,false,false,'https://example.com/repo',now(),'PUBLIC') RETURNING id
             """, Long.class, providerId, "repair/" + unique));
         var workspace = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaces,

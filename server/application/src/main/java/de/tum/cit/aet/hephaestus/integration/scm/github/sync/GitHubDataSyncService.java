@@ -21,8 +21,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTar
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
@@ -34,7 +32,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionCl
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.github.discussion.GitHubDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -42,8 +39,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTyp
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.Project;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.RepositoryIdentityMismatchException;
@@ -56,7 +51,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
@@ -105,7 +99,6 @@ public class GitHubDataSyncService {
     private final SyncTargetProvider syncTargetProvider;
     private final OrganizationMembershipListener organizationMembershipListener;
     private final RepositoryRepository repositoryRepository;
-    private final OrganizationRepository organizationRepository;
 
     private final GitHubLabelSyncService labelSyncService;
     private final GitHubMilestoneSyncService milestoneSyncService;
@@ -114,9 +107,7 @@ public class GitHubDataSyncService {
     private final GitHubIssueTypeSyncService issueTypeSyncService;
     private final GitHubSubIssueSyncService subIssueSyncService;
     private final GitHubPullRequestSyncService pullRequestSyncService;
-    private final GitHubDiscussionSyncService discussionSyncService;
     private final GitHubTeamSyncService teamSyncService;
-    private final GitHubProjectSyncService projectSyncService;
     private final GitHubOrganizationSyncService organizationSyncService;
     private final GitHubRepositorySyncService repositorySyncService;
     private final GitHubCollaboratorSyncService collaboratorSyncService;
@@ -134,7 +125,6 @@ public class GitHubDataSyncService {
             SyncTargetProvider syncTargetProvider,
             OrganizationMembershipListener organizationMembershipListener,
             RepositoryRepository repositoryRepository,
-            OrganizationRepository organizationRepository,
             GitHubLabelSyncService labelSyncService,
             GitHubMilestoneSyncService milestoneSyncService,
             GitHubIssueSyncService issueSyncService,
@@ -142,9 +132,7 @@ public class GitHubDataSyncService {
             GitHubIssueTypeSyncService issueTypeSyncService,
             GitHubSubIssueSyncService subIssueSyncService,
             GitHubPullRequestSyncService pullRequestSyncService,
-            GitHubDiscussionSyncService discussionSyncService,
             GitHubTeamSyncService teamSyncService,
-            GitHubProjectSyncService projectSyncService,
             GitHubOrganizationSyncService organizationSyncService,
             GitHubRepositorySyncService repositorySyncService,
             GitHubCollaboratorSyncService collaboratorSyncService,
@@ -162,7 +150,6 @@ public class GitHubDataSyncService {
         this.syncTargetProvider = syncTargetProvider;
         this.organizationMembershipListener = organizationMembershipListener;
         this.repositoryRepository = repositoryRepository;
-        this.organizationRepository = organizationRepository;
         this.labelSyncService = labelSyncService;
         this.milestoneSyncService = milestoneSyncService;
         this.issueSyncService = issueSyncService;
@@ -170,9 +157,7 @@ public class GitHubDataSyncService {
         this.issueTypeSyncService = issueTypeSyncService;
         this.subIssueSyncService = subIssueSyncService;
         this.pullRequestSyncService = pullRequestSyncService;
-        this.discussionSyncService = discussionSyncService;
         this.teamSyncService = teamSyncService;
-        this.projectSyncService = projectSyncService;
         this.organizationSyncService = organizationSyncService;
         this.repositorySyncService = repositorySyncService;
         this.collaboratorSyncService = collaboratorSyncService;
@@ -395,36 +380,8 @@ public class GitHubDataSyncService {
             // Runs AFTER commit author enrichment so that users are already resolved.
             int commitsMetadataEnriched = enrichCommitMetadata(syncTarget, repository);
 
-            // Sync discussions and comments (with cursor persistence for resumability)
-            // Skip when globally disabled, or for repos without discussions enabled
-            SyncResult discussionResult;
-            if (!syncSchedulerProperties.discussions().enabled()) {
-                log.debug("Skipped discussion sync: reason=discussionsSyncDisabled, repoId={}", repositoryId);
-                discussionResult = SyncResult.completed(0);
-            } else if (!repository.isHasDiscussionsEnabled()) {
-                log.debug("Skipped discussion sync: reason=discussionsNotEnabled, repoId={}", repositoryId);
-                discussionResult = SyncResult.completed(0);
-            } else {
-                discussionResult = discussionSyncService.syncForRepository(
-                        scopeId,
-                        repositoryId,
-                        syncTarget.id(),
-                        syncTarget.discussionSyncCursor(),
-                        syncTarget.lastDiscussionsSyncedAt());
-            }
-
-            if (discussionResult.isCompleted()) {
-                syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.DISCUSSIONS, Instant.now());
-            } else {
-                log.info(
-                        "Skipped discussion timestamp update due to incomplete sync: scopeId={}, repoId={}, discussionStatus={}",
-                        scopeId,
-                        repositoryId,
-                        discussionResult.status());
-            }
-
             log.info(
-                    "Completed repository sync: scopeId={}, repoId={}, commitsBackfilled={}, commitsEnriched={}, commitsMetadataEnriched={}, collaborators={}, labels={}, milestones={}, issues={}, prs={}, discussions={}, issueStatus={}, prStatus={}",
+                    "Completed repository sync: scopeId={}, repoId={}, commitsBackfilled={}, commitsEnriched={}, commitsMetadataEnriched={}, collaborators={}, labels={}, milestones={}, issues={}, prs={}, issueStatus={}, prStatus={}",
                     scopeId,
                     repositoryId,
                     commitsBackfilled >= 0 ? commitsBackfilled : "skipped",
@@ -435,7 +392,6 @@ public class GitHubDataSyncService {
                     milestonesCount >= 0 ? milestonesCount : "skipped",
                     issueResult.count(),
                     prResult.count(),
-                    discussionResult.count(),
                     issueResult.status(),
                     prResult.status());
             String error = null;
@@ -444,9 +400,6 @@ public class GitHubDataSyncService {
             }
             if (error == null && prResult.status() != SyncResult.Status.COMPLETED) {
                 error = "Pull request sync: " + prResult.status();
-            }
-            if (error == null && discussionResult.status() != SyncResult.Status.COMPLETED) {
-                error = "Discussion sync: " + discussionResult.status();
             }
             if (error == null && commitsEnriched < 0) {
                 error = "Commit author enrichment failed";
@@ -549,7 +502,6 @@ public class GitHubDataSyncService {
      * <ol>
      *   <li>Organization + memberships (users must exist first)</li>
      *   <li>Issue types (organization-level, must exist before issues are synced)</li>
-     *   <li>Projects (org-level metadata before issue/PR sync to link items)</li>
      *   <li>Per-repository syncs (creates repository records, syncs issues/PRs)</li>
      *   <li>Teams + team repository permissions (requires repos to exist)</li>
      *   <li>Issue dependencies (requires issues to exist)</li>
@@ -616,9 +568,6 @@ public class GitHubDataSyncService {
             // Issue types are organization-level and must exist before issues are synced so they can
             // be linked immediately.
             syncIssueTypes(scopeId);
-
-            // Projects sync before repositories so embedded project items can be linked.
-            syncProjects(scopeId);
 
             int reposProcessed = 0;
             for (SyncTarget target : syncTargets) {
@@ -863,156 +812,6 @@ public class GitHubDataSyncService {
                             e);
             }
         }
-    }
-
-    /**
-     * Syncs GitHub Projects V2 for a scope from its GitHub organization.
-     * <p>
-     * This runs BEFORE repository syncs so embedded project items can be linked.
-     * Projects are organization-level entities in GitHub.
-     * <p>
-     * Sync is performed in two phases:
-     * <ol>
-     *   <li>Project list sync (metadata for all projects)</li>
-     *   <li>Project items sync (items for each project, with resumable cursors)</li>
-     * </ol>
-     *
-     * @param scopeId the scope ID
-     */
-    private void syncProjects(Long scopeId) {
-        if (!syncSchedulerProperties.projects().enabled()) {
-            log.debug("Skipped project sync: reason=projectsSyncDisabled, scopeId={}", scopeId);
-            return;
-        }
-
-        Optional<SyncMetadata> metadataOpt = syncTargetProvider.getSyncMetadata(scopeId);
-        if (metadataOpt.isEmpty()) {
-            log.debug("Skipped project sync: reason=noMetadata, scopeId={}", scopeId);
-            return;
-        }
-
-        SyncMetadata metadata = metadataOpt.get();
-        String organizationLogin = metadata.organizationLogin();
-
-        if (organizationLogin == null || organizationLogin.isBlank()) {
-            log.debug("Skipped project sync: reason=noOrgLogin, scopeId={}", scopeId);
-            return;
-        }
-
-        String safeOrgLogin = sanitizeForLog(organizationLogin);
-
-        try {
-            // Phase 1: Sync project list (metadata only)
-            SyncResult projectListResult = projectSyncService.syncProjectsForOrganization(scopeId, organizationLogin);
-            log.debug(
-                    "Synced project list: scopeId={}, orgLogin={}, projectCount={}, status={}",
-                    scopeId,
-                    safeOrgLogin,
-                    projectListResult.count(),
-                    projectListResult.status());
-
-            // Phase 2: Sync items for each project (decoupled phase with resumable cursors)
-            // Only proceed if project list sync was successful
-            if (projectListResult.isCompleted()) {
-                syncProjectItems(scopeId, organizationLogin);
-            } else {
-                log.info(
-                        "Skipped project items sync: reason=projectListSyncIncomplete, scopeId={}, status={}",
-                        scopeId,
-                        projectListResult.status());
-            }
-        } catch (InstallationNotFoundException e) {
-            throw e;
-        } catch (Exception e) {
-            ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
-            switch (classification.category()) {
-                case AUTH_ERROR ->
-                    log.error(
-                            "Project sync failed - auth error: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message());
-                case RATE_LIMITED ->
-                    log.warn(
-                            "Project sync failed - rate limited: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message());
-                default ->
-                    log.error(
-                            "Failed to sync projects: scopeId={}, orgLogin={}, error={}",
-                            scopeId,
-                            safeOrgLogin,
-                            classification.message(),
-                            e);
-            }
-        }
-    }
-
-    /**
-     * Syncs items for all projects in an organization.
-     * <p>
-     * Each project's items are synced separately with its own resumable cursor,
-     * allowing interrupted syncs to resume from where they left off.
-     * Projects are processed in order of staleness (oldest sync first).
-     *
-     * @param scopeId           the scope ID
-     * @param organizationLogin the organization login
-     */
-    private void syncProjectItems(Long scopeId, String organizationLogin) {
-        String safeOrgLogin = sanitizeForLog(organizationLogin);
-
-        Organization organization = organizationRepository
-                .findByLoginIgnoreCaseAndProvider_Type(organizationLogin, IdentityProviderType.GITHUB)
-                .orElse(null);
-        if (organization == null) {
-            log.debug("Skipped project items sync: reason=organizationNotFound, orgLogin={}", safeOrgLogin);
-            return;
-        }
-
-        List<Project> projects = projectSyncService.getProjectsNeedingItemSync(organization.getId());
-        if (projects.isEmpty()) {
-            log.debug("Skipped project items sync: reason=noProjects, orgLogin={}", safeOrgLogin);
-            return;
-        }
-
-        int totalItemsSynced = 0;
-        int projectsWithItems = 0;
-
-        for (Project project : projects) {
-            try {
-                SyncResult itemResult = projectSyncService.syncProjectItems(scopeId, project);
-                totalItemsSynced += itemResult.count();
-                if (itemResult.count() > 0) {
-                    projectsWithItems++;
-                }
-
-                // If rate limited, stop processing more projects
-                if (itemResult.status() == SyncResult.Status.ABORTED_RATE_LIMIT) {
-                    log.info(
-                            "Stopping project items sync: reason=rateLimited, scopeId={}, projectsProcessed={}",
-                            scopeId,
-                            projectsWithItems);
-                    break;
-                }
-            } catch (InstallationNotFoundException e) {
-                throw e;
-            } catch (Exception e) {
-                ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
-                log.warn(
-                        "Failed to sync project items: projectId={}, error={}",
-                        project.getId(),
-                        classification.message());
-                // Continue with next project on error
-            }
-        }
-
-        log.info(
-                "Completed project items sync: scopeId={}, orgLogin={}, projectsWithItems={}, totalItems={}",
-                scopeId,
-                safeOrgLogin,
-                projectsWithItems,
-                totalItemsSynced);
     }
 
     /**

@@ -159,7 +159,6 @@ public interface SyncTargetProvider
      * @param lastMilestonesSyncedAt              last milestones sync timestamp
      * @param lastIssuesSyncedAt                  last issues sync timestamp
      * @param lastPullRequestsSyncedAt            last pull requests sync timestamp
-     * @param lastDiscussionsSyncedAt             last discussions sync timestamp
      * @param lastCollaboratorsSyncedAt           last collaborators sync timestamp
      * @param lastFullSyncAt                      last full repository sync timestamp
      * @param issueBackfillHighWaterMark          highest issue number at issue backfill start
@@ -169,7 +168,6 @@ public interface SyncTargetProvider
      * @param backfillLastRunAt                   when backfill last executed
      * @param issueSyncCursor                     pagination cursor for resuming issue sync
      * @param pullRequestSyncCursor               pagination cursor for resuming PR sync
-     * @param discussionSyncCursor                pagination cursor for resuming discussion sync
      * @param nativeId                            provider's stable numeric repository id (GitHub
      *                                            {@code repository.id} / GitLab {@code project.id}), or
      *                                            {@code null} for legacy/unresolved rows. Unlike
@@ -189,7 +187,6 @@ public interface SyncTargetProvider
             @Nullable Instant lastMilestonesSyncedAt,
             @Nullable Instant lastIssuesSyncedAt,
             @Nullable Instant lastPullRequestsSyncedAt,
-            @Nullable Instant lastDiscussionsSyncedAt,
             @Nullable Instant lastCollaboratorsSyncedAt,
             @Nullable Instant lastFullSyncAt,
             @Nullable Integer issueBackfillHighWaterMark,
@@ -199,7 +196,6 @@ public interface SyncTargetProvider
             @Nullable Instant backfillLastRunAt,
             @Nullable String issueSyncCursor,
             @Nullable String pullRequestSyncCursor,
-            @Nullable String discussionSyncCursor,
             @Nullable Long nativeId) {
         /** @return true if full sync has never run or is older than {@code staleThreshold} */
         public boolean needsFullSync(Instant staleThreshold) {
@@ -308,8 +304,6 @@ public interface SyncTargetProvider
         ISSUES,
         /** Pull requests incremental sync */
         PULL_REQUESTS,
-        /** Discussions incremental sync */
-        DISCUSSIONS,
         /** Repository collaborators sync */
         COLLABORATORS,
         /** Full repository metadata sync */

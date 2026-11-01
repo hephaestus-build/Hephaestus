@@ -447,13 +447,7 @@ hephaestus:
         timeframe-days: 7
         cron: "0 0 3 * * *"
         cooldown-minutes: 15
-        # Discussions + Projects V2 sync are the slowest passes and not consumed yet, so off by
-        # default (see DiscussionsProperties/ProjectsProperties). Flip per environment when needed.
-        discussions:
-            enabled: ${HEPHAESTUS_SYNC_DISCUSSIONS_ENABLED:false}
-        projects:
-            enabled: ${HEPHAESTUS_SYNC_PROJECTS_ENABLED:false}
-        # Historical issue/PR backfill (not projects); runs after recent sync, throttled by rate limit.
+        # Historical issue/PR backfill runs after recent sync, throttled by rate limit.
         backfill:
             enabled: false
             batch-size: 25

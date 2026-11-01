@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
-import de.tum.cit.aet.hephaestus.integration.scm.github.events.GitHubProjectEvent;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.context.event.EventListener;
@@ -19,21 +18,6 @@ public class RecordingScmEventListener {
 
     @EventListener
     void onScmEvent(ScmDomainEvent.Event event) {
-        events.add(event);
-    }
-
-    @EventListener
-    void onProjectEvent(GitHubProjectEvent.ProjectEvent event) {
-        events.add(event);
-    }
-
-    @EventListener
-    void onProjectItemEvent(GitHubProjectEvent.ProjectItemEvent event) {
-        events.add(event);
-    }
-
-    @EventListener
-    void onProjectStatusUpdateEvent(GitHubProjectEvent.ProjectStatusUpdateEvent event) {
         events.add(event);
     }
 

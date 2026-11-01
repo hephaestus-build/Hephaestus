@@ -29,10 +29,6 @@ public enum GitHubEventType {
     CHECK_SUITE("check_suite"),
     STATUS("status"),
 
-    // Discussion events
-    DISCUSSION("discussion"),
-    DISCUSSION_COMMENT("discussion_comment"),
-
     // Issue hierarchy events
     SUB_ISSUES("sub_issues"),
     ISSUE_DEPENDENCIES("issue_dependencies"),
@@ -41,11 +37,6 @@ public enum GitHubEventType {
     ORGANIZATION("organization"),
     TEAM("team"),
     MEMBERSHIP("membership"),
-
-    // GitHub Projects V2 events
-    PROJECTS_V2("projects_v2"),
-    PROJECTS_V2_ITEM("projects_v2_item"),
-    PROJECTS_V2_STATUS_UPDATE("projects_v2_status_update"),
 
     // Installation events
     INSTALLATION("installation"),

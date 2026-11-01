@@ -140,9 +140,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                new SyncSchedulerProperties.DiscussionsProperties(false),
-                new SyncSchedulerProperties.ProjectsProperties(false));
+                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
 
         lenient().when(natsConsumerServiceProvider.getIfAvailable()).thenReturn(natsConsumerService);
         lenient().when(dataSyncTriggerProvider.getObject()).thenReturn(dataSyncTrigger);
@@ -204,9 +202,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                new SyncSchedulerProperties.DiscussionsProperties(false),
-                new SyncSchedulerProperties.ProjectsProperties(false));
+                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
         return new GitLabWorkspaceInitializationService(
                 workspaceRepository,
                 organizationRepository,

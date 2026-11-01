@@ -327,27 +327,6 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        void shouldRecordARedeliveredDiscussionCommentEditOnce() {
-            var listener = listener(mock(PullRequestReviewThreadRepository.class));
-            var comment = new ScmEventPayload.DiscussionCommentData(
-                    304L,
-                    "Edited answer",
-                    null,
-                    false,
-                    testUser.getId(),
-                    closedAt,
-                    closedAt,
-                    50L,
-                    testRepository.getId());
-            var edit = new ScmDomainEvent.DiscussionCommentEdited(comment, 50L, Set.of("body"), webhook());
-
-            inTransaction(() -> listener.onDiscussionCommentEdited(edit));
-            inTransaction(() -> listener.onDiscussionCommentEdited(edit));
-
-            assertThat(rows(ActivityEventType.DISCUSSION_COMMENT_EDITED, 304L)).isEqualTo(1);
-        }
-
-        @Test
         void shouldRecordEachDismissalOfOneReviewOnceEvenWhenGitLabDismissesItAgain() {
             var listener = listener(mock(PullRequestReviewThreadRepository.class));
             var dismissed = new ScmDomainEvent.ReviewDismissed(dismissedReview(closedAt), webhook());

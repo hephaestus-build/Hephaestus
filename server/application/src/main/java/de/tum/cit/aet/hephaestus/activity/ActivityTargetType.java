@@ -53,34 +53,9 @@ public enum ActivityTargetType {
     TEAM("team"),
 
     /**
-     * Target is a project (GitHub Projects V2 or similar project boards).
-     */
-    PROJECT("project"),
-
-    /**
-     * Target is a project item (an issue, PR, or draft item within a project).
-     */
-    PROJECT_ITEM("project_item"),
-
-    /**
-     * Target is a project status update (progress tracking posts).
-     */
-    PROJECT_STATUS_UPDATE("project_status_update"),
-
-    /**
      * Target is a git commit.
      */
-    COMMIT("commit"),
-
-    /**
-     * Target is a discussion (GitHub Discussions).
-     */
-    DISCUSSION("discussion"),
-
-    /**
-     * Target is a discussion comment (comment on a GitHub Discussion).
-     */
-    DISCUSSION_COMMENT("discussion_comment");
+    COMMIT("commit");
 
     private final String value;
 

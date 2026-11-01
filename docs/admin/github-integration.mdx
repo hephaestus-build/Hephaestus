@@ -31,7 +31,7 @@ The database stores tokens encrypted with AES-256-GCM per workspace.
 
 ### PAT mode
 
-A **classic PAT** needs `repo`, `read:org`, and `read:project` scopes.
+A **classic PAT** needs the `repo` and `read:org` scopes.
 `repo` includes pull request and issue write access and the check state.
 A **fine-grained PAT** needs the organization as its *resource owner* and the permissions below.
 PAT connections need no GitHub App credentials.
@@ -52,17 +52,15 @@ offer to fine-grained tokens.
 | Contents (`contents`)              | Repository   | Read         | Commit sync stays empty. Practice reviews cannot check out the repository.          |
 | Pull requests (`pull_requests`)    | Repository   | Read & write | Pull request and review sync stays empty. Feedback delivery on pull requests fails. |
 | Issues (`issues`)                  | Repository   | Read & write | Issue sync stays empty. Feedback delivery as comments fails.                        |
-| Discussions (`discussions`)        | Repository   | Read         | Discussion sync stays empty                                                         |
 | Commit statuses (`statuses`)       | Repository   | Read         | Commit statuses do not count toward a pull request's check state                    |
 | Members (`members`)                | Organization | Read         | Organization membership and team sync stay empty                                    |
-| Projects (`organization_projects`) | Organization | Read         | Projects v2 sync stays empty                                                        |
 | Issue types (`issue_types`)        | Organization | Read         | Issue-type sync stays empty                                                         |
 | Metadata (`metadata`)              | Repository   | Read         | Always included                                                                     |
 
 :::caution[CAUTION: A missing permission does not fail the connection]
 
 GitHub accepts a fine-grained token without any of these permissions.
-Without Contents, Pull requests, Issues, Discussions, Members, Projects, or Issue types, the corresponding sync stays empty, as the table describes.
+Without Contents, Pull requests, Issues, Members, or Issue types, the corresponding sync stays empty, as the table describes.
 GitHub does not offer Checks to fine-grained tokens ([community discussion](https://github.com/orgs/community/discussions/129512)).
 A token without it can be refused a private repository's check state.
 There, only `check_suite` and `status` webhook deliveries record the check state.
@@ -166,9 +164,7 @@ The tables explain each grant.
 | Contents (`contents`)              | Repository   | Read         | Push and commit sync. Repository checkout for practice reviews. No code writes.                         |
 | Pull requests (`pull_requests`)    | Repository   | Read & write | PR and review sync. Delivery of review feedback, inline notes, and approvals.                           |
 | Issues (`issues`)                  | Repository   | Read & write | Issue sync. Delivery of feedback as issue or PR comments.                                               |
-| Discussions (`discussions`)        | Repository   | Read         | Discussion sync, not discussion delivery                                                                |
 | Members (`members`)                | Organization | Read         | Organization membership, teams, and member events                                                       |
-| Projects (`organization_projects`) | Organization | Read         | Projects v2 sync and project event access, not classic repository projects.                             |
 | Issue types (`issue_types`)        | Organization | Read         | Native issue-type sync, and the issue-type change that opens a practice review                          |
 | Checks (`checks`)                  | Repository   | Read         | Check state and check runs of a pull request's head. Read with the pull request and when a suite completes. |
 | Commit statuses (`statuses`)       | Repository   | Read         | The same state and runs from commit statuses, including non-Actions CI. `status` events keep them current.  |
@@ -235,29 +231,15 @@ Add the subscription in the release with the feature that reads it.
 | `milestone`                   | Keep milestone metadata current.                            |
 | `member`                      | Track repository collaborator changes.                      |
 | `repository`                  | Track repository metadata and lifecycle.                    |
-| `discussion`                  | Synchronize discussions.                                    |
-| `discussion_comment`          | Synchronize discussion comments.                            |
 | `sub_issues`                  | Update parent/child issue relationships.                    |
 | `issue_dependencies`          | Update blocking/blocked-by relationships.                   |
 | `organization`                | Track organization changes.                                 |
 | `team`                        | Synchronize teams.                                          |
 | `membership`                  | Synchronize team membership.                                |
-| `projects_v2`                 | Synchronize organization project metadata where delivered.  |
-| `projects_v2_item`            | Synchronize project items and field values where delivered. |
-| `projects_v2_status_update`   | Synchronize project status updates where delivered.         |
 
 GitHub delivers `installation` and `installation_repositories` automatically.
 Do not add them to the manifest's `default_events`.
 The server also handles account renames through `installation_target` when delivered.
-
-**Projects v2:** GitHub's event reference lists organization-webhook availability for the three project events.
-Discussions and Projects sync are off by default (`HEPHAESTUS_SYNC_DISCUSSIONS_ENABLED=false` and `HEPHAESTUS_SYNC_PROJECTS_ENABLED=false`).
-
-1. Change a project item.
-2. Verify that the App delivers the `projects_v2_item` event.
-3. If App delivery is unavailable, add an organization webhook subscribed **only to those three events**.
-
-Projects read remains required for API synchronization.
 
 #### Deliberately not subscribed
 
@@ -296,9 +278,7 @@ Hephaestus does not implement GitHub's manifest registration flow.
     "contents": "read",
     "pull_requests": "write",
     "issues": "write",
-    "discussions": "read",
     "members": "read",
-    "organization_projects": "read",
     "issue_types": "read",
     "checks": "read",
     "statuses": "read",
@@ -323,16 +303,11 @@ Hephaestus does not implement GitHub's manifest registration flow.
     "milestone",
     "member",
     "repository",
-    "discussion",
-    "discussion_comment",
     "sub_issues",
     "issue_dependencies",
     "organization",
     "team",
-    "membership",
-    "projects_v2",
-    "projects_v2_item",
-    "projects_v2_status_update"
+    "membership"
   ]
 }
 ```
@@ -378,7 +353,6 @@ A subscription grants the PAT no API access.
    The receiver verifies it as `X-Hub-Signature-256` HMAC.
 6. Under **Events**, select "Let me select individual events".
 7. Select the listed events that GitHub offers for this webhook type.
-   Include the three `projects_v2*` events for organization project boards.
 
 ## Operational mechanics
 
@@ -495,14 +469,11 @@ Leave the receiver's `WEBHOOK_SECRET` unchanged.
    kubectl -n hephaestus logs -f deployment/hephaestus-webhook
    ```
 
-8. For Projects v2, change a project item.
-9. Verify delivery and synchronization.
-10. Only if App delivery is unavailable, add the narrowly scoped organization webhook.
-11. On the **dedicated test App**, change the secret in **GitHub's App settings only**.
-12. Trigger a new real event.
-13. Confirm rejection.
-14. Restore the matching secret.
-15. Select **Redeliver** for the rejected event.
-16. Verify acceptance and application state.
-17. Sign in through the instance hostname.
-18. Verify that the OAuth callback returns to that instance, not the product homepage or another environment.
+8. On the **dedicated test App**, change the secret in **GitHub's App settings only**.
+9. Trigger a new real event.
+10. Confirm rejection.
+11. Restore the matching secret.
+12. Select **Redeliver** for the rejected event.
+13. Verify acceptance and application state.
+14. Sign in through the instance hostname.
+15. Verify that the OAuth callback returns to that instance, not the product homepage or another environment.

@@ -35,8 +35,8 @@ public final class GitHubSyncConstants {
      * Page size for issue sync GraphQL queries.
      * <p>
      * Uses a reduced page size because the issue query embeds comments (first 10),
-     * project items (first 5), assignees, and labels per issue. With 25 issues per
-     * page the worst case is ~25 × (10 + 5 + 10 + 10) = 875 nested nodes — safely
+     * assignees, and labels per issue. With 25 issues per
+     * page the worst case is ~25 × (10 + 10 + 10) = 750 nested nodes — safely
      * under GitHub's MAX_NODE_LIMIT. Previous value of 100 triggered
      * MAX_NODE_LIMIT_EXCEEDED errors on repositories with many issue cross-references.
      */
@@ -57,125 +57,11 @@ public final class GitHubSyncConstants {
     public static final int PR_SYNC_PAGE_SIZE = 10;
 
     /**
-     * Page size for discussion sync queries.
-     * <p>
-     * Set to 25 because discussion queries embed up to 10 comments with replies,
-     * categories, labels, and author details per discussion — similar weight to
-     * issue queries.
-     */
-    public static final int DISCUSSION_SYNC_PAGE_SIZE = 25;
-
-    /**
      * Large page size for GraphQL queries (100 items per page).
      * <p>
      * Used for bulk operations like labels, milestones, and other simpler entities.
      */
     public static final int LARGE_PAGE_SIZE = 100;
-
-    // Project Sync Page Sizes (Cost-Optimized)
-    //
-    // GitHub GraphQL API cost formula: cost = ceil(total_nodes_requested / 100)
-    // Nested collections MULTIPLY: items(50) * fieldValues(20) = 1,000 nodes = 10 cost points
-    //
-    // BEFORE optimization (worst case per page):
-    //   items(100) * fieldValues(100) = 10,000 nodes
-    //   + labels(50) = 500,000 additional nodes
-    //   + users(50) + reviewers(50) + pullRequests(20) = millions of potential nodes
-    //   Estimated cost: 5,000+ points per page (exceeds rate limits quickly)
-    //
-    // AFTER optimization (worst case per page):
-    //   items(50) * fieldValues(20) = 1,000 nodes = 10 cost points
-    //   + labels(50) * 1,000 = 50,000 nodes = 500 cost points
-    //   + users(50) + reviewers(50) + pullRequests(20) = ~120,000 additional nodes
-    //   Estimated cost: ~1,300 points per page (sustainable for large projects)
-    //
-    // Reference: https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits
-
-    /**
-     * Page size for project items sync.
-     * <p>
-     * Uses 50 instead of 100 because project items have deeply nested field values.
-     * Each item can have up to 20 field values (inline), and each field value may
-     * contain nested collections (labels, users, reviewers, pull requests).
-     * <p>
-     * Cost calculation: 50 items * 20 fieldValues = 1,000 base nodes = 10 cost points
-     * Plus nested collections, total ~360 cost points per page (sustainable).
-     */
-    public static final int PROJECT_ITEM_PAGE_SIZE = 50;
-
-    /**
-     * Inline page size for field values within project items.
-     * <p>
-     * Uses 20 instead of 100 to reduce multiplicative cost in nested queries.
-     * Most project items have fewer than 20 custom fields. Items with more fields
-     * will trigger follow-up pagination using GetProjectItemFieldValues query.
-     * <p>
-     * GitHub's recommendation: Use 8-20 for nested collections to reduce cost.
-     * We use 20 as a balance between completeness and cost efficiency.
-     */
-    public static final int FIELD_VALUES_INLINE_SIZE = 20;
-
-    /**
-     * Page size for field value follow-up pagination.
-     * <p>
-     * When an item has more than 20 field values (the inline size), we fetch
-     * the remaining field values using a separate query (GetProjectItemFieldValues).
-     * Since this is a top-level query (not nested), we can use a larger page size.
-     * <p>
-     * Uses 50 to balance API efficiency with response size.
-     */
-    public static final int FIELD_VALUES_PAGINATION_SIZE = 50;
-
-    /**
-     * Page size for labels within field values (triple-nested).
-     * <p>
-     * Uses 50 to match the actual GraphQL fragment page sizes in
-     * FieldValueFields and FieldValueFieldsCostOptimized.
-     * Multiplicative cost impact: 50 items * 20 fieldValues * 50 labels = 50,000 potential nodes.
-     */
-    public static final int NESTED_LABELS_SIZE = 50;
-
-    /**
-     * Page size for users within field values (triple-nested).
-     * <p>
-     * Uses 50 to match the actual GraphQL fragment page sizes in
-     * FieldValueFields and FieldValueFieldsCostOptimized.
-     */
-    public static final int NESTED_USERS_SIZE = 50;
-
-    /**
-     * Page size for reviewers within field values (triple-nested).
-     * <p>
-     * Uses 50 to match the actual GraphQL fragment page sizes in
-     * FieldValueFields and FieldValueFieldsCostOptimized.
-     */
-    public static final int NESTED_REVIEWERS_SIZE = 50;
-
-    /**
-     * Page size for pull requests within field values (triple-nested).
-     * <p>
-     * Uses 20 to match the actual GraphQL fragment page sizes in
-     * FieldValueFields and FieldValueFieldsCostOptimized.
-     */
-    public static final int NESTED_PULL_REQUESTS_SIZE = 20;
-
-    /**
-     * Page size for project status updates.
-     * <p>
-     * Uses the full 100 because status updates have minimal nesting (only creator).
-     * Status updates are simple records with no deeply nested collections.
-     * Cost: 100 status updates = 1 cost point (very efficient).
-     */
-    public static final int STATUS_UPDATE_PAGE_SIZE = 100;
-
-    /**
-     * Page size for project fields.
-     * <p>
-     * Uses 50 because field definitions include options for single-select fields.
-     * Most projects have fewer than 50 custom fields. Options are not deeply nested.
-     * Cost: 50 fields with ~10 options each = 500 nodes = 5 cost points.
-     */
-    public static final int PROJECT_FIELD_PAGE_SIZE = 50;
 
     /**
      * Maximum number of pages to fetch in pagination loops.

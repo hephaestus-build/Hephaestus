@@ -18,9 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
-import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.DiscussionsProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
-import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.ProjectsProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
@@ -32,7 +30,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
@@ -41,7 +38,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitMetadataEnr
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.github.discussion.GitHubDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssueCommentSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
@@ -49,7 +45,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTyp
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.GitHubLabelSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.GitHubMilestoneSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationSyncService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.RepositoryIdentityMismatchException;
@@ -112,9 +107,6 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
-    private OrganizationRepository organizationRepository;
-
-    @Mock
     private GitHubLabelSyncService labelSyncService;
 
     @Mock
@@ -136,13 +128,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
     private GitHubPullRequestSyncService pullRequestSyncService;
 
     @Mock
-    private GitHubDiscussionSyncService discussionSyncService;
-
-    @Mock
     private GitHubTeamSyncService teamSyncService;
-
-    @Mock
-    private GitHubProjectSyncService projectSyncService;
 
     @Mock
     private GitHubOrganizationSyncService organizationSyncService;
@@ -185,9 +171,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15, // cooldownMinutes
                 new BackfillProperties(false, 50, 100, 60),
-                new FilterProperties(Set.of(), Set.of(), Set.of()),
-                new DiscussionsProperties(false), // discussions off — keeps the test on the issue/PR path
-                new ProjectsProperties(false));
+                new FilterProperties(Set.of(), Set.of()));
 
         service = new GitHubDataSyncService(
                 properties,
@@ -195,7 +179,6 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 syncTargetProvider,
                 organizationMembershipListener,
                 repositoryRepository,
-                organizationRepository,
                 labelSyncService,
                 milestoneSyncService,
                 issueSyncService,
@@ -203,9 +186,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 issueTypeSyncService,
                 subIssueSyncService,
                 pullRequestSyncService,
-                discussionSyncService,
                 teamSyncService,
-                projectSyncService,
                 organizationSyncService,
                 repositorySyncService,
                 collaboratorSyncService,
@@ -275,7 +256,6 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 .lastMilestonesSyncedAt(recent)
                 .lastIssuesSyncedAt(recent)
                 .lastPullRequestsSyncedAt(recent)
-                .lastDiscussionsSyncedAt(recent)
                 .lastCollaboratorsSyncedAt(recent)
                 .lastFullSyncAt(recent);
         if (issueCursor != null) builder.issueSyncCursor(issueCursor);
@@ -298,7 +278,6 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
                 .lastMilestonesSyncedAt(recent)
                 .lastIssuesSyncedAt(recent)
                 .lastPullRequestsSyncedAt(recent)
-                .lastDiscussionsSyncedAt(recent)
                 .lastCollaboratorsSyncedAt(recent)
                 .lastFullSyncAt(recent);
         if (nativeId != null) builder.nativeId(nativeId);

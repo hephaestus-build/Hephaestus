@@ -133,7 +133,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                                 case MILESTONES -> rtm.setMilestonesSyncedAt(syncedAt);
                                 case ISSUES -> rtm.setIssuesSyncedAt(syncedAt);
                                 case PULL_REQUESTS -> rtm.setPullRequestsSyncedAt(syncedAt);
-                                case DISCUSSIONS -> rtm.setDiscussionsSyncedAt(syncedAt);
                                 case COLLABORATORS -> rtm.setCollaboratorsSyncedAt(syncedAt);
                                 case FULL_REPOSITORY -> rtm.setRepositorySyncedAt(syncedAt);
                                 case REPOSITORY_VISIBILITY -> rtm.setRepositoryVisibilityConfirmedAt(syncedAt);
@@ -568,7 +567,6 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
                             switch (kind) {
                                 case ISSUE -> rtm.setIssueSyncCursor(cursor);
                                 case PULL_REQUEST -> rtm.setPullRequestSyncCursor(cursor);
-                                case DISCUSSION -> rtm.setDiscussionSyncCursor(cursor);
                             }
                             repositoryToMonitorRepository.save(rtm);
                         },

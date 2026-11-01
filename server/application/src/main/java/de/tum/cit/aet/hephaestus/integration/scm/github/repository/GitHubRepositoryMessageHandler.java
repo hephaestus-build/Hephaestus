@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.ProjectIntegrityService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import java.util.List;
@@ -53,14 +52,12 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
 
     private final ProvisioningListener provisioningListener;
     private final RepositoryRepository repositoryRepository;
-    private final ProjectIntegrityService projectIntegrityService;
     private final IdentityProviderRepository gitProviderRepository;
     private final SyncTargetProvider syncTargetProvider;
 
     GitHubRepositoryMessageHandler(
             ProvisioningListener provisioningListener,
             RepositoryRepository repositoryRepository,
-            ProjectIntegrityService projectIntegrityService,
             IdentityProviderRepository gitProviderRepository,
             SyncTargetProvider syncTargetProvider,
             NatsMessageDeserializer deserializer,
@@ -78,7 +75,6 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                 transactionTemplate);
         this.provisioningListener = provisioningListener;
         this.repositoryRepository = repositoryRepository;
-        this.projectIntegrityService = projectIntegrityService;
         this.gitProviderRepository = gitProviderRepository;
         this.syncTargetProvider = syncTargetProvider;
     }
@@ -152,24 +148,9 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
 
     /**
      * Fallback deletion when installation ID is not available.
-     * <p>
-     * Cascades deletion to projects owned by this repository before deleting
-     * the repository itself. This maintains referential integrity for the
-     * polymorphic project ownership model.
      */
     private void deleteRepository(@Nullable Long nativeId, String fullName, String safeFullName) {
         findGitHubRepository(nativeId, fullName).ifPresent(repository -> {
-            Long repoId = repository.getId();
-
-            int deletedProjects = projectIntegrityService.cascadeDeleteProjectsForRepository(repoId);
-            if (deletedProjects > 0) {
-                log.info(
-                        "Cascade deleted projects for repository: repoId={}, repoName={}, projectCount={}",
-                        repoId,
-                        safeFullName,
-                        deletedProjects);
-            }
-
             repositoryRepository.delete(repository);
             log.info("Deleted repository directly: repoName={}", safeFullName);
         });

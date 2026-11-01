@@ -84,9 +84,7 @@ class WorkspaceActivationServiceTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                new SyncSchedulerProperties.DiscussionsProperties(false),
-                new SyncSchedulerProperties.ProjectsProperties(false));
+                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
         return new WorkspaceActivationService(
                 new NatsConnectionProperties(true, "nats://localhost:4222", null, null),
                 syncProps,

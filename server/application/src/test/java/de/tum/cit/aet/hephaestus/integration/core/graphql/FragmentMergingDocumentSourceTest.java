@@ -7,7 +7,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
@@ -40,9 +39,9 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldAppendOnlyReferencedFragments() {
-            // Arrange — two fragments, only one is referenced by GetOrganizationProjects
+            // Arrange — two fragments, only one is referenced by GetCommitMetadata
             String fragments = """
-                fragment ActorFields on Actor { login }
+                fragment CommitEnrichmentFields on Commit { oid }
                 fragment UnusedFragment on SomeType { field1 }
                 """;
             FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
@@ -50,12 +49,12 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
                     List.of(".graphql"),
                     List.of(byteResource(fragments, "test-fragments")));
 
-            // Act — GetOrganizationProjects uses ...ActorFields but not ...UnusedFragment
-            String document = source.getDocument("GetOrganizationProjects").block();
+            // Act — GetCommitMetadata uses ...CommitEnrichmentFields but not ...UnusedFragment
+            String document = source.getDocument("GetCommitMetadata").block();
 
             assertThat(document).isNotNull();
-            assertThat(document).contains("query GetOrganizationProjects");
-            assertThat(document).contains("fragment ActorFields on Actor");
+            assertThat(document).contains("query GetCommitMetadata");
+            assertThat(document).contains("fragment CommitEnrichmentFields on Commit");
             assertThat(document).doesNotContain("UnusedFragment");
         }
 
@@ -63,8 +62,8 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
         void shouldNotAppendFragmentsWhenNoneReferenced() {
             // Arrange — fragments that are NOT used by GetRepository
             String fragments = """
-                fragment ProjectV2BaseFields on ProjectV2 { id title }
-                fragment ProjectV2OwnerFields on ProjectV2Owner { login }
+                fragment UnusedFields on Repository { id title }
+                fragment UnusedOwnerFields on RepositoryOwner { login }
                 """;
             FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
                     List.of(new ClassPathResource("graphql/github/operations/")),
@@ -77,28 +76,25 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
             // Assert — the document should be the raw operation without any appended fragments
             assertThat(document).isNotNull();
             assertThat(document).contains("query GetRepository");
-            assertThat(document).doesNotContain("fragment ProjectV2BaseFields");
-            assertThat(document).doesNotContain("fragment ProjectV2OwnerFields");
+            assertThat(document).doesNotContain("fragment UnusedFields");
+            assertThat(document).doesNotContain("fragment UnusedOwnerFields");
         }
 
         @Test
         void shouldResolveTransitiveFragmentDependencies() {
-            // Arrange — operations are loaded from a classpath directory, so the transitive case runs on the
-            // real GetProjectItems document: it uses ...ProjectV2ItemFields, which uses ...ActorFieldsCompact
+            String fragments = """
+                fragment CommitEnrichmentFields on Commit { author { ...AuthorFields } }
+                fragment AuthorFields on GitActor { name }
+                """;
             FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
                     List.of(new ClassPathResource("graphql/github/operations/")),
                     List.of(".graphql"),
-                    List.of(new ClassPathResource("graphql/github/fragments/ProjectFragments.graphql")));
+                    List.of(byteResource(fragments, "test-fragments")));
 
-            // Act — GetProjectItems uses ...ProjectV2ItemFields which uses ...ActorFieldsCompact
-            String document = source.getDocument("GetProjectItems").block();
+            String document = source.getDocument("GetCommitMetadata").block();
 
-            // Assert — both the direct and transitive dependencies are included
-            assertThat(document).isNotNull();
-            assertThat(document).contains("fragment ProjectV2ItemFields on ProjectV2Item");
-            assertThat(document).contains("fragment ActorFieldsCompact on Actor");
-            assertThat(document).contains("fragment ProjectV2ItemContentFields on ProjectV2ItemContent");
-            assertThat(document).contains("fragment RequestedReviewerFields on RequestedReviewer");
+            assertThat(document).contains("fragment CommitEnrichmentFields on Commit");
+            assertThat(document).contains("fragment AuthorFields on GitActor");
         }
 
         @Test
@@ -114,123 +110,17 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
                     .hasMessageContaining("NonExistentDocument");
         }
 
-        @Test
-        @DisplayName("should work with actual ProjectFragments.graphql and include correct subset")
-        void shouldWorkWithActualFragmentFileSelectively() {
-            FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
-                    List.of(new ClassPathResource("graphql/github/operations/")),
-                    List.of(".graphql"),
-                    List.of(new ClassPathResource("graphql/github/fragments/ProjectFragments.graphql")));
-
-            // Act — GetOrganizationProjects uses ActorFields, ProjectV2BaseFields, ProjectV2OwnerFields
-            String document = source.getDocument("GetOrganizationProjects").block();
-
-            // Assert — referenced fragments are present
-            assertThat(document).isNotNull();
-            assertThat(document).contains("query GetOrganizationProjects");
-            assertThat(document).contains("fragment ProjectV2BaseFields on ProjectV2");
-            assertThat(document).contains("fragment ProjectV2OwnerFields on ProjectV2Owner");
-            assertThat(document).contains("fragment ActorFields on Actor");
-
-            // Assert — unreferenced fragments are NOT present
-            assertThat(document).doesNotContain("fragment FieldValueFields on ProjectV2ItemFieldValue");
-            assertThat(document).doesNotContain("fragment ProjectV2FieldConfigFields on ProjectV2FieldConfiguration");
-            assertThat(document).doesNotContain("fragment ProjectV2StatusUpdateFields on ProjectV2StatusUpdate");
-        }
-
-        @Test
-        @DisplayName(
-                "should resolve FieldValueFieldsCostOptimized from shared fragment pool with transitive RequestedReviewerFields")
-        void shouldResolveFieldValueFieldsCostOptimizedFromSharedPool() {
-            // Arrange — use the real ProjectFragments.graphql (which now contains FieldValueFieldsCostOptimized)
-            FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
-                    List.of(new ClassPathResource("graphql/github/operations/")),
-                    List.of(".graphql"),
-                    List.of(new ClassPathResource("graphql/github/fragments/ProjectFragments.graphql")));
-
-            // Act — GetProjectItems uses ...FieldValueFieldsCostOptimized (now resolved from shared pool)
-            String document = source.getDocument("GetProjectItems").block();
-
-            // Assert — FieldValueFieldsCostOptimized is resolved from the shared fragment pool
-            assertThat(document).isNotNull();
-            assertThat(document).contains("query GetProjectItems");
-            assertThat(document).contains("fragment FieldValueFieldsCostOptimized on ProjectV2ItemFieldValue");
-
-            // Assert — transitive dependency: FieldValueFieldsCostOptimized references ...RequestedReviewerFields
-            assertThat(document).contains("fragment RequestedReviewerFields on RequestedReviewer");
-
-            // Assert — FieldValueFieldsCostOptimized is NOT defined inline in GetProjectItems.graphql anymore
-            // It should appear exactly once (from the shared pool), not twice
-            int firstIndex = document.indexOf("fragment FieldValueFieldsCostOptimized");
-            int secondIndex = document.indexOf("fragment FieldValueFieldsCostOptimized", firstIndex + 1);
-            assertThat(secondIndex)
-                    .as("FieldValueFieldsCostOptimized should appear exactly once")
-                    .isEqualTo(-1);
-        }
-
-        @Test
-        void shouldResolveFieldValueFieldsCostOptimizedForEmbeddedQueries() {
-            FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
-                    List.of(new ClassPathResource("graphql/github/operations/")),
-                    List.of(".graphql"),
-                    List.of(new ClassPathResource("graphql/github/fragments/ProjectFragments.graphql")));
-
-            // Act — embedded queries now use ...FieldValueFieldsCostOptimized spread
-            String issueItems = source.getDocument("GetIssueProjectItems").block();
-            String prItems = source.getDocument("GetPullRequestProjectItems").block();
-
-            // Assert — both resolve the shared fragment with all 11 field value types
-            for (String doc : List.of(issueItems, prItems)) {
-                assertThat(doc).isNotNull();
-                assertThat(doc).contains("fragment FieldValueFieldsCostOptimized on ProjectV2ItemFieldValue");
-                assertThat(doc).contains("fragment RequestedReviewerFields on RequestedReviewer");
-                // Verify coverage of complex field value types (beyond the original 5 inline types)
-                assertThat(doc).contains("ProjectV2ItemFieldLabelValue");
-                assertThat(doc).contains("ProjectV2ItemFieldMilestoneValue");
-                assertThat(doc).contains("ProjectV2ItemFieldUserValue");
-                assertThat(doc).contains("ProjectV2ItemFieldRepositoryValue");
-                assertThat(doc).contains("ProjectV2ItemFieldPullRequestValue");
-                assertThat(doc).contains("ProjectV2ItemFieldReviewerValue");
-            }
-        }
-
-        @Test
-        void shouldNotContaminateNonProjectQueries() {
-            FragmentMergingDocumentSource source = new FragmentMergingDocumentSource(
-                    List.of(new ClassPathResource("graphql/github/operations/")),
-                    List.of(".graphql"),
-                    List.of(new ClassPathResource("graphql/github/fragments/ProjectFragments.graphql")));
-
-            // Act — GetRepository, GetRepositoryLabels, GetRepositoryCollaborators don't use any fragments
-            String getRepo = source.getDocument("GetRepository").block();
-            String getLabels = source.getDocument("GetRepositoryLabels").block();
-            String getCollaborators =
-                    source.getDocument("GetRepositoryCollaborators").block();
-
-            // Assert — no fragment definitions should be appended
-            for (String doc : List.of(getRepo, getLabels, getCollaborators)) {
-                assertThat(doc).doesNotContain("fragment ActorFields");
-                assertThat(doc).doesNotContain("fragment ProjectV2");
-                assertThat(doc).doesNotContain("fragment FieldValueFields");
-                assertThat(doc).doesNotContain("fragment RequestedReviewerFields");
-            }
-        }
-    }
-
-    @Nested
-    class MultipleFragmentFileTests {
-
         /**
          * A fragment file's last definition runs to end-of-file, so parsing the concatenation of several
          * files staples the next file's header comment onto it. If that header happens to contain
          * {@code ...SomethingElse} — an ordinary way to write a comment about a fragment — the spread
          * scanner reads it as a real reference and drags an unrelated fragment into every document that
          * uses the neighbour. GitHub then rejects the whole query for the unused fragment (§5.5.1.4), so
-         * the symptom is every project/issue sync failing at once.
+         * the symptom is commit metadata sync failing at once.
          */
         @Test
         void aCommentInOneFileCannotDragInAFragmentFromAnother() {
-            Resource first = byteResource("fragment ActorFields on Actor { login }\n", "first");
+            Resource first = byteResource("fragment CommitEnrichmentFields on Commit { oid }\n", "first");
             Resource second = byteResource("""
                 # Spread this with ...LonelyFragment where a commit is selected.
                 fragment LonelyFragment on Commit { oid }
@@ -240,13 +130,12 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
                     List.of(".graphql"),
                     List.of(first, second));
 
-            String document = source.getDocument("GetOrganizationProjects").block();
+            String document = source.getDocument("GetCommitMetadata").block();
 
             assertThat(document).isNotNull();
-            assertThat(document).contains("fragment ActorFields on Actor");
+            assertThat(document).contains("fragment CommitEnrichmentFields on Commit");
             assertThat(document)
-                    .as(
-                            "GetOrganizationProjects never spreads LonelyFragment; only the other file's comment mentions it")
+                    .as("GetCommitMetadata never spreads LonelyFragment; only the other file's comment mentions it")
                     .doesNotContain("LonelyFragment");
         }
     }
@@ -322,11 +211,11 @@ class FragmentMergingDocumentSourceTest extends BaseUnitTest {
                     List.of(new ClassPathResource("graphql/github/operations/")), List.of(".graphql"), List.of());
 
             // Assert — document should load without appended fragments
-            String document = source.getDocument("GetOrganizationProjects").block();
+            String document = source.getDocument("GetCommitMetadata").block();
             assertThat(document).isNotNull();
-            assertThat(document).contains("query GetOrganizationProjects");
+            assertThat(document).contains("query GetCommitMetadata");
             // No fragments should be appended since none were provided
-            assertThat(document).doesNotContain("fragment ProjectV2BaseFields");
+            assertThat(document).doesNotContain("fragment CommitEnrichmentFields");
         }
     }
 }

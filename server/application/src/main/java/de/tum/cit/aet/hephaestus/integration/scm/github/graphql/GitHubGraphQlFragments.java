@@ -8,7 +8,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.graphql;
  */
 public final class GitHubGraphQlFragments {
 
-    public static final String PROJECT_FRAGMENTS_RESOURCE = "graphql/github/fragments/ProjectFragments.graphql";
+    public static final String ACTOR_FRAGMENTS_RESOURCE = "graphql/github/fragments/ActorFragments.graphql";
 
     public static final String COMMIT_ENRICHMENT_FIELDS_RESOURCE =
             "graphql/github/fragments/CommitEnrichmentFields.graphql";

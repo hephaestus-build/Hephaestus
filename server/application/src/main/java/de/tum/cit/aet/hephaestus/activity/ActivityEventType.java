@@ -86,62 +86,6 @@ public enum ActivityEventType {
     /** Issue type removed - work categorization change */
     ISSUE_UNTYPED("issue.untyped"),
 
-    // Project Lifecycle (Project management tracking)
-    /** Project created - new project board started */
-    PROJECT_CREATED("project.created"),
-    /** Project updated - project settings or metadata changed */
-    PROJECT_UPDATED("project.updated"),
-    /** Project closed - project archived or completed */
-    PROJECT_CLOSED("project.closed"),
-    /** Project reopened - project reactivated */
-    PROJECT_REOPENED("project.reopened"),
-    /** Project deleted - project removed */
-    PROJECT_DELETED("project.deleted"),
-
-    // Project Item Lifecycle (Work item tracking in projects)
-    /** Item added to project - issue/PR/draft added to project board */
-    PROJECT_ITEM_CREATED("project_item.created"),
-    /** Item updated - field values or status changed */
-    PROJECT_ITEM_UPDATED("project_item.updated"),
-    /** Item archived - item hidden from active view */
-    PROJECT_ITEM_ARCHIVED("project_item.archived"),
-    /** Item restored - item unarchived back to active view */
-    PROJECT_ITEM_RESTORED("project_item.restored"),
-    /** Item deleted - item removed from project */
-    PROJECT_ITEM_DELETED("project_item.deleted"),
-    /** Item converted - draft issue converted to real issue */
-    PROJECT_ITEM_CONVERTED("project_item.converted"),
-    /** Item reordered - item position changed in project view */
-    PROJECT_ITEM_REORDERED("project_item.reordered"),
-
-    // Project Status Update Events
-    /** Status update posted to project */
-    PROJECT_STATUS_UPDATE_CREATED("project_status_update.created"),
-    /** Status update edited */
-    PROJECT_STATUS_UPDATE_UPDATED("project_status_update.updated"),
-    /** Status update deleted */
-    PROJECT_STATUS_UPDATE_DELETED("project_status_update.deleted"),
-
-    // Discussion Lifecycle (Community engagement tracking)
-    /** Discussion created - community engagement signal */
-    DISCUSSION_CREATED("discussion.created"),
-    /** Discussion closed - discussion resolved or archived */
-    DISCUSSION_CLOSED("discussion.closed"),
-    /** Discussion reopened - discussion reactivated */
-    DISCUSSION_REOPENED("discussion.reopened"),
-    /** Discussion answered - marks a reply as the accepted answer */
-    DISCUSSION_ANSWERED("discussion.answered"),
-    /** Discussion deleted - audit trail */
-    DISCUSSION_DELETED("discussion.deleted"),
-
-    // Discussion Comment Events (Community engagement tracking)
-    /** Discussion comment created - community engagement signal */
-    DISCUSSION_COMMENT_CREATED("discussion_comment.created"),
-    /** Discussion comment edited - audit trail */
-    DISCUSSION_COMMENT_EDITED("discussion_comment.edited"),
-    /** Discussion comment deleted - audit trail */
-    DISCUSSION_COMMENT_DELETED("discussion_comment.deleted"),
-
     // Commit Events (Code contribution tracking)
     /** Commit created (pushed to default branch) */
     COMMIT_CREATED("commit.created");

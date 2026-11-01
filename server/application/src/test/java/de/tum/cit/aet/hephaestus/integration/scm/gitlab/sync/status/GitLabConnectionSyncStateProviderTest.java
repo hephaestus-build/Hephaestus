@@ -86,9 +86,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
                 "0 0 3 * * *",
                 15,
                 new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                new SyncSchedulerProperties.DiscussionsProperties(false),
-                new SyncSchedulerProperties.ProjectsProperties(false));
+                new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
         provider = provider(syncProps, NOON);
         ref = new IntegrationRef(IntegrationKind.GITLAB, WORKSPACE_ID, "gitlab.com:1");
         lenient().when(rateLimitTrackerProvider.getIfAvailable()).thenReturn(rateLimitTracker);
@@ -178,9 +176,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
                             "not a cron",
                             15,
                             new SyncSchedulerProperties.BackfillProperties(false, 50, 100, 60),
-                            new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
-                            new SyncSchedulerProperties.DiscussionsProperties(false),
-                            new SyncSchedulerProperties.ProjectsProperties(false)),
+                            new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of())),
                     NOON);
 
             assertThat(brokenCron.describe(ref, CONNECTION_ID).nextScheduledSyncAt())
@@ -270,7 +266,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         private GitLabConnectionSyncStateProvider backfillEnabledProvider() {
             return provider(
                     new SyncSchedulerProperties(
-                            true, 7, "0 0 3 * * *", 15, new BackfillProperties(true, 50, 100, 60), null, null, null),
+                            true, 7, "0 0 3 * * *", 15, new BackfillProperties(true, 50, 100, 60), null),
                     NOON);
         }
 

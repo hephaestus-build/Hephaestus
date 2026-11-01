@@ -12,12 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.Project;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.ProjectField;
-import de.tum.cit.aet.hephaestus.integration.scm.github.project.ProjectFieldRepository;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -47,13 +42,10 @@ class NativeHibernateJsonPersistenceIntegrationTest extends BaseIntegrationTest 
     private JsonMapper mapper;
 
     @Autowired
-    private ProjectFieldRepository projectFields;
-
-    @Autowired
     private JdbcTemplate jdbc;
 
     @Test
-    void shouldPreserveAllFiveTextFieldsAfterFlushClearAndReload() {
+    void shouldPreserveAllFourTextFieldsAfterFlushClearAndReload() {
         var currentEntityManager = Objects.requireNonNull(entityManager);
         var now = Instant.parse("2026-10-01T12:00:00Z");
         var workspace = WorkspaceTestFixtures.activeWorkspace("native-json-text");
@@ -64,22 +56,6 @@ class NativeHibernateJsonPersistenceIntegrationTest extends BaseIntegrationTest 
                 "text-fixture",
                 new ConnectionConfig.GitHubPatConfig("acme", null, Set.of()));
         currentEntityManager.persist(connection);
-        var provider = new IdentityProvider(IdentityProviderType.GITHUB, "https://text-fixture.example");
-        currentEntityManager.persist(provider);
-        var project = new Project();
-        project.setNativeId(995501L);
-        project.setProvider(provider);
-        project.setOwnerType(Project.OwnerType.ORGANIZATION);
-        project.setOwnerId(995501L);
-        project.setNumber(1);
-        currentEntityManager.persist(project);
-        var field = new ProjectField();
-        field.setId("native-json-text");
-        field.setProject(project);
-        field.setName("Status");
-        field.setDataType(ProjectField.DataType.SINGLE_SELECT);
-        field.setOptions(TEXT);
-        currentEntityManager.persist(field);
         var auth = AuthEvent.create(
                 new AuthEventData(
                         AuthEvent.EventType.LOGIN,
@@ -126,22 +102,6 @@ class NativeHibernateJsonPersistenceIntegrationTest extends BaseIntegrationTest 
         assertThat(Objects.requireNonNull(currentEntityManager.find(ConnectionAudit.class, auditId))
                         .getDetail())
                 .isEqualTo("Connection paused. 雪\\path");
-        assertThat(projectFields.findById(field.getId()).orElseThrow().getOptions())
-                .isEqualTo(TEXT);
-        // Prose is deliberately not valid JSON: the UPSERT must bind TEXT on insert and update.
-        projectFields.upsertCore(
-                "native-json-upsert", project.getId(), "Priority", "SINGLE_SELECT", "Plain options 雪\\path", now, now);
-        assertThat(projectFields
-                        .findByProjectIdAndName(project.getId(), "Priority")
-                        .orElseThrow()
-                        .getOptions())
-                .isEqualTo("Plain options 雪\\path");
-        projectFields.upsertCore("native-json-upsert", project.getId(), "Priority", "SINGLE_SELECT", null, now, now);
-        assertThat(projectFields
-                        .findByProjectIdAndName(project.getId(), "Priority")
-                        .orElseThrow()
-                        .getOptions())
-                .isNull();
     }
 
     @Test

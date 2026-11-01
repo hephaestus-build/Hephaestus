@@ -55,8 +55,8 @@ FROM (VALUES (20), (21)) AS workspaces(workspace_id)
 ON CONFLICT (workspace_id, kind, instance_key) DO NOTHING;
 
 INSERT INTO repository (id, created_at, updated_at, html_url, is_archived, is_disabled, is_private, name,
-  name_with_owner, visibility, has_discussions_enabled, native_id, provider_id)
-SELECT r.id, now(), now(), r.html_url, false, false, false, r.name, r.name_with_owner, 'PUBLIC', false, r.id, p.id
+  name_with_owner, visibility, native_id, provider_id)
+SELECT r.id, now(), now(), r.html_url, false, false, false, r.name, r.name_with_owner, 'PUBLIC', r.id, p.id
 FROM (VALUES
   (920001, 'https://gitlab.example.test/ext/demo', 'demo', 'ext/demo'),
   (922001, 'https://gitlab.example.test/ext/choice', 'choice', 'ext/choice')

@@ -55,7 +55,7 @@ class GraphQlOperationDocumentValidationTest extends BaseUnitTest {
                     "graphql/github/schema.github.graphql",
                     "graphql/github/operations/",
                     List.of(
-                            GitHubGraphQlFragments.PROJECT_FRAGMENTS_RESOURCE,
+                            GitHubGraphQlFragments.ACTOR_FRAGMENTS_RESOURCE,
                             GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE)),
             new Vendor(
                     "gitlab",
