@@ -243,9 +243,11 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                         slackTurn,
                         slackAttempt,
                         WORKER,
-                        MentorTurn.Status.DONE,
-                        List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "A stale answer")),
-                        null))
+                        new MentorTurnService.AttemptEnd(
+                                MentorTurn.Status.DONE,
+                                List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "A stale answer")),
+                                null,
+                                null)))
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThat(events.stream(MentorLedgerEvents.AttemptTakenBack.class))
                 .as("the absorbed attempt is billed and its feedback claims settled after the merge commits")

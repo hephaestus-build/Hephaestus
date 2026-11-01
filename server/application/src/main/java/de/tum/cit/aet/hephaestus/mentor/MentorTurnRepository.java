@@ -235,7 +235,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     @Query(value = "SELECT set_config('synchronous_commit', 'off', true)", nativeQuery = true)
     String commitWithoutFlushWait();
 
-    /** A running attempt, as one partial-answer write found it. */
+    /** A running attempt, as the read before its partial answer found it. */
     interface RunningAttempt {
         Long getWorkspaceId();
 
@@ -245,24 +245,20 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     }
 
     /**
-     * Replaces the partial answer of a running attempt that this worker holds, in one statement: no lock is taken
-     * before it, and the row's own lock is held only while it runs.
+     * The running attempt that this worker holds, read without a lock or a write: a partial answer only checks the
+     * lease, because memory alone keeps it ({@link MentorTurnProgress}).
      *
-     * @param partial the snapshot as JSON text
      * @return the attempt, or empty when it no longer runs on {@code workerId}
      */
     @WorkspaceAgnostic("The worker holds the attempt's lease; the statement returns the turn's workspace")
     @Query(value = """
-            UPDATE mentor_turn SET partial = CAST(:partial AS jsonb)
+            SELECT workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
+              FROM mentor_turn
              WHERE id = :id AND attempt = :attempt AND worker_id = :workerId
                AND status = 'RUNNING' AND leased_until IS NOT NULL
-            RETURNING workspace_id AS workspaceId, conversation_id AS conversationId, surface AS surface
             """, nativeQuery = true)
-    Optional<RunningAttempt> writePartial(
-            @Param("id") UUID id,
-            @Param("attempt") int attempt,
-            @Param("workerId") String workerId,
-            @Param("partial") String partial);
+    Optional<RunningAttempt> findRunningAttempt(
+            @Param("id") UUID id, @Param("attempt") int attempt, @Param("workerId") String workerId);
 
     /**
      * Adds one proxied call to the attempt that made it. The fence drops a call that arrives after the attempt

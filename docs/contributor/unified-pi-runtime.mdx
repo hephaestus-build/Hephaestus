@@ -22,7 +22,7 @@ PostgreSQL holds all Hephaestus state in three workspace-scoped tables:
 | --- | --- |
 | `mentor_conversation` | One main conversation for each account and workspace, and one row for each thread. `account_id` names the owner. A main conversation can carry the Slack team, the Slack user, and the Slack channel id of the direct message. |
 | `mentor_entry` | Each question, answer, tool result, system entry, summary, and weekly digest. The column `seq` orders the entries of one conversation. `surface` tells whether a message was written in the app or in Slack. |
-| `mentor_turn` | One question's run: status, lease, attempt, partial answer, usage, and error. |
+| `mentor_turn` | One question's run: status, lease, attempt, usage, and error. The partial answer is not stored. |
 
 A thread is a `mentor_conversation` row with `parent_conversation_id` and `parent_entry_id`.
 It forks the main conversation at that entry.
@@ -628,8 +628,16 @@ A call that the connection's breaker refuses gets `503` with `upstream_paused` (
 The host fails the turn on either code and does not let Pi retry the call.
 An end without an answer cancels the attempt's calls in flight (`ProxyCallsInFlight.cancel`), so a silent provider cannot hold it.
 
-A partial answer is one conditional `UPDATE … RETURNING` and its `NOTIFY`, in one short transaction (`MentorTurnService.updatePartial`).
-A snapshot equal to the one that the attempt stored last is not written.
+A partial answer is one lease read and its `NOTIFY` frames, in one short transaction (`MentorTurnService.updatePartial`).
+It writes no row.
+Each frame carries a change from the previous snapshot. A whole snapshot follows at least every 2 seconds.
+Each process that listens to the ledger rebuilds the snapshot in memory (`MentorTurnProgress`).
+A process that starts, reconnects or misses a frame shows the partial answer again from the next whole snapshot.
+
+The end of the attempt stores the answer once. Thus, the write-ahead log of a streamed answer stays near the size of the answer.
+A snapshot equal to the one that the attempt sent last is sent again only after 10 seconds, for readers that started since.
+An attempt that ends without its entries gives its last sent snapshot to the end, which classifies its `show_feedback` calls.
+
 The proxy records a model call's usage after it relayed the whole response.
 The host can read the end of the answer earlier and end the turn.
 Thus, the end waits for the attempt's calls, or the fence on the turn row would drop the last call as late.

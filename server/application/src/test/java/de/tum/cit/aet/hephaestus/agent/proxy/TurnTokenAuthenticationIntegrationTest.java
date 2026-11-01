@@ -194,7 +194,11 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldLeaveTheAttemptCheckToTheTurnEndpointWhenTheTurnCallsOne() throws Exception {
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(), null, null));
 
         Result result = call(WORKER, "PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
 
@@ -204,7 +208,11 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldRefuseTheTurnWhenItsAttemptEnded() throws Exception {
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(), null, null));
 
         Result result = call(WORKER, "POST", "/internal/llm/responses", token());
 

@@ -37,6 +37,7 @@ public class MentorSlackDelivery {
     private final MentorSlackDeliveryRepository deliveries;
     private final MentorTurnRepository turns;
     private final MentorTimeline timeline;
+    private final MentorTurnProgress progress;
     private final PersonDataWriteFence writeFence;
 
     /**
@@ -194,7 +195,7 @@ public class MentorSlackDelivery {
         return Optional.ofNullable(call.call(session));
     }
 
-    /** The turn as it is now, with its partial answer: one read for each streamed piece. */
+    /** The turn as it is now: one read for each streamed piece. Its partial answer is in {@link #writing}. */
     @Transactional(readOnly = true)
     public Optional<MentorTurn> turn(long workspaceId, UUID turnId) {
         return turns.findByIdAndWorkspaceId(turnId, workspaceId);
@@ -202,16 +203,17 @@ public class MentorSlackDelivery {
 
     /**
      * What a Slack stream may show of a running turn's partial answer: a stream only grows, and the feedback after
-     * Heph's first link tool call reaches it only with the stored answer.
+     * Heph's first link tool call reaches it only with the stored answer. {@code null} when this process has no
+     * partial answer yet, which says nothing about what the answer holds.
      */
-    public static String writing(MentorTurn turn) {
-        JsonNode partial = turn.getPartial();
-        return partial == null ? "" : MentorPiEntries.partialText(partial, true);
+    public @Nullable String writing(MentorTurn turn) {
+        JsonNode partial = progress.snapshot(turn);
+        return partial == null ? null : MentorPiEntries.partialText(partial, true);
     }
 
     /** What Hephaestus does in a running turn, in the developer's words, or {@code null} before its first snapshot. */
-    public static @Nullable String stage(MentorTurn turn) {
-        JsonNode partial = turn.getPartial();
+    public @Nullable String stage(MentorTurn turn) {
+        JsonNode partial = progress.snapshot(turn);
         return partial == null ? null : MentorTurnPartialDTO.from(partial).stage();
     }
 

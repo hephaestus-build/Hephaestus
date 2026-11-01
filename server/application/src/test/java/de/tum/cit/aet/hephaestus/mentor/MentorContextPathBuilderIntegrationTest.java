@@ -63,7 +63,11 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
         for (String answer : answers) {
             appended.add(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), answer));
         }
-        turns.end(turn.getId(), turn.getAttempt(), WORKER, outcome, appended, null);
+        turns.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(outcome, appended, null, null));
         return turn;
     }
 
@@ -262,16 +266,22 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                MentorTurn.Status.DONE,
-                List.of(
-                        MentorLedgerFixtures.toolCall(
-                                MentorLedgerFixtures.piId(),
-                                "call-1",
-                                "fetch_context",
-                                JsonNodeFactory.instance.objectNode().put("path", "user.json")),
-                        MentorLedgerFixtures.toolResult(
-                                MentorLedgerFixtures.piId(), "call-1", "fetch_context", "colleague data", false)),
-                null);
+                new MentorTurnService.AttemptEnd(
+                        MentorTurn.Status.DONE,
+                        List.of(
+                                MentorLedgerFixtures.toolCall(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-1",
+                                        "fetch_context",
+                                        JsonNodeFactory.instance.objectNode().put("path", "user.json")),
+                                MentorLedgerFixtures.toolResult(
+                                        MentorLedgerFixtures.piId(),
+                                        "call-1",
+                                        "fetch_context",
+                                        "colleague data",
+                                        false)),
+                        null,
+                        null));
         MentorEntry toolResult = entryRepository
                 .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
                         workspace.getId(), turn.getId(), MentorEntry.Kind.TOOL_RESULT)

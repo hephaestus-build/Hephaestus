@@ -130,12 +130,6 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "leased_until")
     private Instant leasedUntil;
 
-    /** The whole in-progress answer as the host last reported it; cleared when the attempt ends. */
-    @Nullable
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "partial", columnDefinition = "jsonb")
-    private JsonNode partial;
-
     /** Prompt tokens that were neither cache reads nor cache writes; those have their own columns. */
     @Column(name = "input_tokens", nullable = false)
     @ColumnDefault("0")
@@ -248,7 +242,6 @@ public class MentorTurn implements Persistable<UUID> {
         this.workerId = worker;
         this.leasedUntil = leaseEnd;
         this.startedAt = now;
-        this.partial = null;
         this.admission = null;
         this.error = null;
         this.failureCause = null;
@@ -265,14 +258,9 @@ public class MentorTurn implements Persistable<UUID> {
         this.admission = admittedWith;
     }
 
-    void progress(JsonNode snapshot) {
-        this.partial = snapshot;
-    }
-
     void stop(Instant now) {
         this.status = Status.STOPPED;
         this.finishedAt = now;
-        this.partial = null;
     }
 
     /**
@@ -302,7 +290,6 @@ public class MentorTurn implements Persistable<UUID> {
         }
         this.error = status == Status.FAILED ? reason : null;
         this.leasedUntil = null;
-        this.partial = null;
     }
 
     /** Records why a {@code FAILED} turn failed, for the operator; a turn in any other state records nothing. */
@@ -325,7 +312,6 @@ public class MentorTurn implements Persistable<UUID> {
         this.workerId = null;
         this.leasedUntil = null;
         this.startedAt = null;
-        this.partial = null;
         this.admission = null;
         resetUsage();
     }

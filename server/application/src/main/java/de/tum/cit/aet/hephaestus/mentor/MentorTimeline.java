@@ -22,6 +22,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -51,10 +53,18 @@ public class MentorTimeline {
     private final MentorEntryRepository entries;
     private final MentorTurnRepository turns;
     private final MentorTurnWaits waits;
+    private final MentorTurnProgress progress;
+    private final MentorLedgerNotifications notifications;
     private final WeeklyDigestFacts weeklyDigests;
     private final ResultHistoryQuery results;
     private final FeedbackHistoryQuery feedback;
     private final ObjectMapper objectMapper;
+
+    /** The partial answers of running turns reach this process only while it listens to the ledger. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void listenForPartialAnswers() {
+        notifications.startListening();
+    }
 
     /** A value the live stream sends, and the developer whose conversation it belongs to. */
     public record Owned<T>(long accountId, T value) {}
@@ -69,7 +79,11 @@ public class MentorTimeline {
         List<MentorTurn> activeTurns = turns.findActiveInTree(workspaceId, main.getId());
         Map<UUID, MentorTurn.WaitingFor> waiting = waits.waits(workspaceId, activeTurns);
         List<MentorTurnDTO> active = activeTurns.stream()
-                .map(turn -> turn(turn, parentEntryId(main, turn.getConversationId()), waiting.get(turn.getId())))
+                .map(turn -> turn(
+                        turn,
+                        parentEntryId(main, turn.getConversationId()),
+                        waiting.get(turn.getId()),
+                        progress.snapshot(turn)))
                 .toList();
         List<MentorThreadSummaryDTO> threads =
                 entries.findThreadSummariesOfMain(workspaceId, main.getId(), MAX_THREADS).stream()
@@ -117,7 +131,7 @@ public class MentorTimeline {
     public MentorTurnDTO turn(long workspaceId, long accountId, UUID turnId) {
         MentorTurn turn = ownedTurn(workspaceId, accountId, turnId);
         MentorConversation conversation = conversation(workspaceId, turn.getConversationId());
-        return turn(turn, conversation.getParentEntryId(), waitingFor(turn));
+        return turn(turn, conversation.getParentEntryId(), waitingFor(turn), progress.snapshot(turn));
     }
 
     @Transactional(readOnly = true)
@@ -155,7 +169,11 @@ public class MentorTimeline {
                         .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                         .map(conversation -> new Owned<>(
                                 conversation.getAccountId(),
-                                turn(turn, conversation.getParentEntryId(), waitingFor(turn)))));
+                                turn(
+                                        turn,
+                                        conversation.getParentEntryId(),
+                                        waitingFor(turn),
+                                        progress.snapshot(turn)))));
     }
 
     /**
@@ -421,8 +439,10 @@ public class MentorTimeline {
     }
 
     private static MentorTurnDTO turn(
-            MentorTurn turn, @Nullable UUID parentEntryId, MentorTurn.@Nullable WaitingFor waitingFor) {
-        JsonNode partial = turn.getPartial();
+            MentorTurn turn,
+            @Nullable UUID parentEntryId,
+            MentorTurn.@Nullable WaitingFor waitingFor,
+            @Nullable JsonNode partial) {
         return new MentorTurnDTO(
                 turn.getId(),
                 turn.getConversationId(),

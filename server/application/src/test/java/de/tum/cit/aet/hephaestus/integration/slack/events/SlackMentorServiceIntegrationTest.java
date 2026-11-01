@@ -202,7 +202,11 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MentorEntry answerPostedAt(String ts) {
         MentorTurn running = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
         ObjectNode pi = MentorLedgerFixtures.answer("a1b2c3d4", "Your reviews are quick.");
-        turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(pi), null);
+        turns.end(
+                running.getId(),
+                running.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(pi), null, null));
         UUID answerId = Objects.requireNonNull(
                 turns.answer(workspace.getId(), running.getId()).answerEntryId());
         delivery.delivered(
@@ -588,7 +592,11 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         deliver(stopFirst);
         assertOnlyTheRunningReplyStopped();
         assertThat(statusOf("100.8")).isEqualTo(MentorTurn.Status.QUEUED);
-        turns.end(first.getId(), first.getAttempt(), WORKER, MentorTurn.Status.STOPPED, List.of(), null);
+        turns.end(
+                first.getId(),
+                first.getAttempt(),
+                WORKER,
+                new MentorTurnService.AttemptEnd(MentorTurn.Status.STOPPED, List.of(), null, null));
         MentorTurn next = turns.claimNext(WORKER, LEASE).orElseThrow();
         assertThat(next.getId()).isEqualTo(question("100.6").getTurnId());
         assertThat(Objects.requireNonNull(turnOf(question("100.6")).getStartedAt()))
