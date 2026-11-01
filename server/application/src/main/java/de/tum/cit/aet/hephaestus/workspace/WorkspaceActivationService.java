@@ -10,14 +10,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextHolder;
-import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -89,12 +86,7 @@ public class WorkspaceActivationService {
             return;
         }
 
-        List<Workspace> prepared = new ArrayList<>(workspaces.size());
-        for (Workspace workspace : workspaces) {
-            prepared.add(ensureWorkspaceMetadata(workspace));
-        }
-
-        List<Workspace> workspacesToActivate = prepared.stream()
+        List<Workspace> workspacesToActivate = workspaces.stream()
                 .filter(workspace -> !shouldSkipActivation(workspace))
                 .toList();
 
@@ -248,52 +240,7 @@ public class WorkspaceActivationService {
         }
     }
 
-    /** Ensures workspace metadata (account login) is populated, persisting when it was derived. */
-    public Workspace ensureWorkspaceMetadata(Workspace workspace) {
-        if (isBlank(workspace.getAccountLogin())) {
-            String derived = deriveAccountLogin(workspace);
-            if (!isBlank(derived)) {
-                workspace.setAccountLogin(Objects.requireNonNull(derived));
-                return workspaceRepository.save(workspace);
-            }
-        }
-
-        return workspace;
-    }
-
-    /** Derives an account login for legacy workspaces from their first monitored repo's owner. */
-    @Nullable
-    String deriveAccountLogin(Workspace workspace) {
-        String repoOwner = workspace.getRepositoriesToMonitor().stream()
-                .map(RepositoryToMonitor::getNameWithOwner)
-                .map(this::extractOwner)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-
-        if (repoOwner != null && !repoOwner.isBlank()) {
-            return Objects.requireNonNull(repoOwner);
-        }
-
-        return null;
-    }
-
-    private @Nullable String extractOwner(@Nullable String nameWithOwner) {
-        if (nameWithOwner == null || nameWithOwner.isBlank()) {
-            return null;
-        }
-        int idx = nameWithOwner.indexOf('/');
-        if (idx <= 0) {
-            return null;
-        }
-        return nameWithOwner.substring(0, idx);
-    }
-
     private boolean shouldUseNats(Workspace workspace) {
         return natsProperties.enabled() && workspace != null;
-    }
-
-    private boolean isBlank(@Nullable String value) {
-        return value == null || value.isBlank();
     }
 }

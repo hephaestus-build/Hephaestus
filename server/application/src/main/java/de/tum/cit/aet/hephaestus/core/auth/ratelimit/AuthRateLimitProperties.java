@@ -23,8 +23,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * </ul>
  *
  * <p>Set {@code enabled=false} to bypass the filter entirely (e.g. load tests). The limits are
- * shared across replicas when a Postgres-backed {@code ProxyManager} is wired (production); see
- * {@link AuthRateLimitConfig} for the per-replica fallback trade-off.
+ * shared across replicas through the PostgreSQL store in {@link AuthRateLimitConfig}.
  *
  * <p>Proxy trust is owned by the servlet container via {@code server.forward-headers-strategy: native}
  * (prod), which rewrites {@code getRemoteAddr()} to the real client before the filter runs; the filter

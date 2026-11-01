@@ -2,21 +2,16 @@ package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import de.tum.cit.aet.hephaestus.core.auth.dev.DevLoginService;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
-import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
@@ -76,10 +71,17 @@ public class IdentityProviderDiscoveryController {
                 .collect(Collectors.toMap(LoginProvider::getRegistrationId, LoginProvider::getType, (a, b) -> a));
         List<IdentityProviderViewDTO> views = new ArrayList<>();
         for (ClientRegistration reg : identityProviderCatalog.listRegistrations()) {
+            // The provider type drives the SPA's icon choice and link-only filtering, so it comes from
+            // the configured provider only. Both lists read the enabled login_provider rows; a row
+            // enabled between the two reads has no type yet and appears on the next request.
+            LoginProvider.ProviderType type = typesByRegistrationId.get(reg.getRegistrationId());
+            if (type == null) {
+                continue;
+            }
             views.add(new IdentityProviderViewDTO(
                     reg.getRegistrationId(),
                     reg.getClientName() != null ? reg.getClientName() : reg.getRegistrationId(),
-                    providerTypeOf(reg, typesByRegistrationId::get),
+                    type.name(),
                     baseUrlOf(reg)));
         }
         // Optional passwordless dev sign-in. Advertised ONLY when enabled (never in prod), so the SPA
@@ -89,48 +91,6 @@ public class IdentityProviderDiscoveryController {
             views.add(new IdentityProviderViewDTO(DEV_REGISTRATION_ID, "Dev sign-in", DEV_PROVIDER_TYPE, ""));
         }
         return ResponseEntity.ok(views);
-    }
-
-    /**
-     * The provider type drives the SPA's icon choice and link-only filtering. Prefers the
-     * {@code login_provider} row's type (authoritative — an OUTLINE registration's authorization host is
-     * an arbitrary self-hosted instance, indistinguishable from a GitLab by URL shape); falls back to
-     * the legacy host sniff when no row resolves.
-     */
-    static String providerTypeOf(
-            ClientRegistration reg, Function<String, @Nullable ProviderType> typeByRegistrationId) {
-        LoginProvider.ProviderType rowType = typeByRegistrationId.apply(reg.getRegistrationId());
-        if (rowType != null) {
-            return rowType.name();
-        }
-        return providerTypeOf(reg);
-    }
-
-    /** Legacy host-sniff fallback for a registration without a {@code login_provider} row. */
-    static String providerTypeOf(ClientRegistration reg) {
-        // Match on the parsed HOST, not a substring of the whole URI — "github.com" appearing in a
-        // path/query of a GitLab instance (or a look-alike host) must not be misclassified as GitHub.
-        String host = hostOf(reg);
-        if ("github.com".equals(host)) {
-            return "GITHUB";
-        }
-        if ("slack.com".equals(host)) {
-            return "SLACK";
-        }
-        return "GITLAB";
-    }
-
-    /** Host of the authorization endpoint, or {@code null} if absent/malformed. */
-    static @Nullable String hostOf(ClientRegistration reg) {
-        String authorizationUri = reg.getProviderDetails().getAuthorizationUri();
-        if (authorizationUri == null) {
-            return null;
-        }
-        try {
-            return new URI(authorizationUri).getHost();
-        } catch (URISyntaxException e) {
-            return null;
-        }
     }
 
     /** The {@link ScmOrigin} of the authorization endpoint, so clients compare instances as plain strings. */

@@ -196,12 +196,6 @@
       "sourceType": "de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties$DefaultProperties"
     },
     {
-      "name": "hephaestus.auth.rate-limit.postgres-backed",
-      "type": "java.lang.Boolean",
-      "description": "Stores rate-limit buckets in PostgreSQL, so all replicas share the limits. When it is false, each replica keeps its own limits in memory. Production must keep it on.",
-      "sourceType": "de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitConfig"
-    },
-    {
       "name": "hephaestus.database.allow-insecure-remote",
       "type": "java.lang.Boolean",
       "description": "Lets the prod profile connect to a remote PostgreSQL host without TLS. Without it, startup fails unless the JDBC URL sets sslmode to require, verify-ca or verify-full. Hosts other than localhost, 127.0.0.1, ::1 and postgres count as remote.",

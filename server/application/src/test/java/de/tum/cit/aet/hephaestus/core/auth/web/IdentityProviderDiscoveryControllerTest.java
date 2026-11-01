@@ -1,96 +1,106 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.auth.dev.DevLoginService;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
+import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
+import de.tum.cit.aet.hephaestus.core.auth.web.IdentityProviderDiscoveryController.IdentityProviderViewDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 
 /**
- * Unit coverage for the OAuth-registration → discovery mapping in {@link IdentityProviderDiscoveryController}:
- * {@code providerTypeOf} (GITHUB vs GITLAB vs SLACK host classification) and {@code baseUrlOf} (scheme://host[:port]
- * reconstruction incl. the malformed/host-less fallback). These are the genuinely error-prone branches — host
- * (not substring) matching and port reconstruction — that the integration tests never assert.
+ * Unit coverage for the OAuth-registration → discovery mapping in {@link IdentityProviderDiscoveryController}: the
+ * provider type comes from the configured {@code login_provider} row only, and {@code baseUrlOf} reconstructs
+ * scheme://host[:port], incl. the host-less fallback.
  */
 class IdentityProviderDiscoveryControllerTest extends BaseUnitTest {
 
     private static ClientRegistration registration(String authorizationUri) {
-        return ClientRegistration.withRegistrationId("p")
+        return registration("p", authorizationUri);
+    }
+
+    private static ClientRegistration registration(String registrationId, String authorizationUri) {
+        return ClientRegistration.withRegistrationId(registrationId)
                 .clientId("client")
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}/login/oauth2/code/p")
+                .redirectUri("{baseUrl}/login/oauth2/code/" + registrationId)
                 .authorizationUri(authorizationUri)
                 .tokenUri("https://example.com/token")
                 .build();
     }
 
     @Test
-    @DisplayName("github.com authorization host classifies as GITHUB")
-    void githubHostIsGithub() {
-        ClientRegistration reg = registration("https://github.com/login/oauth/authorize");
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg)).isEqualTo("GITHUB");
-        assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://github.com");
-    }
-
-    @Test
-    @DisplayName("self-hosted GitLab on a non-default port classifies as GITLAB and keeps the port in baseUrl")
+    @DisplayName("a self-hosted GitLab on a non-default port keeps the port in baseUrl")
     void selfHostedGitlabWithPort() {
         ClientRegistration reg = registration("https://gitlab.example.com:8443/oauth/authorize");
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg)).isEqualTo("GITLAB");
         assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://gitlab.example.com:8443");
     }
 
     @Test
-    @DisplayName("GitLab.com (default port) classifies as GITLAB with a port-less origin")
+    @DisplayName("GitLab.com (default port) has a port-less origin")
     void gitlabDotComDefaultPort() {
         ClientRegistration reg = registration("https://gitlab.com/oauth/authorize");
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg)).isEqualTo("GITLAB");
         assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://gitlab.com");
     }
 
     @Test
-    @DisplayName("slack.com authorization host classifies as SLACK")
-    void slackHostIsSlack() {
-        ClientRegistration reg = registration("https://slack.com/openid/connect/authorize");
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg)).isEqualTo("SLACK");
-        assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://slack.com");
-    }
-
-    @Test
-    @DisplayName("'github.com' appearing in a GitLab host's PATH does not misclassify as GITHUB (host, not substring)")
-    void githubComInPathStaysGitlab() {
-        ClientRegistration reg = registration("https://gitlab.internal/github.com/oauth/authorize");
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg)).isEqualTo("GITLAB");
-        assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEqualTo("https://gitlab.internal");
-    }
-
-    @Test
-    @DisplayName("the login_provider row's type is authoritative — an OUTLINE registration never host-sniffs to GITLAB")
-    void rowTypeWinsOverHostSniff() {
+    @DisplayName("the login_provider row's type is the only source — an Outline instance never reads as GitLab")
+    void rowTypeIsTheProviderType() {
         // A self-hosted Outline's /oauth/authorize is URL-shaped exactly like a GitLab's; only the row
         // type can classify it. Misclassifying as GITLAB would render a public login button for a
         // link-only provider (the SPA filters on providerType).
-        ClientRegistration reg = registration("https://wiki.example.com/oauth/authorize");
-        Map<String, LoginProvider.ProviderType> rows = Map.of("p", LoginProvider.ProviderType.OUTLINE);
+        var catalog = mock(IdentityProviderCatalog.class);
+        var providers = mock(LoginProviderService.class);
+        when(catalog.listRegistrations())
+                .thenReturn(List.of(registration("p", "https://wiki.example.com/oauth/authorize")));
+        when(providers.listEnabled()).thenReturn(List.of(provider("p", LoginProvider.ProviderType.OUTLINE)));
 
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg, rows::get))
-                .isEqualTo("OUTLINE");
-        // Sniff-only fallback (no row) keeps the legacy GITLAB classification.
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg, id -> null))
-                .isEqualTo("GITLAB");
+        var views = new IdentityProviderDiscoveryController(catalog, providers, mock(DevLoginService.class))
+                .list()
+                .getBody();
+
+        assertThat(views)
+                .extracting(IdentityProviderViewDTO::registrationId, IdentityProviderViewDTO::providerType)
+                .containsExactly(tuple("p", "OUTLINE"));
     }
 
     @Test
-    @DisplayName("a host-less (opaque) authorization URI falls back to GITLAB and an empty baseUrl")
-    void hostlessUriFallsBackToGitlabAndEmptyBaseUrl() {
-        // An opaque URI parses (no URISyntaxException) but has a null host — exercises the null-host fallback in
-        // both helpers without depending on the builder accepting a null authorizationUri.
+    @DisplayName("a registration without a configured provider is not listed")
+    void registrationWithoutProviderIsNotListed() {
+        var catalog = mock(IdentityProviderCatalog.class);
+        when(catalog.listRegistrations())
+                .thenReturn(List.of(registration("p", "https://github.com/login/oauth/authorize")));
+
+        var views = new IdentityProviderDiscoveryController(
+                        catalog, mock(LoginProviderService.class), mock(DevLoginService.class))
+                .list()
+                .getBody();
+
+        assertThat(views).isEmpty();
+    }
+
+    private static LoginProvider provider(String registrationId, LoginProvider.ProviderType type) {
+        var provider = new LoginProvider();
+        provider.setRegistrationId(registrationId);
+        provider.setType(type);
+        return provider;
+    }
+
+    @Test
+    @DisplayName("a host-less (opaque) authorization URI has an empty baseUrl")
+    void hostlessUriHasEmptyBaseUrl() {
+        // An opaque URI parses but has a null host, without depending on the builder accepting a null
+        // authorizationUri.
         ClientRegistration reg = registration("urn:example:authorize");
-        assertThat(IdentityProviderDiscoveryController.providerTypeOf(reg)).isEqualTo("GITLAB");
         assertThat(IdentityProviderDiscoveryController.baseUrlOf(reg)).isEmpty();
     }
 }
