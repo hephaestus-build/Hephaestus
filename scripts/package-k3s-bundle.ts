@@ -2,9 +2,11 @@
  * Packs the files of `deploy/platform/` into the one signed bundle of the one-host install,
  * `hephaestus-k3s-<version>.tar.gz`.
  *
- * The same files always give the same bytes: sorted names, one fixed modification time, owner 0:0,
- * mode 0755 for `*.sh` and 0644 for the rest, and a gzip header with no name and no time. The
- * release workflow signs the archive, so a rebuild from the same commit gives the signed bytes.
+ * The same files always give the same tar bytes: sorted names, one fixed modification time, owner
+ * 0:0, and mode 0755 for `*.sh` and 0644 for the rest. The gzip header has no name and no time, but
+ * the compressed bytes are reproducible only with the same Node.js, whose zlib compresses them.
+ * The bundle unpacks into the installer's state directory, so it holds only `k3s-*` and
+ * `hephaestus-*` files and cannot replace `site.yaml` or the kubeconfig there.
  * The job has Node.js only, so this script uses no dependency.
  *
  * Usage: node scripts/package-k3s-bundle.ts <output.tar.gz> <mtime-in-epoch-seconds> [directory]
@@ -31,6 +33,11 @@ export function readMembers(directory: string): BundleMember[] {
 		.map((entry) => {
 			if (!entry.isFile()) {
 				throw new Error(`${entry.name} is not a regular file; the bundle holds regular files only`);
+			}
+			if (!/^(?:k3s|hephaestus)-/u.test(entry.name)) {
+				throw new Error(
+					`${entry.name} has no k3s- or hephaestus- prefix, so it could replace installer state`,
+				);
 			}
 			return {
 				name: entry.name,

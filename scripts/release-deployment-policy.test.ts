@@ -252,6 +252,7 @@ await test("a release publishes one signed k3s bundle, and the smoke runs what o
 	// The smoke downloads the bundle, checks its signature, and unpacks it before the installer runs.
 	const smoke = readFileSync(".github/workflows/release-host-smoke.yml", "utf8");
 	assert.match(smoke, /bundle="hephaestus-k3s-\$\{TAG#v\}\.tar\.gz"/u);
+	assert.match(release, /gh attestation verify "\$k3s"/u);
 	assert.match(smoke, /cosign verify-blob --bundle "k3s-download\/\$bundle\.sigstore\.json"/u);
 	assert.match(smoke, /tar -xzf "k3s-download\/\$bundle" -C k3s-assets/u);
 	assert.doesNotMatch(smoke, /--pattern 'k3s-\*'/u);

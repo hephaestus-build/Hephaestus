@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { gunzipSync } from "node:zlib";
 
-import { packBundle } from "./package-k3s-bundle.ts";
+import { packBundle, readMembers, tar } from "./package-k3s-bundle.ts";
 
 const MTIME = 1_700_000_000;
 
@@ -32,6 +33,28 @@ void test("two builds of the same files are byte-identical, with a fixed header"
 	// Magic, deflate, no flags (so no name), a time of 0.
 	assert.deepEqual([...first.subarray(0, 8)], [0x1f, 0x8b, 8, 0, 0, 0, 0, 0]);
 	assert.notDeepEqual(packBundle(directory, MTIME + 1), first);
+});
+
+void test("the tar bytes of fixed files are the same on every host", (t) => {
+	const directory = platform();
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	// The compressed bytes follow the zlib of the Node.js that packs them; the tar bytes do not.
+	assert.equal(
+		createHash("sha256")
+			.update(tar(readMembers(directory), MTIME))
+			.digest("hex"),
+		"60d0aba271af6870a046bedc8fc9b8e4cebd39359f6fe58dde301094840d9c1f",
+	);
+});
+
+void test("a file without a k3s- or hephaestus- prefix stops the build", (t) => {
+	const directory = platform();
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	writeFileSync(path.join(directory, "site.yaml"), "host: example.org\n");
+	assert.throws(
+		() => packBundle(directory, MTIME),
+		/site\.yaml has no k3s- or hephaestus- prefix/u,
+	);
 });
 
 void test("the members are sorted, owned by 0:0 and have fixed modes and times", (t) => {

@@ -165,10 +165,15 @@ The k3s smoke runs only at a release, or by a dispatch of `release-host-smoke.ym
 A change to `deploy/platform/` runs the k3d jobs of `ci-kubernetes.yml` in pull requests, not the k3s smoke.
 
 The release job packs the files of `deploy/platform/`, `k3s-install.sh` included, into one bundle, `hephaestus-k3s-<version>.tar.gz`, with `scripts/package-k3s-bundle.ts`.
-The same files and commit time give the same bytes.
+The same files and commit time give the same tar bytes.
+The compressed bytes also depend on the zlib of the Node.js that packs them.
 It signs the bundle, attests it with the release, and uploads it and its signature beside the release locks.
 A release has no other k3s asset.
-A new file in `deploy/platform/` joins the bundle with no change to the workflow.
+
+A new `k3s-*` or `hephaestus-*` file in `deploy/platform/` joins the bundle with no change to the workflow.
+The packer refuses any other name, because the bundle unpacks into the installer's state directory.
+A dispatch of `release-host-smoke.yml` needs a release that has the bundle.
+Releases before the bundle cannot be smoked again that way.
 
 `deploy/platform/k3s-platform.yaml` holds every platform pin: k3s, Traefik, and cert-manager.
 k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.

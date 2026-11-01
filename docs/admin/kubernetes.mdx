@@ -890,20 +890,17 @@ If your network cannot reach its own public address, the DNS check fails. Then r
    curl -fsSLO "$release/hephaestus-k3s-$VERSION.tar.gz.sigstore.json"
    ```
 
-3. Verify the signature. Cosign stops with an error if the bundle does not come from the release workflow:
+3. Verify the signature, then unpack the bundle. Cosign stops with an error if the bundle does not come from the release workflow, and then `tar` does not run:
 
    ```bash
    cosign verify-blob --bundle "hephaestus-k3s-$VERSION.tar.gz.sigstore.json" \
      --certificate-identity https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-     "hephaestus-k3s-$VERSION.tar.gz"
+     "hephaestus-k3s-$VERSION.tar.gz" &&
+     tar xzf "hephaestus-k3s-$VERSION.tar.gz"
    ```
 
-4. Unpack the bundle. Do not run any file before the verification passes:
-
-   ```bash
-   tar xzf "hephaestus-k3s-$VERSION.tar.gz"
-   ```
+   Do not run any file of the bundle before this step succeeds.
 
 ### 2. Run the installer
 

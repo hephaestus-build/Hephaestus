@@ -319,7 +319,7 @@ jobs:
 
       # The files of the one-host install, its installer included, as the released commit has them,
       # in the one bundle that operators verify and unpack. Its file time is the commit's, so a
-      # rebuild gives the same bytes.
+      # rebuild gives the same tar bytes (scripts/package-k3s-bundle.ts).
       - name: Build the k3s bundle
         id: k3s
         env:
@@ -592,6 +592,10 @@ jobs:
           cosign verify-blob --bundle "$k3s.sigstore.json" \
             --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' "$k3s" >/dev/null
+          gh attestation verify "$k3s" \
+            --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
+            --predicate-type https://in-toto.io/attestation/release/v0.1 \
+            --repo "${{ github.repository }}"
 
       - name: Publish immutable release
         env:
