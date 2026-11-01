@@ -337,6 +337,10 @@ export type AiChoiceRequest = {
     choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
 
+export type AllowPublic = {
+    allowPublic: boolean;
+};
+
 export type AppliesWhen = {
     anyOf: Array<AppliesWhenClause>;
     otherwise: string;
@@ -1261,6 +1265,11 @@ export type DutyBasis = Omit<ClaimBasis, 'type'> & {
     type: 'DutyBasis';
 };
 
+export type EditProductFeedbackDraft = {
+    description: string;
+    title: string;
+};
+
 export type EmailTestRequest = {
     /**
      * the mailbox to send the test email to; blank means the caller's own verified address
@@ -1451,10 +1460,24 @@ export type FeedbackModeRollup = {
     off: number;
 };
 
+export type FeedbackReceipt = {
+    /**
+     * when a held public report is filed, unless the person keeps it private first
+     */
+    filedAfter?: string;
+    id: string;
+    /**
+     * where the report is going now; it can still change while the state is DRAFTING or HELD
+     */
+    route: 'PUBLIC' | 'PRIVATE' | 'EMAIL';
+    state: 'SENT_TO_ADMINS' | 'DRAFTING' | 'HELD' | 'FILING' | 'FILED' | 'STOPPED';
+};
+
 export type FeedbackRequest = {
     kind: 'IDEA' | 'BUG' | 'FEEDBACK';
     message: string;
     pagePath?: string;
+    share?: boolean;
     userAgent?: string;
 };
 
@@ -2763,6 +2786,49 @@ export type MovePracticeRequest = {
     position: number;
 };
 
+/**
+ * One of the person's own reports.
+ */
+export type MyProductFeedback = {
+    allowPublic: boolean;
+    canAllowPublic: boolean;
+    canEdit: boolean;
+    canKeepPrivate: boolean;
+    canMakePrivate: boolean;
+    createdAt: string;
+    /**
+     * the drafted main text the person can edit while the report is held
+     */
+    draftDescription?: string;
+    /**
+     * the drafted title, while the report is held or once it is filed
+     */
+    draftTitle?: string;
+    excerpt: string;
+    filedAfter?: string;
+    id: string;
+    /**
+     * <code>completed</code>, <code>not_planned</code> or <code>duplicate</code> once the issue is closed
+     */
+    issueClosedAs?: string;
+    issueNumber?: number;
+    /**
+     * the public issue; null for a private issue, which the person cannot open
+     */
+    issueUrl?: string;
+    kind: 'IDEA' | 'BUG' | 'FEEDBACK';
+    /**
+     * why the report is not public, in words; null for a public one
+     */
+    reason?: string;
+    /**
+     * what redaction removed, in words
+     */
+    removed?: string;
+    route: 'PUBLIC' | 'PRIVATE' | 'EMAIL';
+    state: 'SENT_TO_ADMINS' | 'DRAFTING' | 'HELD' | 'FILING' | 'FILED' | 'STOPPED';
+};
+
 export type NotReviewedScanReportItem = {
     item: ItemRef;
     itemVersion: string;
@@ -2784,6 +2850,7 @@ export type NotificationPreferences = {
     emailAvailable: boolean;
     etag: string;
     productFeedback: boolean;
+    productFeedbackUpdates: boolean;
     /**
      * The weekly digest is on
      */
@@ -3866,6 +3933,76 @@ export type ProblemSummary = {
     id: string;
     severity: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'TRIVIAL';
     summary: string;
+};
+
+/**
+ * The instance's product feedback destinations and their health.
+ */
+export type ProductFeedbackDestinations = {
+    dailyDraftLimit: number;
+    /**
+     * drafts made since midnight UTC, against <code>dailyDraftLimit</code>
+     */
+    draftsToday: number;
+    lastFiledAt?: string;
+    /**
+     * the instance model that drafts issues, or null for none (reports then go private undrafted)
+     */
+    llmModelId?: number;
+    needsAction: number;
+    noticeVersion: number;
+    /**
+     * the oldest report not yet on GitHub or in the admin email
+     */
+    oldestWaitingSince?: string;
+    paused: boolean;
+    privateCheck: 'UNSET' | 'INSTALLED' | 'MISSING' | 'NOT_PRIVATE' | 'NOT_PUBLIC' | 'DIFFERENT_OWNER';
+    privateRepository?: string;
+    publicCheck: 'UNSET' | 'INSTALLED' | 'MISSING' | 'NOT_PRIVATE' | 'NOT_PUBLIC' | 'DIFFERENT_OWNER';
+    publicRepository?: string;
+    snapshotAt?: string;
+};
+
+/**
+ * A report that failed to file and waits for an admin.
+ */
+export type ProductFeedbackNeedsAction = {
+    createdAt: string;
+    id: string;
+    kind: 'IDEA' | 'BUG' | 'FEEDBACK';
+    reason: string;
+    repository?: string;
+    route: 'PUBLIC' | 'PRIVATE' | 'EMAIL';
+    stoppedAt: string;
+};
+
+export type ProductFeedbackNeedsActionList = {
+    items: Array<ProductFeedbackNeedsAction>;
+};
+
+/**
+ * The person's sharing choice for public issues.
+ */
+export type ProductFeedbackSharing = {
+    /**
+     * the remembered choice, or null when the person has not chosen for the current notice
+     */
+    allowPublic?: boolean;
+    decidedAt?: string;
+    /**
+     * reports become GitHub issues on this instance, public or private
+     */
+    filesToGitHub: boolean;
+    /**
+     * the person's GitHub login, for the mention; null when the account has no GitHub sign-in
+     */
+    githubLogin?: string;
+    mention: boolean;
+    /**
+     * <code>owner/name</code> of the public repository, or null when the instance has none and the
+     * choice is not asked
+     */
+    publicRepository?: string;
 };
 
 export type ProfileChange = {
@@ -5867,6 +6004,10 @@ export type UpdateLoginProviderRequest = {
 export type UpdateNotificationPreferences = {
     productFeedback: boolean;
     /**
+     * Updates on your own product feedback. On by default. Absent keeps the saved choice.
+     */
+    productFeedbackUpdates?: boolean;
+    /**
      * The weekly digest in your Hephaestus conversation, with one note in Slack or email that it is ready. Absent keeps the saved choice.
      */
     weeklyDigest?: boolean;
@@ -5930,6 +6071,23 @@ export type UpdatePracticeReviewSettingsRequest = {
      * Replaces repository and person coverage wholesale. Null leaves it unchanged.
      */
     reviewScope?: WorkspaceReviewScope;
+};
+
+export type UpdateProductFeedbackDestinations = {
+    dailyDraftLimit: number;
+    llmModelId?: number;
+    /**
+     * true to raise the notice version, so that every person chooses again
+     */
+    newNoticeVersion: boolean;
+    paused: boolean;
+    privateRepository?: string;
+    publicRepository?: string;
+};
+
+export type UpdateProductFeedbackSharing = {
+    allowPublic: boolean;
+    mention: boolean;
 };
 
 export type UpdateReviewBatchStatusRequest = {
@@ -7030,7 +7188,7 @@ export type AdminListAuthEventsData = {
         size?: number;
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: string;
         to?: string;
@@ -7053,7 +7211,7 @@ export type AdminExportAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: string;
         to?: string;
@@ -8216,6 +8374,54 @@ export type AdminListProductFeedbackResponses = {
 
 export type AdminListProductFeedbackResponse = AdminListProductFeedbackResponses[keyof AdminListProductFeedbackResponses];
 
+export type GetProductFeedbackDestinationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/product-feedback/destinations';
+};
+
+export type GetProductFeedbackDestinationsResponses = {
+    /**
+     * OK
+     */
+    200: ProductFeedbackDestinations;
+};
+
+export type GetProductFeedbackDestinationsResponse = GetProductFeedbackDestinationsResponses[keyof GetProductFeedbackDestinationsResponses];
+
+export type UpdateProductFeedbackDestinationsData = {
+    body: UpdateProductFeedbackDestinations;
+    path?: never;
+    query?: never;
+    url: '/admin/product-feedback/destinations';
+};
+
+export type UpdateProductFeedbackDestinationsResponses = {
+    /**
+     * OK
+     */
+    200: ProductFeedbackDestinations;
+};
+
+export type UpdateProductFeedbackDestinationsResponse = UpdateProductFeedbackDestinationsResponses[keyof UpdateProductFeedbackDestinationsResponses];
+
+export type ListProductFeedbackNeedsActionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/product-feedback/needs-action';
+};
+
+export type ListProductFeedbackNeedsActionResponses = {
+    /**
+     * OK
+     */
+    200: ProductFeedbackNeedsActionList;
+};
+
+export type ListProductFeedbackNeedsActionResponse = ListProductFeedbackNeedsActionResponses[keyof ListProductFeedbackNeedsActionResponses];
+
 export type AdminTriageProductFeedbackData = {
     body: FeedbackTriage;
     path: {
@@ -8233,6 +8439,22 @@ export type AdminTriageProductFeedbackResponses = {
 };
 
 export type AdminTriageProductFeedbackResponse = AdminTriageProductFeedbackResponses[keyof AdminTriageProductFeedbackResponses];
+
+export type RetryProductFeedbackFilingData = {
+    body?: never;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/admin/product-feedback/{feedbackId}/retry';
+};
+
+export type RetryProductFeedbackFilingResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
 
 export type AdminGetReleaseData = {
     body?: never;
@@ -8808,8 +9030,148 @@ export type SubmitInstanceProductFeedbackResponses = {
     /**
      * OK
      */
-    200: unknown;
+    200: FeedbackReceipt;
 };
+
+export type SubmitInstanceProductFeedbackResponse = SubmitInstanceProductFeedbackResponses[keyof SubmitInstanceProductFeedbackResponses];
+
+export type ListMyProductFeedbackData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/product-feedback/mine';
+};
+
+export type ListMyProductFeedbackResponses = {
+    /**
+     * OK
+     */
+    200: Array<MyProductFeedback>;
+};
+
+export type ListMyProductFeedbackResponse = ListMyProductFeedbackResponses[keyof ListMyProductFeedbackResponses];
+
+export type GetProductFeedbackSharingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/product-feedback/sharing';
+};
+
+export type GetProductFeedbackSharingResponses = {
+    /**
+     * OK
+     */
+    200: ProductFeedbackSharing;
+};
+
+export type GetProductFeedbackSharingResponse = GetProductFeedbackSharingResponses[keyof GetProductFeedbackSharingResponses];
+
+export type UpdateProductFeedbackSharingData = {
+    body: UpdateProductFeedbackSharing;
+    path?: never;
+    query?: never;
+    url: '/product-feedback/sharing';
+};
+
+export type UpdateProductFeedbackSharingResponses = {
+    /**
+     * OK
+     */
+    200: ProductFeedbackSharing;
+};
+
+export type UpdateProductFeedbackSharingResponse = UpdateProductFeedbackSharingResponses[keyof UpdateProductFeedbackSharingResponses];
+
+export type GetMyProductFeedbackData = {
+    body?: never;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/product-feedback/{feedbackId}';
+};
+
+export type GetMyProductFeedbackResponses = {
+    /**
+     * OK
+     */
+    200: MyProductFeedback;
+};
+
+export type GetMyProductFeedbackResponse = GetMyProductFeedbackResponses[keyof GetMyProductFeedbackResponses];
+
+export type AllowMyProductFeedbackPublicData = {
+    body: AllowPublic;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/product-feedback/{feedbackId}/allow-public';
+};
+
+export type AllowMyProductFeedbackPublicResponses = {
+    /**
+     * OK
+     */
+    200: MyProductFeedback;
+};
+
+export type AllowMyProductFeedbackPublicResponse = AllowMyProductFeedbackPublicResponses[keyof AllowMyProductFeedbackPublicResponses];
+
+export type EditMyProductFeedbackDraftData = {
+    body: EditProductFeedbackDraft;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/product-feedback/{feedbackId}/draft';
+};
+
+export type EditMyProductFeedbackDraftResponses = {
+    /**
+     * OK
+     */
+    200: MyProductFeedback;
+};
+
+export type EditMyProductFeedbackDraftResponse = EditMyProductFeedbackDraftResponses[keyof EditMyProductFeedbackDraftResponses];
+
+export type KeepMyProductFeedbackPrivateData = {
+    body?: never;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/product-feedback/{feedbackId}/keep-private';
+};
+
+export type KeepMyProductFeedbackPrivateResponses = {
+    /**
+     * OK
+     */
+    200: MyProductFeedback;
+};
+
+export type KeepMyProductFeedbackPrivateResponse = KeepMyProductFeedbackPrivateResponses[keyof KeepMyProductFeedbackPrivateResponses];
+
+export type MakeMyProductFeedbackPrivateData = {
+    body?: never;
+    path: {
+        feedbackId: string;
+    };
+    query?: never;
+    url: '/product-feedback/{feedbackId}/make-private';
+};
+
+export type MakeMyProductFeedbackPrivateResponses = {
+    /**
+     * OK
+     */
+    200: MyProductFeedback;
+};
+
+export type MakeMyProductFeedbackPrivateResponse = MakeMyProductFeedbackPrivateResponses[keyof MakeMyProductFeedbackPrivateResponses];
 
 export type GetPublicActivityData = {
     body?: never;
@@ -14282,8 +14644,10 @@ export type SubmitWorkspaceProductFeedbackResponses = {
     /**
      * OK
      */
-    200: unknown;
+    200: FeedbackReceipt;
 };
+
+export type SubmitWorkspaceProductFeedbackResponse = SubmitWorkspaceProductFeedbackResponses[keyof SubmitWorkspaceProductFeedbackResponses];
 
 export type GetWorkspacePublicActivitySettingsData = {
     body?: never;

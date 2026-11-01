@@ -236,6 +236,10 @@ export const zAiChoiceRequest = z.object({
     ])
 });
 
+export const zAllowPublic = z.object({
+    allowPublic: z.boolean()
+});
+
 export const zAppliesWhenClause = z.object({
     changedPath: z.array(z.string()).optional(),
     diffContains: z.array(z.string()).optional(),
@@ -1008,6 +1012,11 @@ export const zDutyBasis = zClaimBasis.and(z.object({
     type: z.literal('DutyBasis')
 }));
 
+export const zEditProductFeedbackDraft = z.object({
+    description: z.string().min(0).max(2000),
+    title: z.string().min(0).max(80)
+});
+
 export const zEmailTestRequest = z.object({
     to: z.email().min(0).max(254).optional()
 });
@@ -1276,6 +1285,24 @@ export const zFeedbackModeRollup = z.object({
     off: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
+export const zFeedbackReceipt = z.object({
+    filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    id: z.uuid(),
+    route: z.enum([
+        'PUBLIC',
+        'PRIVATE',
+        'EMAIL'
+    ]),
+    state: z.enum([
+        'SENT_TO_ADMINS',
+        'DRAFTING',
+        'HELD',
+        'FILING',
+        'FILED',
+        'STOPPED'
+    ])
+});
+
 export const zFeedbackRequest = z.object({
     kind: z.enum([
         'IDEA',
@@ -1283,7 +1310,8 @@ export const zFeedbackRequest = z.object({
         'FEEDBACK'
     ]),
     message: z.string().min(0).max(5000),
-    pagePath: z.string().min(0).max(500).regex(/\/(?!\/)[^?#\p{Cc}]*/u).optional(),
+    pagePath: z.string().min(0).max(500).regex(/\/|(\/(?:[a-z0-9][a-z0-9-]*|\$[A-Za-z]*))+/).optional(),
+    share: z.boolean().optional(),
     userAgent: z.string().min(0).max(500).regex(/[^\p{Cc}]*/u).optional()
 });
 
@@ -2248,11 +2276,52 @@ export const zMovePracticeRequest = z.object({
     position: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
+/**
+ * One of the person's own reports.
+ */
+export const zMyProductFeedback = z.object({
+    allowPublic: z.boolean(),
+    canAllowPublic: z.boolean(),
+    canEdit: z.boolean(),
+    canKeepPrivate: z.boolean(),
+    canMakePrivate: z.boolean(),
+    createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    draftDescription: z.string().optional(),
+    draftTitle: z.string().optional(),
+    excerpt: z.string(),
+    filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    id: z.uuid(),
+    issueClosedAs: z.string().optional(),
+    issueNumber: z.int().optional(),
+    issueUrl: z.string().optional(),
+    kind: z.enum([
+        'IDEA',
+        'BUG',
+        'FEEDBACK'
+    ]),
+    reason: z.string().optional(),
+    removed: z.string().optional(),
+    route: z.enum([
+        'PUBLIC',
+        'PRIVATE',
+        'EMAIL'
+    ]),
+    state: z.enum([
+        'SENT_TO_ADMINS',
+        'DRAFTING',
+        'HELD',
+        'FILING',
+        'FILED',
+        'STOPPED'
+    ])
+});
+
 export const zNotificationPreferences = z.object({
     deliveryConfigured: z.boolean(),
     emailAvailable: z.boolean(),
     etag: z.string(),
     productFeedback: z.boolean(),
+    productFeedbackUpdates: z.boolean(),
     weeklyDigest: z.boolean(),
     weeklyDigestAvailable: z.boolean(),
     workspaceAlerts: z.boolean()
@@ -2720,6 +2789,76 @@ export const zProblemSummary = z.object({
         'TRIVIAL'
     ]),
     summary: z.string()
+});
+
+/**
+ * The instance's product feedback destinations and their health.
+ */
+export const zProductFeedbackDestinations = z.object({
+    dailyDraftLimit: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    draftsToday: z.int(),
+    lastFiledAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    llmModelId: z.int().optional(),
+    needsAction: z.int(),
+    noticeVersion: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    oldestWaitingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    paused: z.boolean(),
+    privateCheck: z.enum([
+        'UNSET',
+        'INSTALLED',
+        'MISSING',
+        'NOT_PRIVATE',
+        'NOT_PUBLIC',
+        'DIFFERENT_OWNER'
+    ]),
+    privateRepository: z.string().optional(),
+    publicCheck: z.enum([
+        'UNSET',
+        'INSTALLED',
+        'MISSING',
+        'NOT_PRIVATE',
+        'NOT_PUBLIC',
+        'DIFFERENT_OWNER'
+    ]),
+    publicRepository: z.string().optional(),
+    snapshotAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
+});
+
+/**
+ * A report that failed to file and waits for an admin.
+ */
+export const zProductFeedbackNeedsAction = z.object({
+    createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    id: z.uuid(),
+    kind: z.enum([
+        'IDEA',
+        'BUG',
+        'FEEDBACK'
+    ]),
+    reason: z.string(),
+    repository: z.string().optional(),
+    route: z.enum([
+        'PUBLIC',
+        'PRIVATE',
+        'EMAIL'
+    ]),
+    stoppedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
+});
+
+export const zProductFeedbackNeedsActionList = z.object({
+    items: z.array(zProductFeedbackNeedsAction)
+});
+
+/**
+ * The person's sharing choice for public issues.
+ */
+export const zProductFeedbackSharing = z.object({
+    allowPublic: z.boolean().optional(),
+    decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    filesToGitHub: z.boolean(),
+    githubLogin: z.string().optional(),
+    mention: z.boolean(),
+    publicRepository: z.string().optional()
 });
 
 export const zProfileChange = z.object({
@@ -5455,6 +5594,7 @@ export const zUpdateLoginProviderRequest = z.object({
 
 export const zUpdateNotificationPreferences = z.object({
     productFeedback: z.boolean(),
+    productFeedbackUpdates: z.boolean().optional(),
     weeklyDigest: z.boolean().optional(),
     workspaceAlerts: z.boolean()
 });
@@ -5477,6 +5617,20 @@ export const zUpdatePracticeGroupRequest = z.object({
 export const zUpdatePracticeRequest = z.object({
     definition: zPracticeDefinitionInput,
     expectedVersionId: z.string().regex(/[1-9][0-9]*/)
+});
+
+export const zUpdateProductFeedbackDestinations = z.object({
+    dailyDraftLimit: z.int().gte(0).lte(1000),
+    llmModelId: z.int().optional(),
+    newNoticeVersion: z.boolean(),
+    paused: z.boolean(),
+    privateRepository: z.string().min(0).max(200).regex(/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/).optional(),
+    publicRepository: z.string().min(0).max(200).regex(/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/).optional()
+});
+
+export const zUpdateProductFeedbackSharing = z.object({
+    allowPublic: z.boolean(),
+    mention: z.boolean()
 });
 
 export const zUpdateReviewBatchStatusRequest = z.object({

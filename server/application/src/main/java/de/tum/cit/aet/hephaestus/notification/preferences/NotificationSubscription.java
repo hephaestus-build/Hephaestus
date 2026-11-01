@@ -53,6 +53,9 @@ class NotificationSubscription {
     NotificationSubscription(long accountId, NotificationSubscriptionKind kind) {
         this.accountId = accountId;
         this.kind = kind;
+        if (kind.enabledByDefault()) {
+            setEnabled(true, Instant.EPOCH);
+        }
     }
 
     void setEnabled(boolean enabled, Instant now) {

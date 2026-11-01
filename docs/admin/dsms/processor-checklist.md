@@ -13,13 +13,30 @@ Fill in the recipient record below for each recipient before you enable it.
 | Reverse proxy or Gateway, ACME endpoint, DNS provider | TLS traffic and domain-validation data | A DNS-only record carries no request data. A proxied record or CDN makes its provider a recipient of request data. |
 | GitHub, a GitLab instance | Sign-in identities and the source system's data | Assess whether the provider processes on your instructions or is a separate controller of its own service. |
 | Model providers configured for a workspace | Prompts and responses for practice review and Hephaestus, where the AI choice allows them | An external provider processes on your instructions and needs an agreement. An in-house model on your infrastructure does not. |
+| Instance-level model provider for product feedback | Code-redacted report text and public issue titles to draft an issue. Redaction can miss personal data | An external provider acts as a processor for drafts and needs an Art. 28 agreement. Check its location, retention, training terms, and subprocessors separately. |
+| GitHub product feedback destinations, public and private | Rendered issues. Private issues have a report number. Public issues can have an opted-in GitHub mention | Name GitHub as a recipient. Assess processor and independent-controller purposes under the actual agreement. Public readers can keep copies. |
 | Slack | App delivery, identity linking, Hephaestus messages and monitored-channel events | Assess when a workspace enables it. |
 | An Outline instance | Selected documents and optional sign-in linking | Classify the exact origin: your infrastructure, a processor, or a separate controller. |
 | SMTP relay | Recipient addresses, notification type and links | Record the relay operator, hosting, retention terms and role before you enable email. |
 | Log store, trace collector | Container logs and traces | See [Optional log collection and monitoring](#optional-log-collection-and-monitoring). |
 
-First-party product feedback submissions remain inside the instance PostgreSQL database.
+Product feedback stays on the instance until the operator names a repository.
+Configured filing sends report text through the instance model provider and to GitHub after code redaction.
+Private filing also needs this recipient assessment.
+Complete the [product feedback legal steps](../legal-pages.mdx#product-feedback-on-github) before activation.
 The webapp and the server include no error-reporting service.
+
+### Product feedback stores
+
+The [personal-data map](./personal-data-map.md) owns export, erasure, and retention for these stores.
+Include their data flows in the recipient record before you enable a destination.
+
+| Store | Data relevant to recipient assessment |
+| --- | --- |
+| `product_feedback_filing` | Draft text can reach the instance model provider. Rendered issue text reaches the named GitHub repository. |
+| `product_feedback_consent` | Account choices, withdrawals, notice versions, and times stay in the instance as publication evidence. |
+| `product_feedback_cleanup` | Minimal locators and reconciliation facts support external cleanup after source deletion. No report text or account identity remains here. |
+| `product_feedback_destination` | Instance-wide repositories, installations, model, limit, and pause state determine the recipients. |
 
 ## Evidence required before engagement
 
@@ -84,6 +101,7 @@ A release of a dataset that is not anonymized needs a separate choice and a new 
 Amend this record, your Art. 30 record, and the privacy statement before deploying any of the following:
 
 - A new model provider.
+- A product feedback destination or drafting provider is enabled or changed. Complete its legal notice and recipient assessment first.
 - A new identity provider.
 - Enabling Outline for a new origin or changing its operator, hosting region, or contractual role.
 - SMTP email delivery becomes active. The chosen SMTP host becomes a recipient of personal data. An external relay needs an Art. 28 DPA.

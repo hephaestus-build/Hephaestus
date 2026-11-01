@@ -349,6 +349,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 - **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated practice results.
 - **Server logs** — IP address and request metadata.
 - **Page experience** — if you turn it on, read [Page experience](#page-experience) first.
+- **Product feedback** — before you name a repository, complete [Product feedback on GitHub](#product-feedback-on-github).
 - **Log collection** — you can ship container logs to a log store such as Loki ([Collecting logs](./observability.mdx#collecting-logs)).
   Name the store's operator and retention in the notice.
   Hephaestus ships no error telemetry service.
@@ -434,6 +435,96 @@ leave the page, it sends the new timings to [example.org]. They are counted with
 workspace or page address, and no copy of the report is kept. Like every request, the report reaches
 the server with your IP address and browser information, which the server logs keep for
 [retention]. Purpose: [purpose]. Legal basis: [legal basis].
+```
+
+### Product feedback on GitHub
+
+Product feedback stays on your instance by default.
+When you name a repository under **Product feedback → Destinations** in the instance admin console, product feedback leaves your instance:
+
+- **To your model provider for a draft.** Your instance-level model drafts an issue from each report.
+  Hephaestus removes the email addresses, secrets, and known names that it finds before the text reaches the provider.
+- **To GitHub, in your private repository.** Reports that stay private become issues there.
+  GitHub stores them under your organization’s agreement with GitHub.
+- **To GitHub, in your public repository, only with the person’s choice.** Anyone can read these issues.
+  Copies outside GitHub can remain after removal.
+
+Redaction lowers the risk, but it cannot remove it.
+A report can still contain personal data that Hephaestus did not find.
+
+Before you name a private repository:
+
+1. Determine a lawful basis for drafts and private issues with your data-protection adviser.
+   Neither self-hosting nor a person’s report supplies one automatically.
+   Art. 6(1)(f) GDPR does not apply to public authorities in the performance of their tasks.
+2. Check GitHub’s role under your organization’s agreement.
+   GitHub’s data protection agreement makes GitHub a processor for some processing and an independent controller for other processing.
+   Name GitHub as a recipient in the notice.
+3. Check your model provider’s agreement under Art. 28 GDPR.
+   Check the location of the processing.
+   Check whether the provider uses inputs for training.
+4. For each transfer outside the EU or EEA, document the Chapter V safeguard for the actual recipient and service.
+5. Add the [drafting and private filing notice](#drafting-and-private-filing-notice) to your privacy notice.
+6. Set the notice version on **Product feedback** in the instance admin console.
+   A new notice version makes every person choose again.
+
+Before you name a public repository, also:
+
+1. Decide whether consent is the right basis for publication.
+   If your users report to you as students or employees, assess whether their choice is free.
+   The EDPB guidelines on consent (05/2020, § 3.1.1) presume an imbalance for public authorities and employers.
+   Consent is valid only when a private report costs the person nothing.
+   In Hephaestus, a private report reaches the same maintainers.
+2. Add the [public issues notice](#public-issues-notice) to your privacy notice.
+3. Check the first-report choice in a staging instance.
+
+The question is **Can this become a public GitHub issue?**
+Its options are **Yes, share it publicly** and **No, keep it private**, with neither selected.
+The dialog names the model provider and explains redaction limits and public copies.
+The [user guide](/user/product-feedback#choose-public-or-private) describes the choice and its withdrawal.
+
+Hephaestus records each choice and each withdrawal as an event with the notice version and time (Art. 7(1) GDPR).
+It does not decide the legal basis for you.
+Replace the placeholders in both templates with your deployment’s actual recipients, agreements, legal bases, and retention.
+
+#### Drafting and private filing notice
+
+```md
+### Product feedback
+
+When you send product feedback about Hephaestus, we store it on [example.org] and use it to improve
+Hephaestus. An AI model from [model provider] turns your report into a short issue. Before your
+text goes to [model provider], Hephaestus removes the email addresses, secrets and names it finds.
+It can miss some, so leave out other people's personal details.
+
+If you keep a report private, it becomes an issue in a private GitHub repository that only the
+[maintainers / team name] can read. The issue doesn't carry your name or email address. It
+carries a report number, so that our administrators can contact you if they need to.
+
+Recipients: [model provider] ([role, location, transfer basis]) and GitHub, Inc.
+([role under our agreement, transfer basis]). Purpose: handling and fixing product feedback.
+Legal basis: [legal basis]. We keep your report in Hephaestus until you delete your account
+[or: retention]. Issues stay in the repository until the maintainers delete them. When you delete
+your account, Hephaestus removes your text from those issues.
+```
+
+#### Public issues notice
+
+```md
+### Public issues from product feedback
+
+The first time you send product feedback, you choose whether your reports may become public
+GitHub issues in [owner/repository]. You can change this for each report, and at any time in your
+settings. If you allow it, a report becomes public only when Hephaestus finds no security problem,
+no secrets, no email addresses and no names of people in it. Anything else stays private.
+
+A public issue doesn't carry your name, unless you choose to have your GitHub account mentioned.
+Anyone can read a public issue. Before it's filed, you have 5 minutes to keep it private. After
+that, you can make it private from Your product feedback: we then move it to our private
+repository. Copies made outside GitHub while it was public can remain, and we can't remove them.
+
+Legal basis: your consent (Art. 6(1)(a) GDPR). You can withdraw it at any time in your settings.
+Withdrawing doesn't affect issues that are already public. You can make each of them private.
 ```
 
 ### Workspace addresses

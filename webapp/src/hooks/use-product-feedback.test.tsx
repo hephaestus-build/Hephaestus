@@ -4,8 +4,16 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { FeedbackReceipt } from "@/api/types.gen";
+import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { useSubmitProductFeedback } from "./use-product-feedback";
+
+const RECEIPT = {
+	id: "a1a1a1a1-0000-0000-0000-000000000001",
+	route: "EMAIL",
+	state: "SENT_TO_ADMINS",
+} satisfies Wire<FeedbackReceipt>;
 
 function setup() {
 	const client = new QueryClient({
@@ -27,7 +35,7 @@ describe("product feedback wire contract", () => {
 		server.use(
 			http.post("*/product-feedback", async ({ request }) => {
 				received = await request.json();
-				return new HttpResponse(null, { status: 202 });
+				return HttpResponse.json(RECEIPT);
 			}),
 		);
 		const { wrapper } = setup();
@@ -64,7 +72,7 @@ describe("product feedback wire contract", () => {
 		server.use(
 			http.post("*/product-feedback", () => {
 				requests += 1;
-				return new HttpResponse(null, { status: 202 });
+				return HttpResponse.json(RECEIPT);
 			}),
 		);
 		const { wrapper } = setup();

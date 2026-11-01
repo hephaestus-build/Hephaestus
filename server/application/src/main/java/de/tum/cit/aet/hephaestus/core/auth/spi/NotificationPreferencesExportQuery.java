@@ -4,5 +4,6 @@ package de.tum.cit.aet.hephaestus.core.auth.spi;
 public interface NotificationPreferencesExportQuery {
     Preferences preferences(long accountId);
 
-    record Preferences(boolean productFeedback, boolean workspaceAlerts, boolean weeklyDigest) {}
+    record Preferences(
+            boolean productFeedback, boolean workspaceAlerts, boolean weeklyDigest, boolean productFeedbackUpdates) {}
 }

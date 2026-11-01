@@ -36,7 +36,13 @@ public class NotificationSubscriptionService {
         return subscriptions
                 .findByAccountIdAndKind(accountId, kind)
                 .map(NotificationSubscription::isEnabled)
-                .orElse(false);
+                .orElse(kind.enabledByDefault());
+    }
+
+    @Transactional
+    public boolean prepareProductFeedbackUpdates(long accountId) {
+        subscriptions.insertDefaultProductFeedbackUpdates(accountId);
+        return isEnabled(accountId, NotificationSubscriptionKind.PRODUCT_FEEDBACK_UPDATES);
     }
 
     public List<Long> subscribedAccountIds(NotificationSubscriptionKind kind) {
@@ -100,13 +106,14 @@ public class NotificationSubscriptionService {
                     "The notification preferences changed. Reload them before you save.");
         }
         for (NotificationSubscriptionKind kind : NotificationSubscriptionKind.values()) {
+            boolean requested = requested(update, rows, kind);
             NotificationSubscription row =
                     rows.stream().filter(s -> s.getKind() == kind).findFirst().orElse(null);
             if (row == null) {
                 row = new NotificationSubscription(accountId, kind);
                 rows.add(row);
             }
-            row.setEnabled(requested(update, rows, kind), clock.instant());
+            row.setEnabled(requested, clock.instant());
         }
         subscriptions.saveAllAndFlush(rows);
         return view(accountId, rows);
@@ -120,7 +127,8 @@ public class NotificationSubscriptionService {
                 enabled(rows, NotificationSubscriptionKind.WORKSPACE_ALERTS),
                 enabled(rows, NotificationSubscriptionKind.MENTOR_DIGEST),
                 weeklyDigests.availableFor(accountId),
-                EntityTagPrecondition.format(version(rows)));
+                EntityTagPrecondition.format(version(rows)),
+                enabled(rows, NotificationSubscriptionKind.PRODUCT_FEEDBACK_UPDATES));
     }
 
     private static boolean requested(
@@ -130,6 +138,10 @@ public class NotificationSubscriptionService {
         return switch (kind) {
             case PRODUCT_FEEDBACK -> update.productFeedback();
             case WORKSPACE_ALERTS -> update.workspaceAlerts();
+            case PRODUCT_FEEDBACK_UPDATES -> {
+                Boolean updates = update.productFeedbackUpdates();
+                yield updates == null ? enabled(rows, kind) : updates;
+            }
             case MENTOR_DIGEST -> {
                 Boolean weeklyDigest = update.weeklyDigest();
                 yield weeklyDigest == null ? enabled(rows, kind) : weeklyDigest;
@@ -138,7 +150,11 @@ public class NotificationSubscriptionService {
     }
 
     private static boolean enabled(List<NotificationSubscription> rows, NotificationSubscriptionKind kind) {
-        return rows.stream().anyMatch(s -> s.getKind() == kind && s.isEnabled());
+        return rows.stream()
+                .filter(s -> s.getKind() == kind)
+                .findFirst()
+                .map(NotificationSubscription::isEnabled)
+                .orElse(kind.enabledByDefault());
     }
 
     private static String version(List<NotificationSubscription> rows) {

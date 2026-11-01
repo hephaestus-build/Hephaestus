@@ -67,6 +67,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	LOGIN_PROVIDER_DELETED: "Login provider deleted",
 	SILENT_MODE_CHANGED: "Silent mode changed",
 	PUBLIC_ACTIVITY_CHANGED: "Public activity publication changed",
+	PRODUCT_FEEDBACK_DESTINATIONS_CHANGED: "Product feedback destinations changed",
 	PERSON_DATA_PREVIEWED: "Person data previewed",
 	PERSON_DATA_EXPORTED: "Person data exported",
 	PERSON_DATA_ERASURE_REQUESTED: "Person data erasure requested",

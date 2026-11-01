@@ -5,9 +5,10 @@ import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
 
 import { ProductFeedbackDialog } from "./ProductFeedbackDialog";
+import { ProductFeedbackReceipt } from "./ProductFeedbackReceipt";
 
 const context = {
-	pagePath: "/w/engineering/practices",
+	pagePath: "/w/$workspaceSlug/practice-profile",
 	userAgent: "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0",
 };
 
@@ -19,6 +20,7 @@ const meta = {
 		kind: "FEEDBACK",
 		onKindChange: fn(),
 		context,
+		sharing: { status: "off" },
 		isSubmitting: false,
 		onSubmit: fn(async () => true),
 	},
@@ -146,5 +148,96 @@ export const NoContext: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expect(dialog.queryByRole("checkbox")).toBeNull();
+	},
+};
+
+/**
+ * The first report on an instance with a public repository: neither option is picked, and Send
+ * waits for one, because a default here would be a choice the person did not make.
+ */
+export const FirstTimeChoice: Story = {
+	args: { sharing: { status: "ask" } },
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Pin a practice.");
+		const share = dialog.getByRole("radio", { name: "Yes, share it publicly." });
+		const keep = dialog.getByRole("radio", { name: "No, keep it private." });
+		await expect(share).not.toBeChecked();
+		await expect(keep).not.toBeChecked();
+		await expect(dialog.getByRole("button", { name: "Send" })).toBeDisabled();
+		await userEvent.click(keep);
+		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
+		await expect(args.onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "Pin a practice.", share: false }),
+		);
+	},
+};
+
+/** After the first choice, one switch starts from it and changes this report only. */
+export const RememberedChoice: Story = {
+	args: { sharing: { status: "remembered", allowPublic: true } },
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog"));
+		const toggle = dialog.getByRole("switch", { name: "Public GitHub issue" });
+		await expect(toggle).toBeChecked();
+		await expect(dialog.getByRole("link", { name: "Change default" })).toHaveAttribute(
+			"href",
+			"/settings#product-feedback",
+		);
+		await userEvent.click(toggle);
+		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Keep this one.");
+		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
+		await expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ share: false }));
+	},
+};
+
+/** An instance with only a private repository asks nothing and says where the report goes. */
+export const PrivateRepositoryOnly: Story = {
+	args: { sharing: { status: "private" } },
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByText(/private GitHub issue from your report/u));
+		await expect(dialog.queryByRole("switch", { name: "Public GitHub issue" })).toBeNull();
+		await expect(dialog.queryByRole("radio", { name: /share it publicly/u })).toBeNull();
+		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Private note.");
+		await userEvent.click(dialog.getByRole("button", { name: "Send" }));
+		await expect(args.onSubmit).toHaveBeenCalledWith(expect.not.objectContaining({ share: true }));
+		await expect(args.onSubmit).toHaveBeenCalledWith(expect.not.objectContaining({ share: false }));
+	},
+};
+
+/** Send waits while the choice is read, so a report is never sent without the question it needs. */
+export const SharingLoading: Story = {
+	args: { sharing: { status: "loading" } },
+	play: async () => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "An idea.");
+		await expect(dialog.getByRole("button", { name: "Send" })).toBeDisabled();
+	},
+};
+
+/** Once sent, the confirmation takes the form's place until the dialog closes. */
+export const Confirmation: Story = {
+	args: {
+		confirmation: (
+			<ProductFeedbackReceipt
+				report={{
+					id: "a1",
+					state: "SENT_TO_ADMINS",
+					route: "EMAIL",
+					canKeepPrivate: false,
+					canEdit: false,
+				}}
+				onKeepPrivate={fn()}
+				onEdit={fn(async () => true)}
+			/>
+		),
+	},
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog"));
+		await expectSettledVisible(dialog.getByText("Thanks. The admins of this instance have it."));
+		await expect(dialog.queryByRole("textbox")).toBeNull();
+		await userEvent.click(dialog.getByRole("button", { name: "Done" }));
+		await expect(args.onOpenChange).toHaveBeenCalledWith(false);
 	},
 };

@@ -10,7 +10,7 @@ import { budgetViolations, type EntryBudget, entryClosure } from "./entry-closur
  */
 // Room for the shell to grow by a small feature; a larger step needs a deliberate new ceiling.
 const budget: EntryBudget = {
-	ceiling: 1_250_000,
+	ceiling: 1_200_000,
 	slack: 50_000,
 	routeOnlyPackages: [
 		"@dnd-kit/core",

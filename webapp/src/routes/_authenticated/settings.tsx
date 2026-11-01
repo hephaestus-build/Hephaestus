@@ -23,6 +23,8 @@ import {
 	getConsentStatusQueryKey,
 	getCurrentUserQueryKey,
 	getNotificationPreferencesOptions,
+	getProductFeedbackSharingOptions,
+	getProductFeedbackSharingQueryKey,
 	getPublicActivityChoiceOptions,
 	getPublicActivityChoiceQueryKey,
 	getNotificationPreferencesQueryKey,
@@ -42,6 +44,7 @@ import {
 	updatePublicActivityChoiceMutation,
 	updateResearchConsentMutation,
 	updateNotificationPreferencesMutation,
+	updateProductFeedbackSharingMutation,
 	updateSlackUserPreferencesMutation,
 	updateUserSettingsMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -59,6 +62,7 @@ import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
 import { PasskeySettings } from "@/components/settings/PasskeySettings";
+import type { ProductFeedbackSharingSectionProps } from "@/components/settings/ProductFeedbackSharingSection";
 import type { PublicActivitySectionProps } from "@/components/settings/PublicActivitySection";
 import type { SessionsSectionProps } from "@/components/settings/SessionsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
@@ -145,11 +149,12 @@ function RouteComponent() {
 		if (current === undefined || preferencesMutation.isPending) {
 			return;
 		}
-		const { productFeedback, weeklyDigest, workspaceAlerts } = current;
+		const { productFeedback, productFeedbackUpdates, weeklyDigest, workspaceAlerts } = current;
 		preferencesMutation.mutate({
 			headers: { "If-Match": current.etag },
 			body: {
 				productFeedback,
+				productFeedbackUpdates,
 				weeklyDigest,
 				workspaceAlerts,
 				...patch,
@@ -327,6 +332,37 @@ function RouteComponent() {
 			visible: publicActivityQuery.data.visible,
 			pending: publicActivityMutation.isPending,
 			onVisibleChange: (visible) => publicActivityMutation.mutate({ body: { visible } }),
+		};
+	}
+
+	const sharingQuery = useQuery(getProductFeedbackSharingOptions());
+	const sharingMutation = useMutation({
+		...updateProductFeedbackSharingMutation(),
+		onSuccess: (data) => {
+			queryClient.setQueryData(getProductFeedbackSharingQueryKey(), data);
+		},
+		onError: () => {
+			toast.error("We could not save your choice. Try again.");
+			void queryClient.invalidateQueries({ queryKey: getProductFeedbackSharingQueryKey() });
+		},
+	});
+	let productFeedbackSharingState: ProductFeedbackSharingSectionProps["state"] = {
+		status: "loading",
+	};
+	if (sharingQuery.isError) {
+		productFeedbackSharingState = {
+			status: "error",
+			error: sharingQuery.error,
+			onRetry: () => {
+				void sharingQuery.refetch();
+			},
+		};
+	} else if (sharingQuery.data !== undefined) {
+		productFeedbackSharingState = {
+			status: "ready",
+			sharing: sharingQuery.data,
+			pending: sharingMutation.isPending,
+			onChange: (body) => sharingMutation.mutate({ body }),
 		};
 	}
 
@@ -541,6 +577,7 @@ function RouteComponent() {
 				},
 			}}
 			publicActivityProps={{ state: publicActivityState }}
+			productFeedbackSharingProps={{ state: productFeedbackSharingState }}
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}
 			slackPreferencesProps={slackPreferencesProps}

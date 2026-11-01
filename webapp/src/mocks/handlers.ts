@@ -10,6 +10,7 @@ import type {
 	AccountAiChoice,
 	AccountAiChoiceRequest,
 	PasskeyStatus,
+	ProductFeedbackSharing,
 	WorkspacePasskeyPolicy,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -78,9 +79,18 @@ export const handlers = [
 		} satisfies Wire<AccountAiChoice>);
 	}),
 	http.get("*/user", () => HttpResponse.json(currentUser)),
+	// No public repository: the composer asks nothing, and settings shows no product feedback section.
+	http.get("*/product-feedback/sharing", () =>
+		HttpResponse.json({
+			filesToGitHub: false,
+			mention: false,
+		} satisfies Wire<ProductFeedbackSharing>),
+	),
+	http.get("*/product-feedback/mine", () => HttpResponse.json([])),
 	http.get("*/user/notification-preferences", () =>
 		HttpResponse.json({
 			productFeedback: false,
+			productFeedbackUpdates: true,
 			workspaceAlerts: false,
 			emailAvailable: true,
 			deliveryConfigured: true,

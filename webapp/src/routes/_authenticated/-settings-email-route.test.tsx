@@ -13,6 +13,7 @@ import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 const preferences = {
 	productFeedback: false,
+	productFeedbackUpdates: false,
 	workspaceAlerts: false,
 	emailAvailable: true,
 	deliveryConfigured: true,
@@ -59,6 +60,7 @@ describe("account email choices", () => {
 		await waitFor(() => expect(etag).toBe('"0-0-0"'));
 		expect(body).toStrictEqual({
 			productFeedback: false,
+			productFeedbackUpdates: false,
 			workspaceAlerts: true,
 			weeklyDigest: false,
 		});
@@ -194,7 +196,12 @@ describe("account email choices", () => {
 				http.get("*/user/notification-preferences", () => HttpResponse.json(retained)),
 				http.put("*/user/notification-preferences", async ({ request }) => {
 					writes.push(await request.json());
-					return HttpResponse.json({ ...retained, productFeedback: false, etag: '"2"' });
+					return HttpResponse.json({
+						...retained,
+						productFeedback: false,
+						productFeedbackUpdates: false,
+						etag: '"2"',
+					});
 				}),
 			);
 			renderRouteAt("/settings");
@@ -212,6 +219,7 @@ describe("account email choices", () => {
 			expect(writes).toStrictEqual([
 				{
 					productFeedback: false,
+					productFeedbackUpdates: false,
 					workspaceAlerts: false,
 					weeklyDigest: false,
 				},
@@ -234,7 +242,12 @@ describe("account email choices", () => {
 			http.get("*/user/notification-preferences", () => HttpResponse.json(retained)),
 			http.put("*/user/notification-preferences", async ({ request }) => {
 				writes.push(await request.json());
-				return HttpResponse.json({ ...retained, productFeedback: false, etag: '"2"' });
+				return HttpResponse.json({
+					...retained,
+					productFeedback: false,
+					productFeedbackUpdates: false,
+					etag: '"2"',
+				});
 			}),
 		);
 		renderRouteAt("/settings");
@@ -251,8 +264,49 @@ describe("account email choices", () => {
 		expect(writes).toStrictEqual([
 			{
 				productFeedback: false,
+				productFeedbackUpdates: false,
 				workspaceAlerts: false,
 				weeklyDigest: false,
+			},
+		]);
+	});
+
+	it("lets a reporter unsubscribe and subscribe again while preserving other choices", async () => {
+		const user = userEvent.setup();
+		let current = { ...preferences, productFeedbackUpdates: true };
+		const writes: unknown[] = [];
+		server.use(
+			http.get("*/user/notification-preferences", () => HttpResponse.json(current)),
+			http.put("*/user/notification-preferences", async ({ request }) => {
+				writes.push(await request.json());
+				current = { ...current, productFeedbackUpdates: !current.productFeedbackUpdates };
+				return HttpResponse.json(current);
+			}),
+		);
+		renderRouteAt("/settings");
+		const updates = await screen.findByRole(
+			"switch",
+			{ name: "Your product feedback updates" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(updates.getAttribute("aria-checked")).toBe("true");
+		await user.click(updates);
+		await waitFor(() => expect(updates.getAttribute("aria-checked")).toBe("false"));
+		await waitFor(() => expect(updates.getAttribute("aria-disabled")).not.toBe("true"));
+		await user.click(updates);
+		await waitFor(() => expect(updates.getAttribute("aria-checked")).toBe("true"));
+		expect(writes).toStrictEqual([
+			{
+				productFeedback: false,
+				workspaceAlerts: false,
+				weeklyDigest: false,
+				productFeedbackUpdates: false,
+			},
+			{
+				productFeedback: false,
+				workspaceAlerts: false,
+				weeklyDigest: false,
+				productFeedbackUpdates: true,
 			},
 		]);
 	});
