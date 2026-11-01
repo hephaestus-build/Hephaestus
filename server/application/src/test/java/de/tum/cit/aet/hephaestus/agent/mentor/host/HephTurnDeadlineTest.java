@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,7 +25,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -45,6 +46,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
 
     private static final JsonMapper MAPPER = new JsonMapper();
     private static final UUID TURN = UUID.randomUUID();
+    private static final UUID LEASE = UUID.randomUUID();
 
     private final BlockingQueue<JsonNode> frames = new LinkedBlockingQueue<>();
     private final MutableClock clock = MutableClock.atFixedInstant();
@@ -82,6 +84,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
         when(turn.getId()).thenReturn(TURN);
         when(turn.getWorkspaceId()).thenReturn(7L);
         when(turn.getAttempt()).thenReturn(1);
+        when(turn.getLeaseId()).thenReturn(LEASE);
         when(turn.getConversationId()).thenReturn(UUID.randomUUID());
         when(turn.getStatus()).thenReturn(MentorTurn.Status.RUNNING);
         MentorTurnService turns = mock(MentorTurnService.class);
@@ -90,7 +93,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
         // The fixture's binding has the default conversation timeout: the ceiling.
         var started = Optional.of(
                 new MentorTurnStarter.StartedTurn(turn, 11L, LlmCatalogTestFixtures.admittedMentorConfig()));
-        when(starter.startNext(any(), any())).thenReturn(started).thenReturn(Optional.empty());
+        when(starter.startNext(any())).thenReturn(started).thenReturn(Optional.empty());
         dispatcher = new HephTurnDispatcher(
                 starter,
                 turns,
@@ -103,7 +106,6 @@ class HephTurnDeadlineTest extends BaseUnitTest {
                 MAPPER,
                 clock,
                 new SimpleMeterRegistry(),
-                "worker",
                 1,
                 Duration.ofMinutes(1),
                 HephTurnDispatcher.STOP_GRACE,
@@ -135,7 +137,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
         assertThat(written).isEqualTo(ceiling);
         assertThat(frames).as("no stop while the turn is within its ceiling").isEmpty();
         assertThat(dispatcher.runs(TURN, 1)).isTrue();
-        verify(completion, never()).end(any(), anyInt(), any(), any());
+        verify(completion, never()).end(anyLong(), any(), anyInt(), any(), any());
 
         clock.advance(Duration.ofSeconds(1));
         dispatcher.tick();
@@ -145,18 +147,13 @@ class HephTurnDeadlineTest extends BaseUnitTest {
 
         clock.advance(HephTurnDispatcher.STOP_GRACE.plusSeconds(1));
         dispatcher.tick();
-        verify(completion)
-                .end(
-                        eq(TURN),
-                        eq(1),
-                        eq("worker"),
-                        eq(new MentorTurnCompletion.Ending(
-                                MentorTurn.Status.FAILED,
-                                List.of(),
-                                HephTurnDispatcher.TOOK_TOO_LONG,
-                                "its Hephaestus host did not end it within " + HephTurnDispatcher.STOP_GRACE
-                                        + " after its deadline",
-                                null)));
+        ArgumentCaptor<MentorTurnCompletion.Ending> ending = ArgumentCaptor.forClass(MentorTurnCompletion.Ending.class);
+        verify(completion).end(eq(7L), eq(TURN), eq(1), eq(LEASE), ending.capture());
+        assertThat(ending.getValue().outcome()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(ending.getValue().error()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
+        assertThat(ending.getValue().cause())
+                .isEqualTo("its Hephaestus host did not end it within " + HephTurnDispatcher.STOP_GRACE
+                        + " after its deadline");
         assertThat(dispatcher.runs(TURN, 1)).isFalse();
     }
 
