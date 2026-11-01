@@ -96,8 +96,10 @@ overrides:
   dompurify: 3.4.17
   "js-yaml@>=4.0.0": 4.3.2
   "markdown-it@<14.3.3": 14.3.3
-  "qs@>=2.2.5 <6.16.0": 6.16.0
-  serialize-javascript: 7.1.2
+  # CVE-2026-110816 (GHSA-6pq8-jhm2-2vcw) reaches 6.16.0 itself.
+  "qs@>=2.2.5 <6.16.1": 6.16.1
+  # CVE-2026-115754 and CVE-2026-115897 (GHSA-m5mm-p8h7-m29v).
+  serialize-javascript: 7.1.4
   "shell-quote@<1.11.0": 1.11.0
   "smol-toml@<1.9.0": 1.9.0
   "undici@>=8.0.0 <8.12.2": 8.12.2
