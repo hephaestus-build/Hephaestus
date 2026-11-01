@@ -335,6 +335,9 @@ jobs:
               - 'docker/compose.app.yaml'
               - 'docker/compose.core.yaml'
               # The generated configuration reference reads these, and its drift check runs on this leg.
+              # It renders the chart to learn which runtime role sets each variable.
+              - 'deploy/chart/**'
+              - 'scripts/lib/deploy-topology.ts'
               - 'docker/compose.proxy.yaml'
               - 'docker/self-host/compose*.yaml'
               - 'docker/self-host/.env.example'
