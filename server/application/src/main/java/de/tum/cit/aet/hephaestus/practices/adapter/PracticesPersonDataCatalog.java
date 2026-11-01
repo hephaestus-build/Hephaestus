@@ -51,6 +51,9 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
             + " result_id IS NOT NULL AND (job_id=ANY(:derivedJobs) OR EXISTS(SELECT 1 FROM"
             + " jsonb_array_elements_text(COALESCE(detail->'custody'->'sourceJobIds','[]'::jsonb)) source(value)"
             + " WHERE source.value::uuid=ANY(:derivedJobs))))";
+    /** Replaces an erased administrator's words where a constraint needs text; guard_feedback_history admits it. */
+    private static final String REDACTED = "'Erased administrator text'";
+
     private static final String FEEDBACK_IDS =
             "SELECT id FROM feedback WHERE developer_id=:account OR id IN(SELECT feedback_id FROM feedback_basis WHERE"
                     + " result_id IN(" + RESULT_IDS + "))";
@@ -212,16 +215,9 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -170),
-                        new JdbcPersonDataStore(
-                                jdbc,
-                                mapper,
-                                "problem",
-                                "problem",
-                                "t.result_id IN(" + RESULT_IDS + ")",
-                                "id,workspace_id,result_id,position,key,severity,summary,explanation,citations,basis,next_step",
-                                "id,workspace_id",
-                                "",
-                                -160),
+                        // Deleting a result deletes its problems (ON DELETE CASCADE) in the same commit.
+                        // A deferred constraint requires a NOT_MET result to keep a problem. Each step commits on its
+                        // own, so a problem step that ran before this one could never commit.
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,
@@ -232,6 +228,23 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "id,workspace_id",
                                 "",
                                 -150),
+                        // Exported on its own; the result step has already deleted these rows.
+                        new JdbcPersonDataStore(
+                                jdbc,
+                                mapper,
+                                "problem",
+                                "problem",
+                                "t.result_id IN(" + RESULT_IDS + ")",
+                                "id,workspace_id,result_id,position,key,severity,summary,explanation,citations,basis,next_step",
+                                "id,workspace_id",
+                                "",
+                                -149) {
+                            @Override
+                            public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                                super.erase(selection, frozenScope);
+                                return selection.rows().size();
+                            }
+                        },
                         new JdbcPersonDataStore(
                                 jdbc,
                                 mapper,
@@ -240,7 +253,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "t.created_by_id=:account",
                                 "id,workspace_id,result_id,created_by_id,created_at,reason",
                                 "id,workspace_id",
-                                "created_by_id=NULL,reason='Erased administrator text'",
+                                "created_by_id=NULL,reason=" + REDACTED,
                                 -180),
                         new JdbcPersonDataStore(
                                 jdbc,
@@ -250,7 +263,9 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "t.removed_by_id=:account",
                                 "id,workspace_id,result_id,removed_by_id,removed_at,removal_reason",
                                 "id,workspace_id",
-                                "removed_by_id=NULL,removal_reason=NULL",
+                                // ck_result_mark_removed keeps removed_at and removal_reason set together.
+                                "removed_by_id=NULL,removal_reason=CASE WHEN removal_reason IS NULL THEN NULL ELSE "
+                                        + REDACTED + " END",
                                 -180),
                         new JdbcPersonDataStore(
                                 jdbc,
@@ -260,8 +275,9 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "t.actor_account_id=:account",
                                 "id,workspace_id,feedback_id,action,actor_account_id,reason,note,content_digest,decided_at",
                                 "id,workspace_id",
-                                "actor_account_id=NULL,note=NULL,reason=CASE WHEN action='APPROVE' THEN NULL ELSE"
-                                        + " 'Erased administrator text' END",
+                                // guard_feedback_history admits exactly this redaction of an append-only row.
+                                "actor_account_id=NULL,note=NULL,reason=CASE WHEN reason IS NULL THEN NULL ELSE "
+                                        + REDACTED + " END",
                                 -180))
                 .stream()
                 .map(store ->

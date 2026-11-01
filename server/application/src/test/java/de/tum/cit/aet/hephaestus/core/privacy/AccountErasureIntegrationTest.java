@@ -418,6 +418,119 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldEraseNotMetResultsAndTheirProblemsWithoutTouchingAnotherPersonsResult() {
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        long targetId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Target")).getId());
+        long otherId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Other")).getId());
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("privacy-not-met"));
+        var targetWork = modelFixtures.work(workspace, "not-met-erased", "scm.pull_request", 42L);
+        var targetResult =
+                modelFixtures.resultWithProblem(targetWork, targetId, "Result title", "erasure-profile-canary");
+        var otherWork = modelFixtures.work(workspace, "not-met-retained", "scm.pull_request", 84L);
+        var otherResult =
+                modelFixtures.resultWithProblem(otherWork, otherId, "Result title", "preserved-profile-canary");
+
+        UUID requestId = personData
+                .preview(administratorId, targetId, List.of())
+                .request()
+                .getId();
+        personData.requestErasure(requestId, administratorId, false);
+        personData.run(requestId);
+
+        var receipt = personData.get(requestId).request();
+        Long remainingResults =
+                jdbc.queryForObject("SELECT count(*) FROM result WHERE id=?", Long.class, targetResult.getId());
+        Long remainingProblems =
+                jdbc.queryForObject("SELECT count(*) FROM problem WHERE result_id=?", Long.class, targetResult.getId());
+        assertThat(receipt.getState())
+                .as(
+                        "erasure failure: %s; result rows=%s; problem rows=%s",
+                        receipt.getFailureCode(), remainingResults, remainingProblems)
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(remainingResults).isZero();
+        assertThat(remainingProblems).isZero();
+        Map<String, Long> erased = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
+        assertThat(erased).containsEntry("result", 1L).containsEntry("problem", 1L);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM result WHERE id=?", Long.class, otherResult.getId()))
+                .isOne();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM problem WHERE result_id=?", Long.class, otherResult.getId()))
+                .isOne();
+    }
+
+    @Test
+    void shouldRedactAnErasedAdministratorFromMarksAndDecisionsOnAnotherPersonsWorkAndKeepTheHistory() {
+        Account operator = new Account("Operator");
+        operator.setAppRole(Account.AppRole.APP_ADMIN);
+        long operatorId = Objects.requireNonNull(accounts.saveAndFlush(operator).getId());
+        long deciderId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Decider")).getId());
+        long developerId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Developer")).getId());
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("decision-history"));
+        var result = modelFixtures.result(
+                modelFixtures.work(workspace, "decided-practice", "scm.pull_request", 71L),
+                developerId,
+                "Developer result");
+        var feedback = modelFixtures.feedback(
+                result, FeedbackDestination.PRACTICE_PAGE, FeedbackState.READY, "Developer feedback");
+        UUID mark = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO result_mark(id, workspace_id, result_id, kind, reason, created_by_id, created_at,
+                    removed_by_id, removed_at, removal_reason)
+                VALUES (?, ?, ?, 'INCORRECT', 'Marked by the developer', ?, now() - interval '1 hour', ?, now(),
+                    'Decider removal words')
+                """, mark, result.getWorkspaceId(), result.getId(), developerId, deciderId);
+        UUID decision = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO feedback_decision(id, workspace_id, feedback_id, action, actor_account_id, reason, note,
+                    content_digest)
+                VALUES (?, ?, ?, 'REJECT', ?, 'Decider reason words', 'Decider note words', ?)
+                """, decision, result.getWorkspaceId(), feedback.getId(), deciderId, "a".repeat(64));
+
+        var preview = personData.preview(operatorId, deciderId, List.of());
+        UUID requestId = preview.request().getId();
+        personData.requestErasure(requestId, operatorId, false);
+        personData.run(requestId);
+
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(jdbc.queryForMap(
+                        "SELECT removed_by_id, removal_reason, removed_at IS NOT NULL AS removed, created_by_id"
+                                + " FROM result_mark WHERE id=?",
+                        mark))
+                .containsEntry("removed_by_id", null)
+                .containsEntry("removal_reason", "Erased administrator text")
+                .containsEntry("removed", true)
+                .containsEntry("created_by_id", developerId);
+        assertThat(jdbc.queryForMap(
+                        "SELECT actor_account_id, reason, note, action, content_digest FROM feedback_decision"
+                                + " WHERE id=?",
+                        decision))
+                .containsEntry("actor_account_id", null)
+                .containsEntry("reason", "Erased administrator text")
+                .containsEntry("note", null)
+                .containsEntry("action", "REJECT")
+                .containsEntry("content_digest", "a".repeat(64));
+        assertThatThrownBy(() -> jdbc.update("UPDATE feedback_decision SET action='WITHDRAW' WHERE id=?", decision))
+                .as("a history row still refuses an edit that is not the privacy redaction")
+                .hasMessageContaining("feedback history is append-only");
+        assertThatThrownBy(() -> jdbc.update("UPDATE feedback_decision SET reason='Other words' WHERE id=?", decision))
+                .hasMessageContaining("feedback history is append-only");
+        assertThatThrownBy(() -> jdbc.update("UPDATE feedback_decision SET note='Other words' WHERE id=?", decision))
+                .hasMessageContaining("feedback history is append-only");
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE feedback_decision SET note=NULL, decided_at=now() - interval '1 day' WHERE id=?",
+                        decision))
+                .as("a redaction cannot change another column")
+                .hasMessageContaining("feedback history is append-only");
+    }
+
+    @Test
     void shouldPreserveUnconfirmedCopyCustodyUntilExternalRemovalIsConfirmed() {
         var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
         jdbc.update("UPDATE feedback SET state='UNCONFIRMED' WHERE id=?", fixture.feedbackId());

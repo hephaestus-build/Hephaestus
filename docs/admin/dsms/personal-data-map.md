@@ -265,6 +265,12 @@ content and attribution while retaining its operational row, and deletes selecte
 before contributor attribution is detached. A person who only applied another developer's commit
 loses their committer attribution. The other developer's file-change rows remain.
 
+Erasure also clears the login of the commit signature on the person's authored and committed commits.
+The diff context of a review comment stays: it is the repository code that the comment points at.
+
+A mark that an erased administrator removed, and a decision that an erased administrator took on another person's feedback, both stay.
+Each loses its actor. Its words become the fixed text `Erased administrator text`, and a decision's note is cleared.
+
 Hephaestus exports the person's conversations and threads, their questions, Hephaestus's answers, weekly digest
 entries, votes and turn usage. It does not export
 tool results, summaries or Pi runtime entries: these can contain context about other people rather
