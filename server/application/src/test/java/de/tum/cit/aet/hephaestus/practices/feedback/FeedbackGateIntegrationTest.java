@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import java.sql.Timestamp;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,12 +40,20 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     @Autowired
     FeedbackGate gate;
+
+    @Autowired
+    FeedbackDeliveryPolicy delivery;
+
+    @Autowired
+    WebTestClient webTestClient;
 
     @MockitoBean(name = "scmItemService", enforceOverride = true)
     ScmItemService source;
@@ -321,5 +330,121 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
                 developerId);
         assertThat(gate.evaluate(piece, FeedbackCheckStage.EGRESS, false).reason())
                 .isEqualTo(FeedbackStopReason.OUTSIDE_CURRENT_SCOPE);
+    }
+
+    @Test
+    void shouldWithholdReadyFeedbackAndSendOnlyWorkAdmittedAfterTheResumeWhenDeliveryIsPausedThenResumed() {
+        Set<UUID> permitted = new HashSet<>();
+        jdbc.update("""
+            INSERT INTO instance_settings(id,silent_mode_engaged,version) VALUES(1,false,0)
+            ON CONFLICT(id) DO UPDATE SET silent_mode_engaged=false
+            """);
+        jdbc.update("UPDATE account SET feedback_delivery_enabled=true WHERE id=?", developerId);
+        when(source.supports(supportedItem)).thenReturn(true);
+        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v1")));
+        when(authorization.permitsForNewDelivery(
+                        eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
+                .thenAnswer(call -> {
+                    Collection<Result> asked = call.getArgument(1);
+                    return asked.stream()
+                            .map(Result::getId)
+                            .filter(permitted::contains)
+                            .collect(Collectors.toSet());
+                });
+        Feedback beforePause = readyOnWorkAdmittedAt(4, permitted);
+
+        setDeliveryStatus("PAUSED");
+        assertThat(workspaceRolloutRevision()).isEqualTo(5);
+        Feedback duringPause = readyOnWorkAdmittedAt(5, permitted);
+
+        prepare(beforePause);
+        prepare(duringPause);
+        assertThat(deliveryOf(beforePause)).isEqualTo("WITHHELD:STALE_ROLLOUT_REVISION");
+        assertThat(deliveryOf(duringPause)).isEqualTo("WITHHELD:WORKSPACE_DELIVERY_PAUSED");
+
+        setDeliveryStatus("ACTIVE");
+        assertThat(workspaceRolloutRevision()).isEqualTo(6);
+        Feedback afterResume = readyOnWorkAdmittedAt(6, permitted);
+
+        prepare(beforePause);
+        prepare(duringPause);
+        prepare(afterResume);
+        assertThat(deliveryOf(beforePause)).isEqualTo("WITHHELD:STALE_ROLLOUT_REVISION");
+        assertThat(deliveryOf(duringPause)).isEqualTo("WITHHELD:WORKSPACE_DELIVERY_PAUSED");
+        assertThat(deliveryOf(afterResume)).isEqualTo("READY:-");
+        assertThat(sendsOf(beforePause)).isEmpty();
+        assertThat(sendsOf(duringPause)).isEmpty();
+        assertThat(sendsOf(afterResume)).containsExactly("POST:PENDING");
+    }
+
+    /** A ready on-work piece of its own review, admitted under the given rollout revision. */
+    private Feedback readyOnWorkAdmittedAt(long rolloutRevision, Set<UUID> permitted) {
+        reviewId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,ordered_at,created_at,"
+                        + "rollout_revision) VALUES (?,?,?,'ITEM','v1','REQUEST','RUNNING',?,?,?)",
+                reviewId,
+                workspace.getId(),
+                itemId,
+                Timestamp.from(AT),
+                Timestamp.from(AT),
+                rolloutRevision);
+        Result result = resultWithStateFilter("state", "open");
+        permitted.add(result.getId());
+        Feedback onWork = piece(FeedbackDestination.ON_WORK, FeedbackState.READY, null);
+        bind(onWork, result);
+        return onWork;
+    }
+
+    private void prepare(Feedback row) {
+        delivery.prepared(feedback.findById(row.getId()).orElseThrow());
+    }
+
+    private String deliveryOf(Feedback row) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT state || ':' || coalesce(stop_reason, '-') FROM feedback WHERE workspace_id=? AND id=?",
+                String.class,
+                workspace.getId(),
+                row.getId()));
+    }
+
+    private List<@Nullable String> sendsOf(Feedback row) {
+        return jdbc.queryForList(
+                "SELECT action || ':' || state FROM feedback_send WHERE workspace_id=? AND feedback_id=?",
+                String.class,
+                workspace.getId(),
+                row.getId());
+    }
+
+    private long workspaceRolloutRevision() {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT practice_rollout_revision FROM workspace WHERE id=?", Long.class, workspace.getId()));
+    }
+
+    private void setDeliveryStatus(String status) {
+        String token = "mock-jwt-sub-" + developerId;
+        String etag = Objects.requireNonNull(webTestClient
+                .get()
+                .uri("/workspaces/{slug}/practices/review-settings", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth(token))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .returnResult(Void.class)
+                .getResponseHeaders()
+                .getETag());
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/practices/review-settings", workspace.getWorkspaceSlug())
+                .headers(headers -> {
+                    headers.setBearerAuth(token);
+                    headers.setIfMatch(etag);
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("deliveryStatus", status))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
     }
 }
