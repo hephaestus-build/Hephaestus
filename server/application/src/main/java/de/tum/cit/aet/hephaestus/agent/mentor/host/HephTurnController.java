@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
@@ -64,19 +63,16 @@ public class HephTurnController {
     private final MentorTurnCompletion completion;
     private final HephTurnDispatcher dispatcher;
     private final ProxyCallsInFlight callsInFlight;
-    private final String workerId;
 
     public HephTurnController(
             HephTurnContexts contexts,
             MentorTurnCompletion completion,
             HephTurnDispatcher dispatcher,
-            ProxyCallsInFlight callsInFlight,
-            WorkerProperties workerProperties) {
+            ProxyCallsInFlight callsInFlight) {
         this.contexts = contexts;
         this.completion = completion;
         this.dispatcher = dispatcher;
         this.callsInFlight = callsInFlight;
-        this.workerId = workerProperties.resolvedWorkerId();
     }
 
     @GetMapping("/context")
@@ -274,9 +270,10 @@ public class HephTurnController {
         }
         try {
             completion.end(
+                    turn.workspaceId(),
                     turn.turnId(),
                     turn.attempt(),
-                    workerId,
+                    turn.leaseId(),
                     new MentorTurnCompletion.Ending(
                             outcome,
                             entries,
@@ -313,7 +310,8 @@ public class HephTurnController {
                 .running(turnId, token.attempt())
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, token.attempt()));
         // The token binds its workspace: a token of another workspace reaches no turn, whatever its id.
-        if (!attempt.workspaceId().equals(token.workspaceId())) {
+        if (!attempt.workspaceId().equals(token.workspaceId())
+                || !attempt.leaseId().equals(token.leaseId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return attempt;

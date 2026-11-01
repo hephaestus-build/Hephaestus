@@ -272,7 +272,7 @@ class PracticeV1CutoverMigrationTest {
         assertThat(column(
                         database,
                         "SELECT status || '|' || processing_status || '|' || cancellation_reason || '|' ||"
-                                + " (worker_id IS NULL) FROM review_job WHERE"
+                                + " (lease_id IS NULL) FROM review_job WHERE"
                                 + " id='00000000-0000-0000-0000-000000992112'"))
                 .containsExactly("CANCELLED|DONE|CONTRACT_CHANGED|true");
         assertThat(column(

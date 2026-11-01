@@ -73,9 +73,8 @@ public class ReviewAttemptUsageService {
      */
     @Transactional
     public boolean registerCall(
-            UUID jobId, long workspaceId, int attempt, @Nullable String workerId, ModelKind kind, FrozenCharge charge) {
-        if (jobs.lockRunningAttemptForCall(jobId, workspaceId, attempt, workerId)
-                .isEmpty()) return false;
+            UUID jobId, long workspaceId, int attempt, UUID leaseId, ModelKind kind, FrozenCharge charge) {
+        if (jobs.lockRunningAttemptForCall(jobId, workspaceId, attempt, leaseId).isEmpty()) return false;
         attempts.registerIfAbsent(jobId, attempt, workspaceId);
         attempts.freezeChargeIfAbsent(jobId, attempt, kind.name(), workspaceId, charge);
         return true;

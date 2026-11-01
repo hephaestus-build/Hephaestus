@@ -97,8 +97,9 @@ public class ReviewJob {
     @Column(name = "hold_reason", length = 32)
     private @Nullable String holdReason;
 
-    @Column(name = "worker_id", length = 255)
-    private @Nullable String workerId;
+    /** Fresh identity for each claimed attempt; independent of the worker process. */
+    @Column(name = "lease_id")
+    private @Nullable UUID leaseId;
 
     @Column(name = "trace_id", nullable = false, length = 32)
     private String traceId;

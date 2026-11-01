@@ -12,6 +12,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -38,7 +39,6 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
     private EntityManager entityManager;
 
     private static final int PATIENCE_SECONDS = 20;
-    private static final String WORKER = "worker-concurrency";
     private static final Duration LEASE = Duration.ofMinutes(5);
 
     @Autowired
@@ -177,16 +177,16 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
         MentorTurn head = submit("First question").turn();
         MentorTurn next = submit("Second question").turn();
         AtomicReference<Optional<MentorTurn>> first = new AtomicReference<>();
-        HeldTransaction holder = holdIn(() -> first.set(turns.claimNext("worker-a", Duration.ofMinutes(5))));
+        HeldTransaction holder = holdIn(() -> first.set(turns.claimNext(Duration.ofMinutes(5))));
         CompletableFuture<Optional<MentorTurn>> second =
-                CompletableFuture.supplyAsync(() -> turns.claimNext("worker-b", Duration.ofMinutes(5)));
+                CompletableFuture.supplyAsync(() -> turns.claimNext(Duration.ofMinutes(5)));
 
         holder.commitAfter(second);
 
         assertThat(first.get()).map(MentorTurn::getId).contains(head.getId());
         assertThat(second.get(PATIENCE_SECONDS, TimeUnit.SECONDS)).isEmpty();
         MentorTurn claimed = turnRepository.findById(head.getId()).orElseThrow();
-        assertThat(claimed.getWorkerId()).isEqualTo("worker-a");
+        assertThat(claimed.getLeaseId()).isNotNull();
         assertThat(claimed.getAttempt()).isEqualTo(1);
         assertThat(turnRepository.findById(next.getId()).orElseThrow().getStatus())
                 .isEqualTo(MentorTurn.Status.QUEUED);
@@ -286,10 +286,11 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
         MentorEntry kept = ended(first, MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "Kept answer"));
         MentorTurn turn = claimNext(submit("Next"));
         HeldTransaction end = holdIn(() -> turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(compaction(kept), searchResult(secret.question())),
                         null,
@@ -312,7 +313,7 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private MentorTurn claimNext(MentorTurnService.Submission submission) {
-        MentorTurn claimed = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorTurn claimed = turns.claimNext(LEASE).orElseThrow();
         assertThat(claimed.getId()).isEqualTo(submission.turn().getId());
         return claimed;
     }
@@ -320,10 +321,11 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
     /** Ends the turn with one Pi entry its host appended, and returns that entry as stored. */
     private MentorEntry ended(MentorTurn turn, JsonNode piEntry) {
         turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(piEntry), null, null));
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(piEntry), null, null));
         return MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .getLast();
     }

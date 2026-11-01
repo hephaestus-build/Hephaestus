@@ -23,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 /** Recovers lost attempts without repeating admitted results or losing their measured spend. */
 @Component
 @ConditionalOnCaptureRole
-@WorkspaceAgnostic("Recovery uses the supplied job id, owning worker, and attempt fence")
+@WorkspaceAgnostic("Recovery uses the supplied job id, lease, and attempt fence")
 public class ReviewJobRecovery {
     enum Outcome {
         NONE,
@@ -54,11 +54,10 @@ public class ReviewJobRecovery {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public Outcome recover(
-            UUID jobId, String workerId, int attempt, @Nullable ReviewJobCancellationReason cancellation) {
+    public Outcome recover(UUID jobId, UUID leaseId, int attempt, @Nullable ReviewJobCancellationReason cancellation) {
         continuation.ifPresent(ReviewCompositionContinuation::holdRecoveryCustody);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
-        if (!owns(job, workerId, attempt)) return Outcome.NONE;
+        if (!owns(job, leaseId, attempt)) return Outcome.NONE;
         ReviewJob owned = Objects.requireNonNull(job);
         ReviewJobLlmUsage counts = counts(owned);
         hold(owned, counts);
@@ -66,19 +65,19 @@ public class ReviewJobRecovery {
         boolean admitted = ResultAdmissionService.isAdmitted(owned);
         if (drained(cancellation) && !admitted) {
             // Not the review's fault: the next attempt spends no retry, up to ReviewJob.MAX_DRAINS drains.
-            if (jobs.requeueDrained(jobId, workerId, ReviewJob.MAX_DRAINS, now) > 0) {
+            if (jobs.requeueDrained(jobId, leaseId, ReviewJob.MAX_DRAINS, now) > 0) {
                 bill(owned, counts);
                 return Outcome.REQUEUED;
             }
             int cancelled = jobs.transitionToCancelledOwnedBy(
-                    jobId, now, DRAINED_TOO_OFTEN, Objects.requireNonNull(cancellation), workerId, attempt);
+                    jobId, now, DRAINED_TOO_OFTEN, Objects.requireNonNull(cancellation), leaseId, attempt);
             if (cancelled == 0) return Outcome.NONE;
             bill(owned, counts);
             return Outcome.CANCELLED;
         }
         Instant availableAt = now.plus(ReviewJobBackoff.compute(owned.spentAttempts() + 1));
         int changed = owned.spentAttempts() < properties.maxRetries()
-                ? jobs.requeueOrphan(jobId, workerId, properties.maxRetries(), availableAt)
+                ? jobs.requeueOrphan(jobId, leaseId, properties.maxRetries(), availableAt)
                 : 0;
         // An admitted review is handed on even at the retry limit: the attempt after it composes nothing and only
         // withholds what is still open.
@@ -87,7 +86,7 @@ public class ReviewJobRecovery {
                     .get()
                     .requeue(
                             owned,
-                            workerId,
+                            leaseId,
                             new ReviewJobRepository.CompositionRequeue(attempt, properties.maxRetries(), availableAt));
         }
         if (changed > 0) {
@@ -96,17 +95,17 @@ public class ReviewJobRecovery {
         }
         if (!admitted && owned.spentAttempts() < properties.maxRetries()) return Outcome.NONE;
         if (admitted) {
-            changed = jobs.completeAdmittedOwnedBy(jobId, workerId, attempt, now);
+            changed = jobs.completeAdmittedOwnedBy(jobId, leaseId, attempt, now);
         } else if (cancellation != null) {
             changed = jobs.transitionToCancelledOwnedBy(
-                    jobId, now, "The worker stopped this attempt.", cancellation, workerId, attempt);
+                    jobId, now, "The worker stopped this attempt.", cancellation, leaseId, attempt);
         } else {
             changed = jobs.transitionStatusOwnedBy(
                     jobId,
                     ReviewJobStatus.FAILED,
                     now,
                     "The worker that owned this job was lost. The retry limit is reached.",
-                    workerId,
+                    leaseId,
                     attempt);
         }
         if (changed == 0) return Outcome.NONE;
@@ -116,15 +115,15 @@ public class ReviewJobRecovery {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean retryUnadmitted(ReviewJob job, String workerId, boolean bill) {
+    public boolean retryUnadmitted(ReviewJob job, UUID leaseId, boolean bill) {
         ReviewJob locked = jobs.lockById(job.getId()).orElse(null);
-        if (locked == null || !owns(locked, workerId, job.getAttempt()) || ResultAdmissionService.isAdmitted(locked))
+        if (locked == null || !owns(locked, leaseId, job.getAttempt()) || ResultAdmissionService.isAdmitted(locked))
             return false;
         ReviewJobLlmUsage counts = bill ? counts(locked) : null;
         if (bill) hold(locked, counts);
         int changed = jobs.requeueOrphan(
                 job.getId(),
-                workerId,
+                leaseId,
                 properties.maxRetries(),
                 Instant.now().plus(ReviewJobBackoff.compute(locked.spentAttempts() + 1)));
         if (changed > 0 && bill) bill(locked, counts);
@@ -139,10 +138,10 @@ public class ReviewJobRecovery {
                 || cancellation == ReviewJobCancellationReason.DRAIN_IMMEDIATE;
     }
 
-    private static boolean owns(@Nullable ReviewJob job, String workerId, int attempt) {
+    private static boolean owns(@Nullable ReviewJob job, UUID leaseId, int attempt) {
         return job != null
                 && job.getStatus() == ReviewJobStatus.RUNNING
-                && workerId.equals(job.getWorkerId())
+                && leaseId.equals(job.getLeaseId())
                 && job.getAttempt() == attempt;
     }
 

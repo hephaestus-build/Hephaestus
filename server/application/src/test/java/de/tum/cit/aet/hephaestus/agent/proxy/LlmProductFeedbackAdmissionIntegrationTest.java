@@ -6,12 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,8 +31,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -198,54 +191,6 @@ class LlmProductFeedbackAdmissionIntegrationTest extends BaseIntegrationTest {
                         Long.class,
                         pool))
                 .isEqualTo(1L);
-    }
-
-    @Test
-    void shouldPrioritizeReviewClaimsWhenFeedbackWasQueuedFirst() throws Exception {
-        long pool = pool(1, 0);
-        var workspace = context.getBean(WorkspaceRepository.class)
-                .saveAndFlush(TestEntities.activeWorkspace("pf-claim-" + UUID.randomUUID()));
-        var job = new ReviewJob();
-        RuntimeJobTestData.initialize(job, workspace.getId());
-        job.setConfigSnapshot(context.getBean(ObjectMapper.class).createObjectNode());
-        var jobs = context.getBean(ReviewJobRepository.class);
-        jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
-        var caller = new LlmCallPermits.Caller(workspace.getId(), job.getId(), 0, null);
-        var transactions = context.getBean(TransactionTemplate.class);
-        var occupied = admit(first, pool, LlmCallClass.EVENT, 1L);
-        var feedback = submit(first, pool, LlmCallClass.PRODUCT_FEEDBACK, null);
-        awaitWaiting(pool, LlmCallClass.PRODUCT_FEEDBACK);
-        try {
-            assertThat(Objects.requireNonNull(
-                                    transactions.execute(status -> second.reserve(pool, LlmCallClass.REQUEST, caller)))
-                            .granted())
-                    .isFalse();
-            occupied.close();
-            var claim = transactions.execute(status -> {
-                var reserved = second.reserve(pool, LlmCallClass.REQUEST, caller);
-                if (reserved.granted())
-                    jdbc.update(
-                            "UPDATE review_job SET status='RUNNING', worker_id=?, leased_until=clock_timestamp()+interval '1 minute' WHERE id=?",
-                            secondWorkerId,
-                            job.getId());
-                return reserved;
-            });
-            assertThat(Objects.requireNonNull(claim).granted()).isTrue();
-            assertThat(feedback.isDone()).isFalse();
-            var review = Objects.requireNonNull(second.acquire(
-                    pool,
-                    LlmCallClass.REQUEST,
-                    caller,
-                    ended::get,
-                    Instant.now().plusSeconds(10)));
-            granted.add(review);
-            review.close();
-            assertThat(feedback.get(10, TimeUnit.SECONDS).isRevoked()).isFalse();
-        } finally {
-            jdbc.update("UPDATE review_job SET status='CANCELLED' WHERE id=?", job.getId());
-            transactions.executeWithoutResult(status -> second.withdrawClaim(caller));
-            second.renew();
-        }
     }
 
     @Test

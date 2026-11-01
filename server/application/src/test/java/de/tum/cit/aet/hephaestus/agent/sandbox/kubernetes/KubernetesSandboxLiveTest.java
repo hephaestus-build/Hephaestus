@@ -912,7 +912,7 @@ class KubernetesSandboxLiveTest {
                     sandboxes,
                     new DefaultListableBeanFactory().getBeanProvider(ContextLoader.class),
                     Clock.systemUTC());
-            TurnAttempt turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
+            TurnAttempt turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, UUID.randomUUID());
             Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
             var attempt = new TurnSandboxes.Attempt(turn.turnId(), turn.attempt());
 
@@ -1631,7 +1631,7 @@ class KubernetesSandboxLiveTest {
             var beans = new DefaultListableBeanFactory();
             beans.registerSingleton("loader", new FixedLoader(repository));
             folder = new TurnContextFolder(sandboxes, beans.getBeanProvider(ContextLoader.class), Clock.systemUTC());
-            turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
+            turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, UUID.randomUUID());
             deadline = Instant.now().plus(Duration.ofMinutes(5));
         }
 

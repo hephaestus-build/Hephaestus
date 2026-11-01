@@ -55,7 +55,7 @@ class ReviewJobEventListenerIntegrationTest extends BaseIntegrationTest {
         var interrupted = new AtomicBoolean();
         when(assignments.executable(978001L, reviewId, 978006L)).thenAnswer(invocation -> {
             interrupted.set(true);
-            throw new IllegalStateException("Simulated crash after start, before enqueue");
+            throw new IllegalStateException("Simulated crash before enqueue");
         });
 
         // Keep async advice off the publisher's transaction thread, and join without a clock deadline.
@@ -85,9 +85,7 @@ class ReviewJobEventListenerIntegrationTest extends BaseIntegrationTest {
                         978001L,
                         reviewId))
                 .isZero();
-        assertThat(failure)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Simulated crash after start, before enqueue");
+        assertThat(failure).isInstanceOf(IllegalStateException.class).hasMessage("Simulated crash before enqueue");
     }
 
     @TestConfiguration

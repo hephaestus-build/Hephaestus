@@ -113,7 +113,7 @@ public class ReviewJobLifecycleService {
             }
         }
 
-        // Reload to read worker_id, which is only set at claim.
+        // Reload to read the lease, which is only set at claim.
         ReviewJob fresh = requireJob(workspaceId, jobId);
         recordUsageIfStarted(fresh);
         jobTelemetry.terminal(fresh, ReviewJobStatus.CANCELLED, ReviewJobTelemetry.age(fresh));

@@ -54,8 +54,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Tag("integration")
 class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    private static final String WORKER = "worker-usage";
-
     /** $10 per 1M input tokens, nothing for output: the fixture's admitted rates. */
     private static final MentorTurnAdmission ADMITTED = MentorTurnAdmission.of(
             LlmCatalogTestFixtures.admittedMentorConfig(),
@@ -113,6 +111,11 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         return runningTurn(Duration.ofMinutes(5));
     }
 
+    /** The admitted attempt's lease runs out, so the take-back that follows is the lease reaper's. */
+    private void leaseRanOut(MentorTurn turn) {
+        jdbc.update("UPDATE mentor_turn SET leased_until = now() - interval '1 second' WHERE id = ?", turn.getId());
+    }
+
     private MentorTurn runningTurn(Duration lease) {
         turns.submit(
                 workspace.getId(),
@@ -123,7 +126,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        return turns.claimNext(WORKER, lease).orElseThrow();
+        return turns.claimNext(lease).orElseThrow();
     }
 
     private Instant measuredDate(MentorTurn turn, int attempt) {
@@ -138,8 +141,14 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @DisplayName("the take-back dates the attempt; a late call and a delayed billing keep that month")
     void shouldKeepTheTakeBackMonthWhenTheLateCallAndTheBillingArriveLater() {
-        MentorTurn turn = runningTurn(Duration.ofSeconds(-1));
-        attemptUsage.admit(turn.getId(), turn.getAttempt(), WORKER, ADMITTED);
+        MentorTurn turn = runningTurn();
+        attemptUsage.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                ADMITTED);
+        leaseRanOut(turn);
         var first = attempt(turn);
         accumulate(first, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
         // The take-back commits; its billing has not run yet.
@@ -156,8 +165,13 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 Timestamp.from(earlierMonth),
                 turn.getId(),
                 first.number());
-        MentorTurn retried = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
-        attemptUsage.admit(retried.getId(), retried.getAttempt(), WORKER, ADMITTED);
+        MentorTurn retried = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
+        attemptUsage.admit(
+                retried.getWorkspaceId(),
+                retried.getId(),
+                retried.getAttempt(),
+                Objects.requireNonNull(retried.getLeaseId()),
+                ADMITTED);
 
         // The already-dispatched call returns now, in the current month, and projects the attempt first.
         accumulate(first, new ProxyTokenUsage(50_000, 0, 0, 0, 0));
@@ -178,8 +192,14 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @DisplayName("an attempt taken back before any call is dated then, so a call that returns later keeps that date")
     void shouldDateAnAttemptWithoutCallsAtItsTakeBack() {
-        MentorTurn turn = runningTurn(Duration.ofSeconds(-1));
-        attemptUsage.admit(turn.getId(), turn.getAttempt(), WORKER, ADMITTED);
+        MentorTurn turn = runningTurn();
+        attemptUsage.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                ADMITTED);
+        leaseRanOut(turn);
         var first = attempt(turn);
         MentorTurnService.LostAttempt lost = Objects.requireNonNull(transactionTemplate.execute(tx -> {
             MentorTurnService.LostAttempt taken =
@@ -200,7 +220,12 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     /** A claimed turn whose attempt the worker admitted, as {@code MentorTurnStarter} admits it. */
     private MentorTurn admittedTurn(MentorTurnAdmission admitted) {
         MentorTurn turn = runningTurn();
-        attemptUsage.admit(turn.getId(), turn.getAttempt(), WORKER, admitted);
+        attemptUsage.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                admitted);
         return turn;
     }
 
@@ -224,7 +249,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
 
     private ProxyRouting.BilledAttempt attempt(MentorTurn turn) {
         return new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
     }
 
     private void accumulate(ProxyRouting.BilledAttempt attempt, ProxyTokenUsage usage) {
@@ -233,9 +258,10 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
 
     private void end(MentorTurn turn) {
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
     }
 
@@ -279,10 +305,11 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         accumulate(attempt(turn), new ProxyTokenUsage(100, 40, 0, 0, 0));
 
         turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(), null, null));
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(), null, null));
         accumulate(attempt(turn), new ProxyTokenUsage(999, 999, 0, 0, 0));
 
         MentorTurn row = stored(turn);
@@ -320,14 +347,20 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     void shouldRetainLateProxyUsageOnTheAttemptThatAlreadyEnded() {
         MentorTurn turn = runningTurn();
         // The worker's admission, which also creates the attempt's usage measurement before any call.
-        attemptUsage.admit(turn.getId(), turn.getAttempt(), WORKER, ADMITTED);
+        attemptUsage.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                ADMITTED);
         // The proxy keeps this identity from dispatch until its observed usage is settled.
         var owningAttempt = attempt(turn);
         accumulate(owningAttempt, new ProxyTokenUsage(100_000, 40, 0, 0, 0));
         completion.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(turn.getLeaseId()),
                 new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null, null));
 
         MentorTurn ended = stored(turn);
@@ -365,7 +398,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
         transactionTemplate.executeWithoutResult(
                 tx -> assertThat(turns.requeueRunning(workspace.getId(), conversation.getId()))
                         .isPresent());
-        MentorTurn retried = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn retried = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         assertThat(retried.getAttempt()).isEqualTo(first.number() + 1);
         // The retry runs on other rates and another purse.
         var otherPrice = new LlmPriceSnapshot(
@@ -378,9 +411,10 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
                 BigDecimal.ZERO,
                 BigDecimal.ZERO);
         attemptUsage.admit(
+                retried.getWorkspaceId(),
                 retried.getId(),
                 retried.getAttempt(),
-                WORKER,
+                Objects.requireNonNull(retried.getLeaseId()),
                 new MentorTurnAdmission(
                         ADMITTED.model(),
                         otherPrice,
@@ -419,7 +453,7 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     void shouldDropACallWhenItsAttemptNumberIsNotTheRunningOne() {
         MentorTurn turn = admittedTurn(ADMITTED);
         var stale = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt() + 1, BigDecimal.ZERO, WORKER);
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt() + 1, BigDecimal.ZERO, turn.getLeaseId());
 
         accumulate(stale, new ProxyTokenUsage(500, 5, 0, 0, 0));
 
@@ -434,7 +468,12 @@ class MentorTurnUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegra
     @DisplayName("a call of an attempt admitted without a measurement is dropped, and none is created for it")
     void shouldDropACallWhenItsAttemptHasNoMeasurement() {
         MentorTurn turn = runningTurn();
-        turns.admit(turn.getId(), turn.getAttempt(), WORKER, ADMITTED.toJson());
+        turns.admit(
+                turn.getWorkspaceId(),
+                turn.getId(),
+                turn.getAttempt(),
+                Objects.requireNonNull(turn.getLeaseId()),
+                ADMITTED.toJson());
 
         accumulate(attempt(turn), new ProxyTokenUsage(500, 5, 0, 0, 0));
         end(turn);

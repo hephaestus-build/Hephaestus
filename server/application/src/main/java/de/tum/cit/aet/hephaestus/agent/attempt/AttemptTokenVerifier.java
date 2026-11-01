@@ -96,8 +96,8 @@ public class AttemptTokenVerifier {
     }
 
     private static AttemptJwt attemptJwt(
-            DecodedJWT verified, @Nullable String workerId, String jti, Instant issuedAt, Instant expiresAt) {
-        if (workerId != null) {
+            DecodedJWT verified, @Nullable String subject, String jti, Instant issuedAt, Instant expiresAt) {
+        if (subject != null) {
             throw new AttemptTokenInvalidException("attempt token contains sub claim", "claim");
         }
         String kindName = verified.getClaim(AttemptTokenIssuer.KIND_CLAIM).asString();
@@ -106,9 +106,10 @@ public class AttemptTokenVerifier {
                 .findFirst()
                 .orElseThrow(() -> new AttemptTokenInvalidException("missing or invalid attempt_kind claim", "claim"));
         UUID id = uuidClaim(verified, AttemptTokenIssuer.ID_CLAIM);
+        UUID leaseId = uuidClaim(verified, AttemptTokenIssuer.LEASE_CLAIM);
         Long workspaceId = longClaim(verified, "workspace_id");
         Integer attempt = intClaim(verified, "attempt");
-        if (id == null || workspaceId == null || attempt == null) {
+        if (id == null || workspaceId == null || attempt == null || leaseId == null) {
             throw new AttemptTokenInvalidException("missing or invalid attempt binding claim", "claim");
         }
         // A review credential without its signed work deadline has no defined work time. The JWT leeway applies to
@@ -123,7 +124,16 @@ public class AttemptTokenVerifier {
         }
         try {
             return new AttemptJwt(
-                    kind, id, workspaceId, attempt, scopeClaim(verified), jti, issuedAt, expiresAt, workDeadline);
+                    kind,
+                    id,
+                    workspaceId,
+                    attempt,
+                    leaseId,
+                    scopeClaim(verified),
+                    jti,
+                    issuedAt,
+                    expiresAt,
+                    workDeadline);
         } catch (IllegalArgumentException invalid) {
             throw new AttemptTokenInvalidException("invalid attempt claims: " + invalid.getMessage(), "claim", invalid);
         }

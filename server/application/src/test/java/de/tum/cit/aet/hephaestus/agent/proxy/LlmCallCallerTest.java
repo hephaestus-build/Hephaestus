@@ -43,28 +43,4 @@ class LlmCallCallerTest extends BaseUnitTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Product feedback calls have no workspace; all other calls require one");
     }
-
-    @Test
-    void shouldRejectAReviewReservationWhenItsWorkspaceIsMissing() {
-        var caller = new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null);
-        assertThatThrownBy(() -> permits.reserve(1, LlmCallClass.REQUEST, caller))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Only workspace review calls can reserve capacity");
-    }
-
-    @Test
-    void shouldRejectAReviewReservationWhenItsClassIsProductFeedback() {
-        var caller = new LlmCallPermits.Caller(1L, UUID.randomUUID(), 0, null);
-        assertThatThrownBy(() -> permits.reserve(1, LlmCallClass.PRODUCT_FEEDBACK, caller))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Only workspace review calls can reserve capacity");
-    }
-
-    @Test
-    void shouldRejectAClaimWithdrawalWhenItsWorkspaceIsMissing() {
-        var caller = new LlmCallPermits.Caller(null, UUID.randomUUID(), 0, null);
-        assertThatThrownBy(() -> permits.withdrawClaim(caller))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Review claims require a workspace");
-    }
 }

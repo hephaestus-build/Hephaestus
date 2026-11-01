@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -9,9 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
-import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
@@ -19,14 +16,11 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
@@ -36,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,13 +53,10 @@ public class ReviewJobClaimService {
     private final ReviewJobAssignments assignments;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
-    private final MeterRegistry meterRegistry;
+    private final ReviewStart reviewStart;
     private final LlmBudgetService llmBudgetService;
     private final @Nullable LlmAdmissionService llmAdmissionService;
     private final ReviewJobTelemetry jobTelemetry;
-    private final @Nullable String workerId;
-    private final Counter concurrencyRejected;
-    private final Timer claimLatency;
     private final LlmCallPermits callPermits;
 
     public ReviewJobClaimService(
@@ -74,11 +66,10 @@ public class ReviewJobClaimService {
             ReviewJobAssignments assignments,
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
-            MeterRegistry meterRegistry,
+            ReviewStart reviewStart,
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
-            Optional<WorkerProperties> workerProperties,
             LlmCallPermits callPermits) {
         this.jobRepository = jobRepository;
         this.callPermits = callPermits;
@@ -87,28 +78,20 @@ public class ReviewJobClaimService {
         this.assignments = assignments;
         this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
-        this.meterRegistry = meterRegistry;
+        this.reviewStart = reviewStart;
         this.llmBudgetService = llmBudgetService;
         this.llmAdmissionService = llmAdmissionService;
         this.jobTelemetry = jobTelemetry;
-        this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
-        this.concurrencyRejected = Counter.builder(AgentMetrics.AGENT_JOB_CONCURRENCY_REJECTED)
-                .description("Jobs rejected due to concurrency limits")
-                .register(meterRegistry);
-        this.claimLatency = Timer.builder(AgentMetrics.AGENT_JOB_CLAIM_LATENCY)
-                .description("Time between job submission and its claim")
-                .register(meterRegistry);
     }
 
     sealed interface ClaimAttempt {}
 
     record PoolWait(long poolId) implements ClaimAttempt {}
 
-    record ClaimTurn(UUID jobId) implements ClaimAttempt {}
-
     enum ClaimOutcome implements ClaimAttempt {
         ALREADY_CLAIMED,
         CONCURRENCY_FULL,
+        QUOTA_FULL,
         BUDGET_HELD,
     }
 
@@ -131,8 +114,12 @@ public class ReviewJobClaimService {
     record TerminalClaim(ReviewJob job, ReviewJobStatus status) implements ClaimAttempt {}
 
     @Nullable
-    ClaimAttempt claimJob(UUID jobId) {
+    ClaimAttempt claimJob(UUID jobId, BooleanSupplier reviewRoom) {
         return transactionTemplate.execute(status -> {
+            // The review service locks the parent before it changes the review, so the claim takes the parent before
+            // the job. Locking without starting it keeps a refused claim from committing a speculative parent
+            // transition.
+            if (jobRepository.lockParentForQueuedClaim(jobId).isEmpty()) return ClaimOutcome.ALREADY_CLAIMED;
             Optional<ReviewJob> locked = jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now());
             if (locked.isEmpty()) {
                 log.debug("Job already claimed or not QUEUED: jobId={}", jobId);
@@ -141,11 +128,7 @@ public class ReviewJobClaimService {
 
             ReviewJob job = locked.get();
             try {
-                ClaimAttempt result = claimLocked(job);
-                if (result instanceof ClaimOutcome || result instanceof TerminalClaim)
-                    callPermits.withdrawClaim(
-                            new LlmCallPermits.Caller(job.getWorkspaceId(), job.getId(), job.getAttempt(), null));
-                return result;
+                return claimLocked(job, reviewRoom);
             } catch (JobPreparationException failure) {
                 PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
                 job.setStatus(ReviewJobStatus.FAILED);
@@ -162,7 +145,7 @@ public class ReviewJobClaimService {
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        job.getWorkerId(),
+                        job.getLeaseId(),
                         objectMapper.writeValueAsString(diagnosis));
                 jobTelemetry.preparationFailed(job, preparation, "FAILED");
                 return new TerminalClaim(job, ReviewJobStatus.FAILED);
@@ -181,7 +164,7 @@ public class ReviewJobClaimService {
         job.setLeasedUntil(jobRepository.databaseNow().plusSeconds(ttl));
     }
 
-    private ClaimAttempt claimLocked(ReviewJob job) {
+    private ClaimAttempt claimLocked(ReviewJob job, BooleanSupplier reviewRoom) {
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
             job.setStatus(ReviewJobStatus.CANCELLED);
@@ -189,7 +172,7 @@ public class ReviewJobClaimService {
             job.setErrorMessage("A personal-data erasure request blocks this job.");
             job.setCancellationReason(ReviewJobCancellationReason.PERSON_DATA_ERASED);
             jobRepository.save(job);
-            recordPracticeReviewRefusal("person_data_erased");
+            jobTelemetry.claimRefused("person_data_erased");
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
 
@@ -215,7 +198,7 @@ public class ReviewJobClaimService {
             job.setErrorMessage("The developer has not enabled AI practice reviews in this workspace.");
             job.setCancellationReason(ReviewJobCancellationReason.MEMBER_AI_DECLINED);
             jobRepository.save(job);
-            recordPracticeReviewRefusal("member_ai_declined");
+            jobTelemetry.claimRefused("member_ai_declined");
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
 
@@ -242,7 +225,7 @@ public class ReviewJobClaimService {
         long runningCount = jobRepository.countRunningByWorkspaceIdAndDataHandlingTier(
                 job.getWorkspaceId(), binding.getDataHandlingTier());
         if (runningCount >= binding.getMaxConcurrentJobs()) {
-            concurrencyRejected.increment();
+            jobTelemetry.claimRejected();
             log.info(
                     "Concurrency limit reached: jobId={}, workspaceId={}, purpose={}, running={}, max={}",
                     job.getId(),
@@ -253,33 +236,25 @@ public class ReviewJobClaimService {
             return ClaimOutcome.CONCURRENCY_FULL;
         }
 
-        Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-        if (!composing && poolId != null) {
-            var reservation = callPermits.reserve(
-                    poolId,
-                    LlmCallClass.REQUEST,
-                    new LlmCallPermits.Caller(
-                            job.getWorkspaceId(),
-                            job.getId(),
-                            job.getAttempt(),
-                            snapshot.model().connectionRef()));
-            if (!reservation.granted()) {
-                UUID next = reservation.nextClaim();
-                return next == null ? new PoolWait(poolId) : new ClaimTurn(next);
-            }
+        if (!composing) {
+            if (!reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
+            Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
+            if (poolId != null && callPermits.hasBackgroundWaiters(poolId)) return new PoolWait(poolId);
         }
 
+        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
         Instant claimedAt = Instant.now();
         // The first claim only: a requeued review would sample its submission again, later each time.
         if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
-            claimLatency.record(Duration.between(job.getSubmittedAt(), claimedAt));
+            jobTelemetry.claimWait(Duration.between(job.getSubmittedAt(), claimedAt));
         }
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(claimedAt);
         job.setExecutionStartedAt(null);
         // Clear the budget hold marker so a crash requeue cannot inherit an expired hold.
         job.setHoldReason(null);
-        job.setWorkerId(workerId);
+        // A fresh lease names this attempt to the gateway and every fenced write, on any worker.
+        job.setLeaseId(UUID.randomUUID());
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
         lease(job);
@@ -287,14 +262,28 @@ public class ReviewJobClaimService {
         return new ClaimResult(job, snapshot, itemKind);
     }
 
+    /**
+     * The review was cancelled or has ended, and its cancellation has not reached this job, for example after a
+     * restart. Left queued, the job would come first in every poll and never run.
+     */
+    private TerminalClaim cancelWithParent(ReviewJob job) {
+        job.setStatus(ReviewJobStatus.CANCELLED);
+        job.setCompletedAt(Instant.now());
+        job.setErrorMessage("Its review was cancelled or has ended.");
+        job.setCancellationReason(ReviewJobCancellationReason.CANCELLED_BY_REQUESTER);
+        jobRepository.save(job);
+        return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
+    }
+
     /** Claims an attempt that makes no model call: it withholds what its review still has open, with this cause. */
-    private ClaimResult claimToWithhold(ReviewJob job, CompositionStop cause) {
+    private ClaimAttempt claimToWithhold(ReviewJob job, CompositionStop cause) {
         String itemKind = assignments.load(job).getFirst().item().kind().value();
+        if (!reviewStart.start(job.getWorkspaceId(), job.getReviewId())) return cancelWithParent(job);
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(null);
         job.setHoldReason(null);
-        job.setWorkerId(workerId);
+        job.setLeaseId(UUID.randomUUID());
         jobRepository.save(job);
         lease(job);
         return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
@@ -390,8 +379,8 @@ public class ReviewJobClaimService {
                     job.getId(),
                     job.getWorkspaceId(),
                     blockReason);
-            recordPracticeReviewRefusal("budget_exhausted");
-            meterRegistry.counter(AgentMetrics.AGENT_JOB_BUDGET_REFUSED).increment();
+            jobTelemetry.claimRefused("budget_exhausted");
+            jobTelemetry.budgetRefused();
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
         job.setAvailableAt(now.plus(BUDGET_HOLD_INTERVAL));
@@ -405,7 +394,7 @@ public class ReviewJobClaimService {
                 job.getId(),
                 job.getWorkspaceId(),
                 job.getAvailableAt());
-        meterRegistry.counter(AgentMetrics.AGENT_JOB_BUDGET_HELD).increment();
+        jobTelemetry.budgetHeld();
         return ClaimOutcome.BUDGET_HELD;
     }
 
@@ -416,14 +405,10 @@ public class ReviewJobClaimService {
         job.setErrorMessage(message);
         job.setCancellationReason(ReviewJobCancellationReason.MODEL_UNAVAILABLE);
         jobRepository.save(job);
-        meterRegistry.counter(AgentMetrics.AGENT_JOB_MODEL_REFUSED).increment();
-        recordPracticeReviewRefusal("model_unavailable");
+        jobTelemetry.modelRefused();
+        jobTelemetry.claimRefused("model_unavailable");
         log.info("Refusing claim — configured model unavailable: jobId={}", job.getId());
         return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
-    }
-
-    private void recordPracticeReviewRefusal(String reason) {
-        ReviewRefusalRecorder.record(meterRegistry, "execution", reason);
     }
 
     private @Nullable UsageFundingSource claimedFundingSource(ReviewJob job) {

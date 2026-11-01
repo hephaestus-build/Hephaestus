@@ -24,6 +24,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 class AttemptTokenTest extends BaseUnitTest {
 
+    private static final UUID LEASE = UUID.fromString("ed34a2dc-7803-43e5-82c4-d2865087c41f");
     private AttemptSigningKey key;
     private AttemptTokenIssuer issuer;
     private AttemptTokenVerifier verifier;
@@ -40,10 +41,10 @@ class AttemptTokenTest extends BaseUnitTest {
         UUID jobId = UUID.randomUUID();
         Instant work = Instant.now().plusSeconds(300);
 
-        AttemptJwt jwt = verifier.verify(
-                issuer.issueForAttempt(AttemptJwt.Kind.REVIEW, jobId, 42L, 0, work, work.plusSeconds(600)));
+        AttemptJwt jwt = verifier.verify(issuer.issueForReview(jobId, 42L, 0, LEASE, work, work.plusSeconds(600)));
 
         assertThat(jwt.id()).isEqualTo(jobId);
+        assertThat(jwt.leaseId()).isEqualTo(LEASE);
         assertThat(jwt.workspaceId()).isEqualTo(42L);
         assertThat(jwt.scopes()).containsExactly("llm_proxy");
         assertThat(jwt.issuedAt()).isNotNull();
@@ -54,8 +55,8 @@ class AttemptTokenTest extends BaseUnitTest {
     void shouldIssueATurnTokenThatNamesOnlyItsTurnWorkspaceAndAttempt() {
         UUID turnId = UUID.randomUUID();
 
-        AttemptJwt jwt = verifier.verify(issuer.issueForAttempt(
-                AttemptJwt.Kind.TURN, turnId, 42L, 2, null, Instant.now().plusSeconds(300)));
+        AttemptJwt jwt = verifier.verify(issuer.issueForTurn(
+                turnId, 42L, 2, UUID.randomUUID(), Instant.now().plusSeconds(300)));
 
         assertThat(jwt.kind()).isEqualTo(AttemptJwt.Kind.TURN);
         assertThat(jwt.id()).isEqualTo(turnId);
@@ -95,6 +96,14 @@ class AttemptTokenTest extends BaseUnitTest {
                         "a workspace that is no number",
                         AttemptJwt.Kind.REVIEW,
                         Map.<String, Object>of("workspace_id", "acme")),
+                Arguments.of(
+                        "no lease",
+                        AttemptJwt.Kind.REVIEW,
+                        Map.<String, Object>of(AttemptTokenIssuer.LEASE_CLAIM, ABSENT)),
+                Arguments.of(
+                        "an invalid lease",
+                        AttemptJwt.Kind.TURN,
+                        Map.<String, Object>of(AttemptTokenIssuer.LEASE_CLAIM, "worker-1")),
                 Arguments.of("no attempt", AttemptJwt.Kind.REVIEW, Map.<String, Object>of("attempt", ABSENT)),
                 Arguments.of(
                         "an attempt that is no number",
@@ -143,14 +152,6 @@ class AttemptTokenTest extends BaseUnitTest {
         assertThatThrownBy(() -> verifier.verify(token))
                 .isInstanceOf(AttemptTokenInvalidException.class)
                 .hasMessageContaining("work_deadline");
-        assertThatThrownBy(() -> issuer.issueForAttempt(
-                        AttemptJwt.Kind.TURN,
-                        UUID.randomUUID(),
-                        42L,
-                        1,
-                        issued.plusSeconds(300),
-                        issued.plusSeconds(900)))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -158,8 +159,8 @@ class AttemptTokenTest extends BaseUnitTest {
         Instant work = Instant.now().plusSeconds(900).truncatedTo(ChronoUnit.SECONDS);
         Instant expiry = work.plusSeconds(600);
 
-        AttemptJwt jwt = verifier.verify(
-                issuer.issueForAttempt(AttemptJwt.Kind.REVIEW, UUID.randomUUID(), 42L, 0, work, expiry));
+        AttemptJwt jwt =
+                verifier.verify(issuer.issueForReview(UUID.randomUUID(), 42L, 0, UUID.randomUUID(), work, expiry));
 
         assertThat(jwt.workDeadline()).isEqualTo(work);
         assertThat(jwt.expiresAt()).isEqualTo(expiry);
@@ -170,14 +171,14 @@ class AttemptTokenTest extends BaseUnitTest {
     void shouldNotIssueAJobTokenWhoseWorkOutlastsItOrHasAlreadyEnded() {
         Instant expiry = Instant.now().plusSeconds(600);
 
-        assertThatThrownBy(() -> issuer.issueForAttempt(
-                        AttemptJwt.Kind.REVIEW, UUID.randomUUID(), 42L, 0, expiry.plusSeconds(1), expiry))
+        assertThatThrownBy(() -> issuer.issueForReview(
+                        UUID.randomUUID(), 42L, 0, UUID.randomUUID(), expiry.plusSeconds(1), expiry))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> issuer.issueForAttempt(
-                        AttemptJwt.Kind.REVIEW,
+        assertThatThrownBy(() -> issuer.issueForReview(
                         UUID.randomUUID(),
                         42L,
                         0,
+                        UUID.randomUUID(),
                         Instant.now().minusSeconds(1),
                         expiry))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -229,8 +230,8 @@ class AttemptTokenTest extends BaseUnitTest {
     @Test
     void shouldRefuseAJobTokenWhoseWorkDeadlineWasChangedAfterSigning() {
         Instant work = Instant.now().plusSeconds(300);
-        String[] parts = issuer.issueForAttempt(
-                        AttemptJwt.Kind.REVIEW, UUID.randomUUID(), 42L, 0, work, work.plusSeconds(600))
+        String[] parts = issuer.issueForReview(
+                        UUID.randomUUID(), 42L, 0, UUID.randomUUID(), work, work.plusSeconds(600))
                 .split("\\.", -1);
         String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         String later = payload.replace(
@@ -282,6 +283,7 @@ class AttemptTokenTest extends BaseUnitTest {
                 .withClaim("attempt", 0)
                 .withClaim("scope", List.of("llm_proxy"))
                 .withJWTId(UUID.randomUUID().toString())
+                .withClaim(AttemptTokenIssuer.LEASE_CLAIM, LEASE.toString())
                 .withIssuedAt(issued)
                 .withExpiresAt(expires);
         claims.forEach((name, value) -> {

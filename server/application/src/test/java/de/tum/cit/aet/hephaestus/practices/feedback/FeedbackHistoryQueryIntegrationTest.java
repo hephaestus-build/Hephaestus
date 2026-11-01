@@ -447,10 +447,11 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                         null));
         MentorTurn running = running(asked.turn().getId());
         turns.end(
+                running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                "worker-history",
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
                                 MentorLedgerFixtures.toolCall(
@@ -490,8 +491,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
     /** Claims turns until this one starts. A turn of another test that starts first is taken along. */
     private MentorTurn running(UUID turnId) {
         while (true) {
-            MentorTurn claimed =
-                    turns.claimNext("worker-history", Duration.ofMinutes(5)).orElseThrow();
+            MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

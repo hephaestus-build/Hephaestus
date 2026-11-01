@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
@@ -76,8 +75,7 @@ class LlmProxySecurityConfig {
             AttemptTokenVerifier jwtVerifier,
             BucketResolver bucketResolver,
             ProxyAccounting accounting,
-            ObjectMapper objectMapper,
-            WorkerProperties workerProperties)
+            ObjectMapper objectMapper)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
         RequestMatcher practiceScriptCalls = paths.matcher(HttpMethod.POST, "/internal/llm/practice-script/{slot}/**");
@@ -138,11 +136,7 @@ class LlmProxySecurityConfig {
                                 caller(identity -> identity.job() != null))))
                 .addFilterBefore(
                         new JobTokenAuthenticationFilter(
-                                agentJobRepository,
-                                mentorTurnRepository,
-                                gatewaySessions,
-                                jwtVerifier,
-                                workerProperties.resolvedWorkerId()),
+                                agentJobRepository, mentorTurnRepository, gatewaySessions, jwtVerifier),
                         UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(
                         bounded(gatewayProperties.maxRequestBytes(), bodies), JobTokenAuthenticationFilter.class)

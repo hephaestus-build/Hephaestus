@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.Serial;
 import java.util.Set;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -26,19 +25,16 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     private final MentorTurnRepository turns;
     private final SandboxGatewaySessions sessions;
     private final AttemptTokenVerifier verifier;
-    private final String workerId;
 
     JobTokenAuthenticationProvider(
             ReviewJobRepository jobs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
-            AttemptTokenVerifier verifier,
-            String workerId) {
+            AttemptTokenVerifier verifier) {
         this.jobs = jobs;
         this.turns = turns;
         this.sessions = sessions;
         this.verifier = verifier;
-        this.workerId = workerId;
     }
 
     @Override
@@ -68,29 +64,28 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         if (job.getWorkspaceId() != jwt.workspaceId()) throw invalid();
         if (request.runtimeJobId() != null
                 && !request.runtimeJobId().equals(jwt.id().toString())) throw invalid();
-        // A valid credential of an attempt that ended, was requeued or moved to another worker: its runner stops.
-        if (job.getStatus() != ReviewJobStatus.RUNNING
-                || job.getAttempt() != jwt.attempt()
-                || !workerId.equals(job.getWorkerId()))
-            throw new WorkerOwnershipConflict("This review attempt no longer runs on this worker");
-        return new JobTokenAuthentication(ProxyIdentity.of(jwt, workerId), jwt.scopes(), null);
+        // A valid credential of an attempt that ended or was requeued, so that it lost its lease: its runner stops.
+        if (!jobs.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+            throw new AttemptLeaseConflict("This review attempt no longer holds its lease");
+        return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), null);
     }
 
     /**
      * A turn token never reaches a sandbox runtime, and on the turn endpoints only its own turn. A model call needs the
-     * attempt to hold its lease on this worker; an attempt that ended or moved on gets {@code 409}, so its host stops.
+     * attempt to hold its live lease; an attempt that ended or moved on gets {@code 409}, so its host stops.
      */
     private Authentication turn(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
         if (request.runtimeJobId() != null) throw invalid();
         if (request.turnId() != null) {
             if (!request.turnId().equals(jwt.id().toString())) throw invalid();
         } else {
-            var turn = turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())
-                    .orElseThrow(JobTokenAuthenticationProvider::invalid);
-            if (!turn.isLeased() || turn.getAttempt() != jwt.attempt() || !workerId.equals(turn.getWorkerId()))
-                throw new WorkerOwnershipConflict("This turn attempt no longer holds its lease");
+            // An unknown turn, or one of another workspace, is no credential at all; only a known turn's ended attempt
+            // gets 409.
+            if (turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId()).isEmpty()) throw invalid();
+            if (!turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.attempt(), jwt.leaseId()))
+                throw new AttemptLeaseConflict("This turn attempt no longer holds its lease");
         }
-        return new JobTokenAuthentication(ProxyIdentity.of(jwt, workerId), jwt.scopes(), jwt);
+        return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), jwt);
     }
 
     /**
@@ -111,11 +106,11 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
      * Answered {@code 409} with {@link JobTokenAuthenticationFilter#ATTEMPT_ENDED}: the credential is valid, but the
      * attempt ended, or another worker or a later attempt now owns the work.
      */
-    static final class WorkerOwnershipConflict extends BadCredentialsException {
+    static final class AttemptLeaseConflict extends BadCredentialsException {
         @Serial
         private static final long serialVersionUID = 1L;
 
-        WorkerOwnershipConflict(String message) {
+        AttemptLeaseConflict(String message) {
             super(message);
         }
     }

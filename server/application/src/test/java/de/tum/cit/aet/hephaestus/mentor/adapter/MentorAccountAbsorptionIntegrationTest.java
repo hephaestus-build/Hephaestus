@@ -79,7 +79,6 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    private static final String WORKER = "worker-absorption";
     private static final Duration LEASE = Duration.ofMinutes(5);
 
     private Workspace workspace(String name) {
@@ -213,7 +212,9 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                 ask(shared, absorbed, MentorTurn.Surface.SLACK, "Asked in a Slack DM", "17.01");
         MentorTurn appAttempt = start(inApp.turn().getId());
         UUID slackTurn = inSlack.turn().getId();
-        int slackAttempt = start(slackTurn).getAttempt();
+        MentorTurn slackClaim = start(slackTurn);
+        int slackAttempt = slackClaim.getAttempt();
+        UUID slackLease = Objects.requireNonNull(slackClaim.getLeaseId());
         turnRepository.flush();
 
         contributor.absorb(claimed, unclaimed);
@@ -235,15 +236,16 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
                 .as("the question stays")
                 .containsEntry("conversation_id", kept.getId())
                 .containsEntry("kept", true);
-        assertThatThrownBy(() ->
-                        turns.updatePartial(slackTurn, slackAttempt, WORKER, JsonNodeFactory.instance.objectNode()))
+        assertThatThrownBy(() -> turns.updatePartial(
+                        shared.getId(), slackTurn, slackAttempt, slackLease, JsonNodeFactory.instance.objectNode()))
                 .as("the host of the absorbed attempt lost its lease")
                 .isInstanceOf(MentorLeaseLostException.class);
         assertThatThrownBy(() -> turns.end(
+                        shared.getId(),
                         slackTurn,
                         slackAttempt,
-                        WORKER,
-                        new MentorTurnService.AttemptEnd(
+                        slackLease,
+                        new MentorTurnService.Ending(
                                 MentorTurn.Status.DONE,
                                 List.of(MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "A stale answer")),
                                 null,
@@ -273,7 +275,7 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
     /** Claims turns until this one starts. A turn of another test that starts first rolls back with this test. */
     private MentorTurn start(UUID turnId) {
         while (true) {
-            MentorTurn claimed = turns.claimNext(WORKER, LEASE).orElseThrow();
+            MentorTurn claimed = turns.claimNext(LEASE).orElseThrow();
             if (claimed.getId().equals(turnId)) {
                 return claimed;
             }

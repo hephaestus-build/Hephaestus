@@ -141,6 +141,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class AccountErasureIntegrationTest extends BaseIntegrationTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
+    private static final UUID OTHER_LEASE = UUID.fromString("259da655-fd97-5a78-815d-211a9f22ceb8");
+
     @Autowired
     private PracticeModelTestFixtures modelFixtures;
 
@@ -512,7 +515,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         // The fixture ends the job; this run is still executing on its worker when the erasure starts.
         jdbc.update(
                 "UPDATE review_job SET status='RUNNING', processing_status='NONE', completed_at=NULL,"
-                        + " worker_id='worker-1', started_at=CURRENT_TIMESTAMP, execution_started_at=CURRENT_TIMESTAMP,"
+                        + " lease_id='508d958c-100e-594f-8b4e-6d5c60e59470', leased_until=CURRENT_TIMESTAMP + interval"
+                        + " '10 minutes', started_at=CURRENT_TIMESTAMP, execution_started_at=CURRENT_TIMESTAMP,"
                         + " config_snapshot=CAST(? AS jsonb) WHERE id=?",
                 mapper.writeValueAsString(snapshot.toJson(mapper)),
                 jobId);
@@ -550,11 +554,11 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         ProxyUsageAccumulator accumulator = accumulator(meters);
         var charge = new FrozenCharge("gpt-5", price);
         var attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, jobId, 0, BigDecimal.ZERO, "worker-1", 0L, 0L, workspaceId);
-        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, "worker-1", ModelKind.CHAT, charge))
+                UsageSourceType.REVIEW_JOB, jobId, 0, BigDecimal.ZERO, LEASE, 0L, 0L, workspaceId);
+        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, LEASE, ModelKind.CHAT, charge))
                 .isTrue();
         accumulator.accumulate(attempt, null, new ProxyTokenUsage(1000, 100, 0, 0, 0));
-        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, "worker-1", ModelKind.CHAT, charge))
+        assertThat(attemptUsage.registerCall(jobId, workspaceId, 0, LEASE, ModelKind.CHAT, charge))
                 .isTrue();
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM llm_usage_event WHERE workspace_id=?", Long.class, workspaceId))
@@ -1304,8 +1308,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        String worker = "worker-heph-erasure";
-        MentorTurn turn = mentorTurns.claimNext(worker, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn turn = mentorTurns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         var admitted = MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()));
         String measurements = "SELECT count(*) FROM mentor_turn_attempt_usage WHERE turn_id=?";
@@ -1317,17 +1320,27 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(jdbc.queryForObject(measurements, Long.class, turn.getId())).isZero();
 
         // The registration commits before the erasure suppresses the account, and one call is measured.
-        assertThat(mentorAttemptUsage.admit(turn.getId(), turn.getAttempt(), worker, admitted))
+        assertThat(mentorAttemptUsage.admit(
+                        turn.getWorkspaceId(),
+                        turn.getId(),
+                        turn.getAttempt(),
+                        Objects.requireNonNull(turn.getLeaseId()),
+                        admitted))
                 .isTrue();
         var meters = new SimpleMeterRegistry();
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, worker);
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
         accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         personData.requestErasure(requestId, administratorId, false);
         // A registration that starts after the suppression is refused under the person-data write fence.
-        assertThat(mentorAttemptUsage.admit(turn.getId(), turn.getAttempt(), worker, admitted))
+        assertThat(mentorAttemptUsage.admit(
+                        turn.getWorkspaceId(),
+                        turn.getId(),
+                        turn.getAttempt(),
+                        Objects.requireNonNull(turn.getLeaseId()),
+                        admitted))
                 .isFalse();
 
         var held = new CountDownLatch(1);
@@ -1396,20 +1409,21 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         null,
                         null));
-        String worker = "worker-heph-taken-back";
-        // A lease that already ran out, so the take-back below is the lease reaper's.
-        MentorTurn turn = mentorTurns.claimNext(worker, Duration.ofSeconds(-1)).orElseThrow();
+        MentorTurn turn = mentorTurns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         var llm = LlmCatalogTestFixtures.admittedMentorConfig();
         assertThat(mentorAttemptUsage.admit(
+                        turn.getWorkspaceId(),
                         turn.getId(),
                         turn.getAttempt(),
-                        worker,
+                        Objects.requireNonNull(turn.getLeaseId()),
                         MentorTurnAdmission.of(llm, Objects.requireNonNull(llm.priceSnapshot()))))
                 .isTrue();
+        // The lease then runs out, so the take-back below is the lease reaper's.
+        jdbc.update("UPDATE mentor_turn SET leased_until = now() - interval '1 second' WHERE id = ?", turn.getId());
         var meters = new SimpleMeterRegistry();
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
-                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, worker);
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, turn.getLeaseId());
         accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         // The take-back commits and dates the attempt; the billing of the lost attempt has not run yet.
@@ -1532,7 +1546,8 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
             throws Exception {
         var job = agentJobRepository.findById(derived.jobId()).orElseThrow();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("mounted-privacy-worker");
+        job.setLeaseId(OTHER_LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         agentJobRepository.saveAndFlush(job);
         var files = new JobEvidenceFiles(
                 new FabricLayout(evidenceRoot.toString()), agentJobRepository, Clock.systemUTC(), worker);

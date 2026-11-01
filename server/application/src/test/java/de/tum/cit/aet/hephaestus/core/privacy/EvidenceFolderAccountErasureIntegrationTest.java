@@ -53,6 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -86,6 +87,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
+    private static final UUID LEASE = UUID.fromString("c6c70fa5-5434-5d4b-a30b-561c0e4664cc");
+    private static final UUID OTHER_LEASE = UUID.fromString("357b1a4e-c0c5-53f2-ba0c-53de7d0cb279");
+
     private final AtomicLong sourceIds = new AtomicLong();
 
     @Autowired
@@ -859,7 +863,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 sourceIds.incrementAndGet());
         var job = work.job();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker-native-id");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         return jobs.saveAndFlush(job);
     }
 
@@ -1079,7 +1084,8 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 workspace, "file-proof-" + UUID.randomUUID().toString().substring(0, 8), "scm.file", 1L);
         var job = work.job();
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("file-proof-worker");
+        job.setLeaseId(OTHER_LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         jobs.saveAndFlush(job);
         var recorder = new ExactPersonDataCopyRecorder();
         var owner = catalog(root, recorder);

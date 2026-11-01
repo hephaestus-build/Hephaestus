@@ -94,7 +94,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     @Override
     public int roomFor(ResourceLimits limits) {
         int room = quota.roomFor(limits);
-        if (room == Integer.MAX_VALUE) return room;
+        if (room == Integer.MAX_VALUE || room == SandboxRoom.UNKNOWN_ROOM) return room;
         long launching = sandboxes.values().stream()
                 .filter(sandbox -> sandbox.pod == null)
                 .count();

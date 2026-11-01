@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -35,10 +37,12 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -51,6 +55,8 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
 class ScanCallGuardTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
     private final ScanBudget budget = mock(ScanBudget.class);
@@ -72,7 +78,7 @@ class ScanCallGuardTest extends BaseUnitTest {
                 1L,
                 1L,
                 1L,
-                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, BigDecimal.ZERO, "worker"),
+                new ProxyRouting.BilledAttempt(UsageSourceType.REVIEW_JOB, job.getId(), 0, BigDecimal.ZERO, LEASE),
                 null,
                 null,
                 workDeadline);
@@ -144,7 +150,8 @@ class ScanCallGuardTest extends BaseUnitTest {
     void setup() {
         lenient().when(budget.callCap(ArgumentMatchers.anyInt())).thenReturn(36L);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.INSTANCE,
                 UsagePricingState.PRICED,
@@ -173,6 +180,10 @@ class ScanCallGuardTest extends BaseUnitTest {
                 60,
                 null)));
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        // The database answers from the row: a replaced attempt or another lease holds no live lease.
+        when(jobs.hasLiveLease(eq(job.getId()), eq(1L), anyInt(), any(UUID.class)))
+                .thenAnswer(call -> job.getAttempt() == (int) call.getArgument(2)
+                        && call.getArgument(3).equals(job.getLeaseId()));
         var old = RuntimeReviewTestData.assignment(null, null).practice();
         var model = new FrozenModel(
                 "instance:1",

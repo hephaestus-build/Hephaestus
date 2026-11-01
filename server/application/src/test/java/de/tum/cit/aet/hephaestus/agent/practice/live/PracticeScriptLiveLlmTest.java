@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.practice.live;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmConnectionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.catalog.CreateWorkspaceLlmModelRequestDTO;
@@ -47,7 +46,6 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesIsolationProbe;
 import de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesSandboxCache;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -245,9 +243,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private AttemptTokenIssuer jwtIssuer;
 
     @Autowired
-    private WorkerProperties workerProperties;
-
-    @Autowired
     private SandboxGatewayConnector gateway;
 
     @Autowired
@@ -400,11 +395,11 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         Map<ModelKind, FrozenModel> frozen = snapshot.practiceScriptModels();
         assertThat(frozen.keySet()).isEqualTo(called);
         Instant workDeadline = Instant.now().plus(Duration.ofSeconds(LiveRunnerWorkspace.TIMEOUT_SECONDS + 300L));
-        String jobToken = jwtIssuer.issueForAttempt(
-                AttemptJwt.Kind.REVIEW,
+        String jobToken = jwtIssuer.issueForReview(
                 job.getId(),
                 context.id(),
                 job.getAttempt(),
+                Objects.requireNonNull(job.getLeaseId()),
                 workDeadline,
                 workDeadline.plus(Duration.ofMinutes(10)));
         PracticeSandboxSpec spec = practiceAdapter.buildSandboxSpec(new PracticeAgentRequest(
@@ -802,7 +797,9 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         job = jobRepository.findByIdAndWorkspaceId(jobId, item.workspaceId()).orElseThrow();
         job.setConfigSnapshot(priced);
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId(workerProperties.resolvedWorkerId());
+        // No worker heartbeat renews this hand-built attempt, so its lease outlasts the whole live run.
+        job.setLeaseId(UUID.randomUUID());
+        job.setLeasedUntil(Instant.now().plus(Duration.ofHours(1)));
         job.setStartedAt(Instant.now());
         job.setExecutionStartedAt(Instant.now());
         job.setCapture(snapshot);

@@ -23,6 +23,9 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Tag("integration")
 class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    private static final UUID LEASE = UUID.fromString("508d958c-100e-594f-8b4e-6d5c60e59470");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -65,6 +69,8 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofHours(1)));
         job.setConfigSnapshot(MAPPER.createObjectNode());
         job.prePersist();
         job = jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
@@ -77,7 +83,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
                         job.getId(),
                         job.getWorkspaceId(),
                         job.getAttempt(),
-                        job.getWorkerId(),
+                        Objects.requireNonNull(job.getLeaseId()),
                         ModelKind.CHAT,
                         FrozenCharge.UNKNOWN))
                 .isTrue();
@@ -85,14 +91,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private ProxyRouting.BilledAttempt attempt(ReviewJob job, int number) {
         return new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB,
-                job.getId(),
-                number,
-                BigDecimal.ZERO,
-                "worker-1",
-                0L,
-                0L,
-                job.getWorkspaceId());
+                UsageSourceType.REVIEW_JOB, job.getId(), number, BigDecimal.ZERO, LEASE, 0L, 0L, job.getWorkspaceId());
     }
 
     private void accumulate(ProxyUsageAccumulator accumulator, ProxyRouting.BilledAttempt attempt, String body) {
@@ -236,7 +235,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ProxyUsageAccumulator accumulator = new ProxyUsageAccumulator(failing, transactionManager, registry);
         ProxyRouting.BilledAttempt attempt = new ProxyRouting.BilledAttempt(
-                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, BigDecimal.ZERO, "worker-1", 0L, 0L, 1L);
+                UsageSourceType.REVIEW_JOB, UUID.randomUUID(), 0, BigDecimal.ZERO, LEASE, 0L, 0L, 1L);
 
         assertThatCode(() ->
                         accumulate(accumulator, attempt, "{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":0}}"))

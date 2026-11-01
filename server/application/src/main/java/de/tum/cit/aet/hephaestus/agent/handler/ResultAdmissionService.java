@@ -171,7 +171,7 @@ public class ResultAdmissionService {
         if (assignments.review(job).kind() == ReviewKind.ITEM && !admitted.isEmpty()) {
             progress = composition.privateProgress(job, admitted);
             var identity = new AdmissionIdentity(
-                    job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId()));
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getLeaseId()));
             privateRead = files.indexLateRead(
                     identity,
                     () -> Objects.requireNonNull(transactions.execute(status -> {
@@ -323,7 +323,9 @@ public class ResultAdmissionService {
                 .orElseThrow(StaleAttemptException::new);
         if (job.getStatus() != ReviewJobStatus.RUNNING
                 || job.getAttempt() != identity.attempt()
-                || !identity.workerId().equals(job.getWorkerId())) throw new StaleAttemptException();
+                || !identity.leaseId().equals(job.getLeaseId())
+                || job.getLeasedUntil() == null
+                || !job.getLeasedUntil().isAfter(jobs.databaseClock())) throw new StaleAttemptException();
         return job;
     }
 
@@ -351,7 +353,7 @@ public class ResultAdmissionService {
         return isAdmitted(job) && citationAttempt(job) != job.getAttempt();
     }
 
-    public record AdmissionIdentity(UUID jobId, long workspaceId, int attempt, String workerId) {}
+    public record AdmissionIdentity(UUID jobId, long workspaceId, int attempt, UUID leaseId) {}
 
     public static class StaleAttemptException extends RuntimeException {
         @Serial

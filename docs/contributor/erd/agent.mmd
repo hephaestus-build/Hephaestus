@@ -195,7 +195,6 @@ erDiagram
         VARCHAR(16) processing_status "NOT NULL"
         TIMESTAMPTZ available_at "NOT NULL"
         VARCHAR(32) hold_reason
-        VARCHAR(255) worker_id
         VARCHAR(32) trace_id "NOT NULL"
         JSONB input "NOT NULL"
         JSONB config_snapshot "NOT NULL"
@@ -221,6 +220,7 @@ erDiagram
         INTEGER drain_count "NOT NULL"
         INTEGER room_refusals "NOT NULL"
         TIMESTAMPTZ leased_until
+        UUID lease_id
     }
 
     ReviewJobAttemptCharge {

@@ -48,6 +48,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +66,8 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import tools.jackson.databind.json.JsonMapper;
 
 class ResultAdmissionServiceTest extends BaseUnitTest {
+    private static final UUID LEASE = UUID.fromString("fafb277e-9c90-58ff-9167-1f1b3b0dce88");
+
     private final JsonMapper mapper = new JsonMapper();
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final ReviewOutputService output = mock(ReviewOutputService.class);
@@ -113,14 +116,16 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
                 composition,
                 mock(ReviewWriteGuard.class));
         job.setStatus(ReviewJobStatus.RUNNING);
-        job.setWorkerId("worker");
+        job.setLeaseId(LEASE);
+        job.setLeasedUntil(Instant.now().plus(Duration.ofMinutes(10)));
         job.setCapture(mapper.createObjectNode());
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         when(jobs.findByIdAndWorkspaceIdForUpdate(job.getId(), 1)).thenReturn(Optional.of(job));
+        when(jobs.databaseClock()).thenReturn(Instant.now());
     }
 
     private ResultAdmissionService.AdmissionIdentity identity() {
-        return new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 0, "worker");
+        return new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 0, LEASE);
     }
 
     @Test
@@ -174,7 +179,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRejectAnOldWorkerAttemptBeforePreparingAnything() {
-        var stale = new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 1, "worker");
+        var stale = new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 1, LEASE);
         assertThatThrownBy(() -> service.prepareFeedback(
                         stale,
                         new PrepareFeedbackRequestDTO(

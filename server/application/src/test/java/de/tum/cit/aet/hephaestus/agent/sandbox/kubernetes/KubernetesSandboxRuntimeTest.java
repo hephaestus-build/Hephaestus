@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
@@ -759,6 +760,16 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
+    void shouldPreserveUnknownRoomWhenTheQuotaWatchIsUnavailable() {
+        var unavailable = mock(KubernetesSandboxCache.class);
+        when(unavailable.quotas()).thenThrow(new IllegalStateException("quota watch unavailable"));
+        var reviews = new KubernetesSandboxBackend(
+                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()), unavailable);
+
+        assertThat(reviews.roomFor(LIMITS)).isEqualTo(SandboxRoom.UNKNOWN_ROOM);
+    }
+
+    @Test
     void shouldCountALaunchedReviewAgainstTheRoomBeforeItsPodAppears() {
         quotaWithRoomForTwoReviews();
         KubernetesSandboxBackend reviews = backend();
@@ -885,7 +896,7 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
-    void shouldAdmitAsWithoutAQuotaWhenTheCacheNoLongerWatches() {
+    void shouldKeepReviewsWaitingWhenTheCacheNoLongerWatches() {
         quotaWithRoomForTwoReviews();
         var cache = cache();
         var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "", "");
@@ -894,9 +905,11 @@ class KubernetesSandboxRuntimeTest {
         cache.close();
 
         assertThat(quota.roomFor(LIMITS))
-                .as("a cache that stopped does not decide; the start does, as before")
-                .isEqualTo(Integer.MAX_VALUE);
-        assertThat(quota.neverFits(LIMITS)).isFalse();
+                .as("a cache that stopped has no observation, so reviews wait instead of starting without one")
+                .isEqualTo(SandboxRoom.UNKNOWN_ROOM);
+        assertThat(quota.neverFits(LIMITS))
+                .as("waiting is not a quota that can never fit")
+                .isFalse();
     }
 
     @Test

@@ -59,9 +59,6 @@ public class ResultAdmissionController {
         if (!(authentication.getPrincipal() instanceof ProxyIdentity identity) || identity.job() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review job credential required");
         var job = identity.job();
-        var workerId = identity.workerId();
-        if (workerId == null)
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review worker credential required");
-        return new ResultAdmissionService.AdmissionIdentity(job.id(), job.workspaceId(), job.attempt(), workerId);
+        return new ResultAdmissionService.AdmissionIdentity(job.id(), job.workspaceId(), job.attempt(), job.leaseId());
     }
 }

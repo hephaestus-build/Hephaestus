@@ -41,8 +41,6 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private EntityManager entityManager;
 
-    private static final String WORKER = "worker-entries";
-
     @Autowired
     private MentorConversationService conversations;
 
@@ -165,10 +163,11 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         entries.editSlackMessage(workspace.getId(), main.getId(), "2.2", "Deploy on Monday");
         turns.end(
+                running.getWorkspaceId(),
                 running.getId(),
                 running.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(running.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(compaction("Friday", kept), searchResult(asked.question(), "Deploy on Friday")),
                         null,
@@ -508,10 +507,11 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .put("problemId", UUID.randomUUID().toString())
                 .put("text", "Rename the flaky helper");
         turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(
                         MentorTurn.Status.DONE,
                         List.of(
                                 MentorLedgerFixtures.message(MentorLedgerFixtures.piId(), "assistant", shownContent),
@@ -571,16 +571,17 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     /** Ends the turn with the Pi entry its host appended, and returns the stored entry. */
     private MentorEntry ended(MentorTurn turn, JsonNode piEntry) {
         turns.end(
+                turn.getWorkspaceId(),
                 turn.getId(),
                 turn.getAttempt(),
-                WORKER,
-                new MentorTurnService.AttemptEnd(MentorTurn.Status.DONE, List.of(piEntry), null, null));
+                Objects.requireNonNull(turn.getLeaseId()),
+                new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(piEntry), null, null));
         return MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
                 .getLast();
     }
 
     private MentorTurn claim(MentorTurnService.Submission submission) {
-        MentorTurn claimed = turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorTurn claimed = turns.claimNext(Duration.ofMinutes(5)).orElseThrow();
         assertThat(claimed.getId()).isEqualTo(submission.turn().getId());
         return claimed;
     }
