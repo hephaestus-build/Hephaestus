@@ -1376,31 +1376,6 @@ export const zFirstLoginConsent = z.object({
     termsAccepted: z.boolean()
 });
 
-export const zFrozenModel = z.object({
-    modelId: z.string(),
-    options: z.record(z.string(), z.union([
-        z.string(),
-        z.number(),
-        z.boolean(),
-        z.record(z.string(), z.unknown()),
-        z.array(z.unknown())
-    ]).nullable()),
-    providerModelId: z.string(),
-    providerProtocol: z.string(),
-    reasoningEffort: z.string().nullable()
-});
-
-export const zBoundModelSlot = z.object({
-    kind: z.enum([
-        'CHAT',
-        'DECISION',
-        'EMBEDDING',
-        'RERANKING'
-    ]),
-    model: zFrozenModel.nullable(),
-    slot: z.string()
-});
-
 /**
  * One frame of the stack, in a script that the server's own web app ships
  */
@@ -1452,6 +1427,31 @@ export const zBrowserFault = z.object({
  */
 export const zBrowserFaultsReport = z.object({
     faults: z.array(zBrowserFault).min(1).max(20)
+});
+
+export const zFrozenModel = z.object({
+    modelId: z.string(),
+    options: z.record(z.string(), z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.unknown()),
+        z.array(z.unknown())
+    ]).nullable()),
+    providerModelId: z.string(),
+    providerProtocol: z.string(),
+    reasoningEffort: z.string().nullable()
+});
+
+export const zBoundModelSlot = z.object({
+    kind: z.enum([
+        'CHAT',
+        'DECISION',
+        'EMBEDDING',
+        'RERANKING'
+    ]),
+    model: zFrozenModel.nullable(),
+    slot: z.string()
 });
 
 /**
