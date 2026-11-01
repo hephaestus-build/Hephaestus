@@ -38,20 +38,27 @@ const sameSet = (actual: unknown, expected: readonly string[]): boolean =>
 
 type Manifest = Record<string, unknown>;
 
-/** The release identity: Manifest V3, the root version, and no development key. */
+/** The release identity: Manifest V3, the root version (numeric part as `version`), and no development key. */
 function identityProblems(manifest: Manifest, releaseVersion: string): string[] {
 	const problems: string[] = [];
 	if (manifest.manifest_version !== 3) {
 		problems.push("manifest_version must be 3");
 	}
-	if (manifest.version !== releaseVersion) {
+	// Chrome accepts only dot-separated integers as `version`; a pre-release keeps its full name in `version_name`.
+	const numericVersion = releaseVersion.replace(/[-+].*$/u, "");
+	if (manifest.version !== numericVersion) {
 		problems.push(
-			`version must be the release version ${releaseVersion}, not ${JSON.stringify(manifest.version)}`,
+			`version must be ${numericVersion}, the numeric part of the release version ${releaseVersion}, not ${JSON.stringify(manifest.version)}`,
 		);
 	}
-	if (manifest.version_name !== undefined && manifest.version_name !== releaseVersion) {
+	const nameRequired = numericVersion !== releaseVersion;
+	if (
+		nameRequired
+			? manifest.version_name !== releaseVersion
+			: manifest.version_name !== undefined && manifest.version_name !== releaseVersion
+	) {
 		problems.push(
-			`version_name must be absent or ${releaseVersion}, not ${JSON.stringify(manifest.version_name)}`,
+			`version_name must be ${nameRequired ? "" : "absent or "}${releaseVersion}, not ${JSON.stringify(manifest.version_name)}`,
 		);
 	}
 	if ("key" in manifest) {
