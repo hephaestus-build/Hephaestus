@@ -179,6 +179,7 @@ public class ScmPersonDataCatalog implements PersonDataCatalog {
                         "id",
                         "author_id=NULL,body=NULL",
                         200),
+                // diff_hunk stays: it is the repository code that the comment points at, not the commenter's words.
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
@@ -215,9 +216,9 @@ public class ScmPersonDataCatalog implements PersonDataCatalog {
                         "git_commit",
                         "git_commit",
                         "t.author_id = ANY(:users)",
-                        "id,sha,message,message_body,html_url,authored_at,committed_at,additions,deletions,changed_files,author_email,signature_valid,authored_by_committer,committed_via_web,parent_count,last_sync_at,created_at,updated_at,repository_id,author_id,signature_state,signature_was_signed_by_github,parent_shas,status_check_rollup_state,git_details_captured_at",
+                        "id,sha,message,message_body,html_url,authored_at,committed_at,additions,deletions,changed_files,author_email,signature_valid,authored_by_committer,committed_via_web,parent_count,last_sync_at,created_at,updated_at,repository_id,author_id,signature_state,signature_signer_login,signature_was_signed_by_github,parent_shas,status_check_rollup_state,git_details_captured_at",
                         "id",
-                        "author_id=NULL,author_email=NULL,message='',message_body=NULL",
+                        "author_id=NULL,author_email=NULL,message='',message_body=NULL,signature_signer_login=NULL",
                         250),
                 new JdbcPersonDataStore(
                         jdbc,
@@ -255,9 +256,10 @@ public class ScmPersonDataCatalog implements PersonDataCatalog {
                         "git_commit_committer",
                         "git_commit",
                         "t.committer_id = ANY(:users)",
-                        "id,sha,repository_id,committer_id,committer_email,committed_at",
+                        "id,sha,repository_id,committer_id,committer_email,signature_signer_login,committed_at",
                         "id",
-                        "committer_id=NULL,committer_email=NULL",
+                        // The signer is the committer when the committer signed someone else's commit.
+                        "committer_id=NULL,committer_email=NULL,signature_signer_login=NULL",
                         250),
                 new JdbcPersonDataStore(
                         jdbc,

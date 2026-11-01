@@ -18,6 +18,7 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
     @Autowired
@@ -34,6 +35,9 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private UserRepository users;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Test
     void shouldEraseExactAuthoredCopiesAndKeepAnotherAuthorsWorkWhenOnlyItsCommitterIsErased() {
@@ -206,5 +210,114 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("Other author");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM commit_file_change WHERE id=995611", Long.class))
                 .isZero();
+    }
+
+    @Test
+    void shouldEraseAndExportThePersonsCommitSignerLoginAndKeepTheDiffContextOfTheirReviewComment() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITHUB, "https://signer.example.test"));
+        long providerId = Objects.requireNonNull(provider.getId());
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "signing-target", provider));
+        var other = users.saveAndFlush(TestUserFactory.createUser(84L, "signing-other", provider));
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        String diffHunk = "@@ -1 +1 @@\n-old line\n+new line";
+        // The seeder resolves no foreign keys, so the review comment is seeded without its review and thread.
+        transactions.executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role = 'replica'");
+            var rows = new SchemaRowSeeder(jdbc);
+            rows.insert("repository", Map.of("id", 996601L, "native_id", 996601L, "provider_id", providerId));
+            rows.insert(
+                    "git_commit",
+                    Map.of(
+                            "id",
+                            996602L,
+                            "repository_id",
+                            996601L,
+                            "sha",
+                            "d".repeat(40),
+                            "author_id",
+                            target.getId(),
+                            "signature_signer_login",
+                            "signing-target"));
+            rows.insert(
+                    "git_commit",
+                    Map.of(
+                            "id",
+                            996603L,
+                            "repository_id",
+                            996601L,
+                            "sha",
+                            "e".repeat(40),
+                            "author_id",
+                            other.getId(),
+                            "committer_id",
+                            target.getId(),
+                            "signature_signer_login",
+                            "signing-target"));
+            rows.insert(
+                    "git_commit",
+                    Map.of(
+                            "id",
+                            996604L,
+                            "repository_id",
+                            996601L,
+                            "sha",
+                            "f".repeat(40),
+                            "author_id",
+                            other.getId(),
+                            "committer_id",
+                            other.getId(),
+                            "signature_signer_login",
+                            "signing-other"));
+            rows.insert(
+                    "pull_request_review_comment",
+                    Map.of(
+                            "id",
+                            996605L,
+                            "native_id",
+                            996605L,
+                            "provider_id",
+                            providerId,
+                            "author_id",
+                            target.getId(),
+                            "body",
+                            "Target review words",
+                            "diff_hunk",
+                            diffHunk));
+        });
+
+        var preview = service.preview(adminId, null, List.of(new PersonIdentity(providerId, "42", null)));
+        var export = service.export(preview.request().getId()).path("stores");
+        assertThat(export.path("git_commit"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.path("signature_signer_login").asString())
+                        .isEqualTo("signing-target"));
+        assertThat(export.path("git_commit_committer"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.path("signature_signer_login").asString())
+                        .isEqualTo("signing-target"));
+        assertThat(export.toString()).doesNotContain("signing-other");
+        service.requestErasure(preview.request().getId(), adminId, true);
+        service.run(preview.request().getId());
+        assertThat(service.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+
+        assertThat(jdbc.queryForList(
+                        "SELECT signature_signer_login FROM git_commit WHERE id IN (996602, 996603)", String.class))
+                .containsOnlyNulls()
+                .hasSize(2);
+        assertThat(jdbc.queryForObject("SELECT signature_signer_login FROM git_commit WHERE id=996604", String.class))
+                .isEqualTo("signing-other");
+        assertThat(jdbc.queryForObject(
+                        "SELECT author_id IS NULL AND body IS NULL AND diff_hunk=? FROM pull_request_review_comment"
+                                + " WHERE id=996605",
+                        Boolean.class,
+                        diffHunk))
+                .as("the review comment keeps the repository code that it points at")
+                .isTrue();
     }
 }

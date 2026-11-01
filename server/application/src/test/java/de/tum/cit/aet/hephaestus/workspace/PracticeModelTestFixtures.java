@@ -181,6 +181,15 @@ public class PracticeModelTestFixtures {
 
     @Transactional
     public Result result(Work work, long developerId, String summary) {
+        return result(work, developerId, summary, null);
+    }
+
+    @Transactional
+    public Result resultWithProblem(Work work, long developerId, String summary, String problemText) {
+        return result(work, developerId, summary, problemText);
+    }
+
+    private Result result(Work work, long developerId, String summary, @Nullable String problemText) {
         var manager = Objects.requireNonNull(entities);
         long existing = manager.createQuery(
                         "SELECT count(r) FROM Result r WHERE r.reviewId=:review AND"
@@ -240,7 +249,7 @@ public class PracticeModelTestFixtures {
                 .itemId(Objects.requireNonNull(work.item().getId()))
                 .itemVersion(Objects.requireNonNull(frozen.getItemVersion()))
                 .developerId(developerId)
-                .outcome(ResultOutcome.MET)
+                .outcome(problemText == null ? ResultOutcome.MET : ResultOutcome.NOT_MET)
                 .summary(summary)
                 .coverage(mapper.valueToTree(new HostCoverage(true, null, 0, 0, 0, List.of())))
                 .evidence(mapper.valueToTree(new ResultEvidence(List.of(), null, null, List.of())))
@@ -248,6 +257,28 @@ public class PracticeModelTestFixtures {
                 .build();
         manager.persist(result);
         manager.flush();
+        if (problemText != null) {
+            jdbc.update(
+                    """
+                    INSERT INTO problem(id,workspace_id,result_id,position,severity,summary,explanation,citations,basis)
+                    VALUES (?,?,?,0,'MINOR',?,?,?::jsonb,?::jsonb)
+                    """,
+                    UUID.randomUUID(),
+                    result.getWorkspaceId(),
+                    result.getId(),
+                    problemText,
+                    problemText,
+                    "[{\"path\":\"context/conversation.json\",\"startLine\":1,\"endLine\":1}]",
+                    mapper.writeValueAsString(Map.of(
+                            "type",
+                            "duty",
+                            "criterionQuote",
+                            "Cover failures",
+                            "event",
+                            0,
+                            "explanation",
+                            problemText)));
+        }
         frozen.setState(ReviewItemState.JUDGED);
         frozen.setResultId(result.getId());
         frozen.setAttemptedAt(Instant.now());

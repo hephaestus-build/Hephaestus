@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793504565891-1" author="hephaestus">
+        <comment>Feedback decisions stay append-only. Person erasure may also clear the actor, replace a reason with the fixed redaction text and clear a note; every other column must stay unchanged.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION guard_feedback_history() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='feedback_decision' THEN
+  IF to_jsonb(NEW)-'actor_account_id' IS NOT DISTINCT FROM to_jsonb(OLD)-'actor_account_id' AND (NEW.actor_account_id IS NULL OR NEW.actor_account_id IS NOT DISTINCT FROM OLD.actor_account_id) THEN RETURN NEW; END IF;
+  IF NEW.actor_account_id IS NULL
+     AND to_jsonb(NEW)-'actor_account_id'-'reason'-'note' IS NOT DISTINCT FROM to_jsonb(OLD)-'actor_account_id'-'reason'-'note'
+     AND (NEW.reason IS NOT DISTINCT FROM OLD.reason OR (OLD.reason IS NOT NULL AND NEW.reason='Erased administrator text'))
+     AND (NEW.note IS NULL OR NEW.note IS NOT DISTINCT FROM OLD.note) THEN RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'feedback history is append-only' USING ERRCODE='55000';
+END $$;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION guard_feedback_history() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_TABLE_NAME='feedback_decision' THEN
+  IF to_jsonb(NEW)-'actor_account_id' IS NOT DISTINCT FROM to_jsonb(OLD)-'actor_account_id' AND (NEW.actor_account_id IS NULL OR NEW.actor_account_id IS NOT DISTINCT FROM OLD.actor_account_id) THEN RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'feedback history is append-only' USING ERRCODE='55000';
+END $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
