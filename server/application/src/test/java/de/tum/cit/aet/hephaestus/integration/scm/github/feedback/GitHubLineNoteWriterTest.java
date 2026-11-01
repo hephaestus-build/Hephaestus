@@ -111,6 +111,22 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPostCodeAndPunctuationAsWrittenWhenALineNoteHoldsMarkdown() {
+        var publication = new OnWorkPackage(
+                null,
+                List.of(
+                        note("mention", 8, "Ask @alice"),
+                        note("code", 9, "`deactivateUser` returns `false` here; log it, @alice.")));
+
+        writer.postPackage(TARGET, publication, (ids, done) -> true);
+
+        assertThat(threads)
+                .extracting(thread -> comment(thread).get("body"))
+                .containsExactly(delivered("Ask <code>\\@alice</code>", "mention"), delivered(
+                        "`deactivateUser` returns `false` here; log it, <code>\\@alice</code>.", "code"));
+    }
+
+    @Test
     void shouldAdoptTheSamePendingReviewAfterPartialDraftFailure() {
         failThread = 2;
         var first = writer.postPackage(TARGET, publication(), (ids, done) -> true);
@@ -222,12 +238,24 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static LineNote note(String key, @Nullable Integer line) {
+        return note(key, line, "Feedback for @everyone.");
+    }
+
+    private static LineNote note(String key, @Nullable Integer line, String body) {
         return new LineNote(
                 UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)),
                 new FeedbackAnchor("src/App.java", line, line, CitationSide.NEW),
-                "Feedback for @everyone.",
+                body,
                 key,
                 "<!-- hephaestus-feedback-copy:" + key + " -->");
+    }
+
+    private static String delivered(String text, String key) {
+        return text + "\n\n"
+                + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                + TARGET.item().itemId() + ").</sub>\n"
+                + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                + "<!-- hephaestus-feedback-copy:" + key + " -->\n<!-- hephaestus-diff-note-ck=" + key + " -->";
     }
 
     private Map<String, Object> review(String body) {
