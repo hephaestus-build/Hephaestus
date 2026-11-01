@@ -323,6 +323,41 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRefuseComposedOutputWhenItsResultBelongsToAnotherWorkspace() {
+        try (var own = claimedReview(FeedbackMode.AUTOMATIC);
+                var other = claimedReview(FeedbackMode.AUTOMATIC)) {
+            assertThat(own.workspaceId()).isNotEqualTo(other.workspaceId());
+            var ownResults = admission.admit(own.identity(), request(own));
+            var foreignResults = admission.admit(other.identity(), request(other));
+            var foreign = foreignResults.admitted().getFirst();
+            var context = admission.publicFeedbackHistory(own.identity()).publicationContext();
+            var forged = composition(own, foreignResults, SUMMARY, context);
+            assertThatThrownBy(() -> admission.prepareFeedback(own.identity(), forged))
+                    .isInstanceOf(AdmissionConflictException.class);
+
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(own.workspaceId(), own.reviewId()))
+                    .isEmpty();
+            assertThat(admission
+                            .admittedResponse(
+                                    jobs.findById(own.identity().jobId()).orElseThrow())
+                            .admitted())
+                    .extracting(AdmittedResultDTO::resultId)
+                    .containsExactly(ownResults.admitted().getFirst().resultId());
+            assertThat(resultIds(other)).containsExactly(foreign.resultId());
+            var accepted = admission.prepareFeedback(own.identity(), composition(own, ownResults, SUMMARY, context));
+            assertThat(basis.findByWorkspaceIdAndFeedbackIdOrderByOrdinalAscIdAsc(
+                            own.workspaceId(), accepted.feedbackIds().getFirst()))
+                    .singleElement()
+                    .satisfies(row -> assertThat(row.getResultId())
+                            .isEqualTo(ownResults.admitted().getFirst().resultId()));
+            assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(
+                            own.workspaceId(), accepted.feedbackIds().getFirst()))
+                    .extracting(FeedbackCopy::getKind)
+                    .containsExactly(FeedbackCopyKind.SUMMARY);
+        }
+    }
+
+    @Test
     void shouldWithholdAnUndeclaredSourceAndComposeOnlyTheValidSibling() {
         var d = DefinitionTestFixtures.definition();
         var definition = new PracticeDefinition(

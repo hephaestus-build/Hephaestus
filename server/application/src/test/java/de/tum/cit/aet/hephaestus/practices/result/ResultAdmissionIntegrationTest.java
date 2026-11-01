@@ -505,8 +505,9 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 .isNull();
     }
 
-    @Test
-    void shouldRecordCaptureFailureWithoutCreatingAMissingEvidenceResult() {
+    @ParameterizedTest
+    @EnumSource(ResultOutcome.class)
+    void shouldRecordCaptureFailureWithoutCreatingAResultForAnyClaimedOutcome(ResultOutcome outcome) {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         running(pending, 1);
         assignments.capture(
@@ -519,7 +520,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         ReviewPracticeStatus.FAILED,
                         "CAPTURE_FAILED",
                         JsonNodeFactory.instance.objectNode().put("status", "FAILED"))));
-        var receipt = admit(pending, ResultOutcome.COULD_NOT_DETERMINE);
+        var receipt = admit(pending, outcome);
         assertThat(receipt.resultIds()).isEmpty();
         assertThat(receipt.withheldItems())
                 .containsExactly(new WithheldItem(
