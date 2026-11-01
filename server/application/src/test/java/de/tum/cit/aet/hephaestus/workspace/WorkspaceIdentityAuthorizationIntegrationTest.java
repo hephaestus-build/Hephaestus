@@ -58,16 +58,15 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
     private RepositoryToMonitorRepository monitoredRepositories;
 
     @Test
-    void shouldRejectAnUnlinkedCreatorInsteadOfUsingTheirNamesakeOrTheSubmittedOwner() {
+    void shouldRejectAnUnlinkedCreatorInsteadOfUsingTheirNamesake() {
         var account = accounts.saveAndFlush(new Account("Unlinked creator"));
         var accountId = Objects.requireNonNull(account.getId());
-        var namesake = persistUser("account-" + accountId);
+        persistUser("account-" + accountId);
         var request = new CreateWorkspaceRequestDTO(
                 "unlinked-creation",
                 "Unlinked",
                 "unlinked",
                 AccountType.ORG,
-                namesake.getId(),
                 IntegrationKind.GITHUB,
                 "test-token",
                 null,
@@ -104,7 +103,6 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
                 "GitHub owner",
                 "github-owner",
                 AccountType.ORG,
-                null,
                 IntegrationKind.GITHUB,
                 "t",
                 null,

@@ -4,6 +4,7 @@ import { createClient } from "@/api/client/client.gen";
 import { getCsrfToken } from "@/api/sdk.gen";
 import environment from "@/environment";
 import { isRecord } from "@/lib/is-record";
+import { problemType } from "@/lib/problem-detail";
 import { workspaceAddressConfig } from "@/runtime/workspace-address";
 
 const csrfClient = createClient({ baseUrl: environment.serverUrl, credentials: "include" });
@@ -45,7 +46,7 @@ async function isCsrfRefusal(response: Response): Promise<boolean> {
 		.clone()
 		.json()
 		.catch(() => undefined);
-	return isRecord(body) && body.type === "urn:hephaestus:csrf";
+	return isRecord(body) && body.type === problemType("csrf-token-rejected");
 }
 
 /** Keep a replayable body only for a request the CSRF filter can reject before it reaches a controller. */

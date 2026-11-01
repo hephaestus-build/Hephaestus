@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.outline.collection;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiException;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineRateLimitedException;
-import java.net.URI;
 import java.time.Duration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -32,19 +32,18 @@ public class OutlineCollectionControllerAdvice {
 
     @ExceptionHandler(UnknownOutlineCollectionException.class)
     ProblemDetail handleUnknownCollection(UnknownOutlineCollectionException exception) {
-        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        problem.setType(URI.create("/problems/unknown-outline-collection"));
-        problem.setTitle("Collection not found in Outline");
-        problem.setDetail(LoggingUtils.sanitizeForLog(exception.getMessage()));
-        return problem;
+        return ProblemType.UNKNOWN_OUTLINE_COLLECTION.problem(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "Collection not found in Outline",
+                LoggingUtils.sanitizeForLog(exception.getMessage()));
     }
 
     @ExceptionHandler(OutlineRateLimitedException.class)
     ResponseEntity<ProblemDetail> handleRateLimited(OutlineRateLimitedException exception) {
-        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.SERVICE_UNAVAILABLE);
-        problem.setType(URI.create("/problems/outline-rate-limited"));
-        problem.setTitle("Outline is limiting requests");
-        problem.setDetail("Outline is limiting how fast Hephaestus can send requests. Try again in a moment.");
+        ProblemDetail problem = ProblemType.OUTLINE_RATE_LIMITED.problem(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Outline is limiting requests",
+                "Outline is limiting how fast Hephaestus can send requests. Try again in a moment.");
         ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE);
         Duration retryAfter = exception.getRetryAfter();
         if (retryAfter != null) {
@@ -55,10 +54,9 @@ public class OutlineCollectionControllerAdvice {
 
     @ExceptionHandler(OutlineApiException.class)
     ProblemDetail handleApiFailure(OutlineApiException exception) {
-        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_GATEWAY);
-        problem.setType(URI.create("/problems/outline-unreachable"));
-        problem.setTitle("Hephaestus could not reach the Outline server");
-        problem.setDetail(LoggingUtils.sanitizeForLog(exception.getMessage()));
-        return problem;
+        return ProblemType.OUTLINE_UNREACHABLE.problem(
+                HttpStatus.BAD_GATEWAY,
+                "Hephaestus could not reach the Outline server",
+                LoggingUtils.sanitizeForLog(exception.getMessage()));
     }
 }

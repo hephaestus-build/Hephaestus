@@ -132,14 +132,13 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Test
     void createWorkspaceRequiresAuthentication() {
-        User owner = persistUser("unauthenticated-owner");
+        persistUser("unauthenticated-owner");
 
         var request = new CreateWorkspaceRequestDTO(
                 "unauthenticated",
                 "Unauthenticated",
                 "unauthenticated",
                 AccountType.ORG,
-                owner.getId(),
                 IntegrationKind.GITLAB,
                 null,
                 null,
@@ -165,14 +164,13 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     @Test
     @WithMentorUser
     void anyAuthenticatedUserCanCreateWorkspace() {
-        User owner = persistUser("mentor");
+        persistUser("mentor");
 
         var request = new CreateWorkspaceRequestDTO(
                 "mentor-space",
                 "Mentor Space",
                 "mentor-org",
                 AccountType.ORG,
-                owner.getId(),
                 IntegrationKind.GITHUB,
                 "ghp_dummy_token_for_test",
                 null,
@@ -203,7 +201,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 "Controller Space",
                 "controller",
                 AccountType.ORG,
-                owner.getId(),
                 IntegrationKind.GITHUB,
                 "ghp_dummy_token_for_test",
                 null,
@@ -450,7 +447,6 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 "Duplicate",
                 "duplicate",
                 AccountType.ORG,
-                owner.getId(),
                 IntegrationKind.GITHUB,
                 "ghp_dummy_token_for_test",
                 null,

@@ -8,6 +8,7 @@ import { ROUTER_SEARCH } from "@/lib/router-search";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { AuthProvider } from "@/runtime/auth/AuthContext";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 const { importFailure } = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ it("keeps the main route available and offers a reload when the Hephaestus panel
 		http.get("*/workspaces", () => HttpResponse.json([])),
 		// Anyone may create a workspace here, so the empty page offers the action this test looks for.
 		http.get("*/workspaces/providers", () => HttpResponse.json({ creationPolicy: "SELF_SERVICE" })),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 	);
 	const queryClient = testQueryClient();
 	const router = createRouter({

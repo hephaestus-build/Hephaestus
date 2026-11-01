@@ -7,8 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
@@ -29,13 +27,6 @@ public class ResultAdmissionController {
         this.admission = admission;
     }
 
-    @Operation(
-            operationId = "admitResults",
-            summary = "Admit results for the current review attempt",
-            description = "Requires the private worker connector and a proxy-scoped worker credential bound to the"
-                    + " workspace, job and attempt. Browser cookies and app-admin authority do not authorize this"
-                    + " request.",
-            security = @SecurityRequirement(name = "workerBearer"))
     @PostMapping("/admit-results")
     @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
     public AdmissionResponseDTO admitResults(

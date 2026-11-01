@@ -152,17 +152,18 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private Workspace createGitLabWorkspaceWithData(String slug) {
         User owner = persistUser(slug + "-owner");
-        Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                slug,
-                "Purge Test " + slug,
-                slug + "-group",
-                AccountType.ORG,
-                owner.getId(),
-                IntegrationKind.GITLAB,
-                "glpat-purge-test-token",
-                null,
-                null,
-                null));
+        Workspace workspace = workspaceService.createWorkspace(
+                new CreateWorkspaceRequestDTO(
+                        slug,
+                        "Purge Test " + slug,
+                        slug + "-group",
+                        AccountType.ORG,
+                        IntegrationKind.GITLAB,
+                        "glpat-purge-test-token",
+                        null,
+                        null,
+                        null),
+                owner.getId());
 
         // Add a monitored repository (saved directly — purge reloads workspace with EAGER fetch)
         RepositoryToMonitor monitor = new RepositoryToMonitor();
@@ -262,17 +263,18 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         @Test
         void purgeDeletesAllWorkspaceScopedData() {
             User owner = persistUser("cleanup-owner");
-            Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                    "cleanup-ws",
-                    "Cleanup Test",
-                    "cleanup-group",
-                    AccountType.ORG,
-                    owner.getId(),
-                    IntegrationKind.GITLAB,
-                    "glpat-cleanup-token",
-                    null,
-                    null,
-                    null));
+            Workspace workspace = workspaceService.createWorkspace(
+                    new CreateWorkspaceRequestDTO(
+                            "cleanup-ws",
+                            "Cleanup Test",
+                            "cleanup-group",
+                            AccountType.ORG,
+                            IntegrationKind.GITLAB,
+                            "glpat-cleanup-token",
+                            null,
+                            null,
+                            null),
+                    owner.getId());
             Long workspaceId = workspace.getId();
 
             // Add a monitored repository (saved directly — purge reloads workspace with EAGER
@@ -325,17 +327,18 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         @DisplayName("purging an already-purged workspace is a no-op")
         void purgeIsIdempotent() {
             User owner = persistUser("idempotent-owner");
-            Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                    "idempotent-ws",
-                    "Idempotent Test",
-                    "idempotent-group",
-                    AccountType.ORG,
-                    owner.getId(),
-                    IntegrationKind.GITLAB,
-                    "glpat-idempotent-token",
-                    null,
-                    null,
-                    null));
+            Workspace workspace = workspaceService.createWorkspace(
+                    new CreateWorkspaceRequestDTO(
+                            "idempotent-ws",
+                            "Idempotent Test",
+                            "idempotent-group",
+                            AccountType.ORG,
+                            IntegrationKind.GITLAB,
+                            "glpat-idempotent-token",
+                            null,
+                            null,
+                            null),
+                    owner.getId());
 
             Workspace first = workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
             assertThat(first.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
@@ -450,17 +453,18 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         @Test
         void shouldDeleteEveryHephConversationWhenTheWorkspaceIsPurged() {
             User owner = persistUser("chat-cleanup-owner");
-            Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                    "chat-cleanup-ws",
-                    "Chat Cleanup",
-                    "chat-cleanup-group",
-                    AccountType.ORG,
-                    owner.getId(),
-                    IntegrationKind.GITLAB,
-                    "glpat-chat-cleanup-token",
-                    null,
-                    null,
-                    null));
+            Workspace workspace = workspaceService.createWorkspace(
+                    new CreateWorkspaceRequestDTO(
+                            "chat-cleanup-ws",
+                            "Chat Cleanup",
+                            "chat-cleanup-group",
+                            AccountType.ORG,
+                            IntegrationKind.GITLAB,
+                            "glpat-chat-cleanup-token",
+                            null,
+                            null,
+                            null),
+                    owner.getId());
 
             MentorConversation main = mentorConversations.findOrCreateMain(workspace.getId(), accountId(owner));
             MentorEntry question =
@@ -497,17 +501,18 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @WithMentorUser
     void shouldDenyPurgeWhenUserIsNotOwner() {
         User owner = persistUser("non-owner-test-owner");
-        Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                "non-owner-ws",
-                "Non-Owner Test",
-                "non-owner-group",
-                AccountType.ORG,
-                owner.getId(),
-                IntegrationKind.GITLAB,
-                "glpat-non-owner-token",
-                null,
-                null,
-                null));
+        Workspace workspace = workspaceService.createWorkspace(
+                new CreateWorkspaceRequestDTO(
+                        "non-owner-ws",
+                        "Non-Owner Test",
+                        "non-owner-group",
+                        AccountType.ORG,
+                        IntegrationKind.GITLAB,
+                        "glpat-non-owner-token",
+                        null,
+                        null,
+                        null),
+                owner.getId());
 
         User mentorUser = persistUser("mentor");
         ensureMembership(workspace, mentorUser, Membership.WorkspaceRole.MEMBER);
@@ -530,17 +535,18 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         private Workspace createBareWorkspace(String slug) {
             User owner = persistUser(slug + "-owner");
-            return workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                    slug,
-                    "Slack Test " + slug,
-                    slug + "-group",
-                    AccountType.ORG,
-                    owner.getId(),
-                    IntegrationKind.GITLAB,
-                    "glpat-slack-test-token",
-                    null,
-                    null,
-                    null));
+            return workspaceService.createWorkspace(
+                    new CreateWorkspaceRequestDTO(
+                            slug,
+                            "Slack Test " + slug,
+                            slug + "-group",
+                            AccountType.ORG,
+                            IntegrationKind.GITLAB,
+                            "glpat-slack-test-token",
+                            null,
+                            null,
+                            null),
+                    owner.getId());
         }
 
         private static String slackTs(Instant instant) {

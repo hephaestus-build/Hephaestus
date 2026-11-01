@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.stepup;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import java.io.Serial;
 import java.time.Duration;
 import org.springframework.http.HttpStatus;
@@ -12,8 +13,8 @@ import org.springframework.web.ErrorResponseException;
  * <p>Deliberately not the RFC 9470 shape (401 plus {@code WWW-Authenticate: Bearer
  * error="insufficient_user_authentication", max_age=…}): the caller is a same-origin SPA holding a
  * cookie session, not a bearer client that could act on the challenge header, and a 401 would send the
- * SPA's interceptor down the sign-out path instead of the confirmation dialog. The machine-readable
- * {@code code} and {@code maxAgeSeconds} carry what the header would have.
+ * SPA's interceptor down the sign-out path instead of the confirmation dialog. The problem type and
+ * {@code maxAgeSeconds} carry what the header would have.
  */
 public class StepUpRequiredException extends ErrorResponseException {
 
@@ -27,10 +28,10 @@ public class StepUpRequiredException extends ErrorResponseException {
     }
 
     private static ProblemDetail problem(Duration maxAge) {
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.FORBIDDEN, "This action requires a recent sign-in. Sign in again to confirm access.");
-        problem.setTitle("Confirm access");
-        problem.setProperty("code", CODE);
+        ProblemDetail problem = ProblemType.STEP_UP_REQUIRED.problem(
+                HttpStatus.FORBIDDEN,
+                "Confirm access",
+                "This action requires a recent sign-in. Sign in again to confirm access.");
         problem.setProperty("maxAgeSeconds", maxAge.toSeconds());
         return problem;
     }

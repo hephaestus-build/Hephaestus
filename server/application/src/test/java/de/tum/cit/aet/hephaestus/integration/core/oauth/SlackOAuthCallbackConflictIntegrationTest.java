@@ -103,7 +103,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
 
         assertThat(problem.getDetail()).isEqualTo(GENERIC_CONFLICT);
         assertThat(problem.getProperties())
-                .containsExactlyInAnyOrderEntriesOf(Map.of("kind", "SLACK", "error", "connected_elsewhere"));
+                .containsExactlyInAnyOrderEntriesOf(Map.of("callbackError", "connected_elsewhere"));
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();
         assertThat(connectionRepository.findActive(source.getId(), IntegrationKind.SLACK))
@@ -178,7 +178,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
 
             ProblemDetail problem = loser.get(30, TimeUnit.SECONDS);
             assertThat(problem.getDetail()).isEqualTo(GENERIC_CONFLICT);
-            assertThat(problem.getProperties()).containsEntry("error", "connected_elsewhere");
+            assertThat(problem.getProperties()).containsEntry("callbackError", "connected_elsewhere");
         }
         assertThat(connectionRepository.findActive(target.getId(), IntegrationKind.SLACK))
                 .isEmpty();

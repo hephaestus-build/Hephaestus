@@ -23,6 +23,7 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,10 +34,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.customizers.OperationCustomizer;
+import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.web.PagedModel;
+import tools.jackson.databind.JsonNode;
 
 /**
  * OpenAPI configuration: processes server DTOs (strips the {@code DTO} suffix from schema
@@ -81,18 +84,20 @@ import org.springframework.data.web.PagedModel;
         bearerFormat = "JWT",
         description = "Hephaestus-native JWT bearer authentication. The SPA normally authenticates through the "
                 + "`__Host-HEPHAESTUS_AT` session cookie. This scheme documents the equivalent bearer token.")
-@SecurityScheme(
-        name = "workerBearer",
-        type = SecuritySchemeType.HTTP,
-        scheme = "bearer",
-        bearerFormat = "JWT",
-        description =
-                "Worker credential on the private sandbox gateway connector. Bound to the worker, workspace, job and"
-                        + " attempt, with the required proxy scope. Browser cookies and app-admin authority do not"
-                        + " authorize it.")
 public class OpenAPIConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAPIConfiguration.class);
+
+    static {
+        // A JsonNode is any JSON value. Without this, springdoc publishes Jackson's bean getters as its schema,
+        // and a schema without types is published as an object.
+        SpringDocUtils.getConfig()
+                .replaceWithSchema(
+                        JsonNode.class,
+                        new Schema<>()
+                                .types(new LinkedHashSet<>(
+                                        List.of("string", "number", "boolean", "object", "array", "null"))));
+    }
 
     /**
      * Domain objects to include even without DTO suffix
@@ -339,7 +344,8 @@ public class OpenAPIConfiguration {
 
     /*
      * OpenAPI 3.1 moved the type into the types set (a nullable number is [number, null])
-     * and leaves getType() populated only in the 3.0 shape, so both have to be read.
+     * and leaves getType() populated only in the 3.0 shape, so both have to be read. A set with
+     * other types, such as any JSON value, is not a decimal.
      */
     @SuppressWarnings({"rawtypes", "unchecked"})
     private boolean isFormatlessNumber(Schema schema) {
@@ -347,7 +353,10 @@ public class OpenAPIConfiguration {
             return false;
         }
         Set<String> types = schema.getTypes();
-        return NUMBER_TYPE.equals(schema.getType()) || (types != null && types.contains(NUMBER_TYPE));
+        return NUMBER_TYPE.equals(schema.getType())
+                || (types != null
+                        && types.contains(NUMBER_TYPE)
+                        && types.stream().allMatch(type -> NUMBER_TYPE.equals(type) || "null".equals(type)));
     }
 
     private boolean isWorkspaceContextParam(Parameter param) {

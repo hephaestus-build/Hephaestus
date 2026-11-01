@@ -186,7 +186,7 @@ Sign-in and sign-out reload the page.
 The new page fetches the current token before it sends credentialed requests.
 Wait for the response before starting other requests.
 
-A CSRF 403 has problem type `urn:hephaestus:csrf`.
+A CSRF 403 has the problem type `https://docs.hephaestus.build/contributor/api-error-handling#csrf-token-rejected`.
 On that response, refetch the token once and retry the rejected request once.
 Do not retry another 403 or an ambiguous network failure.
 OAuth sign-in and browser sign-out clear the previous CSRF cookie through Spring Security.

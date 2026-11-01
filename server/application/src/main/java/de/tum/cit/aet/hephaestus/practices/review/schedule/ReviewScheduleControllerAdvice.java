@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.review.schedule;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import java.net.URI;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.Ordered;
@@ -19,30 +19,29 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class ReviewScheduleControllerAdvice {
     @ExceptionHandler(ReviewBatchConflictException.class)
     ProblemDetail batchConflict(ReviewBatchConflictException exception) {
-        return conflict("review-batch-conflict", "Review batch conflict", exception.getMessage());
+        return conflict(ProblemType.REVIEW_BATCH_CONFLICT, "Review batch conflict", exception.getMessage());
     }
 
     @ExceptionHandler(ReviewScheduleConflictException.class)
     ProblemDetail scheduleConflict(ReviewScheduleConflictException exception) {
-        return conflict("review-schedule-conflict", "Review schedule conflict", exception.getMessage());
+        return conflict(ProblemType.REVIEW_SCHEDULE_CONFLICT, "Review schedule conflict", exception.getMessage());
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ProblemDetail concurrentModification() {
         return conflict(
-                "concurrent-modification",
+                ProblemType.CONCURRENT_MODIFICATION,
                 "Review configuration changed",
                 "The review configuration changed. Try this request again.");
     }
 
-    private static ProblemDetail conflict(String type, String title, @Nullable String message) {
-        var detail = ProblemDetail.forStatus(HttpStatus.CONFLICT);
-        detail.setType(URI.create("/problems/" + type));
-        detail.setTitle(title);
-        detail.setDetail(Optional.ofNullable(message)
-                .map(LoggingUtils::sanitizeForLog)
-                .filter(text -> !text.isBlank())
-                .orElse("This request conflicts with the current review configuration."));
-        return detail;
+    private static ProblemDetail conflict(ProblemType type, String title, @Nullable String message) {
+        return type.problem(
+                HttpStatus.CONFLICT,
+                title,
+                Optional.ofNullable(message)
+                        .map(LoggingUtils::sanitizeForLog)
+                        .filter(text -> !text.isBlank())
+                        .orElse("This request conflicts with the current review configuration."));
     }
 }

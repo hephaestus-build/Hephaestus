@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { problemDetailOf, problemStatusOf, stepUpChallengeOf } from "./problem-detail";
+import { problemDetailOf, problemStatusOf, stepUpChallengeOf, problemType } from "./problem-detail";
 
 describe("problemDetailOf", () => {
 	it("prefers RFC 9457 `detail` over everything else", () => {
@@ -10,21 +10,18 @@ describe("problemDetailOf", () => {
 				title: "Bad Request",
 				status: 400,
 				detail: "Issuer is not reachable",
-				error: "legacy error",
 				message: "some message",
 			}),
 		).toBe("Issuer is not reachable");
 	});
 
 	it("falls back to `title` when `detail` is absent", () => {
-		expect(problemDetailOf({ title: "Bad Request", error: "legacy", message: "msg" })).toBe(
-			"Bad Request",
-		);
+		expect(problemDetailOf({ title: "Bad Request", message: "msg" })).toBe("Bad Request");
 	});
 
-	it("falls back to the legacy `{ error }` shape when title/detail are absent", () => {
-		expect(problemDetailOf({ error: "We could not validate", message: "msg" })).toBe(
-			"We could not validate",
+	it("reads no member outside the RFC 9457 problem", () => {
+		expect(problemDetailOf({ error: "We could not validate", message: "msg" }, "Fallback")).toBe(
+			"Fallback",
 		);
 	});
 
@@ -78,14 +75,16 @@ describe("problemDetailOf", () => {
 describe("stepUpChallengeOf", () => {
 	it("reads the challenge and its window off the refusal body", () => {
 		expect(
-			stepUpChallengeOf({ status: 403, code: "step_up_required", maxAgeSeconds: 300 }),
-		).toStrictEqual({ code: "step_up_required", maxAgeSeconds: 300 });
+			stepUpChallengeOf({ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 }),
+		).toStrictEqual({ type: problemType("step-up-required"), maxAgeSeconds: 300 });
 	});
 
 	it("keeps the challenge when the server names no window", () => {
-		expect(stepUpChallengeOf({ status: 403, code: "step_up_required" })).toStrictEqual({
-			code: "step_up_required",
-		});
+		expect(stepUpChallengeOf({ status: 403, type: problemType("step-up-required") })).toStrictEqual(
+			{
+				type: problemType("step-up-required"),
+			},
+		);
 	});
 
 	it("ignores a refusal coded as something else", () => {
@@ -95,8 +94,8 @@ describe("stepUpChallengeOf", () => {
 
 	it("drops a window it could not phrase and still asks", () => {
 		for (const maxAgeSeconds of ["300", -1, 0, 12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-			const challenge = stepUpChallengeOf({ code: "step_up_required", maxAgeSeconds });
-			expect(challenge?.code).toBe("step_up_required");
+			const challenge = stepUpChallengeOf({ type: problemType("step-up-required"), maxAgeSeconds });
+			expect(challenge?.type).toBe(problemType("step-up-required"));
 			expect(challenge?.maxAgeSeconds).toBeUndefined();
 		}
 	});
@@ -104,7 +103,7 @@ describe("stepUpChallengeOf", () => {
 	it("is safe on the shapes a failed request can throw", () => {
 		expect(stepUpChallengeOf(null)).toBeUndefined();
 		expect(stepUpChallengeOf(undefined)).toBeUndefined();
-		expect(stepUpChallengeOf("step_up_required")).toBeUndefined();
+		expect(stepUpChallengeOf(problemType("step-up-required"))).toBeUndefined();
 		expect(stepUpChallengeOf(new TypeError("Failed to fetch"))).toBeUndefined();
 	});
 });

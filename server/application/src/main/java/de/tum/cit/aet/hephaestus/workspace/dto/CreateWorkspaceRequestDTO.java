@@ -52,13 +52,6 @@ public record CreateWorkspaceRequestDTO(
         @NotNull(message = "Account type is required") @Schema(description = "Type of account (USER or ORG)")
         AccountType accountType,
 
-        @Schema(
-                description = "Deprecated: ignored by the server. The authenticated user always becomes the owner.",
-                deprecated = true,
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-        @Nullable
-        Long ownerUserId,
-
         @NotNull(message = "Integration kind is required")
         @Schema(
                 description = "Integration kind to provision. SLACK flows through OAuth, not this endpoint.",
@@ -95,12 +88,6 @@ public record CreateWorkspaceRequestDTO(
                 requiredMode = Schema.RequiredMode.NOT_REQUIRED)
         @Nullable
         List<@NotNull @Positive Long> selectedProjectIds) {
-    @Override
-    @Deprecated(forRemoval = true)
-    public @Nullable Long ownerUserId() {
-        return ownerUserId;
-    }
-
     @AssertTrue(message = "Personal access token is required")
     @Schema(hidden = true)
     private boolean isTokenProvided() {

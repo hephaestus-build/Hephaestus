@@ -8,8 +8,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelInUseException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUpstreamIdConflictException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -55,11 +55,11 @@ class AgentControllerAdviceTest extends BaseUnitTest {
                 .allSatisfy(problem -> assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value()))
                 .extracting(ProblemDetail::getType)
                 .containsExactly(
-                        URI.create("/problems/agent-job-state-conflict"),
-                        URI.create("/problems/llm-connection-in-use"),
-                        URI.create("/problems/llm-model-in-use"),
-                        URI.create("/problems/llm-connection-slug-conflict"),
-                        URI.create("/problems/llm-model-slug-conflict"),
-                        URI.create("/problems/llm-model-upstream-id-conflict"));
+                        ProblemType.AGENT_JOB_STATE_CONFLICT.uri(),
+                        ProblemType.LLM_CONNECTION_IN_USE.uri(),
+                        ProblemType.LLM_MODEL_IN_USE.uri(),
+                        ProblemType.LLM_CONNECTION_SLUG_CONFLICT.uri(),
+                        ProblemType.LLM_MODEL_SLUG_CONFLICT.uri(),
+                        ProblemType.LLM_MODEL_UPSTREAM_ID_CONFLICT.uri());
     }
 }

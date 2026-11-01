@@ -18,6 +18,7 @@ import {
 	uncertainWriteFeedbackDetail,
 } from "@/components/admin/practice-reviews/fixtures";
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { problemType } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { server } from "@/mocks/server";
 import {
@@ -266,7 +267,8 @@ describe("feedback approval level", () => {
 					{
 						status: 409,
 						detail: "The publication context does not permit approval.",
-						code: "PUBLIC_DELIVERY_UNRESOLVED",
+						type: problemType("feedback-withheld"),
+						withholdingReason: "PUBLIC_DELIVERY_UNRESOLVED",
 						state: "AWAITING_APPROVAL",
 					},
 					{ status: 409 },
@@ -313,7 +315,8 @@ describe("feedback approval level", () => {
 					{
 						status: 409,
 						detail: "The publication context does not permit approval.",
-						code: "PUBLIC_HISTORY_CHANGED",
+						type: problemType("feedback-withheld"),
+						withholdingReason: "PUBLIC_HISTORY_CHANGED",
 						state: "WITHHELD",
 					},
 					{ status: 409 },

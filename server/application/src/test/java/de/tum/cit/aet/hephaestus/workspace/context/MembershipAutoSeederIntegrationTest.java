@@ -54,17 +54,18 @@ class MembershipAutoSeederIntegrationTest extends AbstractWorkspaceIntegrationTe
                 userRepository.save(TestUserFactory.createUser(81_001L, "auto-seed-both", ensureGitLabProvider()));
         User gitHubActor = persistUser("auto-seed-both");
         User owner = persistUser("auto-seed-github-owner");
-        Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                "auto-seed-github",
-                "AutoSeed GitHub",
-                "autoseed-github",
-                AccountType.ORG,
-                owner.getId(),
-                IntegrationKind.GITHUB,
-                "ghp-auto-seed",
-                null,
-                null,
-                null));
+        Workspace workspace = workspaceService.createWorkspace(
+                new CreateWorkspaceRequestDTO(
+                        "auto-seed-github",
+                        "AutoSeed GitHub",
+                        "autoseed-github",
+                        AccountType.ORG,
+                        IntegrationKind.GITHUB,
+                        "ghp-auto-seed",
+                        null,
+                        null,
+                        null),
+                owner.getId());
         membershipRepository.deleteAll(membershipRepository.findByWorkspace_Id(workspace.getId()));
         MembershipAutoSeeder seeder =
                 new MembershipAutoSeeder(membershipRepository, membershipService, connectionService, true);

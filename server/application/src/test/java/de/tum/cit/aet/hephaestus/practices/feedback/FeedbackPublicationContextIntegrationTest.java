@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
@@ -356,7 +357,9 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody()
-                .jsonPath("$.code")
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.FEEDBACK_WITHHELD.uri().toString())
+                .jsonPath("$.withholdingReason")
                 .isEqualTo("PUBLIC_HISTORY_CHANGED")
                 .jsonPath("$.state")
                 .isEqualTo("WITHHELD");
@@ -379,7 +382,9 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody()
-                .jsonPath("$.code")
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.FEEDBACK_WITHHELD.uri().toString())
+                .jsonPath("$.withholdingReason")
                 .isEqualTo("PUBLIC_DELIVERY_UNRESOLVED")
                 .jsonPath("$.state")
                 .isEqualTo("AWAITING_APPROVAL");

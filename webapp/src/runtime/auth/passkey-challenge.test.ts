@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { problemType } from "@/lib/problem-detail";
 import { deferred } from "@/test/async";
 import { passkeyChallengeHandler, passkeyLeaveTo, passkeyReturnTo } from "./passkey-challenge";
 
@@ -37,14 +38,14 @@ describe("passkeyChallengeHandler", () => {
 	it("navigates for a passkey requirement without consuming the response", async () => {
 		const handlePasskeyChallenge = passkeyChallengeHandler();
 		const navigate = vi.fn().mockResolvedValue(undefined);
-		const response = Response.json({ code: "passkey_required" }, { status: 403 });
+		const response = Response.json({ type: problemType("passkey-required") }, { status: 403 });
 		await handlePasskeyChallenge(response, navigate);
 		expect(navigate).toHaveBeenCalledOnce();
-		await expect(response.json()).resolves.toStrictEqual({ code: "passkey_required" });
+		await expect(response.json()).resolves.toStrictEqual({ type: problemType("passkey-required") });
 	});
 	it.each([
-		{ status: 401, body: '{"code":"passkey_required"}' },
-		{ status: 403, body: '{"code":"access_denied"}' },
+		{ status: 401, body: JSON.stringify({ type: problemType("passkey-required") }) },
+		{ status: 403, body: JSON.stringify({ type: problemType("step-up-required") }) },
 		{ status: 403, body: "invalid JSON" },
 	])("does not navigate for $status with $body", async ({ status, body }) => {
 		const navigate = vi.fn().mockResolvedValue(undefined);
@@ -55,7 +56,7 @@ describe("passkeyChallengeHandler", () => {
 		const handlePasskeyChallenge = passkeyChallengeHandler();
 		const decision = deferred();
 		const navigate = vi.fn(async () => decision.promise);
-		const response = Response.json({ code: "passkey_required" }, { status: 403 });
+		const response = Response.json({ type: problemType("passkey-required") }, { status: 403 });
 		const first = handlePasskeyChallenge(response, navigate);
 		const second = handlePasskeyChallenge(response, navigate);
 		await vi.waitFor(() => expect(navigate).toHaveBeenCalledOnce());
@@ -65,12 +66,12 @@ describe("passkeyChallengeHandler", () => {
 	it("does not hold another installation's refusal behind a navigation that never finishes", async () => {
 		const abandoned = passkeyChallengeHandler();
 		void abandoned(
-			Response.json({ code: "passkey_required" }, { status: 403 }),
+			Response.json({ type: problemType("passkey-required") }, { status: 403 }),
 			vi.fn(async () => deferred().promise),
 		);
 		const navigate = vi.fn().mockResolvedValue(undefined);
 		await passkeyChallengeHandler()(
-			Response.json({ code: "passkey_required" }, { status: 403 }),
+			Response.json({ type: problemType("passkey-required") }, { status: 403 }),
 			navigate,
 		);
 		expect(navigate).toHaveBeenCalledOnce();

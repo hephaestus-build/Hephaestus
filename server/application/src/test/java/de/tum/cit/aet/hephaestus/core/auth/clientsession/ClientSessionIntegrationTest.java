@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.net.URI;
 import java.sql.Timestamp;
@@ -348,7 +349,7 @@ class ClientSessionIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.status")
                 .isEqualTo(403)
                 .jsonPath("$.type")
-                .isEqualTo("urn:hephaestus:csrf");
+                .isEqualTo(ProblemType.CSRF_TOKEN_REJECTED.uri().toString());
 
         String csrf = csrfToken();
         webTestClient

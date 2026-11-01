@@ -424,12 +424,6 @@ export const zCitationCapabilities = z.object({
 });
 
 export const zCitationProof = z.object({
-    itemSha256: z.string().optional(),
-    quoteSha256: z.string().optional(),
-    status: z.enum(['VERIFIED']).optional()
-});
-
-export const zCitationProofDto = z.object({
     itemSha256: z.string(),
     quoteSha256: z.string(),
     status: z.enum(['VERIFIED'])
@@ -463,12 +457,6 @@ export const zClientTokenRequest = z.object({
 
 export const zCloseResearchDisclosure = z.object({
     closure: z.enum(['DESTROYED', 'ANONYMIZED'])
-});
-
-export const zClosedPracticePageSupport = z.object({
-    readAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    refusal: z.string().nullable(),
-    state: z.enum(['UNAVAILABLE', 'REFUSED'])
 });
 
 /**
@@ -724,12 +712,6 @@ export const zContributor = z.object({
     name: z.string()
 });
 
-export const zCoverage = z.object({
-    hasMore: z.boolean().optional(),
-    maxEntries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    omittedWithoutCopyAuthority: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional()
-});
-
 export const zCoverageOmission = z.object({
     count: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     items: z.array(z.string()).optional(),
@@ -978,7 +960,6 @@ export const zCreateWorkspaceRequest = z.object({
     accountType: z.enum(['ORG', 'USER']),
     displayName: z.string().min(0).max(120),
     kind: z.enum(['GITHUB', 'GITLAB']),
-    ownerUserId: z.int().optional(),
     personalAccessToken: z.string().min(0).max(512).optional(),
     repositorySelection: z.enum(['ALL', 'SELECTED']).optional(),
     selectedProjectIds: z.array(z.int()).optional(),
@@ -1061,7 +1042,7 @@ export const zEvidenceCitation = z.object({
     sourceKind: z.string(),
     sourcePath: z.string().nullable(),
     startLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    verification: zCitationProofDto.nullable()
+    verification: zCitationProof.nullable()
 });
 
 /**
@@ -1092,8 +1073,8 @@ export const zExternalDelivery = z.object({
  * Feature flags evaluated for the current user
  */
 export const zFeatureFlags = z.object({
-    ADMIN: z.boolean().optional(),
-    PAGE_EXPERIENCE_METRICS: z.boolean().optional()
+    ADMIN: z.boolean(),
+    PAGE_EXPERIENCE_METRICS: z.boolean()
 });
 
 /**
@@ -1393,6 +1374,31 @@ export const zFirstLoginConsent = z.object({
     participateInResearch: z.boolean().optional(),
     researchOrganization: z.string().optional(),
     termsAccepted: z.boolean()
+});
+
+export const zFrozenModel = z.object({
+    modelId: z.string(),
+    options: z.record(z.string(), z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.unknown()),
+        z.array(z.unknown())
+    ]).nullable()),
+    providerModelId: z.string(),
+    providerProtocol: z.string(),
+    reasoningEffort: z.string().nullable()
+});
+
+export const zBoundModelSlot = z.object({
+    kind: z.enum([
+        'CHAT',
+        'DECISION',
+        'EMBEDDING',
+        'RERANKING'
+    ]),
+    model: zFrozenModel.nullable(),
+    slot: z.string()
 });
 
 /**
@@ -1775,62 +1781,6 @@ export const zDeliveredWorkFeedback = z.object({
 export const zItemFacts = z.object({
     facts: z.array(zItemFact),
     item: zItemRef
-});
-
-export const zJsonNode = z.object({
-    array: z.boolean().optional(),
-    bigDecimal: z.boolean().optional(),
-    bigInteger: z.boolean().optional(),
-    binary: z.boolean().optional(),
-    boolean: z.boolean().optional(),
-    container: z.boolean().optional(),
-    double: z.boolean().optional(),
-    embeddedValue: z.boolean().optional(),
-    empty: z.boolean().optional(),
-    float: z.boolean().optional(),
-    floatingPointNumber: z.boolean().optional(),
-    int: z.boolean().optional(),
-    integralNumber: z.boolean().optional(),
-    long: z.boolean().optional(),
-    missingNode: z.boolean().optional(),
-    nodeType: z.enum([
-        'ARRAY',
-        'BINARY',
-        'BOOLEAN',
-        'MISSING',
-        'NULL',
-        'NUMBER',
-        'OBJECT',
-        'POJO',
-        'STRING'
-    ]).optional(),
-    null: z.boolean().optional(),
-    number: z.boolean().optional(),
-    object: z.boolean().optional(),
-    pojo: z.boolean().optional(),
-    short: z.boolean().optional(),
-    string: z.boolean().optional(),
-    textual: z.boolean().optional(),
-    valueNode: z.boolean().optional()
-});
-
-export const zFrozenModel = z.object({
-    modelId: z.string(),
-    options: z.record(z.string(), zJsonNode),
-    providerModelId: z.string(),
-    providerProtocol: z.string(),
-    reasoningEffort: z.string().nullable()
-});
-
-export const zBoundModelSlot = z.object({
-    kind: z.enum([
-        'CHAT',
-        'DECISION',
-        'EMBEDDING',
-        'RERANKING'
-    ]),
-    model: zFrozenModel.nullable(),
-    slot: z.string()
 });
 
 export const zJudgedScanReportItem = z.object({
@@ -2728,51 +2678,6 @@ export const zPreviewRequest = z.object({
     identities: z.array(zIdentity).min(0).max(32)
 });
 
-export const zPrivateFeedbackHistoryBasis = z.object({
-    outcome: z.enum([
-        'MET',
-        'NOT_MET',
-        'DOES_NOT_APPLY',
-        'COULD_NOT_DETERMINE'
-    ]),
-    practiceSlug: z.string(),
-    practiceVersionId: z.int().nullable(),
-    resultId: z.uuid()
-});
-
-export const zDelivered = z.object({
-    basedOn: z.array(zPrivateFeedbackHistoryBasis),
-    body: z.string().nullable(),
-    bodyRole: z.enum([
-        'PRACTICE_PAGE_CARD',
-        'CONVERSATION_WORDS',
-        'MENTOR_NOTES'
-    ]).nullable(),
-    deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    destination: z.enum([
-        'ON_WORK',
-        'PRACTICE_PAGE',
-        'CONVERSATION'
-    ]),
-    id: z.uuid(),
-    recordedClaimCurrentness: z.enum([
-        'CURRENT',
-        'STALE',
-        'UNVERIFIABLE'
-    ]),
-    withdrawn: z.boolean()
-});
-
-/**
- * What an earlier attempt of this review already prepared privately: the admitted results its pieces decide, and the
- * pieces composed for delivery on each private destination. It carries no words.
- */
-export const zPrivateProgress = z.object({
-    conversationDeliveries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    decidedResultIds: z.array(z.uuid()),
-    practicePageDeliveries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
 /**
  * Draft connection probe using a supplied (never-persisted) credential
  */
@@ -2862,20 +2767,6 @@ export const zPracticeProfileOverview = z.object({
     reviewReadiness: zMemberReviewReadiness.nullable(),
     reviewedItems: z.array(zItemRef),
     window: zOverviewWindow
-});
-
-export const zProjectedCitation = z.object({
-    anchorable: z.boolean(),
-    commit: z.string().nullable(),
-    endLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    index: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    path: z.string().nullable(),
-    quote: z.string().nullable(),
-    side: z.enum(['OLD', 'NEW']).nullable(),
-    sourceKind: z.string(),
-    sourcePath: z.string().nullable(),
-    startLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    verification: zCitationProof.nullable()
 });
 
 export const zProviderIdentityRef = z.object({
@@ -3084,46 +2975,6 @@ export const zPublicActivityWorkspaceSettings = z.object({
 });
 
 /**
- * Conversation feedback not yet delivered that a new piece on <code>practiceSlug</code> may replace.
- */
-export const zQueued = z.object({
-    basedOn: z.array(zPrivateFeedbackHistoryBasis),
-    body: z.string().nullable(),
-    bodyRole: z.enum([
-        'PRACTICE_PAGE_CARD',
-        'CONVERSATION_WORDS',
-        'MENTOR_NOTES'
-    ]).nullable(),
-    destination: z.enum([
-        'ON_WORK',
-        'PRACTICE_PAGE',
-        'CONVERSATION'
-    ]),
-    feedbackId: z.uuid(),
-    practiceSlug: z.string(),
-    preparedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    recordedClaimCurrentness: z.enum([
-        'CURRENT',
-        'STALE',
-        'UNVERIFIABLE'
-    ]),
-    threadKey: z.string()
-});
-
-/**
- * The private feedback this developer received, and conversation feedback still queued for them, on each private
- * destination this composition may write for its practice. It is one bounded read, never the complete history:
- * <code>coverage</code> says what it leaves out. A body is present where its words may be copied. It records what was
- * said. <code>recordedClaimCurrentness</code> says separately whether the claim behind it still holds.
- */
-export const zPrivateFeedbackHistory = z.object({
-    coverage: zCoverage,
-    delivered: z.array(zDelivered),
-    queued: z.array(zQueued),
-    readAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
-});
-
-/**
  * Vendor API rate-limit observation, read from in-memory trackers (not persisted across restarts). Every field except observedAt is present only if the vendor actually reported it.
  */
 export const zRateLimitSnapshot = z.object({
@@ -3303,71 +3154,6 @@ export const zHostCoverage = zResultCoverage.and(z.object({
     truncatedReads: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     source: z.literal('HostCoverage')
 }));
-
-export const zResultDecision = z.object({
-    decision: z.enum([
-        'ADMIT',
-        'FEEDBACK_OFF',
-        'MENTOR_UNAVAILABLE',
-        'GATE_REFUSED',
-        'UNATTRIBUTABLE_SUBJECT',
-        'HAS_INLINE_ANCHOR',
-        'ALREADY_DELIVERED_ON_WORK',
-        'REVIEWER_DEFERRED',
-        'BACKFILL_QUIET'
-    ]),
-    resultId: z.uuid(),
-    stopReason: z.enum([
-        'VOLUME_CAPPED',
-        'COMPOSER_WITHHELD',
-        'NOTHING_NEW',
-        'REPEATS_DELIVERED_NOTE',
-        'REACTED_DISAGREE',
-        'REACTED_NOT_APPLICABLE',
-        'CONVERSATION_EXPIRED',
-        'DELIVERY_UNCONFIRMED',
-        'ITEM_GONE',
-        'ITEM_CLOSED',
-        'ITEM_MERGED',
-        'ITEM_STATE_INELIGIBLE',
-        'ISSUE_SNAPSHOT_CHANGED',
-        'PUBLIC_SUBJECT_INELIGIBLE',
-        'NO_AI',
-        'DELIVERY_OFF',
-        'PERSON_SUPPRESSED',
-        'RECIPIENT_UNAVAILABLE',
-        'EMPTY_AFTER_SANITIZE',
-        'INSTANCE_SILENCED',
-        'FEEDBACK_OFF',
-        'WORKSPACE_DISABLED',
-        'WORKSPACE_DELIVERY_PAUSED',
-        'STALE_ROLLOUT_REVISION',
-        'OUTSIDE_CURRENT_SCOPE',
-        'APPROVAL_STALE',
-        'APPROVAL_NO_LONGER_ELIGIBLE',
-        'PRACTICE_REQUIRES_APPROVAL',
-        'BACKFILL_QUIET',
-        'RESULT_MARKED_INCORRECT',
-        'REVIEWED_VERSION_CHANGED',
-        'REVIEW_CANCELLED',
-        'EVIDENCE_NOT_PERMITTED',
-        'NO_EVIDENCE',
-        'UNCORROBORATED',
-        'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED',
-        'NOT_COMPOSED'
-    ]).nullable()
-});
-
-export const zConversationEligibility = z.object({
-    readAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    results: z.array(zResultDecision),
-    state: z.enum([
-        'COMPLETE',
-        'UNAVAILABLE',
-        'REFUSED'
-    ])
-});
 
 export const zResultExample = z.object({
     citation: zEvidenceCitation,
@@ -4508,41 +4294,6 @@ export const zReleaseStatus = z.object({
 });
 
 /**
- * An assigned practice that runtime execution could not complete, without an outcome about the work.
- */
-export const zRuntimeNonResult = z.object({
-    practiceSlug: z.string(),
-    reason: z.enum([
-        'TIMED_OUT',
-        'EXECUTION_FAILED',
-        'PREPARATION_FAILED',
-        'PROCESSING_FAILED',
-        'PERSON_DATA_ERASED',
-        'STALE_ROLLOUT_REVISION',
-        'CANCELLED_BY_ADMIN',
-        'REPLACED',
-        'LEGACY_FAILURE',
-        'EXECUTION_INCOMPLETE',
-        'RESULT_WITHHELD',
-        'READINESS_REFUSED',
-        'SUSPECT_LISTING',
-        'BUDGET',
-        'USAGE_UNVERIFIABLE',
-        'DEADLINE',
-        'CANCELLED',
-        'ENUMERATION_FAILED',
-        'ENUMERATION_LIMIT',
-        'NO_SCAN_PRACTICES',
-        'MODEL_CHANGED',
-        'MODEL_UNAVAILABLE',
-        'ERROR',
-        'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED',
-        'NO_SANDBOX_ROOM'
-    ])
-});
-
-/**
  * Create or change a pool of provider capacity
  */
 export const zSaveLlmCallPoolRequest = z.object({
@@ -5314,113 +5065,6 @@ export const zStateBasis = zClaimBasis.and(z.object({
     explanation: z.string().optional(),
     type: z.literal('StateBasis')
 }));
-
-export const zSubmittedResult = z.object({
-    candidate: zJsonNode.optional(),
-    itemId: z.string().optional(),
-    itemVersion: z.string().optional(),
-    practiceSlug: z.string().optional(),
-    readReceipts: z.array(zReadReceipt).optional()
-});
-
-export const zAdmissionRequest = z.object({
-    attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    contractVersion: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    jobId: z.uuid().optional(),
-    nonResults: z.array(zRuntimeNonResult),
-    results: z.array(zSubmittedResult).optional(),
-    reviewId: z.uuid().optional()
-});
-
-export const zSupportOccurrence = z.object({
-    evidence: zJsonNode.nullable(),
-    explanation: z.string().nullable(),
-    itemId: z.string(),
-    itemKind: z.string(),
-    origin: z.enum([
-        'EVENT',
-        'REQUEST',
-        'SCHEDULE',
-        'BACKFILL'
-    ]),
-    outcome: z.enum([
-        'MET',
-        'NOT_MET',
-        'DOES_NOT_APPLY',
-        'COULD_NOT_DETERMINE'
-    ]),
-    practiceVersionId: z.string().nullable(),
-    recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    resultId: z.uuid(),
-    summary: z.string()
-});
-
-export const zPracticeSupport = z.object({
-    decision: z.enum([
-        'ADMIT',
-        'FEEDBACK_OFF',
-        'GATE_REFUSED',
-        'NO_EVIDENCE',
-        'UNCORROBORATED',
-        'BACKFILL_HELD',
-        'RECENTLY_SURFACED',
-        'UNATTRIBUTABLE_SUBJECT'
-    ]),
-    occurrences: z.array(zSupportOccurrence),
-    practiceSlug: z.string(),
-    stopReason: z.enum([
-        'VOLUME_CAPPED',
-        'COMPOSER_WITHHELD',
-        'NOTHING_NEW',
-        'REPEATS_DELIVERED_NOTE',
-        'REACTED_DISAGREE',
-        'REACTED_NOT_APPLICABLE',
-        'CONVERSATION_EXPIRED',
-        'DELIVERY_UNCONFIRMED',
-        'ITEM_GONE',
-        'ITEM_CLOSED',
-        'ITEM_MERGED',
-        'ITEM_STATE_INELIGIBLE',
-        'ISSUE_SNAPSHOT_CHANGED',
-        'PUBLIC_SUBJECT_INELIGIBLE',
-        'NO_AI',
-        'DELIVERY_OFF',
-        'PERSON_SUPPRESSED',
-        'RECIPIENT_UNAVAILABLE',
-        'EMPTY_AFTER_SANITIZE',
-        'INSTANCE_SILENCED',
-        'FEEDBACK_OFF',
-        'WORKSPACE_DISABLED',
-        'WORKSPACE_DELIVERY_PAUSED',
-        'STALE_ROLLOUT_REVISION',
-        'OUTSIDE_CURRENT_SCOPE',
-        'APPROVAL_STALE',
-        'APPROVAL_NO_LONGER_ELIGIBLE',
-        'PRACTICE_REQUIRES_APPROVAL',
-        'BACKFILL_QUIET',
-        'RESULT_MARKED_INCORRECT',
-        'REVIEWED_VERSION_CHANGED',
-        'REVIEW_CANCELLED',
-        'EVIDENCE_NOT_PERMITTED',
-        'NO_EVIDENCE',
-        'UNCORROBORATED',
-        'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED',
-        'NOT_COMPOSED'
-    ]).nullable()
-});
-
-export const zCompletePracticePageSupport = z.object({
-    practices: z.array(zPracticeSupport),
-    readAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-    state: z.enum(['COMPLETE'])
-});
-
-export const zPracticePageSupport = z.discriminatedUnion('state', [
-    zCompletePracticePageSupport.extend({ state: z.literal('COMPLETE') }),
-    zClosedPracticePageSupport.extend({ state: z.literal('REFUSED') }),
-    zClosedPracticePageSupport.extend({ state: z.literal('UNAVAILABLE') })
-]);
 
 /**
  * One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection
@@ -6278,12 +5922,6 @@ export const zMentorThread = z.object({
     parent: zMentorEntry
 });
 
-export const zWithheld = z.object({
-    itemId: z.string().optional(),
-    practiceSlug: z.string().optional(),
-    reason: z.string().optional()
-});
-
 export const zWithheldScanReportItem = z.object({
     item: zItemRef,
     itemVersion: z.string(),
@@ -6841,68 +6479,6 @@ export const zWorsenedBasis = zClaimBasis.and(z.object({
     head: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     type: z.literal('WorsenedBasis')
 }));
-
-export const zAdmittedProblem = z.object({
-    basis: z.union([
-        zDutyBasis,
-        zIntroducedBasis,
-        zStateBasis,
-        zWorsenedBasis
-    ]).nullable(),
-    citations: z.array(zProjectedCitation),
-    explanation: z.string().nullable(),
-    id: z.uuid(),
-    key: z.string().nullable(),
-    nextStep: z.string().nullable(),
-    position: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    publicEligible: z.boolean(),
-    resultId: z.uuid(),
-    severity: z.enum([
-        'CRITICAL',
-        'MAJOR',
-        'MINOR',
-        'TRIVIAL'
-    ]),
-    summary: z.string()
-});
-
-export const zAdmittedResult = z.object({
-    coverage: z.union([
-        zClaimedCoverage,
-        zHostCoverage
-    ]),
-    evidence: zJsonNode,
-    example: zJsonNode.nullable(),
-    explanation: z.string().nullable(),
-    itemId: z.string(),
-    outcome: z.enum([
-        'MET',
-        'NOT_MET',
-        'DOES_NOT_APPLY',
-        'COULD_NOT_DETERMINE'
-    ]),
-    practiceSlug: z.string(),
-    problems: z.array(zAdmittedProblem),
-    publicEligible: z.boolean(),
-    resultId: z.uuid(),
-    summary: z.string().nullable(),
-    summaryOnly: z.boolean()
-});
-
-export const zAdmissionResponse = z.object({
-    admissionDigest: z.string(),
-    admitted: z.array(zAdmittedResult),
-    attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    contractVersion: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    conversationEligibility: zConversationEligibility.nullable(),
-    jobId: z.uuid(),
-    practicePageSupport: zPracticePageSupport.nullable(),
-    privateHistory: zPrivateFeedbackHistory.nullable(),
-    privateProgress: zPrivateProgress,
-    publicReviewed: z.boolean(),
-    reviewId: z.uuid(),
-    withheld: z.array(zWithheld)
-});
 
 export const zProblem = z.object({
     basis: z.union([

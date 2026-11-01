@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { client } from "@/api/client.gen";
 import type { PageResponseDtoUserViewAccount, UserViewAccount } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
+import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import {
@@ -154,7 +155,7 @@ describe("view as user entry", () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/user-view/users/:accountId", () =>
 				HttpResponse.json(
-					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 					{ status: 403 },
 				),
 			),

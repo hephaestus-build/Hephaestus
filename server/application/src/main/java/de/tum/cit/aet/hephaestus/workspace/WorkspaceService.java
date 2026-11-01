@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -134,8 +133,45 @@ public class WorkspaceService {
      */
     public Workspace createWorkspace(CreateWorkspaceRequestDTO request) {
         @Nullable List<RepositoryIdentity> selected = verifiedSelection(request);
+        return Objects.requireNonNull(transactionTemplate.execute(
+                status -> createWorkspaceInTransaction(request, selected, authenticatedOwner(request))));
+    }
+
+    /**
+     * Creates a workspace from a DTO for an owner that an in-process caller already resolved. The HTTP
+     * path uses {@link #createWorkspace(CreateWorkspaceRequestDTO)}, which takes the owner from the
+     * authenticated account.
+     */
+    public Workspace createWorkspace(CreateWorkspaceRequestDTO request, Long ownerUserId) {
+        @Nullable List<RepositoryIdentity> selected = verifiedSelection(request);
         return Objects.requireNonNull(
-                transactionTemplate.execute(status -> createWorkspaceInTransaction(request, selected)));
+                transactionTemplate.execute(status -> createWorkspaceInTransaction(request, selected, ownerUserId)));
+    }
+
+    /**
+     * The authenticated account's verified actor on the workspace's provider, never one of its other
+     * links. Creation has no workspace identity yet.
+     */
+    private Long authenticatedOwner(CreateWorkspaceRequestDTO request) {
+        if (Objects.requireNonNull(request.kind(), "kind is required") == IntegrationKind.GITLAB) {
+            String serverUrl = gitLabWorkspaceInstance.require(request.serverUrl());
+            var owners = currentAccountUsers.resolve().stream()
+                    .filter(actor -> actor.providerType().equals(IdentityProviderType.GITLAB.name())
+                            && ScmOrigin.of(actor.serverUrl()).equals(ScmOrigin.of(serverUrl)))
+                    .map(actor -> actor.actorId())
+                    .toList();
+            if (owners.size() != 1)
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Connect exactly one GitLab account on this instance before creating a workspace.");
+            return owners.getFirst();
+        }
+        return currentAccountUsers.resolve().stream()
+                .filter(user -> user.providerType().equals(IdentityProviderType.GITHUB.name()))
+                .map(user -> user.actorId())
+                .findFirst()
+                .orElseThrow(() -> new AccessForbiddenException(
+                        "Connect your GitHub account before you create" + " a GitHub workspace."));
     }
 
     /**
@@ -165,10 +201,8 @@ public class WorkspaceService {
                 new LinkedHashSet<>(projectIds));
     }
 
-    // Trusted in-process provisioners still supply an owner without an HTTP authentication context.
-    @SuppressWarnings("removal")
     private Workspace createWorkspaceInTransaction(
-            CreateWorkspaceRequestDTO request, @Nullable List<RepositoryIdentity> selected) {
+            CreateWorkspaceRequestDTO request, @Nullable List<RepositoryIdentity> selected, Long ownerUserId) {
         String workspaceSlug = Objects.requireNonNull(request.workspaceSlug(), "workspaceSlug is required");
         String displayName = Objects.requireNonNull(request.displayName(), "displayName is required");
         String accountLogin = Objects.requireNonNull(request.accountLogin(), "accountLogin is required");
@@ -183,32 +217,6 @@ public class WorkspaceService {
                 : (request.serverUrl() != null && !request.serverUrl().isBlank())
                         ? request.serverUrl().trim()
                         : null;
-
-        // Creation has no workspace identity yet. The owner is the account's verified actor on the
-        // workspace's
-        // provider, never one of its other links.
-        Long ownerUserId;
-        if (SecurityUtils.getCurrentAccountId().isEmpty()) {
-            ownerUserId = request.ownerUserId();
-        } else if (isGitLab) {
-            var owners = currentAccountUsers.resolve().stream()
-                    .filter(actor -> actor.providerType().equals(IdentityProviderType.GITLAB.name())
-                            && ScmOrigin.of(actor.serverUrl()).equals(ScmOrigin.of(serverUrl)))
-                    .map(actor -> actor.actorId())
-                    .toList();
-            if (owners.size() != 1)
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Connect exactly one GitLab account on this instance before creating a workspace.");
-            ownerUserId = owners.getFirst();
-        } else {
-            ownerUserId = currentAccountUsers.resolve().stream()
-                    .filter(user -> user.providerType().equals(IdentityProviderType.GITHUB.name()))
-                    .map(user -> user.actorId())
-                    .findFirst()
-                    .orElseThrow(() -> new AccessForbiddenException(
-                            "Connect your GitHub account before you create" + " a GitHub workspace."));
-        }
 
         Workspace workspace =
                 createWorkspaceInTransaction(workspaceSlug, displayName, accountLogin, accountType, ownerUserId);

@@ -3,6 +3,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { daysAfter, daysBefore } from "@/stories/story-clock";
 
+import { problemType } from "@/lib/problem-detail";
 import {
 	InstanceResearchDisclosureList,
 	type ResearchOpenDataset,
@@ -94,7 +95,7 @@ export const CheckRefused: Story = {
 	args: {
 		state: {
 			status: "error",
-			error: { status: 403, code: "passkey_required", title: "Passkey required" },
+			error: { status: 403, type: problemType("passkey-required"), title: "Passkey required" },
 		},
 	},
 	play: async ({ canvas }) => {

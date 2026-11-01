@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { z } from "zod";
 
 import { getPasskeyStatusOptions } from "@/api/@tanstack/react-query.gen";
 import {
@@ -22,7 +21,12 @@ import {
 	passkeyPromptCanceled,
 	passkeysSupported,
 } from "@/lib/passkeys";
-import { type StepUpChallenge, stepUpChallengeOf, problemDetailOf } from "@/lib/problem-detail";
+import {
+	isProblemType,
+	type StepUpChallenge,
+	stepUpChallengeOf,
+	problemDetailOf,
+} from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { withSessionLock } from "@/runtime/auth/session-lock";
 
@@ -32,10 +36,9 @@ import type { PasskeyAction, PasskeySectionProps } from "@/components/settings/P
 const PROMPT_CANCELED = "The passkey check did not finish. Try again when you’re ready.";
 
 /**
- * The server's refusal of a change that needs a recent confirmation. Its own words send the reader
- * to passkey settings, where this refusal is read, so this page says what to do here instead.
+ * The server's `passkey-required` refusal sends the reader to passkey settings, where this refusal
+ * is read, so this page says what to do here instead.
  */
-const confirmationRequired = z.object({ code: z.literal("passkey_required") });
 const CONFIRMATION_EXPIRED =
 	"Your passkey confirmation has expired. Verify your passkey again, then retry.";
 
@@ -95,7 +98,7 @@ export function usePasskeySettings({
 			setChallenge(stepUpChallengeOf(error));
 			// Refused before the mutation, which is what reads the status after every change: read it
 			// here, or a confirmation that aged out still shows as recent and hides Verify.
-			if (confirmationRequired.safeParse(error).success) {
+			if (isProblemType(error, "passkey-required")) {
 				void status.refetch();
 			}
 		}
@@ -135,7 +138,7 @@ export function usePasskeySettings({
 	let error: string | undefined;
 	if (passkeyPromptCanceled(operationError)) {
 		error = PROMPT_CANCELED;
-	} else if (confirmationRequired.safeParse(operationError).success) {
+	} else if (isProblemType(operationError, "passkey-required")) {
 		error = CONFIRMATION_EXPIRED;
 	} else if (ceremonyError !== undefined) {
 		error = problemDetailOf(ceremonyError, "The passkey operation did not complete. Try again.");

@@ -156,7 +156,7 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
     @WithAdminUser
     void creatingWorkspaceCollidingWithHistoryIsRejected() {
         User ownerA = persistUser("owner-a-history");
-        User ownerB = persistUser("owner-b-history");
+        persistUser("owner-b-history");
 
         Workspace workspaceA = createWorkspace("history-alpha", "Alpha", "alpha", AccountType.ORG, ownerA);
         ensureOwnerMembership(workspaceA);
@@ -169,7 +169,6 @@ class WorkspaceSlugRenameIntegrationTest extends AbstractWorkspaceIntegrationTes
                 "Beta",
                 "beta-account",
                 AccountType.ORG,
-                ownerB.getId(),
                 IntegrationKind.GITHUB,
                 "ghp_dummy_token_for_test",
                 null,

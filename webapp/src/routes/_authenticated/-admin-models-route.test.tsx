@@ -4,6 +4,7 @@ import { HttpResponse, http, type PathParams } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LlmConnection, LlmModel } from "@/api/types.gen";
+import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -217,7 +218,7 @@ describe("instance AI models route", () => {
 		server.use(
 			http.post("*/admin/llm/connections", () =>
 				HttpResponse.json(
-					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 					{ status: 403 },
 				),
 			),
@@ -362,7 +363,7 @@ describe("instance AI models route", () => {
 				writes.push("PATCH 1");
 				await slowSave.promise;
 				return HttpResponse.json(
-					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 					{ status: 403 },
 				);
 			}),
@@ -533,7 +534,7 @@ describe("instance AI models route", () => {
 					toggles.push(body);
 					await slowToggle.promise;
 					return HttpResponse.json(
-						{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+						{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 						{ status: 403 },
 					);
 				},
@@ -600,7 +601,7 @@ describe("instance AI models route", () => {
 					toggles.push(body);
 					await slowToggle.promise;
 					return HttpResponse.json(
-						{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+						{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 						{ status: 403 },
 					);
 				},

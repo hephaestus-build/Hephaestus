@@ -274,6 +274,8 @@ springdoc:
         enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
     default-produces-media-type: application/json
     writer-with-order-by-keys: true
+    # The sandbox gateway is private to agent containers, not part of the public API.
+    paths-to-exclude: /internal/**
 
 hephaestus:
     # What the verified release lock handed this container (docs/admin/release-image-lock.md).

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
@@ -183,7 +184,6 @@ public class OAuthCallbackController {
             // 500 is a server-side wiring bug — always problem+json, no point redirecting the user
             // to a broken flow they'll just retry.
             return problemDetail(
-                    kind.name(),
                     "no_strategy",
                     "No ConnectionStrategy registered for kind=" + kind,
                     HttpStatus.INTERNAL_SERVER_ERROR);
@@ -254,7 +254,7 @@ public class OAuthCallbackController {
     /**
      * Browser path: 302 to {@code failureRedirect} with {@code status|reason|kind} query params.
      * JSON path ({@code Accept: application/json}): an RFC-7807 {@code application/problem+json} body
-     * ({@code detail} = description, {@code kind}/{@code error} extension members) with the given
+     * ({@code detail} = description, {@code callbackError} member) with the given
      * status so curl / devtools / E2E suites surface the failure clearly.
      */
     private ResponseEntity<?> failure(
@@ -264,7 +264,7 @@ public class OAuthCallbackController {
             HttpStatus jsonStatus,
             boolean wantsJson) {
         if (wantsJson) {
-            return problemDetail(kind, error, description, jsonStatus);
+            return problemDetail(error, description, jsonStatus);
         }
         return redirect(buildFailureRedirect(kind, error, description));
     }
@@ -323,15 +323,14 @@ public class OAuthCallbackController {
 
     /**
      * RFC-7807 {@code application/problem+json} body for an OAuth-callback failure, matching the
-     * project's central error-handling contract. {@code kind} and {@code error} ride as extension
-     * members so an API client can branch on the Slack/GitHub error code.
+     * project's central error-handling contract. {@code callbackError} names the failure as data, with
+     * the same value as the browser redirect's {@code reason}.
      */
     private static ResponseEntity<ProblemDetail> problemDetail(
-            @Nullable String kind, String error, @Nullable String description, HttpStatus status) {
-        ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, description != null ? description : error);
-        pd.setTitle("OAuth callback failed");
-        pd.setProperty("kind", kind == null ? "unknown" : kind);
-        pd.setProperty("error", error);
+            String error, @Nullable String description, HttpStatus status) {
+        ProblemDetail pd = ProblemType.OAUTH_CALLBACK_FAILED.problem(
+                status, "OAuth callback failed", description != null ? description : error);
+        pd.setProperty("callbackError", error);
         return ResponseEntity.status(status)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(pd);

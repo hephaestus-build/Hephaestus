@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -584,9 +586,9 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/mentor-rejected")
-                .jsonPath("$.reason")
-                .isEqualTo("NOT_VOTABLE");
+                .isEqualTo(ProblemType.MENTOR_REJECTED.uri().toString())
+                .jsonPath("$.detail")
+                .isEqualTo(MentorRejectedException.Reason.NOT_VOTABLE.userMessage());
     }
 
     @Test
@@ -618,8 +620,8 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody()
-                .jsonPath("$.reason")
-                .isEqualTo("NOT_DELETABLE");
+                .jsonPath("$.detail")
+                .isEqualTo(MentorRejectedException.Reason.NOT_DELETABLE.userMessage());
     }
 
     @Test
@@ -633,9 +635,9 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/mentor-refused")
-                .jsonPath("$.reason")
-                .isEqualTo("UNAVAILABLE");
+                .isEqualTo(ProblemType.MENTOR_REFUSED.uri().toString())
+                .jsonPath("$.detail")
+                .isEqualTo(MentorRefusal.UNAVAILABLE.userMessage());
 
         assertThat(turnRepository.findByWorkspaceIdAndRequestId(workspace.getId(), requestId.toString()))
                 .isEmpty();

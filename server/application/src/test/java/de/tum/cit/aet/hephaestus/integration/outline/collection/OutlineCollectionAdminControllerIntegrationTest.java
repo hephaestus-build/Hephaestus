@@ -7,6 +7,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -232,7 +233,7 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .isEqualTo(422)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/unknown-outline-collection");
+                .isEqualTo(ProblemType.UNKNOWN_OUTLINE_COLLECTION.uri().toString());
         assertThat(collectionRepository.findByWorkspaceIdOrderByCreatedAtAsc(workspace.getId()))
                 .isEmpty();
     }
@@ -344,7 +345,7 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 .jsonPath("$.title")
                 .isEqualTo("Hephaestus could not reach the Outline server")
                 .jsonPath("$.type")
-                .isEqualTo("/problems/outline-unreachable");
+                .isEqualTo(ProblemType.OUTLINE_UNREACHABLE.uri().toString());
     }
 
     @Test

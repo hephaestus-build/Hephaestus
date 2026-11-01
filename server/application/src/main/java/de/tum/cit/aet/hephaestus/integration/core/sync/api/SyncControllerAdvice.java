@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncStateConflictException;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -43,12 +44,10 @@ class SyncControllerAdvice {
     @ExceptionHandler(SyncNotSupportedException.class)
     ProblemDetail handleNotSupported(SyncNotSupportedException exception) {
         log.info("Sync not supported: kind={}", exception.kind());
-        ProblemDetail problem = problem(
+        return ProblemType.SYNC_NOT_SUPPORTED.problem(
                 HttpStatus.CONFLICT,
                 "Manual sync not supported",
                 Objects.requireNonNullElse(exception.getMessage(), "Manual sync not supported"));
-        problem.setProperty("kind", exception.kind());
-        return problem;
     }
 
     @ExceptionHandler(TaskRejectedException.class)

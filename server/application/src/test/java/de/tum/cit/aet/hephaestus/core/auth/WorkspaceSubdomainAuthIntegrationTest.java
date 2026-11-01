@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.web.CsrfController;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -181,7 +182,7 @@ class WorkspaceSubdomainAuthIntegrationTest extends RealAuthIntegrationTest {
                 .isForbidden()
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("urn:hephaestus:csrf");
+                .isEqualTo(ProblemType.CSRF_TOKEN_REJECTED.uri().toString());
 
         var refreshed = fetchCsrf(last.token());
         assertThat(refreshed.token()).isEqualTo(last.token());

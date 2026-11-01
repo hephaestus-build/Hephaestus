@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PublicActivityChoice } from "@/api/types.gen";
 import { server } from "@/mocks/server";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 30_000 });
@@ -16,7 +17,7 @@ describe("the account's public activity choice on the settings page", () => {
 		let visible = true;
 		server.use(
 			http.get("*/workspaces", () => HttpResponse.json([])),
-			http.get("*/user/features", () => HttpResponse.json({})),
+			http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 			http.get("*/user/public-activity", () => HttpResponse.json({ visible })),
 			http.put<PathParams, PublicActivityChoice>("*/user/public-activity", async ({ request }) => {
 				const body = await request.json();

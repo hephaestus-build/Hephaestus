@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -116,11 +117,10 @@ class RecentSignInPolicyTest extends BaseUnitTest {
                         signedInAt(NOW.minus(Duration.ofHours(1))),
                         AuthEvent.EventType.LOGIN_PROVIDER_DELETED,
                         ACTING_ACCOUNT_ID))
-                .isInstanceOfSatisfying(
-                        StepUpRequiredException.class,
-                        e -> assertThat(e.getBody().getProperties())
-                                .containsEntry("code", StepUpRequiredException.CODE)
-                                .containsEntry("maxAgeSeconds", MAX_AGE.toSeconds()));
+                .isInstanceOfSatisfying(StepUpRequiredException.class, e -> {
+                    assertThat(e.getBody().getType()).isEqualTo(ProblemType.STEP_UP_REQUIRED.uri());
+                    assertThat(e.getBody().getProperties()).containsEntry("maxAgeSeconds", MAX_AGE.toSeconds());
+                });
 
         ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
         verify(authEventWriter).write(captor.capture());

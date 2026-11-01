@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { z } from "zod";
+import { ZodError, z } from "zod";
 
 import { getUserFeaturesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { getUserFeatures } from "@/api/sdk.gen";
@@ -7,31 +7,26 @@ import type { FeatureFlags } from "@/api/types.gen";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
 
-export type FeatureFlagName = keyof Required<FeatureFlags>;
-
-type FeatureFlagsResponse = Record<FeatureFlagName, boolean>;
+export type FeatureFlagName = keyof FeatureFlags;
 
 /**
- * Every flag is optional on the wire — an older server omits one it has never heard of — so each is
- * parsed to a definite boolean with absent reading as off. Spelling them out rather than deriving
- * them is what makes that safe: omit one and `fetchFeatureFlags` stops satisfying its return type.
+ * Spelled out rather than imported from `@/api/zod.gen`: this module is in the entry bundle, and the
+ * generated module would bring every schema with it. `satisfies` fails the build when `FeatureFlags`
+ * gains a flag that this list lacks. A flag the server adds later is dropped, not rejected.
  */
 const featureFlagsSchema = z.object({
-	ADMIN: z.boolean().catch(false),
-	PAGE_EXPERIENCE_METRICS: z.boolean().catch(false),
-});
+	ADMIN: z.boolean(),
+	PAGE_EXPERIENCE_METRICS: z.boolean(),
+}) satisfies z.ZodType<FeatureFlags>;
 
-async function fetchFeatureFlags(): Promise<FeatureFlagsResponse> {
+/** A malformed answer is a failed read, never a set of closed gates. */
+async function fetchFeatureFlags(): Promise<FeatureFlags> {
 	const { data } = await getUserFeatures({ throwOnError: true });
-	const parsed = featureFlagsSchema.safeParse(data);
-	if (!parsed.success) {
-		throw new Error("Failed to fetch feature flags");
-	}
-	return parsed.data;
+	return featureFlagsSchema.parse(data);
 }
 
 // The administrator's flags never apply in a view.
-const USER_VIEW_FLAGS: FeatureFlagsResponse = {
+const USER_VIEW_FLAGS: FeatureFlags = {
 	ADMIN: false,
 	PAGE_EXPERIENCE_METRICS: false,
 };
@@ -41,11 +36,12 @@ export const featureFlagsQueryOptions = queryOptions({
 	queryKey: getUserFeaturesQueryKey(),
 	queryFn: fetchFeatureFlags,
 	staleTime: 60_000,
-	retry: retryQuery,
+	// A malformed answer reads the same on every retry.
+	retry: (failureCount, error) => !(error instanceof ZodError) && retryQuery(failureCount, error),
 });
 
 function useFeatureFlagsQuery(): {
-	data: FeatureFlagsResponse | undefined;
+	data: FeatureFlags | undefined;
 	isLoading: boolean;
 	isError: boolean;
 } {

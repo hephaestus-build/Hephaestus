@@ -423,7 +423,10 @@ const consent: ConsentStatus = {
 	noticeVersion: "2026-10-04",
 	participateInResearch: false,
 };
-const features: FeatureFlags = {};
+const features: FeatureFlags = {
+	ADMIN: false,
+	PAGE_EXPERIENCE_METRICS: false,
+};
 
 const workspaceDetail: Wire<Workspace> = {
 	accountLogin: "orbit-labs",

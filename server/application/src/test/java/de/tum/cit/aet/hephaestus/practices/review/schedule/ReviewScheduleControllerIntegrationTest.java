@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review.schedule;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -82,7 +83,7 @@ class ReviewScheduleControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.type")
-                .isEqualTo("/problems/review-schedule-conflict")
+                .isEqualTo(ProblemType.REVIEW_SCHEDULE_CONFLICT.uri().toString())
                 .jsonPath("$.status")
                 .isEqualTo(409);
     }

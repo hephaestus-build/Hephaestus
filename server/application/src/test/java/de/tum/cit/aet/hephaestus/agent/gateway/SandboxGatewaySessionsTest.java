@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -78,8 +79,7 @@ class SandboxGatewaySessionsTest {
         UUID id = UUID.randomUUID();
         assertThatThrownBy(() -> bounded.register(id, "token", archive, "out"))
                 .isInstanceOfSatisfying(WorkspaceBudgetExceededException.class, refusal -> {
-                    assertThat(refusal.getBody().getProperties())
-                            .containsEntry("reasonCode", "WORKSPACE_BUDGET_EXCEEDED");
+                    assertThat(refusal.getBody().getType()).isEqualTo(ProblemType.WORKSPACE_BUDGET_EXCEEDED.uri());
                     assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
                 });
         assertThatThrownBy(() -> bounded.require(id, "Bearer token")).isInstanceOf(ResponseStatusException.class);

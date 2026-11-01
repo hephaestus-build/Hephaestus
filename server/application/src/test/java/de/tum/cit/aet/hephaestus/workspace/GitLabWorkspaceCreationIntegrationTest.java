@@ -143,7 +143,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                         slug,
                         "my-group",
                         AccountType.ORG,
-                        null,
                         IntegrationKind.GITLAB,
                         "glpat-test",
                         serverUrl,
@@ -258,7 +257,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspacePersistsCorrectProviderModeAndServerUrl() {
-        User owner = persistUser("mentor");
+        persistUser("mentor");
         IdentityProvider instance = gitLabInstance(DEFAULT_INSTANCE);
         Consumer<HttpHeaders> auth = gitLabCaller("mentor", gitLabInstance("https://gitlab.com"), instance);
 
@@ -267,7 +266,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "My GitLab Workspace",
                 "my-group/my-project",
                 AccountType.ORG,
-                persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-test-token-12345",
                 "HTTPS://GitLab.LRZ.de:443",
@@ -310,7 +308,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspaceWithoutServerUrlUsesTheDefaultInstance() {
-        User owner = persistUser("mentor");
+        persistUser("mentor");
         Consumer<HttpHeaders> auth = gitLabCaller("mentor");
 
         var request = new CreateWorkspaceRequestDTO(
@@ -318,7 +316,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "Default GitLab",
                 "my-group",
                 AccountType.ORG,
-                persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-test-token-67890",
                 null,
@@ -345,7 +342,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspaceWithoutTokenReturnsValidationError() {
-        User owner = persistUser("admin");
+        persistUser("admin");
         Consumer<HttpHeaders> auth = gitLabCaller("admin");
 
         var request = new CreateWorkspaceRequestDTO(
@@ -353,7 +350,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "No Token",
                 "my-group",
                 AccountType.ORG,
-                persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 null, // missing token
                 null,
@@ -385,7 +381,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspaceWithHttpServerUrlReturnsValidationError() {
-        User owner = persistUser("admin");
+        persistUser("admin");
         Consumer<HttpHeaders> auth = gitLabCaller("admin");
 
         var request = new CreateWorkspaceRequestDTO(
@@ -393,7 +389,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "HTTP GitLab",
                 "my-group",
                 AccountType.ORG,
-                persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-test-token",
                 "http://insecure.example.com", // not HTTPS
@@ -433,7 +428,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "Owner Test",
                 "owner-group",
                 AccountType.ORG,
-                persistedId(namesake.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-owner-token",
                 null,
@@ -465,7 +459,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void createGitLabWorkspaceResponseNeverContainsRawToken() {
-        User owner = persistUser("mentor");
+        persistUser("mentor");
         Consumer<HttpHeaders> auth = gitLabCaller("mentor");
         String secretToken = "test-token-placeholder";
 
@@ -474,7 +468,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "Secret Test",
                 "secret-group",
                 AccountType.ORG,
-                persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 secretToken,
                 null,
@@ -509,7 +502,6 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 "GitLab WS",
                 "gitlab-group",
                 AccountType.ORG,
-                caller.scmUser().getId(),
                 IntegrationKind.GITLAB,
                 "glpat-list-token",
                 null,
@@ -549,17 +541,18 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     @WithAdminUser
     void gitLabWorkspaceLifecycleSuspendAndPurgeWorkCorrectly() {
         User owner = persistUser("lifecycle-owner");
-        Workspace workspace = workspaceService.createWorkspace(new CreateWorkspaceRequestDTO(
-                "gitlab-lifecycle",
-                "Lifecycle Test",
-                "lifecycle-group",
-                AccountType.ORG,
-                persistedId(owner.getId()),
-                IntegrationKind.GITLAB,
-                "glpat-lifecycle-token",
-                null,
-                null,
-                null));
+        Workspace workspace = workspaceService.createWorkspace(
+                new CreateWorkspaceRequestDTO(
+                        "gitlab-lifecycle",
+                        "Lifecycle Test",
+                        "lifecycle-group",
+                        AccountType.ORG,
+                        IntegrationKind.GITLAB,
+                        "glpat-lifecycle-token",
+                        null,
+                        null,
+                        null),
+                persistedId(owner.getId()));
         ensureOwnerMembership(workspace);
 
         // Verify it's ACTIVE
@@ -590,7 +583,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
             @Nullable RepositorySelection selection,
             @Nullable List<Long> projectIds) {
         return new CreateWorkspaceRequestDTO(
-                slug, slug, "my-group", AccountType.ORG, null, kind, "glpat-test", null, selection, projectIds);
+                slug, slug, "my-group", AccountType.ORG, kind, "glpat-test", null, selection, projectIds);
     }
 
     @Test
@@ -624,13 +617,12 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Test
     void shouldApplyTheSelectionRuleToInProcessCallersToo() {
-        User owner = persistUser("in-process-owner");
+        persistUser("in-process-owner");
         var request = new CreateWorkspaceRequestDTO(
                 "selection-in-process",
                 "In process",
                 "my-group",
                 AccountType.ORG,
-                persistedId(owner.getId()),
                 IntegrationKind.GITLAB,
                 "glpat-test",
                 null,

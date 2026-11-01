@@ -162,7 +162,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("kind", "SLACK").containsEntry("error", "access_denied");
+        assertThat(body.getProperties()).containsEntry("callbackError", "access_denied");
         assertThat(body.getDetail()).isEqualTo("The user denied the request");
 
         // An unbound callback cannot name a return workspace.
@@ -258,7 +258,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "missing_state");
+        assertThat(body.getProperties()).containsEntry("callbackError", "missing_state");
     }
 
     @Test
@@ -282,7 +282,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "invalid_state");
+        assertThat(body.getProperties()).containsEntry("callbackError", "invalid_state");
         assertThat(body.getDetail()).contains("signature of the OAuth state");
         // Critical: strategy NEVER invoked when the state is bad.
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
@@ -301,7 +301,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "kind_mismatch");
+        assertThat(body.getProperties()).containsEntry("callbackError", "kind_mismatch");
         assertThat(body.getDetail()).contains("SLACK").contains("github");
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
         verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
@@ -323,7 +323,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "finalize_failed");
+        assertThat(body.getProperties()).containsEntry("callbackError", "finalize_failed");
         assertThat(body.getDetail()).contains("vendor rejected");
         // No completion issued on a Failed result.
         verify(callbackService, never()).completeConnection(any(), any(), any());
@@ -368,7 +368,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "strategy_error");
+        assertThat(body.getProperties()).containsEntry("callbackError", "strategy_error");
     }
 
     @Test
@@ -393,7 +393,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "missing_state");
+        assertThat(body.getProperties()).containsEntry("callbackError", "missing_state");
     }
 
     @Test
@@ -414,7 +414,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.getDetail()).isEqualTo("Held elsewhere.");
-        assertThat(body.getProperties()).containsEntry("error", "connected_elsewhere");
+        assertThat(body.getProperties()).containsEntry("callbackError", "connected_elsewhere");
     }
 
     @Test
@@ -441,7 +441,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "transition_conflict");
+        assertThat(body.getProperties()).containsEntry("callbackError", "transition_conflict");
     }
 
     @Test
@@ -471,7 +471,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "unknown_kind");
+        assertThat(body.getProperties()).containsEntry("callbackError", "unknown_kind");
         verify(oauthStateService, never()).consume(any());
     }
 
@@ -499,7 +499,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         ProblemDetail body = (ProblemDetail) response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.getProperties()).containsEntry("error", "no_strategy");
+        assertThat(body.getProperties()).containsEntry("callbackError", "no_strategy");
     }
 
     @Test

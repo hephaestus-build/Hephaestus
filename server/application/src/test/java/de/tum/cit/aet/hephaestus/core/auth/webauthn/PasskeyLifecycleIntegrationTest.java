@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
+import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -197,8 +198,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         assertThat(publicActivityEnabled(admin.workspace())).isFalse();
         patch(base + "/public-activity", token(admin.account(), Instant.now()), csrf)
                 .bodyValue(new UpdateWorkspacePublicActivityRequestDTO(true, false))
@@ -240,8 +241,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         patch(path, token(owner.account(), Instant.now()), csrf)
                 .bodyValue(new WorkspacePasskeyPolicyController.UpdateWorkspacePasskeyPolicyDTO(false))
                 .exchange()
@@ -256,8 +257,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         patch(path, token(owner.account(), Instant.now()), csrf)
                 .bodyValue(new WorkspacePasskeyPolicyController.UpdateWorkspacePasskeyPolicyDTO(true))
                 .exchange()
@@ -290,8 +291,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         client.get()
                 .uri(base + "/members")
                 .header(HttpHeaders.COOKIE, cookie + "=" + token(admin, Instant.now()))
@@ -314,16 +315,16 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         assertThat(auditCount(admin, "USER_VIEW", "SUCCESS", null)).isZero();
         userView(base + "/members/me", stale, member)
                 .exchange()
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         userView(base + "/members/me", token(admin, Instant.now()), member)
                 .exchange()
                 .expectStatus()
@@ -388,8 +389,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
         post("/user/passkeys/registration-options", token, csrf())
                 .exchange()
                 .expectStatus()
@@ -791,8 +792,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
 
         var next = new PasskeyTestAuthenticator();
         enroll(removed, csrf, next, "Phone");
@@ -824,8 +825,8 @@ class PasskeyLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isForbidden()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("passkey_required");
+                .jsonPath("$.type")
+                .isEqualTo(ProblemType.PASSKEY_REQUIRED.uri().toString());
 
         var other = account();
         enroll(token(other, null), csrf, new PasskeyTestAuthenticator(), "Other laptop");

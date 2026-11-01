@@ -7,6 +7,7 @@ import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { ConversationFake } from "@/test/conversation-server";
 import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
@@ -22,7 +23,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 	conversation.add({ kind: "HEPH", text: "Earlier guidance remains readable." });
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(preference)),
 		...conversation.handlers(),
@@ -56,7 +57,7 @@ it("keeps an existing conversation readable under No AI and restores its compose
 it("names the saved choice when no conversation model is set up for it", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
@@ -91,7 +92,7 @@ it("names the saved choice when no conversation model is set up for it", async (
 it("says Hephaestus is not set up, and offers no choice to change, to a member without a choice whom no model serves", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
@@ -119,7 +120,7 @@ it("opens Hephaestus for a member whose account carries no feature flags", async
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		// Hephaestus follows the workspace and the member's AI choice, not an account flag.
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
@@ -142,7 +143,7 @@ it("offers Hephaestus to a member who has not chosen, whom the workspace's undec
 	// sends no refusal; the page follows the refusal, not the declared options.
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
@@ -163,7 +164,7 @@ it("offers Hephaestus to a member who has not chosen, whom the workspace's undec
 it("lists Hephaestus in the navigation for a member who has not chosen", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(workspaceOnboarding())),
 	);
@@ -175,7 +176,7 @@ it("keeps Hephaestus out of the navigation for a reader who is not a member", as
 	let membershipAnswered = false;
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		// The server answers `members/me` only for a member of the workspace.
 		http.get("*/workspaces/acme/members/me", () => {
 			membershipAnswered = true;
@@ -194,7 +195,7 @@ it("keeps Hephaestus out of the navigation for a reader who is not a member", as
 it("offers Hephaestus in the navigation where a conversation model is ready, whatever the member chose", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
 		http.get("*/workspaces/acme/onboarding/me", () =>
 			HttpResponse.json({
@@ -221,7 +222,7 @@ it("keeps Hephaestus out of the navigation of a workspace where only practice re
 		http.get("*/workspaces", () =>
 			HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other", { id: 2 })]),
 		),
-		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("MEMBER")),
 		),

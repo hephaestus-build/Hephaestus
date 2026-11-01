@@ -1,7 +1,7 @@
 import type { AnyRouter } from "@tanstack/react-router";
-import { z } from "zod";
 
 import { client } from "@/api/client.gen";
+import { isProblemType } from "@/lib/problem-detail";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 
 /** The focused page that asks for a passkey; an apex path in `workspace-address`. */
@@ -29,10 +29,8 @@ function handlesItsOwnRefusals(pathname: string): boolean {
 	return pathname === "/settings" || pathname === PASSKEY_CHALLENGE_PATH;
 }
 
-const challenge = z.object({ code: z.literal("passkey_required") });
-
 /**
- * Handles `passkey_required` refusals. Concurrent refusals share one navigation, such as one that a
+ * Handles `passkey-required` refusals. Concurrent refusals share one navigation, such as one that a
  * draft blocker holds. The navigation belongs to one installation, so a navigation its router never
  * finishes cannot hold another router's responses.
  */
@@ -46,7 +44,7 @@ export function passkeyChallengeHandler() {
 			.clone()
 			.json()
 			.catch(() => undefined);
-		if (challenge.safeParse(body).success) {
+		if (isProblemType(body, "passkey-required")) {
 			navigation ??= navigate().finally(() => {
 				navigation = undefined;
 			});
@@ -57,7 +55,7 @@ export function passkeyChallengeHandler() {
 
 /**
  * Takes the developer to confirm with a passkey when the server refuses a request of the page they
- * are on with `passkey_required`, and back to that exact page once they have. A response from a page
+ * are on with `passkey-required`, and back to that exact page once they have. A response from a page
  * they left cannot interrupt their current page. The challenge replaces the refused page in history,
  * so Back does not ask again. The refused request is not sent again. Returns the function that
  * removes the handling.
