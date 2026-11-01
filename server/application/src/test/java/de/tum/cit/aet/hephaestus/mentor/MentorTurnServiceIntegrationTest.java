@@ -807,6 +807,46 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     @Test
+    void shouldRewriteTheRunningTurnInPlaceWhenItsHostRenewsTheLeaseAdmitsAndReportsUsage() {
+        ask(main, "Question");
+
+        long[] counts = transactionTemplate.execute(tx -> {
+            MentorTurn running = turns.claimNext(LEASE).orElseThrow();
+            entityManager.flush();
+            long[] before = turnUpdatesInThisTransaction();
+            UUID leaseId = Objects.requireNonNull(running.getLeaseId());
+            turns.renewLease(running.getWorkspaceId(), running.getId(), running.getAttempt(), leaseId, LEASE);
+            entityManager.flush();
+            turns.admit(
+                    running.getWorkspaceId(),
+                    running.getId(),
+                    running.getAttempt(),
+                    leaseId,
+                    JsonNodeFactory.instance.objectNode().put("model", "admitted"));
+            entityManager.flush();
+            turnRepository.accumulateUsage(
+                    running.getId(), running.getAttempt(), new MentorTurnUsage(1_000, 200, 0, 0, 0, 1));
+            turns.renewLease(running.getWorkspaceId(), running.getId(), running.getAttempt(), leaseId, LEASE);
+            entityManager.flush();
+            long[] after = turnUpdatesInThisTransaction();
+            return new long[] {after[0] - before[0], after[1] - before[1]};
+        });
+
+        assertThat(counts)
+                .as("updates, and those that added no index entry (HOT)")
+                .containsExactly(4, 4);
+    }
+
+    /** This transaction's updates of {@code mentor_turn}, and how many of them were HOT, so far. */
+    private long[] turnUpdatesInThisTransaction() {
+        Object[] row = (Object[]) entityManager
+                .createNativeQuery("SELECT n_tup_upd, n_tup_hot_upd FROM pg_stat_xact_user_tables"
+                        + " WHERE relid = 'mentor_turn'::regclass")
+                .getSingleResult();
+        return new long[] {((Number) row[0]).longValue(), ((Number) row[1]).longValue()};
+    }
+
+    @Test
     void shouldKeepTheProxysCountsWhenAStaleTurnSnapshotIsSavedAfterThem() {
         ask(main, "Question");
         MentorTurn running = turns.claimNext(LEASE).orElseThrow();
