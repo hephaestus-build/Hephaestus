@@ -134,7 +134,12 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 	const workers = 4;
 	let downloads = 0;
 	const responses: ServerResponse[] = [];
-	const server = createServer((_request, response) => {
+	const server = createServer((request, response) => {
+		// Another local process can probe a newly opened port. Only the installers' requests count.
+		if (request.url !== `/${asset.name}`) {
+			response.writeHead(404).end();
+			return;
+		}
 		downloads += 1;
 		if (downloads > workers) {
 			response.end(archive);
