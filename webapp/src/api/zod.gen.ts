@@ -1906,10 +1906,6 @@ export const zLatestRelease = z.object({
     version: z.string()
 });
 
-export const zLegacyFeedbackItem = z.object({
-    itemId: z.string().regex(/^[1-9][0-9]*$/)
-});
-
 /**
  * A provider instance the current user is linked to: its type + server-url origin.
  */

@@ -7450,41 +7450,6 @@ paths:
       summary: List items in the workspace
       tags:
       - item
-  /workspaces/{workspaceSlug}/practices/items/legacy-feedback/{artifactKind}/{artifactId}:
-    get:
-      operationId: resolveLegacyFeedbackItem
-      parameters:
-      - description: Workspace slug
-        in: path
-        name: workspaceSlug
-        required: true
-        schema:
-          type: string
-          maxLength: 51
-          minLength: 3
-          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: path
-        name: artifactKind
-        required: true
-        schema:
-          type: string
-      - in: path
-        name: artifactId
-        required: true
-        schema:
-          type: string
-          maxLength: 19
-          pattern: "^[1-9][0-9]*$"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/LegacyFeedbackItem"
-          description: OK
-      summary: Resolve a feedback link posted before item IDs
-      tags:
-      - item
   /workspaces/{workspaceSlug}/practices/items/{itemId}/facts:
     get:
       operationId: getItemFacts
@@ -16111,14 +16076,6 @@ components:
       - notesUrl
       - publishedAt
       - version
-    LegacyFeedbackItem:
-      type: object
-      properties:
-        itemId:
-          type: string
-          pattern: "^[1-9][0-9]*$"
-      required:
-      - itemId
     LinkedProvider:
       type: object
       description: "A provider instance the current user is linked to: its type +\

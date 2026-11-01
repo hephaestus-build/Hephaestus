@@ -1,6 +1,6 @@
 # ADR 0070: 1.0 is a cutover release
 
-**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews)
+**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews; amended 2026-11-03 — F-2 removes the legacy feedback link resolver)
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 **Amends:** ADR 0058 (§ Supported deployment, § Notice and removal, gate 10), ADR 0041, ADR 0042 and ADR 0005.
@@ -109,7 +109,7 @@ The owning layer of each item records the detail.
 | # | Decision | Outcome |
 |---|---|---|
 | F-1 | Pre-cutover practice history: evidence version 0 and the `LEGACY_*` reasons (S-1, RL-1). Keep a read-only view, or convert or delete it? | Keep the `LEGACY_*` reasons (no false history). Keep version-0 rows as a read-only "earlier review" view, and collapse the branches into one adapter. |
-| F-2 | Legacy feedback link resolver (FD-1) | Keep it permanently. Posted links are not ours to break. |
+| F-2 | Legacy feedback link resolver (FD-1) | Remove it (amended 2026-11-03; this decision first kept it permanently). 1.0 is a full cutover with no legacy paths. A link posted before 0.94.1 names the work by its provider id and now shows the not-found page. |
 | F-3 | Hotfixes after 0.95.0: is a `release/0.95` branch allowed while `main` carries 1.0 deletions? | Yes. Otherwise the Compose deletions must wait for the 1.0 tag. |
 | F-4 | Retire `docs/db/archive/v0.77.4/`, the archive tests and `WorkspaceConnectionBackfillChange` at 1.0 (needs a change to the immutability guard)? | Yes, with FU-2. 0.95 owns that path. |
 | F-5 | Shared GitLab webhook endpoint for operator-created hooks (II-8) | Remove it. Re-register connection hooks at the cutover. |
@@ -164,5 +164,5 @@ This update amends F-18 and resolves its persona decision.
 F-18 now names the worker capacity **conversation turns**, in the conversation loop layer.
 The unpublished chart value becomes `worker.conversationTurns` in 0.95.
 Configuration, environment variable, metric, API and storage identifiers change once at the 1.0 cutover.
-Posted `/mentor` links keep a permanent redirect to `/conversation`, under the F-2 precedent.
+`/mentor` links redirect to `/conversation` until the rename of these identifiers.
 The [retired words](../contributor/practice-feedback-language.md#retired-words) state which Slack wire identifiers remain.

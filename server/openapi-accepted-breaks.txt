@@ -146,3 +146,6 @@ in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report/problems 
 # FrozenModel.options values are any JSON value, not Jackson's JsonNode bean properties.
 in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report the response property `practices/items/method/models/items/model/anyOf[#/components/schemas/FrozenModel]/options/additionalProperties/` became nullable for the status `200`
 in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report the `practices/items/method/models/items/model/anyOf[#/components/schemas/FrozenModel]/options/additionalProperties/` response's property `type` was widened from `object` to `string, number, boolean, object, array, null` for status `200`
+
+# 1.0 is a full cutover: the resolver of the feedback links posted before 0.94.1 goes, and those links show the not-found page.
+in API GET /workspaces/{workspaceSlug}/practices/items/legacy-feedback/{artifactKind}/{artifactId} api path removed without deprecation

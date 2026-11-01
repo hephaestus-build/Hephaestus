@@ -18,7 +18,6 @@ const JOURNEY_PAGES: [keyof FileRoutesById, WebVital["page"]][] = [
 	["/_authenticated/w/$workspaceSlug/practice-profile", "PRACTICE_PROFILE"],
 	["/_authenticated/w/$workspaceSlug/conversation", "ASK_HEPHAESTUS"],
 	["/_authenticated/w/$workspaceSlug/feedback/$itemId", "FEEDBACK"],
-	["/_authenticated/w/$workspaceSlug/feedback_/$itemId/$artifactId", "FEEDBACK"],
 	["/_authenticated/w/$workspaceSlug/admin/practices/reviews/feedback", "FEEDBACK_APPROVAL"],
 	["/_authenticated/w/$workspaceSlug/activity", "ACTIVITY"],
 ];

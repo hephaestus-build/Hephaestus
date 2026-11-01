@@ -17,8 +17,6 @@ import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspace
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -49,17 +47,6 @@ public class ItemController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
         return PageResponseDTO.from(directory.list(ws.id(), itemKind, PageRequest.of(page, size)));
-    }
-
-    @GetMapping("/legacy-feedback/{artifactKind}/{artifactId}")
-    @PreAuthorize("@workspaceSecure.isMember()")
-    @Operation(operationId = "resolveLegacyFeedbackItem", summary = "Resolve a feedback link posted before item IDs")
-    public LegacyFeedbackItemDTO legacyFeedback(
-            WorkspaceContext ws,
-            @PathVariable String artifactKind,
-            @Parameter(schema = @Schema(type = "string", pattern = "^[1-9][0-9]*$", maxLength = 19)) @PathVariable
-                    long artifactId) {
-        return directory.legacyFeedback(ws.id(), artifactKind, artifactId);
     }
 
     @GetMapping("/{itemId}/facts")

@@ -342,7 +342,6 @@ export { resetCatalogOrderMutation } from './react-query/resetCatalogOrder.gen.j
 export { resetCatalogPracticeMutation } from './react-query/resetCatalogPractice.gen.js';
 export { resetGroupToCatalogMutation } from './react-query/resetGroupToCatalog.gen.js';
 export { resetPracticeToCatalogMutation } from './react-query/resetPracticeToCatalog.gen.js';
-export { resolveLegacyFeedbackItemOptions, resolveLegacyFeedbackItemQueryKey } from './react-query/resolveLegacyFeedbackItem.gen.js';
 export { resolveReviewContextOptions, resolveReviewContextQueryKey } from './react-query/resolveReviewContext.gen.js';
 export { retryFeedbackMutation } from './react-query/retryFeedback.gen.js';
 export { retryProductFeedbackFilingMutation } from './react-query/retryProductFeedbackFiling.gen.js';

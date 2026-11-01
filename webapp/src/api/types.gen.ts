@@ -2056,10 +2056,6 @@ export type LatestRelease = {
     version: string;
 };
 
-export type LegacyFeedbackItem = {
-    itemId: string;
-};
-
 /**
  * A provider instance the current user is linked to: its type + server-url origin.
  */
@@ -12954,29 +12950,6 @@ export type ListReviewItemsResponses = {
 };
 
 export type ListReviewItemsResponse = ListReviewItemsResponses[keyof ListReviewItemsResponses];
-
-export type ResolveLegacyFeedbackItemData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        artifactKind: string;
-        artifactId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/items/legacy-feedback/{artifactKind}/{artifactId}';
-};
-
-export type ResolveLegacyFeedbackItemResponses = {
-    /**
-     * OK
-     */
-    200: LegacyFeedbackItem;
-};
-
-export type ResolveLegacyFeedbackItemResponse = ResolveLegacyFeedbackItemResponses[keyof ResolveLegacyFeedbackItemResponses];
 
 export type GetItemFactsData = {
     body?: never;
