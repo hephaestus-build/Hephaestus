@@ -20,10 +20,8 @@
 		"@docusaurus/plugin-content-docs": "3.10.2",
 		"@docusaurus/plugin-content-pages": "3.10.2",
 		"@docusaurus/plugin-css-cascade-layers": "3.10.2",
-		"@docusaurus/plugin-debug": "3.10.2",
 		"@docusaurus/plugin-sitemap": "3.10.2",
 		"@docusaurus/plugin-svgr": "3.10.2",
-		"@docusaurus/preset-classic": "3.10.2",
 		"@docusaurus/theme-classic": "3.10.2",
 		"@docusaurus/theme-mermaid": "3.10.2",
 		"@docusaurus/utils": "3.10.2",
@@ -38,6 +36,7 @@
 	},
 	"devDependencies": {
 		"@docusaurus/module-type-aliases": "3.10.2",
+		"@docusaurus/theme-common": "3.10.2",
 		"@docusaurus/types": "3.10.2",
 		"@types/react": "19.2.18",
 		"markdownlint-cli2": "0.23.2",

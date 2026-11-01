@@ -1,7 +1,7 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 9,
-		"packages": 2473,
+		"packages": 2433,
 		"importers": {
 			".": {
 				"direct": {
@@ -10,23 +10,23 @@
 				},
 				"transitive": {
 					"prod": 0,
-					"all": 864
+					"all": 858
 				}
 			},
 			"docs": {
 				"direct": {
-					"prod": 22,
+					"prod": 20,
 					"dev": 6
 				},
 				"transitive": {
-					"prod": 1437,
-					"all": 1460
+					"prod": 1403,
+					"all": 1425
 				}
 			},
 			"extension": {
 				"direct": {
 					"prod": 7,
-					"dev": 26
+					"dev": 25
 				},
 				"transitive": {
 					"prod": 12,
@@ -46,11 +46,11 @@
 			"webapp": {
 				"direct": {
 					"prod": 33,
-					"dev": 47
+					"dev": 45
 				},
 				"transitive": {
 					"prod": 224,
-					"all": 1248
+					"all": 1246
 				}
 			}
 		}
