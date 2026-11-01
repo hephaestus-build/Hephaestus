@@ -1,12 +1,12 @@
 import { readdirSync } from "node:fs";
 import nodePath from "node:path";
 
-import { makeRe } from "minimatch";
+import { minimatch } from "minimatch";
 
 // Hidden paths are reviewed code; exclude .git and symlinks. fs.globSync cannot include hidden paths.
 export function globFilesSync(pattern: string, cwd: string): string[] {
-	const matcher = makeRe(pattern, { dot: true });
-	if (matcher === false) {
+	// minimatch matches nothing for an empty or comment pattern, so walking the tree would only read it.
+	if (pattern === "" || pattern.startsWith("#")) {
 		return [];
 	}
 	const files: string[] = [];
@@ -20,7 +20,7 @@ export function globFilesSync(pattern: string, cwd: string): string[] {
 				}
 			} else if (entry.isFile()) {
 				const name = nodePath.relative(cwd, path);
-				if (matcher.test(name.split(nodePath.sep).join("/"))) {
+				if (minimatch(name.split(nodePath.sep).join("/"), pattern, { dot: true })) {
 					files.push(name);
 				}
 			}

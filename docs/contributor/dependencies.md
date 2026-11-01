@@ -41,6 +41,26 @@ Examples are a Node built-in such as `util.parseArgs`, `util.styleText`, `fs.glo
 In `webapp/` and `server/`, ask a maintainer before you add a dependency.
 Their package guides say so.
 
+### Exceptions to the bar
+
+Only a maintainer can accept a package that fails an item.
+Each accepted exception has a row here, with the condition that makes us examine it again.
+
+| Package | Item | Reason | Examine again when |
+|---|---|---|---|
+| `@isaacs/nonrecursive-glob-match@1.0.3` | 5. Maintainers | `minimatch` 11 needs it, and only `minimatch` 11 fixes GHSA-g3hv-75wg-m249. The single maintainer of `minimatch` released this code from the `minimatch` tree. We already ship `minimatch` with the same single maintainer. Thus, the trust boundary stays the same. The package has no dependencies, no install script and a permissive license. | `minimatch` gets an organization or a second maintainer, or npm provenance. |
+
+### Held versions
+
+An update that breaks a budget or a suite leaves its batch, and stays out until a newer release fixes it.
+Each held version has a row, with the condition that makes us try it again.
+
+| Package | Held at | Reason | Try again when |
+|---|---|---|---|
+| `react`, `react-dom` | 19.2.8 | 19.3 adds 29,236 bytes to the entry, which every page loads. `react-dom` is part of the entry, so no route split can move it. | The entry budget has room for it. |
+| `lucide-react` | 1.41.0 | 1.64.0 adds 2,687 gzip bytes to the entry. The bundle budget in `webapp/tools/bundle-budget` allows 1,024. | A release does not grow the entry. |
+| `monaco-editor` | 0.56.0 | 0.57.0 adds about 30,000 gzip bytes to each page with the code editor. No feature that we use needs 0.57. | We need a feature of a newer release, or a release does not grow these pages. |
+
 ## When to own code instead
 
 Own the code when all of these are true:

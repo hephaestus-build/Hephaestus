@@ -42,7 +42,7 @@
 		"mermaid": "11.17.2",
 		"micromark-extension-gfm-strikethrough": "2.1.0",
 		"micromark-extension-mdxjs": "3.0.0",
-		"minimatch": "10.2.6",
+		"minimatch": "11.0.3",
 		"mprocs": "0.9.6",
 		"npm-package-arg": "14.0.0",
 		"oxfmt": "catalog:",
