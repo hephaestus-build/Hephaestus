@@ -99,7 +99,7 @@ public class MentorConversation implements Persistable<UUID> {
             @Nullable UUID parentConversationId,
             @Nullable UUID parentEntryId,
             Instant now) {
-        this.id = UUID.randomUUID();
+        this.id = MentorIds.next();
         this.workspaceId = workspaceId;
         this.accountId = accountId;
         this.parentConversationId = parentConversationId;
