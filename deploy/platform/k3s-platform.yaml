@@ -28,6 +28,10 @@ spec:
   targetNamespace: cert-manager
   createNamespace: true
   valuesContent: |-
+    # A critical Pod, like Traefik: the release's roles preempt every lower priority, and a
+    # preempted cert-manager stops renewing the Gateway certificate.
+    global:
+      priorityClassName: system-cluster-critical
     crds:
       enabled: true
       keep: true
