@@ -6,7 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { parseAllDocuments } from "yaml";
+import { parse, parseAllDocuments } from "yaml";
 
 import { durationSeconds, gatewayCertificate } from "./kubernetes-cluster.ts";
 import { isRecord } from "./lib/json.ts";
@@ -161,6 +161,21 @@ await test("workerGatewayPorts lets the worker reach the Gateway Pods on those p
 		rules.map((rule) => rule.ports),
 		[[{ port: 8443, protocol: "TCP" }]],
 	);
+});
+
+await test("the platform add-ons run at a priority that the release's roles cannot preempt", () => {
+	const platform = documents(read("k3s-platform.yaml"));
+	const values = (name: string) => {
+		const chart = named(platform, "HelmChart", name);
+		assert.ok(chart && isRecord(chart.spec), `${name} is missing`);
+		const parsed: unknown = parse(String(chart.spec.valuesContent));
+		assert.ok(isRecord(parsed), `${name} has no values`);
+		return parsed;
+	};
+	assert.equal(values("traefik").priorityClassName, "system-cluster-critical");
+	const certManager = values("cert-manager");
+	assert.ok(isRecord(certManager.global));
+	assert.equal(certManager.global.priorityClassName, "system-cluster-critical");
 });
 
 await test("the Gateway, its certificate, the installer and the smoke name one namespace", async () => {
