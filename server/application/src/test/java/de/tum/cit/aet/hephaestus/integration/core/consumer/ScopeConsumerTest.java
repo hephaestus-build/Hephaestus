@@ -18,6 +18,7 @@ import io.nats.client.MessageHandler;
 import io.nats.client.StreamContext;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.ConsumerInfo;
+import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -32,6 +33,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -50,6 +53,52 @@ class ScopeConsumerTest {
     private static final String CONSUMER_NAME = "hephaestus-scope-7";
     private static final long SCOPE_ID = 7L;
     private static final String[] SUBJECTS = new String[] {"github.acme.repo.>"};
+
+    @Test
+    void shouldDispatchOneCopyWhenTheBrokerRedeliversWhileTheHandlerIsBlocked() throws Exception {
+        ConsumerContext context = mock(ConsumerContext.class);
+        when(context.consume(any(MessageHandler.class))).thenReturn(mock(MessageConsumer.class));
+        CountDownLatch handling = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch following = new CountDownLatch(1);
+        AtomicInteger handled = new AtomicInteger();
+        ScopeConsumer consumer = new ScopeConsumer(
+                SCOPE_ID, CONSUMER_NAME, STREAM, context, mock(StreamContext.class), SUBJECTS, message -> {
+                    handled.incrementAndGet();
+                    if (message.metaData().streamSequence() == 1) {
+                        handling.countDown();
+                        try {
+                            release.await();
+                        } catch (InterruptedException failure) {
+                            Thread.currentThread().interrupt();
+                        }
+                    } else following.countDown();
+                });
+        try {
+            consumer.start();
+            var callback = ArgumentCaptor.forClass(MessageHandler.class);
+            verify(context).consume(callback.capture());
+            callback.getValue().onMessage(sequencedMessage(1));
+            assertThat(handling.await(5, TimeUnit.SECONDS)).isTrue();
+            for (int copy = 0; copy < 1000; copy++) callback.getValue().onMessage(sequencedMessage(1));
+            callback.getValue().onMessage(sequencedMessage(2));
+            release.countDown();
+            assertThat(following.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(handled.get()).isEqualTo(2);
+        } finally {
+            release.countDown();
+            consumer.stop();
+        }
+    }
+
+    private static Message sequencedMessage(long sequence) {
+        Message message = mock(Message.class);
+        NatsJetStreamMetaData metadata = mock(NatsJetStreamMetaData.class);
+        when(message.isJetStream()).thenReturn(true);
+        when(message.metaData()).thenReturn(metadata);
+        when(metadata.streamSequence()).thenReturn(sequence);
+        return message;
+    }
 
     @Nested
     class ConstructorArgs {
@@ -205,8 +254,9 @@ class ScopeConsumerTest {
             consumer.stop();
         }
 
-        @Test
-        void handlerExceptionDoesNotKillLoop() throws Exception {
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void handlerExceptionDoesNotKillLoop(boolean stackOverflow) throws Exception {
             ConsumerContext ctx = mock(ConsumerContext.class);
             ArgumentCaptor<MessageHandler> handlerCaptor = ArgumentCaptor.forClass(MessageHandler.class);
             MessageConsumer subscription = mock(MessageConsumer.class);
@@ -216,6 +266,7 @@ class ScopeConsumerTest {
             ScopeConsumer consumer = new ScopeConsumer(
                     SCOPE_ID, CONSUMER_NAME, STREAM, ctx, mock(StreamContext.class), SUBJECTS, msg -> {
                         if (msg.getSubject().endsWith(".boom")) {
+                            if (stackOverflow) throw new StackOverflowError();
                             throw new RuntimeException("simulated handler failure");
                         }
                         survivedFailure.countDown();
@@ -231,6 +282,34 @@ class ScopeConsumerTest {
                     .isTrue();
 
             consumer.stop();
+        }
+
+        @Test
+        void shouldStopOnFatalJvmErrorAndResumeWhenReconciled() throws Exception {
+            var context = mock(ConsumerContext.class);
+            var callbacks = ArgumentCaptor.forClass(MessageHandler.class);
+            var subscription = mock(MessageConsumer.class);
+            when(context.consume(callbacks.capture())).thenReturn(subscription);
+            var resumed = new CountDownLatch(1);
+            var consumer = new ScopeConsumer(
+                    SCOPE_ID, CONSUMER_NAME, STREAM, context, mock(StreamContext.class), SUBJECTS, message -> {
+                        if (message.getSubject().endsWith(".boom")) throw new InternalError();
+                        resumed.countDown();
+                    });
+            try {
+                consumer.start();
+                callbacks.getValue().onMessage(messageWithSubject("github.acme.repo.boom"));
+                await().atMost(Duration.ofSeconds(5)).until(() -> !consumer.isRunning());
+                assertThat(consumer.isAttached()).isFalse();
+
+                consumer.updateSubjects(SUBJECTS);
+                assertThat(consumer.isRunning()).isTrue();
+                callbacks.getValue().onMessage(messageWithSubject("github.acme.repo.ok"));
+                assertThat(resumed.await(5, TimeUnit.SECONDS)).isTrue();
+                verify(subscription, atLeastOnce()).close();
+            } finally {
+                consumer.stop();
+            }
         }
 
         @Test

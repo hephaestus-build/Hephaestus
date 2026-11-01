@@ -927,6 +927,17 @@ export type ConsentStatus = {
     researchOrganization?: string;
 };
 
+export type ConsumerDeadLetter = {
+    errorClass: string;
+    failedAt: Date;
+    id: number;
+    receivedAt: Date;
+    replayedAt?: Date;
+    replayedBy?: number;
+    sequence: number;
+    stream: string;
+};
+
 /**
  * Information about a contributor to the Hephaestus project
  */
@@ -7274,7 +7285,7 @@ export type AdminListAuthEventsData = {
         size?: number;
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7297,7 +7308,7 @@ export type AdminExportAuthEventsData = {
     query?: {
         accountId?: number;
         actingAccountId?: number;
-        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
         result?: Array<'SUCCESS' | 'FAILURE'>;
         from?: Date;
         to?: Date;
@@ -7381,6 +7392,42 @@ export type AdminSendTestEmailResponses = {
 };
 
 export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
+
+export type ListInstallationDeadLettersData = {
+    body?: never;
+    path?: never;
+    query?: {
+        after?: number;
+    };
+    url: '/admin/integration/dead-letters';
+};
+
+export type ListInstallationDeadLettersResponses = {
+    /**
+     * OK
+     */
+    200: Array<ConsumerDeadLetter>;
+};
+
+export type ListInstallationDeadLettersResponse = ListInstallationDeadLettersResponses[keyof ListInstallationDeadLettersResponses];
+
+export type ReplayInstallationDeadLetterData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/integration/dead-letters/{id}/replays';
+};
+
+export type ReplayInstallationDeadLetterResponses = {
+    /**
+     * OK
+     */
+    200: ConsumerDeadLetter;
+};
+
+export type ReplayInstallationDeadLetterResponse = ReplayInstallationDeadLetterResponses[keyof ReplayInstallationDeadLetterResponses];
 
 export type AdminListLlmCallPoolsData = {
     body?: never;
@@ -10885,6 +10932,51 @@ export type UpdateFeaturesResponses = {
 };
 
 export type UpdateFeaturesResponse = UpdateFeaturesResponses[keyof UpdateFeaturesResponses];
+
+export type ListConsumerDeadLettersData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: {
+        after?: number;
+    };
+    url: '/workspaces/{workspaceSlug}/integrations/dead-letters';
+};
+
+export type ListConsumerDeadLettersResponses = {
+    /**
+     * OK
+     */
+    200: Array<ConsumerDeadLetter>;
+};
+
+export type ListConsumerDeadLettersResponse = ListConsumerDeadLettersResponses[keyof ListConsumerDeadLettersResponses];
+
+export type ReplayConsumerDeadLetterData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        id: number;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays';
+};
+
+export type ReplayConsumerDeadLetterResponses = {
+    /**
+     * OK
+     */
+    200: ConsumerDeadLetter;
+};
+
+export type ReplayConsumerDeadLetterResponse = ReplayConsumerDeadLetterResponses[keyof ReplayConsumerDeadLetterResponses];
 
 export type WorkspaceListAvailableLlmModelsData = {
     body?: never;

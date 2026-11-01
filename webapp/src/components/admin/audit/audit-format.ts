@@ -52,6 +52,7 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	RESEARCH_DATASET_RELEASED: "Research dataset released",
 	RESEARCH_REMOVAL_RECORDED: "Research removal recorded",
 	WORKSPACE_ELEVATION: "Workspace reached as instance admin",
+	INSTALLATION_EVENT_REPLAYED: "Installation event replayed",
 	LLM_CONNECTION_CREATED: "Connection added",
 	LLM_CONNECTION_UPDATED: "Connection updated",
 	LLM_CONNECTION_DELETED: "Connection deleted",

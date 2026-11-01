@@ -26,6 +26,10 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
     private static final Set<String> GLOBAL_WITHOUT_ENTITY =
             Set.of("account_public_activity_hidden_by_default", "auth_rate_limit_bucket", "shedlock");
 
+    /** These nullable-workspace tables still require SQL tenancy enforcement. */
+    private static final Map<String, String> MIXED_SCOPE_TABLES =
+            Map.of("consumer_dead_letter", "Installation lifecycle failures can arrive before a workspace exists");
+
     private static final String MIRROR =
             "a provider mirror that reaches its workspace through its repository or" + " organization";
     private static final String OPTIONAL = "workspace_id is NULL for product feedback outside a workspace";
@@ -80,6 +84,9 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private WorkspaceScopedTables workspaceScopedTables;
+
     @Test
     void shouldCarryNotNullWorkspaceIdInEveryWorkspaceTable() {
         List<String> missing = tablesWithoutWorkspaceId("public");
@@ -87,11 +94,18 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
         assertThat(missing)
                 .filteredOn(table -> !WorkspaceScopedTables.GLOBAL_TABLES.contains(table)
                         && !GLOBAL_WITHOUT_ENTITY.contains(table)
+                        && !MIXED_SCOPE_TABLES.containsKey(table)
                         && !BEFORE_THE_RULE.containsKey(table))
-                .as("These tables have no workspace_id, or a nullable one. Give each a NOT NULL workspace_id, or list a"
-                        + " table that belongs to no workspace as docs/contributor/database-migration.mdx"
+                .as("These tables have no workspace_id, or a nullable one. Give each a NOT NULL workspace_id, or record"
+                        + " an approved exception as docs/contributor/database-migration.mdx"
                         + " § Workspace column describes")
                 .isEmpty();
+        assertThat(MIXED_SCOPE_TABLES).allSatisfy((table, reason) -> {
+            assertThat(missing).as(reason).contains(table);
+            assertThat(workspaceScopedTables.isScoped(table))
+                    .as("Mixed-scope table %s must retain SQL tenancy enforcement", table)
+                    .isTrue();
+        });
         assertThat(BEFORE_THE_RULE.keySet())
                 .filteredOn(table -> !missing.contains(table))
                 .as("These tables now carry a NOT NULL workspace_id or no longer exist. Remove them from"

@@ -82,6 +82,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "DiscussionComment", // through Discussion -> Repository -> Organization <- Workspace
             // Unified integration framework
             "Connection", // has direct Workspace field
+            "ConsumerDeadLetter", // workspace-owned records; installation records have no workspace yet
             "ConnectionAudit", // through Connection.workspace
             // Product feedback and copies each carry the tenant independently.
             "Feedback", // direct workspace_id scalar
@@ -260,6 +261,10 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             ArchRule rule = fields().that()
                     .areDeclaredInClassesThat()
                     .areAnnotatedWith(Entity.class)
+                    // Installation lifecycle events arrive before a workspace exists.
+                    .and()
+                    .areDeclaredInClassesThat()
+                    .doNotHaveSimpleName("ConsumerDeadLetter")
                     .should(beNotNullableIfWorkspaceType())
                     .because("Workspace relationships should be required to prevent orphaned data");
 

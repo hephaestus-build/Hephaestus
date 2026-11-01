@@ -9,6 +9,8 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Pure-function tests for {@link ConsumerSubjectMath}. Mirrors the publisher-side coverage
@@ -16,6 +18,20 @@ import org.junit.jupiter.api.Test;
  * JetStream filter creation.
  */
 class ConsumerSubjectMathTest extends BaseUnitTest {
+    @ParameterizedTest
+    @CsvSource({
+        "github.acme.repo.>, github.acme.repo.issues, true",
+        "github.acme.repo.>, github.other.repo.issues, false",
+        "github.acme.repo.>, github.acme.repo, false",
+        "gitlab.?connection.7.>, gitlab.?connection.7.merge_request, true",
+        "slack.T1.>, slack.T1.message, true",
+        "slack.T1.>, slack.T2.message, false",
+        "outline.subscription.>, outline.subscription.documents, true",
+        "github.*.repo.issues, github.acme.repo.issues, true"
+    })
+    void shouldMatchOnlySubjectsInTheCurrentSubscription(String filter, String subject, boolean expected) {
+        assertThat(ConsumerSubjectMath.matchesFilter(filter, subject)).isEqualTo(expected);
+    }
 
     @Nested
     @DisplayName("repositoryFilter / organizationFilter / installationAwareSubjectFilter")

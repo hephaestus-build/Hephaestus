@@ -100,3 +100,13 @@ Re-open this decision if any of the following land:
 - Revert: commit `b6970db0b`
 - Original pass-9 add: commit `976b4dbf9`
 - Counter dashboard: Grafana panel `integration.consumer.poison{kind}` (per-vendor rate)
+
+## Update — 2026-10-30 (PR #3463)
+
+This update supersedes the Decision and Consequences sections for retry limits and poison-message storage.
+Temporary outages must not exhaust a retry budget.
+The consumer retries proven temporary failures without a delivery limit.
+Unknown failures exhaust a retry budget.
+Permanent failures and exhausted unknown failures have a metadata record in PostgreSQL before termination.
+The decision to avoid a second JetStream stream remains.
+[Webhook delivery and retry order](../contributor/ingest-durability.md) owns the current contract.

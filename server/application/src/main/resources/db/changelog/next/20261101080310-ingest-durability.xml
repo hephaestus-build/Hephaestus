@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793363841456-1" author="hephaestus">
+        <createTable tableName="consumer_dead_letter">
+            <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" primaryKeyName="consumer_dead_letter_pkey" nullable="false"/></column>
+            <column name="workspace_id" type="BIGINT"/>
+            <column name="consumer_name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="stream_name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="stream_sequence" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="subject" type="TEXT"><constraints nullable="false"/></column>
+            <column name="received_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="replayed_by" type="BIGINT"/>
+            <column name="error_class" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="failed_at" type="TIMESTAMP WITH TIME ZONE"><constraints nullable="false"/></column>
+            <column name="replayed_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+        <addUniqueConstraint tableName="consumer_dead_letter" columnNames="consumer_name,stream_name,stream_sequence" constraintName="uk_consumer_dead_letter_delivery"/>
+        <addForeignKeyConstraint baseTableName="consumer_dead_letter" baseColumnNames="workspace_id" referencedTableName="workspace" referencedColumnNames="id" constraintName="fk_consumer_dead_letter_workspace" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="consumer_dead_letter" baseColumnNames="replayed_by" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_consumer_dead_letter_replayed_by" onDelete="SET NULL"/>
+        <createIndex tableName="consumer_dead_letter" indexName="idx_consumer_dead_letter_workspace_id"><column name="workspace_id"/><column name="id"/></createIndex>
+        <rollback><dropTable tableName="consumer_dead_letter"/></rollback>
+    </changeSet>
+    <changeSet id="1793363841456-2" author="hephaestus">
+    <preConditions onFail="HALT" onError="HALT">
+      <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'</sqlCheck>
+    </preConditions>
+    <comment>Admit installation replay audit events while preserving existing history.</comment>
+    <sql><![CDATA[
+ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED'));
+    ]]></sql>
+    <rollback><sql splitStatements="false"><![CDATA[
+DO $replay_audit_rollback$
+BEGIN
+  IF EXISTS (SELECT 1 FROM auth_event WHERE event_type = 'INSTALLATION_EVENT_REPLAYED') THEN
+    RAISE EXCEPTION 'Installation replay audit rows exist; retain the widened audit constraint';
+  END IF;
+  ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+  ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED'));
+END
+$replay_audit_rollback$;
+    ]]></sql></rollback>
+  </changeSet>
+</databaseChangeLog>

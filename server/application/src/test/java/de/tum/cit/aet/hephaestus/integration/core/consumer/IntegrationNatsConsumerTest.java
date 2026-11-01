@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -259,7 +261,7 @@ class IntegrationNatsConsumerTest {
 
             verify(handler, never()).onMessage(message);
             verify(message, never()).ack();
-            verify(poisonHandler).nakWithBackoff(message);
+            verify(poisonHandler).handleFailure(eq(5L), eq(message), any());
         }
 
         @Test
@@ -331,6 +333,51 @@ class IntegrationNatsConsumerTest {
             verify(handler).onMessage(message);
             verify(message).ack();
             verify(activityRecorder).recordEventProcessed(SCOPE_ID, IntegrationKind.GITHUB, "repository.issues");
+        }
+
+        @Test
+        void shouldAcknowledgeCompletedHandlerWhenLivenessWriteFails() {
+            IntegrationMessageHandler handler = mock(IntegrationMessageHandler.class);
+            when(handler.key()).thenReturn(new EventTypeKey(IntegrationKind.GITHUB, "repository.issues"));
+            when(dispatcher.dispatch("github.acme.repo.issues")).thenReturn(Optional.of(handler));
+            doThrow(new IllegalStateException("liveness unavailable"))
+                    .when(activityRecorder)
+                    .recordEventProcessed(SCOPE_ID, IntegrationKind.GITHUB, "repository.issues");
+            consumer.handleMessage(SCOPE_ID, message);
+            verify(message).ack();
+            verify(message, never()).nak();
+        }
+
+        @Test
+        void shouldSerializeReplayWithLiveDispatchWithoutJoiningOtherStreams() throws Exception {
+            CountDownLatch entered = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            FutureTask<String> live = new FutureTask<>(() -> consumer.serialDispatch(SCOPE_ID, "github", () -> {
+                entered.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                }
+                return "live";
+            }));
+            FutureTask<String> replay =
+                    new FutureTask<>(() -> consumer.serialDispatch(SCOPE_ID, "github", () -> "replay"));
+            FutureTask<String> other =
+                    new FutureTask<>(() -> consumer.serialDispatch(SCOPE_ID, "slack", () -> "other stream"));
+            Thread.ofVirtual().start(live);
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                Thread.ofVirtual().start(replay);
+                Thread.ofVirtual().start(other);
+                assertThat(other.get(5, TimeUnit.SECONDS)).isEqualTo("other stream");
+                assertThat(replay.isDone()).isFalse();
+                release.countDown();
+                assertThat(live.get(5, TimeUnit.SECONDS)).isEqualTo("live");
+                assertThat(replay.get(5, TimeUnit.SECONDS)).isEqualTo("replay");
+            } finally {
+                release.countDown();
+            }
         }
 
         @Test
