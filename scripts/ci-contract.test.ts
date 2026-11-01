@@ -19,6 +19,7 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
+import { INSTALL_ARGUMENTS, INSTALL_ENVIRONMENT } from "./maintain-version-pr.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
 import { QUEUE_TIER_JOBS } from "./report-ci-latency.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
@@ -3082,25 +3083,17 @@ void describe("CI contract", () => {
 	void test("leaves the Version PR's CI to its own pull_request event and a deliberate dispatch", async () => {
 		const versioning = parseDocument(await readFile(".github/workflows/version-pr.yml", "utf8"));
 		const maintainer = ["jobs", "version-pr"];
-		// Only a successful same-repository push to main, still the branch tip, maintains the PR.
-		const trigger = String(versioning.getIn([...maintainer, "if"]));
-		for (const guard of [
-			"github.event.workflow_run.conclusion == 'success'",
-			"github.event.workflow_run.event == 'push'",
-			"github.event.workflow_run.head_repository.full_name == github.repository",
-		]) {
-			assert.ok(trigger.includes(guard), guard);
-		}
-		const maintain = namedStep(versioning, maintainer, "Maintain Version PR");
-		assert.equal(maintain.get("if"), "steps.current.outputs.validated == 'true'");
-		assert.match(String(maintain.get("uses")), /^changesets\/action@[0-9a-f]{40}$/u);
-		assert.equal(maintain.getIn(["with", "github-token"]), `\${{ secrets.GITHUB_TOKEN }}`);
+		// `version-pr-workflow.test.ts` owns the trigger; `maintain-version-pr.test.ts` the selection.
+		const steps = versioning.getIn([...maintainer, "steps"]);
+		assert.ok(isSeq(steps));
 		// The pull request's own run validates it; maintenance cannot start a second, competing one.
 		const permissions = versioning.getIn([...maintainer, "permissions"]);
 		assert.ok(isMap(permissions));
-		assert.deepEqual(permissions.toJSON(), { contents: "write", "pull-requests": "write" });
-		const steps = versioning.getIn([...maintainer, "steps"]);
-		assert.ok(isSeq(steps));
+		assert.deepEqual(permissions.toJSON(), {
+			actions: "read",
+			contents: "write",
+			"pull-requests": "write",
+		});
 		for (const maintenanceStep of steps.items) {
 			assert.ok(isMap(maintenanceStep));
 			const run = maintenanceStep.get("run");
@@ -3108,6 +3101,42 @@ void describe("CI contract", () => {
 				assert.ok(typeof run === "string");
 				assert.doesNotMatch(run, /workflow run|dispatch/u);
 			}
+		}
+		// The base's dependencies install in the job that holds the write token, so they install
+		// exactly as every other CI job installs them: no lifecycle script, every entry verified.
+		const toolchain = parseDocument(
+			await readFile(".github/actions/setup-toolchain/action.yml", "utf8"),
+		);
+		const toolchainSteps = toolchain.getIn(["runs", "steps"]);
+		assert.ok(isSeq(toolchainSteps));
+		const install = toolchainSteps.items.find(
+			(item) => isMap(item) && item.get("id") === "pnpm-install",
+		);
+		assert.ok(isMap(install));
+		assert.equal(install.get("run"), `pnpm ${INSTALL_ARGUMENTS.join(" ")}`);
+		const installEnvironment = install.get("env");
+		assert.ok(isMap(installEnvironment));
+		assert.deepEqual(installEnvironment.toJSON(), INSTALL_ENVIRONMENT);
+		const maintainerSource = await readFile("scripts/maintain-version-pr.ts", "utf8");
+		assert.doesNotMatch(maintainerSource, /"workflow",\s*"run"|\/dispatches/u);
+
+		// A failed run reopens nothing by itself, so it reports on one tracking issue, which the
+		// next successful run closes. A run that the concurrency group replaces reports nothing.
+		const report = ["jobs", "report"];
+		assert.equal(versioning.getIn([...report, "needs"]), "version-pr");
+		assert.equal(
+			versioning.getIn([...report, "if"]),
+			`\${{ always() && contains(fromJSON('["success", "failure"]'), needs.version-pr.result) }}`,
+		);
+		const reportPermissions = versioning.getIn([...report, "permissions"]);
+		assert.ok(isMap(reportPermissions));
+		assert.deepEqual(reportPermissions.toJSON(), { issues: "write" });
+		const tracking = asString(
+			namedStep(versioning, report, "Open or close the tracking issue").get("run"),
+			"tracking script",
+		);
+		for (const command of ["gh issue create", "gh issue comment", "gh issue close"]) {
+			assert.ok(tracking.includes(command), command);
 		}
 
 		// What remains: the pull_request event, and the manual dispatch an operator runs to recover.

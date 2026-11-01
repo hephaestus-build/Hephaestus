@@ -2,7 +2,7 @@ name: Release / Version PR
 
 # Versioning contract: docs/contributor/release-management.mdx.
 on:
-  workflow_run: # zizmor: ignore[dangerous-triggers] Only successful same-repository main pushes can mutate the Version PR.
+  workflow_run: # zizmor: ignore[dangerous-triggers] Only successful same-repository main pushes start maintenance. It runs main's tip and versions a validated main commit, never the event's ref.
     workflows: ["CI/CD"]
     types: [completed]
     branches: [main]
@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
       pull-requests: write
     steps:
@@ -29,27 +30,45 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Select the validated default-branch tip
-        id: current
-        shell: bash
-        env:
-          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          if [ "$(git rev-parse HEAD)" = "$VALIDATED_SHA" ]; then
-            echo "validated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Default branch has advanced; its successful CI run will maintain the Version PR."
-          fi
-      - if: steps.current.outputs.validated == 'true'
-        uses: ./.github/actions/setup-toolchain
+      - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-
+      # Main moves faster than its CI, so its tip is rarely validated when a run completes. The
+      # script runs from the tip and versions the newest first-parent commit whose push run succeeded.
       - name: Maintain Version PR
-        if: steps.current.outputs.validated == 'true'
-        uses: changesets/action@8488615a623b1b9c987934bb89eae8af6a946ac1 # v2.1.1
-        with:
-          version-script: vp run release:version
-          pr-title: "chore(release): version packages"
-          commit-message: "chore(release): version packages"
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/maintain-version-pr.ts
+
+  # A failed maintenance leaves the Version PR stale without any other signal.
+  report:
+    needs: version-pr
+    # A run that the concurrency group replaces ends cancelled; only a finished run reports.
+    if: ${{ always() && contains(fromJSON('["success", "failure"]'), needs.version-pr.result) }}
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RESULT: ${{ needs.version-pr.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Version PR maintenance failed"
+          # A listing, not the search index, so a failure right after another finds its issue.
+          number=$(gh issue list -R "$REPOSITORY" --state open --limit 500 --json number,title |
+            jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
+          if [ "$RESULT" = success ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" -R "$REPOSITORY" --comment "Maintenance succeeded again: $RUN_URL"
+            fi
+          elif [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPOSITORY" --body "Maintenance failed again: $RUN_URL"
+          else
+            gh issue create -R "$REPOSITORY" --title "$title" \
+              --body "Maintenance failed, so the Version PR does not include the newest validated changesets: $RUN_URL. The workflow's log names the step. A later successful run closes this issue."
+          fi
