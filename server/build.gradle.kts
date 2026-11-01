@@ -4,7 +4,7 @@ import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 // These dependencies run at build time and do not reach the application image.
 buildscript {
     dependencies {
-        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
+        classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.4"))
         classpath(platform("tools.jackson:jackson-bom:3.1.7"))
         constraints {
             classpath("com.google.guava:guava:33.7.2-jre") { because("CVE-2026-102554") }
@@ -15,7 +15,7 @@ buildscript {
         resolutionStrategy {
             activateDependencyLocking()
             force("com.graphql-java:graphql-java:20.9")
-            force("com.github.jknack:handlebars:4.5.2")
+            force("com.github.jknack:handlebars:4.5.8")
             force("org.freemarker:freemarker:2.3.35")
         }
         // 4.5.2 offers a Nashorn-backed helper and the ASM tree it needs. The generation configured
@@ -42,10 +42,6 @@ val javaVersion = file("../.java-version").readText().trim().toInt()
 val bootVersion = libs.versions.spring.boot.get()
 val managedOverrides =
     mapOf(
-        "jackson-bom.version" to libs.versions.jackson.get(),
-        "jackson-2-bom.version" to libs.versions.jackson2.get(),
-        "netty.version" to libs.versions.netty.get(),
-        "tomcat.version" to libs.versions.tomcat.get(),
         "spring-modulith.version" to libs.versions.spring.modulith.get(),
         "liquibase.version" to libs.versions.liquibase.asProvider().get(),
     )
