@@ -2796,8 +2796,7 @@ void describe("CI contract", () => {
 		);
 		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ inputs.platform }}`);
 		assert.doesNotMatch(String(enforce.get("run")), /github\.(?:run_id|run_attempt)/u);
-		// Trivy copies each layer to a temporary file after the builds have filled the root volume,
-		// so the scans run on freed disk with their temporary files on the roomiest volume.
+		// The scans run on freed disk, with their temporary files on the roomiest volume.
 		const disk = namedStep(workflow, build, "Free disk space for the scans");
 		assert.equal(
 			at("Free disk space for the scans"),

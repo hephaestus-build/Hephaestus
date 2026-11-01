@@ -339,8 +339,7 @@ jobs:
         with:
           database-artifact: ${{ inputs.database-artifact }}
 
-      # Trivy copies each image layer to a temporary file after the builds have filled the root
-      # volume, so the scans get the freed volume with the most space.
+      # The builds fill the root volume; ci-cd.mdx § Parallelism and concurrency gives the reason.
       - name: Free disk space for the scans
         id: scan-disk
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
