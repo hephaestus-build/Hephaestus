@@ -1,3 +1,0 @@
-#### 🔴 Remove the obsolete webhook concurrency setting
-
-Remove `hephaestus.integration.consumer.max-ack-pending` from your configuration. The consumer now enforces one outstanding event per workspace and stream. Temporary failures retry without a delivery limit. Set retry base and maximum delays to at least one second. Unknown failures use `hephaestus.integration.consumer.poison.max-redeliver` (default 10). Apply the database migration before starting the server. Dead-letter records contain metadata only; replay reads the original event from NATS before its retention expires. A database rollback is blocked if installation replay audit records exist. Otherwise, it drops the dead-letter table and destroys its pending replay records. Back up the table before a rollback.
