@@ -14,9 +14,10 @@ spring:
         # Note: Pool size increased to handle REQUIRES_NEW nested transactions
         hikari:
             maximum-pool-size: 10
-            minimum-idle: 2
+            # Spring keeps up to 32 test contexts cached, each with its own pool; an idle one holds no connection.
+            minimum-idle: 0
             connection-timeout: 5000 # 5 seconds (fail fast)
-            idle-timeout: 30000 # 30 seconds (faster cleanup)
+            idle-timeout: 10000 # HikariCP's lowest idle timeout
             validation-timeout: 3000 # 3 seconds
             leak-detection-threshold: 5000 # 5 seconds for leak detection
             connection-test-query: SELECT 1

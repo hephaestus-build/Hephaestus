@@ -20,10 +20,10 @@ public final class RealAuthDatasource {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "10");
-        registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "0");
         registry.add("spring.datasource.hikari.max-lifetime", () -> "300000");
         registry.add("spring.datasource.hikari.connection-timeout", () -> "10000");
-        registry.add("spring.datasource.hikari.idle-timeout", () -> "60000");
+        registry.add("spring.datasource.hikari.idle-timeout", () -> "10000");
         registry.add("spring.datasource.hikari.leak-detection-threshold", () -> "10000");
     }
 }

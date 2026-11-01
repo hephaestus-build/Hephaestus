@@ -53,10 +53,11 @@ public abstract class BaseIntegrationTest {
 
         // Nested REQUIRES_NEW transactions need a second connection while the outer transaction remains open.
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "10");
-        registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
+        // Each cached test context has its own pool, so an idle one holds no connection.
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "0");
         registry.add("spring.datasource.hikari.max-lifetime", () -> "300000"); // 5 minutes
         registry.add("spring.datasource.hikari.connection-timeout", () -> "10000"); // 10 seconds
-        registry.add("spring.datasource.hikari.idle-timeout", () -> "60000"); // 1 minute
+        registry.add("spring.datasource.hikari.idle-timeout", () -> "10000"); // HikariCP's lowest
         registry.add("spring.datasource.hikari.validation-timeout", () -> "5000"); // 5 seconds
         registry.add("spring.datasource.hikari.leak-detection-threshold", () -> "10000"); // 10 seconds
         registry.add("spring.datasource.hikari.connection-test-query", () -> "SELECT 1");
