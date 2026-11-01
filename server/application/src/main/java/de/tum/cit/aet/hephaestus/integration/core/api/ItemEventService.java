@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -131,6 +132,83 @@ public class ItemEventService {
     }
 
     public record Unresolved(UUID id, ItemEventName name, ItemEventState state, String pendingFence) {}
+
+    /** The pinned occasions of the item that no review started and none withheld yet, oldest first. */
+    @Transactional(readOnly = true)
+    public List<Open> open(long workspaceId, long itemId) {
+        return repository.findOpen(workspaceId, itemId).stream()
+                .map(row -> new Open(
+                        row.getId(),
+                        new ItemEventName(row.getName()),
+                        row.getItemVersion(),
+                        ItemEventState.valueOf(row.getState()),
+                        row.getReason() == null ? null : ReviewRequestReason.valueOf(row.getReason()),
+                        row.getOccurredAt(),
+                        row.getDecidedAt()))
+                .toList();
+    }
+
+    /**
+     * An occasion that waits for its readiness edge.
+     *
+     * @param decidedAt when it began to wait for {@code reason}, or when it was recorded
+     */
+    public record Open(
+            UUID id,
+            ItemEventName name,
+            String itemVersion,
+            ItemEventState state,
+            @Nullable ReviewRequestReason reason,
+            Instant occurredAt,
+            Instant decidedAt) {}
+
+    /**
+     * When the quiet window of these occasions closes: one window after the newest joined, and at most one cap after
+     * the first joined. An occasion joins when it first waits in the window; one recorded or waiting for another reason
+     * joins now.
+     */
+    public Instant windowCloses(List<Open> window) {
+        Instant now = clock.instant();
+        Instant first = now;
+        Instant last = null;
+        for (var event : window) {
+            Instant joined = inWindow(event) ? event.decidedAt() : now;
+            if (joined.isBefore(first)) first = joined;
+            if (last == null || joined.isAfter(last)) last = joined;
+        }
+        if (last == null) return now;
+        var closes = last.plus(properties.quietWindow());
+        var cap = first.plus(properties.quietWindowCap());
+        return closes.isBefore(cap) ? closes : cap;
+    }
+
+    private static boolean inWindow(Open event) {
+        return event.state() == ItemEventState.WAITING
+                && (event.reason() == ReviewRequestReason.QUIET_WINDOW
+                        || event.reason() == ReviewRequestReason.REVIEW_IN_PROGRESS);
+    }
+
+    /**
+     * Holds the occasions as waiting for {@code reason} until {@code until}, when the quiet window closer offers them
+     * again. An occasion that already waits in the window keeps the moment it joined.
+     */
+    public void hold(long workspaceId, long itemId, List<Open> events, ReviewRequestReason reason, Instant until) {
+        if (reason != ReviewRequestReason.QUIET_WINDOW && reason != ReviewRequestReason.REVIEW_IN_PROGRESS)
+            throw new IllegalArgumentException("Only a quiet window or an earlier review holds an occasion");
+        var ids = events.stream().map(Open::id).toList();
+        if (repository.hold(workspaceId, itemId, ids, reason.name(), clock.instant(), until) != ids.size())
+            throw new IllegalStateException("An occasion changed while its item was locked");
+    }
+
+    /** How long a quiet window stays open after its newest occasion. */
+    public Duration quietWindow() {
+        return properties.quietWindow();
+    }
+
+    /** The longest an item's quiet window stays open, counted from its first occasion. */
+    public Duration quietWindowCap() {
+        return properties.quietWindowCap();
+    }
 
     /**
      * What an unresolved occasion retained, read once to complete it: its record until its expiry, an

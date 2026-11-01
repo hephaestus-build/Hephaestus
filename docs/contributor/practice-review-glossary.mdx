@@ -36,13 +36,14 @@ A term has one definition in one of these pages.
 | **Citation**            | A pointer into captured source text at an item version, with its quote and available coordinates.                                                             | citation                                            |
 | **Coverage**            | What an observation read and what it did not read.                                                                                                            | result.coverage                                     |
 | **Report**              | A scan's summary and supported observations for workspace admins and exports.                                                                                 | review.report                                       |
-| **Quiet window**        | The wait before an item event starts a review, so that newer events of the same item can join it.                                                         | planned: item_event.retry_at                        |
+| **Quiet window**        | The wait before the occasions of an item reach their readiness edge, so that newer occasions of the same item join them. The [operations guide](../admin/practice-review-operations#quiet-window) sets its length and its cap. | item_event.reason QUIET_WINDOW, item_event.retry_at |
 | **Problem lineage**     | How a problem compares with the previous comparable result of the same practice on the same item.              | planned: problem.lineage_id                         |
-| **Readiness edge**      | The moment the server decides which selected practices of an item run. It comes when the quiet window closes, or at once for an occasion that never joins a window. | planned                                             |
+| **Readiness edge**      | The moment the server decides which selected practices of an item run. It comes when the quiet window closes, or at once for an occasion that never joins a window. A milestone measures every practice it selects. Any other occasion measures only those with no current result. | item_event.reason, review_item.reason |
+| **Milestone**           | An occasion that is the first or a renewed moment for feedback: opened, ready, or a request. Its readiness edge measures every practice it selects, also one with a current result. The item kind decides which of its events are milestones. | ItemEventDefinition.occasion |
 | **Source fingerprint**  | A value for one source kind of an item, computed by its source contract. Equal fingerprints mean equal captured bytes. A result stays current while the fingerprints of every source its session could read do not change. | planned: result.read_fingerprints                   |
 
-Quiet window and Problem lineage are decided for 1.0 and not shipped yet ([ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md)).
-Readiness edge, Source fingerprint and Feedback composer are decided for 1.0 and not shipped yet ([ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md)).
+Problem lineage is decided for 1.0 and not shipped yet ([ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md)).
+Source fingerprint and Feedback composer are decided for 1.0 and not shipped yet ([ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md)).
 
 Use Review as the short product name where the page establishes the practice context.
 Use practice review in prose that does not establish that context.
@@ -100,6 +101,28 @@ A source used only to check Applies when does not become a runtime read source.
 The server records no observation for the refused candidate.
 This refusal establishes neither missing evidence nor a defect in the developer's work.
 The [operations guide](/admin/practice-review-operations#the-trace-line) gives the operator's next step.
+
+## Readiness reasons
+
+An item event that waits has one of these reasons:
+
+- `QUIET_WINDOW`: the event waits in its item's quiet window.
+- `REVIEW_IN_PROGRESS`: a practice that the window selects is still measured by an earlier review of the item. The window closes again one window later, until that review ends.
+
+`ALREADY_CURRENT` marks a withheld item event whose selected practices all have a current result.
+Only a continuing occasion can end with it. A milestone measures its practices again.
+
+A practice that declares the item's checks source as Required or Complete waits until the checks of the head settle.
+Its membership is withheld with one of these reasons:
+
+- `CHECKS_PENDING`: a check of the head still runs, or the provider has not listed all of them.
+- `CHECKS_AWAITING_APPROVAL`: a check waits for a maintainer to approve its workflows.
+- `NO_CHECKS_REPORTED`: no check reported on the head, or the provider's checks are not read.
+
+The next readiness edge of the item selects that practice again.
+The checks event of the head is such an edge.
+A practice that reads the checks as Optional never waits.
+These reasons establish nothing about the work.
 
 ## Legacy history reasons
 

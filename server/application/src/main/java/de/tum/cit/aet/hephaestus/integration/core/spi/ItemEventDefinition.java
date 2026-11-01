@@ -8,7 +8,8 @@ public record ItemEventDefinition(
         Set<EventTypeKey> producedBy,
         ItemVersionScheme versionScheme,
         boolean recommendedForAuthoring,
-        boolean bindableForAuthoring) {
+        boolean bindableForAuthoring,
+        OccasionKind occasion) {
     public ItemEventDefinition {
         producedBy = Set.copyOf(producedBy);
     }

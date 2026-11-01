@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -31,6 +32,29 @@ public final class PullRequestChecksRecord {
             if (record.has(field)) checks.set(field, record.get(field).deepCopy());
         }
         return checks;
+    }
+
+    /**
+     * What a checks record says about readiness: the same record that capture writes, so a practice that waits for
+     * the checks runs on the evidence it will read.
+     */
+    public static ItemChecks readiness(ObjectNode checks) {
+        JsonNode runs = checks.path("head_check_runs");
+        if (runs.isObject()) {
+            if (HeadCheckRuns.AWAITING_APPROVAL.equals(runs.path("limitation").asString(null)))
+                return ItemChecks.AWAITING_APPROVAL;
+            JsonNode listed = runs.path("runs");
+            if (runs.path("complete").asBoolean(false)) {
+                if (listed.isEmpty()) return ItemChecks.NONE_REPORTED;
+                boolean finished = true;
+                for (JsonNode run : listed) finished &= run.path("finished").asBoolean(false);
+                if (finished) return ItemChecks.SETTLED;
+            }
+            return ItemChecks.PENDING;
+        }
+        String state = checks.path("head_checks").asString(null);
+        // A rollup that ended before its runs were listed waits for that read, which records the checks event.
+        return state == null || state.equals(CheckState.NONE.name()) ? ItemChecks.NONE_REPORTED : ItemChecks.PENDING;
     }
 
     public static ObjectNode core(ObjectNode record) {

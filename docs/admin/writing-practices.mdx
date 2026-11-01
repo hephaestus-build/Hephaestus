@@ -60,7 +60,13 @@ Only GitHub supplies them.
 Write the practice so that missing check runs give Could not determine, never Not met.
 The [source contract](/contributor/item-source-contract#source-catalog) owns this rule.
 
-To review a pull request again when its checks finish, select **Checks finished** under Review on.
+Declare the checks source as Required or Complete only when the practice judges the checks.
+Such a practice waits until every check of the pushed commit has finished.
+Until then, its review records why it waits, and the practice runs on the next event after the checks finish.
+A practice that reads the checks as Optional never waits, and it must not judge a check that has not finished.
+Only GitHub reports the checks. On GitLab, a practice that needs them is not reviewed.
+
+To review a pull request again whenever its checks finish, select **Checks finished** under Review on.
 It means that every check GitHub had listed at that time had ended.
 A workflow or a status that starts later can add checks.
 A re-run on the same push starts a new review when its checks finish, even if their results match.

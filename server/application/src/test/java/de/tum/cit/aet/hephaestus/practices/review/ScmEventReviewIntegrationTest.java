@@ -32,10 +32,13 @@ import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEvent;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventLedgerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.PendingItemEventReaper;
+import de.tum.cit.aet.hephaestus.integration.core.itemevent.QuietWindowCloser;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -53,6 +56,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmWorkCapture;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -74,6 +78,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.ReviewOn;
@@ -109,6 +115,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -142,6 +149,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -151,6 +159,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -285,6 +294,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ItemEventService itemEvents;
+
+    @Autowired
+    ReviewItemRepository memberships;
 
     @Autowired
     ReviewSnapshotQuery snapshots;
@@ -891,6 +903,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 ObjectNode.class);
         original.withObject("/reads").put("contract", "2.0.0");
         original.put("criteria", criteria);
+        // Selection no longer takes a practice pinned to an earlier contract, so the review that an earlier release
+        // queued is built here: the event selects the practice, then the queued assignment names the 2.0.0 version.
+        publish(prepared);
+        var review = itemReviews(prepared).getFirst();
         long recorded = Objects.requireNonNull(transactions.execute(ignored -> {
             long id = Objects.requireNonNull(jdbc.queryForObject(
                     "INSERT INTO practice_version(workspace_id,practice_id,number,definition,created_at) VALUES (?,?,2,?::jsonb,now()) RETURNING id",
@@ -900,10 +916,14 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     original.toString()));
             jdbc.update(
                     "UPDATE practice SET current_version_id=? WHERE id=? AND workspace_id=?", id, practice, workspace);
+            jdbc.update(
+                    "UPDATE review_practice SET practice_version_id=? WHERE review_id=? AND practice_id=? AND workspace_id=?",
+                    id,
+                    review.getId(),
+                    practice,
+                    workspace);
             return id;
         }));
-        publish(prepared);
-        var review = itemReviews(prepared).getFirst();
         assertThat(jdbc.queryForObject(
                         "SELECT practice_version_id FROM review_practice WHERE review_id=? AND practice_id=? AND workspace_id=?",
                         Long.class,
@@ -1606,12 +1626,17 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         deliver(prepared, "synchronize", synchronize);
         var occasions = itemEvents(prepared);
         var admitted = itemReviews(prepared).stream().map(Review::getId).toList();
-        // A push also records the edit of its head; only the ready and the push are reviewed here.
+        // A push also records the edit of its head. The first occasion's review is still queued and measures the
+        // practice, so the later occasion waits for it instead of starting a second review.
         assertThat(occasions)
                 .extracting(ItemEvent::getName)
                 .containsOnlyOnce(
                         ScmItemEvents.PULL_REQUEST_READY.value(), ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value());
-        assertThat(admitted).hasSize(2);
+        assertThat(admitted).hasSize(1);
+        assertThat(occasions)
+                .filteredOn(occasion -> occasion.getState() == ItemEventState.WAITING)
+                .extracting(ItemEvent::getReason)
+                .containsOnly(ReviewRequestReason.REVIEW_IN_PROGRESS);
         long jobsBefore = jobs(prepared);
 
         // The provider delivers both again after the push: the ready payload still names the first head.
@@ -1648,12 +1673,17 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         deliver(prepared, "ready_for_review", ready);
         var occasions = itemEvents(prepared);
         var admitted = itemReviews(prepared).stream().map(Review::getId).toList();
-        // A push also records the edit of its head; only the ready and the push are reviewed here.
+        // A push also records the edit of its head. The first occasion's review is still queued and measures the
+        // practice, so the later occasion waits for it instead of starting a second review.
         assertThat(occasions)
                 .extracting(ItemEvent::getName)
                 .containsOnlyOnce(
                         ScmItemEvents.PULL_REQUEST_READY.value(), ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value());
-        assertThat(admitted).hasSize(2);
+        assertThat(admitted).hasSize(1);
+        assertThat(occasions)
+                .filteredOn(occasion -> occasion.getState() == ItemEventState.WAITING)
+                .extracting(ItemEvent::getReason)
+                .containsOnly(ReviewRequestReason.REVIEW_IN_PROGRESS);
         long jobsBefore = jobs(prepared);
 
         deliver(prepared, "ready_for_review", ready);
@@ -2834,6 +2864,17 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             Map<String, Set<String>> state,
             boolean draft,
             List<ItemEventName> alsoOn) {
+        return prepare(type, reviewed, state, draft, alsoOn, null);
+    }
+
+    /** @param checks how the practice reads the pull request's checks, or null when it does not read them */
+    private Prepared prepare(
+            IdentityProviderType type,
+            boolean reviewed,
+            Map<String, Set<String>> state,
+            boolean draft,
+            List<ItemEventName> alsoOn,
+            @Nullable ReadNeed checks) {
         var fixture = fixture(type);
         var workspace = fixture.workspace();
         workspace.getFeatures().setPracticesEnabled(true);
@@ -2859,7 +2900,14 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 new ReviewOn(Stream.concat(Stream.of(name), alsoOn.stream()).toList(), state),
                 original.appliesWhen(),
                 reviewed ? AboutRole.REVIEWER : AboutRole.AUTHOR,
-                original.reads(),
+                checks == null
+                        ? original.reads()
+                        : new PracticeReads(
+                                original.reads().contract(),
+                                Stream.concat(
+                                                original.reads().sources().stream(),
+                                                Stream.of(new PracticeReadSource(PullRequestChecksRecord.KIND, checks)))
+                                        .toList()),
                 original.reviewedBy(),
                 original.criteria(),
                 original.script(),
@@ -3045,6 +3093,243 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     private static long nativeId() {
         return ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
+    }
+
+    @Test
+    void shouldHoldANewerOccasionWhileAnEarlierReviewMeasuresItsPracticeAndRunItWhenThatReviewEnds() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long workspace = prepared.item().workspaceId();
+        publish(prepared);
+        var first = reviews.findByWorkspaceIdAndEventId(
+                        workspace, event(prepared).getId())
+                .orElseThrow();
+
+        deliver(prepared, "synchronize", pullRequestPayload(prepared, "c".repeat(40), Instant.now()), "b".repeat(40));
+        var pushed = occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+        assertThat(pushed.getState()).isEqualTo(ItemEventState.WAITING);
+        assertThat(pushed.getReason()).isEqualTo(ReviewRequestReason.REVIEW_IN_PROGRESS);
+        assertThat(reviews.findByWorkspaceIdAndEventId(workspace, pushed.getId()))
+                .isEmpty();
+
+        // While the earlier review runs, the closed window is offered again and still waits.
+        closeWindows(prepared);
+        assertThat(occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED).getState())
+                .isEqualTo(ItemEventState.WAITING);
+
+        jdbc.update(
+                "UPDATE review SET status='CANCELLED', stop_reason='CANCELLED', completed_at=now() WHERE id=?",
+                first.getId());
+        closeWindows(prepared);
+        // The push also recorded the edit of its head: one review runs at the newest occasion of that window.
+        assertThat(itemEvents(prepared))
+                .filteredOn(event -> !event.getName().equals(ScmItemEvents.PULL_REQUEST_OPENED.value()))
+                .extracting(ItemEvent::getState)
+                .containsOnly(ItemEventState.STARTED, ItemEventState.WITHHELD)
+                .containsOnlyOnce(ItemEventState.STARTED);
+        assertThat(itemReviews(prepared))
+                .hasSize(2)
+                .filteredOn(review -> !review.getId().equals(first.getId()))
+                .singleElement()
+                .satisfies(review -> assertThat(review.getItemVersion()).isEqualTo(pushed.getItemVersion()));
+    }
+
+    @Test
+    void shouldWithholdAContinuingOccasionWhenEverySelectedPracticeIsCurrentButMeasureAgainOnAMilestone() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED, ScmItemEvents.PULL_REQUEST_READY));
+        long workspace = prepared.item().workspaceId();
+        publish(prepared);
+        var first = reviews.findByWorkspaceIdAndEventId(
+                        workspace, event(prepared).getId())
+                .orElseThrow();
+        var practice = practices.findByWorkspaceId(workspace).getFirst();
+        jdbc.update(
+                """
+                INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,
+                    outcome,evidence,coverage,recorded_at)
+                VALUES(?,?,?,?,?,?,?,'MET','{}'::jsonb,'{}'::jsonb,now())
+                """,
+                UUID.randomUUID(),
+                workspace,
+                first.getId(),
+                practice.getId(),
+                practice.getCurrentVersion().getId(),
+                prepared.item().itemId(),
+                prepared.version().value());
+        jdbc.update("UPDATE review SET status='COMPLETE', completed_at=now() WHERE id=?", first.getId());
+
+        settleChecks(prepared);
+        var checks = occasion(prepared, ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED);
+        assertThat(checks.getState()).isEqualTo(ItemEventState.WITHHELD);
+        assertThat(checks.getReason()).isEqualTo(ReviewRequestReason.ALREADY_CURRENT);
+
+        // Ready is a milestone: it measures the practice again although its result is current.
+        deliver(prepared, "ready_for_review", pullRequestPayload(prepared, "b".repeat(40), Instant.now()));
+        var ready = occasion(prepared, ScmItemEvents.PULL_REQUEST_READY);
+        assertThat(ready.getState()).isEqualTo(ItemEventState.STARTED);
+    }
+
+    @Test
+    void shouldWithholdAPracticeThatNeedsTheChecksUntilTheyFinishAndRunItOnTheChecksEvent() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(), ReadNeed.REQUIRED);
+        long workspace = prepared.item().workspaceId();
+        transactions.executeWithoutResult(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                    .orElseThrow();
+            pull.observeHeadChecks(Objects.requireNonNull(pull.getHeadRefOid()), CheckState.PENDING, true);
+            pulls.saveAndFlush(pull);
+        });
+        publish(prepared);
+        var opened = event(prepared);
+        assertThat(opened.getState()).isEqualTo(ItemEventState.STARTED);
+        var waiting =
+                reviews.findByWorkspaceIdAndEventId(workspace, opened.getId()).orElseThrow();
+        assertThat(waiting.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
+        assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, waiting.getId()))
+                .singleElement()
+                .satisfies(member -> {
+                    assertThat(member.getState()).isEqualTo(ReviewItemState.WITHHELD);
+                    assertThat(member.getReason()).isEqualTo("CHECKS_PENDING");
+                });
+
+        // No practice selects Checks finished: the practice that waits for the checks is selected by it.
+        settleChecks(prepared);
+        var checks = occasion(prepared, ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED);
+        assertThat(checks.getState()).isEqualTo(ItemEventState.STARTED);
+        var measured =
+                reviews.findByWorkspaceIdAndEventId(workspace, checks.getId()).orElseThrow();
+        assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, measured.getId()))
+                .singleElement()
+                .satisfies(member -> assertThat(member.getState()).isEqualTo(ReviewItemState.LISTED));
+    }
+
+    @Test
+    void shouldNeverWaitForTheChecksOfAPracticeThatReadsThemAsOptional() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false, Map.of(), false, List.of(), ReadNeed.OPTIONAL);
+        long workspace = prepared.item().workspaceId();
+        transactions.executeWithoutResult(ignored -> {
+            var pull = pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                    .orElseThrow();
+            pull.observeHeadChecks(Objects.requireNonNull(pull.getHeadRefOid()), CheckState.PENDING, true);
+            pulls.saveAndFlush(pull);
+        });
+        publish(prepared);
+        var review = reviews.findByWorkspaceIdAndEventId(
+                        workspace, event(prepared).getId())
+                .orElseThrow();
+        assertThat(memberships.findByWorkspaceIdAndReviewIdOrderByPracticeIdAscItemIdAsc(workspace, review.getId()))
+                .singleElement()
+                .satisfies(member -> assertThat(member.getState()).isEqualTo(ReviewItemState.LISTED));
+    }
+
+    @Nested
+    @TestPropertySource(properties = "hephaestus.item-event-ledger.quiet-window=2m")
+    class QuietWindow {
+        @Test
+        void shouldStartOneReviewAtTheNewestOccasionWhenTheWindowCloses() {
+            var prepared = prepare(
+                    IdentityProviderType.GITHUB,
+                    false,
+                    Map.of(),
+                    false,
+                    List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+            long workspace = prepared.item().workspaceId();
+            publish(prepared);
+            var opened = event(prepared);
+            assertThat(opened.getState()).isEqualTo(ItemEventState.WAITING);
+            assertThat(opened.getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
+            assertThat(opened.getRetryAt()).isAfter(Instant.now().plusSeconds(60));
+
+            deliver(
+                    prepared,
+                    "synchronize",
+                    pullRequestPayload(prepared, "c".repeat(40), Instant.now()),
+                    "b".repeat(40));
+            var pushed = occasion(prepared, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED);
+            assertThat(pushed.getState()).isEqualTo(ItemEventState.WAITING);
+            assertThat(pushed.getReason()).isEqualTo(ReviewRequestReason.QUIET_WINDOW);
+            assertThat(itemReviews(prepared)).isEmpty();
+
+            // A window that has not closed is not offered.
+            closeWindows(prepared, false);
+            assertThat(itemReviews(prepared)).isEmpty();
+
+            jdbc.update(
+                    "UPDATE item_event SET decided_at = decided_at - interval '3 minutes' WHERE workspace_id=? AND item_id=?",
+                    workspace,
+                    prepared.item().itemId());
+            closeWindows(prepared);
+            // The push also recorded the edit of its head: one review runs at the newest occasion, at the pushed head.
+            assertThat(itemReviews(prepared))
+                    .singleElement()
+                    .satisfies(review -> assertThat(review.getItemVersion()).isEqualTo(pushed.getItemVersion()));
+            assertThat(itemEvents(prepared))
+                    .extracting(ItemEvent::getState)
+                    .containsOnly(ItemEventState.STARTED, ItemEventState.WITHHELD)
+                    .containsOnlyOnce(ItemEventState.STARTED);
+            var coalesced = events.findById(opened.getId()).orElseThrow();
+            assertThat(coalesced.getState()).isEqualTo(ItemEventState.WITHHELD);
+            assertThat(coalesced.getReason()).isEqualTo(ReviewRequestReason.COALESCED);
+        }
+
+        @Test
+        void shouldDecideAMergeAtOnceWithoutClosingTheWindow() {
+            var prepared = prepare(
+                    IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_MERGED));
+            publish(prepared);
+            assertThat(event(prepared).getState()).isEqualTo(ItemEventState.WAITING);
+            var merged = Objects.requireNonNull(transactions.execute(ignored -> itemEvents.record(new ItemEventInput(
+                    prepared.item().workspaceId(),
+                    prepared.item().itemId(),
+                    ScmItemEvents.PULL_REQUEST_MERGED,
+                    prepared.version().value(),
+                    Instant.now(),
+                    FoundBy.WEBHOOK,
+                    null,
+                    null))));
+            assertThat(events.findById(merged).orElseThrow().getState())
+                    .isNotIn(ItemEventState.RECORDED, ItemEventState.WAITING);
+            assertThat(event(prepared).getState()).isEqualTo(ItemEventState.WAITING);
+        }
+    }
+
+    private ItemEvent occasion(Prepared prepared, ItemEventName name) {
+        return itemEvents(prepared).stream()
+                .filter(event -> event.getName().equals(name.value()))
+                .reduce((older, newer) -> newer)
+                .orElseThrow();
+    }
+
+    /** Settles the head's checks, which records the checks event of the pull request. */
+    private void settleChecks(Prepared prepared) {
+        var item = prepared.item();
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        long repositoryId = Objects.requireNonNull(pull.getRepository()).getId();
+        var context = Objects.requireNonNull(transactions.execute(status -> ProcessingContext.forWebhook(
+                item.workspaceId(), repositories.findById(repositoryId).orElseThrow(), "completed")));
+        String head = Objects.requireNonNull(pull.getHeadRefOid());
+        Instant readAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        checkRuns.observe(repositoryId, settled(head, List.of(checkRun("build", "success", readAt)), readAt), context);
+    }
+
+    private void closeWindows(Prepared prepared) {
+        closeWindows(prepared, true);
+    }
+
+    /** Runs the quiet window closer once, with every window of the item due when {@code due}. */
+    private void closeWindows(Prepared prepared, boolean due) {
+        if (due)
+            jdbc.update(
+                    "UPDATE item_event SET retry_at = now() - interval '1 second' WHERE workspace_id=? AND item_id=? AND state='WAITING'",
+                    prepared.item().workspaceId(),
+                    prepared.item().itemId());
+        var closer = new QuietWindowCloser(events, ledger, publisher, clock);
+        transactions.executeWithoutResult(ignored -> closer.close());
     }
 
     private record Prepared(ItemRef item, ItemVersion version, ItemEventName name, ScmDomainEvent.Event event) {}

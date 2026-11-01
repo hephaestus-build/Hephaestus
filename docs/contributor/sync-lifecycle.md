@@ -456,6 +456,7 @@ A read that shows them in another order, or that lags and shows earlier runs aga
 A re-run on the same head ends at another time, so it records a new event at the same version.
 This is also true when the results match an earlier settling, as for a build that fails, passes and fails again.
 The practices that select **Checks finished** then review it again.
+Its readiness edge also selects each practice that waits for the checks of the item ([readiness reasons](practice-review-glossary#readiness-reasons)).
 Every other item event keeps one event of a name per version.
 
 Each read that records no completion logs why: the list is incomplete, a run has not finished, or the head has no rollup.

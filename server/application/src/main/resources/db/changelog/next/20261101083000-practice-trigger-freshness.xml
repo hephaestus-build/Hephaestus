@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793370301585-1" author="hephaestus">
+        <preConditions onFail="HALT"><tableExists tableName="item_event"/><columnExists tableName="item_event" columnName="reason"/></preConditions>
+        <sql splitStatements="true"><![CDATA[
+ALTER TABLE item_event DROP CONSTRAINT ck_item_event_reason;
+ALTER TABLE item_event ADD CONSTRAINT ck_item_event_reason CHECK(reason IS NULL OR reason IN ('GATE_WITHHELD','COOLDOWN_ACTIVE','REQUEST_COOLDOWN_ACTIVE','REQUESTER_QUOTA_EXHAUSTED','CONCURRENT_DUPLICATE','COALESCED','OUT_OF_REVIEW_SCOPE','BOT_AUTHOR','BOT_REVIEWER','STALE_ROLLOUT_REVISION','WORKSPACE_INACTIVE','PRACTICES_DISABLED','NO_ACTIVE_PRACTICE','REVIEW_MODEL_UNBOUND','MEMBER_AI_DECLINED','PERSON_DATA_ERASED','FEEDBACK_MODE_OFF','SUBJECT_UNLINKED','MERGE_ACTOR_UNAVAILABLE','MODEL_UNAVAILABLE','BUDGET_EXHAUSTED','ITEM_NOT_VISIBLE','VERSION_SUPERSEDED','PENDING_DEADLINE_EXCEEDED','ITEM_GONE','LEGACY_REVIEW_UNBOUND','OCCASION_EVIDENCE_UNAVAILABLE','QUIET_WINDOW','REVIEW_IN_PROGRESS','ALREADY_CURRENT'));
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade compatible backup and matching runtime release.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

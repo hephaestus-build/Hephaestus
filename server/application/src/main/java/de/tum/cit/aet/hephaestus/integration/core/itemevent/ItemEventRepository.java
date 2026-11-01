@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -206,6 +207,72 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
 
         long getItemId();
     }
+
+    /** The pinned occasions of the item that no review started and none withheld yet, oldest first. */
+    @Query(
+            value =
+                    "SELECT id, name, item_version AS itemVersion, state, reason, occurred_at AS occurredAt, decided_at AS decidedAt "
+                            + "FROM item_event WHERE workspace_id = :workspaceId AND item_id = :itemId AND item_version IS NOT NULL "
+                            + "AND state IN ('RECORDED','WAITING') ORDER BY occurred_at, id",
+            nativeQuery = true)
+    List<OpenRow> findOpen(@Param("workspaceId") long workspaceId, @Param("itemId") long itemId);
+
+    interface OpenRow {
+        UUID getId();
+
+        String getName();
+
+        String getItemVersion();
+
+        String getState();
+
+        @Nullable
+        String getReason();
+
+        Instant getOccurredAt();
+
+        Instant getDecidedAt();
+    }
+
+    /**
+     * Holds open occasions of the item in its window, waiting for {@code reason} until {@code until}. An occasion that
+     * already waits in the window keeps the moment it joined, so the cap counts from the window's first occasion.
+     */
+    @Modifying
+    @Query(
+            value =
+                    "UPDATE item_event SET decided_at = CASE WHEN state = 'WAITING' AND reason IN ('QUIET_WINDOW','REVIEW_IN_PROGRESS') "
+                            + "THEN decided_at ELSE :now END, "
+                            + "state = 'WAITING', reason = :reason, retry_at = :until "
+                            + "WHERE workspace_id = :workspaceId AND item_id = :itemId AND id IN (:ids) AND state IN ('RECORDED','WAITING')",
+            nativeQuery = true)
+    int hold(
+            @Param("workspaceId") long workspaceId,
+            @Param("itemId") long itemId,
+            @Param("ids") Collection<UUID> ids,
+            @Param("reason") String reason,
+            @Param("now") Instant now,
+            @Param("until") Instant until);
+
+    /** One waiting occasion of each item whose quiet window has closed, oldest window first. */
+    @Query(
+            value =
+                    "SELECT id, workspaceId, itemId FROM (SELECT DISTINCT ON (workspace_id, item_id) id, workspace_id AS workspaceId, "
+                            + "item_id AS itemId, retry_at FROM item_event WHERE state = 'WAITING' AND reason IN ('QUIET_WINDOW','REVIEW_IN_PROGRESS') "
+                            + "AND retry_at <= :now ORDER BY workspace_id, item_id, retry_at, id) due ORDER BY retry_at, id LIMIT :limit",
+            nativeQuery = true)
+    @WorkspaceAgnostic(
+            "The quiet window closer finds closed windows across workspaces and preserves each event workspace")
+    List<DueEvent> findClosedWindows(@Param("now") Instant now, @Param("limit") int limit);
+
+    /** Moves the end of the item's window, so an edge that fails is offered again later and not at once. */
+    @Modifying
+    @Query(
+            value = "UPDATE item_event SET retry_at = :retryAt WHERE workspace_id = :workspaceId AND item_id = :itemId "
+                    + "AND state = 'WAITING' AND reason IN ('QUIET_WINDOW','REVIEW_IN_PROGRESS')",
+            nativeQuery = true)
+    int postponeWindow(
+            @Param("workspaceId") long workspaceId, @Param("itemId") long itemId, @Param("retryAt") Instant retryAt);
 
     record Decision(
             ItemEventState from,

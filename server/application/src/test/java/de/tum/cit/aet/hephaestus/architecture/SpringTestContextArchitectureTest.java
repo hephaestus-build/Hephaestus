@@ -284,6 +284,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "notification.email.EmailAdminControllerIntegrationTest",
             "practices.research.ResearchDisclosureControllerIntegrationTest",
             "practices.review.DisabledIntegrationHistoryIntegrationTest",
+            "practices.review.ScmEventReviewIntegrationTest$QuietWindow",
             "productfeedback.ProductFeedbackEmailIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");

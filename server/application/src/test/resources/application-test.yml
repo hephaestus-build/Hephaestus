@@ -77,6 +77,9 @@ hephaestus:
     # bean a second candidate and let it settle signals before the test does.
     agent:
         enabled: false
+    # Each item event reaches its readiness edge at once; the quiet window's own tests open one.
+    item-event-ledger:
+        quiet-window: 0s
     # Tests take expired Heph turn leases back themselves; a background sweep would race them.
     mentor:
         turn:
