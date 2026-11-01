@@ -10,6 +10,7 @@ import type {
 	ProductFeedbackNeedsActionList,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
+import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -161,7 +162,7 @@ describe("instance product feedback destinations", () => {
 		server.use(
 			http.put("*/admin/product-feedback/destinations", () =>
 				HttpResponse.json(
-					{ status: 403, code: "step_up_required", maxAgeSeconds: 300 },
+					{ status: 403, type: problemType("step-up-required"), maxAgeSeconds: 300 },
 					{ status: 403 },
 				),
 			),
