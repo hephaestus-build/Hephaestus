@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793472587773-1" author="hephaestus">
+        <dropColumn columnName="created_by" tableName="llm_model_price"/>
+    </changeSet>
+    <changeSet id="1793472587773-3" author="hephaestus">
+        <dropColumn columnName="granted_by" tableName="llm_model_workspace_grant"/>
+    </changeSet>
+    <changeSet id="1793472587773-2" author="hephaestus">
+        <comment>A BEFORE UPDATE trigger sees NULL for stored generated columns in NEW, so the guard rejected every update, including clearing the author on person erasure and on account deletion. Compare without the generated columns; they derive from the compared definition.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION guard_practice_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'created_by_account_id'-'name'-'review_digest') IS DISTINCT FROM (to_jsonb(OLD)-'created_by_account_id'-'name'-'review_digest') OR (NEW.created_by_account_id IS NOT NULL AND NEW.created_by_account_id IS DISTINCT FROM OLD.created_by_account_id) THEN RAISE EXCEPTION 'practice versions are immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION guard_practice_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'created_by_account_id') IS DISTINCT FROM (to_jsonb(OLD)-'created_by_account_id') OR (NEW.created_by_account_id IS NOT NULL AND NEW.created_by_account_id IS DISTINCT FROM OLD.created_by_account_id) THEN RAISE EXCEPTION 'practice versions are immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

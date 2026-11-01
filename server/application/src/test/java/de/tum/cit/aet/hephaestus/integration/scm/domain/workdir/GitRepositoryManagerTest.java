@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -652,8 +653,20 @@ class GitRepositoryManagerTest extends BaseUnitTest {
         prepare();
         assertThat(manager.isRepositoryCloned(KEY)).isTrue();
         assertThat(manager.isRepositoryCloned(new RepositoryKey(200L, 1L))).isFalse();
-        manager.deleteOrphanedRepository(1L);
+        assertThat(manager.localRepositories()).containsExactly(KEY);
+    }
+
+    @Test
+    void shouldKeepAMirrorWhenTheRetentionCheckUnderTheLockHolds() throws Exception {
+        repository().close();
+        prepare();
+        assertThat(manager.deleteUnretainedRepository(KEY, Duration.ofSeconds(5), () -> true))
+                .isFalse();
+        assertThat(manager.isRepositoryCloned(KEY)).isTrue();
+        assertThat(manager.deleteUnretainedRepository(KEY, Duration.ofSeconds(5), () -> false))
+                .isTrue();
         assertThat(manager.isRepositoryCloned(KEY)).isFalse();
+        assertThat(manager.localRepositories()).isEmpty();
     }
 
     @Test

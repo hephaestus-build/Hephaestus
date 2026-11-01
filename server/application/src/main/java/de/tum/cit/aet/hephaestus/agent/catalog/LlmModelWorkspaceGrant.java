@@ -29,10 +29,6 @@ public class LlmModelWorkspaceGrant {
     @Column(name = "granted_at", nullable = false)
     private @Nullable Instant grantedAt;
 
-    @Nullable
-    @Column(name = "granted_by", length = 255)
-    private String grantedBy;
-
     public LlmModelWorkspaceGrant(Long modelId, Long workspaceId) {
         this.id = new Id(modelId, workspaceId);
     }

@@ -16,6 +16,7 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @PersonDataStores({
     "git_repository_history",
+    "installation_account",
     "user",
     "organization_membership",
     "team_membership",
@@ -54,6 +55,7 @@ public class ScmPersonDataCatalog implements PersonDataCatalog {
     public List<PersonDataContributor> contributors() {
         return List.of(
                 new GitRepositoryHistoryPersonDataStore(jdbc, mapper),
+                new InstallationAccountPersonDataStore(jdbc, mapper),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

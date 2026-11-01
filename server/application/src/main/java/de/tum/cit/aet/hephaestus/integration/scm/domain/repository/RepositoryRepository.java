@@ -144,6 +144,13 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
         """, nativeQuery = true)
     boolean isIndexedByAnyWorkspace(@Param("repositoryId") long repositoryId);
 
+    /** Whether this workspace holds the exact source as an active repository item, monitored or stopped. */
+    @Query(value = """
+        SELECT EXISTS (SELECT 1 FROM item i WHERE i.workspace_id=:workspaceId AND i.kind='scm.repository'
+          AND i.parent_id IS NULL AND i.source_id=:repositoryId AND i.removed_at IS NULL)
+        """, nativeQuery = true)
+    boolean isIndexedByWorkspace(@Param("workspaceId") long workspaceId, @Param("repositoryId") long repositoryId);
+
     /** The sources this workspace holds as active repository items, including stopped GitLab projects. */
     @Query(value = """
         SELECT i.source_id FROM item i WHERE i.workspace_id=:workspaceId AND i.kind='scm.repository'

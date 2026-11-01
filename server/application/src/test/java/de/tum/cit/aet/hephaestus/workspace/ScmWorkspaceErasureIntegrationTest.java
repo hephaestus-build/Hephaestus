@@ -7,9 +7,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
@@ -27,6 +29,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitMirrorRetention;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.connect.GitHubConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceProvisioningAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabConnectionStrategy;
@@ -36,17 +42,26 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
+
+    @TempDir
+    private Path mirrorRoot;
 
     private static final String SHARED_REPO = "acme/shared";
     private static final String EXCLUSIVE_REPO = "acme/exclusive";
@@ -108,6 +123,88 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
     private IdentityProvider gitProvider;
     private Workspace tenantA;
     private Workspace tenantB;
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    @DisplayName("each role removes only the departing workspace's mirrors after repository removal or uninstall")
+    void shouldRemoveOnlyTheDepartingWorkspacesMirrorsOnEveryRoleWhenItsRepositoryLeaves(boolean purge)
+            throws Exception {
+        long repositoryId = repositoryRepository
+                .findByNameWithOwner(SHARED_REPO)
+                .orElseThrow()
+                .getId();
+        long departingWorkspace = Objects.requireNonNull(tenantA.getId());
+        long keepingWorkspace = Objects.requireNonNull(tenantB.getId());
+        assertThat(repositoryRepository.isMonitored(keepingWorkspace, repositoryId))
+                .isTrue();
+        Path departing = localMirror(departingWorkspace, repositoryId);
+        Path kept = localMirror(keepingWorkspace, repositoryId);
+        // The server and each worker hold their own mirror root.
+        List<Path> roots = List.of(mirrorRoot.resolve("server"), mirrorRoot.resolve("worker"));
+        for (Path root : roots) {
+            Files.createDirectories(root.resolve(departing));
+            Files.createDirectories(root.resolve(kept));
+            Files.writeString(root.resolve(departing).resolve("objects"), "departing workspace");
+            Files.writeString(root.resolve(kept).resolve("objects"), "keeping workspace");
+        }
+
+        // An uninstall purges the workspace.
+        if (purge) provisioningAdapter.onInstallationDeleted(5001L);
+        else
+            provisioningAdapter.onRepositoriesRemoved(
+                    5001L, List.of(new ProvisioningListener.RepositoryRemoval(9001L, SHARED_REPO)));
+
+        for (Path root : roots) {
+            var retention = new GitMirrorRetention(
+                    new GitRepositoryManager(
+                            new GitRepositoryProperties(true, 1, 1024),
+                            new GitRepositoryLockManager(),
+                            new FabricLayout(root.toString())),
+                    repositoryRepository);
+            assertThat(retention.removeUnretainedMirrors()).isEqualTo(1);
+            assertThat(retention.removeUnretainedMirrors())
+                    .as("a retry finds nothing left")
+                    .isZero();
+            assertThat(root.resolve(departing)).doesNotExist();
+            assertThat(root.resolve(kept).resolve("objects")).hasContent("keeping workspace");
+        }
+        assertThat(repositoryRepository.findById(repositoryId)).isPresent();
+    }
+
+    @Test
+    @DisplayName("a workspace that still keeps a repository's synced work keeps its mirror without a monitor")
+    void shouldKeepTheMirrorOfAStoppedProjectUntilItsSyncedWorkIsRemoved() throws Exception {
+        long repositoryId = repositoryRepository
+                .findByNameWithOwner(EXCLUSIVE_REPO)
+                .orElseThrow()
+                .getId();
+        long workspaceId = Objects.requireNonNull(tenantA.getId());
+        Path mirror = mirrorRoot.resolve(localMirror(workspaceId, repositoryId));
+        Files.createDirectories(mirror);
+        Long item = jdbcTemplate.queryForObject(
+                "INSERT INTO item(workspace_id,kind,source_id,created_at) VALUES (?,'scm.repository',?,now()) RETURNING id",
+                Long.class,
+                workspaceId,
+                repositoryId);
+        repositoryToMonitorRepository.deleteAllByWorkspaceId(workspaceId);
+        var retention = new GitMirrorRetention(
+                new GitRepositoryManager(
+                        new GitRepositoryProperties(true, 1, 1024),
+                        new GitRepositoryLockManager(),
+                        new FabricLayout(mirrorRoot.toString())),
+                repositoryRepository);
+
+        assertThat(retention.removeUnretainedMirrors()).isZero();
+        assertThat(mirror).isDirectory();
+
+        jdbcTemplate.update("UPDATE item SET removed_at=now() WHERE id=?", item);
+        assertThat(retention.removeUnretainedMirrors()).isEqualTo(1);
+        assertThat(mirror).doesNotExist();
+    }
+
+    private static Path localMirror(long workspaceId, long repositoryId) {
+        return Path.of("mirrors", Long.toString(workspaceId), repositoryId + ".git");
+    }
 
     @BeforeEach
     void setUp() {
