@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FeedbackRequest } from "@/api/types.gen";
+import { zFeedbackRequest } from "@/api/zod.gen";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
@@ -24,7 +25,7 @@ describe("product feedback sent from a workspace page", () => {
 				HttpResponse.json(ownMembership("MEMBER")),
 			),
 			http.post("*/workspaces/acme/product-feedback", async ({ request }) => {
-				sent.push((await request.json()) as FeedbackRequest);
+				sent.push(zFeedbackRequest.parse(await request.json()));
 				return new HttpResponse(null, { status: 202 });
 			}),
 		);
@@ -39,7 +40,7 @@ describe("product feedback sent from a workspace page", () => {
 		);
 		await user.click(await screen.findByRole("menuitem", { name: "Report a bug" }));
 		await user.type(screen.getByRole("textbox", { name: "What happened?" }), "The list is empty.");
-		expect(screen.getByText("/w/$workspaceSlug/activity")).toBeDefined();
+		screen.getByText("/w/$workspaceSlug/activity");
 		await user.click(screen.getByRole("button", { name: "Send" }));
 
 		await waitFor(() => expect(sent).toHaveLength(1));
