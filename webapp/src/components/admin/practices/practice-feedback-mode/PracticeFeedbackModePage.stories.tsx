@@ -9,9 +9,7 @@ import { PracticeFeedbackModePage } from "./PracticeFeedbackModePage";
 
 const from = ({ settings, rollup, groups, practices }: FeedbackModeFixture) => ({
 	settings,
-	rollup,
-	groups,
-	practices,
+	tree: { status: "ready" as const, rollup, groups, practices },
 });
 
 const small = buildFeedbackModeFixture({
@@ -153,15 +151,14 @@ const meta = {
 	},
 	args: {
 		workspaceSlug: "demo",
-		settings: small.settings,
-		rollup: small.rollup,
-		groups: small.groups,
-		practices: small.practices,
+		...from(small),
 		pending: idle,
 		overridesOnly: false,
 		onOverridesOnlyChange: fn(),
 		onSetWorkspaceDefault: fn(),
 		onClearWorkspaceDefault: fn(),
+		onSetSending: fn(),
+		onClearDeliverToMerged: fn(),
 		onSetGroupFeedbackMode: fn(),
 		onClearGroupFeedbackMode: fn(),
 		onSetPracticeFeedbackMode: fn(),
@@ -196,6 +193,16 @@ export const WorkspaceDefaultUnset: Story = {
 		await expect(canvas.getByRole("radiogroup", { name: "Workspace feedback mode" })).toBeVisible();
 		await expect(canvas.getByText(/It does not decide what Hephaestus reviews\./u)).toBeVisible();
 		await expectNoPageOverflow();
+	},
+};
+
+/** One tab answers when feedback reaches developers: the mode, then whether it is sent at all. */
+export const SendingUnderTheWorkspaceDefault: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		const headings = canvas.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+		await expect(headings.slice(0, 2)).toEqual(["Workspace default", "Sending feedback"]);
+		await userEvent.click(canvas.getByRole("switch", { name: "Send feedback" }));
+		await expect(args.onSetSending).toHaveBeenCalledWith({ deliveryStatus: "PAUSED" });
 	},
 };
 
@@ -562,10 +569,37 @@ export const NotReviewedByHephaestus: Story = {
 	},
 };
 
+export const PracticesLoading: Story = {
+	args: { tree: { status: "loading" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("radiogroup", { name: "Workspace feedback mode" })).toBeVisible();
+		await expect(canvas.getByRole("switch", { name: "Send feedback" })).toBeVisible();
+		await expect(
+			canvas.queryByRole("toolbar", { name: "Filter practices" }),
+		).not.toBeInTheDocument();
+	},
+};
+
+const retryPractices = fn();
+
+/** A failed practice list keeps the workspace settings: pause and resume never wait on it. */
+export const PracticesLoadFailed: Story = {
+	args: { tree: { status: "error", error: { status: 503 }, onRetry: retryPractices } },
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(canvas.getByText("We could not load the practices")).toBeVisible();
+		await userEvent.click(canvas.getByRole("switch", { name: "Send feedback" }));
+		await expect(args.onSetSending).toHaveBeenCalledWith({ deliveryStatus: "PAUSED" });
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		await expect(retryPractices).toHaveBeenCalled();
+	},
+};
+
 export const Empty: Story = {
 	args: from(noPractices),
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No practices yet")).toBeVisible();
 		await expect(canvas.getByText("No practices yet.")).toBeVisible();
+		// Sending is a workspace setting, so it stays reachable before any practice exists.
+		await expect(canvas.getByRole("switch", { name: "Send feedback" })).toBeVisible();
 	},
 };

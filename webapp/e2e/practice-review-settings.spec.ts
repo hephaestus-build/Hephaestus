@@ -13,10 +13,10 @@ function isReviewSettingsWrite(response: Response) {
 test("practice review settings can be updated", async ({ page }) => {
 	await loginAsDevAdmin(page);
 
-	await page.goto("/w/e2e/admin/practices/review?section=automated-review");
+	await page.goto("/w/e2e/admin/practices/review?section=feedback-mode");
 	await expect(page.getByRole("heading", { name: "Review settings", exact: true })).toBeVisible();
-	await expect(page.getByRole("heading", { name: "Automated review", exact: true })).toBeVisible();
-	await expect(page.getByRole("heading", { name: "How reviews start", exact: true })).toBeVisible();
+	await expect(page.getByRole("tab", { name: "Feedback mode", selected: true })).toBeVisible();
+	await expect(page.getByRole("heading", { name: "Sending feedback", exact: true })).toBeVisible();
 
 	const deliverAfterMerge = page.getByRole("switch", { name: "Post feedback after merge" });
 	const before = await deliverAfterMerge.getAttribute("aria-checked");

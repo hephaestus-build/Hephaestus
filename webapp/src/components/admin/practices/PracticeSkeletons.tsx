@@ -105,7 +105,7 @@ export function ReviewSettingsSkeleton() {
 		<div aria-busy="true">
 			<span className="sr-only">Loading review settings…</span>
 			<div className="space-y-8" aria-hidden>
-				{["status", "timing", "coverage", "delivery"].map((section) => (
+				{["status", "timing", "coverage"].map((section) => (
 					<div key={section} className="space-y-4">
 						<div className="space-y-2">
 							<Skeleton className="h-6 w-48" />
@@ -116,6 +116,20 @@ export function ReviewSettingsSkeleton() {
 						))}
 					</div>
 				))}
+			</div>
+		</div>
+	);
+}
+
+/** Mirrors the Feedback mode tab: the workspace default and sending cards over the practice list. */
+export function FeedbackModeSkeleton() {
+	return (
+		<div aria-busy="true">
+			<span className="sr-only">Loading feedback settings…</span>
+			<div className="space-y-6" aria-hidden>
+				<Skeleton className="h-64 w-full rounded-xl" />
+				<Skeleton className="h-56 w-full rounded-xl" />
+				<PracticeTreeSkeleton groups={3} practicesPerGroup={3} />
 			</div>
 		</div>
 	);
