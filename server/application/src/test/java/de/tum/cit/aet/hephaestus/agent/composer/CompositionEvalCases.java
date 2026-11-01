@@ -9,6 +9,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -604,8 +605,12 @@ final class CompositionEvalCases {
         return utf8(JsonText.stringify(node, 1));
     }
 
+    /** Replaces the file in one move, so a run stopped mid-write leaves the earlier file whole for its resume. */
     static void write(String file, JsonNode node) throws IOException {
-        Files.writeString(Path.of(file), JsonText.stringify(node, 1) + "\n", StandardCharsets.UTF_8);
+        Path target = Path.of(file).toAbsolutePath();
+        Path partial = target.resolveSibling(target.getFileName() + ".partial");
+        Files.writeString(partial, JsonText.stringify(node, 1) + "\n", StandardCharsets.UTF_8);
+        Files.move(partial, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     }
 
     static ArrayNode strings(List<String> values) {

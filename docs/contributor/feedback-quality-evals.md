@@ -225,7 +225,12 @@ A rerun refuses a file from another model, other settings or other rendered requ
 The run sends requests directly to the endpoint, without the proxy that fences and bills them in production.
 
 A run from another runner writes one `report_review` argument object for each case into a file such as `outputs.json`.
-`COMPOSITION_EVAL_OUTPUTS` and `COMPOSITION_EVAL_CHECKED` then apply main's check to that file.
+This command applies main's check to that file and writes the checked run:
+
+```bash
+(cd server && COMPOSITION_EVAL_OUTPUTS=/tmp/ev/outputs.json COMPOSITION_EVAL_CHECKED=/tmp/ev/outputs-checked.json \
+  ./gradlew :application:test --tests CompositionEvalTest)
+```
 
 The report puts the runs side by side:
 

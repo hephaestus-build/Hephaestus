@@ -47,7 +47,13 @@ const named = (pairs: string[] | undefined) =>
 if (values.compositions !== undefined) {
 	const set = parseCompositions(read(values.compositions));
 	const labels = named(values["run-labels"]);
-	const runs = [...named(values.run)].map(([name, file]) => {
+	const runNames = named(values.run);
+	for (const name of labels.keys()) {
+		if (!runNames.has(name)) {
+			throw new Error(`--run-labels ${name} names no --run`);
+		}
+	}
+	const runs = [...runNames].map(([name, file]) => {
 		const labelFile = labels.get(name);
 		const runLabels: RunLabels | undefined =
 			labelFile === undefined ? undefined : parseRunLabels(read(labelFile), labelFile);
@@ -56,6 +62,9 @@ if (values.compositions !== undefined) {
 	const gate = values.gate === undefined ? undefined : parseGate(read(values.gate), values.gate);
 	process.stdout.write(`${JSON.stringify(compositionReport(set, gate, runs), null, 2)}\n`);
 	process.exit(0);
+}
+if (values.run !== undefined || values["run-labels"] !== undefined || values.gate !== undefined) {
+	throw new Error("--run, --run-labels and --gate need --compositions");
 }
 const corpus = parseCorpus(
 	parseJson(

@@ -80,6 +80,9 @@ class CompositionEvalLiveTest {
                     .as("%s was composed from other requests; use another file", checkedFile)
                     .isEqualTo(requests);
             for (JsonNode entry : earlier.path("cases")) {
+                // An endpoint failure measures the endpoint, not the model, so the rerun composes that case again.
+                var failure = entry.path("failure");
+                if (failure.isString() && List.of("PROVIDER", "CAPACITY").contains(failure.asString())) continue;
                 cases.add(entry);
                 done.add(entry.path("id").asString());
             }

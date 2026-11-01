@@ -102,7 +102,17 @@ const parser =
 const definition = (name: string) => ({ $ref: `${schema.$id}#/$defs/${name}` });
 export const parseGate = parser(ajv.compile<GateFile>(definition("gate")));
 export const parseRun = parser(ajv.compile<RunFile>(definition("run")));
-export const parseRunLabels = parser(ajv.compile<RunLabels>(definition("runLabels")));
+const parseRunLabelSchema = parser(ajv.compile<RunLabels>(definition("runLabels")));
+/** A run's labels, after their schema and the rule that a good label carries no code. */
+export function parseRunLabels(value: unknown, file: string): RunLabels {
+	const labels = parseRunLabelSchema(value, file);
+	for (const label of labels.labels) {
+		if (label.good !== (label.codes.length === 0)) {
+			throw new Error(`${file} ${label.caseId}: good means no code`);
+		}
+	}
+	return labels;
+}
 
 const texts = (review: Review): { kind: "summary" | "note"; body: string }[] => [
 	...(review.summary ? [{ kind: "summary" as const, body: review.summary.body }] : []),

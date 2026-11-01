@@ -8,6 +8,7 @@ import {
 	mechanicalCodes,
 	parseCompositions,
 	parseRun,
+	parseRunLabels,
 	type CompositionSet,
 	type RunFile,
 } from "./feedback-eval/compositions.ts";
@@ -45,6 +46,22 @@ void test("a good label carries no code", () => {
 	assert.ok(target);
 	target.label.codes = ["Q5"];
 	assert.throws(() => parseCompositions(copy), /good means no code/u);
+});
+
+const runLabels = (good: boolean, codes: string[]) => ({
+	version: 1,
+	labels: [
+		{ caseId: "gh-a-01-menu-view-does-its-own-networking", good, codes, why: "Test label." },
+	],
+});
+
+void test("a run's good label carries no code either", () => {
+	assert.throws(
+		() => parseRunLabels(runLabels(true, ["T1"]), "labels.json"),
+		/good means no code/u,
+	);
+	assert.throws(() => parseRunLabels(runLabels(false, []), "labels.json"), /good means no code/u);
+	assert.equal(parseRunLabels(runLabels(false, ["T1"]), "labels.json").labels.length, 1);
 });
 
 void test("words over the length target need the length code", () => {
