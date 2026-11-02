@@ -331,6 +331,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
                         SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)
                 .orElseThrow();
         assertThat(entry.practiceVersion()).isEqualTo(1);
+        assertThat(entry.practiceName()).isEqualTo(original.name());
         var criteria = entry.criteria();
         assertThat(criteria).isNotNull();
         assertThat(criteria.asString()).isEqualTo(original.criteria());

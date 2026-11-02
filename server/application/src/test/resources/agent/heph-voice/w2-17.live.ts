@@ -24,11 +24,13 @@ const TESTS_OBSERVATION = {
 	...OBSERVATION,
 	resultId: TESTS_RESULT_ID,
 	practiceSlug: "ships-tests-with-the-change",
+	practiceName: "Include tests with the change",
 	practiceVersion: 2,
 	outcome: "MET",
 	recordedAt: "Mon 2026-10-26 23:31 +01:00",
 	resource: `inputs/context/results_history/${TESTS_RESULT_ID}.json`,
 	summary: "The change adds a test for the missing-file path next to the handler.",
+	problems: [],
 };
 
 const TESTS_DETAIL = {

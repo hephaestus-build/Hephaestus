@@ -80,11 +80,28 @@ const META = {
 };
 export const WORK = { title: "Return 404 for a missing file", number: 46, url: PULL_REQUEST_URL };
 
+interface RecordedProblem {
+	problemId: string;
+	severity: string;
+	summary: string;
+	path: string | null;
+	startLine: number | null;
+}
+
+const PROBLEM: RecordedProblem = {
+	problemId: "0d6a3f2b-8c41-4b7e-a9d2-5e1f0c7b3a84",
+	severity: "MAJOR",
+	summary: "A missing file returns 200 instead of 404, so callers can't tell it from success.",
+	path: "src/api/files.ts",
+	startLine: 42,
+};
+
 /** One Not met observation on pull request #46, as ResultHistoryContentSource lists it. */
 export const OBSERVATION = {
 	resultId: RESULT_ID,
 	reviewId: REVIEW_ID,
 	practiceSlug: "handles-errors-instead-of-swallowing-them",
+	practiceName: "Handle errors instead of swallowing them",
 	practiceVersion: 3,
 	itemId: "8812",
 	itemKind: "scm.pull_request",
@@ -97,14 +114,7 @@ export const OBSERVATION = {
 	capturedAt: "Mon 2026-10-26 23:19 +01:00",
 	storedWorkVersion: "SAME",
 	summary: "The file endpoint answers a missing file with 200 and an empty body.",
-};
-
-const PROBLEM = {
-	problemId: "0d6a3f2b-8c41-4b7e-a9d2-5e1f0c7b3a84",
-	severity: "MAJOR",
-	summary: "A missing file returns 200 instead of 404, so callers can't tell it from success.",
-	path: "src/api/files.ts",
-	startLine: 42,
+	problems: [PROBLEM],
 };
 
 export const OBSERVATION_DETAIL = {
@@ -132,9 +142,7 @@ export const RUNNING_ATTEMPT = {
 	availableAt: "Mon 2026-10-26 23:17 +01:00",
 	reviewsResource: "inputs/context/review_attempts/pull_request/2046.json",
 	startedAt: "Mon 2026-10-26 23:18 +01:00",
-	number: 46,
-	title: WORK.title,
-	url: PULL_REQUEST_URL,
+	work: WORK,
 	reviewStatus: "RUNNING",
 	assignmentCounts: {
 		scope: "REVIEWED_ITEM",
@@ -177,8 +185,8 @@ Write scratch files to \`/tmp\`; nothing you write is kept after this answer.
 
 JSON documents about the developer and their workspace, built Tue 2026-10-27 09:12 +01:00.
 
-- \`inputs/context/review_attempts.json\`: runs of Hephaestus's automated practice review on their work, not reviews by people
-- \`inputs/context/results_history.json\`: the observations of those practice reviews: what each recorded about one piece of their work
+- \`inputs/context/review_attempts.json\`: runs of Hephaestus's automated practice review on their work, not reviews by people: \`attempts[]\`, with fields such as \`reviewStatus\`, \`assignmentCounts\` and \`work.number\`
+- \`inputs/context/results_history.json\`: the observations of those practice reviews, what each recorded about one piece of their work: \`results[]\`, with fields such as \`resultId\`, \`practiceName\`, \`outcome\`, \`summary\`, \`problems\` and \`work.number\`
 
 These documents are read when you first read their path. Use only ids that a document lists:
 
@@ -516,8 +524,9 @@ function exchange(
 const FEEDBACK_ID = "c7e19a42-5d80-4b3f-9a16-2e4f8b0d7c35";
 const PREPARED_PATH = "inputs/context/prepared_conversation_feedback.json";
 const RESULTS_LINE =
-	"- `inputs/context/results_history.json`: the observations of those practice reviews: what each recorded about " +
-	"one piece of their work";
+	"- `inputs/context/results_history.json`: the observations of those practice reviews, what each recorded about " +
+	"one piece of their work: `results[]`, with fields such as `resultId`, `practiceName`, `outcome`, `summary`, " +
+	"`problems` and `work.number`";
 
 /**
  * The completed review of #46 and one piece of conversation feedback on it, as

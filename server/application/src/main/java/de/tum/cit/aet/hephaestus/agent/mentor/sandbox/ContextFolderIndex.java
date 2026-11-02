@@ -41,10 +41,13 @@ final class ContextFolderIndex {
                 "merge_readiness.json", "their open pull requests in detail: checks, reviews, threads, merge state");
         documents.put(
                 "review_attempts.json",
-                "runs of Hephaestus's automated practice review on their work, not reviews by people");
+                "runs of Hephaestus's automated practice review on their work, not reviews by people: `attempts[]`, with"
+                        + " fields such as `reviewStatus`, `assignmentCounts` and `work.number`");
         documents.put(
                 "results_history.json",
-                "the observations of those practice reviews: what each recorded about one piece of their work");
+                "the observations of those practice reviews, what each recorded about one piece of their work:"
+                        + " `results[]`, with fields such as `resultId`, `practiceName`, `outcome`, `summary`,"
+                        + " `problems` and `work.number`");
         documents.put("delivered_feedback.json", "practice feedback Hephaestus delivered to them");
         documents.put("prepared_conversation_feedback.json", "practice feedback queued to raise in this conversation");
         documents.put("practice_profile.json", "their standing in each practice, as their Practice profile shows it");

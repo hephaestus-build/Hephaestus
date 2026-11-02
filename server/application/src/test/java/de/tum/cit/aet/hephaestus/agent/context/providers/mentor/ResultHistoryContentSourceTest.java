@@ -90,6 +90,7 @@ class ResultHistoryContentSourceTest extends BaseUnitTest {
         var withheldRow = rows.get(1);
 
         assertThat(shownRow.path("resultId").asString()).isEqualTo(shownId.toString());
+        assertThat(shownRow.path("practiceName").asString()).isEqualTo("Explains why");
         assertThat(shownRow.path("summary").asString()).isEqualTo("The description omits why.");
         var problem = shownRow.path("problems").get(0);
         assertThat(problem.path("problemId").asString()).isEqualTo(problemId.toString());
@@ -102,6 +103,7 @@ class ResultHistoryContentSourceTest extends BaseUnitTest {
                 .isEqualTo(shownRow.path("problems"));
 
         assertThat(withheldRow.path("resultId").asString()).isEqualTo(withheldId.toString());
+        assertThat(withheldRow.path("practiceName").asString()).isEqualTo("Explains why");
         assertThat(withheldRow.path("wordsUnavailable").asString()).isEqualTo("COPY_AUTHORITY_UNAVAILABLE");
         assertThat(withheldRow.has("summary")).isFalse();
         assertThat(withheldRow.has("problems")).isFalse();
@@ -344,6 +346,7 @@ class ResultHistoryContentSourceTest extends BaseUnitTest {
         when(entry.resultId()).thenReturn(id);
         when(entry.reviewId()).thenReturn(UUID.randomUUID());
         when(entry.practiceSlug()).thenReturn("explains-why");
+        lenient().when(entry.practiceName()).thenReturn("Explains why");
         when(entry.itemId()).thenReturn(item.itemId());
         when(entry.itemKind()).thenReturn(item.kind().value());
         when(entry.itemVersion()).thenReturn(itemVersion);

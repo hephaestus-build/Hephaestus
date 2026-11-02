@@ -159,6 +159,7 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
                 result.getReviewId(),
                 result.getPracticeId(),
                 version.orElseThrow().getPractice().getSlug(),
+                version.orElseThrow().getDefinition().path("name").stringValue(null),
                 version.orElseThrow().getNumber(),
                 result.getItemId(),
                 item.orElseThrow().kind().value(),

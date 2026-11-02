@@ -86,7 +86,8 @@ condition) mean that field is not confirmed.
 
 Runs of Hephaestus's automated practice review about this developer within `coverage`. Each `attempts` entry gives
 `reviewId`, `jobId`, `itemId`, `itemKind`, `attempt`, execution `status`, `processingStatus` and the run times
-`availableAt` (when a run could start; a retry moves it), `startedAt` and `completedAt`. They do not say who asked
+`availableAt` (when a run could start; a retry moves it), `startedAt` and `completedAt`, and `work` (the reviewed
+work's `number`, `title` and `url` as its source names it now; absent when it cannot). They do not say who asked
 for the review or why. These describe a run, not what it observed and not whether feedback reached anyone. `reviewStatus` gives the review's
 status as the screens show it (`QUEUED` while its run waits to start), with `reviewStopReason` where it recorded one; a `COMPLETED` run can belong to a `PARTIAL` review.
 `assignmentCounts` counts that review's practices about this developer on this work: `total`, then `judged`,
@@ -97,7 +98,8 @@ observations.
 ## inputs/context/results_history.json
 
 A bounded recent sample of the observations about this developer. Each entry in `results` names `resultId`,
-`reviewId`, `practiceSlug`, `practiceVersion`, `itemId`, `itemKind`, `itemVersion`, `outcome`, `recordedAt`,
+`reviewId`, `practiceSlug`, `practiceName` (the practice as that version names it), `practiceVersion`, `itemId`,
+`itemKind`, `itemVersion`, `outcome`, `recordedAt`,
 `endedAt` and `endReason` when it ended, `capturedAt` when it is known, `storedWorkVersion`, `activeMarks`, the detail
 `resource`, and `work` (the reviewed work's `number`, `title` and `url` as its source names it now; absent when it
 cannot). Each entry also has `summary`, the observation's one-line summary, and `problems`, each with its `problemId`,
@@ -148,7 +150,7 @@ their current standing.
 
 A bounded sample of authorized feedback records; withdrawn pieces are not listed. `feedbackStates` gives each
 piece's `feedbackId`, `state`, `destination`, `createdAt`, `practiceSlugs` and `resultIds`; a result's detail names
-its review and problems. `deliveredFeedback` gives the confirmed `deliveredAt`, the `destination` and the first 600
+its review and problems. `displayName` in `practice_catalog.json` names the practice of a slug. `deliveredFeedback` gives the confirmed `deliveredAt`, the `destination` and the first 600
 characters of the words (`body`) when those words are available: only these show that feedback reached them. When a
 row's `bodyTruncated` is true, read its `resource` for up to 2,000 characters; a `bodyTruncated` there marks a
 further cut, and `bodyChars` gives the full length. Never quote a cut piece as complete. That file also names the
