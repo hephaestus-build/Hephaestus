@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { retryTransient } from "./lib/github.ts";
 import { output } from "./lib/process.ts";
 import {
 	classify,
@@ -12,7 +13,6 @@ import {
 	parseDeployment,
 	parseReleases,
 	renderDeliveryMetrics,
-	retryTransient,
 	searchCount,
 	versionBranch,
 	type Change,

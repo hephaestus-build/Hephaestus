@@ -4,8 +4,8 @@
  * from the local first-parent history of the default branch.
  */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
-import { setTimeout as delay } from "node:timers/promises";
 
+import { retryTransient } from "./lib/github.ts";
 import { asArray, asRecord, asString, at, isRecord, parseJson, readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 import { median, percentile } from "./lib/statistics.ts";
@@ -573,34 +573,6 @@ export function parseDeployment(
 		outcome: isOutcome(decided?.state) ? decided.state : undefined,
 		finishedAt: decided === undefined ? undefined : time(decided.created_at, "status created_at"),
 	};
-}
-
-/** The waits before each new attempt. GitHub asks for at least a minute after a secondary rate limit. */
-const RETRY_DELAYS_MS = [10_000, 30_000, 60_000];
-
-/** `gh` has no retry of its own. It names the HTTP status, or the rate limit, on stderr. */
-const isTransient = (error: unknown): boolean =>
-	isRecord(error) &&
-	typeof error.stderr === "string" &&
-	/\bHTTP 50[234]\b|secondary rate limit/iu.test(error.stderr);
-
-/** Repeats a request after a transient GitHub failure, a bounded number of times. Any other failure stops at once. */
-export async function retryTransient<T>(
-	request: () => Promise<T>,
-	wait: (milliseconds: number) => Promise<unknown> = delay,
-): Promise<T> {
-	for (const milliseconds of RETRY_DELAYS_MS) {
-		try {
-			return await request();
-		} catch (error) {
-			if (!isTransient(error)) {
-				throw error;
-			}
-			console.warn(`GitHub failed transiently; the next attempt is in ${milliseconds / 1000} s`);
-			await wait(milliseconds);
-		}
-	}
-	return request();
 }
 
 async function api(args: readonly string[]): Promise<unknown> {

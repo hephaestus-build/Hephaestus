@@ -1,9 +1,11 @@
 /** GitHub signs API-created commits; expectedHeadOid rejects a concurrently moved branch. */
+import { createHash } from "node:crypto";
 import { appendFile, readFile } from "node:fs/promises";
-import { parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs } from "node:util";
 
 import { isSet, requiredEnv } from "./lib/env.ts";
-import { asRecord, asString, at, isRecord } from "./lib/json.ts";
+import { GitHubFailureError, isTransientGitHubFailure, retryTransient } from "./lib/github.ts";
+import { asArray, asRecord, asString, at, isRecord } from "./lib/json.ts";
 import { output, type RunOptions } from "./lib/process.ts";
 
 export interface WorkTreeChanges {
@@ -97,10 +99,123 @@ const COMMIT_MUTATION = `mutation ($input: CreateCommitOnBranchInput!) {
   }
 }`;
 
+interface CreatedCommit {
+	readonly oid: string;
+	readonly description: string;
+}
+
+/** A REST read with the commit's token, so that a repeated commit needs no other credential. */
+async function readGitHub(token: string, path: string): Promise<Record<string, unknown>> {
+	const response = await fetch(
+		`${process.env.GITHUB_API_URL ?? "https://api.github.com"}/${path}`,
+		{
+			headers: { authorization: `bearer ${token}`, accept: "application/vnd.github+json" },
+		},
+	);
+	const text = await response.text();
+	if (!response.ok) {
+		throw new GitHubFailureError(
+			`GitHub answered ${response.status} ${response.statusText} for ${path}`,
+			`HTTP ${response.status} ${text}`,
+		);
+	}
+	return asRecord(JSON.parse(text), path);
+}
+
+async function treeFiles(
+	token: string,
+	repository: string,
+	revision: string,
+): Promise<Map<string, string>> {
+	const tree = await readGitHub(token, `repos/${repository}/git/trees/${revision}?recursive=1`);
+	if (tree.truncated !== false) {
+		throw new Error(`The tree of ${revision} is too large to compare`);
+	}
+	return new Map(
+		asArray(tree.tree, "tree entries")
+			.map((value) => asRecord(value, "tree entry"))
+			.filter((entry) => entry.type !== "tree")
+			.map((entry) => [asString(entry.path, "tree path"), asString(entry.sha, "tree sha")]),
+	);
+}
+
+const blobSha = (contents: Buffer): string =>
+	createHash("sha1").update(`blob ${contents.length}\0`).update(contents).digest("hex");
+
+/**
+ * Finds this commit on the branch after an attempt whose answer was lost. Undefined means that the
+ * branch has not moved. A moved branch counts as this commit only when its head has the expected
+ * parent, the headline, exactly the expected files and a verified signature, which a commit that
+ * GitHub made has. Anything else is someone else's commit, so this throws.
+ */
+export async function landedCommit(
+	token: string,
+	input: CommitInput,
+): Promise<CreatedCommit | undefined> {
+	const { repositoryNameWithOwner: repository, branchName: branch } = input.branch;
+	const ref = await readGitHub(token, `repos/${repository}/git/ref/heads/${branch}`);
+	const head = asString(asRecord(ref.object, "ref object").sha, "ref sha");
+	if (head === input.expectedHeadOid) {
+		return undefined;
+	}
+	const commit = await readGitHub(token, `repos/${repository}/git/commits/${head}`);
+	const parents = asArray(commit.parents, "parents").map((parent) =>
+		asString(asRecord(parent, "parent").sha, "parent sha"),
+	);
+	const message = asString(commit.message, "commit message");
+	const expected = await treeFiles(token, repository, input.expectedHeadOid);
+	for (const { path } of input.fileChanges.deletions) {
+		expected.delete(path);
+	}
+	for (const { path, contents } of input.fileChanges.additions) {
+		expected.set(path, blobSha(Buffer.from(contents, "base64")));
+	}
+	if (
+		!isDeepStrictEqual(parents, [input.expectedHeadOid]) ||
+		message.split("\n")[0] !== input.message.headline ||
+		asRecord(commit.verification, "verification").verified !== true ||
+		!isDeepStrictEqual(await treeFiles(token, repository, head), expected)
+	) {
+		throw new Error(`${branch} moved to ${head}, which is not this commit`);
+	}
+	return { oid: head, description: `${head} (verified, found on the branch after a lost answer)` };
+}
+
+/**
+ * Commits once, even when GitHub loses the answer to a commit that it made. expectedHeadOid already
+ * prevents a duplicate: GitHub refuses a second attempt once the first has moved the branch. So each
+ * new attempt first looks for the commit, and returns it instead of reporting that refusal.
+ */
 export async function createCommit(
 	token: string,
 	input: CommitInput,
-): Promise<{ oid: string; description: string }> {
+	wait?: (milliseconds: number) => Promise<unknown>,
+): Promise<CreatedCommit> {
+	let attempted = false;
+	return retryTransient(async () => {
+		const repeating = attempted;
+		attempted = true;
+		const landed = repeating ? await landedCommit(token, input) : undefined;
+		if (landed !== undefined) {
+			return landed;
+		}
+		try {
+			return await postCommit(token, input);
+		} catch (error) {
+			if (!repeating || isTransientGitHubFailure(error)) {
+				throw error;
+			}
+			// The lost attempt can land after the look above, and then GitHub refuses this one.
+			const late = await landedCommit(token, input);
+			if (late === undefined) {
+				throw error;
+			}
+			return late;
+		}
+	}, wait);
+}
+
+async function postCommit(token: string, input: CommitInput): Promise<CreatedCommit> {
 	const response = await fetch(process.env.GITHUB_GRAPHQL_URL ?? "https://api.github.com/graphql", {
 		method: "POST",
 		headers: { authorization: `bearer ${token}`, "content-type": "application/json" },
@@ -108,11 +223,14 @@ export async function createCommit(
 	});
 	const text = await response.text();
 	if (!response.ok) {
-		throw new Error(`GitHub answered ${response.status} ${response.statusText}`);
+		throw new GitHubFailureError(
+			`GitHub answered ${response.status} ${response.statusText}`,
+			`HTTP ${response.status} ${text}`,
+		);
 	}
 	const body = asRecord(JSON.parse(text), "GraphQL response");
 	if (body.errors != null) {
-		throw new Error(`createCommitOnBranch refused the commit: ${text}`);
+		throw new GitHubFailureError(`createCommitOnBranch refused the commit: ${text}`, text);
 	}
 	const commit = asRecord(
 		at(body, ["data", "createCommitOnBranch", "commit"], "response"),

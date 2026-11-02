@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
-import { newestValidated, skipReason, versionPullRequest } from "./maintain-version-pr.ts";
+import {
+	newestValidated,
+	pointBranch,
+	skipReason,
+	versionPullRequest,
+} from "./maintain-version-pr.ts";
 
 const changelog = `# hephaestus
 
@@ -73,3 +81,55 @@ void test("a body above GitHub's limit keeps its header and points to the change
 	assert.match(body, /^Merging this pull request releases `2\.0\.0`/u);
 	assert.match(body, /The notes continue in this pull request's `CHANGELOG\.md`\.\n$/u);
 });
+
+void test(
+	"moving a branch survives a lost answer, and a refusal is not repeated",
+	{ skip: process.platform === "win32" },
+	async (context) => {
+		const directory = mkdtempSync(path.join(tmpdir(), "point-branch-"));
+		const log = path.join(directory, "calls.log");
+		const failures = path.join(directory, "failures");
+		const tool = (name: string, body: string) => {
+			writeFileSync(path.join(directory, name), `#!/bin/sh\n${body}\n`);
+			chmodSync(path.join(directory, name), 0o755);
+		};
+		tool("git", `printf '${"a".repeat(40)}\\trefs/heads/work\\n'`);
+		// Each call uses the next line of `failures` as its error, until the lines run out.
+		tool(
+			"gh",
+			[
+				`echo "$*" >> "${log}"; cat > /dev/null`,
+				`line=$(head -n 1 "${failures}"); tail -n +2 "${failures}" > "${failures}.next"`,
+				`mv "${failures}.next" "${failures}"`,
+				'if [ -n "$line" ]; then echo "$line" >&2; exit 1; fi',
+			].join("\n"),
+		);
+		const originalPath = process.env.PATH;
+		process.env.PATH = `${directory}${path.delimiter}${originalPath ?? ""}`;
+		context.after(() => {
+			process.env.PATH = originalPath;
+			rmSync(directory, { recursive: true, force: true });
+		});
+		const calls = () => readFileSync(log, "utf8").trim().split("\n");
+		const waits: number[] = [];
+		const wait = async (milliseconds: number) => waits.push(milliseconds);
+
+		writeFileSync(failures, "gh: HTTP 502\n");
+		await pointBranch("o/r", "work", "c".repeat(40), wait);
+		assert.deepEqual(waits, [10_000]);
+		const patch = "api --method PATCH repos/o/r/git/refs/heads/work --input -";
+		assert.deepEqual(calls(), [patch, patch]);
+
+		writeFileSync(log, "");
+		writeFileSync(failures, "gh: Validation Failed (HTTP 422)\n");
+		await assert.rejects(pointBranch("o/r", "work", "c".repeat(40), wait));
+		assert.equal(calls().length, 1);
+
+		// A branch that does not exist yet is created.
+		tool("git", "exit 0");
+		writeFileSync(log, "");
+		writeFileSync(failures, "");
+		await pointBranch("o/r", "work", "c".repeat(40), wait);
+		assert.deepEqual(calls(), ["api --method POST repos/o/r/git/refs --input -"]);
+	},
+);

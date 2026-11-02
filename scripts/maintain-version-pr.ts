@@ -8,6 +8,7 @@ import path from "node:path";
 
 import { commitInput, createCommit, stageChanges } from "./commit-via-api.ts";
 import { requiredEnv } from "./lib/env.ts";
+import { retryTransient } from "./lib/github.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
@@ -121,17 +122,25 @@ async function branchHead(branch: string): Promise<string | undefined> {
 	return sha === "" ? undefined : sha;
 }
 
-async function pointBranch(repository: string, branch: string, sha: string): Promise<void> {
-	const exists = (await branchHead(branch)) !== undefined;
-	await (exists
-		? gh(
-				["--method", "PATCH", `repos/${repository}/git/refs/heads/${branch}`, "--input", "-"],
-				JSON.stringify({ sha, force: true }),
-			)
-		: gh(
-				["--method", "POST", `repos/${repository}/git/refs`, "--input", "-"],
-				JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
-			));
+/** Safe to repeat: each attempt reads the branch again, and a forced update to one commit is idempotent. */
+export async function pointBranch(
+	repository: string,
+	branch: string,
+	sha: string,
+	wait?: (milliseconds: number) => Promise<unknown>,
+): Promise<void> {
+	await retryTransient(async () => {
+		const exists = (await branchHead(branch)) !== undefined;
+		await (exists
+			? gh(
+					["--method", "PATCH", `repos/${repository}/git/refs/heads/${branch}`, "--input", "-"],
+					JSON.stringify({ sha, force: true }),
+				)
+			: gh(
+					["--method", "POST", `repos/${repository}/git/refs`, "--input", "-"],
+					JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+				));
+	}, wait);
 }
 
 async function packageVersion(revision: string): Promise<string> {
