@@ -22,8 +22,13 @@ void test(
 		assert.match(reply.text, /\b200\b/u, `leaves out the recorded problem: ${reply.text}`);
 		assert.match(
 			reply.text,
-			/\b(?:running|not finished|hasn't finished|still going)\b/iu,
+			/\b(?:(?:still|is|it's|currently) running|still going|in progress|(?:is not|isn't|has not|hasn't|not) finished)\b/iu,
 			`does not say that the review still runs: ${reply.text}`,
+		);
+		assert.doesNotMatch(
+			reply.text,
+			/\b(?:not|isn't|no longer) (?:\w+ )?running\b|\b(?:review|run|it) (?:has |had )?finished\b/iu,
+			`says that the review no longer runs: ${reply.text}`,
 		);
 		assert.doesNotMatch(
 			reply.text,
