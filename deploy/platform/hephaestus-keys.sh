@@ -137,7 +137,7 @@ add() {
 	# An empty value, for example from a failed openssl, would be kept by every later run.
 	[ -n "$2" ] || die "no value for $1: nothing was changed"
 	case $2 in *'
-'*) die "the value of $1 holds a line break" ;;
+'* | *"$(printf '\r')"*) die "the value of $1 holds a line break" ;;
 	esac
 	printf '%s=%s\n' "$1" "$2" >>"$TEMP/secret.env"
 	added="$added $1"
@@ -148,6 +148,8 @@ supply() {
 	[ -n "$value" ] || die "$2"
 	add "$1" "$value"
 }
+# Random bytes as one line. openssl on Windows ends base64 lines with CRLF, and $(...) strips only the LF.
+random() { openssl rand "$@" | tr -d '\r\n'; }
 
 if [ "$EXTERNAL_DATABASE" = false ]; then
 	database=$(kubectl -n "$NAMESPACE" get pvc -l app.kubernetes.io/component=postgresql -o name)
@@ -156,7 +158,7 @@ if [ "$EXTERNAL_DATABASE" = false ]; then
 		die "the PostgreSQL volume exists, but the Secret $SECRET lacks its database login or an encryption key. A new value would lock the database or lose what it encrypts. Restore the Secret from your backup, and run this again"
 	fi
 	has DATABASE_USERNAME || add DATABASE_USERNAME hephaestus
-	has DATABASE_PASSWORD || add DATABASE_PASSWORD "$(openssl rand -hex 16)"
+	has DATABASE_PASSWORD || add DATABASE_PASSWORD "$(random -hex 16)"
 else
 	has DATABASE_USERNAME || supply DATABASE_USERNAME "--external-database: set DATABASE_USERNAME to the login of your PostgreSQL"
 	has DATABASE_PASSWORD || supply DATABASE_PASSWORD "--external-database: set DATABASE_PASSWORD to the password of that login"
@@ -166,7 +168,7 @@ else
 	fi
 fi
 # "heph" and random hex, or nothing when openssl fails: a bare "heph" would pass the check in add.
-heph_random() { suffix=$(openssl rand -hex 16) && [ -n "$suffix" ] && printf 'heph%s' "$suffix"; }
+heph_random() { suffix=$(random -hex 16) && [ -n "$suffix" ] && printf 'heph%s' "$suffix"; }
 if [ "$EXTERNAL_NATS" = false ]; then
 	has NATS_USERNAME || add NATS_USERNAME "$(heph_random)"
 	has NATS_PASSWORD || add NATS_PASSWORD "$(heph_random)"
@@ -175,13 +177,13 @@ else
 	has NATS_PASSWORD || supply NATS_PASSWORD "--external-nats: set NATS_PASSWORD to the password of that login"
 fi
 # Each key gets its own value (docs/admin/secret-custody.mdx § Generation and rotation).
-has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_ENCRYPTION_KEY "$(openssl rand -hex 16)"
-has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY "$(openssl rand -hex 16)"
-has HEPHAESTUS_AUTH_STATE_COOKIE_KEY || add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(openssl rand -base64 32)"
-has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(openssl rand -hex 32)"
-has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(openssl rand -hex 32)"
+has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_ENCRYPTION_KEY "$(random -hex 16)"
+has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY "$(random -hex 16)"
+has HEPHAESTUS_AUTH_STATE_COOKIE_KEY || add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(random -base64 32)"
+has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(random -hex 32)"
+has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
 if [ "$BACKUPS" = true ]; then
-	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(openssl rand -base64 48 | tr -d '\n')"
+	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(random -base64 48)"
 fi
 
 changed=

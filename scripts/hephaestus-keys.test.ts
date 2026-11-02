@@ -281,6 +281,15 @@ await test(
 		assert.equal(result.secret.NATS_PASSWORD, "broker-password");
 		assert.match(result.secret.HEPHAESTUS_SECURITY_ENCRYPTION_KEY ?? "", /^[0-9a-f]{32}$/u);
 		assert.ok(!result.output.includes("password"));
+
+		// A value copied from a Windows file keeps its CR, which no login contains.
+		const carriage = run({
+			args: ["--external-database", "--new-keys", "--external-nats"],
+			env: { ...login, NATS_PASSWORD: "broker-password\r" },
+		});
+		assert.notEqual(carriage.status, 0);
+		assert.match(carriage.output, /the value of NATS_PASSWORD holds a line break/u);
+		assert.deepEqual(carriage.secret, {});
 	},
 );
 
@@ -501,31 +510,44 @@ await test(
 	},
 );
 
-await test("a jq that ends its lines with CRLF, as on Windows, changes no result", { skip }, () => {
-	const realJq = spawnSync("sh", ["-c", "command -v jq"], { encoding: "utf8" }).stdout.trim();
-	const windowsJq = `#!/bin/sh\n"${realJq}" "$@" | awk '{ printf "%s\\r\\n", $0 }'\n`;
-	const first = run();
-	const second = run({ cluster: { secret: encoded(first.secret) }, tools: { jq: windowsJq } });
-	assert.equal(second.status, 0, second.output);
-	assert.deepEqual(second.secret, first.secret, "a repeat run keeps every key");
-	const folder = keyFolder();
-	try {
-		const file = folder.file("keys.env");
-		const exported = run({
-			cluster: { secret: encoded(first.secret) },
-			args: ["--export-keys", file],
-			tools: { jq: windowsJq },
-		});
-		assert.equal(exported.status, 0, exported.output);
-		assert.ok(!readFileSync(file, "utf8").includes("\r"));
-		const checked = run({
-			cluster: { secret: encoded(first.secret) },
-			args: ["--check-keys", file],
-			tools: { jq: windowsJq },
-		});
-		assert.equal(checked.status, 0, checked.output);
-		assert.doesNotMatch(checked.output, /differs|not in/u);
-	} finally {
-		folder.done();
-	}
-});
+/** A stand-in for a tool that ends each output line with CRLF, as tools on Windows do. */
+function windowsTool(tool: string): string {
+	const real = spawnSync("sh", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
+	return `#!/bin/sh\n"${real}" "$@" | awk '{ printf "%s\\r\\n", $0 }'\n`;
+}
+
+await test(
+	"a jq and an openssl that end their lines with CRLF, as on Windows, change no result",
+	{ skip },
+	() => {
+		const windowsJq = windowsTool("jq");
+		const first = run({ args: ["--backups"], tools: { openssl: windowsTool("openssl") } });
+		assert.equal(first.status, 0, first.output);
+		for (const [key, value] of Object.entries(first.secret)) {
+			assert.ok(!/[\r\n]/u.test(value), `${key} holds no line break`);
+		}
+		const second = run({ cluster: { secret: encoded(first.secret) }, tools: { jq: windowsJq } });
+		assert.equal(second.status, 0, second.output);
+		assert.deepEqual(second.secret, first.secret, "a repeat run keeps every key");
+		const folder = keyFolder();
+		try {
+			const file = folder.file("keys.env");
+			const exported = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--export-keys", file],
+				tools: { jq: windowsJq },
+			});
+			assert.equal(exported.status, 0, exported.output);
+			assert.ok(!readFileSync(file, "utf8").includes("\r"));
+			const checked = run({
+				cluster: { secret: encoded(first.secret) },
+				args: ["--check-keys", file],
+				tools: { jq: windowsJq },
+			});
+			assert.equal(checked.status, 0, checked.output);
+			assert.doesNotMatch(checked.output, /differs|not in/u);
+		} finally {
+			folder.done();
+		}
+	},
+);
