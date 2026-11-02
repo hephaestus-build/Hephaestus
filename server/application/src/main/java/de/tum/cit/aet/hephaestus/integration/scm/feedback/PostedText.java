@@ -37,12 +37,14 @@ public final class PostedText {
     private PostedText() {}
 
     // What a provider links in a run: a name or an e-mail address; an issue, pull request, merge request, epic,
-    // snippet, label, milestone or iteration reference; a web address; link, image or footnote syntax; a commit.
-    // GitHub and GitLab read link syntax again in the rendered text, through any escape, so it is code too.
-    private static final Pattern LINKABLE = Pattern.compile(
-            "@|[#~%][A-Za-z0-9_\"]|[!&$]\\d|GH-\\d|(?i:www\\.|\\*iteration:)"
-                    + "|://|[\\[\\]]"
-                    + "|(?<![A-Za-z0-9_])(?=[0-9A-Fa-f]{0,39}[0-9])(?=[0-9A-Fa-f]{0,39}[A-Fa-f])[0-9A-Fa-f]{7,40}(?![A-Za-z0-9_])");
+    // snippet, label, milestone or iteration reference; a GitLab project path before `>`; a web address; link, image
+    // or footnote syntax; a custom emoji, which renders as an image; a GitLab inline diff mark; a commit, which both
+    // providers find in any 7 to 64 hexadecimal characters. GitHub and GitLab read link syntax and diff marks again
+    // in the rendered text, through any escape, so they are code too.
+    private static final Pattern LINKABLE = Pattern.compile("@|#[A-Za-z0-9_\"]|[~%].|[!&$]\\d|GH-\\d"
+            + "|(?i:www\\.|\\*iteration:)|://|[\\[\\]]|[A-Za-z0-9_./-](?:>|&gt;)|:[A-Za-z0-9_+-]+:"
+            + "|\\{[+-]|[+-]\\}"
+            + "|(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,64}(?![A-Za-z0-9_])");
 
     // `[text](address)` and `[text][label]`, whose text may hold spaces, are one code span.
     private static final Pattern LINK_SYNTAX =
@@ -50,10 +52,10 @@ public final class PostedText {
 
     // Punctuation around a run that stays outside its code span.
     private static final String OPENING = "(\"'";
-    private static final String CLOSING = ".,;:!?)'\"";
+    private static final String CLOSING = ".,;!?)'\"";
 
-    // Emphasis, code, escapes, strikethrough, tables, GitLab math and diff marks. Other punctuation opens nothing
-    // inside a line.
+    // Emphasis, code, escapes, strikethrough, tables and GitLab math. GitLab's diff marks survive an escaped brace, so
+    // a run with one is code. Other punctuation opens nothing inside a line.
     private static final String ALWAYS_ESCAPED = "\\`*_~[]|${}";
 
     // The parser reads this in place of `&`, so it decodes no character reference.
@@ -68,10 +70,11 @@ public final class PostedText {
     // GitLab's quick action reader drops a lone carriage return, so every line end is one before anything else.
     private static final Pattern LINE_END = Pattern.compile("\\r\\n?|[\\u2028\\u2029\\u0085]");
 
-    // Direction controls, zero-width characters and tag characters make the text read differently from its bytes.
-    // U+FFFF is no character; the parser reads it in place of `&`.
+    // Direction controls, zero-width characters and tag characters make the text read differently from its bytes. Both
+    // providers drop a byte order mark that starts the text, so the line after it would open a block. U+FFFF is no
+    // character; the parser reads it in place of `&`.
     private static final Pattern INVISIBLE = Pattern.compile(
-            "[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFFFF\\x{E0000}-\\x{E007F}]");
+            "[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFFF\\x{E0000}-\\x{E007F}]");
 
     // Each line is read alone and with no block parser, so only its inline Markdown has a meaning.
     private static final Parser INLINE = Parser.builder()
@@ -253,10 +256,12 @@ public final class PostedText {
             } else {
                 end = i;
                 while (end < text.length() && !Character.isWhitespace(text.charAt(end))) end++;
+                // The whole run decides, so `50%.` counts although its code span ends before the dot.
+                boolean linkable = LINKABLE.matcher(text.substring(i, end)).find();
                 while (from < end && OPENING.indexOf(text.charAt(from)) >= 0) from++;
                 to = end;
                 while (to > from && CLOSING.indexOf(text.charAt(to - 1)) >= 0) to--;
-                if (!LINKABLE.matcher(text.substring(from, to)).find()) {
+                if (!linkable) {
                     from = end;
                     to = end;
                 }

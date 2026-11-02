@@ -7,9 +7,12 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -62,36 +65,39 @@ class PostedTextTest extends BaseUnitTest {
 
     // The bot's own header links the reviewed file.
     private static final Pattern OWN_LINK = Pattern.compile(
-            "<a [^>]*href=\"https://github\\.com/HephaestusTest/practice-validation/blob/[^\"]*\"[^>]*>");
+            "<a [^>]*href=\"https://github\\.com/HephaestusTest/practice-validation/blob/[^\"]*\"[^>]*>[^<]*</a>");
+
+    private static final Pattern TAG = Pattern.compile("<(/?)([A-Za-z][A-Za-z0-9-]*)([^>]*)>");
+
+    // Paragraphs, line breaks, code, emphasis and Unicode emoji.
+    private static final Set<String> ALLOWED = Set.of("p", "br", "code", "em", "strong", "g-emoji", "gl-emoji");
+
+    // GitLab marks an escaped character, and shows a colour chip beside a colour in code.
+    private static final Pattern ALLOWED_SPAN = Pattern.compile(
+            "\\s+data-escaped-char=\"\"(?:\\s+data-sourcepos=\"[^\"]*\")?|\\s+class=\"gfm-color_chip\"|\\s+style=\"background-color: [^\";]*;?\"");
 
     /**
-     * What a rendered comment must not hold: a link, a mention, a reference, an image, a block that the text did not
-     * ask for, a script, an event attribute or hidden markup.
+     * A rendered comment holds only paragraphs, line breaks, code, emphasis, Unicode emoji and GitLab's escaped
+     * characters and colour chips: no link, mention, reference, image, block, math, inline diff or hidden markup.
      */
     static void assertQuiet(String html) {
         String visible =
                 OWN_LINK.matcher(OWN_MARKER.matcher(html).replaceAll("")).replaceAll("");
         assertThat(visible)
-                .doesNotContainPattern("<a[\\s>]")
-                .doesNotContain("commit-link")
-                .doesNotContain("user-mention")
-                .doesNotContain("team-mention")
-                .doesNotContain("data-reference-type=")
-                .doesNotContain("issue-link")
-                .doesNotContainPattern("<h[1-6][\\s>]")
-                .doesNotContainPattern("<(?:ul|ol|li)[\\s>]")
-                .doesNotContainPattern("<hr[\\s/>]")
-                .doesNotContain("<input")
-                .doesNotContain("<img")
-                .doesNotContain("<table")
-                .doesNotContain("<blockquote")
-                .doesNotContain("<script")
                 .doesNotContainPattern("<[a-z][^>]*\\son[a-z]+=")
                 .doesNotContain("<!--")
                 .doesNotContain("<?")
                 .doesNotContain("<![CDATA[")
-                .doesNotContain("<!DOCTYPE")
-                .doesNotContainPattern("(?i)href=\"\\s*(?:javascript|data|vbscript):");
+                .doesNotContain("<!DOCTYPE");
+        Matcher tag = TAG.matcher(visible);
+        while (tag.find()) {
+            String name = tag.group(2).toLowerCase(Locale.ROOT);
+            boolean allowed = ALLOWED.contains(name)
+                    || (name.equals("span")
+                            && (!tag.group(1).isEmpty()
+                                    || ALLOWED_SPAN.matcher(tag.group(3)).matches()));
+            assertThat(allowed).as("%s in %s", tag.group(), visible).isTrue();
+        }
     }
 
     static boolean live(String html) {
@@ -136,7 +142,7 @@ class PostedTextTest extends BaseUnitTest {
                 "key",
                 "<!-- hephaestus-feedback-copy:1 -->");
         assertThat(PostedText.summary(content))
-                .isEqualTo("Ask `@alice` &lt;b&gt;now&lt;/b&gt;\n\n<!-- hephaestus-feedback-copy:1 -->");
+                .isEqualTo("Ask `@alice` `<b>now</b>`\n\n<!-- hephaestus-feedback-copy:1 -->");
     }
 
     @Test
@@ -197,7 +203,29 @@ class PostedTextTest extends BaseUnitTest {
                 .isEqualTo("See `www.@alice`, `alice@example.com` and `11d4b03dff9c29d6f211734ee063fbb8696ceb83`.");
         assertThat(PostedText.of("[text](relative), [some text](//evil.example/) and [x][1]"))
                 .isEqualTo("`[text](relative)`, `[some text](//evil.example/)` and `[x][1]`");
-        assertThat(PostedText.of("a deadbeef, 1234567 and decade")).isEqualTo("a deadbeef, 1234567 and decade");
+        assertThat(PostedText.of("a deadbeef, 1234567 and decade")).isEqualTo("a `deadbeef`, `1234567` and decade");
+    }
+
+    @Test
+    void shouldPostEveryCommitLikeRunAsCodeWhateverItsDigitsAndLetters() {
+        assertThat(PostedText.of("Build 2036564 broke it; bdcfdcf and 20365645 too."))
+                .isEqualTo("Build `2036564` broke it; `bdcfdcf` and `20365645` too.");
+        String sha256 = "ab".repeat(32);
+        assertThat(PostedText.of("Image " + sha256 + ".")).isEqualTo("Image `" + sha256 + "`.");
+    }
+
+    @Test
+    void shouldPostAProjectPathEmojiDiffMarksAndMilestonesAsCode() {
+        assertThat(PostedText.of("see group/project> first")).isEqualTo("see `group/project>` first");
+        assertThat(PostedText.of(":shipit: and :octocat:")).isEqualTo("`:shipit:` and `:octocat:`");
+        assertThat(PostedText.of("{+ added +} and {- removed -}")).isEqualTo("`{+` added `+}` and `{-` removed `-}`");
+        assertThat(PostedText.of("%-rc1, %.x and 50%.")).isEqualTo("`%-rc1`, `%.x` and `50%`.");
+    }
+
+    @Test
+    void shouldKeepALineOutOfBlocksWhenTheTextStartsWithAByteOrderMark() {
+        assertThat(PostedText.of("\uFEFF# Heading")).isEqualTo("\\# Heading");
+        assertThat(PostedText.of("\uFEFF1. one")).isEqualTo("1\\. one");
     }
 
     @Test
