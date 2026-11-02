@@ -48,6 +48,19 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(args) + "\\n");
 const save = () => fs.writeFileSync(process.env.FAKE_STATE, JSON.stringify(state));
 const has = (word) => args.includes(word);
+// A restart only needs to be logged: the tests read the log. A rollout status fails for a Deployment
+// that the state names as unready. Each role has one Deployment unless the state names others.
+if (has("rollout")) {
+	const unready = (state.unready ?? []).some((name) => args.includes("deployment.apps/hephaestus-" + name));
+	process.exit(has("status") && unready ? 1 : 0);
+}
+if (has("deployment")) {
+	const role = /component=(\\w+)/.exec(args.join(" "))[1];
+	for (const name of (state.deployments ?? { server: ["server"], webhook: ["webhook"] })[role] ?? []) {
+		console.log("deployment.apps/hephaestus-" + name);
+	}
+	process.exit(0);
+}
 const b64 = (value) => Buffer.from(value).toString("base64");
 if (has("pvc")) {
 	if (state.volume) console.log("persistentvolumeclaim/data-hephaestus-postgresql-0");
@@ -74,6 +87,10 @@ if (has("pvc")) {
 interface Cluster {
 	secret?: Record<string, string>;
 	volume?: boolean;
+	/** The Deployment names per role; one per role when absent. */
+	deployments?: Record<string, string[]>;
+	/** The Deployments whose rollout does not finish. */
+	unready?: string[];
 }
 
 interface Run {
@@ -576,3 +593,134 @@ await test(
 		}
 	},
 );
+
+/** A Secret without its routing keys, to prove that a routing rotation changed nothing else. */
+const withoutRouting = (secret: Record<string, string>) =>
+	Object.fromEntries(Object.entries(secret).filter(([key]) => !key.startsWith("WEBHOOK_ROUTING")));
+
+const restarts = (argv: string) =>
+	argv
+		.split("\n")
+		.filter((line) => line.includes('"rollout"') && line.includes('"restart"'))
+		.map((line) => /deployment\.apps\/hephaestus-(?<role>\w+)/u.exec(line)?.groups?.role ?? "");
+
+/** Each rollout command in order, as "restart webhook" or "status webhook". */
+const rollouts = (argv: string) =>
+	argv
+		.split("\n")
+		.map(
+			(line) =>
+				/"rollout","(?<verb>\w+)","deployment\.apps\/hephaestus-(?<role>\w+)"/u.exec(line)?.groups,
+		)
+		.filter((groups) => groups !== undefined)
+		.map((groups) => `${groups.verb ?? ""} ${groups.role ?? ""}`);
+
+await test(
+	"--rotate replaces the state-cookie key alone, and restarts the server",
+	{ skip },
+	() => {
+		const first = run();
+		const result = run({
+			cluster: { secret: encoded(first.secret) },
+			args: ["--rotate", "HEPHAESTUS_AUTH_STATE_COOKIE_KEY"],
+			tools: { openssl: windowsTool("openssl") },
+		});
+		assert.equal(result.status, 0, result.output);
+		assert.match(result.secret.HEPHAESTUS_AUTH_STATE_COOKIE_KEY ?? "", /^[A-Za-z0-9+/]{43}=$/u);
+		assert.notEqual(
+			result.secret.HEPHAESTUS_AUTH_STATE_COOKIE_KEY,
+			first.secret.HEPHAESTUS_AUTH_STATE_COOKIE_KEY,
+		);
+		const { HEPHAESTUS_AUTH_STATE_COOKIE_KEY: _new, ...rest } = result.secret;
+		const { HEPHAESTUS_AUTH_STATE_COOKIE_KEY: _old, ...before } = first.secret;
+		assert.deepEqual(rest, before, "no other key changed");
+		assert.deepEqual(restarts(result.argv), ["server"]);
+		assert.ok(!result.output.includes(result.secret.HEPHAESTUS_AUTH_STATE_COOKIE_KEY ?? "-"));
+	},
+);
+
+await test(
+	"--rotate keeps the routing secret as the previous one, and restarts both roles that read it",
+	{ skip },
+	() => {
+		const first = run();
+		const result = run({
+			cluster: { secret: encoded(first.secret) },
+			args: ["--rotate", "WEBHOOK_ROUTING_SECRET"],
+		});
+		assert.equal(result.status, 0, result.output);
+		assert.equal(
+			result.secret.WEBHOOK_ROUTING_PREVIOUS_SECRET,
+			first.secret.WEBHOOK_ROUTING_SECRET,
+		);
+		assert.match(result.secret.WEBHOOK_ROUTING_SECRET ?? "", /^[0-9a-f]{64}$/u);
+		assert.notEqual(result.secret.WEBHOOK_ROUTING_SECRET, first.secret.WEBHOOK_ROUTING_SECRET);
+		assert.deepEqual(
+			rollouts(result.argv),
+			["restart webhook", "status webhook", "restart server", "status server"],
+			"the server restarts only once the webhook pods hold both values",
+		);
+		assert.deepEqual(
+			withoutRouting(result.secret),
+			withoutRouting(first.secret),
+			"no other key changed",
+		);
+		for (const value of [
+			result.secret.WEBHOOK_ROUTING_SECRET,
+			first.secret.WEBHOOK_ROUTING_SECRET,
+		]) {
+			assert.ok(!result.output.includes(value ?? "-"), "the output holds no value");
+			assert.ok(!result.argv.includes(value ?? "-"), "no kubectl argument holds a value");
+		}
+
+		// A second rotation would drop the previous value, so it is refused and changes nothing.
+		const again = run({
+			cluster: { secret: encoded(result.secret) },
+			args: ["--rotate", "WEBHOOK_ROUTING_SECRET"],
+		});
+		assert.notEqual(again.status, 0);
+		assert.match(again.output, /retire it first/u);
+		assert.deepEqual(again.secret, result.secret);
+		assert.deepEqual(restarts(again.argv), []);
+
+		// Webhook pods that never become ready keep the server on the old value, and the run says so.
+		const stuck = run({
+			cluster: { secret: encoded(first.secret), unready: ["webhook"] },
+			args: ["--rotate", "WEBHOOK_ROUTING_SECRET"],
+		});
+		assert.notEqual(stuck.status, 0);
+		assert.deepEqual(restarts(stuck.argv), ["webhook"], "the server does not restart");
+		assert.match(stuck.output, /hephaestus-webhook restarted, but it is not ready/u);
+		assert.match(stuck.output, /did not restart yet: deployment\.apps\/hephaestus-server\./u);
+	},
+);
+
+await test("--rotate refuses every other key, a missing Secret, and a mixed run", { skip }, () => {
+	const first = run();
+	for (const key of ["HEPHAESTUS_SECURITY_ENCRYPTION_KEY", "DATABASE_PASSWORD", "WEBHOOK_SECRET"]) {
+		const refused = run({ cluster: { secret: encoded(first.secret) }, args: ["--rotate", key] });
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.output, /Rotate a value section of Secret custody/u);
+		assert.deepEqual(refused.secret, first.secret);
+	}
+	const missing = run({ args: ["--rotate", "HEPHAESTUS_AUTH_STATE_COOKIE_KEY"] });
+	assert.notEqual(missing.status, 0);
+	assert.deepEqual(missing.secret, {});
+	const mixed = run({ args: ["--rotate", "HEPHAESTUS_AUTH_STATE_COOKIE_KEY", "--backups"] });
+	assert.notEqual(mixed.status, 0);
+	assert.match(mixed.output, /each run alone/u);
+});
+
+await test("--rotate changes nothing unless each role has exactly one Deployment", { skip }, () => {
+	const first = run();
+	for (const deployments of [{ server: [] }, { server: ["one", "two"] }]) {
+		const result = run({
+			cluster: { secret: encoded(first.secret), deployments },
+			args: ["--rotate", "HEPHAESTUS_AUTH_STATE_COOKIE_KEY"],
+		});
+		assert.notEqual(result.status, 0);
+		assert.match(result.output, /exactly one server Deployment/u);
+		assert.deepEqual(result.secret, first.secret);
+		assert.deepEqual(restarts(result.argv), []);
+	}
+});
