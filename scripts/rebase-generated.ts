@@ -10,7 +10,8 @@ const generated = (file: string) =>
 	file === "server/openapi.yaml" ||
 	file.startsWith("webapp/src/api/") ||
 	file.startsWith("extension/src/api/") ||
-	file === "docs/admin/configuration-reference.mdx";
+	file === "docs/admin/configuration-reference.mdx" ||
+	file.startsWith("docs/admin/_configuration-reference/");
 
 export interface PullRequest {
 	head: string;

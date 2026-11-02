@@ -7,15 +7,12 @@
  * without a build. Whether the page matches the metadata of the built JAR is the generator's own
  * drift check in CI.
  */
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
 import {
 	descriptionProblems,
 	readPage,
 	readSources,
+	readReference,
 	REFERENCE_PAGE,
-	REPO_ROOT,
 	requiredVariables,
 } from "./lib/configuration-reference.ts";
 
@@ -53,7 +50,7 @@ function report(title: string, variables: readonly string[], fix: string): void 
 }
 
 if (import.meta.main) {
-	const page = await readFile(path.join(REPO_ROOT, REFERENCE_PAGE), "utf8");
+	const page = await readReference();
 	const { missing, stale, undescribed, flawed } = judge(
 		requiredVariables(await readSources()),
 		page,

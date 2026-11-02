@@ -98,7 +98,7 @@ jobs:
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
         run: |
           vp run generate:configuration-reference
-          if ! node scripts/assert-generated-clean.ts docs/admin/configuration-reference.mdx; then
+          if ! node scripts/assert-generated-clean.ts docs/admin/configuration-reference.mdx docs/admin/_configuration-reference; then
             echo "::error::Configuration reference out of sync. Run: vp run generate:configuration-reference"
             exit 1
           fi

@@ -4,15 +4,24 @@ import { test } from "node:test";
 import { judge } from "./check-configuration-reference.ts";
 import {
 	chartRows,
+	environmentGroup,
+	helmGroup,
 	join,
 	Metadata,
 	readPage,
 	readSources,
 	readSpringBindings,
-	renderPage,
+	REFERENCE_PAGE,
+	REFERENCE_PARTS,
+	renderReference,
 	requiredVariables,
+	type Row,
 } from "./lib/configuration-reference.ts";
 import { applicationImage } from "./lib/deploy-topology.ts";
+
+/** The page and its parts as one text, as the check reads them. */
+const reference = (...args: Parameters<typeof renderReference>) =>
+	[...renderReference(...args).values()].join("\n");
 
 await test("schema leaves include release pins absent from source defaults", () => {
 	const rows = chartRows(
@@ -70,7 +79,7 @@ await test("application variables join placeholder and relaxed names to rendered
 			["HEPHAESTUS_POLL", ["hephaestus.poll"], ["worker"]],
 		],
 	);
-	assert.deepEqual(judge(requiredVariables(sources), renderPage(result.rows, [])), {
+	assert.deepEqual(judge(requiredVariables(sources), reference(result.rows, [])), {
 		missing: [],
 		stale: [],
 		undescribed: [],
@@ -114,7 +123,7 @@ await test("the deploy inputs include chart values and no host Compose keys", as
 	assert.ok(required.has("DATABASE_PASSWORD"));
 	assert.ok(!required.has("APP_HOSTNAME"));
 	assert.ok(!required.has("SERVER_MEM"));
-	assert.ok(readPage(renderPage([], sources.values)).some((row) => row.variable === "values.host"));
+	assert.ok(readPage(reference([], sources.values)).some((row) => row.variable === "values.host"));
 });
 
 await test("nested Spring fallbacks retain both bindings and local profiles stay out", () => {
@@ -127,5 +136,67 @@ await test("nested Spring fallbacks retain both bindings and local profiles stay
 	assert.deepEqual(
 		bindings.map((binding) => binding.variable),
 		["URL", "PORT"],
+	);
+});
+
+const row = (variable: string, setting: string): Row => ({
+	variable,
+	settings: [setting],
+	defaultValue: "",
+	services: ["server"],
+	description: "A described setting.",
+});
+
+await test("each group of settings is its own part, so unrelated changes touch different files", () => {
+	assert.equal(helmGroup("config.auth.passkeys.rpId"), "config.auth");
+	assert.equal(helmGroup("config.consumerInactiveThreshold"), "config");
+	assert.equal(helmGroup("postgresql.backup.enabled"), "postgresql");
+	assert.equal(helmGroup("host"), "top-level");
+	assert.equal(environmentGroup(row("HEPHAESTUS_AUTH_X", "hephaestus.auth.x")), "hephaestus.auth");
+
+	const rows = [
+		row("HEPHAESTUS_AUTH_X", "hephaestus.auth.x"),
+		row("SPRING_MAIL_HOST", "spring.mail.host"),
+	];
+	const files = renderReference(rows, []);
+	const auth = [...files.entries()].find(([, text]) => text.includes("HEPHAESTUS_AUTH_X"));
+	const mail = [...files.entries()].find(([, text]) => text.includes("SPRING_MAIL_HOST"));
+	assert.ok(auth && mail);
+	assert.notEqual(auth[0], mail[0], "two groups, two files");
+	assert.ok(auth[0].startsWith(`${REFERENCE_PARTS}/`));
+	// The same rows give the same files, so an unchanged setting never shows as a change.
+	assert.deepEqual([...renderReference(rows, []).entries()], [...files.entries()]);
+});
+
+await test("the page keeps its anchors, imports every part, and every row reads back", async () => {
+	const sources = await readSources();
+	const rows = [
+		row("HEPHAESTUS_AUTH_X", "hephaestus.auth.x"),
+		row("SPRING_MAIL_HOST", "spring.mail.host"),
+	];
+	const files = renderReference(rows, sources.values);
+	const page = files.get(REFERENCE_PAGE) ?? "";
+	// The page had these two anchors before the split, and links may name them.
+	assert.match(page, /^## Helm values$/mu);
+	assert.match(page, /^## Application environment$/mu);
+	assert.match(page, /^<HelmValues \/>$/mu);
+	assert.match(page, /^<ApplicationEnvironment \/>$/mu);
+	const indexes = [`${REFERENCE_PARTS}/helm.mdx`, `${REFERENCE_PARTS}/environment.mdx`]
+		.map((file) => files.get(file) ?? "")
+		.join("\n");
+	for (const file of files.keys()) {
+		const name = file.slice(REFERENCE_PARTS.length + 1, -".mdx".length);
+		if (file !== REFERENCE_PAGE && name !== "helm" && name !== "environment") {
+			assert.ok(indexes.includes(`./${name}.mdx`), `an index imports ${name}`);
+		}
+	}
+	// A new group changes an index, never the page.
+	const more = renderReference([...rows, row("NATS_SERVER", "nats.server")], sources.values);
+	assert.equal(more.get(REFERENCE_PAGE), page);
+	const read = readPage(reference(rows, sources.values)).map((entry) => entry.variable);
+	assert.ok(read.includes("HEPHAESTUS_AUTH_X") && read.includes("SPRING_MAIL_HOST"));
+	assert.equal(
+		read.filter((variable) => variable.startsWith("values.")).length,
+		sources.values.length,
 	);
 });

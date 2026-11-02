@@ -1,0 +1,14 @@
+### `server`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `server.databasePool.maximumPoolSize` | integer | `20` | yes | `minimum: 1. maximum: 400` |
+| `server.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
+| `server.gitCache.sizeLimit` | string | `"20Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.replicas` | integer | `1` | yes | `minimum: 0. maximum: 1` |
+| `server.resources.limits.cpu` | string | `"4"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.limits.ephemeral-storage` | string | `"22Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.limits.memory` | string | `"2560Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `server.resources.requests.memory` | string | `"2560Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |

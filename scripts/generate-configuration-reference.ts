@@ -1,7 +1,7 @@
 // Write docs/admin/configuration-reference.mdx from the sources and the configuration metadata of the
 // executable JAR: the CI artifact when HEPHAESTUS_APPLICATION_JAR names it, a local build otherwise.
 // The JAR carries the metadata of the application and of every library, Spring Boot's included.
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -14,7 +14,8 @@ import {
 	type MetadataProperty,
 	readSources,
 	REFERENCE_PAGE,
-	renderPage,
+	REFERENCE_PARTS,
+	renderReference,
 	REPO_ROOT,
 } from "./lib/configuration-reference.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
@@ -93,9 +94,19 @@ if (unbound.length > 0) {
 	console.error("Rename each to the variable its setting reads, or remove it.\n");
 }
 
-const page = path.join(REPO_ROOT, REFERENCE_PAGE);
-await writeFile(page, renderPage(rows, sources.values));
-console.log(`Wrote ${REFERENCE_PAGE}: ${rows.length} variables.`);
+const files = renderReference(rows, sources.values);
+const parts = path.join(REPO_ROOT, REFERENCE_PARTS);
+await mkdir(parts, { recursive: true });
+// A group that no setting names any more loses its part.
+for (const name of await readdir(parts)) {
+	if (!files.has(`${REFERENCE_PARTS}/${name}`)) {
+		await rm(path.join(parts, name));
+	}
+}
+for (const [file, text] of files) {
+	await writeFile(path.join(REPO_ROOT, file), text);
+}
+console.log(`Wrote ${REFERENCE_PAGE} and ${files.size - 1} parts: ${rows.length} variables.`);
 const undescribed = rows.filter((row) => row.description === "").map((row) => row.variable);
 if (undescribed.length > 0) {
 	console.error(`${undescribed.length} rows have no description: ${undescribed.join(", ")}`);

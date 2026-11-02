@@ -1,0 +1,7 @@
+### `hephaestus.agent`
+
+| Variable | Setting | Application default | Containers | Description |
+| --- | --- | --- | --- | --- |
+| `AGENT_ENABLED` | `hephaestus.agent.enabled` | `default: false` | `server`, `worker` | Turns on agent jobs, which run practice reviews. The server role submits jobs and the worker role runs them, so set it on both. |
+| `HEPHAESTUS_AGENT_IMAGE_REFERENCE` | `hephaestus.agent.image.reference` |  | `server`, `webhook`, `worker` | Image reference used by Pi practice sandboxes and the Hephaestus container. Production must be digest-pinned (registry/path@sha256:\<64 lowercase hex\>). |
+| `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` | `hephaestus.agent.image.require-digest` |  | `server`, `webhook`, `worker` | Refuses startup unless the agent image reference is pinned by digest. |

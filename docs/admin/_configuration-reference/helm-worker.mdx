@@ -1,0 +1,28 @@
+### `worker`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `worker.conversationTurns` | string or integer | `8` | yes | HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this. |
+| `worker.databasePool.maximumPoolSize` | integer | `32` | yes | `minimum: 1. maximum: 400` |
+| `worker.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
+| `worker.drainTimeoutSeconds` | integer | `1800` | yes | `minimum: 0. maximum: 86400` |
+| `worker.enabled` | boolean | `false` | yes | — |
+| `worker.gitCache.sizeLimit` | string | `"50Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.replicas` | integer | `2` | yes | `minimum: 0. maximum: 16` |
+| `worker.resources.limits.cpu` | string | `"4"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.limits.ephemeral-storage` | string | `"52Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.limits.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.resources.requests.memory` | string | `"2Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `worker.reviews` | integer | `5` | yes | `minimum: 1. maximum: 32` |
+| `worker.rolloutStrategy` | string | `"RollingUpdate"` | yes | `enum: ["RollingUpdate","Recreate"]` |
+| `worker.runtime.nodeSelector` | object | `{}` | yes | `additionalProperties: {"type":"string","maxLength":63}` |
+| `worker.runtime.podOverhead.cpuMillis` | integer | `0` | yes | `minimum: 0` |
+| `worker.runtime.podOverhead.memoryMi` | integer | `0` | yes | `minimum: 0` |
+| `worker.runtime.probeInterval` | string | `"15m"` | yes | `pattern: "^[1-9][0-9]*(?:m\|h)$"` |
+| `worker.runtime.runtimeClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"` |
+| `worker.runtime.seccompProfile` | string | `""` | yes | `pattern: "^(?:[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*)?$"` |
+| `worker.runtime.tolerations` | array | `[]` | yes | — |
+| `worker.sandbox.namespace` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
+| `worker.sandbox.quota.enabled` | boolean | `true` | yes | — |

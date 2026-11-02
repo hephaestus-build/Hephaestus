@@ -1,0 +1,15 @@
+### `config`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `config.browserFaultReports` | boolean | `false` | yes | — |
+| `config.consumerInactiveThreshold` | string | `"30d"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
+| `config.durableConsumerName` | string | `"hephaestus"` | yes | `pattern: "^[A-Za-z0-9_-]{1,64}$"` |
+| `config.gitCheckoutEnabled` | boolean | `true` | yes | — |
+| `config.llmDisplayCurrency` | string | `""` | yes | `enum: ["","EUR"]` |
+| `config.llmPrivateHosts` | array | `[]` | yes | `maxItems: 32` |
+| `config.llmPrivateHostsAllowHttp` | boolean | `false` | yes | — |
+| `config.llmUsageRetention` | string | `"P400D"` | yes | `pattern: "^P[0-9]+D$"` |
+| `config.pageExperienceMetrics` | boolean | `false` | yes | — |
+| `config.releaseCheckEnabled` | boolean | `true` | yes | — |
+| `config.researchOrganization` | string | `""` | yes | — |

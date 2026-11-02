@@ -336,6 +336,7 @@ jobs:
               - 'deploy/chart/**'
               - 'scripts/lib/deploy-topology.ts'
               - 'docs/admin/configuration-reference.mdx'
+              - 'docs/admin/_configuration-reference/**'
               - 'scripts/generate-configuration-reference.ts'
               - 'scripts/lib/configuration-reference.ts'
               - 'scripts/lib/application-jar.ts'
