@@ -119,6 +119,7 @@ export type SessionBehaviour =
 	| "unreachable";
 
 export interface StagedPractice {
+	itemKind?: string | undefined;
 	slug: string;
 	program?: string;
 	inputs?: boolean;
@@ -217,12 +218,20 @@ export function stagePractices(cwd: string, practices: readonly StagedPractice[]
 			),
 		),
 	);
-	for (const { slug, program, inputs = true } of practices) {
+	for (const { slug, program, inputs = true, itemKind = GOLDEN_INPUTS.kind } of practices) {
 		write(`catalog/practices/${slug}.md`, AUTHENTICATION_PRACTICE);
 		if (inputs) {
 			write(
 				`${PRACTICES_DIR}/${slug}.inputs.json`,
-				JSON.stringify({ ...GOLDEN_INPUTS, practice: { ...GOLDEN_INPUTS.practice, slug } }),
+				JSON.stringify({
+					...GOLDEN_INPUTS,
+					kind: itemKind,
+					scope: {
+						...GOLDEN_INPUTS.scope,
+						item: { ...GOLDEN_INPUTS.scope.item, kind: itemKind },
+					},
+					practice: { ...GOLDEN_INPUTS.practice, slug },
+				}),
 			);
 		}
 		if (program !== undefined) {

@@ -59,9 +59,9 @@ const inapplicable = {
 	},
 };
 
-async function replay(sent: unknown, corrected?: unknown) {
+async function replay(sent: unknown, corrected?: unknown, itemKind?: string) {
 	const cwd = mkdtempSync(nodePath.join(tmpdir(), "pi-schema-replay-"));
-	stagePractices(cwd, [{ slug: "test-practice" }]);
+	stagePractices(cwd, [{ slug: "test-practice", itemKind }]);
 	try {
 		const exit = await runRunner(
 			cwd,
@@ -278,3 +278,30 @@ for (const [name, sent, corrected, error] of [
 		assert.match(replies[1] ?? "", /stored/u);
 	});
 }
+
+void test("submit_result explains a state basis on an issue, then stores the duty basis", async () => {
+	const replies = await replay(
+		{
+			...negative,
+			problems: [{ ...problem, basis: { type: "state", explanation: "It is present." } }],
+		},
+		{
+			...negative,
+			problems: [
+				{
+					...problem,
+					basis: {
+						type: "duty",
+						criterionQuote: "Added authentication calls use checked()",
+						event: 0,
+						explanation: "The criteria require this.",
+					},
+				},
+			],
+		},
+		"scm.issue",
+	);
+	assert.equal(replies.length, 2);
+	assert.match(replies[0] ?? "", /state_basis_not_allowed.*duty/iu);
+	assert.match(replies[1] ?? "", /stored/u);
+});
