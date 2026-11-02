@@ -118,7 +118,7 @@ After the reader opens or closes it, it stays in that state until the reader cha
 | A mascot or a narrator | Microsoft turned off its Office assistant by default in 2001 ([Microsoft](http://web.archive.org/web/20250401114434/https://news.microsoft.com/2001/04/11/farewell-clippy-whats-happening-to-the-infamous-office-assistant-in-office-xp/)). An assistant must be easy to call and easy to dismiss ([Amershi et al., CHI 2019](https://www.microsoft.com/en-us/research/publication/guidelines-for-human-ai-interaction/)). |
 | A beacon, a hotspot, or motion that loops to get attention | It pulls attention from the task. This ban is stricter than [WCAG 2.2.2](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html), which also allows a control to stop the motion. |
 | A "seen" flag in browser storage that decides whether guidance appears | The guidance comes back on each device. Use state, or the server. |
-| A tour library, or a spotlight over the live page | A spotlight needs a positioning engine, a cutout, and a change to the drawers so that they stay usable under it. A target that an engine finds by a selector or by text needs its own tests to stay correct. It also needs a populated page, which a new person lacks. Some libraries also need an AGPL-3.0 or a paid license, such as [Shepherd.js](https://github.com/shipshapecode/shepherd) and [Intro.js](https://introjs.com/docs/getting-started/license). |
+| A tour library, or a spotlight over the live page | A spotlight needs a positioning engine and a cutout. The drawers also need a change to stay usable under it. A target that an engine finds by a selector or by text needs its own tests to stay correct. A spotlight also needs a populated page, which a new person lacks. Some libraries need an AGPL-3.0 or a paid license, such as [Shepherd.js](https://github.com/shipshapecode/shepherd) and [Intro.js](https://introjs.com/docs/getting-started/license). |
 | A "What's new" dialog or a welcome dialog | The release notes own changes. A welcome dialog interrupts on load. |
 
 ## The guided tour
@@ -128,10 +128,14 @@ The page explains itself, but one page cannot show the chain from work to feedba
 Decide each of the points below from what the person needs at that moment.
 The research gives a direction for each point, not a limit.
 
-- **Length follows the questions.** Each chapter answers one question that a person has at a known moment, such as "How does my work become feedback?".
-  Completion falls as tours get longer, and a tour that a person starts completes more often than one that starts by itself ([Chameleon](https://www.chameleon.io/blog/mastering-product-tours), [Produktly](https://produktly.com/research/saas-onboarding-benchmarks-2026), vendor data, so only the direction holds).
+- **Length follows the questions.** Each chapter answers one question that a person has at a known moment.
+  An example is "How does my work become feedback?".
+  Fewer people finish a longer tour.
+  More people finish a tour that they start than one that starts by itself.
+  These sources are vendor data, so only the direction holds: [Chameleon](https://www.chameleon.io/blog/mastering-product-tours) and [Produktly](https://produktly.com/research/saas-onboarding-benchmarks-2026).
   Thus, the person chooses a chapter and can leave and continue, and a chapter is as long as its answer.
-- **The start follows the moment.** A person starts the tour, or accepts an offer that the page derives from state, such as the first-run state or a first feedback card.
+- **The start follows the moment.** A person starts the tour, or accepts an offer that the page derives from state.
+  The first-run state and a first feedback card make such an offer.
   An offer that follows state ends by itself, so it needs no dismissal.
   The tour does not open by itself. The first visit already follows the terms, and perhaps the AI choice.
   If the offers prove too quiet, change them there.
@@ -149,8 +153,10 @@ The research gives a direction for each point, not a limit.
 
 These parts are firm, because they are not matters of taste:
 
-- A complete keyboard path with no trap ([WCAG 2.1.2](https://www.w3.org/WAI/WCAG22/Understanding/no-keyboard-trap.html)), and focus that stays visible ([WCAG 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)).
-- Words that carry what each step teaches, announced as the step changes ([WCAG 4.1.3](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)). A picture is out of reach of a screen reader.
+- A complete keyboard path with no trap ([WCAG 2.1.2](https://www.w3.org/WAI/WCAG22/Understanding/no-keyboard-trap.html)).
+- Focus that stays visible ([WCAG 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)).
+- Words that carry what each step teaches, because a screen reader cannot reach a picture.
+- An announcement when the step changes ([WCAG 4.1.3](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)).
 - Reduced motion: every scene shows its final state from the start.
 - Lazy loading: the tour adds nothing to the entry chunk.
 
