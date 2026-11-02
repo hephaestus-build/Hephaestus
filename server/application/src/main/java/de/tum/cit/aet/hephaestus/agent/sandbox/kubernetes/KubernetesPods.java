@@ -190,7 +190,7 @@ public class KubernetesPods {
             1024 * MIB,
             SandboxLayout.SCRATCH_BYTES,
             ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
-            100);
+            50);
 
     /** The Heph host, in the same volumes as a review. It is idle between turns, so it requests 50m of its one CPU. */
     static final Size HOST = new Size(

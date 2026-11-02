@@ -585,7 +585,7 @@
 				},
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
-				"reviews": { "type": "integer", "minimum": 1, "maximum": 32 },
+				"reviews": { "type": "integer", "minimum": 1, "maximum": 64 },
 				"conversationTurns": {
 					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the conversation turns that one worker runs at once. The server's HEPHAESTUS_MENTOR_TURN_CAPACITY is replicas times this.",
 					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
