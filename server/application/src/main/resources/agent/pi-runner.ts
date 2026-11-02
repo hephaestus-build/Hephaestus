@@ -356,6 +356,12 @@ function validateDomainBasis(
 				`state_basis_not_allowed: problems.${index}.basis.type: an ITEM change needs introduced, worsened or duty basis. Corrected field example: ${JSON.stringify({ basis: { type: "introduced", head: 0, explanation: "<how the cited NEW line introduces this problem>" } })}. This is a shape example; choose introduced only if the changed line proves introduction, worsened only with OLD and NEW witnesses, or duty with an exact criterionQuote and event index. Otherwise remove the problem.`,
 			);
 		}
+		// The server accepts a state basis only in a scan.
+		if (!scan && assignment !== undefined && problem.basis.type === "state") {
+			throw new Error(
+				`state_basis_not_allowed: problems.${index}.basis.type: this item needs duty basis. Corrected field example: ${JSON.stringify({ basis: { type: "duty", criterionQuote: "<the criteria's exact words>", event: 0, explanation: problem.basis.explanation } })}. Use duty with an exact criterionQuote and the index of the citation that shows the event. Otherwise remove the problem.`,
+			);
+		}
 	}
 }
 
