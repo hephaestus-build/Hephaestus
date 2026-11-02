@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
+import io.nats.client.api.CompressionOption;
 import io.nats.client.api.DiscardPolicy;
 import io.nats.client.api.RetentionPolicy;
 import io.nats.client.api.StorageType;
@@ -247,6 +248,30 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
         assertThat(captor.getAllValues())
                 .allSatisfy(config -> assertThat(config.getDuplicateWindow())
                         .isEqualTo(properties.stream().duplicateWindow()));
+    }
+
+    @Test
+    void createsEveryStreamCompressed() throws Exception {
+        assertThat(createdConfigurations(Map.of()))
+                .allSatisfy(config -> assertThat(config.getCompressionOption()).isEqualTo(CompressionOption.S2));
+    }
+
+    @Test
+    void compressesAnExistingStreamWithoutAnOptInAndLeavesItsStoredMessages() throws Exception {
+        // Full stream, no opt-in: the broker rewrites no block, so turning this on cannot cost a message.
+        StreamInfo info =
+                existing(builder -> builder.compressionOption(CompressionOption.None), state(GIBIBYTE, 10, 1));
+        JetStreamManagement jsm = mock(JetStreamManagement.class);
+        when(jsm.getStreamInfo(anyString())).thenReturn(info);
+
+        new WebhookJetStreamBootstrap(jsm, properties).bootstrap();
+
+        ArgumentCaptor<StreamConfiguration> captor = ArgumentCaptor.forClass(StreamConfiguration.class);
+        verify(jsm, times(4)).updateStream(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(config -> {
+            assertThat(config.getCompressionOption()).isEqualTo(CompressionOption.S2);
+            assertThat(config.getMaxBytes()).isEqualTo(GIBIBYTE);
+        });
     }
 
     @Test
@@ -615,7 +640,8 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
                         .duplicateWindow(properties.stream().duplicateWindow())
                         .maxAge(properties.stream().maxAge())
                         .maxMessages(-1)
-                        .maxBytes(properties.stream().maxBytes().toBytes()))
+                        .maxBytes(properties.stream().maxBytes().toBytes())
+                        .compressionOption(CompressionOption.S2))
                 .build();
         StreamInfo info = mock(StreamInfo.class);
         // Lenient: a stream whose shape has drifted is refused before its state is ever read.
