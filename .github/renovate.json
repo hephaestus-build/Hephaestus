@@ -137,13 +137,6 @@
 			"description": "Compatibility override for older transitive consumers: retain patched releases within the supported major, rather than forcing a breaking API",
 			"matchManagers": ["npm"],
 			"matchDepTypes": ["pnpm-workspace.overrides"],
-			"matchDepNames": ["markdown-it@<14.3.3"],
-			"allowedVersions": "14.x"
-		},
-		{
-			"description": "Compatibility override for older transitive consumers: retain patched releases within the supported major, rather than forcing a breaking API",
-			"matchManagers": ["npm"],
-			"matchDepTypes": ["pnpm-workspace.overrides"],
 			"matchDepNames": ["uuid@<11.1.1"],
 			"allowedVersions": "11.x"
 		},

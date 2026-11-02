@@ -284,6 +284,8 @@ const config: Config = {
 	],
 
 	themeConfig: {
+		// Mermaid 12 otherwise lays every diagram out with ELK and draws it in its new look. An ERD asks for ELK in its own front matter.
+		mermaid: { options: { layout: "dagre", look: "classic" } },
 		image: "img/hephaestus-social-card.png",
 		colorMode: {
 			respectPrefersColorScheme: true,
@@ -434,7 +436,7 @@ const config: Config = {
 			darkTheme: prismThemes.vsDark,
 			additionalLanguages: ["bash", "json", "yaml", "java"],
 		},
-	} satisfies UserThemeConfig,
+	} satisfies UserThemeConfig & { mermaid: { options: { layout: string; look: string } } },
 };
 
 export default config;

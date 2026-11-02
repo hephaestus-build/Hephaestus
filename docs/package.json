@@ -28,7 +28,6 @@
 		"@docusaurus/utils-validation": "3.10.2",
 		"@easyops-cn/docusaurus-search-local": "0.55.3",
 		"@mdx-js/react": "3.1.1",
-		"@mermaid-js/layout-elk": "0.2.3",
 		"@signalwire/docusaurus-plugin-llms-txt": "1.2.2",
 		"prism-react-renderer": "2.4.1",
 		"react": "19.2.8",
@@ -39,7 +38,7 @@
 		"@docusaurus/theme-common": "3.10.2",
 		"@docusaurus/types": "3.10.2",
 		"@types/react": "19.2.18",
-		"markdownlint-cli2": "0.23.2",
+		"markdownlint-cli2": "0.24.0",
 		"typescript": "7.0.2"
 	},
 	"browserslist": {
