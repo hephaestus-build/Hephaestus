@@ -3,9 +3,9 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 
-import { stageChanges, commitInput } from "./commit-via-api.ts";
+import { commitInput, createCommit, stageChanges } from "./commit-via-api.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 
 type Git = (...args: string[]) => string;
@@ -185,4 +185,154 @@ await test("preserves filenames that require Git's NUL-delimited output", async 
 		writeFileSync(path.join(repo, file), "added\n");
 	}
 	assert.deepEqual(await changes(), { additions: paths.toSorted(), deletions: [] });
+});
+
+const BASE = "b".repeat(40);
+const COMMIT = "c".repeat(40);
+const OTHER = "d".repeat(40);
+/** `git hash-object` of the contents that the input below commits. */
+const NEW_BLOB = "3b18e512dba79e4c8300dd08aeb37f8e728b8dad";
+const input = commitInput(
+	{ repository: "o/r", branch: "work", expectedHeadOid: BASE, headline: "Move the file" },
+	new Map([["new.txt", Buffer.from("hello world\n")]]),
+	["old.txt"],
+);
+const baseFiles = [
+	{ path: "old.txt", type: "blob", sha: "1".repeat(40) },
+	{ path: "kept", type: "tree", sha: "2".repeat(40) },
+	{ path: "kept/file.txt", type: "blob", sha: "3".repeat(40) },
+];
+const landedFiles = [
+	{ path: "kept", type: "tree", sha: "2".repeat(40) },
+	{ path: "kept/file.txt", type: "blob", sha: "3".repeat(40) },
+	{ path: "new.txt", type: "blob", sha: NEW_BLOB },
+];
+
+interface FakeHead {
+	readonly oid: string;
+	readonly parent?: string;
+	readonly headline?: string;
+	readonly files?: readonly object[];
+	readonly verified?: boolean;
+}
+
+/**
+ * GitHub's answers for one branch. Each entry of `posts` answers one commit attempt: a status for a
+ * failure, and `land` moves the branch before the answer, as a lost answer does.
+ */
+function fakeGitHub(
+	context: TestContext,
+	posts: readonly { status?: number; body?: string; land?: FakeHead; refuse?: boolean }[],
+) {
+	const state = { head: { oid: BASE } as FakeHead, posts: 0, reads: 0, waits: [] as number[] };
+	context.mock.method(globalThis, "fetch", async (url: string | URL, init?: RequestInit) => {
+		const address = String(url);
+		if (init?.method === "POST") {
+			const answer = posts[state.posts] ?? {};
+			state.posts += 1;
+			if (answer.land !== undefined) {
+				state.head = answer.land;
+			}
+			if (answer.status !== undefined) {
+				return new Response(answer.body ?? "", { status: answer.status });
+			}
+			if (answer.refuse === true) {
+				return Response.json({
+					errors: [{ message: "Expected branch to point to another commit" }],
+				});
+			}
+			state.head = { oid: COMMIT, parent: BASE, headline: "Move the file", files: landedFiles };
+			return Response.json({ data: { createCommitOnBranch: { commit: { oid: COMMIT } } } });
+		}
+		state.reads += 1;
+		if (address.endsWith("/git/ref/heads/work")) {
+			return Response.json({ object: { sha: state.head.oid } });
+		}
+		if (address.includes("/git/commits/")) {
+			return Response.json({
+				parents: [{ sha: state.head.parent ?? OTHER }],
+				message: `${state.head.headline ?? "Another commit"}\n\nA body.`,
+				verification: { verified: state.head.verified ?? true },
+			});
+		}
+		const files = address.includes(`/git/trees/${BASE}`) ? baseFiles : state.head.files;
+		return Response.json({ truncated: false, tree: files ?? [] });
+	});
+	const wait = async (milliseconds: number) => state.waits.push(milliseconds);
+	return { state, wait };
+}
+
+const ours = { oid: COMMIT, parent: BASE, headline: "Move the file", files: landedFiles };
+
+void test("the answer to the first attempt decides when GitHub answers", async (context) => {
+	const { state, wait } = fakeGitHub(context, [{}]);
+	const { oid } = await createCommit("token", input, wait);
+	assert.equal(oid, COMMIT);
+	assert.deepEqual([state.posts, state.reads, state.waits], [1, 0, []]);
+});
+
+void test("a transient failure that changed nothing commits again", async (context) => {
+	const { state, wait } = fakeGitHub(context, [{ status: 502 }, {}]);
+	const { oid } = await createCommit("token", input, wait);
+	assert.equal(oid, COMMIT);
+	assert.deepEqual([state.posts, state.waits], [2, [10_000]]);
+});
+
+void test("a lost answer to a commit that landed never commits twice", async (context) => {
+	const { state, wait } = fakeGitHub(context, [{ status: 502, land: ours }]);
+	const { oid } = await createCommit("token", input, wait);
+	assert.equal(oid, COMMIT);
+	assert.equal(state.posts, 1);
+});
+
+void test("a commit that lands after the look is still found", async (context) => {
+	const { state, wait } = fakeGitHub(context, [{ status: 504 }, { refuse: true, land: ours }]);
+	const { oid } = await createCommit("token", input, wait);
+	assert.equal(oid, COMMIT);
+	assert.equal(state.posts, 2);
+});
+
+void test("a branch that someone else moved stops the commit", async (context) => {
+	for (const [label, moved] of [
+		["another parent", { ...ours, oid: OTHER, parent: OTHER }],
+		["another headline", { ...ours, oid: OTHER, headline: "Other" }],
+		["other files", { ...ours, oid: OTHER, files: baseFiles }],
+		["no verified signature", { ...ours, oid: OTHER, verified: false }],
+	] as const) {
+		const { state, wait } = fakeGitHub(context, [{ status: 502, land: moved }]);
+		await assert.rejects(createCommit("token", input, wait), /moved to d+, which is not/u, label);
+		assert.equal(state.posts, 1, label);
+		context.mock.restoreAll();
+	}
+});
+
+void test("a refused first attempt and a 4xx are not repeated", async (context) => {
+	for (const answer of [
+		{ refuse: true },
+		{ status: 401 },
+		{ status: 403, body: "API rate limit exceeded" },
+		{ status: 404 },
+		{ status: 422 },
+		{ status: 429 },
+	]) {
+		const { state, wait } = fakeGitHub(context, [answer]);
+		await assert.rejects(createCommit("token", input, wait));
+		assert.deepEqual([state.posts, state.reads, state.waits], [1, 0, []]);
+		context.mock.restoreAll();
+	}
+});
+
+void test("a secondary rate limit is repeated", async (context) => {
+	const limited = { status: 403, body: "You have exceeded a secondary rate limit" };
+	const { state, wait } = fakeGitHub(context, [limited, {}]);
+	const { oid } = await createCommit("token", input, wait);
+	assert.equal(oid, COMMIT);
+	assert.equal(state.posts, 2);
+});
+
+void test("repeated transient failures stop at the bound", async (context) => {
+	const failed = { status: 503 };
+	const { state, wait } = fakeGitHub(context, [failed, failed, failed, failed, failed]);
+	await assert.rejects(createCommit("token", input, wait), /answered 503/u);
+	assert.deepEqual([state.posts, state.waits], [4, [10_000, 30_000, 60_000]]);
 });

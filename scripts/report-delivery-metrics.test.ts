@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { retryTransient } from "./lib/github.ts";
+import { output } from "./lib/process.ts";
 import {
 	classify,
 	deliveryMetrics,
 	duration,
 	isRevert,
+	mergedDateRanges,
 	parseChanges,
 	parseDeployment,
 	parseReleases,
@@ -477,4 +480,78 @@ await test("the report shows missing measurements as missing, not as zero", () =
 	assert.equal(duration(90 * MINUTE), "90 min");
 	assert.equal(duration(3 * 60 * MINUTE), "3.0 h");
 	assert.equal(duration(72 * 60 * MINUTE), "3.0 d");
+});
+
+void test("the searches cover each day of the window once, a week at a time", () => {
+	const until = Date.parse("2026-11-02T13:46:00Z");
+	assert.deepEqual(mergedDateRanges(until - 28 * DAY, until), [
+		"2026-10-05..2026-10-11",
+		"2026-10-12..2026-10-18",
+		"2026-10-19..2026-10-25",
+		"2026-10-26..2026-11-01",
+		"2026-11-02..2026-11-02",
+	]);
+	assert.deepEqual(mergedDateRanges(until - 3 * DAY, until), ["2026-10-30..2026-11-02"]);
+});
+
+/** A real failed child process, so these cases read the error that `gh` produces through `output`. */
+const failingGh = async (stderr: string) =>
+	output(process.execPath, ["-e", `console.error(${JSON.stringify(stderr)}); process.exit(1)`]);
+
+/** Fails with each message in turn, then answers. */
+function requests(...failures: string[]) {
+	const state = { attempts: 0, waits: [] as number[] };
+	return {
+		state,
+		request: async () => {
+			const failure = failures[state.attempts];
+			state.attempts += 1;
+			return failure === undefined ? "answer" : failingGh(failure);
+		},
+		wait: async (milliseconds: number) => state.waits.push(milliseconds),
+	};
+}
+
+void test("a transient GitHub failure is repeated with growing waits", async () => {
+	for (const failure of [
+		"gh: HTTP 502",
+		"gh: Server Error (HTTP 503)",
+		"gh: HTTP 504",
+		"gh: You have exceeded a secondary rate limit. (HTTP 403)",
+	]) {
+		const { state, request, wait } = requests(failure, failure);
+		assert.equal(await retryTransient(request, wait), "answer", failure);
+		assert.deepEqual(state, { attempts: 3, waits: [10_000, 30_000] }, failure);
+	}
+});
+
+void test("repeated transient failures stop at the bound and surface the last error", async () => {
+	const failure = "gh: HTTP 504";
+	const { state, request, wait } = requests(failure, failure, failure, failure, failure);
+	await assert.rejects(retryTransient(request, wait), /HTTP 504/u);
+	assert.deepEqual(state, { attempts: 4, waits: [10_000, 30_000, 60_000] });
+});
+
+void test("any other failure is not repeated", async () => {
+	for (const failure of [
+		"gh: Bad credentials (HTTP 401)",
+		"gh: API rate limit exceeded for user. (HTTP 403)",
+		"gh: Not Found (HTTP 404)",
+		"gh: Validation Failed (HTTP 422)",
+		"gh: Too Many Requests (HTTP 429)",
+		"gh: Internal Server Error (HTTP 500)",
+		"gh: Could not resolve to a Repository",
+	]) {
+		const { state, request, wait } = requests(failure);
+		await assert.rejects(retryTransient(request, wait), /./u, failure);
+		assert.deepEqual(state, { attempts: 1, waits: [] }, failure);
+	}
+	const parsing = { attempts: 0 };
+	await assert.rejects(
+		retryTransient(async () => {
+			parsing.attempts += 1;
+			throw new Error("HTTP 504 appears only in the message");
+		}),
+	);
+	assert.equal(parsing.attempts, 1, "only stderr of the command decides");
 });
