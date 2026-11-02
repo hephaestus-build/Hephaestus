@@ -318,6 +318,11 @@ config:
   llmPrivateHosts: []
   # Accept http:// base URLs for the hosts in llmPrivateHosts. Every other host still needs HTTPS.
   llmPrivateHostsAllowHttp: false
+  # A private CA for a Git provider, such as a self-managed GitLab: the Secret and the key that holds
+  # the PEM file. The public CAs stay trusted. docs/admin/kubernetes.mdx.
+  privateCa:
+    existingSecret: ""
+    key: ca.crt
   # The organization that runs research on this instance, as the privacy notice names it.
   researchOrganization: ""
   publicActivity:

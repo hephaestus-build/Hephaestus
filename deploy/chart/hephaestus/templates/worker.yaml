@@ -318,6 +318,7 @@ spec:
             {{- include "hephaestus.env.shared" . | nindent 12 }}
             {{- include "hephaestus.env.scm" . | nindent 12 }}
             {{- include "hephaestus.env.modelEgress" . | nindent 12 }}
+            {{- include "hephaestus.privateCaEnv" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod,worker
             - name: JAVA_TOOL_OPTIONS
@@ -383,6 +384,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+            {{- include "hephaestus.privateCaMount" . | nindent 12 }}
       volumes:
         # A cache per worker: the worker fills it again after a restart.
         - name: git-cache
@@ -392,4 +394,5 @@ spec:
           emptyDir:
             sizeLimit: 1Gi
         {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+        {{- include "hephaestus.privateCaVolume" . | nindent 8 }}
 {{- end }}

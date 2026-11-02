@@ -482,6 +482,30 @@ spec:
         - { port: 8000, protocol: TCP }
 ```
 
+### A Git provider with a private CA
+
+If your GitLab uses a certificate from a private CA, Hephaestus must trust that CA.
+Sign-in, API calls and Git fetches all use the same trust.
+
+1. Create a Secret with the PEM file of the CA. The file can hold more than one certificate.
+
+   ```bash
+   kubectl -n hephaestus create secret generic corp-ca --from-file=ca.crt=./corp-ca.pem
+   ```
+
+2. Name the Secret in your values, then run the install command again.
+
+   ```yaml title="values.yaml"
+   config:
+     privateCa:
+       existingSecret: corp-ca
+       key: ca.crt
+   ```
+
+The server and the worker add this CA at start, and the public CAs stay trusted.
+After you replace the CA, restart the server and the worker.
+This option does not change what GitLab trusts. If Hephaestus uses a private certificate, add its CA to the trusted certificates of your GitLab, so that GitLab can deliver webhooks.
+
 ### A model endpoint on a private network
 
 A model endpoint outside the cluster can have a private address, for example a vLLM server on the LAN.

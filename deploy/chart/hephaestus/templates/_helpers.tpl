@@ -151,6 +151,41 @@ another, and the chart creates no certificate, key or CA.
 {{- end -}}
 
 {{/*
+A private CA for a Git provider, such as a self-managed GitLab. The buildpack's launcher adds this file to the
+JVM truststore at start, so sign-in, API calls and Git fetches all trust it, and the public CAs stay trusted.
+*/}}
+{{- define "hephaestus.privateCaFile" -}}
+/etc/hephaestus/private-ca/ca.crt
+{{- end -}}
+
+{{- define "hephaestus.privateCaEnv" -}}
+{{- if .Values.config.privateCa.existingSecret }}
+- name: SSL_CERT_FILE
+  value: {{ include "hephaestus.privateCaFile" . | quote }}
+{{- end }}
+{{- end -}}
+
+{{- define "hephaestus.privateCaVolume" -}}
+{{- if .Values.config.privateCa.existingSecret }}
+- name: private-ca
+  secret:
+    secretName: {{ .Values.config.privateCa.existingSecret }}
+    items:
+      - key: {{ .Values.config.privateCa.key }}
+        path: ca.crt
+    defaultMode: 292 # 0444
+{{- end }}
+{{- end -}}
+
+{{- define "hephaestus.privateCaMount" -}}
+{{- if .Values.config.privateCa.existingSecret }}
+- name: private-ca
+  mountPath: /etc/hephaestus/private-ca
+  readOnly: true
+{{- end }}
+{{- end -}}
+
+{{/*
 Every role verifies the server's certificate and name. The bundled server is dialled at its Service
 name in the release namespace, so its certificate must name exactly that host.
 */}}

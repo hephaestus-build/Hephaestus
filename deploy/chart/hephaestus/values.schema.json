@@ -671,6 +671,7 @@
 				"llmDisplayCurrency",
 				"llmPrivateHosts",
 				"llmPrivateHostsAllowHttp",
+				"privateCa",
 				"researchOrganization",
 				"publicActivity",
 				"pageExperienceMetrics",
@@ -699,6 +700,15 @@
 					"items": { "type": "string", "pattern": "^[A-Za-z0-9._:/-]+$" }
 				},
 				"llmPrivateHostsAllowHttp": { "type": "boolean" },
+				"privateCa": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["existingSecret", "key"],
+					"properties": {
+						"existingSecret": { "type": "string" },
+						"key": { "type": "string", "minLength": 1 }
+					}
+				},
 				"researchOrganization": { "type": "string", "maxLength": 300 },
 				"publicActivity": {
 					"type": "object",
