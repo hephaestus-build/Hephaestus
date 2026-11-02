@@ -226,10 +226,15 @@ const leadAt = (at: EvidenceLocation) => ({ at, label: "A lead." });
 
 function decisions(request: { body: Record<string, unknown> }) {
 	const { questions, input } = request.body;
-	assert.ok(typeof input === "string" && Array.isArray(questions), "an OpenAI Decisions request");
+	assert.ok(Array.isArray(input) && Array.isArray(questions), "an OpenAI Decisions request");
+	// The state arrives as the content parts of one user message.
+	const state = input
+		.flatMap((message: { content: { type: string; text?: string }[] }) => message.content)
+		.map((part) => (part.type === "input_text" ? part.text : ""))
+		.join("\n");
 	// Each item of a pack is `[i<n>]` on its own line, then the item's first line.
 	const items = new Map(
-		[...input.matchAll(/\[(?<id>i\d+)\]\n(?<text>[^\n]*)/gu)].map((m) => [
+		[...state.matchAll(/\[(?<id>i\d+)\]\n(?<text>[^\n]*)/gu)].map((m) => [
 			m.groups?.id,
 			m.groups?.text,
 		]),
