@@ -11,7 +11,6 @@ import {
 	modelSlotSchema,
 	REASONS,
 	CANDIDATE_LIMITS,
-	type Candidate,
 	type Citation,
 	type ModelSlot,
 	type PracticeInputs,
@@ -66,7 +65,6 @@ export type HostMessage =
 	| { kind: "model-failed"; id: number; reason: UnratedReason; message: string; tokensLeft: number }
 	| { kind: "read-result"; id: number; value: ReadValue }
 	| { kind: "read-failed"; id: number; reason: UnratedReason; message: string }
-	| { kind: "review-result"; id: number; candidate: Candidate }
 	| { kind: "review-failed"; id: number; reason: UnratedReason; message: string }
 	| { kind: "abort"; reason: AbortReason };
 

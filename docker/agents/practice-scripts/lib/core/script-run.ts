@@ -1,12 +1,11 @@
 /**
  * The host's side of one custom program's process: its grants, its requests, its deadline and its
- * final value. The host answers each request once, keeps one review active, and ends the process at
- * the practice's deadline.
+ * final value. The host answers each request once, and ends the process at its review or at the
+ * practice's deadline.
  */
 import { supportsForcedToolChoice } from "./model-capabilities.ts";
 
-import { fork } from "node:child_process";
-import { once } from "node:events";
+import { type ChildProcess, fork } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -39,6 +38,13 @@ import { reasonOf, UnratedError } from "./practice-script.ts";
 const CHILD_HEAP_MB = 256;
 /** A program's process is killed this long after its deadline, so a program that unwinds still returns. */
 export const RETURN_MS = 5000;
+/**
+ * Script processes that may run at once in one Pod. Each loads Node and the toolkit, and it ends at its review, so
+ * this bound is what keeps a wide review's memory flat: without it, every script of the review loads together.
+ */
+export const SCRIPT_PROCESSES = 2;
+/** A script that holds its room this long gives it back, so that one slow script cannot starve the others. */
+export const SCRIPT_PROCESS_LEASE_MS = 10_000;
 
 export class ProgramSettlementError extends Error {
 	override name = "ProgramSettlementError";
@@ -149,9 +155,58 @@ export function abortReasonOf(signal: AbortSignal): AbortReason {
 		: "deadline";
 }
 
+let processesFree = SCRIPT_PROCESSES;
+const processWaiters: (() => void)[] = [];
+
+/** Waits for room for one script process. False if `signal` ended the wait. */
+async function enterProcesses(signal: AbortSignal): Promise<boolean> {
+	if (signal.aborted) {
+		return false;
+	}
+	if (processesFree > 0) {
+		processesFree -= 1;
+		return true;
+	}
+	const turn = Promise.withResolvers<boolean>();
+	const give = () => {
+		signal.removeEventListener("abort", stop);
+		turn.resolve(true);
+	};
+	const stop = () => {
+		processWaiters.splice(processWaiters.indexOf(give), 1);
+		turn.resolve(false);
+	};
+	processWaiters.push(give);
+	signal.addEventListener("abort", stop, { once: true });
+	return turn.promise;
+}
+
+function leaveProcesses(): void {
+	const next = processWaiters.shift();
+	if (next === undefined) {
+		processesFree += 1;
+	} else {
+		next();
+	}
+}
+
+/** Takes the room this process entered with. The returned function gives it back, once. */
+function holdProcessRoom(): () => void {
+	let held = true;
+	const release = () => {
+		if (held) {
+			held = false;
+			clearTimeout(lease);
+			leaveProcesses();
+		}
+	};
+	const lease = setTimeout(release, SCRIPT_PROCESS_LEASE_MS);
+	return release;
+}
+
 /**
- * Run one custom program in its own process, until it returns, fails or reaches its deadline. Its
- * value is returned unchecked: the host validates it as a candidate.
+ * Run one custom program in its own process, until it returns, fails, asks for its review or reaches
+ * its deadline. Its value is returned unchecked: the host validates it as a candidate.
  */
 export async function runCustomProgram(
 	modulePath: string,
@@ -160,26 +215,41 @@ export async function runCustomProgram(
 ): Promise<ProgramExecution> {
 	const { slug } = job;
 	const calls = noCalls();
-	if (services.signal.aborted || Date.now() >= job.deadline) {
+	const entered =
+		Date.now() < job.deadline &&
+		(await enterProcesses(
+			AbortSignal.any([services.signal, AbortSignal.timeout(job.deadline - Date.now())]),
+		));
+	if (!entered) {
 		const stopReason = services.signal.aborted ? abortReasonOf(services.signal) : "deadline";
 		return {
-			failure: { stopReason, error: `the host stopped this program: ${stopReason}` },
+			failure: {
+				stopReason,
+				error: `the host stopped this program before it started: ${stopReason}`,
+			},
 			models: [],
 			calls,
 		};
 	}
 	let report: SlotReport[] = [];
 	const readable = readableRoots([path.dirname(path.dirname(modulePath))]);
-	const child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
-		env: {},
-		execArgv: [
-			"--permission",
-			...readable.map((dir) => `--allow-fs-read=${dir}`),
-			`--max-old-space-size=${CHILD_HEAP_MB}`,
-		],
-		stdio: ["ignore", "pipe", "pipe", "ipc"],
-		serialization: "advanced",
-	});
+	const releaseRoom = holdProcessRoom();
+	let child: ChildProcess;
+	try {
+		child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
+			env: {},
+			execArgv: [
+				"--permission",
+				...readable.map((dir) => `--allow-fs-read=${dir}`),
+				`--max-old-space-size=${CHILD_HEAP_MB}`,
+			],
+			stdio: ["ignore", "pipe", "pipe", "ipc"],
+			serialization: "advanced",
+		});
+	} catch (error) {
+		releaseRoom();
+		throw error;
+	}
 	let output = 0;
 	const prefix = (chunk: Buffer) => {
 		if (output >= MAX_OUTPUT_CHARS) {
@@ -201,9 +271,20 @@ export async function runCustomProgram(
 
 	const stopped = new AbortController();
 	let ended = false;
-	child.on("close", () => {
+	// The program ends at its review (see answerReview), so its exit does not stop the session it handed to.
+	const handOff = { happened: false };
+	const reviewEnded = Promise.withResolvers<undefined>();
+	const processGone = Promise.withResolvers<readonly unknown[]>();
+	const endProgram = () => {
 		ended = true;
 		stopped.abort(new UnratedError("deadline", "the program ended"));
+	};
+	child.once("close", (...exit) => {
+		releaseRoom();
+		processGone.resolve(exit);
+		if (!handOff.happened) {
+			endProgram();
+		}
 	});
 	const signal = AbortSignal.any([
 		stopped.signal,
@@ -220,7 +301,7 @@ export async function runCustomProgram(
 		}
 	};
 	const reply = (message: Exclude<HostMessage, { kind: "job" | "abort" | "meta-accepted" }>) => {
-		if (!open.delete(message.id) || !child.connected) {
+		if (!open.delete(message.id) || !child.connected || handOff.happened) {
 			return;
 		}
 		child.send(message);
@@ -279,6 +360,7 @@ export async function runCustomProgram(
 	const stopAtLimit = () => {
 		limit.reached = true;
 		child.kill("SIGKILL");
+		reviewEnded.resolve(undefined);
 	};
 	let killLater: ReturnType<typeof setTimeout> | undefined;
 
@@ -286,7 +368,6 @@ export async function runCustomProgram(
 	let finished = false;
 	let meta: ParsedMeta | undefined;
 	let accepted: Partial<Record<ModelSlot, string>> = {};
-	let reviewing = false;
 
 	const fail = (stopReason: StopReason, error: string) => {
 		settled ??= { failure: { stopReason, error: cut(error) } };
@@ -298,6 +379,8 @@ export async function runCustomProgram(
 		request: OpenRequest,
 		call: AbortSignal,
 	) => {
+		// A direct model call can take minutes, and it holds no more of the Pod than waiting for it does.
+		releaseRoom();
 		const { id, slot, label } = message;
 		const model = services.models[slot];
 		if (
@@ -343,34 +426,38 @@ export async function runCustomProgram(
 		});
 	};
 
+	/**
+	 * A script returns what `ctx.review` returned, so its process has nothing left to do while the model works.
+	 * The host ends it now and returns the session's candidate itself. Its other requests end with it.
+	 */
 	const answerReview = async (
 		message: Extract<ChildMessage, { kind: "review" }>,
 		call: AbortSignal,
 	) => {
 		const { id } = message;
-		if (reviewing) {
-			reply({
-				kind: "review-failed",
-				id,
-				reason: "refused",
-				message: "a review of this practice is already running",
-			});
-			return;
-		}
 		const parsed = parseReviewOptions(message.options);
 		if ("error" in parsed) {
 			reply({ kind: "review-failed", id, reason: "error", message: parsed.error });
 			return;
 		}
-		reviewing = true;
+		handOff.happened = true;
 		calls.review += 1;
+		for (const [other, request] of open) {
+			if (other !== id) {
+				request.refused = true;
+				request.call.abort(new UnratedError("cancelled", "the program ended at its review"));
+			}
+		}
+		child.kill("SIGKILL");
 		try {
 			const candidate = await services.review(parsed.options, call);
-			reply({ kind: "review-result", id, candidate });
+			settled ??= { value: structuredClone(candidate) };
 		} catch (error) {
-			reply({ kind: "review-failed", id, reason: reasonOf(error), message: cut(messageOf(error)) });
+			settled ??= { failure: { stopReason: reasonOf(error), error: cut(messageOf(error)) } };
 		} finally {
-			reviewing = false;
+			open.delete(id);
+			endProgram();
+			reviewEnded.resolve(undefined);
 		}
 	};
 
@@ -448,6 +535,9 @@ export async function runCustomProgram(
 	};
 
 	child.on("message", (raw: unknown) => {
+		if (handOff.happened) {
+			return;
+		}
 		if (aborted === undefined && Date.now() >= job.deadline) {
 			sendAbort("deadline");
 		}
@@ -557,12 +647,17 @@ export async function runCustomProgram(
 		}
 	});
 	child.on("error", (error) => {
-		settled ??= { failure: { stopReason: "error", error: cut(messageOf(error)) } };
+		// A send to a process that the host just ended raises an error event, which must not fail the review.
+		if (!handOff.happened) {
+			settled ??= { failure: { stopReason: "error", error: cut(messageOf(error)) } };
+		}
 	});
-	const closed = once(child, "close");
 	const deadlineLimit = setTimeout(stopAtLimit, Math.max(0, job.deadline - Date.now()) + RETURN_MS);
 	child.send({ kind: "job", job: { ...job, modulePath } } satisfies HostMessage);
-	const exit: readonly unknown[] = await closed;
+	const exit = await processGone.promise;
+	if (handOff.happened) {
+		await reviewEnded.promise;
+	}
 	clearTimeout(deadlineLimit);
 	clearTimeout(killLater);
 	const drainTimer = new AbortController();

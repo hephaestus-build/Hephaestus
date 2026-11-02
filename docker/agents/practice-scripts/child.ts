@@ -134,9 +134,6 @@ async function runDefinition(
 		review: async (options) => {
 			stopped.signal.throwIfAborted();
 			const reply = await request((id) => ({ kind: "review", id, options: options ?? {} }));
-			if (reply.kind === "review-result") {
-				return reply.candidate;
-			}
 			if (reply.kind === "review-failed") {
 				throw new UnratedError(reply.reason, reply.message);
 			}

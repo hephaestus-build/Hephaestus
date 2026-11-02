@@ -1,7 +1,7 @@
 /**
  * Runs one admitted practice's program under the scope the host supplies: the built-in in this
  * process, a custom program in a child process. Either way the program gets the same context, and its
- * final value is checked as one candidate. The host keeps one practice and one review active.
+ * final value is checked as one candidate. A custom program ends at its review.
  */
 import { createHash } from "node:crypto";
 
@@ -17,7 +17,6 @@ import {
 	type Citation,
 	type Coverage,
 	type Omission,
-	type Outcome,
 	type ParsedSessionCandidate,
 	type ProgramCalls,
 	type SessionCandidate,
@@ -172,15 +171,12 @@ export async function runPracticeProgram(
 	const started = Date.now();
 	/** The coverage each review of this practice returned: the only host coverage its candidate may carry. */
 	const returned = new Set<string>();
-	/** What each review decided: its outcome and citations, on its coverage. */
-	const decisions = new Set<string>();
 	const sessionReadReceipts: ReadReceipt[] = [];
 	const hosted: ProgramServices = {
 		...services,
 		review: async (options, signal) => {
 			const candidate = await services.review(options, signal);
 			returned.add(JSON.stringify(candidate.coverage));
-			decisions.add(decisionKey(candidate, candidate.coverage));
 			if (candidate.coverage.source === "host") {
 				sessionReadReceipts.push(...candidate.coverage.receipts);
 			}
@@ -273,11 +269,9 @@ export async function runPracticeProgram(
 			error: "a scan citation is outside its frozen context",
 		});
 	}
-	// Only a result that returns a review's decision unchanged keeps that review's coverage. Any other
-	// result is code's decision, measured against the reads, whatever coverage it carries.
-	const decided =
-		reviewed !== null && decisions.has(decisionKey(shaped, reviewed)) ? reviewed : null;
-	// A search proves an absence only for the decision that ran it: the review kept unchanged, or else the code.
+	// A result with no review's coverage is code's decision, measured against the reads.
+	const decided = reviewed;
+	// A search proves an absence only for the decision that ran it: the review, or else the code.
 	const searchedBy = new Set(
 		(decided?.receipts ?? services.reader.readReceipts).map((receipt) => JSON.stringify(receipt)),
 	);
@@ -335,11 +329,6 @@ interface Cited {
 		inapplicability?: unknown;
 		openQuestions?: readonly { citation?: Citation }[];
 	};
-}
-
-/** A decision's identity: its outcome and every citation, on the coverage it rests on. */
-function decisionKey(candidate: Cited & { outcome: Outcome }, coverage: Coverage): string {
-	return JSON.stringify([candidate.outcome, citationsOf(candidate), coverage]);
 }
 
 /** Every citation of a candidate: its own, its problems', its example's and its open questions'. */
