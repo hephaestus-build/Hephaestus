@@ -24865,7 +24865,7 @@ snapshots:
       '@webext-core/fake-browser': 2.0.1
       '@webext-core/isolated-element': 3.0.0
       '@webext-core/match-patterns': 2.0.0
-      '@wxt-dev/browser': 0.3.0
+      '@wxt-dev/browser': 0.3.7
       '@wxt-dev/storage': 1.2.9
       c12: 3.3.4(magicast@0.5.5)
       cac: 7.0.0
