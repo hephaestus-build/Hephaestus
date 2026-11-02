@@ -100,10 +100,10 @@ function bodyOrMissing<T>(result: CallResult<T>): T | undefined {
 
 /** Calls that need no session: discovery and the client-session lifecycle itself. */
 export const publicApi = {
-	runtimeConfig: async (origin: string): Promise<unknown> =>
+	runtimeConfig: async (origin: string, signal?: AbortSignal): Promise<unknown> =>
 		body(
 			await send(async () =>
-				clientFor(origin).get({ url: "/.well-known/hephaestus.json", redirect: "error" }),
+				clientFor(origin).get({ url: "/.well-known/hephaestus.json", redirect: "error", signal }),
 			),
 		),
 	async identityProviders(apiBase: string): Promise<IdentityProviderView[]> {

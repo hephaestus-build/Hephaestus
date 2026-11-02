@@ -88,6 +88,9 @@ async function harness() {
 		.fn<() => Promise<Response>>()
 		.mockResolvedValue(new Response(null, { status: 204 }));
 	const discovery = vi.fn<() => Promise<Response>>().mockResolvedValue(Response.json([]));
+	const release = vi
+		.fn<() => Promise<Response>>()
+		.mockImplementation(async () => Response.json({ version: "1.0.0" }));
 	const user = vi
 		.fn<() => Promise<Response>>()
 		.mockImplementation(async () =>
@@ -102,6 +105,9 @@ async function harness() {
 		sent.push({ origin: url.origin, path: url.pathname, body: await request.clone().text() });
 		if (url.pathname.endsWith("/identity-providers")) {
 			return discovery();
+		}
+		if (url.pathname.endsWith("/.well-known/hephaestus.json")) {
+			return release();
 		}
 		if (url.pathname.endsWith("/auth/client/logout")) {
 			return logout();
@@ -135,6 +141,7 @@ async function harness() {
 		sent,
 		logout,
 		discovery,
+		release,
 		launch,
 		user,
 		refresh,
@@ -277,6 +284,54 @@ describe("worker instance transitions", () => {
 		expect(platform.scripting.registerContentScripts.mock.lastCall?.[0][0]?.matches).toStrictEqual([
 			`${A.origin}/*`,
 		]);
+	});
+
+	it("says a server is too old and reads nothing else from it", async () => {
+		const h = await harness();
+		h.release.mockImplementation(async () => Response.json({ version: "0.95.1" }));
+		h.sent.length = 0;
+
+		await expect(h.ask({ type: "get-state" })).resolves.toMatchObject({
+			ok: true,
+			data: {
+				instance: { origin: A.origin },
+				session: { status: "server-too-old", serverVersion: "0.95.1", oldestServer: "1.0.0" },
+			},
+		});
+		await expect(
+			h.handleMessage(
+				{ type: "get-context" },
+				{
+					id: ID,
+					url: `chrome-extension://${ID}/inline.html`,
+					frameId: 2,
+					tab: { id: 42 },
+				},
+			),
+		).resolves.toMatchObject({
+			ok: true,
+			data: {
+				status: "server-too-old",
+				instanceHost: "a.test",
+				serverVersion: "0.95.1",
+				oldestServer: "1.0.0",
+			},
+		});
+		expect(new Set(h.sent.map(({ path }) => path))).toStrictEqual(
+			new Set(["/.well-known/hephaestus.json"]),
+		);
+	});
+
+	it("reads the account again once the server has upgraded", async () => {
+		const h = await harness();
+		h.release.mockImplementation(async () => Response.json({ version: "0.95.1" }));
+		await h.ask({ type: "get-state" });
+		h.release.mockImplementation(async () => Response.json({ version: "1.0.0" }));
+
+		const state = await h.ask({ type: "get-state" });
+		expect(state).toMatchObject({ ok: true, data: { instance: { origin: A.origin } } });
+		expect(JSON.stringify(state)).not.toContain("server-too-old");
+		expect(h.sent.map(({ path }) => path)).toContain("/api/user");
 	});
 
 	it("answers state queries while a tab delays configuration reconciliation", async () => {

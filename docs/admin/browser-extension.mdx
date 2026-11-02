@@ -143,6 +143,21 @@ Your instance matches the page against the configured workspace connection for t
 Work on a provider that no workspace connects to appears as not available.
 GitHub Enterprise Server has no end-to-end verification and is not currently supported by this extension setup.
 
+## Keep the server current
+
+Chrome updates the extension on its own, so a new extension version can reach users before you upgrade the server.
+The extension supports every server that names version 1.0.0 or newer in `/.well-known/hephaestus.json`.
+A release candidate that names its version counts as that release.
+A file without a version counts as too old.
+Version 1.0.0-rc.1 writes no version, so it counts as too old.
+
+On a server that is too old, the report and extension settings say so and ask users to contact you.
+The report and settings then ask that server for nothing else.
+After you upgrade, the extension works again without a reinstall.
+
+If the extension cannot read that file within three seconds, it carries on.
+Any call that then fails reports its own error.
+
 ## Verify the setup
 
 1. Ask your instance whether it accepts an id:

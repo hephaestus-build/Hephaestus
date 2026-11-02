@@ -403,6 +403,25 @@ export const LoadFailedOpened: Story = {
 	},
 };
 
+/** Chrome updated the extension ahead of the server: the report says so, and offers no retry. */
+export const ServerTooOld: Story = {
+	args: {
+		state: {
+			status: "server-too-old",
+			instanceHost: "hephaestus.build",
+			serverVersion: "0.95.1",
+			oldestServer: "1.0.0",
+		},
+		expanded: true,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("This server is too old for this extension")).toBeVisible();
+		await expect(canvas.getByText(/runs version 0\.95\.1/u)).toBeVisible();
+		await expect(canvas.getByText(/ask your instance operator/u)).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Retry" })).toBeNull();
+	},
+};
+
 export const SignedOut: Story = {
 	args: { state: { status: "signed-out", instanceHost: "hephaestus.build" }, expanded: true },
 	play: async ({ canvas, args }) => {

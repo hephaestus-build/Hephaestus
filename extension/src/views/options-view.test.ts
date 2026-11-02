@@ -378,6 +378,40 @@ it("disconnects only after the reader confirms changing the instance", async () 
 	await until(() => expect(requests("clear-instance")).toHaveLength(1));
 });
 
+it("says a server is too old, asks it for nothing, and recovers after the upgrade", async () => {
+	const tooOld: AppState = {
+		generation: 0,
+		developmentBuild: false,
+		instance: HOSTED,
+		session: { status: "server-too-old", serverVersion: "0.95.1", oldestServer: "1.0.0" },
+	};
+	const upgraded: AppState = { ...tooOld, session: { status: "signed-out" } };
+	const asked: string[] = [];
+	answer(
+		routed(
+			{
+				"get-state": firstThen(tooOld, Promise.resolve(upgraded)),
+				"list-sign-in-options": () => {
+					asked.push("list-sign-in-options");
+					return SIGN_IN_OPTIONS;
+				},
+			},
+			() => tooOld,
+		),
+	);
+	await render();
+	await until(() => expect(container.textContent).toContain("runs version 0.95.1"));
+	expect(asked).toStrictEqual([]);
+	expect(container.textContent).toContain("Change instance");
+
+	await act(async () => {
+		button("Check again").click();
+		await Promise.resolve();
+	});
+	await until(() => expect(asked).toStrictEqual(["list-sign-in-options"]));
+	expect(container.textContent).not.toContain("too old");
+});
+
 it("sends a signed-in reader without a connected workspace to the web app, not to a dead end", async () => {
 	const signedIn: AppState = {
 		generation: 0,

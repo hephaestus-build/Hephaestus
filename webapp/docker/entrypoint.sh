@@ -89,10 +89,11 @@ main() {
     exit 1
   fi
   mkdir -p "${RUNTIME_DIR}/.well-known"
-  printf '{"apexOrigin":"%s","baseDomain":"%s","workspaceSubdomainsEnabled":%s}\n' \
+  printf '{"apexOrigin":"%s","baseDomain":"%s","workspaceSubdomainsEnabled":%s,"version":"%s"}\n' \
     "$(escape_for_js "${APPLICATION_CLIENT_URL:-}")" \
     "$(escape_for_js "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}")" \
-    "$subdomains" > "${RUNTIME_DIR}/.well-known/hephaestus.json"
+    "$subdomains" \
+    "$(escape_for_js "${APPLICATION_VERSION:-}")" > "${RUNTIME_DIR}/.well-known/hephaestus.json"
   write_security_txt
 
   # Extract all env var names from TypeScript (single source of truth)

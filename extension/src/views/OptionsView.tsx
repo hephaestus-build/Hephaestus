@@ -12,6 +12,7 @@ import { AccountSummary } from "~/components/options/AccountSummary";
 import { ConsentPrompt } from "~/components/options/ConsentPrompt";
 import { InstanceCard } from "~/components/options/InstanceCard";
 import { OptionsFooter } from "~/components/options/OptionsFooter";
+import { ServerTooOldNotice } from "~/components/options/ServerTooOldNotice";
 import { SetupSteps } from "~/components/options/SetupSteps";
 import {
 	type SignInAttempt,
@@ -356,6 +357,27 @@ function Connected({ state, instance }: { state: AppState; instance: InstanceSum
 							/>
 						)}
 					</Card>
+					<InstanceSection instance={instance} />
+				</>
+			);
+		}
+		case "server-too-old": {
+			return (
+				<>
+					<ServerTooOldNotice
+						instanceHost={instance.host}
+						serverVersion={session.serverVersion}
+						oldestServer={session.oldestServer}
+						checking={checking}
+						onCheckAgain={() => {
+							setChecking(true);
+							const check = async () => {
+								await queryClient.refetchQueries({ queryKey: EXTENSION_QUERY_KEYS.state });
+								setChecking(false);
+							};
+							void check();
+						}}
+					/>
 					<InstanceSection instance={instance} />
 				</>
 			);

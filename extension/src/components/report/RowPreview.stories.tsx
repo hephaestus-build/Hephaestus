@@ -88,6 +88,13 @@ export const OneHeightInEveryState: Story = {
 			{ state: { status: "loading" } },
 			{ state: { status: "failed", message: "We could not reach Hephaestus." } },
 			{ state: { status: "signed-out", instanceHost: "hephaestus.example.test" } },
+			{
+				state: {
+					status: "server-too-old",
+					instanceHost: "hephaestus.example.test",
+					oldestServer: "1.0.0",
+				},
+			},
 			{ state: { status: "not-found", instanceHost: "hephaestus.example.test", workLabel: "#1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
 			{ feedback: { status: "error", message: "We could not load." } },
@@ -109,7 +116,7 @@ export const OneHeightInEveryState: Story = {
 		const heights = [...canvasElement.querySelectorAll<HTMLElement>("[data-state] > div")].map(
 			(element) => element.getBoundingClientRect().height,
 		);
-		await expect(heights).toHaveLength(9);
+		await expect(heights).toHaveLength(10);
 		await expect(new Set(heights)).toStrictEqual(new Set([LIST_STRIP_HEIGHT]));
 	},
 };
