@@ -117,6 +117,11 @@ async function completeWith(
 	{ modelId = "gpt-5", tools }: { modelId?: string; tools?: Context["tools"] } = {},
 ) {
 	const server = createServer((request, response) => {
+		// Another local process can probe a newly opened port. Only the provider call counts.
+		if (request.method !== "POST") {
+			response.writeHead(404).end();
+			return;
+		}
 		request.resume();
 		request.on("end", () => respond(response));
 	});

@@ -213,6 +213,11 @@ When a test flakes:
 `vp run check` fails on a skip that names no issue, owner and end date, and on an expired quarantine.
 A skip that depends on the environment, such as missing live credentials, is not a quarantine.
 
+A local test server does not own its port.
+Another process on the host can send a request as soon as the port opens.
+Check the method, path or credential that the test sends.
+Answer any other request with a 404 or a 401, and do not count it.
+
 ## Live external-service tests
 
 Live tests use real provider APIs, LLM endpoints or sandbox containers. They carry `@Tag("live")`

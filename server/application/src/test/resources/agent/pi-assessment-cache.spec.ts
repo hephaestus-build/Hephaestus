@@ -151,6 +151,11 @@ async function wire(
 ) {
 	const bodies: Record<string, unknown>[] = [];
 	const server = createServer((request, response) => {
+		// Another local process can probe a newly opened port. Only the provider call counts.
+		if (request.method !== "POST") {
+			response.writeHead(404).end();
+			return;
+		}
 		const chunks: Buffer[] = [];
 		request.on("data", (chunk: Buffer) => {
 			chunks.push(chunk);

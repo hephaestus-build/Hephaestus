@@ -38,6 +38,11 @@ for (const [apiProtocol, reasoningEffort, modelId = "test-model"] of [
 		const bodies: Record<string, unknown>[] = [];
 		const nativeRequests: unknown[] = [];
 		const server = createServer((request, response) => {
+			// Another local process can probe a newly opened port. Only the provider call counts.
+			if (request.method !== "POST") {
+				response.writeHead(404).end();
+				return;
+			}
 			const chunks: Buffer[] = [];
 			if (apiProtocol === "anthropic-messages") {
 				nativeRequests.push({ authorization: request.headers.authorization, path: request.url });

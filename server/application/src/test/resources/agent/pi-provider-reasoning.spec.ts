@@ -30,6 +30,11 @@ async function capturedBody(
 ): Promise<Record<string, unknown>> {
 	const captured: { body: Record<string, unknown> | null } = { body: null };
 	const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+		// Another local process can probe a newly opened port. Only the provider call counts.
+		if (request.method !== "POST") {
+			response.writeHead(404).end();
+			return;
+		}
 		const chunks: Buffer[] = [];
 		request.on("data", (chunk: Buffer) => {
 			chunks.push(chunk);

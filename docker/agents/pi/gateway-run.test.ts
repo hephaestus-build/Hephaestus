@@ -536,6 +536,11 @@ for (const scenario of [
 			body: Buffer;
 		}[] = [];
 		const server = createServer((request, response) => {
+			// Another local process can probe a newly opened port. Only the upload counts.
+			if (request.url !== "/result") {
+				response.writeHead(404).end();
+				return;
+			}
 			const chunks: Buffer[] = [];
 			request.on("data", (chunk: Buffer) => {
 				chunks.push(chunk);
