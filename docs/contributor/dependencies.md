@@ -62,6 +62,9 @@ Each held version has a row, with the condition that makes us try it again.
 | `lucide-react` | 1.41.0 | 1.64.0 adds 2,687 gzip bytes to the entry. The bundle budget in `webapp/tools/bundle-budget` allows 1,024. | A release does not grow the entry. |
 | `@base-ui/react` | 1.8.0 | 1.9.0 adds 2,088 gzip bytes to the entry. The bundle budget allows 1,024. 1.9 also renders a disabled accordion trigger with the native `disabled` attribute instead of `aria-disabled`, so `ui/accordion.tsx` and the catalog story move with it. | A release does not grow the entry. |
 | `monaco-editor` | 0.56.0 | 0.57.0 adds about 30,000 gzip bytes to each page with the code editor. No feature that we use needs 0.57. | We need a feature of a newer release, or a release does not grow these pages. |
+| `msw`, `msw-storybook-addon` | 2.15.0, 2.0.7 | Thirteen route tests fail on 3.0.3. A handler sees a request's `credentials` as `same-origin` when the app sends `omit`. A test of a response body in transit times out. | A release keeps the request as the app sent it. |
+| `motion` | 13.5.1 | 14.8.0 adds 4,612 gzip bytes to the landing page. The bundle budget in `webapp/tools/bundle-budget` allows 1,024. No feature that we use needs 14. | A release does not grow the page, or we need a feature of 14. |
+| `entities` | 8.1.0 | 9.0.0 adds a second copy to the tree for one lint rule. Its synchronous decoding, which we use, does not change. | Other packages in the tree move to 9. |
 | `com.graphql-java:graphql-java` | 25.0 | Every release shades Guava 32.1.2-jre. `security/vulnerability-policy.json` has a reviewed CVE-2026-102554 decision for the 25.0 jar only. The 25.1 jar that Spring Boot 4.1.2 manages has not been reviewed. | A release shades a fixed Guava, or a newer jar gets its own reviewed decision. |
 
 ## When to own code instead
