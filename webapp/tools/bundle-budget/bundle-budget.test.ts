@@ -7,6 +7,7 @@ import {
 	lazyKey,
 	measure,
 	TOLERANCE_BYTES,
+	updatedBaseline,
 } from "./bundle-budget";
 
 const chunk = (overrides: Partial<BuiltChunk> & Pick<BuiltChunk, "fileName">): BuiltChunk => ({
@@ -127,5 +128,49 @@ describe("checkBudget", () => {
 		expect(checkBudget(measured, baseline, ["react"]).violations).toStrictEqual([
 			"react is in the entry closure; only the routes that use it may load it.",
 		]);
+	});
+});
+
+describe("updatedBaseline", () => {
+	const baseline: BundleSizes = {
+		entry: 5000,
+		lazy: { "a.tsx": 5000, "b.tsx": 5000, "gone.tsx": 5 },
+	};
+	const checksClean = (measured: BundleSizes) => {
+		const updated = updatedBaseline(measured, baseline);
+		expect(checkBudget({ sizes: measured, entryPackages: [] }, updated, [])).toStrictEqual({
+			violations: [],
+			lowerable: [],
+		});
+		return updated;
+	};
+
+	it("keeps a size that moved within the tolerance, in both directions", () => {
+		const updated = checksClean({
+			entry: 5000 + TOLERANCE_BYTES,
+			lazy: { "a.tsx": 5000 - TOLERANCE_BYTES, "b.tsx": 5003 },
+		});
+		expect(updated).toStrictEqual({ entry: 5000, lazy: { "a.tsx": 5000, "b.tsx": 5000 } });
+	});
+
+	it("records growth and savings past the tolerance, a new chunk, and no removed chunk", () => {
+		const measured: BundleSizes = {
+			entry: 5001 + TOLERANCE_BYTES,
+			lazy: { "a.tsx": 4999 - TOLERANCE_BYTES, "b.tsx": 5000, "new.tsx": 7 },
+		};
+		expect(checksClean(measured)).toStrictEqual(measured);
+	});
+
+	it("keeps every size of a build within the tolerance", () => {
+		const updated = checksClean({
+			entry: 5001,
+			lazy: { "a.tsx": 4999, "b.tsx": 5000, "gone.tsx": 5 },
+		});
+		expect(updated).toStrictEqual(baseline);
+	});
+
+	it("records the build when no baseline can be read", () => {
+		const measured: BundleSizes = { entry: 7, lazy: { "a.tsx": 8 } };
+		expect(updatedBaseline(measured, undefined)).toStrictEqual(measured);
 	});
 });
