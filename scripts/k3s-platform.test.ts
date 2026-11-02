@@ -544,23 +544,23 @@ await test("repeat installs require an explicit certificate choice before changi
 	}
 });
 
-await test("the installer ends with the backup command for exactly the keys a restore needs", () => {
+await test("the installer ends with the command that backs up the keys a restore needs", () => {
 	const installer = read("k3s-install.sh");
+	const keysScript = read("hephaestus-keys.sh");
 	const custody = readFileSync(
 		fileURLToPath(new URL("../docs/admin/secret-custody.mdx", import.meta.url)),
 		"utf8",
 	);
 	const message = installer.slice(installer.lastIndexOf('say "Hephaestus $VERSION runs at'));
-	const selection = /test\("(?<keys>[^"]+)"\)/u.exec(message)?.groups?.keys ?? "";
-	assert.notEqual(selection, "", "the closing message names the keys that it copies");
-	// One rule in two places: the custody page gives the same command for every install.
-	assert.ok(custody.includes(`test("${selection}")`));
-	for (const text of [message, custody]) {
-		// A failed read must not leave an empty file that reads as a backup.
-		assert.match(text, /\(umask 077 && rm -f hephaestus-keys\.env && kubectl /u);
-		assert.match(text, /jq -er /u);
-	}
-	const generated = [...read("hephaestus-keys.sh").matchAll(/has (?<key>\w+) \|\| add /gu)].map(
+	// The installer and the custody page give one command; the key rule lives in the script alone.
+	// Quoted, so that a bundle folder with a space in its path still gives one argument.
+	assert.match(message, /sh "\$HERE\/hephaestus-keys\.sh" --export-keys /u);
+	assert.match(message, /export KUBECONFIG="\$KUBECONFIG"$/mu);
+	assert.match(custody, /sh hephaestus-keys\.sh --export-keys /u);
+	assert.match(custody, /sh hephaestus-keys\.sh --check-keys /u);
+	const selection = /^RESTORE_KEYS='(?<keys>[^']+)'$/mu.exec(keysScript)?.groups?.keys ?? "";
+	assert.notEqual(selection, "", "the script names the keys that a restore needs");
+	const generated = [...keysScript.matchAll(/has (?<key>\w+) \|\| add /gu)].map(
 		(match) => match.groups?.key ?? "",
 	);
 	const keys = new Set([

@@ -10,9 +10,11 @@ import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
 export type FeatureFlagName = keyof FeatureFlags;
 
 /**
- * Spelled out rather than imported from `@/api/zod.gen`: this module is in the entry bundle, and the
- * generated module would bring every schema with it. `satisfies` fails the build when `FeatureFlags`
- * gains a flag that this list lacks. A flag the server adds later is dropped, not rejected.
+ * Spelled out rather than imported from `@/api/zod.gen`: this module is in the entry bundle, and a
+ * lazy route also imports schemas from that one generated module. Rolldown cannot split a module
+ * across chunks, so the import would move every schema that any route uses into the entry.
+ * `satisfies` fails the build when `FeatureFlags` gains a flag that this list lacks. A flag the
+ * server adds later is dropped, not rejected.
  */
 const featureFlagsSchema = z.object({
 	ADMIN: z.boolean(),

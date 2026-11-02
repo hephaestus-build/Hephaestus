@@ -3,6 +3,11 @@
 #
 #   sh hephaestus-keys.sh [--namespace hephaestus] [--secret hephaestus-app] [--backups]
 #                         [--external-database [--new-keys]] [--external-nats]
+#   sh hephaestus-keys.sh [--namespace …] [--secret …] --export-keys FILE
+#   sh hephaestus-keys.sh [--namespace …] [--secret …] --check-keys FILE
+#
+# --export-keys writes the keys that a restore needs to a new file that only you can read, and
+# --check-keys tells for each key whether that file still matches the Secret. Both change nothing.
 #
 # It uses the current kubectl context. It creates the Secret, or adds only the keys that the Secret
 # lacks, and it never changes a key that exists. It prints key names, never a value.
@@ -22,6 +27,8 @@ BACKUPS=false
 EXTERNAL_DATABASE=false
 EXTERNAL_NATS=false
 NEW_KEYS=false
+EXPORT=
+CHECK=
 
 die() {
 	printf 'hephaestus-keys: %s\n' "$*" >&2
@@ -37,9 +44,14 @@ while [ $# -gt 0 ]; do
 	--external-database) EXTERNAL_DATABASE=true; shift ;;
 	--external-nats) EXTERNAL_NATS=true; shift ;;
 	--new-keys) NEW_KEYS=true; shift ;;
+	--export-keys) [ $# -ge 2 ] && [ -n "$2" ] || die "--export-keys needs a file"; EXPORT=$2; shift 2 ;;
+	--check-keys) [ $# -ge 2 ] && [ -n "$2" ] || die "--check-keys needs a file"; CHECK=$2; shift 2 ;;
 	*) die "unknown argument: $1" ;;
 	esac
 done
+if [ -n "$EXPORT$CHECK" ] && { [ -n "$EXPORT" ] && [ -n "$CHECK" ] || [ "$BACKUPS$EXTERNAL_DATABASE$EXTERNAL_NATS$NEW_KEYS" != falsefalsefalsefalse ]; }; then
+	die "--export-keys and --check-keys run alone, with at most --namespace and --secret"
+fi
 [ "$NEW_KEYS" = false ] || [ "$EXTERNAL_DATABASE" = true ] || die "--new-keys needs --external-database: for the bundled PostgreSQL, the script decides from its volume"
 printf '%s\n' "$NAMESPACE" | grep -Eq '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$' || die "not a namespace name: $NAMESPACE"
 printf '%s\n' "$SECRET" | grep -Eq '^[a-z0-9]([-.a-z0-9]{0,251}[a-z0-9])?$' || die "not a Secret name: $SECRET"
@@ -54,8 +66,76 @@ trap 'exit 1' HUP INT TERM
 
 # An error of the API stops the run here: it must never read as "no Secret", which would make new keys.
 secret_json=$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o json --ignore-not-found)
-existing=$(printf '%s' "$secret_json" | jq -r '.data // {} | keys[]')
+# jq on Windows ends each output line with CRLF, and $(...) strips only the LF, so every jq output
+# that the script reads drops its CR.
+existing=$(printf '%s' "$secret_json" | jq -r '.data // {} | keys[]' | tr -d '\r')
 has() { printf '%s\n' "$existing" | grep -qx "$1"; }
+# The keys that a restore needs: docs/admin/secret-custody.mdx § Keep the required keys outside the cluster.
+RESTORE_KEYS='^(HEPHAESTUS_SECURITY_(CREDENTIAL_|PRIOR_CREDENTIAL_)?ENCRYPTION_KEY|DATABASE_USERNAME|BACKUP_CIPHER_PASS)$'
+value_of() { printf '%s' "$secret_json" | jq -r --arg key "$1" '.data[$key] // empty | @base64d' | tr -d '\r'; }
+
+if [ -n "$EXPORT" ]; then
+	[ -n "$secret_json" ] || die "the Secret $NAMESPACE/$SECRET does not exist: there is nothing to back up"
+	{ has HEPHAESTUS_SECURITY_ENCRYPTION_KEY && has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY; } ||
+		die "the Secret $NAMESPACE/$SECRET lacks an encryption key: restore it before you back it up"
+	# An empty key restores nothing, so a file that holds one is no backup.
+	empty=$(printf '%s' "$secret_json" | jq -r --arg keys "$RESTORE_KEYS" \
+		'[.data | to_entries[] | select(.key | test($keys)) | select(.value | @base64d == "") | .key] | join(" ")' | tr -d '\r')
+	[ -z "$empty" ] || die "the Secret $NAMESPACE/$SECRET holds an empty $empty: restore it before you back it up"
+	directory=$(cd "$(dirname "$EXPORT")" && pwd -P) || die "the folder of $EXPORT does not exist"
+	case $directory in /var/lib/rancher | /var/lib/rancher/*) die "write the file outside the k3s data folder" ;; esac
+	[ ! -e "$EXPORT" ] && [ ! -L "$EXPORT" ] || die "$EXPORT exists: name a new file, so that no older copy is overwritten"
+	# A line break would split a value over two lines of the file, which then restores the wrong key.
+	breaks=$(printf '%s' "$secret_json" | jq -r --arg keys "$RESTORE_KEYS" \
+		'[.data | to_entries[] | select(.key | test($keys)) | .value | @base64d | select(test("[\r\n]"))] | length' | tr -d '\r')
+	[ "$breaks" = 0 ] || die "a key of the Secret holds a line break, so a file cannot keep it: copy it with another tool"
+	printf '%s' "$secret_json" | jq -r --arg keys "$RESTORE_KEYS" \
+		'.data | to_entries[] | select(.key | test($keys)) | "\(.key)=\(.value | @base64d)"' | tr -d '\r' >"$TEMP/keys.env"
+	[ -s "$TEMP/keys.env" ] || die "the Secret $NAMESPACE/$SECRET holds none of the keys that a restore needs"
+	names=$(printf '%s' "$secret_json" | jq -r --arg keys "$RESTORE_KEYS" '[.data | keys[] | select(test($keys))] | join(" ")' | tr -d '\r')
+	# umask 077 makes the new file 0600; noclobber refuses a file that appeared since the check above.
+	(set -C && cat "$TEMP/keys.env" >"$EXPORT") || die "could not write $EXPORT"
+	printf 'Wrote %s, readable only by you, with: %s\n' "$EXPORT" "$names"
+	echo "Move it off this host, to a password manager or offline storage, and delete it here."
+	exit 0
+fi
+
+if [ -n "$CHECK" ]; then
+	[ -f "$CHECK" ] || die "no file: $CHECK"
+	[ -n "$secret_json" ] || die "the Secret $NAMESPACE/$SECRET does not exist"
+	status=0
+	seen=
+	carriage=$(printf '\r')
+	while IFS= read -r line || [ -n "$line" ]; do
+		line=${line%"$carriage"}
+		case $line in '' | '#'*) continue ;; *=*) ;; *) die "$CHECK holds a line that is not KEY=VALUE" ;; esac
+		key=${line%%=*}
+		value=${line#*=}
+		printf '%s\n' "$key" | grep -Eq '^[A-Z][A-Z0-9_]*$' || die "$CHECK holds a line that is not KEY=VALUE"
+		seen="$seen $key"
+		if ! has "$key"; then
+			echo "$key: not in the Secret"
+			status=1
+		# The encoded values compare exactly: $(...) would drop a trailing line break from the Secret value.
+		elif [ "$(printf '%s' "$secret_json" | jq -r --arg key "$key" '.data[$key]' | tr -d '\r')" = \
+			"$(printf '%s' "$value" | openssl base64 -A | tr -d '\r\n')" ]; then
+			echo "$key: matches"
+		else
+			echo "$key: differs from the Secret"
+			status=1
+		fi
+	done <"$CHECK"
+	[ -n "$seen" ] || die "$CHECK holds no key"
+	for key in $existing; do
+		printf '%s\n' "$key" | grep -Eq "$RESTORE_KEYS" || continue
+		case " $seen " in *" $key "*) ;; *)
+			echo "$key: not in the file"
+			status=1
+			;;
+		esac
+	done
+	exit "$status"
+fi
 
 : >"$TEMP/secret.env"
 added=
@@ -63,7 +143,7 @@ add() {
 	# An empty value, for example from a failed openssl, would be kept by every later run.
 	[ -n "$2" ] || die "no value for $1: nothing was changed"
 	case $2 in *'
-'*) die "the value of $1 holds a line break" ;;
+'* | *"$(printf '\r')"*) die "the value of $1 holds a line break" ;;
 	esac
 	printf '%s=%s\n' "$1" "$2" >>"$TEMP/secret.env"
 	added="$added $1"
@@ -74,6 +154,8 @@ supply() {
 	[ -n "$value" ] || die "$2"
 	add "$1" "$value"
 }
+# Random bytes as one line. openssl on Windows ends base64 lines with CRLF, and $(...) strips only the LF.
+random() { openssl rand "$@" | tr -d '\r\n'; }
 
 if [ "$EXTERNAL_DATABASE" = false ]; then
 	database=$(kubectl -n "$NAMESPACE" get pvc -l app.kubernetes.io/component=postgresql -o name)
@@ -82,7 +164,7 @@ if [ "$EXTERNAL_DATABASE" = false ]; then
 		die "the PostgreSQL volume exists, but the Secret $SECRET lacks its database login or an encryption key. A new value would lock the database or lose what it encrypts. Restore the Secret from your backup, and run this again"
 	fi
 	has DATABASE_USERNAME || add DATABASE_USERNAME hephaestus
-	has DATABASE_PASSWORD || add DATABASE_PASSWORD "$(openssl rand -hex 16)"
+	has DATABASE_PASSWORD || add DATABASE_PASSWORD "$(random -hex 16)"
 else
 	has DATABASE_USERNAME || supply DATABASE_USERNAME "--external-database: set DATABASE_USERNAME to the login of your PostgreSQL"
 	has DATABASE_PASSWORD || supply DATABASE_PASSWORD "--external-database: set DATABASE_PASSWORD to the password of that login"
@@ -92,7 +174,7 @@ else
 	fi
 fi
 # "heph" and random hex, or nothing when openssl fails: a bare "heph" would pass the check in add.
-heph_random() { suffix=$(openssl rand -hex 16) && [ -n "$suffix" ] && printf 'heph%s' "$suffix"; }
+heph_random() { suffix=$(random -hex 16) && [ -n "$suffix" ] && printf 'heph%s' "$suffix"; }
 if [ "$EXTERNAL_NATS" = false ]; then
 	has NATS_USERNAME || add NATS_USERNAME "$(heph_random)"
 	has NATS_PASSWORD || add NATS_PASSWORD "$(heph_random)"
@@ -101,19 +183,19 @@ else
 	has NATS_PASSWORD || supply NATS_PASSWORD "--external-nats: set NATS_PASSWORD to the password of that login"
 fi
 # Each key gets its own value (docs/admin/secret-custody.mdx § Generation and rotation).
-has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_ENCRYPTION_KEY "$(openssl rand -hex 16)"
-has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY "$(openssl rand -hex 16)"
-has HEPHAESTUS_AUTH_STATE_COOKIE_KEY || add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(openssl rand -base64 32)"
-has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(openssl rand -hex 32)"
-has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(openssl rand -hex 32)"
+has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_ENCRYPTION_KEY "$(random -hex 16)"
+has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY "$(random -hex 16)"
+has HEPHAESTUS_AUTH_STATE_COOKIE_KEY || add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(random -base64 32)"
+has WEBHOOK_SECRET || add WEBHOOK_SECRET "$(random -hex 32)"
+has WEBHOOK_ROUTING_SECRET || add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
 if [ "$BACKUPS" = true ]; then
-	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(openssl rand -base64 48 | tr -d '\n')"
+	has BACKUP_CIPHER_PASS || add BACKUP_CIPHER_PASS "$(random -base64 48)"
 fi
 
 changed=
 client_secret=$(printenv GITHUB_OAUTH_CLIENT_SECRET || true)
 if [ -n "$client_secret" ]; then
-	current=$(printf '%s' "$secret_json" | jq -r '.data.GITHUB_OAUTH_CLIENT_SECRET // empty | @base64d')
+	current=$(printf '%s' "$secret_json" | jq -r '.data.GITHUB_OAUTH_CLIENT_SECRET // empty | @base64d' | tr -d '\r')
 	if [ "$current" != "$client_secret" ]; then
 		add GITHUB_OAUTH_CLIENT_SECRET "$client_secret"
 		# The server copies the client secret at its start, so a running server needs a restart.
