@@ -60,6 +60,7 @@ Each held version has a row, with the condition that makes us try it again.
 | `react`, `react-dom` | 19.2.8 | 19.3 adds 29,236 bytes to the entry, which every page loads. `react-dom` is part of the entry, so no route split can move it. | The entry budget has room for it. |
 | `lucide-react` | 1.41.0 | 1.64.0 adds 2,687 gzip bytes to the entry. The bundle budget in `webapp/tools/bundle-budget` allows 1,024. | A release does not grow the entry. |
 | `monaco-editor` | 0.56.0 | 0.57.0 adds about 30,000 gzip bytes to each page with the code editor. No feature that we use needs 0.57. | We need a feature of a newer release, or a release does not grow these pages. |
+| `com.graphql-java:graphql-java` | 25.0 | Every release shades Guava 32.1.2-jre. `security/vulnerability-policy.json` has a reviewed CVE-2026-102554 decision for the 25.0 jar only. The 25.1 jar that Spring Boot 4.1.2 manages has not been reviewed. | A release shades a fixed Guava, or a newer jar gets its own reviewed decision. |
 
 ## When to own code instead
 

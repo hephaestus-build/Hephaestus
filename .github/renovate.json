@@ -7,7 +7,7 @@
 	],
 	"assigneesFromCodeOwners": true,
 	"timezone": "Europe/Berlin",
-	"schedule": ["before 7am every weekday"],
+	"schedule": ["before 7am on monday"],
 	"minimumReleaseAge": "3 days",
 	"semanticCommitScope": "deps",
 	"enabledManagers": [
@@ -23,7 +23,7 @@
 	"dependencyDashboardTitle": "Dependency Dashboard",
 	"lockFileMaintenance": {
 		"enabled": true,
-		"schedule": ["before 7am on monday"]
+		"schedule": ["before 7am on the first day of the month"]
 	},
 	"rangeStrategy": "replace",
 	"constraints": { "java": "21" },
@@ -37,9 +37,33 @@
 			]
 		},
 		{
-			"matchManagers": ["github-actions"],
+			"description": "Workflows, their actions and the CI tools they pin move in one pull request",
+			"matchFileNames": [".github/**"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "GitHub Actions"
+			"groupName": "CI and build tooling"
+		},
+		{
+			"matchManagers": ["gradle-wrapper"],
+			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+			"groupName": "CI and build tooling"
+		},
+		{
+			"description": "What the chart and the release image set ship moves in one pull request, after the images it replaces are stable",
+			"matchDatasources": ["docker"],
+			"matchFileNames": [
+				"**/Dockerfile",
+				"**/*compose*.yaml",
+				"deploy/**",
+				"security/release-images.json",
+				"server/application/project.toml"
+			],
+			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+			"groupName": "runtime images"
+		},
+		{
+			"matchDepNames": ["paketobuildpacks/**"],
+			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+			"groupName": "runtime images"
 		},
 		{
 			"matchManagers": ["npm"],
@@ -49,15 +73,27 @@
 		},
 		{
 			"matchManagers": ["npm"],
-			"matchFileNames": ["webapp/package.json"],
-			"matchDepTypes": ["devDependencies"],
+			"matchFileNames": ["webapp/package.json", "extension/package.json"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-			"groupName": "webapp development dependencies"
+			"groupName": "webapp and extension dependencies"
 		},
 		{
 			"matchManagers": ["gradle"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
 			"groupName": "server dependencies"
+		},
+		{
+			"description": "The practice runtime's model SDK moves on its own, because each update needs the practice evaluation set run before and after",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["docker/agents/practice-scripts/package.json"],
+			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+			"groupName": "AI SDK and practice runtime"
+		},
+		{
+			"matchManagers": ["npm"],
+			"matchPackageNames": ["ai", "@ai-sdk/**"],
+			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+			"groupName": "AI SDK and practice runtime"
 		},
 		{
 			"matchUpdateTypes": ["major"],
