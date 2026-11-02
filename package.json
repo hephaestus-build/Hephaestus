@@ -10,10 +10,10 @@
 		"@actions/expressions": "0.3.61",
 		"@actions/languageservice": "0.3.61",
 		"@actions/workflow-parser": "0.3.61",
-		"@ai-sdk/anthropic": "4.0.85",
-		"@ai-sdk/openai": "4.0.85",
-		"@ai-sdk/openai-compatible": "3.0.63",
-		"@ai-sdk/provider": "4.0.22",
+		"@ai-sdk/anthropic": "4.0.92",
+		"@ai-sdk/openai": "4.0.105",
+		"@ai-sdk/openai-compatible": "3.0.81",
+		"@ai-sdk/provider": "4.0.34",
 		"@changesets/cli": "3.0.3",
 		"@changesets/read": "1.0.1",
 		"@commitlint/cli": "21.2.4",
@@ -26,7 +26,7 @@
 		"@types/npm-package-arg": "6.1.4",
 		"@types/pg": "8.23.1",
 		"@vitest/browser-playwright": "catalog:",
-		"ai": "7.0.128",
+		"ai": "7.0.157",
 		"ajv": "8.20.0",
 		"ajv-formats": "3.0.1",
 		"commander": "15.0.0",
@@ -55,7 +55,7 @@
 		"vite-plus": "1.4.0",
 		"vscode-languageserver-textdocument": "1.0.16",
 		"yaml": "2.9.1",
-		"zod": "4.6.6"
+		"zod": "4.6.7"
 	},
 	"devEngines": {
 		"packageManager": {

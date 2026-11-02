@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { Experimental_DecisionUnsupportedQuestionTypeError, experimental_decide } from "ai";
+
 import type { ModelSlot, SlotAnswer } from "./contract.ts";
 import { ipcModels } from "./models-ipc.ts";
 import { agent, z } from "./practice-script.ts";
@@ -32,9 +34,33 @@ void test("a model call crosses to the host without its signal or a function, an
 void test("an answer for another slot is refused", async () => {
 	const { decision } = ipcModels({ decision: "d" }, async () => embedded);
 	assert.ok(decision !== undefined);
-	await assert.rejects(async () => decision.doDecide({ state: "s", questions: {} }), {
-		message: "the host answered a decision call with another slot's result",
+	await assert.rejects(
+		async () => decision.doDecide({ state: [{ type: "text", text: "s" }], questions: {} }),
+		{
+			message: "the host answered a decision call with another slot's result",
+		},
+	);
+});
+
+void test("a box question stops in the script, before it reaches the host", async () => {
+	let calls = 0;
+	const { decision } = ipcModels({ decision: "d" }, async () => {
+		calls += 1;
+		return embedded;
 	});
+	assert.ok(decision !== undefined);
+	await assert.rejects(
+		async () =>
+			experimental_decide({
+				model: decision,
+				state: "a screenshot",
+				questions: { where: { type: "box", instructions: "Where is the submit button?" } },
+			}),
+		(error: unknown) =>
+			Experimental_DecisionUnsupportedQuestionTypeError.isInstance(error) &&
+			error.questionId === "where",
+	);
+	assert.equal(calls, 0);
 });
 
 for (const [supported, expected] of [
