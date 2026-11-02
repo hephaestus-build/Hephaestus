@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { environmentForGitFixture } from "./lib/git-environment.ts";
 import {
+	removedChartValues,
 	verifyChangesets,
 	verifyLocalChangesets,
 	verifyChangesetMigration,
 	verifyMigrationFragment,
+	verifyRemovedChartValues,
 } from "./verify-changesets.ts";
 
 const status = (releases: unknown[], summary: string) => ({
@@ -222,4 +225,108 @@ void test("a changeset consumed in pre mode needs its entry in the candidate's m
 		"#### 🔴 Stop every role before the lease cutover\n\nStop all roles.\n",
 	);
 	await verifyLocalChangesets(root);
+});
+
+const chartSchema = (gitlab: Record<string, unknown>, top: Record<string, unknown> = {}) => ({
+	definitions: { flag: { type: "boolean" } },
+	properties: {
+		config: {
+			type: "object",
+			properties: {
+				gitlab: { type: "object", properties: gitlab },
+			},
+		},
+		...top,
+	},
+});
+const flag = { $ref: "#/definitions/flag" };
+const listSchema = (fields: Record<string, unknown>) => ({
+	properties: { route: { type: "array", items: { properties: fields } } },
+});
+const branchSchema = (fields: Record<string, unknown>) => ({
+	properties: { auth: { properties: { mode: flag }, oneOf: [{ properties: fields }] } },
+});
+
+void test("names a removed chart value once, at the top of what the schema lost", () => {
+	const base = chartSchema(
+		{ enabled: flag, workspaceCreation: flag },
+		{ route: { type: "string" } },
+	);
+	assert.deepEqual(removedChartValues(base, base), []);
+	assert.deepEqual(removedChartValues(base, chartSchema({ enabled: flag }, base.properties)), []);
+	assert.deepEqual(
+		removedChartValues(base, chartSchema({ enabled: flag }, { route: { type: "string" } })),
+		["config.gitlab.workspaceCreation"],
+	);
+	assert.deepEqual(removedChartValues(base, { properties: { route: { type: "string" } } }), [
+		"config",
+	]);
+	// A list's items and a conditional branch hold names that an operator sets, too.
+	assert.deepEqual(
+		removedChartValues(listSchema({ name: flag, section: flag }), listSchema({ name: flag })),
+		["route[].section"],
+	);
+	assert.deepEqual(removedChartValues(listSchema({ name: flag }), { properties: {} }), ["route"]);
+	assert.deepEqual(removedChartValues(branchSchema({ issuer: flag }), branchSchema({})), [
+		"auth.issuer",
+	]);
+	// A group that only loses its condition keeps every name.
+	assert.deepEqual(
+		removedChartValues(
+			{ properties: { auth: { properties: { mode: flag }, if: { required: ["mode"] } } } },
+			{ properties: { auth: { properties: { mode: flag } } } },
+		),
+		[],
+	);
+});
+
+void test("a removed chart value needs a note that names it in backticks", () => {
+	const base = chartSchema({ enabled: flag, workspaceCreation: flag });
+	const head = chartSchema({ enabled: flag });
+	const note = "Remove `config.gitlab.workspaceCreation` before you upgrade.";
+	assert.doesNotThrow(() => verifyRemovedChartValues(base, head, note));
+	assert.doesNotThrow(() => verifyRemovedChartValues(base, base, ""));
+	assert.doesNotThrow(
+		() => verifyRemovedChartValues(head, base, ""),
+		"an added value needs no note",
+	);
+	for (const notes of ["", "Remove config.gitlab.workspaceCreation.", "Remove `config.gitlab`."]) {
+		assert.throws(
+			() => verifyRemovedChartValues(base, head, notes),
+			/no longer accepts config\.gitlab\.workspaceCreation/u,
+		);
+	}
+});
+
+void test("the pull request check compares the chart's schema with the merge base", async (t) => {
+	const source = await readFile(".github/workflows/verify-changesets.yml", "utf8");
+	assert.match(
+		source,
+		/if ! git diff --quiet "\$BASE_SHA"\.\.\.HEAD -- deploy\/chart\/hephaestus\/values\.schema\.json; then\n\s+node scripts\/verify-changesets\.ts --removed-chart-values "\$BASE_SHA" "\$\{changesets_changed\[@\]\}" "\$\{migration_changed\[@\]\}"/u,
+	);
+
+	const root = await mkdtemp(path.join(tmpdir(), "removed-chart-value-"));
+	t.after(async () => rm(root, { recursive: true, force: true }));
+	const environment = environmentForGitFixture();
+	const git = (...args: string[]) =>
+		execFileSync("git", args, { cwd: root, env: environment, stdio: "pipe" });
+	const schemaFile = path.join(root, "deploy/chart/hephaestus/values.schema.json");
+	await mkdir(path.dirname(schemaFile), { recursive: true });
+	await writeFile(schemaFile, JSON.stringify(chartSchema({ enabled: flag, gone: flag })));
+	git("init", "--quiet");
+	git("add", ".");
+	git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "--quiet", "-m", "base");
+	const base = git("rev-parse", "HEAD").toString().trim();
+	await writeFile(schemaFile, JSON.stringify(chartSchema({ enabled: flag })));
+	const note = path.join(root, "note.md");
+	const script = fileURLToPath(new URL("verify-changesets.ts", import.meta.url));
+	const check = (...files: string[]) =>
+		execFileSync(process.execPath, [script, "--removed-chart-values", base, ...files], {
+			cwd: root,
+			env: environment,
+			stdio: "pipe",
+		});
+	assert.throws(() => check(), /no longer accepts config\.gitlab\.gone/u);
+	await writeFile(note, "Remove `config.gitlab.gone`.\n");
+	check(note);
 });

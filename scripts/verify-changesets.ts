@@ -1,10 +1,12 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { readChangesets } from "@changesets/read";
 
+import { CHART } from "./lib/deploy-topology.ts";
 import { isSet } from "./lib/env.ts";
-import { asArray, asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord, parseJson, readJsonFile } from "./lib/json.ts";
 import { migrationGuideSections } from "./lib/migration-guide.ts";
 import { CLAUDE_SESSION_PATTERN } from "./lib/model-attribution.ts";
 import { parseVersion } from "./lib/release-version.ts";
@@ -190,6 +192,57 @@ export const verifyConsumedMigrationEntries = (
 	}
 };
 
+/** Each name that a chart schema accepts, as a dotted path. `[]` marks the items of a list. */
+const chartValueNames = (schema: unknown): Set<string> => {
+	const root = asRecord(schema, "chart schema");
+	const definitions = isRecord(root.definitions) ? root.definitions : {};
+	const names = new Set<string>();
+	const walk = (raw: unknown, prefix: string): void => {
+		if (!isRecord(raw)) {
+			return;
+		}
+		const node =
+			typeof raw.$ref === "string" ? definitions[raw.$ref.replace("#/definitions/", "")] : raw;
+		if (!isRecord(node)) {
+			return;
+		}
+		for (const [name, child] of Object.entries(isRecord(node.properties) ? node.properties : {})) {
+			const key = prefix === "" ? name : `${prefix}.${name}`;
+			names.add(key);
+			walk(child, key);
+		}
+		walk(node.items, `${prefix}[]`);
+		for (const branch of [node.then, node.else, node.allOf, node.anyOf, node.oneOf].flat()) {
+			walk(branch, prefix);
+		}
+	};
+	walk(root, "");
+	return names;
+};
+
+/** Each name that the base schema has and the head schema lacks: `a` once for a removed group `a.*`. */
+export const removedChartValues = (base: unknown, head: unknown): string[] => {
+	const kept = chartValueNames(head);
+	const removed = [...chartValueNames(base)].filter((name) => !kept.has(name));
+	return removed.filter(
+		(name) =>
+			!removed.some((other) => name.startsWith(`${other}.`) || name.startsWith(`${other}[]`)),
+	);
+};
+
+/**
+ * The chart refuses a value that its schema lacks, so an operator who still sets a removed value
+ * cannot upgrade. The repository cannot read an operator's values, so it requires the warning.
+ */
+export const verifyRemovedChartValues = (base: unknown, head: unknown, notes: string): void => {
+	const unnamed = removedChartValues(base, head).filter((key) => !notes.includes(`\`${key}\``));
+	if (unnamed.length > 0) {
+		throw new Error(
+			`The chart no longer accepts ${unnamed.join(", ")}: name each value in backticks in this pull request's changeset or migration fragment, with the action an operator takes`,
+		);
+	}
+};
+
 export async function verifyLocalChangesets(rootDir: string): Promise<void> {
 	const changesets = await readChangesets(rootDir);
 	await verifyParsedChangesets(
@@ -199,16 +252,35 @@ export async function verifyLocalChangesets(rootDir: string): Promise<void> {
 	);
 }
 
+const git = (...command: string[]) =>
+	execFileSync("git", command, { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+
 async function main(): Promise<void> {
 	const [statusJson, ...arguments_] = process.argv.slice(2);
 	if (!isSet(statusJson)) {
-		throw new Error("usage: verify-changesets.ts --local | <changeset-status-json> <files...>");
+		throw new Error(
+			"usage: verify-changesets.ts --local | --removed-chart-values <base> <files...> | <changeset-status-json> <files...>",
+		);
 	}
 	if (statusJson === "--local") {
 		if (arguments_.length > 0) {
 			throw new Error("--local reads all pending changesets and takes no file arguments");
 		}
 		await verifyLocalChangesets(process.cwd());
+		return;
+	}
+	if (statusJson === "--removed-chart-values") {
+		const [base, ...notes] = arguments_;
+		if (!isSet(base)) {
+			throw new Error("--removed-chart-values needs the base commit");
+		}
+		const schema = path.posix.join(CHART, "values.schema.json");
+		const mergeBase = git("merge-base", base, "HEAD").trim();
+		verifyRemovedChartValues(
+			parseJson(git("show", `${mergeBase}:${schema}`)),
+			parseJson(readFileSync(schema, "utf8")),
+			notes.map((file) => readFileSync(file, "utf8")).join("\n"),
+		);
 		return;
 	}
 	const status = await readJsonFile(statusJson);
