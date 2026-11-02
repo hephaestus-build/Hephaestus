@@ -1,5 +1,5 @@
 import { BookOpenIcon, ChevronDownIcon } from "lucide-react";
-import { type ComponentType, useId } from "react";
+import { type ComponentType, type ReactNode, useId } from "react";
 
 import { cn } from "cn";
 import { type StatusDef, statusToneClass, statusValues } from "@/components/common/status-def";
@@ -17,7 +17,13 @@ export interface PracticeProfileGuideProps {
 	/** Whether the explanation is open. The button that opens it stays either way, so it can come back. */
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	/** A control beside the button, such as the one that starts the guided tour. */
+	action?: ReactNode;
 }
+
+/** Who can see what on the Practice profile. The legend and the guided tour both say it, from here. */
+export const PROFILE_AUDIENCE =
+	"Your Practice profile is yours. Feedback on a pull request is visible to everyone who can see that pull request. Workspace admins can see all practice reviews, and instance admins can open a read-only view.";
 
 /**
  * What a first visit needs before the page makes sense. The rules a card resolves by stay on the
@@ -28,7 +34,7 @@ const POINTS = [
 	"Your standing on a practice comes from your recent reviewed work. It is not a grade. Gray means there is nothing to judge yet.",
 	"A feedback card appears when reviews find the same problem in at least two pieces of your work. It resolves when several pieces of your work in a row, reviewed after it, come back clean, and the card counts how many more it needs.",
 	"Feedback about one piece of work, such as a pull request, stays on that work. If something is unclear, ask Hephaestus.",
-	"Your Practice profile is yours. Feedback on a pull request is visible to everyone who can see that pull request. Workspace admins can see all practice reviews, and instance admins can open a read-only view.",
+	PROFILE_AUDIENCE,
 	GROUP_COLORS_NOTE,
 ] as const;
 
@@ -52,17 +58,20 @@ const TREND_ENTRIES: StatusDef[] = statusValues(PRACTICE_TREND_DEFS).map(
  * trends mean, and when a feedback card appears and resolves. The label sentences are the
  * registries' own, the ones a badge shows only on hover, so each sentence has one home.
  */
-export function PracticeProfileGuide({ open, onOpenChange }: PracticeProfileGuideProps) {
+export function PracticeProfileGuide({ open, onOpenChange, action }: PracticeProfileGuideProps) {
 	return (
 		<Collapsible open={open} onOpenChange={onOpenChange}>
-			<CollapsibleTrigger render={<Button variant="quiet" size="sm" className="group -ml-2.5" />}>
-				<BookOpenIcon aria-hidden />
-				How to read this page
-				<ChevronDownIcon
-					aria-hidden
-					className="transition-transform group-aria-expanded:rotate-180 motion-reduce:transition-none"
-				/>
-			</CollapsibleTrigger>
+			<div className="flex flex-wrap items-center gap-x-1">
+				<CollapsibleTrigger render={<Button variant="quiet" size="sm" className="group -ml-2.5" />}>
+					<BookOpenIcon aria-hidden />
+					How to read this page
+					<ChevronDownIcon
+						aria-hidden
+						className="transition-transform group-aria-expanded:rotate-180 motion-reduce:transition-none"
+					/>
+				</CollapsibleTrigger>
+				{action}
+			</div>
 			{/* The panel itself stays unstyled: `hiddenUntilFound` keeps it in the layout while closed,
 			    so a border or padding on it would draw an empty frame. */}
 			<CollapsibleContent hiddenUntilFound>

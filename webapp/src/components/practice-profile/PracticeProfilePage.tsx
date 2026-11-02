@@ -1,4 +1,6 @@
 // The palette this page and its levels share is `webapp/DESIGN.md` § Practice surfaces palette.
+import type { ReactNode } from "react";
+
 import type { GroupRef, PracticeStanding, ProfileReviewRef } from "@/api/types.gen";
 import type { LoadState } from "@/components/common/panel-state";
 import {
@@ -60,6 +62,13 @@ export interface PracticeProfilePageProps {
 	 */
 	firstRun?: Omit<ProfileFirstRunProps, "reviewed">;
 	state: LoadState;
+	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
+	tourAction?: ReactNode;
+	/**
+	 * The offer to explain a first feedback card, shown while the reader has exactly one card and that
+	 * card is open. It needs no dismissal: the state that shows it ends by itself.
+	 */
+	firstCardOffer?: ReactNode;
 }
 
 /** Two cards' worth of skeleton while the cards load: what fits above the fold under the header. */
@@ -110,6 +119,8 @@ export function PracticeProfilePage({
 	onFeedbackTabChange,
 	firstRun,
 	state,
+	tourAction,
+	firstCardOffer,
 }: PracticeProfilePageProps) {
 	const openGroupBySlug = (groupSlug: string) => {
 		const group = groups.find((candidate) => candidate.slug === groupSlug);
@@ -150,8 +161,10 @@ export function PracticeProfilePage({
 				practiceCount={practices.length}
 				groupCount={groups.length}
 				isLoading={isLoading}
+				tourAction={tourAction}
 			/>
 			<Section
+				data-tour-slot="feedback"
 				size="lg"
 				title="Your feedback"
 				description="Each card is one pattern seen more than once across your work, with the one thing to try next."
@@ -180,6 +193,10 @@ export function PracticeProfilePage({
 						</PracticeTabsList>
 						<span className="pb-2 text-sm text-muted-foreground">Newest first</span>
 					</PracticeTabsRail>
+					{!isLoading &&
+						feedbackCards.length === 1 &&
+						cardsByTab.open.length === 1 &&
+						firstCardOffer}
 					<TabsContent value={feedbackTab}>
 						{/* Room between the cards, so each card's own edge is what parts them. */}
 						<div className="flex flex-col gap-6" aria-busy={isLoading}>

@@ -317,6 +317,36 @@ describe("practice profile route", () => {
 		expect(practicePage).not.toHaveBeenCalled();
 	});
 
+	it("opens the guided tour only when asked, and a link in it hands over to the real level", async () => {
+		const router = await renderProfile();
+		// The page has loaded without it: nothing starts by itself.
+		await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
+
+		fireEvent.click(screen.getByRole("button", { name: "Take the tour" }));
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		fireEvent.click(within(dialog).getByRole("button", { name: /Going deeper/u }));
+		for (let step = 0; step < 3; step += 1) {
+			fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
+		}
+		fireEvent.click(await within(dialog).findByRole("link", { name: "See all practice groups" }));
+
+		await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull());
+		await waitFor(() =>
+			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual([
+				"practice-groups:all",
+			]),
+		);
+	});
+
+	it("keeps the guided tour out of a user view", async () => {
+		storeUserView({ workspaceSlug: "acme" });
+		await renderProfile();
+		await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("button", { name: "Take the tour" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "See how feedback comes about" })).toBeNull();
+	});
+
 	it("stacks the list, a group and a practice in the detail param, one history entry each", async () => {
 		const router = await renderProfile();
 		const entries = router.history.length;

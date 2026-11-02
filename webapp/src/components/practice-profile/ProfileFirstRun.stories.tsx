@@ -73,6 +73,21 @@ export const Default: Story = {
 };
 
 /** Where an admin approves feedback first, the page says so about the workspace, never about an item. */
+export const WithTourOffer: Story = {
+	args: {
+		tourOffer: (
+			<Button variant="quiet" size="sm">
+				See how feedback comes about
+			</Button>
+		),
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("button", { name: "See how feedback comes about" }),
+		).toBeVisible();
+	},
+};
+
 export const ApprovalBeforePosting: Story = {
 	args: { readiness: { ...READY, approvalBeforePosting: true } },
 	play: async ({ canvas }) => {

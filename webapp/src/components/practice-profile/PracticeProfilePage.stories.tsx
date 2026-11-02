@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { ASK_HEPHAESTUS_LABEL } from "@/components/brand/HephaestusMark";
+import { Button } from "@/components/ui/button";
 import { ALL_FEEDBACK_CARDS } from "@/stories/practice-feedback-cards-story-mock-data";
 import {
 	groups,
@@ -39,6 +40,40 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/** The tour's offer stands with a first card, and goes by itself when a second card arrives. */
+export const FirstCardOffer: Story = {
+	args: {
+		feedbackCards: ALL_FEEDBACK_CARDS.filter((card) => card.state === "new").slice(0, 1),
+		firstCardOffer: (
+			<Button variant="quiet" size="sm">
+				See how to read it
+			</Button>
+		),
+		tourAction: (
+			<Button variant="quiet" size="sm">
+				Take the tour
+			</Button>
+		),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "See how to read it" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Take the tour" })).toBeVisible();
+	},
+};
+
+export const NoOfferWithSeveralCards: Story = {
+	args: {
+		firstCardOffer: (
+			<Button variant="quiet" size="sm">
+				See how to read it
+			</Button>
+		),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("button", { name: "See how to read it" })).toBeNull();
+	},
+};
 
 export const Default: Story = {
 	play: async ({ args, canvas }) => {

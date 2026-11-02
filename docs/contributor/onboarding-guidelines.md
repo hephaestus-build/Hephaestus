@@ -6,7 +6,7 @@ page_type: explanation
 
 Hephaestus teaches through its own pages.
 Each page explains itself, shows guidance in the place where it applies, and derives that guidance from the person's real state.
-Hephaestus has no product tour.
+A guided tour, which a person starts, explains what the pages cannot show at once.
 This page gives the rules for every change that adds guidance, an empty state, or a first-run step.
 The general design principles and the motion rules are in [`webapp/DESIGN.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/webapp/DESIGN.md).
 This page applies them to onboarding and does not repeat them.
@@ -18,7 +18,7 @@ Three facts shape onboarding in Hephaestus.
 1. **People come to do a task.** They skip and forget instructions that come before the task.
    A study of three games found that tutorials improved engagement only in the most complex game.
    The source is [Andersen et al., CHI 2012](https://grail.cs.washington.edu/projects/game-abtesting/chi2012/).
-   People learn Hephaestus by use, so we infer that a tour adds little.
+   Thus, an explanation must wait until the person wants it.
    Apple says that people should understand an app "simply by experiencing it" ([HIG Onboarding](https://developer.apple.com/design/human-interface-guidelines/onboarding)).
 2. **The value arrives later.** A review starts from configured events on the work, or from a request.
    A feedback card needs the same problem on at least two different pieces of work.
@@ -103,6 +103,7 @@ It does not state a time that the server did not measure.
 | Notice in the page | The person must know or decide something, but not now | `Alert` as a region named by its title, first in the main content, one at a time |
 | Setup list from real facts | An admin setting blocks value for members | One row for each fact, with its status and a link to the page that changes it |
 | Example questions | The person sees an empty conversation | The conversation greeting. A question fills the composer. |
+| Guided tour | A person wants the chain from work to feedback, or the levels under a page | `PracticeProfileTour`, started from the page or from an offer that follows state |
 
 A legend starts closed when the page shows the meaning that the reader needs.
 After the reader opens or closes it, it stays in that state until the reader changes it ([NN/g accordions](https://www.nngroup.com/articles/accordions-complex-content/)).
@@ -111,29 +112,50 @@ After the reader opens or closes it, it stays in that state until the reader cha
 
 | Pattern | Reason |
 |---|---|
-| A product tour that starts by itself, or a tour of more than five steps | People finish a tour that they start more often than one that starts by itself, and fewer finish a longer tour. The figures differ between reports, so only this direction holds. The sources are vendor data: [Chameleon](https://www.chameleon.io/blog/mastering-product-tours) and [Produktly](https://produktly.com/research/saas-onboarding-benchmarks-2026). Our first value arrives after the first sign-in. |
+| A tour that starts by itself on a first visit | It covers the page before the person has seen anything of their own, after other first-visit steps. See [the guided tour](#the-guided-tour). |
 | A modal dialog for information or for an optional decision on load | Apple: "Avoid showing an alert when your app starts". GOV.UK has no modal component. |
 | Sample feedback or a demo profile on the reader's own page | Rule 5 |
 | A mascot or a narrator | Microsoft turned off its Office assistant by default in 2001 ([Microsoft](http://web.archive.org/web/20250401114434/https://news.microsoft.com/2001/04/11/farewell-clippy-whats-happening-to-the-infamous-office-assistant-in-office-xp/)). An assistant must be easy to call and easy to dismiss ([Amershi et al., CHI 2019](https://www.microsoft.com/en-us/research/publication/guidelines-for-human-ai-interaction/)). |
 | A beacon, a hotspot, or motion that loops to get attention | It pulls attention from the task. This ban is stricter than [WCAG 2.2.2](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html), which also allows a control to stop the motion. |
-| A "seen" flag in browser storage for guidance about a person | The guidance comes back on each device. Use state, or the server. |
-| A tour library or a second positioning engine | Our guidance lives in the components that it explains, so it needs no overlay and no positioning. A target that an engine finds by a selector or by text needs its own tests to stay correct. Some libraries also need an AGPL-3.0 or a paid license, such as [Shepherd.js](https://github.com/shipshapecode/shepherd) and [Intro.js](https://introjs.com/docs/getting-started/license). |
+| A "seen" flag in browser storage that decides whether guidance appears | The guidance comes back on each device. Use state, or the server. |
+| A tour library, or a spotlight over the live page | A spotlight needs a positioning engine, a cutout, and a change to the drawers so that they stay usable under it. A target that an engine finds by a selector or by text needs its own tests to stay correct. It also needs a populated page, which a new person lacks. Some libraries also need an AGPL-3.0 or a paid license, such as [Shepherd.js](https://github.com/shipshapecode/shepherd) and [Intro.js](https://introjs.com/docs/getting-started/license). |
 | A "What's new" dialog or a welcome dialog | The release notes own changes. A welcome dialog interrupts on load. |
 
-## The bar for a future tour or hint
+## The guided tour
 
-A tour or a hint is a new pattern.
-It needs an explanation of the failure that it prevents, and it must meet all of these conditions:
+The Practice profile has a guided tour.
+The page explains itself, but one page cannot show the chain from work to feedback, or the levels under it.
+Decide each of the points below from what the person needs at that moment.
+The research gives a direction for each point, not a limit.
 
-- The person starts it, or a real first event shows it, such as the first feedback card.
-- It has no more than five steps, and it shows the person's real data.
-- It is attached to a component slot, not found by a selector or by text.
-- It is not modal. It does not trap focus, and it never fully covers the focused element ([WCAG 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)).
-- Its keyboard and screen-reader paths are complete. It announces changes without moving focus ([WCAG 4.1.3](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)).
-- It follows reduced motion. It does not scroll the page by itself.
-- Only one shows at a time. Apple's TipKit spaces tips, for example one each day ([WWDC23 TipKit](https://developer.apple.com/videos/play/wwdc2023/10229/)).
-- The server remembers its dismissal for the account. User settings can show it again, and export and erasure include it.
-- A test walks every step.
+- **Length follows the questions.** Each chapter answers one question that a person has at a known moment, such as "How does my work become feedback?".
+  Completion falls as tours get longer, and a tour that a person starts completes more often than one that starts by itself ([Chameleon](https://www.chameleon.io/blog/mastering-product-tours), [Produktly](https://produktly.com/research/saas-onboarding-benchmarks-2026), vendor data, so only the direction holds).
+  Thus, the person chooses a chapter and can leave and continue, and a chapter is as long as its answer.
+- **The start follows the moment.** A person starts the tour, or accepts an offer that the page derives from state, such as the first-run state or a first feedback card.
+  An offer that follows state ends by itself, so it needs no dismissal.
+  The tour does not open by itself. The first visit already follows the terms, and perhaps the AI choice.
+  If the offers prove too quiet, change them there.
+- **A dialog is right when the person asked for it.** The tour is the one task on screen, so [`webapp/DESIGN.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/webapp/DESIGN.md#design-principles) principle 3 gives it a dialog.
+  The same dialog would be wrong if it opened on load.
+- **Truth is structural.** A stage that shows the reader's page holds only the reader's real data.
+  An example stands alone, under a caption that says it is an example, and the words say so too.
+  This is firm: see rule 5.
+- **Show real components.** A stage renders the components that the product renders, so it cannot drift from them.
+  A component names a part with `data-tour-slot`, and a story walks every step and fails on a missing part.
+  A schematic says that it is a schematic.
+- **A real link hands over.** Where the reader can act on their own data, a link closes the tour and opens the real level.
+- **Memory can stay in the browser when nothing returns because of it.** The tour stores only a place to continue and the finished chapters.
+  A lost record costs a checkmark. A server record would add export and erasure entries for that.
+
+These parts are firm, because they are not matters of taste:
+
+- A complete keyboard path with no trap ([WCAG 2.1.2](https://www.w3.org/WAI/WCAG22/Understanding/no-keyboard-trap.html)), and focus that stays visible ([WCAG 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)).
+- Words that carry what each step teaches, announced as the step changes ([WCAG 4.1.3](https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html)). A picture is out of reach of a screen reader.
+- Reduced motion: every scene shows its final state from the start.
+- Lazy loading: the tour adds nothing to the entry chunk.
+
+Apply the same reasoning to a future hint or tour.
+State the failure that it prevents and why its length, shape, and start make sense there.
 
 ## Motion and accessibility
 
@@ -154,7 +176,7 @@ Before you add guidance, an empty state, or a first-run step, check these points
 2. The server owns each fact that the text states.
 3. No text claims a time that the server did not measure.
 4. No example is about the reader's own work.
-5. Nothing modal opens on load. Guidance that a real event shows meets [the bar for a future tour or hint](#the-bar-for-a-future-tour-or-hint).
+5. Nothing modal opens on load. A new hint or tour states its reasons, as [the guided tour](#the-guided-tour) does.
 6. A fact that the person must keep also appears in a place that stays.
 7. The keyboard, screen-reader, and reduced-motion paths work.
 

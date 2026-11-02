@@ -39,6 +39,8 @@ export interface ProfileFirstRunProps {
 	 * workspace, so the member page itself makes no admin read.
 	 */
 	adminLinks?: Record<AdminFix, (label: string) => ReactElement>;
+	/** The offer of the guided tour's first chapter; absent where the reader cannot take it, and inside the tour. */
+	tourOffer?: ReactElement;
 }
 
 /** The admin page that removes a blocker: the setup summary, or the review scope it does not show. */
@@ -140,6 +142,7 @@ export function ProfileFirstRun({
 	aiChoiceLink,
 	requestReviewLink,
 	adminLinks,
+	tourOffer,
 }: ProfileFirstRunProps) {
 	const provider = useWorkProvider();
 	const approval = readiness.approvalBeforePosting
@@ -153,6 +156,7 @@ export function ProfileFirstRun({
 		const { item } = activeReview;
 		return (
 			<FirstRunEmpty
+				offer={tourOffer}
 				icon={<SparklesIcon />}
 				title={
 					status === "QUEUED"
@@ -186,6 +190,7 @@ export function ProfileFirstRun({
 				: adminLinks?.[copy.adminFix.page](copy.adminFix.label);
 		return (
 			<FirstRunEmpty
+				offer={tourOffer}
 				icon={<CircleSlashIcon />}
 				title={copy.title}
 				description={
@@ -206,6 +211,7 @@ export function ProfileFirstRun({
 		const phrases = reviewEventPhrases(readiness.events, provider);
 		return (
 			<FirstRunEmpty
+				offer={tourOffer}
 				icon={<MessageSquareTextIcon />}
 				title="No review of your work yet"
 				description={`Hephaestus reviews your work against the practices that ${workspaceName} chose.`}
@@ -262,12 +268,14 @@ function FirstRunEmpty({
 	title,
 	description,
 	action,
+	offer,
 	children,
 }: {
 	icon: ReactElement;
 	title: string;
 	description: ReactNode;
 	action?: ReactElement;
+	offer?: ReactElement;
 	children?: ReactNode;
 }) {
 	return (
@@ -277,12 +285,13 @@ function FirstRunEmpty({
 				<EmptyTitle>{title}</EmptyTitle>
 				<EmptyDescription>{description}</EmptyDescription>
 			</EmptyHeader>
-			{(children !== undefined || action !== undefined) && (
+			{(children !== undefined || action !== undefined || offer !== undefined) && (
 				<EmptyContent>
 					{children !== undefined && (
 						<div className="flex flex-col gap-2 text-sm text-muted-foreground">{children}</div>
 					)}
 					{action}
+					{offer}
 				</EmptyContent>
 			)}
 		</Empty>
