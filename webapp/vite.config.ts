@@ -28,7 +28,12 @@ const viteConfig = defineConfig({
 		rolldownOptions: {
 			// The generated zod schemas carry no pure annotations. Without this, a chunk that imports one schema ships all of them.
 			// It marks every `z.*` call pure, so a call kept only for its side effect, such as `z.config(...)`, would be dropped.
-			treeshake: { manualPureFunctions: ["z"] },
+			// The generated client has no side effects. An import through `sdk.gen` or `react-query.gen`
+			// then reaches only the operation that it names (scripts/api-generator/webapp.config.ts).
+			treeshake: {
+				manualPureFunctions: ["z"],
+				moduleSideEffects: [{ test: /[/]webapp[/]src[/]api[/]/u, sideEffects: false }],
+			},
 			output: {
 				codeSplitting: {
 					// Keep the shared renderer cacheable across application releases. Do not collect all

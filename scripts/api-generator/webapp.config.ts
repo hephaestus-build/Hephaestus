@@ -1,9 +1,53 @@
 import { defineConfig } from "@hey-api/openapi-ts";
 import { discriminatedUnionDates } from "./discriminated-union-dates.ts";
 
+/**
+ * A bundler keeps a module in one chunk. Each operation therefore has its own module, so a page
+ * loads only the operations it calls. `sdk.gen.ts` and `@tanstack/react-query.gen.ts` stay as
+ * re-exports. The operation modules import `createQueryKey` and `createInfiniteParams` from the
+ * second one. An owned patch exports both (`patches/NOTICE.md`).
+ */
+const OPERATION_DIRECTORIES: Readonly<Record<string, string>> = {
+	"@hey-api/sdk": "sdk",
+	"@tanstack/react-query": "@tanstack/react-query",
+};
+
+/** The query key and infinite query helpers carry their operation only in their name. */
+const NAMED_HELPER = /^(?<operation>.+?)(?:Infinite)?(?:QueryKey|Options)$/u;
+
+function operationOf(symbol: { name: string; meta?: Readonly<Record<string, unknown>> }) {
+	const { meta } = symbol;
+	if (meta?.resource === "operation" && typeof meta.resourceId === "string") {
+		return meta.resourceId;
+	}
+	return meta?.category === undefined
+		? NAMED_HELPER.exec(symbol.name)?.groups?.operation
+		: undefined;
+}
+
+function operationModule(symbol: { name: string; meta?: Readonly<Record<string, unknown>> }) {
+	const directory = OPERATION_DIRECTORIES[String(symbol.meta?.plugin)];
+	if (directory === undefined) {
+		return;
+	}
+	const operation = operationOf(symbol);
+	return operation === undefined ? undefined : { directory, file: `${directory}/${operation}` };
+}
+
 export default defineConfig({
 	input: "../../server/openapi.yaml",
 	output: "../../webapp/src/api",
+	parser: {
+		hooks: {
+			symbols: {
+				getFilePath: (symbol) => operationModule(symbol)?.file,
+				getExportFromFilePath: (symbol) => {
+					const module = operationModule(symbol);
+					return module === undefined ? undefined : [module.directory];
+				},
+			},
+		},
+	},
 	plugins: [
 		"@hey-api/typescript",
 		"@hey-api/client-fetch",

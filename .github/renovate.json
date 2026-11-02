@@ -110,7 +110,8 @@
 			"allowedVersions": "/^[0-9]+\\.[0-9]+\\.[0-9]+$/",
 			"groupName": "Hey API",
 			"prBodyNotes": [
-				"Run `vp run generate:api:client` and commit both generated clients. Verify webapp and extension tests and builds."
+				"Run `vp run generate:api:client` and commit both generated clients. Verify webapp and extension tests and builds.",
+				"`@hey-api/openapi-ts` carries an owned patch. Make it again for the new version as `patches/NOTICE.md` describes."
 			]
 		},
 		{
