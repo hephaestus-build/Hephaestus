@@ -730,3 +730,16 @@ This update amends [decision F](#f-delete-the-hub-and-fence-attempts-on-the-leas
 - A drain is local to the worker. It flips readiness, stops claims and settles the attempts in flight.
 
 A draining flag and a `NOTIFY` channel would have no reader, so the layer adds neither.
+
+## Update — 2026-11-02: a review Pod is wide and small
+
+[ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md) amends this ADR.
+
+- § Fit by measured use: a review agent Pod requests 384 MiB at practice concurrency 27. The table above records the earlier estimate.
+- [Decision G](#g-review-pod-admission-checks-quota-and-provider-demand): a live background waiter alone no longer blocks a claim.
+  A wide review has waiters whenever the pool is below its width.
+  Thus, the rule would keep a second review from starting.
+  The pool's fair order shares the grants.
+- [Option Z](#z-one-loop-host-for-every-loop-rejected) stays rejected.
+  Its revisit trigger is now the bench at 64 reviews.
+  Reopen it only if Pods or memory are still the first limit.
