@@ -1,9 +1,9 @@
--- One sorted line for each object that the changelog decides in the application schema: the schema fingerprint.
--- Two databases with the same lines have the same tables, columns, defaults, constraints, indexes, triggers, views,
--- functions, sequences, extensions and pg_partman parents. Liquibase's own tables, pg_partman's runtime partitions and
--- sequence positions are left out: no changelog decides them. Whitespace folds to one space, so each object is one
--- line. SchemaFingerprint and scripts/release-upgrade-test.ts
--- both run this file.
+-- One sorted line for each object that the changelog decides in the application schema: the schema fingerprint. Two
+-- databases with the same lines have the same tables, columns, defaults, constraints, indexes, triggers, views,
+-- functions, sequences, extensions, pg_partman parents and storage options, such as a table's fillfactor. Liquibase's
+-- own tables, pg_partman's runtime partitions and sequence positions are left out: no changelog decides them.
+-- Whitespace folds to one space, so each object is one line. SchemaFingerprint and scripts/release-upgrade-test.ts both
+-- run this file.
 SELECT line FROM (
 SELECT regexp_replace(line, '\s+', ' ', 'g') AS line FROM (
     SELECT 'column|' || c.relname || '|' || a.attname || '|' || format_type(a.atttypid, a.atttypmod) || '|'
@@ -30,6 +30,10 @@ SELECT regexp_replace(line, '\s+', ' ', 'g') AS line FROM (
     FROM pg_trigger g
     JOIN pg_class c ON c.oid = g.tgrelid
     WHERE c.relnamespace = 'public'::regnamespace AND NOT g.tgisinternal AND NOT c.relispartition
+    UNION ALL
+    SELECT 'storage|' || c.relname || '|' || array_to_string(c.reloptions, ',')
+    FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.reloptions IS NOT NULL AND NOT c.relispartition
     UNION ALL
     SELECT 'view|' || c.relname || '|' || md5(pg_get_viewdef(c.oid))
     FROM pg_class c

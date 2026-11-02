@@ -3627,6 +3627,8 @@ sequence|workspace_id_seq|bigint|1|1|9223372036854775807|false
 sequence|workspace_llm_connection_id_seq|bigint|1|1|9223372036854775807|false
 sequence|workspace_llm_model_id_seq|bigint|1|1|9223372036854775807|false
 sequence|workspace_slug_history_id_seq|bigint|1|1|9223372036854775807|false
+storage|mentor_turn|fillfactor=50
+storage|worker_registry|autovacuum_vacuum_scale_factor=0,autovacuum_vacuum_threshold=100
 trigger|consent_decision|trg_consent_decision_append_only|CREATE TRIGGER trg_consent_decision_append_only BEFORE DELETE OR UPDATE ON public.consent_decision FOR EACH ROW EXECUTE FUNCTION enforce_consent_decision_append_only()
 trigger|feedback_copy|feedback_copy_fence_monotonic|CREATE TRIGGER feedback_copy_fence_monotonic BEFORE UPDATE ON public.feedback_copy FOR EACH ROW EXECUTE FUNCTION guard_feedback_copy_fence()
 trigger|feedback_decision|feedback_decision_append_only|CREATE TRIGGER feedback_decision_append_only BEFORE UPDATE ON public.feedback_decision FOR EACH ROW EXECUTE FUNCTION guard_feedback_history()

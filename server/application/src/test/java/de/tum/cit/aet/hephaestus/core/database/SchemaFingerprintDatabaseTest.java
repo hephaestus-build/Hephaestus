@@ -104,6 +104,7 @@ class SchemaFingerprintDatabaseTest {
                     "ALTER TABLE kinds ADD CONSTRAINT kinds_v_set CHECK (v <> '')",
                     "DROP INDEX kinds_v",
                     "ALTER SEQUENCE kinds_seq INCREMENT BY 2",
+                    "ALTER TABLE kinds SET (fillfactor = 50)",
                     "CREATE OR REPLACE VIEW kinds_view AS SELECT id FROM kinds WHERE id > 0",
                     "CREATE OR REPLACE FUNCTION kinds_touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN"
                             + " NEW.v = 'x'; RETURN NEW; END $$",

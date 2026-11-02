@@ -3629,6 +3629,8 @@ sequence|workspace_id_seq|bigint|1|1|9223372036854775807|false
 sequence|workspace_llm_connection_id_seq|bigint|1|1|9223372036854775807|false
 sequence|workspace_llm_model_id_seq|bigint|1|1|9223372036854775807|false
 sequence|workspace_slug_history_id_seq|bigint|1|1|9223372036854775807|false
+storage|mentor_turn|fillfactor=50
+storage|worker_registry|autovacuum_vacuum_scale_factor=0,autovacuum_vacuum_threshold=100
 trigger|auth_event|trg_auth_event_block_mutation|CREATE TRIGGER trg_auth_event_block_mutation BEFORE DELETE OR UPDATE ON public.auth_event FOR EACH ROW EXECUTE FUNCTION auth_event_block_mutation()
 trigger|config_audit_event|trg_config_audit_event_block_mutation|CREATE TRIGGER trg_config_audit_event_block_mutation BEFORE DELETE OR UPDATE ON public.config_audit_event FOR EACH ROW EXECUTE FUNCTION config_audit_event_block_mutation()
 trigger|config_audit_event|trg_config_audit_event_block_truncate|CREATE TRIGGER trg_config_audit_event_block_truncate BEFORE TRUNCATE ON public.config_audit_event FOR EACH STATEMENT EXECUTE FUNCTION config_audit_event_block_truncate()
