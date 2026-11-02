@@ -143,7 +143,7 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         when(labels.labels(eq(1L), any()))
                 .thenReturn(Map.of(
                         2L,
-                        new ItemLabel(2, "Guide", "Onboarding guide", "document", null, null, "https://docs/x", null)));
+                        new ItemLabel(2, "Guide", "Onboarding guide", "document", 69, null, "https://docs/x", null)));
         var attempts = attempts();
         var payload = attempts.overview(1, 5);
         var row = payload.path("attempts").get(0);
@@ -152,8 +152,11 @@ class ReviewAttemptsContentSourceTest extends BaseUnitTest {
         assertThat(row.has("resultId")).isFalse();
         assertThat(row.has("outcome")).isFalse();
         assertThat(row.has("evidence")).isFalse();
-        assertThat(row.path("title").asString()).isEqualTo("Onboarding guide");
-        assertThat(row.path("url").asString()).isEqualTo("https://docs/x");
+        assertThat(row.at("/work/number").intValue())
+                .as("the same path that names the work in results_history.json")
+                .isEqualTo(69);
+        assertThat(row.at("/work/title").asString()).isEqualTo("Onboarding guide");
+        assertThat(row.at("/work/url").asString()).isEqualTo("https://docs/x");
         assertThat(row.has("reviewsResource"))
                 .as("a document has no review attempts resource")
                 .isFalse();

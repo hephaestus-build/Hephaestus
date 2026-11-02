@@ -40,10 +40,12 @@ const WHY_46 = {
 	...OBSERVATION,
 	resultId: "b81f4d2c-6e07-4a93-9c58-1d3e7f0a2b64",
 	practiceSlug: "describe-what-and-why",
+	practiceName: "Describe what changed and why",
 	practiceVersion: 4,
 	recordedAt: "Mon 2026-10-26 23:28 +01:00",
 	resource: "inputs/context/results_history/b81f4d2c-6e07-4a93-9c58-1d3e7f0a2b64.json",
 	summary: "The description says what changed but not why.",
+	problems: [WHY_PROBLEM],
 };
 
 /** The same practice and the same gap on another pull request, #47. */

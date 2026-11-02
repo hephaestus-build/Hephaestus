@@ -13,6 +13,7 @@ public record ResultHistoryEntry(
         UUID reviewId,
         long practiceId,
         String practiceSlug,
+        @Nullable String practiceName,
         int practiceVersion,
         long itemId,
         String itemKind,

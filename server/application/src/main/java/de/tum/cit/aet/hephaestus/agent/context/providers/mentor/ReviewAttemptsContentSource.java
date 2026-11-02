@@ -186,7 +186,8 @@ public class ReviewAttemptsContentSource implements ContentSource {
         Map<Long, ItemLabel> named = listed.isEmpty()
                 ? Map.of()
                 : labels.labels(workspaceId, listed.stream().map(Listed::item).toList());
-        listed.forEach(entry -> name(entry.row(), named.get(entry.item().itemId())));
+        listed.forEach(entry -> ResultHistoryContentSource.putWork(
+                entry.row(), named.get(entry.item().itemId())));
         // Asked only for reviewed work the source still permits, once per review and item however many runs it had.
         Map<ReviewAssignmentQuery.ReviewedItem, ReviewAssignmentQuery.Recorded> recorded = listed.isEmpty()
                 ? Map.of()
@@ -239,13 +240,5 @@ public class ReviewAttemptsContentSource implements ContentSource {
                 .put("reused", counts.reused())
                 .put("withheld", counts.withheld())
                 .put("pending", counts.pending());
-    }
-
-    /** The reviewed work's number, title and link as its source names it; absent when the source no longer can. */
-    private static void name(ObjectNode row, @Nullable ItemLabel label) {
-        if (label == null) return;
-        if (label.number() != null) row.put("number", label.number());
-        row.put("title", label.title());
-        if (label.url() != null) row.put("url", label.url());
     }
 }

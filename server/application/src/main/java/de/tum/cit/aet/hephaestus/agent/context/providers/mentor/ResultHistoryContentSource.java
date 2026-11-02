@@ -125,6 +125,14 @@ public class ResultHistoryContentSource implements ContentSource {
         return root;
     }
 
+    /** The reviewed work as its source names it now, under one key in every list; absent when it no longer can. */
+    static void putWork(ObjectNode row, @Nullable ItemLabel work) {
+        if (work == null) return;
+        var named = row.putObject("work").put("title", work.title());
+        if (work.number() != null) named.put("number", work.number());
+        if (work.url() != null) named.put("url", work.url());
+    }
+
     /** @param work how the work's source names it now; {@code null} when it no longer can */
     private ObjectNode describe(ResultHistoryEntry entry, @Nullable ItemLabel work, boolean detail) {
         var row = objectMapper
@@ -132,6 +140,7 @@ public class ResultHistoryContentSource implements ContentSource {
                 .put("resultId", entry.resultId().toString())
                 .put("reviewId", entry.reviewId().toString())
                 .put("practiceSlug", entry.practiceSlug())
+                .put("practiceName", entry.practiceName())
                 .put("practiceVersion", entry.practiceVersion())
                 .put("itemId", Long.toString(entry.itemId()))
                 .put("itemKind", entry.itemKind())
@@ -143,11 +152,7 @@ public class ResultHistoryContentSource implements ContentSource {
         if (endedAt != null) row.put("endedAt", endedAt.toString());
         ResultEndReason endReason = entry.endReason();
         if (endReason != null) row.put("endReason", endReason.name());
-        if (work != null) {
-            var named = row.putObject("work").put("title", work.title());
-            if (work.number() != null) named.put("number", work.number());
-            if (work.url() != null) named.put("url", work.url());
-        }
+        putWork(row, work);
         row.set("activeMarks", objectMapper.valueToTree(entry.activeMarks()));
         if (!copies.record(copies.of(entry)))
             return row.put("storedWorkVersion", ResultHistoryEntry.StoredWorkVersion.UNKNOWN.name())
