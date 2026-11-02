@@ -221,11 +221,15 @@ describe("WorkspaceLlmModelFormDialog", () => {
 
 		fireEvent.click(screen.getByRole("button", { name: "Leave undeclared" }));
 		screen.getByText("Assignments holding this model as Cloud stop serving");
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		expect(onUpdate.mock.calls[2]?.[1]).toStrictEqual(
+			expect.objectContaining({ operatedBy: undefined, clearDataHandling: true }),
+		);
 		fireEvent.click(screen.getByRole("radio", { name: "Your organization" }));
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-		expect(onUpdate).toHaveBeenCalledTimes(3);
-		expect(onUpdate.mock.calls[2]?.[1]).toStrictEqual(
-			expect.objectContaining({ operatedBy: "OWN_ORGANISATION" }),
+		expect(onUpdate).toHaveBeenCalledTimes(4);
+		expect(onUpdate.mock.calls[3]?.[1]).toStrictEqual(
+			expect.objectContaining({ operatedBy: "OWN_ORGANISATION", clearDataHandling: false }),
 		);
 	});
 });

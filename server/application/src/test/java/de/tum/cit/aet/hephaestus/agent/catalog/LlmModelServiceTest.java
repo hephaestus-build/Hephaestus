@@ -384,7 +384,7 @@ class LlmModelServiceTest extends BaseUnitTest {
             model.getConnection().setEnabled(true);
             when(priceRepository.findByModelIdAndEffectiveToIsNull(7L)).thenReturn(Optional.empty());
             UpdateLlmModelRequestDTO request =
-                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null);
+                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null, null);
 
             assertThatThrownBy(() -> modelService.update(7L, request))
                     .isInstanceOf(IllegalArgumentException.class)
@@ -411,7 +411,7 @@ class LlmModelServiceTest extends BaseUnitTest {
         void updateKeepsImmutableUpstreamModelIdAndAuditsTheModelAndConnectionItChanged() {
             stubModelSavePassthrough();
             UpdateLlmModelRequestDTO request =
-                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null);
+                    new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null, null);
 
             LlmModel result = modelService.update(7L, request);
 
@@ -421,20 +421,42 @@ class LlmModelServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void updateReplacesTheDataHandlingFactsWholesale() {
+        void shouldKeepTheDeclarationUnlessAnUpdateSendsOrClearsIt() {
             stubModelSavePassthrough();
             model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, "EU"));
 
             LlmModel declared = modelService.update(
                     7L,
                     new UpdateLlmModelRequestDTO(
-                            null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, null, null, null));
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            LlmDataOperator.OWN_ORGANISATION,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null));
             assertThat(declared.getDataHandlingTier()).isEqualTo(DataHandlingTier.IN_HOUSE);
             assertThat(declared.getDataHandling().getNote()).isNull();
 
+            LlmModel renamed = modelService.update(
+                    7L,
+                    new UpdateLlmModelRequestDTO(
+                            "Renamed", null, null, null, null, null, null, null, null, null, null));
+            assertThat(renamed.getDataHandlingTier()).isEqualTo(DataHandlingTier.IN_HOUSE);
+
+            LlmModel noted = modelService.update(
+                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, null, null, "EU", null, null, null, null));
+            assertThat(noted.getDataHandlingTier()).isEqualTo(DataHandlingTier.IN_HOUSE);
+            assertThat(noted.getDataHandling().getNote()).isEqualTo("EU");
+
             LlmModel undeclared = modelService.update(
-                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null));
+                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, null, true));
             assertThat(undeclared.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+            assertThat(undeclared.getDataHandling().getNote()).isNull();
         }
 
         @Test
@@ -443,11 +465,13 @@ class LlmModelServiceTest extends BaseUnitTest {
             model.setBrand(AiModelBrand.QWEN);
 
             modelService.update(
-                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null));
+                    7L,
+                    new UpdateLlmModelRequestDTO(
+                            "Renamed", null, null, null, null, null, null, null, null, null, null));
             assertThat(model.getBrand()).isEqualTo(AiModelBrand.QWEN);
 
             modelService.update(
-                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, true));
+                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, true, null));
             assertThat(model.getBrand()).isNull();
         }
 
@@ -475,17 +499,19 @@ class LlmModelServiceTest extends BaseUnitTest {
             model.setReasoningEffort(ReasoningEffort.LOW);
 
             modelService.update(
-                    7L, new UpdateLlmModelRequestDTO("Renamed", null, null, null, null, null, null, null, null, null));
+                    7L,
+                    new UpdateLlmModelRequestDTO(
+                            "Renamed", null, null, null, null, null, null, null, null, null, null));
             assertThat(model.getReasoningEffort()).isEqualTo(ReasoningEffort.LOW);
 
             modelService.update(
                     7L,
                     new UpdateLlmModelRequestDTO(
-                            null, null, null, ReasoningEffort.XHIGH, null, null, null, null, null, null));
+                            null, null, null, ReasoningEffort.XHIGH, null, null, null, null, null, null, null));
             assertThat(model.getReasoningEffort()).isEqualTo(ReasoningEffort.XHIGH);
 
             modelService.update(
-                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, true, null, null, null, null, null));
+                    7L, new UpdateLlmModelRequestDTO(null, null, null, null, true, null, null, null, null, null, null));
             assertThat(model.getReasoningEffort()).isNull();
         }
 

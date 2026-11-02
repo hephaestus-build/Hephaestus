@@ -150,7 +150,8 @@ public class WorkspaceLlmModelService {
         }
         if (Boolean.TRUE.equals(request.clearBrand())) model.setBrand(null);
         else if (request.brand() != null) model.setBrand(request.brand());
-        model.setDataHandling(DataHandlingFacts.of(request.operatedBy(), request.dataHandlingNote()));
+        model.setDataHandling(model.getDataHandling()
+                .updated(request.clearDataHandling(), request.operatedBy(), request.dataHandlingNote()));
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }

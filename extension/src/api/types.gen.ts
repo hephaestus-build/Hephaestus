@@ -5995,6 +5995,10 @@ export type UpdateLlmModelRequest = {
      */
     clearBrand?: boolean;
     /**
+     * Clear the data-handling declaration, so the model is undeclared
+     */
+    clearDataHandling?: boolean;
+    /**
      * True clears the reasoning effort, so the provider's own default applies
      */
     clearReasoningEffort?: boolean;
@@ -6019,7 +6023,7 @@ export type UpdateLlmModelRequest = {
      */
     maxOutputTokens?: number;
     /**
-     * Who operates the systems the work is sent to; omit to leave the model undeclared
+     * Who operates the systems the work is sent to; omit to leave the declaration unchanged
      */
     operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
     /**
@@ -6249,6 +6253,10 @@ export type UpdateWorkspaceLlmModelRequest = {
      */
     clearBrand?: boolean;
     /**
+     * Clear the data-handling declaration, so the model is undeclared
+     */
+    clearDataHandling?: boolean;
+    /**
      * True clears the reasoning effort, so the provider's own default applies
      */
     clearReasoningEffort?: boolean;
@@ -6273,7 +6281,7 @@ export type UpdateWorkspaceLlmModelRequest = {
      */
     maxOutputTokens?: number;
     /**
-     * Who operates the systems the work is sent to; omit to leave the model undeclared
+     * Who operates the systems the work is sent to; omit to leave the declaration unchanged
      */
     operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
     /**

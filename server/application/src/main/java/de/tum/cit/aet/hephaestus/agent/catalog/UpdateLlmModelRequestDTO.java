@@ -32,7 +32,7 @@ public record UpdateLlmModelRequestDTO(
         Boolean clearReasoningEffort,
 
         @Nullable
-        @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
+        @Schema(description = "Who operates the systems the work is sent to; omit to leave the declaration unchanged")
         LlmDataOperator operatedBy,
 
         @Nullable @Size(max = 200) @Schema(description = "Admin-only note: region, agreement, renewal date")
@@ -45,4 +45,7 @@ public record UpdateLlmModelRequestDTO(
         AiModelBrand brand,
 
         @Nullable @Schema(description = "Clear the declared model brand")
-        Boolean clearBrand) {}
+        Boolean clearBrand,
+
+        @Nullable @Schema(description = "Clear the data-handling declaration, so the model is undeclared")
+        Boolean clearDataHandling) {}

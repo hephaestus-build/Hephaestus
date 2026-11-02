@@ -41,6 +41,17 @@ public class DataHandlingFacts {
         return facts;
     }
 
+    /**
+     * The declaration after an update. An omitted operator leaves the declaration as it is, so an edit of something else
+     * cannot lose it. A sent operator replaces the declaration, note included. Only an explicit clear undeclares.
+     */
+    public DataHandlingFacts updated(
+            @Nullable Boolean clear, @Nullable LlmDataOperator newOperator, @Nullable String newNote) {
+        if (Boolean.TRUE.equals(clear)) return of(null, null);
+        if (newOperator != null) return of(newOperator, newNote);
+        return newNote == null ? this : of(operatedBy, newNote);
+    }
+
     public DataHandlingTier tier() {
         if (operatedBy == null) {
             return DataHandlingTier.UNDECLARED;

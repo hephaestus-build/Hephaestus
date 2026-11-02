@@ -25748,6 +25748,9 @@ components:
         clearBrand:
           type: boolean
           description: Clear the declared model brand
+        clearDataHandling:
+          type: boolean
+          description: "Clear the data-handling declaration, so the model is undeclared"
         clearReasoningEffort:
           type: boolean
           description: "True clears the reasoning effort, so the provider's own default\
@@ -25778,7 +25781,7 @@ components:
         operatedBy:
           type: string
           description: Who operates the systems the work is sent to; omit to leave
-            the model undeclared
+            the declaration unchanged
           enum:
           - OWN_ORGANISATION
           - PROVIDER
@@ -26152,6 +26155,9 @@ components:
         clearBrand:
           type: boolean
           description: Clear the declared model brand
+        clearDataHandling:
+          type: boolean
+          description: "Clear the data-handling declaration, so the model is undeclared"
         clearReasoningEffort:
           type: boolean
           description: "True clears the reasoning effort, so the provider's own default\
@@ -26182,7 +26188,7 @@ components:
         operatedBy:
           type: string
           description: Who operates the systems the work is sent to; omit to leave
-            the model undeclared
+            the declaration unchanged
           enum:
           - OWN_ORGANISATION
           - PROVIDER

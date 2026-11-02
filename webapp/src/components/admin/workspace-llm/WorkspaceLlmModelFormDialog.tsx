@@ -125,6 +125,7 @@ function WorkspaceLlmModelFormDialogContent({
 			onUpdate(editing.id, {
 				...shared,
 				clearBrand: fields.brand === undefined,
+				clearDataHandling: fields.operatedBy === undefined,
 				...reasoningEffortUpdateOf(fields.reasoningEffort),
 			} satisfies UpdateWorkspaceLlmModelRequest);
 			return;

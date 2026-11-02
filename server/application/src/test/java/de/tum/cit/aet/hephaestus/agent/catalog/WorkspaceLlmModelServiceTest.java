@@ -284,6 +284,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     null,
                     null,
                     null,
+                    null,
                     null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
@@ -293,7 +294,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void dataHandlingIsReplacedWholesaleOnEveryUpdate() {
+        void shouldKeepTheDeclarationUnlessAnUpdateClearsIt() {
             byoEnabled(true);
             WorkspaceLlmModel existing = new WorkspaceLlmModel();
             existing.setId(7L);
@@ -303,7 +304,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.findByIdAndWorkspaceIdForUpdate(7L, 1L)).thenReturn(Optional.of(existing));
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            WorkspaceLlmModel result = modelService.update(
+            WorkspaceLlmModel renamed = modelService.update(
                     workspaceContext,
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
@@ -322,10 +323,19 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                             null,
                             null,
                             null,
+                            null,
                             null));
+            assertThat(renamed.getDataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
+            assertThat(renamed.getDataHandling().getNote()).isEqualTo("EU");
 
-            assertThat(result.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
-            assertThat(result.getDataHandling().getNote()).isNull();
+            WorkspaceLlmModel cleared = modelService.update(
+                    workspaceContext,
+                    7L,
+                    new UpdateWorkspaceLlmModelRequestDTO(
+                            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                            null, true));
+            assertThat(cleared.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
+            assertThat(cleared.getDataHandling().getNote()).isNull();
         }
 
         @Test
@@ -343,7 +353,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
                             "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                            null, null));
+                            null, null, null));
             assertThat(existing.getBrand()).isEqualTo(AiModelBrand.QWEN);
 
             modelService.update(
@@ -351,7 +361,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
                             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                            true));
+                            true, null));
             assertThat(existing.getBrand()).isNull();
         }
     }
@@ -398,7 +408,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             when(modelRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
-                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+                    "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
                     null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
