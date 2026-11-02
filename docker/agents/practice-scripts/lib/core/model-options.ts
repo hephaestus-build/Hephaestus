@@ -126,24 +126,36 @@ export const chatOptionsSchema = z.object({
 });
 const decisionInput = z.union([z.string(), jsonObject, z.array(z.json())]);
 const described = decisionInput.nullable();
+const instructions = described.optional();
+// No decision model that the host binds answers a `box` question, so the script's `decide` refuses one before IPC.
 export const decisionOptionsSchema = z.object({
-	state: decisionInput,
+	state: z.array(z.union([text, file, z.object({ type: z.literal("json"), value: z.json() })])),
 	questions: z.record(
 		z.string(),
 		z.discriminatedUnion("type", [
-			z.object({
-				type: z.literal("boolean"),
-				instructions: decisionInput,
-				criteria: z.object({ true: described.optional(), false: described.optional() }).optional(),
-			}),
+			z
+				.object({
+					type: z.literal("boolean"),
+					instructions,
+					criteria: z
+						.object({ true: described.optional(), false: described.optional() })
+						.optional(),
+				})
+				.refine(
+					(question) =>
+						question.instructions != null ||
+						question.criteria?.true != null ||
+						question.criteria?.false != null,
+					"a boolean question needs instructions or a criterion",
+				),
 			z.object({
 				type: z.literal("choice"),
-				instructions: decisionInput,
+				instructions,
 				criteria: z.record(z.string(), described),
 			}),
 			z.object({
 				type: z.literal("score"),
-				instructions: decisionInput,
+				instructions,
 				criteria: z.array(described),
 			}),
 		]),

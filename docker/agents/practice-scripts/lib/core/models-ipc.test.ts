@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { Experimental_DecisionUnsupportedQuestionTypeError, experimental_decide } from "ai";
+
 import type { ModelSlot, SlotAnswer } from "./contract.ts";
+import { decisionOptionsSchema } from "./model-options.ts";
 import { ipcModels } from "./models-ipc.ts";
 import { agent, z } from "./practice-script.ts";
 
@@ -32,9 +35,59 @@ void test("a model call crosses to the host without its signal or a function, an
 void test("an answer for another slot is refused", async () => {
 	const { decision } = ipcModels({ decision: "d" }, async () => embedded);
 	assert.ok(decision !== undefined);
-	await assert.rejects(async () => decision.doDecide({ state: "s", questions: {} }), {
-		message: "the host answered a decision call with another slot's result",
+	await assert.rejects(
+		async () => decision.doDecide({ state: [{ type: "text", text: "s" }], questions: {} }),
+		{
+			message: "the host answered a decision call with another slot's result",
+		},
+	);
+});
+
+void test("an image in a decision's state crosses to the host as base64 that the host accepts", async () => {
+	const sent: unknown[] = [];
+	const { decision } = ipcModels({ decision: "d" }, async (_slot, options) => {
+		sent.push(options);
+		return {
+			slot: "decision",
+			result: { answers: { met: { type: "boolean", probability: 1 } }, warnings: [] },
+		};
 	});
+	assert.ok(decision !== undefined);
+	await decision.doDecide({
+		state: [
+			{
+				type: "file",
+				mediaType: "image/png",
+				data: { type: "data", data: new Uint8Array([137, 80]) },
+			},
+		],
+		questions: { met: { type: "boolean", instructions: "Is it met?" } },
+	});
+	const [options] = sent;
+	assert.deepEqual(decisionOptionsSchema.parse(options).state, [
+		{ type: "file", mediaType: "image/png", data: { type: "data", data: "iVA=" } },
+	]);
+});
+
+void test("a box question stops in the script, before it reaches the host", async () => {
+	let calls = 0;
+	const { decision } = ipcModels({ decision: "d" }, async () => {
+		calls += 1;
+		return embedded;
+	});
+	assert.ok(decision !== undefined);
+	await assert.rejects(
+		async () =>
+			experimental_decide({
+				model: decision,
+				state: "a screenshot",
+				questions: { where: { type: "box", instructions: "Where is the submit button?" } },
+			}),
+		(error: unknown) =>
+			Experimental_DecisionUnsupportedQuestionTypeError.isInstance(error) &&
+			error.questionId === "where",
+	);
+	assert.equal(calls, 0);
 });
 
 for (const [supported, expected] of [

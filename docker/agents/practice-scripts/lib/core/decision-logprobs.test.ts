@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { InvalidResponseDataError, type LanguageModelV4GenerateResult } from "@ai-sdk/provider";
+import {
+	Experimental_DecisionUnsupportedQuestionTypeError,
+	InvalidResponseDataError,
+	UnsupportedFunctionalityError,
+	type LanguageModelV4GenerateResult,
+} from "@ai-sdk/provider";
 import { experimental_decide } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 
@@ -47,6 +52,44 @@ async function decideKind(result: LanguageModelV4GenerateResult) {
 }
 
 void describe("a decision model on a chat model's logprobs", () => {
+	void test("a box question is refused by its type, because a bounding box needs an image", async () => {
+		const model = logprobDecisionModel(
+			new MockLanguageModelV4({ doGenerate: answering(" A", []) }),
+		);
+		await assert.rejects(
+			async () =>
+				model.doDecide({
+					state: [{ type: "text", text: "a screenshot" }],
+					questions: { where: { type: "box", instructions: "Where is the submit button?" } },
+				}),
+			(error: unknown) =>
+				Experimental_DecisionUnsupportedQuestionTypeError.isInstance(error) &&
+				error.questionId === "where" &&
+				error.questionType === "box",
+		);
+	});
+
+	void test("a file part in the state is refused rather than dropped from what the model judges", async () => {
+		const model = logprobDecisionModel(
+			new MockLanguageModelV4({ doGenerate: answering(" A", []) }),
+		);
+		await assert.rejects(
+			async () =>
+				model.doDecide({
+					state: [
+						{ type: "text", text: "the change" },
+						{
+							type: "file",
+							mediaType: "image/png",
+							data: { type: "data", data: new Uint8Array([1]) },
+						},
+					],
+					questions: { met: { type: "boolean", instructions: "Is it met?" } },
+				}),
+			(error: unknown) => UnsupportedFunctionalityError.isInstance(error),
+		);
+	});
+
 	void test("the distribution over the option letters becomes the answer, normalized over those letters", async () => {
 		const { answers, usage } = await decideKind(
 			answering(" B", [

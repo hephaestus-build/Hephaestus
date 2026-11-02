@@ -29,7 +29,9 @@ export default definePracticeScript({
 			step("rerank at", async () =>
 				rerank({ model: reranking, query: "q", documents: items(MODEL_SLOT_CAPS.reranking) }),
 			),
-			step("decide over", async () => decision.doDecide({ state: "s", questions })),
+			step("decide over", async () =>
+				decision.doDecide({ state: [{ type: "text", text: "s" }], questions }),
+			),
 			step("embed over", async () =>
 				embedding.doEmbed({ values: items(MODEL_SLOT_CAPS.embedding + 1) }),
 			),

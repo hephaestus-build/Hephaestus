@@ -1,11 +1,14 @@
 // Chat decision adapters expose no choice distribution; derive it from answer-letter log probabilities.
 import {
+	Experimental_DecisionUnsupportedQuestionTypeError,
 	InvalidResponseDataError,
+	UnsupportedFunctionalityError,
 	type Experimental_DecisionModelV4,
 	type Experimental_DecisionModelV4Answer,
 	type Experimental_DecisionModelV4CallOptions,
 	type Experimental_DecisionModelV4Input,
 	type Experimental_DecisionModelV4Question,
+	type Experimental_DecisionModelV4State,
 	type LanguageModelV4,
 } from "@ai-sdk/provider";
 import { z } from "zod";
@@ -46,7 +49,24 @@ function described(value: Experimental_DecisionModelV4Input | null | undefined, 
 	return value === null || value === undefined ? fallback : asText(value);
 }
 
-function optionsOf(question: Experimental_DecisionModelV4Question): Asked["options"] {
+// The adapter reads the answer letters of a text completion, so only text and JSON parts reach the model.
+function stateText(state: Experimental_DecisionModelV4State): string {
+	return state
+		.map((part) => {
+			if (part.type === "text") {
+				return part.text;
+			}
+			if (part.type === "json") {
+				return JSON.stringify(part.value);
+			}
+			throw new UnsupportedFunctionalityError({ functionality: "file parts in a decision state" });
+		})
+		.join("\n");
+}
+
+type TextQuestion = Exclude<Experimental_DecisionModelV4Question, { type: "box" }>;
+
+function optionsOf(question: TextQuestion): Asked["options"] {
 	switch (question.type) {
 		case "choice": {
 			return Object.entries(question.criteria).map(([key, description]) => ({
@@ -69,14 +89,26 @@ function optionsOf(question: Experimental_DecisionModelV4Question): Asked["optio
 	}
 }
 
-function askedOf(questions: Experimental_DecisionModelV4CallOptions["questions"]): Asked[] {
+function askedOf(
+	model: LanguageModelV4,
+	questions: Experimental_DecisionModelV4CallOptions["questions"],
+): Asked[] {
 	return Object.entries(questions).map(([id, question], index) => {
+		if (question.type === "box") {
+			// A bounding box is an answer about an image; this adapter judges text.
+			throw new Experimental_DecisionUnsupportedQuestionTypeError({
+				questionId: id,
+				questionType: question.type,
+				provider: model.provider,
+				modelId: model.modelId,
+			});
+		}
 		const options = optionsOf(question);
 		return {
 			id,
 			alias: `q${index + 1}`,
 			kind: question.type,
-			text: asText(question.instructions),
+			text: described(question.instructions, ""),
 			options,
 			letters: options.map((_, i) => LETTERS[i] ?? "?"),
 		};
@@ -129,7 +161,7 @@ export function logprobDecisionModel(model: LanguageModelV4): Experimental_Decis
 		modelId: model.modelId,
 		supportedQuestionTypes: ["boolean", "choice", "score"],
 		doDecide: async ({ state, questions, abortSignal }) => {
-			const asked = askedOf(questions);
+			const asked = askedOf(model, questions);
 			const listing = asked
 				.map((q) =>
 					[
@@ -146,7 +178,9 @@ export function logprobDecisionModel(model: LanguageModelV4): Experimental_Decis
 					{ role: "system", content: SYSTEM },
 					{
 						role: "user",
-						content: [{ type: "text", text: `STATE:\n${asText(state)}\n\nQUESTIONS:\n${listing}` }],
+						content: [
+							{ type: "text", text: `STATE:\n${stateText(state)}\n\nQUESTIONS:\n${listing}` },
+						],
 					},
 				],
 				maxOutputTokens: decisionOutputTokens(asked.length),

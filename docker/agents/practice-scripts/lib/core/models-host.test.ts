@@ -339,7 +339,10 @@ void describe("logprob decision usage receipts from the bound provider", () => {
 			const call = modelCall(
 				"decision",
 				decision,
-				{ state: "work", questions: { q: { type: "boolean", instructions: "Is it met?" } } },
+				{
+					state: [{ type: "text", text: "work" }],
+					questions: { q: { type: "boolean", instructions: "Is it met?" } },
+				},
 				never,
 			);
 			assert.ok("run" in call);
@@ -385,7 +388,7 @@ void describe("a call to a slot's model", () => {
 		[
 			"decision",
 			{
-				state: "s",
+				state: [{ type: "text", text: "s" }],
 				questions: Object.fromEntries(
 					values(MODEL_SLOT_CAPS.decision + 1).map((q) => [
 						q,
@@ -417,10 +420,30 @@ void describe("a call to a slot's model", () => {
 
 	for (const [slot, options] of [
 		["chat", { prompt: "Say hi." }],
-		["decision", { state: "s" }],
-		["decision", { state: 1, questions: { q: { type: "boolean", instructions: "q" } } }],
-		["decision", { state: "s", questions: { q: { type: "free", instructions: "q" } } }],
-		["decision", { state: "s", questions: { q: { type: "boolean" } } }],
+		["decision", { state: [{ type: "text", text: "s" }] }],
+		["decision", { state: "s", questions: { q: { type: "boolean", instructions: "q" } } }],
+		[
+			"decision",
+			{
+				state: [{ type: "text", text: "s" }],
+				questions: { q: { type: "free", instructions: "q" } },
+			},
+		],
+		[
+			"decision",
+			{
+				state: [{ type: "text", text: "s" }],
+				questions: { q: { type: "box", instructions: "q" } },
+			},
+		],
+		["decision", { state: [{ type: "text", text: "s" }], questions: { q: { type: "boolean" } } }],
+		[
+			"decision",
+			{
+				state: [{ type: "text", text: "s" }],
+				questions: { q: { type: "boolean", instructions: null, criteria: { true: null } } },
+			},
+		],
 		["embedding", { values: [1, 2] }],
 		["reranking", { documents: { type: "text", values: ["a"] } }],
 		["reranking", { query: "q", documents: { type: "text", values: [{ text: "a" }] } }],

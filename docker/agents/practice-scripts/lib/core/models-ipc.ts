@@ -11,12 +11,16 @@ type ModelCall = (
 	signal: AbortSignal | undefined,
 ) => Promise<SlotAnswer>;
 
-// Functions and abort signals cannot cross the process boundary.
+// Functions and abort signals cannot cross the process boundary. JSON would turn bytes into an object
+// of indices, so they cross as base64, which the SDK reads as the same file data.
 function portable(options: object): unknown {
 	return JSON.parse(
-		JSON.stringify(options, (key, value: unknown) =>
-			key === "abortSignal" || typeof value === "function" ? undefined : value,
-		),
+		JSON.stringify(options, (key, value: unknown) => {
+			if (value instanceof Uint8Array) {
+				return Buffer.from(value).toString("base64");
+			}
+			return key === "abortSignal" || typeof value === "function" ? undefined : value;
+		}),
 	);
 }
 
