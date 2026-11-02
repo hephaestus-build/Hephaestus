@@ -43,7 +43,7 @@ public final class PostedText {
     // no math renders and a snippet reference links nothing. GitHub and GitLab read link syntax, diff marks and math
     // again in the rendered text, through any escape.
     private static final Pattern LINKABLE = Pattern.compile("@|#[A-Za-z0-9_\"]|[~%].|[!&]\\d|\\$"
-            + "|(?i:GH-\\d|GHSA-|CVE-\\d|www\\.|iteration:)|://|[\\[\\]]|[A-Za-z0-9_./-](?:>|&gt;)|:[A-Za-z0-9_+-]+:"
+            + "|(?i:GH-\\d|GL-\\d|GHSA-|CVE-\\d|www\\.|iteration:)|://|[\\[\\]]|[A-Za-z0-9_./-](?:>|&gt;)|:[A-Za-z0-9_+-]+:"
             + "|\\{[+-]|[+-]\\}"
             + "|(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,64}(?![A-Za-z0-9_])");
 

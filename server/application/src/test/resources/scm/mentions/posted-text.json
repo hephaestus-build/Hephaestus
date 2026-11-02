@@ -2092,6 +2092,19 @@
     "posted" : "<p data-sourcepos=\"1:1-1:19\" dir=\"auto\"><code data-sourcepos=\"1:1-1:7\">gh-26</code> and <code data-sourcepos=\"1:13-1:19\">gH-26</code></p>"
   }
 }, {
+  "body" : "GL-1 and gl-1",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`GL-1` and `gl-1`",
+  "github" : {
+    "raw" : "<p dir=\"auto\">GL-1 and gl-1</p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">GL-1</code> and <code class=\"notranslate\">gl-1</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:13\" dir=\"auto\"><a href=\"http://127.0.0.1:18931/hephaestus-test/sandbox/-/work_items/1\" title=\"First\" class=\"gfm gfm-issue\" data-original=\"GL-1\" data-link=\"false\" data-link-reference=\"false\" data-issue=\"2\" data-project=\"2\" data-iid=\"1\" data-namespace-path=\"hephaestus-test/sandbox\" data-project-path=\"hephaestus-test/sandbox\" data-issue-type=\"issue\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"issue\">#1</a> and gl-1</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\"><code data-sourcepos=\"1:1-1:6\">GL-1</code> and <code data-sourcepos=\"1:12-1:17\">gl-1</code></p>"
+  }
+}, {
   "body" : "GHSA-jfh8-c2jp-5v3q and ghsa-jfh8-c2jp-5v3q",
   "header" : null,
   "marker" : null,
