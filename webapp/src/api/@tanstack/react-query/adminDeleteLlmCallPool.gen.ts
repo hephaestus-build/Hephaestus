@@ -7,7 +7,7 @@ import { adminDeleteLlmCallPool } from '../../sdk/adminDeleteLlmCallPool.gen.js'
 import type { AdminDeleteLlmCallPoolData, AdminDeleteLlmCallPoolResponse } from '../../types.gen.js';
 
 /**
- * Delete a pool; its models are no longer limited
+ * Delete a shared pool; each of its models gets a pool of its own
  */
 export const adminDeleteLlmCallPoolMutation = (options?: Partial<Options<AdminDeleteLlmCallPoolData>>): UseMutationOptions<AdminDeleteLlmCallPoolResponse, DefaultError, Options<AdminDeleteLlmCallPoolData>> => {
     const mutationOptions: UseMutationOptions<AdminDeleteLlmCallPoolResponse, DefaultError, Options<AdminDeleteLlmCallPoolData>> = {

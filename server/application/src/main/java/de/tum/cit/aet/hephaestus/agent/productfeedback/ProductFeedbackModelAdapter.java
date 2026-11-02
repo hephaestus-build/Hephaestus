@@ -106,16 +106,14 @@ class ProductFeedbackModelAdapter {
 
     void draft(DraftWork work) {
         LlmModelResolver.InstanceModel model = models.resolveInstanceModel(work.llmModelId());
-        Long pool = model == null ? null : permits.poolFor(model.ref());
-        if (model == null || pool == null) {
-            // The strict class needs a pool; a model outside one is unavailable, never a bypass of admission.
+        if (model == null) {
             drafting.fail(work.feedbackId(), work.attempt(), Failure.MODEL_UNAVAILABLE, 0, 0);
             return;
         }
         BooleanSupplier ended = () -> !drafting.held(work.feedbackId(), work.attempt());
         var usage = new long[2];
         try (var permit = permits.acquire(
-                pool,
+                permits.poolFor(model.ref()),
                 LlmCallClass.PRODUCT_FEEDBACK,
                 new LlmCallPermits.Caller(null, work.feedbackId(), work.attempt(), model.ref()),
                 ended,
@@ -134,7 +132,7 @@ class ProductFeedbackModelAdapter {
             ModelSession.Transport transport = body -> {
                 if (calls[0]++ > 0 && !permits.beforeRetry(permit, ended, work.deadline()))
                     return new ModelSession.Answer(0, new byte[0], false, null);
-                return send(model, body, usage);
+                return send(model, body, usage, permit);
             };
             var session = new ModelSession(transport, mapper, settings, work.system(), List.of());
             ModelSession.Reply reply = session.send(work.user());
@@ -154,7 +152,8 @@ class ProductFeedbackModelAdapter {
         }
     }
 
-    private ModelSession.Answer send(LlmModelResolver.InstanceModel model, byte[] body, long[] usage) {
+    private ModelSession.Answer send(
+            LlmModelResolver.InstanceModel model, byte[] body, long[] usage, LlmCallPermits.Permit permit) {
         var credential = model.credential();
         URI uri = URI.create(credential.baseUrl().strip().replaceAll("/+$", "")
                 + model.protocol().upstreamPath());
@@ -169,8 +168,11 @@ class ProductFeedbackModelAdapter {
                     .block(CALL_TIMEOUT);
             byte[] answer = response == null ? new byte[0] : response;
             count(answer, usage);
+            permit.served(true);
             return new ModelSession.Answer(200, answer, true, null);
         } catch (WebClientResponseException refused) {
+            int status = refused.getStatusCode().value();
+            if (LlmCallPermits.throttles(status)) permits.throttled(permit, status, refused.getHeaders(), true);
             return new ModelSession.Answer(
                     refused.getStatusCode().value(), refused.getResponseBodyAsByteArray(), true, null);
         }

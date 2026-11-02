@@ -94,8 +94,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         blocked.setMaxConcurrentCalls(2);
         blocked.setNoCallBefore(Instant.now().plusSeconds(60));
         blocked = pools.saveAndFlush(blocked);
-        instanceModel.setCallPoolId(blocked.getId());
-        llmModelRepository.saveAndFlush(instanceModel);
+        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", blocked.getId(), instanceModel.getId());
         Instant old = Instant.now().minusSeconds(3600);
         UUID first = null;
         for (int i = 0; i < 5; i++) {
@@ -115,8 +114,8 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         openPool = pools.saveAndFlush(openPool);
         var openConnection = llmConnectionRepository.saveAndFlush(LlmCatalogTestFixtures.connection("open-endpoint"));
         var openModel = LlmCatalogTestFixtures.model(openConnection, "open-model", "open-upstream");
-        openModel.setCallPoolId(openPool.getId());
         openModel = llmModelRepository.saveAndFlush(openModel);
+        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", openPool.getId(), openModel.getId());
         var openBinding = bindingRepository
                 .findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         openWorkspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)

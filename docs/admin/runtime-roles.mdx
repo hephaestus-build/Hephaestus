@@ -496,25 +496,70 @@ A refused call is not lost:
 ### Call pools
 
 A call pool represents one provider quota boundary across workers, models, and workspaces.
-The instance admin assigns model membership explicitly.
+Every model is in a pool. The database gives each model a pool of its own.
+An instance admin can move models into a shared pool.
 A shared host name alone does not establish a shared quota.
 [AI providers](./ai-providers.mdx#6-sharing-provider-capacity) owns the setup procedure.
 
 Every call takes a database grant before it reaches the provider.
 Review calls, composition, and direct script calls share the background capacity.
-Conversation calls can also use the interactive reserve.
+Conversation calls can also use the conversation reserve.
 The reserve is never lent to background work.
 Both the total limit and the background limit apply independently.
-A finite pool must leave background capacity above zero.
+
+#### The learned limit
+
+The pool row holds the limit, so all workers share it and a restart keeps it.
+No worker holds a database connection while its call waits for a grant or for the provider.
+
+| Event | Effect |
+| --- | --- |
+| New pool | The limit starts at 8 calls in flight |
+| A served call ended while the limit was full, and the provider did not refuse in the last 10 minutes | The limit rises by 1, so it doubles in about one call duration |
+| A served call ended while the limit was full, and the provider refused in the last 10 minutes | The limit rises by 1 for each limit's worth of such calls |
+| The provider answers 429, 529, or 503 | The limit falls to 70%, and never below 2. No call starts until the provider's `Retry-After` has passed, or for 5 seconds without one |
+
+A burst of refusals lowers the limit once: only a call that started under the current limit can lower it.
+The same rule applies to a served call that raises it.
+The limit does not rise while calls do not fill it.
+An instance admin's maximum is a ceiling on the limit.
+
+The conversation reserve is a quarter of the limit, rounded up, and the limit always leaves one background call.
+A limit of 32 has a reserve of 8. A limit of 8 has a reserve of 2.
+When the limit falls, calls in flight continue. A conversation can still use its reserve while they end.
+A new provider pause applies to conversations too, as the provider would refuse their calls.
+
+#### What a caller sees
+
+A provider's refusal does not reach the caller when the call can wait for it.
+The proxy releases the grant, and the call joins the queue again.
+The call asks the provider again after the pause. A conversation call waits up to 30 seconds and another call up to 2 minutes.
+
+The refusal reaches the caller as the provider's own answer, with its status, in these cases:
+
+- The provider asks for a longer pause than the call can wait.
+- The answer says that the account has no quota left (`insufficient_quota`).
+- The answer is a 503 without `Retry-After`, which can be an outage. The connection's breaker also counts it.
+- A workspace-controlled credential was refused in a shared pool.
+
+A call that ends while it waits gets a capacity refusal. Hephaestus records this as its own stop, and it says nothing about the reviewed work.
+[Decisions and withholdings](/contributor/practice-review-pipeline#decisions-and-withholdings) explains how a stop affects the feedback.
 
 Product feedback uses the lowest call class, `PRODUCT_FEEDBACK`.
 It starts only when no other class waits in that endpoint pool.
-At most one drafting call can be active in each pool, and it cannot use the interactive reserve.
+At most one drafting call can be active in each pool, and it cannot use the conversation reserve.
 A later call does not revoke an active draft: it can wait for that draft's transport to close.
 
-A fair queue gives workspaces, composition, and individual attempts turns before repeated grants to a busy peer.
+A fair queue first serves the workspace with the fewest calls in flight.
+Within a workspace, composition and review calls take turns, and then the attempt with the fewest calls in flight goes first.
+Thus, a wide review cannot hold more than its share while another review waits. It uses free capacity while none waits.
 Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
 Every physical call joins this queue, including composition and direct script calls.
+
+Each worker runs one admission round per pool for each 250 milliseconds while calls wait, and a new call starts one at once.
+A round can grant any worker's call, in queue order, up to the limit. The call's own worker finds the grant in its next round.
+Thus, the database load does not grow with the number of waiting calls.
+Conversation calls are granted first in each round.
 
 Before a review starts capture or creates a Pod, its claim checks the review quota and its model's endpoint pool.
 The parent review and its job start in one transaction after those checks pass.
@@ -543,7 +588,7 @@ Each physical request, including a protocol retry, consumes a rate debit.
 A configured per-call token bound reserves the provider's maximum input-plus-output charge.
 The reservation remains conservative when usage is absent or the call is cancelled.
 Closed calls retain their debit for a full minute after closure.
-The rate account also leaves an interactive share when the pool has an interactive reserve.
+Background calls keep their share of the limit in the rate account too, and at least one call.
 
 A live worker cancels a call after three quarters of the permit lease without renewal.
 The proxy also checks that local lease before it starts or retries a provider call, without waiting for the next periodic check.
@@ -564,10 +609,8 @@ The expired grant cannot renew or debit a retry.
 Its provider rate debit remains for one minute after lease expiry.
 Pool edits, deletion, and membership changes wait for open requests, retained rate debits, and cooldowns to end.
 
-An instance-controlled connection can impose a shared cooldown after HTTP 429.
-A workspace-controlled connection cannot impose that cooldown on other tenants.
-The response still reaches its caller.
 The cooldown follows the retry headers and never shortens an existing pause.
+A workspace-controlled connection can lower the limit and pause only a pool that its model has alone.
 
 The worker loads at most four compositions at once by default.
 It acquires this local capacity before it loads or restores composition inputs.

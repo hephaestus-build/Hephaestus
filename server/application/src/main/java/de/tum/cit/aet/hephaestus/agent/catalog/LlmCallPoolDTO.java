@@ -16,11 +16,31 @@ public record LlmCallPoolDTO(
         @NonNull @Schema(description = "Human-readable name")
         String displayName,
 
-        @Nullable @Schema(description = "Most model calls in flight at once; null does not limit them")
+        @Nullable @Schema(description = "Ceiling on the learned limit; null leaves it uncapped")
         Integer maxConcurrentCalls,
 
-        @Schema(description = "Calls only conversations may use", requiredMode = RequiredMode.REQUIRED)
-        int interactiveReserve,
+        @Schema(
+                description = "Calls in flight the provider is thought to serve, learned from its answers",
+                requiredMode = RequiredMode.REQUIRED)
+        int learnedLimit,
+
+        @Schema(
+                description = "The calls in flight the pool allows now: the learned limit under the ceiling",
+                requiredMode = RequiredMode.REQUIRED)
+        int effectiveLimit,
+
+        @Schema(
+                description = "How many of the effective limit's calls only conversations may use",
+                requiredMode = RequiredMode.REQUIRED)
+        int conversationReserve,
+
+        @Schema(
+                description = "True for the pool a model has of its own; false for one that models share",
+                requiredMode = RequiredMode.REQUIRED)
+        boolean dedicated,
+
+        @Nullable @Schema(description = "When a provider's refusal last lowered the learned limit")
+        Instant throttledAt,
 
         @Nullable @Schema(description = "The provider asked for no call before this time")
         Instant noCallBefore,
@@ -30,12 +50,17 @@ public record LlmCallPoolDTO(
         @Nullable Long tokensPerCall) {
 
     public static LlmCallPoolDTO from(LlmCallPool pool) {
+        int effective = LlmCallLimit.effective(pool.getLearnedLimit(), pool.getMaxConcurrentCalls());
         return new LlmCallPoolDTO(
                 pool.getId(),
                 pool.getSlug(),
                 pool.getDisplayName(),
                 pool.getMaxConcurrentCalls(),
-                pool.getInteractiveReserve(),
+                pool.getLearnedLimit(),
+                effective,
+                LlmCallLimit.reserve(effective),
+                pool.isDedicated(),
+                pool.getThrottledAt(),
                 pool.getNoCallBefore(),
                 pool.getRequestsPerMinute(),
                 pool.getTokensPerMinute(),

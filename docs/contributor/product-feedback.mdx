@@ -180,7 +180,7 @@ These bounds leave headroom for practice feedback but cannot guarantee GitHub’
 
 ## Model admission
 
-Drafts use the instance model under `LlmCallClass.PRODUCT_FEEDBACK`, without tools or interactive reserve.
+Drafts use the instance model under `LlmCallClass.PRODUCT_FEEDBACK`, without tools or conversation reserve.
 The class receives a grant only when no other class has a live waiting request.
 At most one product feedback call runs per pool.
 It cannot pass a queued practice-review call.

@@ -52,6 +52,7 @@ class LlmModelResolverTest extends BaseUnitTest {
         model = new LlmModel();
         model.setId(20L);
         model.setUpstreamModelId("gpt-test");
+        model.setCallPoolId(1L);
         model.setConnection(connection);
         model.setEnabled(true);
         model.setVisibility(ModelVisibility.PUBLIC);

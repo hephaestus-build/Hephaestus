@@ -76,30 +76,88 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             """, nativeQuery = true)
     void prune(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
 
+    interface Head {
+        UUID getId();
+
+        String getCallClass();
+    }
+
     /**
-     * Workspace, service class, then attempt each receive a turn before another grant to a busy peer.
-     * Grant timestamps retain scheduling history independently of provider rate debits.
+     * The next request of one queue. The workspace with the fewest calls in flight comes first, then, within it, the
+     * service class and then the attempt, so that a wide review cannot hold more than its share while another waits.
+     * Grant timestamps break ties independently of provider rate debits. Each group is read once: this runs under the
+     * pool row lock, and a wide review can leave hundreds of requests waiting.
      */
     @Query(value = """
-            SELECT q.id FROM llm_call_permit q
+            WITH granted AS (
+              SELECT workspace_id,source_id,call_class,state,granted_at FROM llm_call_permit
+              WHERE pool_id=:poolId AND granted_at IS NOT NULL AND (call_class='TURN')=:interactive
+            ), workspaces AS (
+              SELECT workspace_id,count(*) FILTER (WHERE state='ACTIVE') AS active,max(granted_at) AS last
+              FROM granted GROUP BY workspace_id
+            ), classes AS (
+              SELECT workspace_id,call_class='COMPOSITION' AS composition,max(granted_at) AS last
+              FROM granted GROUP BY workspace_id,call_class='COMPOSITION'
+            ), sources AS (
+              SELECT source_id,count(*) FILTER (WHERE state='ACTIVE') AS active,max(granted_at) AS last
+              FROM granted GROUP BY source_id
+            )
+            SELECT q.id AS "id",q.call_class AS "callClass" FROM llm_call_permit q
+            LEFT JOIN workspaces w ON w.workspace_id=q.workspace_id
+            LEFT JOIN classes c ON c.workspace_id=q.workspace_id AND c.composition=(q.call_class='COMPOSITION')
+            LEFT JOIN sources s ON s.source_id=q.source_id
             WHERE q.pool_id=:poolId AND q.state='WAITING' AND (q.call_class='TURN')=:interactive
               AND (q.call_class<>'PRODUCT_FEEDBACK' OR NOT EXISTS (
                 SELECT 1 FROM llm_call_permit h WHERE h.pool_id=q.pool_id
                   AND h.state='WAITING' AND h.call_class<>'PRODUCT_FEEDBACK'))
-            ORDER BY
-              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive) NULLS FIRST,
-              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive AND (g.call_class='COMPOSITION')=(q.call_class='COMPOSITION')) NULLS FIRST,
-              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.source_id=q.source_id AND (g.call_class='TURN')=:interactive) NULLS FIRST,
-              q.acquired_at,q.id LIMIT 1
+            ORDER BY COALESCE(w.active,0),w.last NULLS FIRST,c.last NULLS FIRST,
+              COALESCE(s.active,0),s.last NULLS FIRST,q.acquired_at,q.id LIMIT 1
             """, nativeQuery = true)
-    Optional<UUID> next(@Param("poolId") long poolId, @Param("interactive") boolean interactive);
+    Optional<Head> next(@Param("poolId") long poolId, @Param("interactive") boolean interactive);
 
+    /** Any worker may grant the head of the queue. The request's own worker finds the grant and makes the call. */
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_permit SET state='ACTIVE',worker_id=:workerId,granted_at=clock_timestamp(),renewed_at=clock_timestamp(),requests=1,tokens=:tokens WHERE id=:id AND state='WAITING'",
+                    "UPDATE llm_call_permit SET state='ACTIVE',granted_at=clock_timestamp(),renewed_at=clock_timestamp(),requests=1,tokens=:tokens WHERE id=:id AND state='WAITING'",
             nativeQuery = true)
-    int grant(@Param("id") UUID id, @Param("tokens") long tokens, @Param("workerId") String workerId);
+    int grant(@Param("id") UUID id, @Param("tokens") long tokens);
+
+    interface Queued {
+        UUID getId();
+
+        String getState();
+    }
+
+    /** This worker's requests that still have a row: those that an admission round granted read ACTIVE. */
+    @Query(
+            value =
+                    "SELECT id AS \"id\",state AS \"state\" FROM llm_call_permit WHERE worker_id=:workerId AND id IN (:ids)",
+            nativeQuery = true)
+    List<Queued> findQueued(@Param("workerId") String workerId, @Param("ids") Collection<UUID> ids);
+
+    interface Backlog {
+        String getSlug();
+
+        int getLearnedLimit();
+
+        @Nullable
+        Integer getMaxConcurrentCalls();
+
+        long getWaitingTurns();
+
+        long getWaitingBackground();
+    }
+
+    /** What every pool in use stands at, whichever worker holds its calls, for its gauges. */
+    @Query(value = """
+            SELECT p.slug AS "slug",p.learned_limit AS "learnedLimit",p.max_concurrent_calls AS "maxConcurrentCalls",
+              count(*) FILTER (WHERE q.state='WAITING' AND q.call_class='TURN') AS "waitingTurns",
+              count(*) FILTER (WHERE q.state='WAITING' AND q.call_class<>'TURN') AS "waitingBackground"
+            FROM llm_call_pool p JOIN llm_call_permit q ON q.pool_id=p.id
+            GROUP BY p.id,p.slug,p.learned_limit,p.max_concurrent_calls
+            """, nativeQuery = true)
+    List<Backlog> backlog();
 
     @Modifying
     @Query(

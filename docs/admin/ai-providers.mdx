@@ -510,40 +510,65 @@ They never see an upstream model ID, base URL, or credential.
 
 ## 6. Sharing provider capacity
 
-Put models in a call pool when they share one provider quota boundary.
-The pool enforces capacity and rate accounting across all workers and workspaces.
-A shared host name does not prove that credentials or deployments share a quota.
-A model without a pool has no endpoint-wide limit.
+Every model has a call pool. You do not create it or set a number for it.
+The pool learns how many calls in flight the provider serves.
+The pool applies this limit across all workers and workspaces.
+When the provider refuses calls, all callers of that model wait, and their calls continue.
 
-Use the instance admin API under `/api/admin/llm/call-pools`:
+| What the system learns | What you can set |
+| --- | --- |
+| The limit of calls in flight | A maximum, as a ceiling on that limit |
+| The conversation reserve: a quarter of the limit, rounded up | Nothing. The limit sets it |
+| The pause after a refusal, from the provider's `Retry-After` | The longest pause, `HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN` |
+| | `requestsPerMinute`, `tokensPerMinute` and `tokensPerCall`, if the provider publishes these rates |
+| | Which models share one pool |
 
-1. Create a pool with its slug, display name, maximum concurrent calls, and interactive reserve.
-2. Set `requestsPerMinute` and `tokensPerMinute` when the provider imposes these rates.
-3. Set `tokensPerCall` to a conservative maximum input-plus-output charge when you configure a token rate.
-4. List models with `GET /api/admin/llm/call-pools/models`.
-5. Assign models with `PUT /api/admin/llm/call-pools/{id}/models`.
+A new pool starts at 8 calls in flight, and the limit rises while the provider serves all of them.
+The [runtime guide](./runtime-roles.mdx#call-pools) explains how the limit changes.
 
+Use the instance admin API under `/api/admin/llm/call-pools` for all changes in this section:
+
+- `GET /api/admin/llm/call-pools` shows each pool's `learnedLimit`, `effectiveLimit`, `conversationReserve` and `throttledAt`.
+- `GET /api/admin/llm/call-pools/models` shows the pool of each model.
+
+### Set a ceiling or a rate
+
+Send `PUT /api/admin/llm/call-pools/{id}` with the pool's slug and display name, and with the values that you want.
+Set `maxConcurrentCalls` to `null` to remove the ceiling.
+
+Set `tokensPerCall` to a conservative maximum input-plus-output charge when you configure a token rate.
 Use provider documentation to establish the token bound for every assigned model.
 Include reasoning and server-side tool tokens when the provider bills them.
 An understated bound cannot protect the provider's token quota.
 The pool reserves the full bound for each physical call, including cancelled calls and retries.
 This conservative policy can admit fewer requests than an exact tokenizer would permit.
 
-Use 32 concurrent calls and an eight-call reserve only when the provider supports that capacity.
-The reserve must leave nonzero background capacity.
-Reviews, composition, and direct script calls never borrow the reserve.
-The rate limits also keep a proportional interactive share.
-The [runtime guide](./runtime-roles.mdx#call-pools) explains fairness and call closure.
+### Share one pool between models
 
-Configure membership while the affected models are idle.
+Each model learns its limit alone. Two models that share one provider quota both receive refusals, and both limits fall.
+Put them in one pool when you know that they share a quota boundary:
+
+1. Create a pool with its slug and display name. A slug cannot start with `own-`.
+2. Assign models with `PUT /api/admin/llm/call-pools/{id}/models`.
+
+A shared host name does not prove that credentials or deployments share a quota.
+A model that leaves a shared pool receives a new pool of its own. So does a model whose shared pool you delete.
+The new pool learns from the start value.
+You cannot delete a model's own pool or add another model to it. It ends with the model or when the model joins a shared pool.
+
+### When a change is possible
+
+Make these changes while the affected models are idle.
 Pool settings and membership cannot change while their pool has open requests, recent rate debits, or a shared cooldown.
 Wait at least one minute after the last call closes.
 The slug cannot change.
 A workspace admin can read their model's membership but cannot change it.
-Deleting an idle pool leaves its models without endpoint-wide limits.
 
-Only an instance-controlled credential can pause a shared pool after a provider rate limit.
-A workspace-controlled credential's rate limit reaches that caller without pausing other tenants.
+### Who can slow whom
+
+A model's own pool follows its provider, whichever credential the model uses.
+In a shared pool, only an instance-controlled credential can lower the limit or pause the pool.
+A workspace-controlled credential's refusal reaches its caller without an effect on other tenants.
 
 ## 7. Errors you can hit
 

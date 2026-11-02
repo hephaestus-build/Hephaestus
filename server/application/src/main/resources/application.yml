@@ -704,7 +704,7 @@ hephaestus:
             # Permit renewal window. Live workers cancel before expiry; admission and administration
             # reclaim expired grants, keeping the provider rate debit for a minute after expiry.
             permit-lease: ${HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE:PT1M}
-            # The longest pause of a call pool after a rate limit answer, whatever its Retry-After asks for.
+            # The longest pause of a call pool after a provider's refusal, whatever its Retry-After asks for.
             max-cooldown: ${HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN:PT5M}
         egress:
             # Allow http://localhost provider base URLs, for testing against an Ollama/vLLM running

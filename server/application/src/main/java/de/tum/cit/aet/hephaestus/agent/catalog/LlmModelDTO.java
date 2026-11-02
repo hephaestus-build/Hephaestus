@@ -74,7 +74,7 @@ public record LlmModelDTO(
         @Nullable @Schema(description = "Last update timestamp")
         Instant updatedAt,
 
-        @Nullable @Schema(description = "The pool whose capacity the model's calls share; null for none")
+        @Schema(description = "The pool whose capacity the model's calls share; a model has its own by default")
         Long callPoolId) {
     public static LlmModelDTO from(
             LlmModel model, @Nullable LlmModelPrice currentPrice, List<Long> grantedWorkspaceIds) {

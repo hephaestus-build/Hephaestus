@@ -47,6 +47,9 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     private JdbcTemplate jdbc;
 
     @Autowired
+    private LlmCallPoolRepository pools;
+
+    @Autowired
     private LlmModelRepository instanceModels;
 
     @Autowired
@@ -63,7 +66,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     void shouldDescribeTheMembershipArrayReturnedByHttp() throws Exception {
         var first = instanceModel();
         var second = instanceModel();
-        var pool = create(slug("array-contract"), 4, 0);
+        var pool = create(slug("array-contract"), 4);
         assertThat(putModels(pool.id(), List.of(first.getId(), second.getId()), List.of()))
                 .extracting(LlmCallPoolModelDTO::modelId)
                 .contains(first.getId(), second.getId());
@@ -102,7 +105,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         Workspace workspace = workspace("pool-share");
         LlmModel instanceModel = instanceModel();
         WorkspaceLlmModel workspaceModel = workspaceModel(workspace);
-        LlmCallPoolDTO pool = create(slug("gpu"), 8, 2);
+        LlmCallPoolDTO pool = create(slug("gpu"), 8);
 
         List<LlmCallPoolModelDTO> models =
                 putModels(pool.id(), List.of(instanceModel.getId()), List.of(workspaceModel.getId()));
@@ -124,8 +127,10 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .expectBody()
                 .jsonPath("$[?(@.id == %d)].callPool.slug".formatted(workspaceModel.getId()))
                 .isEqualTo(pool.slug())
-                .jsonPath("$[?(@.id == %d)].callPool.interactiveReserve".formatted(workspaceModel.getId()))
-                .isEqualTo(2)
+                .jsonPath("$[?(@.id == %d)].callPool.maxConcurrentCalls".formatted(workspaceModel.getId()))
+                .isEqualTo(8)
+                .jsonPath("$[?(@.id == %d)].callPool.learnedLimit".formatted(workspaceModel.getId()))
+                .doesNotExist()
                 .jsonPath("$[?(@.id == %d)].callPool.noCallBefore".formatted(workspaceModel.getId()))
                 .doesNotExist();
 
@@ -133,7 +138,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
 
         assertThat(find(models, UsageFundingSource.INSTANCE, instanceModel.getId())
                         .callPoolId())
-                .isNull();
+                .isNotEqualTo(pool.id());
         assertThat(find(models, UsageFundingSource.WORKSPACE, workspaceModel.getId())
                         .callPoolId())
                 .isEqualTo(pool.id());
@@ -143,8 +148,8 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @WithAdminUser
     void shouldMoveAModelWhenAnotherPoolTakesIt() {
         LlmModel model = instanceModel();
-        LlmCallPoolDTO first = create(slug("first"), 4, 0);
-        LlmCallPoolDTO second = create(slug("second"), 4, 0);
+        LlmCallPoolDTO first = create(slug("first"), 4);
+        LlmCallPoolDTO second = create(slug("second"), 4);
         putModels(first.id(), List.of(model.getId()), List.of());
 
         List<LlmCallPoolModelDTO> models = putModels(second.id(), List.of(model.getId()), List.of());
@@ -159,7 +164,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         var owner = workspace("pool-owner");
         var other = workspace("pool-other");
         var model = workspaceModel(owner);
-        var pool = create(slug("scoped"), 4, 0);
+        var pool = create(slug("scoped"), 4);
         putModels(pool.id(), List.of(), List.of(model.getId()));
         long connectionId = model.getConnection().getId();
         var scope = UsageFundingSource.WORKSPACE;
@@ -178,7 +183,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @WithAdminUser
     void shouldKeepTheModelsWhenOneOfTheChosenModelsDoesNotExist() {
         LlmModel model = instanceModel();
-        LlmCallPoolDTO pool = create(slug("keep"), 4, 0);
+        LlmCallPoolDTO pool = create(slug("keep"), 4);
         putModels(pool.id(), List.of(model.getId()), List.of());
 
         webTestClient
@@ -198,9 +203,9 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Test
     @WithAdminUser
-    void shouldLeaveTheModelsUnlimitedWhenThePoolIsDeleted() {
+    void shouldGiveEachModelItsOwnPoolAgainWhenTheSharedPoolIsDeleted() {
         LlmModel model = instanceModel();
-        LlmCallPoolDTO pool = create(slug("gone"), 4, 0);
+        LlmCallPoolDTO pool = create(slug("gone"), 4);
         putModels(pool.id(), List.of(model.getId()), List.of());
 
         webTestClient
@@ -212,21 +217,124 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .isNoContent()
                 .expectBody(Void.class);
 
-        assertThat(instanceModels.findById(model.getId()).orElseThrow().getCallPoolId())
-                .isNull();
+        long own = instanceModels.findById(model.getId()).orElseThrow().getCallPoolId();
+        assertThat(own).isNotEqualTo(pool.id());
+        assertThat(pools.findById(own).orElseThrow().isDedicated()).isTrue();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldGiveEveryModelItsOwnPoolWithNoAdminAndEndItWithTheModel() {
+        Workspace workspace = workspace("pool-own");
+        LlmModel instance = instanceModel();
+        WorkspaceLlmModel own = workspaceModel(workspace);
+        long instancePool = instance.getCallPoolId();
+        long workspacePool = own.getCallPoolId();
+
+        var row = pools.findById(workspacePool).orElseThrow();
+        assertThat(row.isDedicated()).isTrue();
+        assertThat(row.getMaxConcurrentCalls()).isNull();
+        assertThat(row.getLearnedLimit()).isEqualTo(8);
+        assertThat(row.getSlug()).isEqualTo("own-workspace-model-" + own.getId());
+        assertThat(pools.findById(instancePool).orElseThrow().getSlug()).isEqualTo("own-model-" + instance.getId());
+
+        instanceModels.delete(instance);
+        workspaceModels.delete(own);
+
+        assertThat(pools.findById(instancePool)).isEmpty();
+        assertThat(pools.findById(workspacePool)).isEmpty();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldEndAModelsOwnPoolWhenItJoinsASharedOneAndGiveItANewOneWhenItLeaves() {
+        LlmModel model = instanceModel();
+        long own = model.getCallPoolId();
+        LlmCallPoolDTO shared = create(slug("join"), 4);
+
+        putModels(shared.id(), List.of(model.getId()), List.of());
+        assertThat(pools.findById(own)).isEmpty();
+
+        var models = putModels(shared.id(), List.of(), List.of());
+        long fresh = find(models, UsageFundingSource.INSTANCE, model.getId()).callPoolId();
+        assertThat(fresh).isNotEqualTo(shared.id());
+        assertThat(pools.findById(fresh).orElseThrow().isDedicated()).isTrue();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldKeepAModelsOwnPoolToThatModel() {
+        LlmModel first = instanceModel();
+        LlmModel second = instanceModel();
+        long own = first.getCallPoolId();
+
+        webTestClient
+                .delete()
+                .uri("/admin/llm/call-pools/{id}", own)
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        webTestClient
+                .put()
+                .uri("/admin/llm/call-pools/{id}/models", own)
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmCallPoolModelsRequestDTO(List.of(second.getId()), List.of()))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(instanceModels.findById(second.getId()).orElseThrow().getCallPoolId())
+                .isNotEqualTo(own);
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldLetAnAdminSetACeilingOnAModelsOwnPoolAndTakeItBack() {
+        LlmModel model = instanceModel();
+        var row = pools.findById(model.getCallPoolId()).orElseThrow();
+
+        LlmCallPoolDTO capped = put(row.getId(), row.getSlug(), 4);
+        assertThat(capped.maxConcurrentCalls()).isEqualTo(4);
+        assertThat(capped.learnedLimit()).isEqualTo(8);
+        assertThat(capped.effectiveLimit()).isEqualTo(4);
+        assertThat(capped.conversationReserve()).isEqualTo(1);
+        assertThat(capped.dedicated()).isTrue();
+
+        LlmCallPoolDTO uncapped = put(row.getId(), row.getSlug(), null);
+        assertThat(uncapped.maxConcurrentCalls()).isNull();
+        assertThat(uncapped.effectiveLimit()).isEqualTo(8);
+        assertThat(uncapped.conversationReserve()).isEqualTo(2);
+    }
+
+    private LlmCallPoolDTO put(long id, String slug, @Nullable Integer ceiling) {
+        return Objects.requireNonNull(webTestClient
+                .put()
+                .uri("/admin/llm/call-pools/{id}", id)
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Own", ceiling, null, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(LlmCallPoolDTO.class)
+                .returnResult()
+                .getResponseBody());
     }
 
     @Test
     @WithAdminUser
     void shouldChangeTheLimitsButNotTheSlug() {
-        LlmCallPoolDTO pool = create(slug("change"), 4, 1);
+        LlmCallPoolDTO pool = create(slug("change"), 4);
 
         LlmCallPoolDTO changed = Objects.requireNonNull(webTestClient
                 .put()
                 .uri("/admin/llm/call-pools/{id}", pool.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Renamed", null, 0, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Renamed", null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -241,24 +349,25 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Test
     @WithAdminUser
-    void shouldRefuseAReserveTheMaximumCannotHold() {
-        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("over"), "Over", 2, 3, null, null, null));
-        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("nomax"), "No maximum", null, 1, null, null, null));
-        refuseCreate(new SaveLlmCallPoolRequestDTO("Not A Slug", "Bad slug", 2, 0, null, null, null));
+    void shouldRefuseABadSlugAndATokenRateWithoutABound() {
+        refuseCreate(new SaveLlmCallPoolRequestDTO("Not A Slug", "Bad slug", 2, null, null, null));
+        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("no-bound"), "No bound", 2, null, 100L, null));
+        refuseCreate(new SaveLlmCallPoolRequestDTO(slug("over-rate"), "Over rate", 2, null, 100L, 101L));
+        refuseCreate(new SaveLlmCallPoolRequestDTO("own-" + slug("reserved"), "Reserved prefix", 2, null, null, null));
     }
 
     @Test
     @WithAdminUser
     void shouldRefuseASlugThatIsTaken() {
         String slug = slug("taken");
-        create(slug, 4, 0);
+        create(slug, 4);
 
         webTestClient
                 .post()
                 .uri("/admin/llm/call-pools")
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Again", 4, 0, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Again", 4, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)
@@ -275,7 +384,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools")
                 .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug("denied"), "Denied", 4, 0, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug("denied"), "Denied", 4, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -285,8 +394,8 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @WithAdminUser
     void shouldAllowMembershipEditsWhileAnUnrelatedPoolIsBusy() {
-        var busy = create(slug("busy"), 4, 1);
-        var idle = create(slug("idle"), 4, 1);
+        var busy = create(slug("busy"), 4);
+        var idle = create(slug("idle"), 4);
         jdbc.update(
                 "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp(),clock_timestamp(),1,0)",
                 UUID.randomUUID(),
@@ -302,7 +411,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @WithAdminUser
     void shouldRefuseToDeleteAPoolBeforeItsCallAndRateWindowClose() {
-        var pool = create(slug("closing"), 4, 1);
+        var pool = create(slug("closing"), 4);
         UUID call = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp(),clock_timestamp(),1,0)",
@@ -351,7 +460,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @WithAdminUser
     void shouldRemoveAnExpiredWaiterWhenDeletingAnIdlePool() {
-        var pool = create(slug("expired-waiter"), 4, 1);
+        var pool = create(slug("expired-waiter"), 4);
         jdbc.update(
                 "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'WAITING',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',0,0)",
                 UUID.randomUUID(),
@@ -371,7 +480,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     @Test
     @WithAdminUser
     void shouldAllowEditingAndDeletingAfterACrashedOwnersLeaseAndRateWindowExpire() {
-        var pool = create(slug("crashed-owner"), 4, 1);
+        var pool = create(slug("crashed-owner"), 4);
         jdbc.update(
                 "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',1,17)",
                 UUID.randomUUID(),
@@ -383,7 +492,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .uri("/admin/llm/call-pools/{id}", pool.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Recovered endpoint", 3, 1, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Recovered endpoint", 3, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -436,13 +545,13 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         return workspaceModels.save(model);
     }
 
-    private LlmCallPoolDTO create(String slug, @Nullable Integer max, int reserve) {
+    private LlmCallPoolDTO create(String slug, @Nullable Integer max) {
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/admin/llm/call-pools")
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Shared GPU", max, reserve, null, null, null))
+                .bodyValue(new SaveLlmCallPoolRequestDTO(slug, "Shared GPU", max, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isCreated()

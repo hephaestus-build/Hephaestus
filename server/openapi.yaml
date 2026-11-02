@@ -800,11 +800,13 @@ paths:
       responses:
         "204":
           description: Pool deleted
+        "400":
+          description: The pool is a model's own
         "404":
           description: Pool not found
         "409":
           description: "The pool still has calls, rate history, or a cooldown"
-      summary: Delete a pool; its models are no longer limited
+      summary: Delete a shared pool; each of its models gets a pool of its own
       tags:
       - Admin LLM
     put:
@@ -16479,21 +16481,36 @@ components:
       type: object
       description: Provider capacity that the models in it share
       properties:
+        conversationReserve:
+          type: integer
+          format: int32
+          description: How many of the effective limit's calls only conversations
+            may use
+        dedicated:
+          type: boolean
+          description: True for the pool a model has of its own; false for one that
+            models share
         displayName:
           type: string
           description: Human-readable name
+        effectiveLimit:
+          type: integer
+          format: int32
+          description: "The calls in flight the pool allows now: the learned limit\
+            \ under the ceiling"
         id:
           type: integer
           format: int64
           description: Pool id
-        interactiveReserve:
+        learnedLimit:
           type: integer
           format: int32
-          description: Calls only conversations may use
+          description: "Calls in flight the provider is thought to serve, learned\
+            \ from its answers"
         maxConcurrentCalls:
           type: integer
           format: int32
-          description: Most model calls in flight at once; null does not limit them
+          description: Ceiling on the learned limit; null leaves it uncapped
         noCallBefore:
           type: string
           format: date-time
@@ -16504,6 +16521,10 @@ components:
         slug:
           type: string
           description: Unique slug; also the pool label of its metrics
+        throttledAt:
+          type: string
+          format: date-time
+          description: When a provider's refusal last lowered the learned limit
         tokensPerCall:
           type: integer
           format: int64
@@ -16511,23 +16532,23 @@ components:
           type: integer
           format: int64
       required:
+      - conversationReserve
+      - dedicated
       - displayName
+      - effectiveLimit
       - id
-      - interactiveReserve
+      - learnedLimit
       - slug
     LlmCallPoolMembership:
       type: object
-      description: "Tenant-visible membership, without shared activity or cooldown\
-        \ information."
+      description: "Tenant-visible membership, without what the pool learned, its\
+        \ activity or its cooldown."
       properties:
         displayName:
           type: string
         id:
           type: integer
           format: int64
-        interactiveReserve:
-          type: integer
-          format: int32
         maxConcurrentCalls:
           type: integer
           format: int32
@@ -16536,7 +16557,6 @@ components:
       required:
       - displayName
       - id
-      - interactiveReserve
       - slug
     LlmCallPoolModel:
       type: object
@@ -16545,7 +16565,8 @@ components:
         callPoolId:
           type: integer
           format: int64
-          description: The pool the model is in; null for none
+          description: The pool the model is in; a model has its own until an admin
+            moves it
         connectionDisplayName:
           type: string
           description: Connection's display name
@@ -16571,6 +16592,7 @@ components:
           description: Slug of the workspace that owns the model; null for an instance
             model
       required:
+      - callPoolId
       - connectionDisplayName
       - displayName
       - modelId
@@ -16694,7 +16716,8 @@ components:
         callPoolId:
           type: integer
           format: int64
-          description: The pool whose capacity the model's calls share; null for none
+          description: The pool whose capacity the model's calls share; a model has
+            its own by default
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -24239,15 +24262,10 @@ components:
           description: Human-readable name
           maxLength: 128
           minLength: 0
-        interactiveReserve:
-          type: integer
-          format: int32
-          description: Calls only conversations may use
-          minimum: 0
         maxConcurrentCalls:
           type: integer
           format: int32
-          description: Most model calls in flight at once; null does not limit them
+          description: Ceiling on the limit the pool learns; null leaves it uncapped
           minimum: 1
         requestsPerMinute:
           type: integer
@@ -24270,7 +24288,6 @@ components:
           minimum: 1
       required:
       - displayName
-      - interactiveReserve
       - slug
     ScanAvailability:
       type: object

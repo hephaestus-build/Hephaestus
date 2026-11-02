@@ -82,7 +82,7 @@ class LlmCallBacklogIntegrationTest extends BaseIntegrationTest {
         long pool = pool();
         UUID id = enqueue(pool, LlmCallClass.REQUEST);
         transactions.executeWithoutResult(
-                status -> assertThat(rows.grant(id, 0, "backlog")).isEqualTo(1));
+                status -> assertThat(rows.grant(id, 0)).isEqualTo(1));
         var observer = LlmCallPermitsTestFixtures.worker(context, "observer");
 
         assertThat(observer.hasBackgroundWaiters(pool)).isFalse();

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
@@ -12,15 +13,19 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
@@ -37,7 +42,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
-/** Shared admission, fair grants and rate accounting. Revocation never releases an active call. */
+/**
+ * Shared admission, fair grants, rate accounting and the limit learned from the provider. The row of a pool is the one
+ * thing all workers share: each decision on it holds its row lock, and no one holds a database connection while it waits
+ * for a grant or a model. Revocation never releases an active call.
+ */
 @Component
 @ConditionalOnWorkerRole
 @WorkspaceAgnostic("Instance-owned endpoint capacity, shared across all workers and workspaces.")
@@ -45,6 +54,7 @@ public class LlmCallPermits {
     private static final Logger log = LoggerFactory.getLogger(LlmCallPermits.class);
     static final Duration POLL = Duration.ofMillis(250);
     static final Duration DEFAULT_COOLDOWN = Duration.ofSeconds(5);
+    private static final int ENDED_CHECK_POLLS = 8;
     private final LlmCallPoolRepository pools;
     private final LlmCallPermitRepository rows;
     private final TransactionTemplate transactions;
@@ -53,8 +63,8 @@ public class LlmCallPermits {
     private final LlmPoolMeters meters;
     private final Map<UUID, Permit> held = new ConcurrentHashMap<>();
     private final Set<UUID> pendingRelease = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> waiting = ConcurrentHashMap.newKeySet();
-    private final Map<Long, ReentrantLock> localAdmissions = new ConcurrentHashMap<>();
+    private final Map<UUID, Waiter> waiting = new ConcurrentHashMap<>();
+    private final Map<Long, Admissions> admissions = new ConcurrentHashMap<>();
     private @Nullable ScheduledExecutorService scheduler;
     private final LlmModelResolver models;
 
@@ -96,7 +106,8 @@ public class LlmCallPermits {
             value = ApplicationReadyEvent.class,
             condition = "!@environment.matchesProfiles('specs', 'cds-training')")
     public void start() {
-        pools.findAll().forEach(pool -> meters.pool(pool.getSlug()));
+        // A pool that models share starts from zero, for its alerts. A model's own pool registers at its first call.
+        pools.findAll().stream().filter(pool -> !pool.isDedicated()).forEach(pool -> meters.pool(pool.getSlug()));
         ScheduledExecutorService started = Executors.newScheduledThreadPool(2, task -> {
             Thread thread = new Thread(task, "llm-call-permits");
             thread.setDaemon(true);
@@ -106,6 +117,8 @@ public class LlmCallPermits {
         var unusedRenewal =
                 started.scheduleWithFixedDelay(this::renew, renewMillis, renewMillis, TimeUnit.MILLISECONDS);
         var unusedFence = started.scheduleWithFixedDelay(this::fence, 250, 250, TimeUnit.MILLISECONDS);
+        var unusedGauges =
+                started.scheduleWithFixedDelay(this::observeBacklog, renewMillis, renewMillis, TimeUnit.MILLISECONDS);
         scheduler = started;
     }
 
@@ -114,7 +127,7 @@ public class LlmCallPermits {
         if (scheduler != null) scheduler.shutdownNow();
     }
 
-    /** No provider call starts without a committed grant, and an ended caller never receives one. */
+    /** No provider call starts without a committed grant, or for a caller that has ended. */
     public @Nullable Permit acquire(
             long poolId, LlmCallClass callClass, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
         if ((caller.workspaceId() == null) != (callClass == LlmCallClass.PRODUCT_FEEDBACK))
@@ -132,24 +145,34 @@ public class LlmCallPermits {
                     id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
             return admission.getSlug();
         }));
-        waiting.add(id);
+        Waiter waiter = new Waiter(poolId, poolSlug, callClass);
+        waiting.put(id, waiter);
         long began = System.nanoTime();
         boolean handedOff = false;
         Permit admitted = null;
         try {
-            while (!ended.getAsBoolean() && !expired(deadline)) {
-                admitted = tryGrant(id, poolId, callClass);
+            // A new request has its round at once, so an idle pool adds no wait to a call.
+            boolean arrived = true;
+            // Asking whether a call ended can read the database, and hundreds can wait. The handoff asks again.
+            int polls = 0;
+            while (!expired(deadline) && (++polls % ENDED_CHECK_POLLS != 0 || !ended.getAsBoolean())) {
+                admit(poolId, callClass.interactive(), arrived);
+                arrived = false;
+                admitted = waiter.awaitGrant();
                 if (admitted != null) {
+                    meters.pool(admitted.pool).granted(callClass);
                     meters.pool(admitted.pool).waited(callClass, "capacity", System.nanoTime() - began);
                     Permit result = handOff(admitted, ended, deadline);
                     handedOff = result != null;
                     return result;
                 }
-                if (!pause()) return null;
+                if (Thread.currentThread().isInterrupted()) return null;
             }
             return null;
         } finally {
             waiting.remove(id);
+            // A round may have delivered the grant after the last look.
+            if (admitted == null && !waiter.granted.isCompletedExceptionally()) admitted = waiter.granted.getNow(null);
             if (!handedOff && admitted != null) admitted.close();
             if (!handedOff && admitted == null) {
                 meters.pool(poolSlug).abandoned(callClass, "capacity");
@@ -157,9 +180,11 @@ public class LlmCallPermits {
                 try {
                     // No transport can have opened before handoff, including an uncertain grant commit.
                     pendingRelease.add(id);
+                    // In this order: the delete waits for another worker's grant of this request, which the release
+                    // then sees and closes. The other way round, the grant would stay open with no one to close it.
                     transactions.executeWithoutResult(status -> {
-                        rows.release(id, workerId);
                         rows.abandon(id, workerId);
+                        rows.release(id, workerId);
                     });
                     pendingRelease.remove(id);
                 } catch (RuntimeException failed) {
@@ -186,13 +211,16 @@ public class LlmCallPermits {
         }
     }
 
-    public @Nullable Long poolFor(LlmModelResolver.ConnectionRef ref) {
-        return models.resolveCallPool(ref);
+    /** The model's pool. Every model has one, so only a model that is gone has none. */
+    public long poolFor(LlmModelResolver.ConnectionRef ref) {
+        Long pool = models.resolveCallPool(ref);
+        if (pool == null) throw new IllegalStateException("The configured model is no longer available");
+        return pool;
     }
 
     private boolean samePool(long poolId, Caller caller) {
         var model = caller.model();
-        return model == null || Objects.equals(poolFor(model), poolId);
+        return model == null || poolFor(model) == poolId;
     }
 
     /** A point-in-time endpoint backlog observation; this creates no request or grant. */
@@ -201,45 +229,83 @@ public class LlmCallPermits {
                 .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
     }
 
-    private @Nullable Permit tryGrant(UUID id, long poolId, LlmCallClass callClass) {
-        ReentrantLock local = localAdmissions.computeIfAbsent(poolId, key -> new ReentrantLock());
-        if (!local.tryLock()) return null;
+    /**
+     * One admission round: grants whatever the pool has room for, in fair order, whichever worker's requests they are,
+     * and hands this worker's grants to its waiters. So one round per worker and pool is enough, however many calls
+     * wait, and the database's load does not grow with them. A new conversation call queues for its round, as it must
+     * not lose time to the review calls that wait beside it.
+     */
+    private void admit(long poolId, boolean interactive, boolean arrived) {
+        Admissions local = admissions.computeIfAbsent(poolId, key -> new Admissions());
+        if (!arrived && System.nanoTime() - local.lastRound < POLL.toNanos()) return;
+        if (interactive && arrived) local.lock.lock();
+        else if (!local.lock.tryLock()) return;
         try {
-            Permit granted = transactions.execute(status -> {
-                var pool = pools.lockAdmission(poolId).orElseThrow();
-                if (rows.renew(workerId, Set.of(id), properties.permitLease().toSeconds()) != 1)
-                    throw new IllegalStateException("Queued model request expired before its grant");
-                rows.prune(poolId, properties.permitLease().toSeconds());
-                if (!room(poolId, pool, callClass)
-                        || !rows.next(poolId, callClass.interactive())
-                                .filter(id::equals)
-                                .isPresent()) return null;
-                if (rows.grant(id, tokenBound(pool), workerId) != 1) return null;
-                Permit permit = new Permit(id, poolId, pool.getSlug(), callClass);
-                return permit;
+            local.lastRound = System.nanoTime();
+            Map<UUID, Waiter> mine = new HashMap<>();
+            waiting.forEach((id, waiter) -> {
+                if (waiter.poolId == poolId) mine.put(id, waiter);
             });
-            return granted;
+            if (mine.isEmpty()) return;
+            Round round = Objects.requireNonNull(transactions.execute(status -> {
+                var pool = pools.lockAdmission(poolId)
+                        .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
+                long lease = properties.permitLease().toSeconds();
+                rows.renew(workerId, mine.keySet(), lease);
+                rows.prune(poolId, lease);
+                grantWhileRoom(poolId, pool, true);
+                grantWhileRoom(poolId, pool, false);
+                Map<UUID, Boolean> queued = new HashMap<>();
+                for (var row : rows.findQueued(workerId, mine.keySet()))
+                    queued.put(row.getId(), row.getState().equals("ACTIVE"));
+                return new Round(queued, pool.getThrottleMark(), pool.getCooldownMillis() > 0);
+            }));
+            mine.forEach((id, waiter) -> {
+                Boolean active = round.queued().get(id);
+                if (active == null)
+                    waiter.granted.completeExceptionally(
+                            new IllegalStateException("Queued model request expired before its grant"));
+                // Another worker may have granted it before a refusal paused the pool. The grant waits for the pause.
+                else if (active && !round.cooling())
+                    waiter.granted.complete(new Permit(id, waiter, round.throttleMark()));
+            });
         } finally {
-            local.unlock();
+            local.lock.unlock();
+        }
+    }
+
+    private void grantWhileRoom(long poolId, LlmCallPoolRepository.Admission pool, boolean interactive) {
+        while (true) {
+            var head = rows.next(poolId, interactive).orElse(null);
+            if (head == null) return;
+            if (!room(poolId, pool, LlmCallClass.valueOf(head.getCallClass()))) return;
+            if (rows.grant(head.getId(), tokenBound(pool)) != 1) return;
         }
     }
 
     private boolean room(long poolId, LlmCallPoolRepository.Admission pool, LlmCallClass callClass) {
         if (pool.getCooldownMillis() > 0) return false;
         if (callClass == LlmCallClass.PRODUCT_FEEDBACK && rows.countActiveProductFeedback(poolId) >= 1) return false;
-        Integer maximum = pool.getMaxConcurrentCalls();
-        if (maximum != null
-                && (rows.countActive(poolId) >= maximum
-                        || (!callClass.interactive()
-                                && rows.countBackground(poolId) >= maximum - pool.getInteractiveReserve())))
-            return false;
-        return rateRoom(poolId, pool, callClass);
+        int limit = limit(pool);
+        int reserve = LlmCallLimit.reserve(limit);
+        long active = rows.countActive(poolId);
+        long background = rows.countBackground(poolId);
+        // Background calls that a lowered limit left in flight must not cost a conversation its reserve.
+        boolean within = callClass.interactive()
+                ? active < limit || active - background < reserve
+                : active < limit && background < limit - reserve;
+        return within && rateRoom(poolId, pool, callClass);
+    }
+
+    private static int limit(LlmCallPoolRepository.Admission pool) {
+        return LlmCallLimit.effective(pool.getLearnedLimit(), pool.getMaxConcurrentCalls());
     }
 
     private boolean rateRoom(long poolId, LlmCallPoolRepository.Admission pool, LlmCallClass callClass) {
-        var used = rows.rates(poolId);
         Integer requests = pool.getRequestsPerMinute();
         Long tokens = pool.getTokensPerMinute();
+        if (requests == null && tokens == null) return true;
+        var used = rows.rates(poolId);
         long bound = tokenBound(pool);
         if (requests != null && used.getRequests() >= requests) return false;
         if (tokens != null && used.getTokens() > tokens - bound) return false;
@@ -248,14 +314,12 @@ public class LlmCallPermits {
         return tokens == null || used.getBackgroundTokens() <= backgroundShare(tokens, pool, bound) - bound;
     }
 
+    /** Background calls get the rate's share that the limit gives them, and always at least one call. */
     private static long backgroundShare(long budget, LlmCallPoolRepository.Admission pool, long perCall) {
-        Integer maximum = pool.getMaxConcurrentCalls();
-        if (maximum == null || pool.getInteractiveReserve() == 0) return budget;
-        long background = (long) maximum - pool.getInteractiveReserve();
-        long proportional = (budget / maximum) * background + (budget % maximum) * background / maximum;
-        int interactive = pool.getInteractiveReserve();
-        long reserved = perCall <= budget / interactive ? perCall * interactive : budget;
-        return Math.max(0, Math.min(proportional, budget - reserved));
+        int limit = limit(pool);
+        long background = (long) limit - LlmCallLimit.reserve(limit);
+        long proportional = (budget / limit) * background + (budget % limit) * background / limit;
+        return Math.max(perCall, proportional);
     }
 
     private static long tokenBound(LlmCallPoolRepository.Admission pool) {
@@ -304,7 +368,7 @@ public class LlmCallPermits {
     /** Retries only releases whose request thread already confirmed transport closure. */
     void renew() {
         try {
-            Set<UUID> queued = Set.copyOf(waiting);
+            Set<UUID> queued = Set.copyOf(waiting.keySet());
             if (!queued.isEmpty())
                 transactions.executeWithoutResult(status ->
                         rows.renew(workerId, queued, properties.permitLease().toSeconds()));
@@ -354,15 +418,106 @@ public class LlmCallPermits {
                 .forEach(permit -> permit.revoke("no_renewal"));
     }
 
-    /** Only an instance-controlled credential can impose a shared provider cooldown on other tenants. */
-    public void coolDown(Permit permit, HttpHeaders headers) {
+    /**
+     * The provider's answer that it serves too many calls: 429, 529, or a 503. Only one of the calls that started under
+     * the same limit lowers it, since the others say nothing new, and all extend the pause.
+     *
+     * <p>Another tenant's calls may not depend on a workspace's own credential, so in a pool that models share, such a
+     * credential changes nothing and {@code null} tells the caller that its calls did not slow down.
+     *
+     * @return how long the provider asked to be left alone, uncapped; {@code null} when the answer changed nothing
+     */
+    public @Nullable Duration throttled(Permit permit, int status, HttpHeaders headers, boolean instanceCredential) {
         Duration asked = RetryAfter.parse(headers, Instant.now());
         Duration pause = asked == null ? DEFAULT_COOLDOWN : asked;
-        if (pause.compareTo(properties.maxCooldown()) > 0) pause = properties.maxCooldown();
-        long millis = Math.max(1, pause.toMillis());
-        transactions.executeWithoutResult(status -> pools.coolDown(permit.poolId, millis));
-        meters.pool(permit.pool).throttled();
+        Duration capped = pause.compareTo(properties.maxCooldown()) > 0 ? properties.maxCooldown() : pause;
+        long millis = Math.max(1, capped.toMillis());
+        boolean applied = Boolean.TRUE.equals(transactions.execute(state -> {
+            var pool = pools.lockAdmission(permit.poolId).orElse(null);
+            if (pool == null || (!instanceCredential && !pool.getDedicated())) return false;
+            if (Objects.equals(pool.getThrottleMark(), permit.throttleMark)) {
+                pools.throttled(
+                        permit.poolId,
+                        new LlmCallLimit(limit(pool), pool.getLimitCredit())
+                                .afterThrottle()
+                                .learned());
+                meters.pool(permit.pool).limitDecreased();
+            }
+            pools.coolDown(permit.poolId, millis);
+            return true;
+        }));
+        meters.pool(permit.pool).throttled(status);
+        if (!applied) return null;
         meters.pool(permit.pool).coolingFor(millis);
+        return pause;
+    }
+
+    /** Whether a provider's status says it serves too many calls. */
+    public static boolean throttles(int status) {
+        return status == 429 || status == 503 || status == 529;
+    }
+
+    /** Raises the limit for a served call that started under it and found it binding; the caller is in a transaction. */
+    private void learn(Permit permit) {
+        var pool = pools.lockAdmission(permit.poolId).orElse(null);
+        if (pool == null || !Objects.equals(pool.getThrottleMark(), permit.throttleMark)) return;
+        if (!permit.instanceCredential && !pool.getDedicated()) return;
+        Integer maximum = pool.getMaxConcurrentCalls();
+        if (maximum != null && pool.getLearnedLimit() >= maximum) return;
+        int limit = limit(pool);
+        if (rows.countActive(permit.poolId) < limit
+                && rows.countBackground(permit.poolId) < limit - LlmCallLimit.reserve(limit)) return;
+        var next = new LlmCallLimit(pool.getLearnedLimit(), pool.getLimitCredit()).afterServedCall(pool.getProbing());
+        pools.learned(permit.poolId, next.learned(), next.credit());
+    }
+
+    /** Publishes what every pool in use stands at, read from the database, so each worker reports the same. */
+    void observeBacklog() {
+        try {
+            meters.observe(rows.backlog());
+        } catch (RuntimeException failed) {
+            log.warn(
+                    "Model call pool gauges not read: error={}",
+                    failed.getClass().getSimpleName());
+        }
+    }
+
+    /** What one admission round found: whether each of this worker's requests is granted, the limit's mark, and a pause. */
+    private record Round(
+            Map<UUID, Boolean> queued, @Nullable Long throttleMark, boolean cooling) {}
+
+    /** This worker's admission rounds of one pool. */
+    private static final class Admissions {
+        private final ReentrantLock lock = new ReentrantLock();
+        private volatile long lastRound = System.nanoTime() - POLL.toNanos();
+    }
+
+    /** One queued call of this worker, until a round hands it its grant. */
+    private static final class Waiter {
+        private final long poolId;
+        private final String pool;
+        private final LlmCallClass callClass;
+        private final CompletableFuture<Permit> granted = new CompletableFuture<>();
+
+        private Waiter(long poolId, String pool, LlmCallClass callClass) {
+            this.poolId = poolId;
+            this.pool = pool;
+            this.callClass = callClass;
+        }
+
+        /** Its grant, or {@code null} after a poll without one or when interrupted. */
+        private @Nullable Permit awaitGrant() {
+            try {
+                return granted.get(POLL.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException noneYet) {
+                return null;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (ExecutionException failed) {
+                throw new IllegalStateException("Queued model request expired before its grant", failed);
+            }
+        }
     }
 
     /** Close only after the upstream operation or its cancelled transport has terminated. */
@@ -376,12 +531,29 @@ public class LlmCallPermits {
         private final AtomicBoolean lost = new AtomicBoolean();
         private volatile long confirmedAt = System.nanoTime();
         private volatile BooleanSupplier ended = () -> false;
+        private volatile boolean served;
+        private volatile boolean instanceCredential;
 
-        private Permit(UUID id, long poolId, String pool, LlmCallClass callClass) {
+        /** The limit's mark when the call started: an answer about an older limit says nothing about this one. */
+        private final @Nullable Long throttleMark;
+
+        private Permit(UUID id, Waiter waiter, @Nullable Long throttleMark) {
             this.id = id;
-            this.poolId = poolId;
-            this.pool = pool;
-            this.callClass = callClass;
+            this.poolId = waiter.poolId;
+            this.pool = waiter.pool;
+            this.callClass = waiter.callClass;
+            this.throttleMark = throttleMark;
+        }
+
+        /** The provider served this call, which is the evidence that the limit can rise. */
+        public void served(boolean instanceCredential) {
+            this.instanceCredential = instanceCredential;
+            served = true;
+        }
+
+        /** The provider's answer never reached the caller, because the call asks again instead. */
+        public void absorbed() {
+            meters.pool(pool).absorbed();
         }
 
         public Mono<Void> revoked() {
@@ -411,7 +583,11 @@ public class LlmCallPermits {
             if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
             pendingRelease.add(id);
             try {
-                transactions.executeWithoutResult(status -> rows.release(id, workerId));
+                transactions.executeWithoutResult(status -> {
+                    // First, in the order every grant takes these locks.
+                    if (served) learn(this);
+                    rows.release(id, workerId);
+                });
                 pendingRelease.remove(id);
             } catch (RuntimeException failed) {
                 log.warn(

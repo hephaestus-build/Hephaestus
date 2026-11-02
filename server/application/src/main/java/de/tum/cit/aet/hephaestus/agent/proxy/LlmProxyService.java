@@ -72,6 +72,15 @@ class LlmProxyService {
     /** The refusal of a model call after its review attempt's work deadline. */
     static final String WORK_TIME_OVER = "This review's work time has ended; it makes no more model calls.";
 
+    /** How long a conversation call can wait out a provider's refusal, as its person is watching. */
+    static final Duration TURN_ABSORB_WINDOW = Duration.ofSeconds(30);
+
+    /** How long any other call can. The caller's own retries come on top, and its failure must end the attempt in time. */
+    static final Duration REVIEW_ABSORB_WINDOW = Duration.ofMinutes(2);
+
+    /** OpenAI answers 429 with this code when an account has no quota left, which no wait mends. */
+    private static final String SPENT_ACCOUNT = "insufficient_quota";
+
     private static final String AI_CHOICE_REFUSED = "Your AI choice no longer permits this model in this workspace.";
 
     /** Names which of the proxy's own rules refused a call, so an in-process caller need not read the refusal's words. */
@@ -308,6 +317,26 @@ class LlmProxyService {
         }
     }
 
+    /** Sent by {@link #forwardWithinScanBudget} instead of an answer, when the call must take its place in line again. */
+    private static final class AskAgain extends ResponseEntity<Void> {
+        AskAgain() {
+            super(HttpStatus.TOO_MANY_REQUESTS);
+        }
+    }
+
+    /**
+     * Whether a provider's refusal can wait: nothing went to the caller, it is a limit and not a spent account, and the
+     * provider's own pause ends in time. A 503 without {@code Retry-After} may be an outage, which the caller and the
+     * connection's breaker must hear at once.
+     */
+    private static boolean absorbs(UpstreamResult upstream, Duration asked, Instant absorbUntil) {
+        byte[] body = upstream.body();
+        if (upstream.streamOutcome() != null || body == null) return false;
+        if (upstream.status() == 503 && RetryAfter.parse(upstream.headers(), Instant.now()) == null) return false;
+        if (new String(body, StandardCharsets.UTF_8).contains(SPENT_ACCOUNT)) return false;
+        return !Instant.now().plus(asked).isAfter(absorbUntil);
+    }
+
     private static String operationName(LlmApiProtocol protocol) {
         return switch (protocol.kind()) {
             case CHAT -> "chat";
@@ -346,8 +375,16 @@ class LlmProxyService {
         try {
             if (workTimeOver(routing))
                 return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
-            return forwardWithinScanBudget(
-                    routing, protocol, practiceScript, response, incomingHeaders, body, span, call);
+            // A provider's limit should slow a call, not fail it. It must still be heard: past this, or when the
+            // provider
+            // asks for longer, its answer reaches the caller as the failure it is.
+            Instant absorbUntil = Instant.now().plus(routing.hephTurn() ? TURN_ABSORB_WINDOW : REVIEW_ABSORB_WINDOW);
+            ResponseEntity<?> answer;
+            do {
+                answer = forwardWithinScanBudget(
+                        routing, protocol, practiceScript, response, incomingHeaders, body, span, call, absorbUntil);
+            } while (answer instanceof AskAgain);
+            return answer;
         } finally {
             lease.ifPresent(ScanCallGuard.Lease::close);
         }
@@ -361,7 +398,8 @@ class LlmProxyService {
             HttpHeaders incomingHeaders,
             byte[] body,
             Span span,
-            ProxyCallsInFlight.Call call) {
+            ProxyCallsInFlight.Call call,
+            Instant absorbUntil) {
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         if (call.isCancelled()) {
             return refusal(
@@ -417,24 +455,21 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Invalid upstream configuration");
         }
 
-        Long poolId = credential.callPoolId();
-        LlmCallPermits.Permit poolPermit = poolId == null
-                ? null
-                : callPermits.acquire(
-                        poolId,
-                        routingService.callClass(routing),
-                        new LlmCallPermits.Caller(
-                                Objects.requireNonNull(routing.workspaceId()),
-                                routing.sourceId(),
-                                attempt.number(),
-                                new LlmModelResolver.ConnectionRef(
-                                        routing.connectionScope(),
-                                        routing.connectionId(),
-                                        routing.modelId(),
-                                        routing.workspaceId())),
-                        () -> call.isCancelled() || !routingService.ownsAttempt(routing),
-                        routing.workDeadline());
-        if (poolId != null && poolPermit == null) {
+        LlmCallPermits.Permit poolPermit = callPermits.acquire(
+                credential.callPoolId(),
+                routingService.callClass(routing),
+                new LlmCallPermits.Caller(
+                        Objects.requireNonNull(routing.workspaceId()),
+                        routing.sourceId(),
+                        attempt.number(),
+                        new LlmModelResolver.ConnectionRef(
+                                routing.connectionScope(),
+                                routing.connectionId(),
+                                routing.modelId(),
+                                routing.workspaceId())),
+                () -> call.isCancelled() || !routingService.ownsAttempt(routing),
+                routing.workDeadline());
+        if (poolPermit == null) {
             return refusal(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     ReviewModelGateway.Refusal.CAPACITY,
@@ -457,9 +492,7 @@ class LlmProxyService {
                     upstreamUri,
                     buildUpstreamHeaders(incomingHeaders, credential),
                     attempt.sourceType() == UsageSourceType.MENTOR_TURN ? hephBounds : null,
-                    poolPermit == null
-                            ? call.cancelled()
-                            : Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
+                    Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
                     transports);
             ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
@@ -471,7 +504,7 @@ class LlmProxyService {
                     permit.released();
                     return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
                 }
-                if (poolPermit != null && poolPermit.isRevoked()) {
+                if (poolPermit.isRevoked()) {
                     permit.released();
                     return errors.providerError(
                             HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
@@ -492,7 +525,7 @@ class LlmProxyService {
                         permit.released();
                         return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
                     }
-                    if (poolPermit != null && !callPermits.beforeRetry(poolPermit, call::isCancelled, deadline)) {
+                    if (!callPermits.beforeRetry(poolPermit, call::isCancelled, deadline)) {
                         permit.released();
                         return refusal(
                                 HttpStatus.SERVICE_UNAVAILABLE,
@@ -555,12 +588,20 @@ class LlmProxyService {
                 accounting.recordError(routing.apiProtocol());
                 return ResponseEntity.status(502).body("Upstream provider unavailable");
             }
-            if (upstream.status() == 429
-                    && poolPermit != null
-                    && routing.connectionScope() == UsageFundingSource.INSTANCE)
-                callPermits.coolDown(poolPermit, upstream.headers());
+            boolean instanceCredential = routing.connectionScope() == UsageFundingSource.INSTANCE;
+            if (upstream.status() >= 200 && upstream.status() < 300) poolPermit.served(instanceCredential);
+            if (LlmCallPermits.throttles(upstream.status())) {
+                Duration asked =
+                        callPermits.throttled(poolPermit, upstream.status(), upstream.headers(), instanceCredential);
+                if (asked != null && !call.isCancelled() && absorbs(upstream, asked, absorbUntil)) {
+                    // This answer says the provider is busy, not that it fails, so the breaker hears nothing of it.
+                    permit.released();
+                    poolPermit.absorbed();
+                    return new AskAgain();
+                }
+            }
             // Report revocation in the stream; buffered responses still settle health and usage below.
-            if (poolPermit != null && poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
+            if (poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
                 errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
@@ -596,7 +637,7 @@ class LlmProxyService {
                     .headers(upstream.headers())
                     .body(upstream.body());
         } finally {
-            if (poolPermit != null) transports.releaseWhenClosed(poolPermit::close);
+            transports.releaseWhenClosed(poolPermit::close);
         }
     }
 

@@ -295,3 +295,11 @@ in API POST /workspaces/gitlab/projects removed the required property `projects`
 # #3671: Applies when can check that the work has merged, so the definition options can offer that condition.
 in API GET /admin/practice-catalog/definition-options added the new `MERGED` enum value to the `itemTypes/items/applicabilityClauses/items/` response property for the response status `200`
 in API GET /workspaces/{workspaceSlug}/practices/definition-options added the new `MERGED` enum value to the `itemTypes/items/applicabilityClauses/items/` response property for the response status `200`
+
+# #3678: a call pool learns its limit, and the limit sets the conversation reserve, so it is no longer a field.
+in API GET /admin/llm/call-pools removed the required property `items/interactiveReserve` from the response with the `200` status
+in API GET /workspaces/{workspaceSlug}/llm/models removed the required property `items/callPool/interactiveReserve` from the response with the `200` status
+in API PATCH /workspaces/{workspaceSlug}/llm/models/{id} removed the required property `callPool/interactiveReserve` from the response with the `200` status
+in API POST /admin/llm/call-pools removed the required property `interactiveReserve` from the response with the `201` status
+in API POST /workspaces/{workspaceSlug}/llm/connections/{connectionId}/models removed the required property `callPool/interactiveReserve` from the response with the `201` status
+in API PUT /admin/llm/call-pools/{id} removed the required property `interactiveReserve` from the response with the `200` status

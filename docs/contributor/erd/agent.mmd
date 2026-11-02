@@ -45,7 +45,6 @@ erDiagram
         BIGINT id PK
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(128) display_name "NOT NULL"
-        INTEGER interactive_reserve "NOT NULL"
         INTEGER max_concurrent_calls
         TIMESTAMPTZ no_call_before
         VARCHAR(64) slug UK "NOT NULL"
@@ -53,6 +52,10 @@ erDiagram
         INTEGER requests_per_minute
         BIGINT tokens_per_minute
         BIGINT tokens_per_call
+        INTEGER learned_limit "NOT NULL"
+        INTEGER limit_credit "NOT NULL"
+        TIMESTAMPTZ throttled_at
+        BOOLEAN dedicated "NOT NULL"
     }
 
     LlmConnection {
@@ -85,7 +88,7 @@ erDiagram
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
-        BIGINT call_pool_id FK
+        BIGINT call_pool_id FK "NOT NULL"
         BOOLEAN forced_tool_choice
     }
 
@@ -349,7 +352,7 @@ erDiagram
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
-        BIGINT call_pool_id FK
+        BIGINT call_pool_id FK "NOT NULL"
         BOOLEAN forced_tool_choice
     }
 

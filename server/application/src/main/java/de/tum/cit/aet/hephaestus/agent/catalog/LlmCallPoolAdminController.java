@@ -28,8 +28,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
- * Instance-admin management of the pools of provider capacity: the limit that every workspace's calls to the models
- * in a pool share, and which models are in it.
+ * Instance-admin management of the pools of provider capacity: which models share one, and the ceiling and rates that
+ * every workspace's calls to them share. Each model has a pool of its own until an admin moves it.
  */
 @RestController
 @RequestMapping("/admin/llm/call-pools")
@@ -91,8 +91,14 @@ public class LlmCallPoolAdminController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Delete a pool; its models are no longer limited", operationId = "adminDeleteLlmCallPool")
+    @Operation(
+            summary = "Delete a shared pool; each of its models gets a pool of its own",
+            operationId = "adminDeleteLlmCallPool")
     @ApiResponse(responseCode = "204", description = "Pool deleted")
+    @ApiResponse(
+            responseCode = "400",
+            description = "The pool is a model's own",
+            content = @Content(schema = @Schema(hidden = true)))
     @ApiResponse(
             responseCode = "404",
             description = "Pool not found",

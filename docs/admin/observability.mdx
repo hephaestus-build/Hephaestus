@@ -593,19 +593,29 @@ The worker fails each such turn and continues to claim.
 ## Call pool metrics
 
 Each worker reports the [call pools](./runtime-roles.mdx#call-pools) whose models it calls.
-A worker registers every series of a pool at start, so a rate starts from zero.
-The labels are `pool` (the pool's slug), `class` and `reason`, each from a closed set.
+A worker registers every series of a shared pool at start, so a rate starts from zero. It registers a model's own pool at that pool's first call.
+
+The labels are `pool`, `class`, `reason`, `status` and `queue`.
+`pool` is the pool's slug. An instance model's own pool has the slug `own-model-<id>`.
+All pools of workspaces' own models report under the one label `workspace-models`.
+`status` is `429`, `503`, or `529`. `queue` is `conversation` or `background`.
+
 `class` is `turn`, `composition`, `request`, `event`, `schedule`, `backfill`, or `product_feedback`.
 It identifies conversation, composition, product feedback, or the origin of a review call.
-No series names a workspace, a model, a job or a turn.
+No series names a workspace, a workspace's model, a job or a turn.
 
 | Prometheus name                            | Type      | Labels                     | Meaning |
 | ------------------------------------------ | --------- | -------------------------- | ------- |
 | `llm_pool_permits_active`                  | Gauge     | `pool`, `class`            | Permits that this worker holds. Sum over the workers for the pool's calls in flight |
 | `llm_pool_permit_wait_seconds`             | Histogram | `pool`, `class`, `reason`  | How long a queued call waited for its permit. `reason=capacity` includes concurrency, rate, and cooldown admission |
 | `llm_pool_permit_abandoned_total`          | Counter   | `pool`, `class`, `reason`  | Calls whose attempt ended, or whose work deadline passed, while they waited |
-| `llm_pool_upstream_throttled_total`        | Counter   | `pool`                     | HTTP 429 answers from the pool's provider |
-| `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a 429. Take the maximum over the workers |
+| `llm_pool_permits_granted_total`           | Counter   | `pool`, `class`            | Grants that this worker's calls received |
+| `llm_pool_limit`                           | Gauge     | `pool`                     | The calls in flight that the pool allows now: the learned limit under its ceiling. All workers read it from the database. Take the maximum over the workers. `workspace-models` is the sum of its pools |
+| `llm_pool_waiters`                         | Gauge     | `pool`, `queue`            | Live calls that wait for the pool. All workers read it from the database. Take the maximum over the workers |
+| `llm_pool_limit_decreases_total`           | Counter   | `pool`                     | How often a provider's answer lowered the limit |
+| `llm_pool_upstream_throttled_total`        | Counter   | `pool`, `status`           | Answers of the pool's provider that it serves too many calls |
+| `llm_pool_upstream_absorbed_total`         | Counter   | `pool`                     | Those answers that the caller never saw, because its call waited and asked again |
+| `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a refusal. Take the maximum over the workers |
 | `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a worker cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, or `attempt_ended` |
 | `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a worker's permits |
 
