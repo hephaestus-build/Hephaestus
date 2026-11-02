@@ -1,4 +1,5 @@
 import { ArrowRightIcon, ChevronRightIcon, HistoryIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { cn } from "cn";
 
@@ -44,6 +45,8 @@ export interface PracticeProfilePageHeaderProps {
 	practiceCount: number;
 	groupCount: number;
 	isLoading?: boolean;
+	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
+	tourAction?: ReactNode;
 }
 
 /**
@@ -70,6 +73,7 @@ export function PracticeProfilePageHeader({
 	practiceCount,
 	groupCount,
 	isLoading = false,
+	tourAction,
 }: PracticeProfilePageHeaderProps) {
 	const [guideOpen, setGuideOpen] = useSectionOpen(GUIDE_FOLD_KEY, { defaultOpen: false });
 	return (
@@ -77,39 +81,43 @@ export function PracticeProfilePageHeader({
 			<div className="flex min-w-0 flex-col gap-2">
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
 					<h1 className="text-2xl font-semibold tracking-tight">{PRACTICE_PROFILE_TITLE}</h1>
-					{isLoading ? (
-						<Skeleton className="h-5 w-64 rounded-full" />
-					) : (
-						<LatestReviewChip review={latestReview} activeReview={activeReview} />
-					)}
+					<div data-tour-slot="chip" className="max-w-full min-w-0">
+						{isLoading ? (
+							<Skeleton className="h-5 w-64 rounded-full" />
+						) : (
+							<LatestReviewChip review={latestReview} activeReview={activeReview} />
+						)}
+					</div>
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">{PRACTICE_PROFILE_INTRO}</p>
 			</div>
-			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} />
+			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} action={tourAction} />
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole
 			    card is the pointer path while the words stay the keyboard path. The words turn highlight
 			    blue while the card is hovered, as every inline link on the practice surfaces does on
 			    its own hover. */}
-			<StandingSummaryBox
-				layout="fill"
-				label={
-					practiceCount === 0 ? "No practices set up yet" : countLabel(practiceCount, groupCount)
-				}
-				counts={counts}
-				isLoading={isLoading}
-				className="group/panel relative transition-colors hover:bg-sidebar"
-			>
-				<InlineLink
-					render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
-					className="inline-flex w-full items-center gap-1.5 text-sm font-medium whitespace-nowrap group-hover/panel:text-highlight group-hover/panel:underline after:absolute after:inset-0 sm:w-auto sm:shrink-0 sm:self-center"
+			<div data-tour-slot="ring">
+				<StandingSummaryBox
+					layout="fill"
+					label={
+						practiceCount === 0 ? "No practices set up yet" : countLabel(practiceCount, groupCount)
+					}
+					counts={counts}
+					isLoading={isLoading}
+					className="group/panel relative transition-colors hover:bg-sidebar"
 				>
-					See all practice groups
-					<ArrowRightIcon
-						className="size-3.5 shrink-0 transition-transform motion-safe:group-hover/panel:translate-x-0.5"
-						aria-hidden
-					/>
-				</InlineLink>
-			</StandingSummaryBox>
+					<InlineLink
+						render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
+						className="inline-flex w-full items-center gap-1.5 text-sm font-medium whitespace-nowrap group-hover/panel:text-highlight group-hover/panel:underline after:absolute after:inset-0 sm:w-auto sm:shrink-0 sm:self-center"
+					>
+						See all practice groups
+						<ArrowRightIcon
+							className="size-3.5 shrink-0 transition-transform motion-safe:group-hover/panel:translate-x-0.5"
+							aria-hidden
+						/>
+					</InlineLink>
+				</StandingSummaryBox>
+			</div>
 		</header>
 	);
 }

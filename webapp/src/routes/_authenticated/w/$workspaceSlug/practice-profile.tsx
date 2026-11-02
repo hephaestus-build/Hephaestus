@@ -1,11 +1,15 @@
 import { skipToken, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import {
+	CatchBoundary,
 	createFileRoute,
 	Link,
 	Navigate,
 	retainSearchParams,
 	stripSearchParams,
 } from "@tanstack/react-router";
+import { CompassIcon } from "lucide-react";
+import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
 import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
@@ -40,16 +44,22 @@ import {
 	type PracticeTab,
 	REVIEW_SELECTION_CLEARED,
 	reviewLevel,
+	type FeedbackTab,
 } from "@/components/practice-profile/practice-profile-search";
 import { PracticeGroupDetailDrawer } from "@/components/practice-profile/PracticeGroupDetailDrawer";
-import { PracticeProfilePage } from "@/components/practice-profile/PracticeProfilePage";
+import {
+	PracticeProfilePage,
+	type PracticeProfilePageProps,
+} from "@/components/practice-profile/PracticeProfilePage";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
 import { ROW_LINK_CLASS, RowLinkArrow } from "@/components/practice-vocabulary/PracticeTable";
 import {
 	ObservationDetailSkeleton,
 	ReviewResultDetails,
 } from "@/components/profile/ReviewResultRow";
-import { buttonVariants } from "@/components/ui/button";
+import type { TourChapterId } from "@/components/tour/tour-chapters";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
@@ -60,7 +70,16 @@ import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
+import { toast } from "@/lib/toast";
+import { useWorkProvider } from "@/lib/work-provider-context";
 import { useAuth } from "@/runtime/auth/AuthContext";
+
+/** The tour and its example load when someone starts it, so the page and the entry carry none of it. */
+const loadTour = async () => import("@/components/tour/PracticeProfileTour");
+const PracticeProfileTour = lazy(async () => {
+	const { PracticeProfileTour: component } = await loadTour();
+	return { default: component };
+});
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
@@ -77,9 +96,44 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-
 	},
 });
 
+/** Loads the tour ahead of the press, so it opens at once. A failed load shows when the reader presses. */
+function preloadTour() {
+	loadTour().catch(() => undefined);
+}
+
+/** The quiet offer of a tour chapter at the moment it helps. It goes when the state that shows it ends. */
+function TourOffer({
+	onSelect,
+	pending,
+	children,
+}: {
+	onSelect: () => void;
+	pending: boolean;
+	children: ReactNode;
+}) {
+	return (
+		<Button
+			variant="quiet"
+			size="sm"
+			className="w-fit self-center"
+			onClick={onSelect}
+			onPointerEnter={preloadTour}
+			onFocus={preloadTour}
+			aria-busy={pending}
+		>
+			{pending ? <Spinner /> : <CompassIcon aria-hidden />}
+			{children}
+		</Button>
+	);
+}
+
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
+	const [tour, setTour] = useState<{ startChapter?: TourChapterId } | null>(null);
+	const [tourLoading, startTourTransition] = useTransition();
+	const tourPending = useSpinDelay(tourLoading, { delay: 1000, minDuration: 500 });
+	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
 	const { isAdmin } = useWorkspaceAccess();
 	const { workspaceSlug } = Route.useParams();
@@ -203,79 +257,139 @@ function PracticeProfile() {
 		);
 	};
 
+	const pageProps = {
+		latestReview: composed.latestReview,
+		practices: practiceStandings,
+		groups,
+		feedbackCards: feedback.cards,
+		ratingProps: readOnly ? undefined : feedback.ratingProps,
+		onOpenGroup: openGroup,
+		onOpenPractice: openPractice,
+		feedbackTab: search.feedback,
+		onFeedbackTabChange: (tab: FeedbackTab) => setView({ feedback: tab }),
+		firstRun:
+			overview.reviewReadiness === null
+				? undefined
+				: {
+						workspaceName,
+						readiness: overview.reviewReadiness,
+						activeReview: overview.activeReview ?? undefined,
+						requestReviewLink: readOnly ? undefined : (
+							<Link
+								to="/w/$workspaceSlug/activity"
+								params={{ workspaceSlug }}
+								className={buttonVariants({ variant: "outline", size: "sm" })}
+							>
+								Request a review on Activity
+							</Link>
+						),
+						aiChoiceLink: readOnly
+							? undefined
+							: (label) => (
+									<Link
+										to="/w/$workspaceSlug/onboarding"
+										params={{ workspaceSlug }}
+										search={{ returnTo: `/w/${workspaceSlug}/practice-profile` }}
+										className={buttonVariants({ variant: "outline", size: "sm" })}
+									>
+										{label}
+									</Link>
+								),
+						adminLinks: isAdmin
+							? {
+									setupSummary: (label) => (
+										<InlineLink
+											render={
+												<Link to="/w/$workspaceSlug/admin/settings" params={{ workspaceSlug }} />
+											}
+										>
+											{label}
+										</InlineLink>
+									),
+									reviewScope: (label) => (
+										<InlineLink
+											render={
+												<Link
+													to="/w/$workspaceSlug/admin/practices/review"
+													params={{ workspaceSlug }}
+													search={{ section: "automated-review" }}
+												/>
+											}
+										>
+											{label}
+										</InlineLink>
+									),
+								}
+							: undefined,
+					},
+		state: page,
+	} satisfies PracticeProfilePageProps;
+
+	const startTour = (chapter?: TourChapterId) => {
+		startTourTransition(() => setTour({ startChapter: chapter }));
+	};
+
 	return (
 		<>
 			<PracticeProfilePage
-				latestReview={composed.latestReview}
-				practices={practiceStandings}
-				groups={groups}
-				feedbackCards={feedback.cards}
-				ratingProps={readOnly ? undefined : feedback.ratingProps}
-				onOpenGroup={openGroup}
-				onOpenPractice={openPractice}
-				feedbackTab={search.feedback}
-				onFeedbackTabChange={(tab) => setView({ feedback: tab })}
+				{...pageProps}
 				firstRun={
-					overview.reviewReadiness === null
-						? undefined
-						: {
-								workspaceName,
-								readiness: overview.reviewReadiness,
-								activeReview: overview.activeReview ?? undefined,
-								requestReviewLink: readOnly ? undefined : (
-									<Link
-										to="/w/$workspaceSlug/activity"
-										params={{ workspaceSlug }}
-										className={buttonVariants({ variant: "outline", size: "sm" })}
-									>
-										Request a review on Activity
-									</Link>
-								),
-								aiChoiceLink: readOnly
-									? undefined
-									: (label) => (
-											<Link
-												to="/w/$workspaceSlug/onboarding"
-												params={{ workspaceSlug }}
-												search={{ returnTo: `/w/${workspaceSlug}/practice-profile` }}
-												className={buttonVariants({ variant: "outline", size: "sm" })}
-											>
-												{label}
-											</Link>
-										),
-								adminLinks: isAdmin
-									? {
-											setupSummary: (label) => (
-												<InlineLink
-													render={
-														<Link
-															to="/w/$workspaceSlug/admin/settings"
-															params={{ workspaceSlug }}
-														/>
-													}
-												>
-													{label}
-												</InlineLink>
-											),
-											reviewScope: (label) => (
-												<InlineLink
-													render={
-														<Link
-															to="/w/$workspaceSlug/admin/practices/review"
-															params={{ workspaceSlug }}
-															search={{ section: "automated-review" }}
-														/>
-													}
-												>
-													{label}
-												</InlineLink>
-											),
-										}
-									: undefined,
-							}
+					pageProps.firstRun && {
+						...pageProps.firstRun,
+						tourOffer: readOnly ? undefined : (
+							<TourOffer onSelect={() => startTour("how-it-works")} pending={tourPending}>
+								See how feedback comes about
+							</TourOffer>
+						),
+					}
 				}
-				state={page}
+				tourAction={
+					// Offered once the page has loaded: until then the tour has no real data to speak from.
+					readOnly || page.status !== "ready" ? undefined : (
+						<Button
+							variant="quiet"
+							size="sm"
+							onClick={() => startTour()}
+							onPointerEnter={preloadTour}
+							onFocus={preloadTour}
+							aria-busy={tourPending}
+						>
+							{tourPending ? <Spinner /> : <CompassIcon aria-hidden />}
+							Take the tour
+						</Button>
+					)
+				}
+				firstCardOffer={
+					readOnly ? undefined : (
+						<TourOffer onSelect={() => startTour("your-profile")} pending={tourPending}>
+							See how to read a feedback card
+						</TourOffer>
+					)
+				}
 			/>
+			<CatchBoundary
+				getResetKey={() => (tour === null ? "closed" : "open")}
+				onCatch={() => {
+					setTour(null);
+					toast.error("The tour could not load. Reload the page to try again.");
+				}}
+				errorComponent={() => null}
+			>
+				{/* Stays mounted: a transition holds its pending state only for a boundary that already exists. */}
+				<Suspense fallback={null}>
+					{tour !== null && (
+						<PracticeProfileTour
+							workspaceSlug={workspaceSlug}
+							workspaceName={workspaceName}
+							provider={workProvider}
+							page={pageProps}
+							practicesByGroup={practicesByGroup}
+							startChapter={tour.startChapter}
+							onClose={() => setTour(null)}
+						/>
+					)}
+				</Suspense>
+			</CatchBoundary>
 			<PracticeGroupDetailDrawer
 				detail={readOnly ? { ...detail, responses: undefined } : detail}
 				detailStack={detailStack}

@@ -112,11 +112,12 @@ WHERE p.type = 'GITHUB' AND p.server_url = 'https://github.com'
 ON CONFLICT (id) DO NOTHING;
 
 -- Both chose to show on public pages: a member who has not answered is hidden, and E2E Hidden must
--- stay off the page because an admin hid them, not because of that default.
+-- stay off the page because an admin hid them, not because of that default. A database seeded before
+-- the upgrade that hid unanswered members gets the choice back on the next seed.
 INSERT INTO account (id, display_name, status, created_at, updated_at, public_activity_visible)
 VALUES (940001, 'E2E River', 'UNCLAIMED', now(), now(), true),
   (940002, 'E2E Hidden', 'UNCLAIMED', now(), now(), true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public_activity_visible = EXCLUDED.public_activity_visible;
 
 INSERT INTO identity (account_id, provider_id, provider_user_key, linked_via, linked_at)
 SELECT fixture.account_id, p.id, fixture.provider_user_key, 'ROSTER', now()
@@ -128,6 +129,7 @@ ON CONFLICT DO NOTHING;
 INSERT INTO membership (workspace_id, account_id, role, hidden, public_activity_seen)
 VALUES (9, 940001, 'MEMBER', false, true), (9, 940002, 'MEMBER', true, true)
 ON CONFLICT DO NOTHING;
+UPDATE membership SET public_activity_seen = true WHERE workspace_id = 9 AND account_id IN (940001, 940002);
 
 INSERT INTO repository (id, native_id, provider_id, created_at, updated_at, html_url, is_archived, is_disabled,
   is_private, name, name_with_owner, visibility)

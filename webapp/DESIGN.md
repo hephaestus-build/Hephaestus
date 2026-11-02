@@ -114,7 +114,7 @@ Thus, they add no specificity.
 `dark:data-checked:bg-primary`, `hover:not-data-checked:bg-muted/50`.
 
 **A `*.module.css` is only for what a utility cannot express.**
-The tree has three: `HephaestusMark`, the landing scene and the fade of a streaming answer.
+The tree has four: `HephaestusMark`, the landing scene, the fade of a streaming answer and the scenes of the guided tour.
 Each holds one or more of these:
 
 - `@keyframes`.
@@ -288,6 +288,11 @@ Do not scale or travel the width of the viewport. Keep the fade so the arrival i
 **Only `transform`, `opacity` and `filter` may appear in a `transition-*` on an overlay.**
 Anything resolving to `width`/`height`/inset must be constant, or scoped to the axis where it is constant.
 A survivor's geometry must never depend on the element that is leaving.
+
+A scene in the guided tour teaches one change, so it can take longer than a transition.
+It plays once on arrival and never loops.
+The person can continue before it ends and can play it again.
+Under reduced motion, its final state shows from the start.
 
 **The Storybook suite runs under `prefers-reduced-motion: reduce`** — `vitest.config.storybook.ts`
 sets it on the Playwright context so play functions are deterministic. Every `motion-reduce:` rule is therefore the branch under test.

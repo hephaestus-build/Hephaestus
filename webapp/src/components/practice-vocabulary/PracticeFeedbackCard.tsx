@@ -398,7 +398,11 @@ export function PracticeFeedbackCard({
 			>
 				<div className="flex flex-col gap-3 p-4">
 					{head}
-					<h3 id={headingId} className="max-w-3xl text-lg leading-snug font-semibold">
+					<h3
+						id={headingId}
+						data-tour-slot="pattern"
+						className="max-w-3xl text-lg leading-snug font-semibold"
+					>
 						This feedback was withdrawn
 					</h3>
 					<p className="max-w-3xl text-sm text-foreground">
@@ -438,7 +442,11 @@ export function PracticeFeedbackCard({
 			{/* What it is about. */}
 			<div className="flex flex-col gap-3 p-4">
 				{head}
-				<h3 id={headingId} className="max-w-3xl text-lg leading-snug font-semibold">
+				<h3
+					id={headingId}
+					data-tour-slot="pattern"
+					className="max-w-3xl text-lg leading-snug font-semibold"
+				>
 					{headline}
 				</h3>
 				<UnverifiedHistoryNotice unverified={unverifiedHistory} />
@@ -446,7 +454,7 @@ export function PracticeFeedbackCard({
 				 * The whole explanation under a heading that names it: it is short, and a clamp only hid the
 				 * reason behind a click.
 				 */}
-				<div className="flex flex-col gap-1">
+				<div data-tour-slot="why" className="flex flex-col gap-1">
 					<h4 className={ZONE_HEADING}>Why this was raised</h4>
 					<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-3xl text-sm text-foreground")}>
 						<UntrustedMarkdown
@@ -488,7 +496,7 @@ export function PracticeFeedbackCard({
 			 * block set to the right. A narrow card stacks the block under the timeline, full width. A
 			 * rule under the band parts the zone from the band.
 			 */}
-			<div className="@container/progress px-4 py-3">
+			<div data-tour-slot="resolves" className="@container/progress px-4 py-3">
 				<div className="grid gap-x-10 gap-y-4 @xl/progress:grid-cols-[minmax(0,1fr)_auto]">
 					<div className="flex min-w-0 flex-col gap-2.5">
 						<div className="flex flex-col gap-1">
@@ -533,7 +541,7 @@ export function PracticeFeedbackCard({
 								/>
 							)}
 							{onResolve && answerable && (
-								<div className="flex flex-col gap-1.5">
+								<div data-tour-slot="mark" className="flex flex-col gap-1.5">
 									<span id={responseId} className="text-xs text-muted-foreground">
 										Or mark it yourself
 									</span>
@@ -580,6 +588,7 @@ export function PracticeFeedbackCard({
 				</div>
 				{(onRate !== undefined || onDisagree !== undefined) && (
 					<div
+						data-tour-slot="rate"
 						role="group"
 						aria-label="Rate this feedback"
 						className="ml-auto flex items-center gap-0.5"
@@ -670,6 +679,7 @@ function nextStepTone(state: FeedbackState): NextStepTone {
 function NextStepBand({ tone, nextStep }: { tone: NextStepTone; nextStep: string }) {
 	return (
 		<div
+			data-tour-slot="next-step"
 			data-next-step={tone}
 			className={cn(
 				"flex border-y",

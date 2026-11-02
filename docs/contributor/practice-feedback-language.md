@@ -247,6 +247,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Ask Hephaestus** | The product area where a developer talks with Hephaestus: its menu item, page and panel. | Heph, Mentor, Conversations (as the area), chat, AI assistant |
 | **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. |  |
 | **Hephaestus** | The application. It also answers in a developer's conversation. | agent, AI mentor, Heph, mentor, assistant |
+| **Guided tour** | The chapters on the Practice profile that explain how work becomes feedback and how to read the page. A person starts it. | product tour, walkthrough, onboarding wizard |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
 | **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. A change to the work keeps its last decision until a newer review decides again. | score, grade, rating |
