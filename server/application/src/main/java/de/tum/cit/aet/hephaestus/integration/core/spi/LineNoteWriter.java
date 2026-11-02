@@ -12,4 +12,9 @@ public interface LineNoteWriter {
     List<CopyReceipt> findPosted(FeedbackTarget target, OnWorkPackage publication);
 
     List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies);
+
+    /** Writes each retracted note's words back into the same provider note. Never posts another note. */
+    List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes);
+
+    record RetractedNote(CopyReceipt copy, LineNote note) {}
 }

@@ -86,7 +86,7 @@ public class FeedbackGate {
                 checkApproval,
                 support,
                 edges.stream().map(FeedbackBasis::getResultId).distinct().count(),
-                basis.hasIncorrectBasis(workspaceId, feedbackId),
+                basis.isIncorrect(workspaceId, feedbackId),
                 copies.hasWriteFence(workspaceId, feedbackId),
                 new GateReads(workspaceId));
     }
@@ -118,7 +118,7 @@ public class FeedbackGate {
                                 .toList())
                 .stream()
                 .collect(Collectors.toMap(Result::getId, Function.identity()));
-        var incorrect = Set.copyOf(basis.incorrectBasisFeedbackIds(workspaceId, ids));
+        var incorrect = Set.copyOf(basis.incorrectFeedbackIds(workspaceId, ids));
         var fenced = Set.copyOf(copies.writeFencedFeedbackIds(workspaceId, ids));
         var reads = new GateReads(workspaceId);
         reads.prefetch(owned, rowById.values());

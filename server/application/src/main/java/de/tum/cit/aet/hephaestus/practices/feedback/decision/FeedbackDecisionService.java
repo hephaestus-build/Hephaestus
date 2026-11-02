@@ -101,8 +101,8 @@ public class FeedbackDecisionService {
                 throw conflict("This feedback is no longer awaiting that decision.");
             }
             if (action == FeedbackDecisionAction.APPROVE) {
-                if (basis.hasIncorrectBasis(workspaceId, feedbackId))
-                    throw conflict("A result in this feedback is marked incorrect.");
+                if (basis.isIncorrect(workspaceId, feedbackId))
+                    throw conflict("The results of this feedback are marked incorrect.");
                 var check = gate.evaluate(feedback, FeedbackCheckStage.APPROVED, false);
                 if (!check.allowed()) throw conflict("Current delivery policy does not permit approval.");
                 var refusal = publication.refusal(feedback).orElse(null);

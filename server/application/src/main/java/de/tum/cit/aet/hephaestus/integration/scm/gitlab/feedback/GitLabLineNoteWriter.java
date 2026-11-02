@@ -594,6 +594,35 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     // GitLab has no node(id:) root field; its merge request notes API reads and edits every note type by REST id.
     @Override
     public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies) {
+        return rewrite(target, copies, (copy, type, original) -> ScmFeedbackFormatter.withdrawnCopyBody(original));
+    }
+
+    @Override
+    public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+        var footer = formatter.footer(target.item());
+        var byCopy = notes.stream().collect(Collectors.toMap(note -> note.copy().copyId(), RetractedNote::note));
+        return rewrite(target, notes.stream().map(RetractedNote::copy).toList(), (copy, type, original) -> {
+            var item = Objects.requireNonNull(byCopy.get(copy.copyId()));
+            if (!item.writeKey().equals(ScmFeedbackFormatter.lastDeliveryKey(original))) return null;
+            if ("DiffNote".equals(type)) return lineBody(footer, item);
+            var mr = GitLabMrResolver.parseSubjectExternalId(targets.subject(target, kind()));
+            String revision = item.anchor().side() == CitationSide.OLD
+                    ? target.version().baseVersion()
+                    : ScmVersion.reviewedHead(target.version());
+            return revision == null
+                    ? null
+                    : locationBody(footer, projectUrl(target.item().workspaceId(), mr), revision, item.anchor(), item);
+        });
+    }
+
+    /** The new text of one of the author's own notes, or null when this note does not belong to the copy. */
+    @FunctionalInterface
+    private interface Rewrite {
+        @Nullable
+        String body(CopyReceipt copy, String type, String original);
+    }
+
+    private List<CopyUpdateReceipt> rewrite(FeedbackTarget target, List<CopyReceipt> copies, Rewrite rewrite) {
         String subject = targets.subject(target, kind());
         long workspaceId = target.item().workspaceId();
         List<CopyUpdateReceipt> outcomes = new ArrayList<>();
@@ -661,15 +690,19 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                     outcomes.add(unsupported(copy, "Existing copy authority could not be verified"));
                     continue;
                 }
-                String withdrawn = ScmFeedbackFormatter.withdrawnCopyBody(original);
-                if (original.equals(withdrawn)) {
+                String rewritten = rewrite.body(copy, type, original);
+                if (rewritten == null) {
+                    outcomes.add(unsupported(copy, "Existing copy authority could not be verified"));
+                    continue;
+                }
+                if (original.equals(rewritten)) {
                     outcomes.add(edited(copy));
                     continue;
                 }
                 egressGuard.requireDeliveryAllowed("gitlab.correct-feedback-copy");
                 Answer written;
                 try {
-                    written = exchange(workspaceId, HttpMethod.PUT, note, Map.of("body", withdrawn));
+                    written = exchange(workspaceId, HttpMethod.PUT, note, Map.of("body", rewritten));
                 } catch (RuntimeException unknown) {
                     log.warn(
                             "GitLab copy correction outcome unknown: workspaceId={}, note={}",
@@ -683,7 +716,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 JsonNode stored = written.status() == 200 ? written.json() : null;
                 boolean confirmed = stored != null
                         && ownNote(stored, noteId, type, author)
-                        && withdrawn.equals(text(stored, "body"));
+                        && rewritten.equals(text(stored, "body"));
                 outcomes.add(
                         confirmed
                                 ? edited(copy)

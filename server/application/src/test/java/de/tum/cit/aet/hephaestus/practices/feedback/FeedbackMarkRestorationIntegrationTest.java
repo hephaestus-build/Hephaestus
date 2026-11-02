@@ -4,19 +4,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.evidence.CitationSide;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyInput;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDecisionInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDraft;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkChanged;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -132,7 +140,8 @@ class FeedbackMarkRestorationIntegrationTest extends AbstractFeedbackDeliveryInt
     }
 
     @Test
-    void shouldReportUnsupportedAnchoredRestorationWithoutInventingAnotherDelivery() {
+    void shouldWriteARetractedNoteBackIntoTheSameProviderNote() {
+        provider.retraction = CopyUpdateKind.EDITED;
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
         var original = children().get(1);
@@ -141,15 +150,162 @@ class FeedbackMarkRestorationIntegrationTest extends AbstractFeedbackDeliveryInt
         assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.RETRACTED);
         remove(id);
         newSender().send(workspace.getId(), feedbackId);
-        var retained = children().get(1);
-        assertThat(retained.getState()).isEqualTo(FeedbackCopyState.RETRACTED);
-        assertThat(retained.getLastError())
-                .isEqualTo("Restoring a deleted anchored note is unsupported. The original receipt"
-                        + " remains retracted.");
-        assertThat(retained.getExternalRef()).isEqualTo(original.getExternalRef());
-        assertThat(retained.getPostedAt()).isEqualTo(original.getPostedAt());
+        var restored = children().get(1);
+        assertThat(restored.getState()).isEqualTo(FeedbackCopyState.POSTED);
+        assertThat(restored.getLastError()).isNull();
+        assertThat(restored.getExternalRef()).isEqualTo(original.getExternalRef());
+        assertThat(restored.getPostedAt()).isEqualTo(original.getPostedAt());
         assertThat(provider.noteCreates).isEqualTo(1);
-        assertThat(provider.physical).doesNotContainKey(original.getId());
+    }
+
+    @Test
+    void shouldLeaveANoteRetractedWithItsReasonWhenTheProviderNoLongerHasIt() {
+        prepare(true);
+        sender.send(workspace.getId(), feedbackId);
+        UUID id = mark(supportingResult.getId());
+        newSender().send(workspace.getId(), feedbackId);
+        remove(id);
+        newSender().send(workspace.getId(), feedbackId);
+        var gone = children().get(1);
+        assertThat(gone.getState()).isEqualTo(FeedbackCopyState.RETRACTED);
+        assertThat(gone.getLastError()).isEqualTo("The provider copy no longer exists, so it stays retracted.");
+        assertThat(provider.noteCreates).isEqualTo(1);
+    }
+
+    @Test
+    void shouldWithdrawAndRestoreOnlyTheCopiesThatRestOnTheMarkedResult() {
+        provider.retraction = CopyUpdateKind.EDITED;
+        Result other = negativeResult();
+        prepareSeparateSupport(other);
+        sender.send(workspace.getId(), feedbackId);
+        var posted = children();
+        UUID marked = posted.get(1).getId();
+
+        UUID id = mark(supportingResult.getId());
+        newSender().send(workspace.getId(), feedbackId);
+
+        assertThat(provider.retracted).containsExactly(marked);
+        assertThat(children())
+                .extracting(FeedbackCopy::getState)
+                .containsExactly(FeedbackCopyState.POSTED, FeedbackCopyState.RETRACTED, FeedbackCopyState.POSTED);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+
+        remove(id);
+        newSender().send(workspace.getId(), feedbackId);
+
+        assertThat(provider.restored).containsExactly(marked);
+        assertThat(children()).extracting(FeedbackCopy::getState).containsOnly(FeedbackCopyState.POSTED);
+        assertThat(provider.summaryCreates).isEqualTo(1);
+        assertThat(provider.noteCreates).isEqualTo(2);
+    }
+
+    @Test
+    void shouldKeepACopyWithdrawnUntilTheLastMarkOnItsSupportIsRemoved() {
+        provider.retraction = CopyUpdateKind.EDITED;
+        Result other = negativeResult();
+        prepare(supportOf(List.of(other), List.of(supportingResult, other), List.of(other)), other);
+        sender.send(workspace.getId(), feedbackId);
+        UUID note = children().get(1).getId();
+        UUID first = mark(supportingResult.getId());
+        newSender().send(workspace.getId(), feedbackId);
+        remove(first);
+        UUID second = mark(other.getId());
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.RETRACTED);
+        assertThat(provider.restored).doesNotContain(note);
+        remove(second);
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children()).extracting(FeedbackCopy::getState).containsOnly(FeedbackCopyState.POSTED);
+    }
+
+    @Test
+    void shouldHoldBackOnlyTheUnsentCopyThatRestsOnTheMarkedResult() {
+        Result other = negativeResult();
+        prepareSeparateSupport(other);
+
+        UUID id = mark(supportingResult.getId());
+        sender.send(workspace.getId(), feedbackId);
+
+        var sent = children();
+        assertThat(sent)
+                .extracting(FeedbackCopy::getState)
+                .containsExactly(FeedbackCopyState.POSTED, FeedbackCopyState.WITHHELD, FeedbackCopyState.POSTED);
+        assertThat(sent.get(1).getStopReason()).isEqualTo(FeedbackStopReason.RESULT_MARKED_INCORRECT);
+        assertThat(provider.noteCreates).isEqualTo(1);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+
+        remove(id);
+        newSender().send(workspace.getId(), feedbackId);
+
+        assertThat(children()).extracting(FeedbackCopy::getState).containsOnly(FeedbackCopyState.POSTED);
+        assertThat(provider.noteCreates).isEqualTo(2);
+        assertThat(provider.summaryCreates).isEqualTo(1);
+    }
+
+    /** The summary and the second note rest on {@code other}. The first note rests on the supporting result. */
+    private void prepareSeparateSupport(Result other) {
+        prepare(supportOf(List.of(other), List.of(supportingResult), List.of(other)), other);
+    }
+
+    private static FeedbackCompositionTrace supportOf(
+            List<Result> summary, List<Result> firstNote, List<Result> secondNote) {
+        return new FeedbackCompositionTrace(
+                List.of(
+                        copySupport(FeedbackCopyKind.SUMMARY, 0, summary),
+                        copySupport(FeedbackCopyKind.LINE_NOTE, 1, firstNote),
+                        copySupport(FeedbackCopyKind.LINE_NOTE, 2, secondNote)),
+                List.of(),
+                null,
+                null);
+    }
+
+    private static FeedbackCompositionTrace.CopySupport copySupport(
+            FeedbackCopyKind kind, int position, List<Result> support) {
+        return new FeedbackCompositionTrace.CopySupport(
+                kind,
+                position,
+                support.stream()
+                        .map(result -> new FeedbackCompositionTrace.Support(result.getId(), null))
+                        .toList());
+    }
+
+    private void prepare(FeedbackCompositionTrace trace, Result other) {
+        var base = draft(true);
+        UUID second = FeedbackIds.copy(feedbackId, FeedbackCopyKind.LINE_NOTE, 2);
+        var copies = new ArrayList<>(base.copies());
+        copies.add(new FeedbackCopyInput(
+                second,
+                FeedbackCopyKind.LINE_NOTE,
+                2,
+                "Name the second failure.",
+                "src/B.java",
+                3,
+                3,
+                CitationSide.NEW,
+                second.toString(),
+                FeedbackIds.writeMarker(second)));
+        store.prepareAll(
+                workspace.getId(),
+                reviewId,
+                List.of(new FeedbackDraft(
+                        base.id(),
+                        base.workspaceId(),
+                        base.reviewId(),
+                        base.itemId(),
+                        base.developerId(),
+                        base.destination(),
+                        base.state(),
+                        base.stopReason(),
+                        base.body(),
+                        List.of(
+                                new FeedbackBasisInput(supportingResult.getId(), null, 0),
+                                new FeedbackBasisInput(other.getId(), null, 1)),
+                        copies,
+                        base.checks(),
+                        trace,
+                        null)));
     }
 
     @Test

@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackVisibilityService;
@@ -26,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
@@ -37,7 +37,6 @@ class PostedCopyCorrectorTest {
 
     @Test
     void shouldUpdateOnlyTheRecordedSummaryHandleAndRetainItsMarker() {
-        var basis = mock(FeedbackBasisRepository.class);
         var visibility = mock(FeedbackVisibilityService.class);
         var writer = mock(SummaryWriter.class);
         var transactions = mock(FeedbackSendTransactions.class);
@@ -63,7 +62,8 @@ class PostedCopyCorrectorTest {
                 .writeKey(copyId.toString())
                 .writeMarker(FeedbackIds.writeMarker(copyId))
                 .build();
-        when(basis.hasIncorrectBasis(1, id)).thenReturn(true);
+        var repository = mock(FeedbackCopyRepository.class);
+        when(repository.incorrectCopyIds(1, id)).thenReturn(Set.of(copyId));
         when(transactions.holdsLease(1, id, "owner")).thenReturn(true);
         when(transactions.recipientWrite(eq(2L), any())).thenAnswer(a -> {
             Supplier<?> callback = a.getArgument(1);
@@ -71,8 +71,7 @@ class PostedCopyCorrectorTest {
         });
         when(writer.updateSummary(eq(target), any(), any()))
                 .thenReturn(new CopyUpdateReceipt(copyId, CopyUpdateKind.EDITED, "note-17", null, null));
-        new PostedCopyCorrector(
-                        basis, mock(FeedbackCopyRepository.class), visibility, List.of(writer), List.of(), transactions)
+        new PostedCopyCorrector(repository, visibility, List.of(writer), List.of(), transactions)
                 .correct(
                         new FeedbackSendTransactions.Attempt(feedback, FeedbackSendAction.RETRACT, List.of(copy), 1),
                         target,
@@ -89,13 +88,12 @@ class PostedCopyCorrectorTest {
 
     @Test
     void shouldRequireCurrentPolicyBeforeRestoringAnExistingSummary() {
-        var basis = mock(FeedbackBasisRepository.class);
         var visibility = mock(FeedbackVisibilityService.class);
         var writer = mock(SummaryWriter.class);
         var tx = mock(FeedbackSendTransactions.class);
         UUID id = UUID.randomUUID();
         var parent = Feedback.builder().id(id).workspaceId(1).build();
-        new PostedCopyCorrector(basis, mock(FeedbackCopyRepository.class), visibility, List.of(writer), List.of(), tx)
+        new PostedCopyCorrector(mock(FeedbackCopyRepository.class), visibility, List.of(writer), List.of(), tx)
                 .correct(
                         new FeedbackSendTransactions.Attempt(
                                 parent,

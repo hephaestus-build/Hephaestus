@@ -8,18 +8,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyUpdateKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.GitHubCorrectionTestFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -90,6 +94,55 @@ class ScmCopyCorrectionTest extends BaseUnitTest {
         assertThat(documents.getAllValues().get(1))
                 .contains(form == CopyForm.FILE_NOTE ? "updateIssueComment" : "updatePullRequestReviewComment")
                 .doesNotContain("create", "addComment", "addPullRequestReview");
+    }
+
+    @Test
+    void shouldWriteAWithdrawnGitHubNoteBackInPlaceWithItsOriginalWords() {
+        var client = mock(HttpGraphQlClient.class);
+        var writer = writer(IntegrationKind.GITHUB, client);
+        var read = mock(GraphQlClient.RequestSpec.class);
+        var write = mock(GraphQlClient.RequestSpec.class);
+        when(client.document(anyString())).thenReturn(read, write);
+        when(read.variable(anyString(), any())).thenReturn(read);
+        when(write.variable(anyString(), any())).thenReturn(write);
+        var target = ScmFeedbackFixtures.target(
+                new IntegrationRef(IntegrationKind.GITHUB, 1, null), "owner/repo#42", "a".repeat(40));
+        UUID copyId = UUID.randomUUID();
+        String marker = "<!-- hephaestus-feedback-copy:" + copyId + " -->";
+        var note = new LineNote(
+                copyId, new FeedbackAnchor("src/A.java", 3, 3, CitationSide.NEW), "Original words", "key-1", marker);
+        String original = ScmFeedbackFixtures.formatter()
+                        .footer(target.item())
+                        .appendLineNotePrompt(PostedText.of("Original words"))
+                + "\n" + marker + "\n" + ScmFeedbackFormatter.deliveryTag("key-1");
+        var lookedUp = mock(ClientGraphQlResponse.class);
+        when(lookedUp.getErrors()).thenReturn(List.of());
+        field(
+                lookedUp,
+                "node",
+                Map.of(
+                        "__typename",
+                        "PullRequestReviewComment",
+                        "id",
+                        "copy-1",
+                        "body",
+                        ScmFeedbackFormatter.withdrawnCopyBody(original),
+                        "viewerDidAuthor",
+                        true));
+        when(read.execute()).thenReturn(Mono.just(lookedUp));
+        var updated = mock(ClientGraphQlResponse.class);
+        when(updated.getErrors()).thenReturn(List.of());
+        field(updated, "updatePullRequestReviewComment.pullRequestReviewComment.id", "copy-1");
+        field(updated, "updatePullRequestReviewComment.pullRequestReviewComment.url", "https://example.test/copy-1");
+        when(write.execute()).thenReturn(Mono.just(updated));
+        var receipt = new CopyReceipt(copyId, CopyDisposition.POSTED, "copy-1", null, true, CopyForm.LINE_NOTE);
+
+        assertThat(writer.restore(target, List.of(new LineNoteWriter.RetractedNote(receipt, note))))
+                .singleElement()
+                .satisfies(update -> assertThat(update.kind()).isEqualTo(CopyUpdateKind.EDITED));
+        var body = ArgumentCaptor.forClass(Object.class);
+        verify(write).variable(eq("body"), body.capture());
+        assertThat(body.getValue()).isEqualTo(original);
     }
 
     @ParameterizedTest

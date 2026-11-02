@@ -616,10 +616,21 @@ The [operator guide](/admin/practice-review) owns approval, retry and diagnosis 
 ## Correct results and feedback
 
 An incorrect mark prevents its result from supporting new feedback.
+On reviewed work, a mark reaches only the copies whose exact support in `review.checks.feedbackComposition` names the result.
+The other copies stay posted, because a disagreement with one finding does not hide another.
+A copy with no recorded support rests on every basis of its feedback.
+A private piece has one text, so a mark on any of its results ends the piece.
+
 The send service reconciles any started copy before it requests supported provider correction.
+Correction edits the stored provider reference in place, so the note keeps its position and its replies.
 Unsupported correction leaves the actual posted appearance visible with its recorded reason.
-Removing the mark rechecks current policy before restoring eligible unreplaced feedback.
-It never reposts an earlier confirmed copy.
+
+Removing the mark rechecks current policy, then restores what the mark withdrew and no other copy.
+A copy stays withdrawn until the last mark on its support is gone.
+A restored note gets its original words back in the same provider note.
+A copy that the mark held back before any write gets its first post.
+Restoration never reposts an earlier confirmed copy.
+A provider note that no longer exists stays retracted with its recorded reason.
 
 An accepted mark removes a result from open-problem lists without changing its outcome.
 Neither mark ends the current result or restores older proof.

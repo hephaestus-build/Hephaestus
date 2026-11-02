@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
+import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
@@ -204,6 +205,47 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                         "This feedback was withdrawn.\n" + MARKER + "\n<!-- hephaestus-diff-note-ck=result:a:0 -->"));
         assertThat(guarded.get()).isEqualTo(2);
         verify(gitLabProvider, times(3)).updateRateLimit(eq(1L), any());
+    }
+
+    @Test
+    void shouldWriteAWithdrawnDiffNoteBackInPlaceWithItsOriginalWords() {
+        var item = item("fix", "result:a:0");
+        String original = posted(item);
+        Map<String, Object> stored = restNote(5303062, "DiffNote", ScmFeedbackFormatter.withdrawnCopyBody(original), 1);
+        rest.answer(200, Map.of("id", 1, "username", "bot"));
+        rest.answer(200, stored);
+        rest.answer(call -> ScriptedGitLabRest.respond(200, storedAs(stored, call)));
+        var copy = copy("gid://gitlab/DiffNote/5303062");
+
+        assertThat(channel.restore(target(), List.of(new LineNoteWriter.RetractedNote(copy, item))))
+                .singleElement()
+                .satisfies(update -> assertThat(update.kind()).isEqualTo(CopyUpdateKind.EDITED));
+        assertThat(rest.calls())
+                .extracting(ScriptedGitLabRest.Call::method, ScriptedGitLabRest.Call::path)
+                .containsExactly(
+                        tuple(HttpMethod.GET, "/api/v4/user"),
+                        tuple(HttpMethod.GET, NOTES + "5303062"),
+                        tuple(HttpMethod.PUT, NOTES + "5303062"));
+        assertThat(rest.calls().get(2).json()).containsExactly(Map.entry("body", original));
+    }
+
+    @Test
+    void shouldNotRestoreWordsIntoANoteThatBelongsToAnotherCopy() {
+        var item = item("fix", "result:a:0");
+        rest.answer(200, Map.of("id", 1, "username", "bot"));
+        rest.answer(
+                200,
+                restNote(
+                        5303062,
+                        "DiffNote",
+                        ScmFeedbackFormatter.withdrawnCopyBody(posted(item("other", "result:b:0"))),
+                        1));
+        var copy = copy("gid://gitlab/DiffNote/5303062");
+
+        assertThat(channel.restore(target(), List.of(new LineNoteWriter.RetractedNote(copy, item))))
+                .singleElement()
+                .satisfies(update -> assertThat(update.kind()).isEqualTo(CopyUpdateKind.UNSUPPORTED));
+        assertThat(rest.calls()).extracting(ScriptedGitLabRest.Call::method).doesNotContain(HttpMethod.PUT);
     }
 
     @ParameterizedTest
