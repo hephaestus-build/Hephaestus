@@ -8,6 +8,7 @@ final class AnonymousEndpointAllowlist {
             "PublicActivityController.getPublicActivityPerson",
             "PublicActivityController.getPublicActivityPersonWork",
             "CsrfController.token",
+            "BrowserFaultsController.report",
             "ContributorController.listGlobalContributors",
             "WorkspaceRegistryController.getProviders",
             "EmailUnsubscribeController.unsubscribe",

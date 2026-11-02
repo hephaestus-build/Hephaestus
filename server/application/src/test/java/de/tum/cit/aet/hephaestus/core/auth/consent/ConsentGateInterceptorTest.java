@@ -27,6 +27,10 @@ class ConsentGateInterceptorTest extends BaseUnitTest {
                 .isTrue();
         assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("POST", "/auth/dev-login"))
                 .isTrue();
+        assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("POST", "/browser-faults"))
+                .isTrue();
+        assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("POST", "/web-vitals"))
+                .isFalse();
         assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("POST", "/auth/client/token"))
                 .isFalse();
         assertThat(ConsentGateInterceptor.isAllowedBeforeConsent("GET", "/workspaces"))

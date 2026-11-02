@@ -340,6 +340,12 @@
       "description": "Lets the browser of a signed-in reader measure how fast each visit loads and responds and report it to the page experience metrics. In the EU, turning it on can require consent or a documented legal basis."
     },
     {
+      "name": "hephaestus.features.flags.browser-fault-reports",
+      "type": "java.lang.Boolean",
+      "sourceType": "de.tum.cit.aet.hephaestus.feature.FeatureProperties",
+      "description": "Lets the browser of each reader, signed in or not, report the failures that it met to the server's logs and metrics. In the EU, turning it on can require consent or a documented legal basis."
+    },
+    {
       "name": "spring.application.version",
       "type": "java.lang.String",
       "description": "Version that the application reports in its logs, traces and release card. The deployment sets it from the release."

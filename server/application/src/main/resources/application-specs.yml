@@ -48,10 +48,11 @@ hephaestus:
             client-secret: ""
         outline:
             enabled: true
-    # The page experience endpoint exists only when the operator turns it on; the contract always has it.
+    # The browser report endpoints exist only when the operator turns them on; the contract always has them.
     features:
         flags:
             page-experience-metrics: true
+            browser-fault-reports: true
     runtime:
         webhook:
             enabled: false

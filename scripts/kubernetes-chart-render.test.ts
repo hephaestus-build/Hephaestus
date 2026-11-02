@@ -2974,6 +2974,19 @@ await test("traces reach an in-cluster collector on the endpoint's port, only wh
 	}
 });
 
+await test("one value turns browser fault reports on for the server and for the browser", () => {
+	for (const browserFaultReports of [false, true]) {
+		const resources = rendered([...layersFor("small"), { config: { browserFaultReports } }]);
+		for (const component of ["server", "webapp"]) {
+			assert.equal(
+				envValue(workload(resources, component), "BROWSER_FAULT_REPORTS"),
+				String(browserFaultReports),
+				component,
+			);
+		}
+	}
+});
+
 await test("workspace hosts reach only the SPA and share the apex origin settings", () => {
 	const layers = [profile("small"), prepared, operator, reviews];
 	const off = rendered(layers);

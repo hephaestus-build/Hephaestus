@@ -324,6 +324,9 @@ config:
   # Readers' browsers report how fast pages load and respond. In the EU this can need consent or a
   # documented legal basis: docs/admin/legal-pages.mdx.
   pageExperienceMetrics: false
+  # Readers' browsers, signed in or not, report the failures they meet to the server's logs and
+  # metrics. In the EU this can need consent or a documented legal basis: docs/admin/legal-pages.mdx.
+  browserFaultReports: false
   # The scheduled sync of each workspace's repositories.
   monitoring:
     runOnStartup: true

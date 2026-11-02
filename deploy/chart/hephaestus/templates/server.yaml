@@ -144,6 +144,8 @@ spec:
               value: {{ $config.gitlab.oauthDisplayName | quote }}
             - name: PAGE_EXPERIENCE_METRICS
               value: {{ $config.pageExperienceMetrics | quote }}
+            - name: BROWSER_FAULT_REPORTS
+              value: {{ $config.browserFaultReports | quote }}
             - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
               value: {{ $config.slack.clientId | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET" "optional" true) | nindent 12 }}
