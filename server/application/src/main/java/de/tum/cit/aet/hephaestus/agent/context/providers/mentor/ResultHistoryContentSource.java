@@ -155,14 +155,15 @@ public class ResultHistoryContentSource implements ContentSource {
         Instant capturedAt = entry.capturedAt();
         if (capturedAt != null) row.put("capturedAt", capturedAt.toString());
         row.put("storedWorkVersion", entry.storedWorkVersion().name());
+        // The summary and each problem's summary are what the practice page lists for this result.
         row.put("summary", entry.summary());
+        row.set("problems", objectMapper.valueToTree(entry.problems()));
         if (detail) {
             row.put("explanation", entry.explanation());
             row.set("criteria", objectMapper.valueToTree(entry.criteria()));
             row.set("evidence", objectMapper.valueToTree(entry.evidence()));
             row.set("example", objectMapper.valueToTree(entry.example()));
             row.set("coverage", objectMapper.valueToTree(entry.coverage()));
-            row.set("problems", objectMapper.valueToTree(entry.problems()));
             row.set("openQuestions", objectMapper.valueToTree(entry.openQuestions()));
         }
         return row;
