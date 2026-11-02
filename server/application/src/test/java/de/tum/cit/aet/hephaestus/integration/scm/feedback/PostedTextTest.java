@@ -223,6 +223,18 @@ class PostedTextTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPostMathReferencesInAnyCaseAdvisoriesAndIterationsAsCode() {
+        assertThat(PostedText.of("Run it once ($O(n)$ cost).")).isEqualTo("Run it once (`$O(n)$` cost).");
+        assertThat(PostedText.of("$\\color{red}\\Huge\\text{Approved by maintainers}$"))
+                .isEqualTo("`$\\color{red}\\Huge\\text{Approved` by `maintainers}$`");
+        assertThat(PostedText.of("$`x`$ and $$x$$")).isEqualTo("`$x$` and `$$x$$`");
+        assertThat(PostedText.of("gh-26 and gH-26")).isEqualTo("`gh-26` and `gH-26`");
+        assertThat(PostedText.of("GHSA-jfh8-c2jp-5v3q and cve-2021-44228"))
+                .isEqualTo("`GHSA-jfh8-c2jp-5v3q` and `cve-2021-44228`");
+        assertThat(PostedText.of("*iteration:1&*x")).isEqualTo("*`iteration:1&`*x");
+    }
+
+    @Test
     void shouldKeepALineOutOfBlocksWhenTheTextStartsWithAByteOrderMark() {
         assertThat(PostedText.of("\uFEFF# Heading")).isEqualTo("\\# Heading");
         assertThat(PostedText.of("\uFEFF1. one")).isEqualTo("1\\. one");

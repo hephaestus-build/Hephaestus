@@ -37,12 +37,13 @@ public final class PostedText {
     private PostedText() {}
 
     // What a provider links in a run: a name or an e-mail address; an issue, pull request, merge request, epic,
-    // snippet, label, milestone or iteration reference; a GitLab project path before `>`; a web address; link, image
-    // or footnote syntax; a custom emoji, which renders as an image; a GitLab inline diff mark; a commit, which both
-    // providers find in any 7 to 64 hexadecimal characters. GitHub and GitLab read link syntax and diff marks again
-    // in the rendered text, through any escape, so they are code too.
-    private static final Pattern LINKABLE = Pattern.compile("@|#[A-Za-z0-9_\"]|[~%].|[!&$]\\d|GH-\\d"
-            + "|(?i:www\\.|\\*iteration:)|://|[\\[\\]]|[A-Za-z0-9_./-](?:>|&gt;)|:[A-Za-z0-9_+-]+:"
+    // label, milestone or iteration reference, in any case; a security advisory; a GitLab project path before `>`; a
+    // web address; link, image or footnote syntax; a custom emoji, which renders as an image; a GitLab inline diff
+    // mark; a commit, which both providers find in any 7 to 64 hexadecimal characters. A run with `$` is code too, so
+    // no math renders and a snippet reference links nothing. GitHub and GitLab read link syntax, diff marks and math
+    // again in the rendered text, through any escape.
+    private static final Pattern LINKABLE = Pattern.compile("@|#[A-Za-z0-9_\"]|[~%].|[!&]\\d|\\$"
+            + "|(?i:GH-\\d|GHSA-|CVE-\\d|www\\.|iteration:)|://|[\\[\\]]|[A-Za-z0-9_./-](?:>|&gt;)|:[A-Za-z0-9_+-]+:"
             + "|\\{[+-]|[+-]\\}"
             + "|(?<![A-Za-z0-9_])[0-9A-Fa-f]{7,64}(?![A-Za-z0-9_])");
 

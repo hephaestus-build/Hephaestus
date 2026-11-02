@@ -1213,11 +1213,11 @@
   "marker" : null,
   "posted" : "See the `note.[^1]`\n\n`[^1]:` This is a note.\n\n`@alice` hidden in the footnote &lt;img `src=https://evil.example/f.png>`",
   "github" : {
-    "raw" : "<p dir=\"auto\">See the note.<sup><a href=\"#user-content-fn-1-46cbcd9cc4ea17665f1c79ea11318b19\" id=\"user-content-fnref-1-46cbcd9cc4ea17665f1c79ea11318b19\" data-footnote-ref=\"\" aria-describedby=\"footnote-label\">1</a></sup></p>\n<section data-footnotes=\"\" class=\"footnotes\"><h2 id=\"footnote-label\" class=\"sr-only\" dir=\"auto\">Footnotes</h2>\n<ol dir=\"auto\">\n<li id=\"user-content-fn-1-46cbcd9cc4ea17665f1c79ea11318b19\">\n<p dir=\"auto\">This is a note.</p>\n<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a> hidden in the footnote <img src=\"https://evil.example/f.png\"> <a href=\"#user-content-fnref-1-46cbcd9cc4ea17665f1c79ea11318b19\" data-footnote-backref=\"\" aria-label=\"Back to reference 1\" class=\"data-footnote-backref\">↩</a></p>\n</li>\n</ol>\n</section>",
+    "raw" : "<p dir=\"auto\">See the note.<sup><a href=\"#user-content-fn-1-8725e3157ac8dbe2c479b64db90ddc3c\" id=\"user-content-fnref-1-8725e3157ac8dbe2c479b64db90ddc3c\" data-footnote-ref=\"\" aria-describedby=\"footnote-label\">1</a></sup></p>\n<section data-footnotes=\"\" class=\"footnotes\"><h2 id=\"footnote-label\" class=\"sr-only\" dir=\"auto\">Footnotes</h2>\n<ol dir=\"auto\">\n<li id=\"user-content-fn-1-8725e3157ac8dbe2c479b64db90ddc3c\">\n<p dir=\"auto\">This is a note.</p>\n<p dir=\"auto\"><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a> hidden in the footnote <img src=\"https://evil.example/f.png\"> <a href=\"#user-content-fnref-1-8725e3157ac8dbe2c479b64db90ddc3c\" data-footnote-backref=\"\" aria-label=\"Back to reference 1\" class=\"data-footnote-backref\">↩</a></p>\n</li>\n</ol>\n</section>",
     "posted" : "<p dir=\"auto\">See the <code class=\"notranslate\">note.[^1]</code></p>\n<p dir=\"auto\"><code class=\"notranslate\">[^1]:</code> This is a note.</p>\n<p dir=\"auto\"><code class=\"notranslate\">@alice</code> hidden in the footnote &lt;img <code class=\"notranslate\">src=https://evil.example/f.png&gt;</code></p>"
   },
   "gitlab" : {
-    "raw" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\">See the note.<sup data-sourcepos=\"1:14-1:17\" class=\"footnote-ref\"><a href=\"#fn-1-5168\" id=\"fnref-1-5168\" data-footnote-ref=\"\">1</a></sup></p>\n<section data-sourcepos=\"3:1-5:70\" data-footnotes=\"\" class=\"footnotes\">\n<ol>\n<li data-sourcepos=\"3:1-5:70\" id=\"fn-1-5168\">\n<p data-sourcepos=\"3:7-3:21\">This is a note.</p>\n<p data-sourcepos=\"5:5-5:70\"><a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a> hidden in the footnote <a class=\"no-attachment-icon\" href=\"https://evil.example/f.png\" target=\"_blank\" rel=\"nofollow noreferrer noopener\"><img src=\"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==\" decoding=\"async\" class=\"lazy\" data-src=\"https://evil.example/f.png\"></a> <a href=\"#fnref-1-5168\" data-footnote-backref=\"\" data-footnote-backref-idx=\"1\" aria-label=\"Back to reference 1\" title=\"Back to reference 1\" class=\"footnote-backref\">↩</a></p>\n</li>\n</ol>\n</section>",
+    "raw" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\">See the note.<sup data-sourcepos=\"1:14-1:17\" class=\"footnote-ref\"><a href=\"#fn-1-1033\" id=\"fnref-1-1033\" data-footnote-ref=\"\">1</a></sup></p>\n<section data-sourcepos=\"3:1-5:70\" data-footnotes=\"\" class=\"footnotes\">\n<ol>\n<li data-sourcepos=\"3:1-5:70\" id=\"fn-1-1033\">\n<p data-sourcepos=\"3:7-3:21\">This is a note.</p>\n<p data-sourcepos=\"5:5-5:70\"><a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a> hidden in the footnote <a class=\"no-attachment-icon\" href=\"https://evil.example/f.png\" target=\"_blank\" rel=\"nofollow noreferrer noopener\"><img src=\"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==\" decoding=\"async\" class=\"lazy\" data-src=\"https://evil.example/f.png\"></a> <a href=\"#fnref-1-1033\" data-footnote-backref=\"\" data-footnote-backref-idx=\"1\" aria-label=\"Back to reference 1\" title=\"Back to reference 1\" class=\"footnote-backref\">↩</a></p>\n</li>\n</ol>\n</section>",
     "posted" : "<p data-sourcepos=\"1:1-1:19\" dir=\"auto\">See the <code data-sourcepos=\"1:9-1:19\">note.[^1]</code></p>\n<p data-sourcepos=\"3:1-3:23\" dir=\"auto\"><code data-sourcepos=\"3:1-3:7\">[^1]:</code> This is a note.</p>\n<p data-sourcepos=\"5:1-5:73\" dir=\"auto\"><code data-sourcepos=\"5:1-5:8\">@alice</code> hidden in the footnote &lt;img <code data-sourcepos=\"5:41-5:73\">src=https://evil.example/f.png&gt;</code></p>"
   }
 }, {
@@ -2025,5 +2025,122 @@
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:39\" dir=\"auto\">Color <code data-sourcepos=\"1:7-1:12\">#F00<span class=\"gfm-color_chip\"><span style=\"background-color: #F00;\"></span></span></code> and <code data-sourcepos=\"1:18-1:31\">RGB(0,255,0)<span class=\"gfm-color_chip\"><span style=\"background-color: RGB(0,255,0);\"></span></span></code> in code</p>",
     "posted" : "<p data-sourcepos=\"1:1-1:39\" dir=\"auto\">Color <code data-sourcepos=\"1:7-1:12\">#F00<span class=\"gfm-color_chip\"><span style=\"background-color: #F00;\"></span></span></code> and <code data-sourcepos=\"1:18-1:31\">RGB(0,255,0)<span class=\"gfm-color_chip\"><span style=\"background-color: RGB(0,255,0);\"></span></span></code> in code</p>"
+  }
+}, {
+  "body" : "Run it once ($O(n)$ cost).",
+  "header" : null,
+  "marker" : null,
+  "posted" : "Run it once (`$O(n)$` cost).",
+  "github" : {
+    "raw" : "<p dir=\"auto\">Run it once (<math-renderer class=\"js-inline-math\" style=\"display: inline-block\" data-run-id=\"c0d0bde6b1be3cc40d2e7c5617a6d196\">$O(n)$</math-renderer> cost).</p>",
+    "posted" : "<p dir=\"auto\">Run it once (<code class=\"notranslate\">$O(n)$</code> cost).</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:26\" dir=\"auto\">Run it once (<span data-math-style=\"inline\" data-sourcepos=\"1:14-1:19\" class=\"js-render-math\">O(n)</span> cost).</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:28\" dir=\"auto\">Run it once (<code data-sourcepos=\"1:14-1:21\">$O(n)$</code> cost).</p>"
+  }
+}, {
+  "body" : "$\\color{red}\\Huge\\text{Approved by maintainers}$",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`$\\color{red}\\Huge\\text{Approved` by `maintainers}$`",
+  "github" : {
+    "raw" : "<p dir=\"auto\"><math-renderer class=\"js-inline-math\" style=\"display: inline-block\" data-run-id=\"53ec85e48264d4aef50ef10f2ba3df6b\">$\\color{red}\\Huge\\text{Approved by maintainers}$</math-renderer></p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">$\\color{red}\\Huge\\text{Approved</code> by <code class=\"notranslate\">maintainers}$</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:48\" dir=\"auto\"><span data-math-style=\"inline\" data-sourcepos=\"1:1-1:48\" class=\"js-render-math\">\\color{red}\\Huge\\text{Approved by maintainers}</span></p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:52\" dir=\"auto\"><code data-sourcepos=\"1:1-1:33\">$\\color{red}\\Huge\\text{Approved</code> by <code data-sourcepos=\"1:38-1:52\">maintainers}$</code></p>"
+  }
+}, {
+  "body" : "$`x`$",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`$x$`",
+  "github" : {
+    "raw" : "<p dir=\"auto\"><math-renderer class=\"js-inline-math\" style=\"display: inline-block\" data-run-id=\"d848662f0c280ef0fda1b1cb805f5001\">$x$</math-renderer></p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">$x$</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:5\" dir=\"auto\"><code data-math-style=\"inline\" data-sourcepos=\"1:1-1:5\" class=\"js-render-math\">x</code></p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:5\" dir=\"auto\"><code data-sourcepos=\"1:1-1:5\">$x$</code></p>"
+  }
+}, {
+  "body" : "$$x$$",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`$$x$$`",
+  "github" : {
+    "raw" : "<p dir=\"auto\"><math-renderer class=\"js-display-math\" style=\"display: block\" data-run-id=\"17e0c21058b8f90cf34f752e59f50173\">$$x$$</math-renderer></p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">$$x$$</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:5\" dir=\"auto\"><span data-math-style=\"display\" data-sourcepos=\"1:1-1:5\" class=\"js-render-math\">x</span></p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:7\" dir=\"auto\"><code data-sourcepos=\"1:1-1:7\">$$x$$</code></p>"
+  }
+}, {
+  "body" : "gh-26 and gH-26",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`gh-26` and `gH-26`",
+  "github" : {
+    "raw" : "<p dir=\"auto\"><a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5914999095\" data-permission-text=\"Title is private\" data-url=\"https://github.com/HephaestusTest/practice-validation/issues/26\" data-hovercard-type=\"issue\" data-hovercard-url=\"/HephaestusTest/practice-validation/issues/26/hovercard\" href=\"https://github.com/HephaestusTest/practice-validation/issues/26\">gh-26</a> and <a class=\"issue-link js-issue-link\" data-error-text=\"Failed to load title\" data-id=\"5914999095\" data-permission-text=\"Title is private\" data-url=\"https://github.com/HephaestusTest/practice-validation/issues/26\" data-hovercard-type=\"issue\" data-hovercard-url=\"/HephaestusTest/practice-validation/issues/26/hovercard\" href=\"https://github.com/HephaestusTest/practice-validation/issues/26\">gH-26</a></p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">gh-26</code> and <code class=\"notranslate\">gH-26</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:15\" dir=\"auto\">gh-26 and gH-26</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:19\" dir=\"auto\"><code data-sourcepos=\"1:1-1:7\">gh-26</code> and <code data-sourcepos=\"1:13-1:19\">gH-26</code></p>"
+  }
+}, {
+  "body" : "GHSA-jfh8-c2jp-5v3q and ghsa-jfh8-c2jp-5v3q",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`GHSA-jfh8-c2jp-5v3q` and `ghsa-jfh8-c2jp-5v3q`",
+  "github" : {
+    "raw" : "<p dir=\"auto\"><a title=\"GHSA-jfh8-c2jp-5v3q\" data-hovercard-type=\"advisory\" data-hovercard-url=\"/advisories/GHSA-jfh8-c2jp-5v3q/hovercard\" href=\"https://github.com/advisories/GHSA-jfh8-c2jp-5v3q\">GHSA-jfh8-c2jp-5v3q</a> and <a title=\"GHSA-jfh8-c2jp-5v3q\" data-hovercard-type=\"advisory\" data-hovercard-url=\"/advisories/GHSA-jfh8-c2jp-5v3q/hovercard\" href=\"https://github.com/advisories/GHSA-jfh8-c2jp-5v3q\">GHSA-jfh8-c2jp-5v3q</a></p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">GHSA-jfh8-c2jp-5v3q</code> and <code class=\"notranslate\">ghsa-jfh8-c2jp-5v3q</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:43\" dir=\"auto\">GHSA-jfh8-c2jp-5v3q and ghsa-jfh8-c2jp-5v3q</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:47\" dir=\"auto\"><code data-sourcepos=\"1:1-1:21\">GHSA-jfh8-c2jp-5v3q</code> and <code data-sourcepos=\"1:27-1:47\">ghsa-jfh8-c2jp-5v3q</code></p>"
+  }
+}, {
+  "body" : "CVE-2021-44228 and cve-2021-44228",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`CVE-2021-44228` and `cve-2021-44228`",
+  "github" : {
+    "raw" : "<p dir=\"auto\"><a title=\"CVE-2021-44228\" data-hovercard-type=\"advisory\" data-hovercard-url=\"/advisories/GHSA-jfh8-c2jp-5v3q/hovercard\" href=\"https://github.com/advisories/GHSA-jfh8-c2jp-5v3q\">CVE-2021-44228</a> and <a title=\"CVE-2021-44228\" data-hovercard-type=\"advisory\" data-hovercard-url=\"/advisories/GHSA-jfh8-c2jp-5v3q/hovercard\" href=\"https://github.com/advisories/GHSA-jfh8-c2jp-5v3q\">cve-2021-44228</a></p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">CVE-2021-44228</code> and <code class=\"notranslate\">cve-2021-44228</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:33\" dir=\"auto\">CVE-2021-44228 and cve-2021-44228</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\"><code data-sourcepos=\"1:1-1:16\">CVE-2021-44228</code> and <code data-sourcepos=\"1:22-1:37\">cve-2021-44228</code></p>"
+  }
+}, {
+  "body" : "*iteration:1&*x",
+  "header" : null,
+  "marker" : null,
+  "posted" : "*`iteration:1&`*x",
+  "github" : {
+    "raw" : "<p dir=\"auto\">*iteration:1&amp;*x</p>",
+    "posted" : "<p dir=\"auto\">*<code class=\"notranslate\">iteration:1&amp;</code>*x</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:15\" dir=\"auto\">*iteration:1&amp;*x</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\">*<code data-sourcepos=\"1:2-1:15\">iteration:1&amp;</code>*x</p>"
+  }
+}, {
+  "body" : "50%, ~5, :smile:, defaced and 1000000",
+  "header" : null,
+  "marker" : null,
+  "posted" : "`50%`, `~5`, `:smile:`, `defaced` and `1000000`",
+  "github" : {
+    "raw" : "<p dir=\"auto\">50%, ~5, 😄, defaced and 1000000</p>",
+    "posted" : "<p dir=\"auto\"><code class=\"notranslate\">50%</code>, <code class=\"notranslate\">~5</code>, <code class=\"notranslate\">:smile:</code>, <code class=\"notranslate\">defaced</code> and <code class=\"notranslate\">1000000</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\">50%, ~5, <gl-emoji title=\"grinning face with smiling eyes\" data-name=\"smile\" data-unicode-version=\"6.0\">😄</gl-emoji>, defaced and 1000000</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:47\" dir=\"auto\"><code data-sourcepos=\"1:1-1:5\">50%</code>, <code data-sourcepos=\"1:8-1:11\">~5</code>, <code data-sourcepos=\"1:14-1:22\">:smile:</code>, <code data-sourcepos=\"1:25-1:33\">defaced</code> and <code data-sourcepos=\"1:39-1:47\">1000000</code></p>"
   }
 } ]
