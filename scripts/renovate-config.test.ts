@@ -53,7 +53,12 @@ const RELEASE_TAG_DATASOURCES = new Set(["github-releases", "github-tags"]);
 void test("Renovate creates bounded update PRs without a manual dispatch queue", () => {
 	assert.ok(extensions.includes("config:best-practices"));
 	assert.ok(!extensions.includes(":dependencyDashboardApproval"));
-	assert.deepEqual(config.schedule, ["before 7am every weekday"]);
+	// One weekly batch per group keeps at most two dependency pull requests in the merge queue.
+	assert.deepEqual(config.schedule, ["before 7am on monday"]);
+	assert.ok(isRecord(config.lockFileMaintenance));
+	assert.deepEqual(config.lockFileMaintenance.schedule, [
+		"before 7am on the first day of the month",
+	]);
 	assert.equal(config.prHourlyLimit, 2);
 	assert.equal(config.prConcurrentLimit, 2);
 	assert.equal(config.branchConcurrentLimit, 2);
@@ -153,22 +158,44 @@ void test("routine update groups preserve repository boundaries", () => {
 	assert.ok(Array.isArray(config.packageRules));
 	const rules = config.packageRules.filter(isRecord);
 	const groups = [
-		["repository tooling dependencies", "npm", "package.json", undefined],
-		["webapp development dependencies", "npm", "webapp/package.json", ["devDependencies"]],
-		["server dependencies", "gradle", undefined, undefined],
+		["repository tooling dependencies", ["npm"], ["package.json"]],
+		[
+			"webapp and extension dependencies",
+			["npm"],
+			["webapp/package.json", "extension/package.json"],
+		],
+		["server dependencies", ["gradle"], undefined],
+		["AI SDK and practice runtime", ["npm"], ["docker/agents/practice-scripts/package.json"]],
+		["CI and build tooling", undefined, [".github/**"]],
 	] as const;
-	for (const [groupName, manager, fileName, depTypes] of groups) {
+	for (const [groupName, managers, fileNames] of groups) {
 		const rule = rules.find((candidate) => candidate.groupName === groupName);
-		assert.ok(rule);
-		assert.deepEqual(rule.matchManagers, [manager]);
-		assert.deepEqual(rule.matchFileNames, fileName === undefined ? undefined : [fileName]);
-		assert.deepEqual(rule.matchDepTypes, depTypes);
+		assert.ok(rule, `${groupName} must be a group`);
+		assert.deepEqual(rule.matchManagers, managers);
+		assert.deepEqual(rule.matchFileNames, fileNames);
+		assert.equal(rule.matchDepTypes, undefined);
 		assert.ok(Array.isArray(rule.matchUpdateTypes));
 		assert.deepEqual(
 			new Set(rule.matchUpdateTypes),
 			new Set(["minor", "patch", "digest", "pin", "pinDigest"]),
 		);
 	}
+});
+
+void test("what the chart and the release image set ship moves as its own group", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rule = config.packageRules
+		.filter(isRecord)
+		.find(
+			(candidate) =>
+				candidate.groupName === "runtime images" && Array.isArray(candidate.matchFileNames),
+		);
+	assert.ok(rule);
+	assert.deepEqual(rule.matchDatasources, ["docker"]);
+	assert.ok(
+		Array.isArray(rule.matchFileNames) &&
+			rule.matchFileNames.includes("security/release-images.json"),
+	);
 });
 
 void test("vulnerability remediation bypasses normal update latency", () => {

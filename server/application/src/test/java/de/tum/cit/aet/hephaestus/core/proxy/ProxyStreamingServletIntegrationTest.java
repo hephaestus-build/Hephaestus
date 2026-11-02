@@ -187,6 +187,7 @@ class ProxyStreamingServletIntegrationTest {
         }
 
         @Override
+        @SuppressWarnings("PreferCharsetOverload") // Forwards the overload the caller chose.
         public void setCharacterEncoding(@Nullable String charset) {
             checkOwner();
             super.setCharacterEncoding(charset);

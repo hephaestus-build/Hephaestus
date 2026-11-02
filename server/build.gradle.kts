@@ -45,6 +45,8 @@ val managedOverrides =
         // Every graphql-java release shades Guava 32.1.2-jre. The vulnerability policy's reviewed
         // CVE-2026-102554 disposition names the 25.0 jar. Boot's 25.1 is a new jar, same Guava.
         "graphql-java.version" to libs.versions.graphql.java.get(),
+        // Boot 4.1.2 manages 1.62.0, which GHSA-ccrj-gw8r-854m affects (tracestate parsing).
+        "opentelemetry.version" to libs.versions.opentelemetry.get(),
         "spring-modulith.version" to libs.versions.spring.modulith.get(),
         "liquibase.version" to libs.versions.liquibase.asProvider().get(),
     )

@@ -1,42 +1,43 @@
 [versions]
 commons-compress = "1.28.0"
-immutables = "2.10.1"
+immutables = "2.12.3"
 checker-qual = "3.55.1"
-pmd = "7.27.0"
-jacoco = "0.8.15"
-pitest = "1.30.0"
+pmd = "7.28.0"
+jacoco = "0.8.16"
+pitest = "1.30.1"
 pitest-junit5 = "1.2.3"
 picocli = "4.7.7"
 ktfmt = "0.64"
 spring-boot = "4.1.2"
 graphql-codegen = "5.10.0"
 graphql-java = "25.0"
+opentelemetry = "1.67.0"
 openapi-generator = "7.25.0"
 palantir-java-format = "2.102.0"
 resilience4j = "2.4.0"
 okhttp = "5.5.1"
 fabric8 = "8.0.0"
 vertx = "5.2.2"
-archunit = "1.5.0"
+archunit = "1.5.1"
 spring-modulith = "2.1.2"
 liquibase = "5.0.4"
 liquibase-hibernate7 = "5.0.4"
 springdoc = "3.1.1"
-slack-bolt = "1.51.0"
+slack-bolt = "1.52.0"
 jnats = "2.26.4"
-jgit = "7.7.1.202607240634-r"
+jgit = "7.8.0.202609011348-r"
 java-jwt = "4.6.2"
-therapi = "0.15.0"
-error-prone = "2.50.0"
-nullaway = "0.14.1"
+therapi = "0.16.0"
+error-prone = "2.51.0"
+nullaway = "0.14.3"
 shedlock = "7.10.1"
-bucket4j = "8.19.0"
-bcprov = "1.85.2"
+bucket4j = "8.21.0"
+bcprov = "1.86"
 bouncycastle-lts = "2.73.13"
-bcutil = "1.85"
+bcutil = "1.86"
 guava = "33.7.2-jre"
-bcpkix = "1.85"
-commonmark = "0.30.0"
+bcpkix = "1.86"
+commonmark = "0.31.0"
 
 [libraries]
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
@@ -135,7 +136,7 @@ commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }
-spotless = { id = "com.diffplug.spotless", version = "8.10.2" }
+spotless = { id = "com.diffplug.spotless", version = "8.10.4" }
 errorprone = { id = "net.ltgt.errorprone", version = "5.1.1" }
 graphql-codegen = { id = "io.github.kobylynskyi.graphql.codegen", version.ref = "graphql-codegen" }
 openapi-generator = { id = "org.openapi.generator", version.ref = "openapi-generator" }
