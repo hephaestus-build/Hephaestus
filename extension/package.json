@@ -18,7 +18,7 @@
 	},
 	"dependencies": {
 		"@tanstack/react-query": "5.102.8",
-		"@wxt-dev/browser": "0.3.0",
+		"@wxt-dev/browser": "0.3.7",
 		"cn": "0.2.6",
 		"lucide-react": "1.41.0",
 		"react": "19.2.8",
@@ -50,6 +50,6 @@
 		"typescript": "7.0.2",
 		"vite": "catalog:",
 		"vitest": "catalog:",
-		"wxt": "0.21.4"
+		"wxt": "0.21.5"
 	}
 }
