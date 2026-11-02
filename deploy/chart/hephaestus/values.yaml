@@ -269,11 +269,11 @@ worker:
   rolloutStrategy: RollingUpdate
   # The sandbox nodes. The chart passes each value to the worker as it is.
   runtime:
-    # Optional. The RuntimeClass of every sandbox pod, for example gVisor's. Empty uses the
-    # cluster's default runtime.
+    # Optional. The RuntimeClass of every sandbox Pod. It must support user namespaces.
+    # Empty uses the cluster's default runtime.
     runtimeClassName: ""
     # The RuntimeClass's overhead.podFixed, which the quotas count with each sandbox Pod's requests.
-    # Set it for a class with an overhead, such as gVisor or Kata on some clusters.
+    # Set it for a compatible class with an overhead.
     # Only the chart reads it: the worker reads the overhead from its Pods.
     podOverhead:
       cpuMillis: 0

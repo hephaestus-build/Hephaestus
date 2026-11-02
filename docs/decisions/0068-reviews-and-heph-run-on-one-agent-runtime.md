@@ -44,7 +44,7 @@ Effort is not a criterion. Correctness, security, simplicity and fit on the refe
 | Review sandbox | A Job for each attempt | The review's runner and its tools | One sandbox runs the whole review |
 | Heph host | A bare Pod for each worker | The Heph turns of its worker | The stateless loop of [ADR 0057](0057-one-heph-conversation-per-developer.md) |
 | Turn sandbox | Bare Pods with a stager container, a pool of 2 | Nothing. No network. The worker reaches it through `pods/exec`. | `read`, `bash` and `load_context` for Heph |
-| Isolation probe | A Job with 3 Pods for each run | Nothing | It proves the NetworkPolicy and Pod Security Admission on the running cluster |
+| Isolation probe | A Job with 2 Pods for each run | Nothing | It proves the NetworkPolicy and Pod Security Admission on the running cluster |
 
 ### What went wrong on staging
 

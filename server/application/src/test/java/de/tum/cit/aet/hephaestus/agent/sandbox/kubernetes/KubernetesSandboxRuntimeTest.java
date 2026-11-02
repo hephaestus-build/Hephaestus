@@ -75,6 +75,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.web.server.ResponseStatusException;
@@ -192,6 +194,19 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
+    void shouldRequireUserNamespacesForEveryPodEvenWithoutAProbeProof() {
+        var unproved = new KubernetesWorker(properties, WORKER_ID, 8081);
+        var manifests = new KubernetesPods(api(), unproved, 10, ImagePullPolicy.IF_NOT_PRESENT);
+        var workload = new KubernetesPods.Workload("sandbox", Map.of(), IMAGE, "agent");
+        assertThat(List.of(
+                        manifests.workspacePod(workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.REVIEW),
+                        manifests.workspacePod(workload, Map.of(), List.of("node"), LIMITS, KubernetesPods.HOST),
+                        manifests.turnPod(workload, LIMITS),
+                        manifests.probePod(workload, List.of("true"), LIMITS, 1024L * 1024 * 1024, 60)))
+                .allSatisfy(pod -> assertThat(pod.getSpec().getHostUsers()).isFalse());
+    }
+
+    @Test
     void shouldBuildReviewPodWithRestrictedContainersAndReadOnlyRuntimeWorkspace() {
         Pod pod = pods.workspacePod(
                 new KubernetesPods.Workload("review", Map.of(), IMAGE, "agent"),
@@ -283,8 +298,7 @@ class KubernetesSandboxRuntimeTest {
                 List.of("true"),
                 LIMITS,
                 1024L * 1024 * 1024,
-                60,
-                true);
+                60);
         for (Container each : Stream.concat(
                         probePod.getSpec().getInitContainers().stream(), probePod.getSpec().getContainers().stream())
                 .toList()) {
@@ -354,8 +368,7 @@ class KubernetesSandboxRuntimeTest {
                                 List.of("true"),
                                 LIMITS,
                                 1024L * 1024 * 1024,
-                                60,
-                                true)
+                                60)
                         .getSpec()
                         .getPriorityClassName())
                 .as("a probe never displaces a person's conversation")
@@ -944,9 +957,13 @@ class KubernetesSandboxRuntimeTest {
                 .create();
     }
 
-    @Test
-    void shouldStartNoSandboxBeforeTheIsolationProbePassed() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldStartNoSandboxBeforeTheIsolationProbePassed(boolean probeRanWithoutUserNamespaces) {
         var unproved = new KubernetesWorker(properties, WORKER_ID, 8081);
+        if (probeRanWithoutUserNamespaces) {
+            unproved.proved(new KubernetesIsolationProbe.Proof(Instant.now(), List.of(), false, "gvisor", 256));
+        }
         var unprovedPods = new KubernetesPods(api(), unproved, 10, ImagePullPolicy.IF_NOT_PRESENT);
         var adapter = new SandboxAttemptRunner(
                 new KubernetesSandboxBackend(
@@ -983,7 +1000,7 @@ class KubernetesSandboxRuntimeTest {
                 .isEmpty();
         assertThat(api().pods().inNamespace(SANDBOXES).list().getItems()).isEmpty();
 
-        unproved.proved(new KubernetesIsolationProbe.Proof(Instant.now(), List.of(), false, "", 256));
+        unproved.proved(new KubernetesIsolationProbe.Proof(Instant.now(), List.of(), true, "", 256));
 
         assertThat(adapter.ready()).isTrue();
         assertThat(Objects.requireNonNull(readiness.health()).getStatus()).isEqualTo(Status.UP);
@@ -1164,7 +1181,7 @@ class KubernetesSandboxRuntimeTest {
     }
 
     static KubernetesIsolationProbe.Proof passed() {
-        return new KubernetesIsolationProbe.Proof(Instant.now(), List.of(), false, "gvisor", 256);
+        return new KubernetesIsolationProbe.Proof(Instant.now(), List.of(), true, "gvisor", 256);
     }
 
     // --- fixtures ---

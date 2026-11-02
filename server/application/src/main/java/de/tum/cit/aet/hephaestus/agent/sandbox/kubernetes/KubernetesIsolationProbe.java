@@ -42,12 +42,11 @@ import tools.jackson.databind.json.JsonMapper;
  *       the control, and none of: this worker's management port, the Kubernetes API, the cluster DNS server. A Pod of no
  *       sandbox kind, which the policies treat as a turn sandbox, does not reach the gateway either.
  *   <li><b>No service account token, a read-only root and a non-root user</b> inside these Pods.
+ *   <li><b>User namespaces.</b> A Pod without host users gets a user namespace of its own.
  *   <li><b>The RuntimeClass</b>, when one is named: a class that the cluster does not have runs no probe Pod.
  * </ul>
  *
- * <p>The isolation tier, recorded and not required, because a conformant cluster need not have it: whether a Pod
- * without host users ({@code hostUsers: false}) gets a user namespace of its own, and how many processes a Pod can
- * start. Where user namespaces take effect, every sandbox Pod runs without host users.
+ * <p>The process limit is recorded, not required: how many processes a Pod can start before the node refuses one.
  *
  * <p>The probe Pods have the sandbox's own configuration and image. Each is the Pod of a Job of its own
  * ({@link KubernetesSandboxJobs}), which the probe deletes when it ends. A worker that stops during a run leaves its
@@ -62,9 +61,6 @@ public class KubernetesIsolationProbe {
     static final Duration PROBE_TIME = Duration.ofMinutes(5);
     /** How long a worker that starts waits before it tries again a probe whose Pods could not run. */
     static final Duration START_RETRY = Duration.ofSeconds(15);
-
-    /** A node without user namespaces can leave the Pod without host users waiting, so it gets less time. */
-    static final Duration USER_NAMESPACE_TIME = Duration.ofSeconds(90);
 
     /** How many processes the review probe Pod tries to start. A Pod that starts them all has no process limit. */
     static final int PROCESS_TRIAL = 1024;
@@ -195,7 +191,7 @@ public class KubernetesIsolationProbe {
         }
 
         public boolean passed() {
-            return failures.isEmpty();
+            return userNamespaces && failures.isEmpty();
         }
 
         /** The isolation tier, for the operator: the runtime, the users, and the process limit. */
@@ -232,20 +228,19 @@ public class KubernetesIsolationProbe {
         review.addFirst(gateway);
         List<Target> closed = List.of(new Target(gateway.name(), gateway.host(), gateway.port(), false));
         CompletableFuture<Outcome> reviewRun = CompletableFuture.supplyAsync(
-                () -> run(KubernetesWorker.KIND_REVIEW, review, PROCESS_TRIAL, true, PROBE_TIME));
+                () -> run(KubernetesWorker.KIND_REVIEW, review, PROCESS_TRIAL, PROBE_TIME));
         CompletableFuture<Outcome> closedRun =
-                CompletableFuture.supplyAsync(() -> run(CLOSED_KIND, closed, 0, true, PROBE_TIME));
-        CompletableFuture<Outcome> userNamespaceRun =
-                CompletableFuture.supplyAsync(() -> run(CLOSED_KIND, List.of(), 0, false, USER_NAMESPACE_TIME));
+                CompletableFuture.supplyAsync(() -> run(CLOSED_KIND, closed, 0, PROBE_TIME));
         Outcome reviewed = reviewRun.join();
         Outcome closedOutcome = closedRun.join();
         failures.addAll(reviewed.failures());
         failures.addAll(closedOutcome.failures());
-        Outcome userNamespace = userNamespaceRun.join();
-        // A gate that ran and failed always counts; only Pods that did not run leave the last proof standing.
+        // Quota refusals and unscheduled Pods can keep the last proof; a failed gate on a node cannot.
         boolean gateFailed = failures.size()
-                > (reviewed.ran() ? 0 : reviewed.failures().size())
-                        + (closedOutcome.ran() ? 0 : closedOutcome.failures().size());
+                > (reviewed.conclusive() ? 0 : reviewed.failures().size())
+                        + (closedOutcome.conclusive()
+                                ? 0
+                                : closedOutcome.failures().size());
         Proof last = worker.proof();
         boolean inconclusive = !gateFailed && !failures.isEmpty();
         if (inconclusive && last != null && last.passed()) {
@@ -266,7 +261,7 @@ public class KubernetesIsolationProbe {
         Proof proof = new Proof(
                 Instant.now(),
                 failures,
-                userNamespace.failures().isEmpty() && ownUserNamespace(userNamespace.result()),
+                ownUserNamespace(reviewed.result()) && ownUserNamespace(closedOutcome.result()),
                 worker.properties().runtimeClassName(),
                 processLimit(reviewed.result()));
         worker.proved(proof);
@@ -388,23 +383,19 @@ public class KubernetesIsolationProbe {
     /**
      * What one probe Pod showed: the gates that did not hold, and the line it printed.
      *
-     * @param ran whether the Pod started and ended; one that the Job controller did not create, for example because
-     *     the sandbox quota was full, or that the nodes did not schedule did not
+     * @param conclusive whether the Pod ran or its sandbox could not start on a node; quota refusals, unscheduled
+     *     Pods and transient image-pull failures prove nothing
      */
-    record Outcome(List<String> failures, @Nullable JsonNode result, boolean ran) {}
+    record Outcome(List<String> failures, @Nullable JsonNode result, boolean conclusive) {}
 
-    /**
-     * Runs one probe Pod.
-     *
-     * @param hostUsers whether the Pod runs with the node's users; the tier's Pod runs without them
-     */
-    private Outcome run(String kind, List<Target> targets, int processes, boolean hostUsers, Duration time) {
+    /** Runs one probe Pod. */
+    private Outcome run(String kind, List<Target> targets, int processes, Duration time) {
         // A sandbox's own labels: the chart's gateway policy admits a review Pod by its kind.
         Map<String, String> labels = new LinkedHashMap<>(worker.labels(kind));
         labels.put(KubernetesWorker.PROBE, "true");
         String name = "hephaestus-isolation-probe-" + kind + "-"
                 + UUID.randomUUID().toString().substring(0, 8);
-        String probe = hostUsers ? "the " + kind + " probe Pod" : "the probe Pod without host users";
+        String probe = "the " + kind + " probe Pod";
         var spec = JSON.createObjectNode();
         var list = spec.putArray("targets");
         targets.forEach(target -> list.addObject()
@@ -420,8 +411,7 @@ public class KubernetesIsolationProbe {
                 List.of("node", "-e", SCRIPT, spec.toString()),
                 limits,
                 memory,
-                time.toSeconds(),
-                hostUsers);
+                time.toSeconds());
         Instant end = Instant.now().plus(time);
         try {
             jobs.create(jobs.job(pod, time.toSeconds()));
@@ -443,8 +433,19 @@ public class KubernetesIsolationProbe {
             }
             if (ended.timedOut() || last == null || KubernetesPods.exitCode(last, KubernetesPods.RUNTIME) == null) {
                 String waiting = last == null ? null : KubernetesPods.fatalWaiting(last);
+                boolean sandboxFailed = last != null
+                        && last.getSpec() != null
+                        && last.getSpec().getNodeName() != null
+                        && (waiting != null
+                                || (last.getStatus() != null
+                                        && last.getStatus().getConditions().stream()
+                                                .anyMatch(condition ->
+                                                        "PodReadyToStartContainers".equals(condition.getType())
+                                                                && "False".equals(condition.getStatus()))));
                 return new Outcome(
-                        List.of(probe + " did not run" + (waiting == null ? "" : ": " + waiting)), null, false);
+                        List.of(probe + " did not start" + (waiting == null ? "" : ": " + waiting)),
+                        null,
+                        sandboxFailed);
             }
             JsonNode result = parse(pods.logs(created, KubernetesPods.RUNTIME));
             if (result == null) {
@@ -502,6 +503,9 @@ public class KubernetesIsolationProbe {
         if (!result.path("uid").isIntegralNumber() || result.path("uid").intValue() == 0) {
             failures.add(probe + " runs as root");
         }
+        if (!ownUserNamespace(result)) {
+            failures.add(probe + " has no private user mapping; the sandbox nodes must support user namespaces");
+        }
         return failures;
     }
 
@@ -510,7 +514,8 @@ public class KubernetesIsolationProbe {
         if (result == null || !result.path("uidMap").isString()) {
             return false;
         }
-        return !HOST_USERS_MAP.equals(result.path("uidMap").stringValue());
+        String mapping = result.path("uidMap").stringValue();
+        return !mapping.isBlank() && !HOST_USERS_MAP.equals(mapping);
     }
 
     /** How many processes the Pod started before the node refused one, or null when it started every one it tried. */

@@ -1160,7 +1160,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		/^[1-9][0-9]*Mi$/u,
 	);
 	// One worker with Recreate: one review, one probe run, one host and the unchanged eight-plus-two tools quota.
-	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "4");
+	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "3");
 	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "11");
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
@@ -1711,8 +1711,8 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			},
 		]),
 		{
-			worker: "1",
-			server: "3",
+			worker: "2",
+			server: "6",
 		},
 	);
 	assert.deepEqual(
@@ -1729,12 +1729,12 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		},
 	);
 	assert.deepEqual(capacities([...layersFor("small"), { worker: { reviews: 15 } }]), {
-		worker: "8",
-		server: "8",
+		worker: "9",
+		server: "9",
 	});
 	assert.deepEqual(
 		capacities([...layersFor("small"), { server: { resources: { requests: { cpu: "2" } } } }]),
-		{ worker: "1", server: "1" },
+		{ worker: "2", server: "2" },
 	);
 	const exhausted = render([
 		...layersFor("small"),
@@ -2222,7 +2222,7 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 		`steady: ${gib(steady.memory)} of ${gib(node.memory)} GiB`,
 	);
 	// The isolation probe may wait for room then: a probe whose Pods cannot start keeps the last proof.
-	const probing = sum(steady, sandboxes(sandboxGib.probe, 3));
+	const probing = sum(steady, sandboxes(sandboxGib.probe, sandboxPods.probe.pods));
 	// An upgrade: the old worker is gone (Recreate), the webhook and webapp surge, the server restarts in
 	// place, and the migration and stanza Jobs run. The new worker must pass its probe at its start, while
 	// the old worker's pooled turn sandboxes wait for the reconciler; the new pool waits for room.
