@@ -11,5 +11,7 @@ public enum ReviewJobCancellationReason {
     CANCELLED_BY_REQUESTER,
     CONTRACT_CHANGED,
     /** The sandbox runtime had no room for the review in time, or the sandbox quota can never hold its sandbox. */
-    NO_SANDBOX_ROOM
+    NO_SANDBOX_ROOM,
+    /** A newer occasion of the item waits at another version, so the review stopped before it started. */
+    REPLACED
 }

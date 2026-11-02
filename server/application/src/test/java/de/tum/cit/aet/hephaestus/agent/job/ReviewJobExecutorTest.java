@@ -462,6 +462,25 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCancelAReplacedReviewAtClaimWithNoSandbox() {
+        var job = configuredJob();
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        when(reviewStart.replaceByNewerOccasion(job.getWorkspaceId(), job.getReviewId()))
+                .thenReturn(true);
+
+        assertThat(executor(mock(AsyncTaskExecutor.class)).processJob(job.getId()))
+                .isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+
+        assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(job.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.REPLACED);
+        assertThat(job.getCompletedAt()).isNotNull();
+        assertThat(job.getLeaseId()).isNull();
+        verify(reviewStart, never()).start(anyLong(), any());
+        verifyNoInteractions(sandbox, budgets, assignments);
+    }
+
+    @Test
     void shouldNeverRunAnAlreadyAdmittedAttemptAgain() {
         var job = RuntimeReviewTestData.job();
         job.setAdmissionAttempt(0);

@@ -71,9 +71,12 @@ import tools.jackson.databind.node.ObjectNode;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
-    /** Membership reasons of a practice that waits for the item's checks; the next edge offers it again. */
-    private static final List<String> CHECKS_REASONS =
-            List.of("CHECKS_PENDING", "NO_CHECKS_REPORTED", "CHECKS_AWAITING_APPROVAL");
+    /**
+     * Membership reasons of a practice that was never measured and is still owed: it waits for the item's checks, or a
+     * newer occasion replaced its review. The next edge selects it again, whatever that edge's occasions select.
+     */
+    private static final List<String> CARRIED_REASONS = List.of(
+            "CHECKS_PENDING", "NO_CHECKS_REPORTED", "CHECKS_AWAITING_APPROVAL", ReviewStopReason.REPLACED.name());
 
     private final ReviewRepository reviews;
     private final ReviewStart starts;
@@ -184,12 +187,12 @@ public class ReviewServiceImpl implements ReviewService {
                     .toList();
         } else {
             boolean event = request.origin() == ReviewOrigin.EVENT;
-            Set<Long> awaitingChecks = event
+            Set<Long> carried = event
                     ? Set.copyOf(memberships.lastWithheldPracticeIds(
-                            request.workspaceId(), request.itemId(), CHECKS_REASONS))
+                            request.workspaceId(), request.itemId(), CARRIED_REASONS))
                     : Set.of();
             selected = switch (gate.evaluate(
-                    workspace, pinned, request.origin(), occasions, awaitingChecks, request.practiceIds())) {
+                    workspace, pinned, request.origin(), occasions, carried, request.practiceIds())) {
                 case GateDecision.Skip skip ->
                     throw new ReviewRequestRejected(
                             ReviewRequestRejected.Reason.ITEM_INELIGIBLE,

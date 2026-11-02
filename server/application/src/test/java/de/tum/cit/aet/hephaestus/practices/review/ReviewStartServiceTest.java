@@ -2,8 +2,11 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -102,6 +105,13 @@ class ReviewStartServiceTest extends BaseUnitTest {
     }
 
     private ReviewStartService starts() {
-        return new ReviewStartService(reviews, Clock.fixed(NOW, ZoneOffset.UTC));
+        return new ReviewStartService(
+                reviews,
+                mock(ReviewItemRepository.class),
+                mock(ReviewPracticeRepository.class),
+                mock(ProductItemQuery.class),
+                mock(PracticeItemOptions.class),
+                mock(ItemEventService.class),
+                Clock.fixed(NOW, ZoneOffset.UTC));
     }
 }

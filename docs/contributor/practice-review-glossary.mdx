@@ -110,6 +110,8 @@ An item event that waits has one of these reasons:
 - `QUIET_WINDOW`: the event waits in its item's quiet window.
 - `REVIEW_IN_PROGRESS`: a practice that the window selects is still measured by an earlier review of the item. The window closes again one window later, until that review ends.
 
+A practice with the withheld membership reason `REPLACED` was in a queued review that a newer event stopped at claim. The next readiness edge of the item selects it again.
+
 `ALREADY_CURRENT` marks a withheld item event whose selected practices all have a current result.
 Only a continuing occasion can end with it. A milestone measures its practices again.
 

@@ -49,6 +49,7 @@ import de.tum.cit.aet.hephaestus.observability.ProblemRequestIdAdvice;
 import de.tum.cit.aet.hephaestus.practices.result.ResultAdmissionPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -235,11 +236,14 @@ class RuntimeRoleContextIntegrationTest {
                 assertThat(application).doesNotHaveBean(ResultMarkService.class);
                 assertThat(application).doesNotHaveBean(CitedSourceAccess.class);
                 assertThat(application).doesNotHaveBean(EvidenceDeliveryAuthorization.class);
+                assertThat(application).doesNotHaveBean(ReviewStart.class);
             } else {
                 assertThat(application).doesNotHaveBean(JetStreamPublisher.class);
                 assertThat(application).hasSingleBean(ResultMarkService.class);
                 assertThat(application).hasSingleBean(CitedSourceAccess.class);
                 assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);
+                // A claim replaces a queued review through the review's own start service, with the real ledger.
+                assertThat(application).hasSingleBean(ReviewStart.class);
             }
             assertDatabaseConnections(application, role, database, maximum);
             assertSlackIngressOwnership(application, role);

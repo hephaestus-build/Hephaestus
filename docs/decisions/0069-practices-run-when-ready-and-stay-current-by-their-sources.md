@@ -872,3 +872,15 @@ Acceptance must not be described as delivery.
   The practice version and the declared sources must not have changed.
   Above, a request is a milestone that measures everything again.
 - [D10](#d10-practice-concurrency): no setting limits width. The runner sets its own pace, from its Pod's memory and from whether its sessions are being served. A script's process ends at `ctx.review`, so width costs about 3 MiB for each session.
+
+## Update — 2026-11-02: a newer occasion replaces a queued review
+
+The row "A push while a review is queued" ships with four details.
+
+- **Only a move replaces.** The newer occasion joins a window and waits at another version. An occasion at the same version leaves the review's input as it was, so that review runs.
+- **Only an event review is replaced.** A person asked for a requested review, so it stays.
+- **The newer window inherits the selection.** An `opened` review selects practices that a `synchronized` window does not. A plain cancel would lose them at the new head.
+  Each unmeasured practice gets a withheld membership with the reason `REPLACED`.
+  The next readiness edge selects it, by the rule that it uses for a practice that waits for checks. This stores nothing new.
+  A retry that seals at a moved version writes the same reason. What it did not measure is thus owed too.
+- **With no newer occasion, the review captures what its occasion retained.** The re-pin of that row is not shipped.
