@@ -1,0 +1,328 @@
+{
+	"commit-message-quality": {
+		"about": "AUTHOR",
+		"appliesWhen": null,
+		"criteria": "Evaluates whether commit messages follow conventions and clearly describe the change.",
+		"guidance": {
+			"goingWell": null,
+			"guide": null,
+			"visual": null,
+			"whatGoodLooksLike": null,
+			"whyItMatters": null
+		},
+		"lineNotes": true,
+		"name": "Commit Message Quality",
+		"reads": {
+			"contract": "3.0.0",
+			"sources": [
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.comments"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.core"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.diff"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.repository.tree"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.checks"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.review-threads"
+				}
+			]
+		},
+		"reviewOn": {
+			"events": [
+				"scm.pull_request.opened"
+			],
+			"state": {
+				"draftStatus": [
+					"NOT_DRAFT"
+				]
+			}
+		},
+		"reviewedBy": {
+			"by": "HEPHAESTUS",
+			"humanReason": null,
+			"limits": [
+				{
+					"code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+					"description": "Repository evidence does not establish behavior in a deployed runtime."
+				}
+			]
+		},
+		"scan": null,
+		"script": null
+	},
+	"error-handling": {
+		"about": "AUTHOR",
+		"appliesWhen": null,
+		"criteria": "Evaluates whether error handling follows best practices — no swallowed exceptions, proper logging, meaningful messages.",
+		"guidance": {
+			"goingWell": null,
+			"guide": null,
+			"visual": null,
+			"whatGoodLooksLike": null,
+			"whyItMatters": null
+		},
+		"lineNotes": true,
+		"name": "Error Handling",
+		"reads": {
+			"contract": "3.0.0",
+			"sources": [
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.comments"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.core"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.diff"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.repository.tree"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.checks"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.review-threads"
+				}
+			]
+		},
+		"reviewOn": {
+			"events": [
+				"scm.pull_request.opened"
+			],
+			"state": {
+				"draftStatus": [
+					"NOT_DRAFT"
+				]
+			}
+		},
+		"reviewedBy": {
+			"by": "HEPHAESTUS",
+			"humanReason": null,
+			"limits": [
+				{
+					"code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+					"description": "Repository evidence does not establish behavior in a deployed runtime."
+				}
+			]
+		},
+		"scan": null,
+		"script": null
+	},
+	"pr-description-quality": {
+		"about": "AUTHOR",
+		"appliesWhen": null,
+		"criteria": "Evaluates whether PR descriptions clearly explain what changed and why.",
+		"guidance": {
+			"goingWell": null,
+			"guide": null,
+			"visual": null,
+			"whatGoodLooksLike": null,
+			"whyItMatters": null
+		},
+		"lineNotes": true,
+		"name": "PR Description Quality",
+		"reads": {
+			"contract": "3.0.0",
+			"sources": [
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.comments"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.core"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.diff"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.repository.tree"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.checks"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.review-threads"
+				}
+			]
+		},
+		"reviewOn": {
+			"events": [
+				"scm.pull_request.opened",
+				"scm.pull_request.ready"
+			],
+			"state": {
+				"draftStatus": [
+					"NOT_DRAFT"
+				]
+			}
+		},
+		"reviewedBy": {
+			"by": "HEPHAESTUS",
+			"humanReason": null,
+			"limits": [
+				{
+					"code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+					"description": "Repository evidence does not establish behavior in a deployed runtime."
+				}
+			]
+		},
+		"scan": null,
+		"script": null
+	},
+	"pr-scope": {
+		"about": "AUTHOR",
+		"appliesWhen": null,
+		"criteria": "Evaluates whether a pull request has an appropriate scope — not too large, focused on a single concern.",
+		"guidance": {
+			"goingWell": null,
+			"guide": null,
+			"visual": null,
+			"whatGoodLooksLike": null,
+			"whyItMatters": null
+		},
+		"lineNotes": true,
+		"name": "PR Scope",
+		"reads": {
+			"contract": "3.0.0",
+			"sources": [
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.comments"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.core"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.diff"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.repository.tree"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.checks"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.review-threads"
+				}
+			]
+		},
+		"reviewOn": {
+			"events": [
+				"scm.pull_request.opened"
+			],
+			"state": {
+				"draftStatus": [
+					"NOT_DRAFT"
+				]
+			}
+		},
+		"reviewedBy": {
+			"by": "HEPHAESTUS",
+			"humanReason": null,
+			"limits": [
+				{
+					"code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+					"description": "Repository evidence does not establish behavior in a deployed runtime."
+				}
+			]
+		},
+		"scan": null,
+		"script": null
+	},
+	"review-thoroughness": {
+		"about": "AUTHOR",
+		"appliesWhen": null,
+		"criteria": "Evaluates whether a code review is thorough, providing actionable and constructive feedback.",
+		"guidance": {
+			"goingWell": null,
+			"guide": null,
+			"visual": null,
+			"whatGoodLooksLike": null,
+			"whyItMatters": null
+		},
+		"lineNotes": true,
+		"name": "Review Thoroughness",
+		"reads": {
+			"contract": "3.0.0",
+			"sources": [
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.comments"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.core"
+				},
+				{
+					"need": "REQUIRED",
+					"source": "scm.pull-request.diff"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.repository.tree"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.pull-request.checks"
+				},
+				{
+					"need": "OPTIONAL",
+					"source": "scm.review-threads"
+				}
+			]
+		},
+		"reviewOn": {
+			"events": [
+				"scm.pull_request_review.submitted"
+			],
+			"state": {
+				"draftStatus": [
+					"NOT_DRAFT"
+				]
+			}
+		},
+		"reviewedBy": {
+			"by": "HEPHAESTUS",
+			"humanReason": null,
+			"limits": [
+				{
+					"code": "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+					"description": "Repository evidence does not establish behavior in a deployed runtime."
+				}
+			]
+		},
+		"scan": null,
+		"script": null
+	}
+}
