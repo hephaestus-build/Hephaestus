@@ -25,7 +25,12 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
 
@@ -176,6 +181,19 @@ async function openPractice(name: string): Promise<HTMLElement> {
 	return row;
 }
 
+/** A reader whose role in `acme` the chrome can resolve: it reads the role through the workspace list. */
+function stubReaderWithRole(role: WorkspaceMembership["role"]) {
+	stubWorkspace([
+		http.get("*/user", () => HttpResponse.json(currentUser)),
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: true })]),
+		),
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(membership({ role })),
+		),
+	]);
+}
+
 describe("review route", () => {
 	it("keeps an instance administrator's target chrome and review origin changes scoped to that workspace", async () => {
 		const changes: { slug: string; body: unknown }[] = [];
@@ -236,6 +254,26 @@ describe("review route", () => {
 		expect(queryClient.getQueryData(listWorkspacesQueryKey())).toStrictEqual([
 			workspaceListItem("acme"),
 		]);
+	});
+
+	it("leads an owner to AI models when no review model is ready", async () => {
+		stubReaderWithRole("OWNER");
+		renderRouteAt("/w/acme/admin/practices/review");
+		const link = await screen.findByRole("link", { name: "Open AI models" }, ROUTE_RENDER_WAIT);
+		expect(link.getAttribute("href")).toContain("/w/acme/admin/models");
+	});
+
+	it("tells an admin who chooses the review model, since AI models is an owner's page", async () => {
+		stubReaderWithRole("ADMIN");
+		renderRouteAt("/w/acme/admin/practices/review");
+		await screen.findByText(
+			/A workspace owner chooses the review model/u,
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		// The role must have arrived, or this says nothing about an admin.
+		await waitFor(() => expect(testQueryClient().isFetching()).toBe(0));
+		expect(screen.queryByRole("link", { name: "Open AI models" })).toBeNull();
 	});
 
 	it("answers 'what is this workspace doing' from the rollup rather than from the rows", async () => {

@@ -11,6 +11,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { StatefulPatch } from "@/stories/stateful";
 import type { ReviewSectionId } from "./review-sections";
 import { ReviewPage } from "./ReviewPage";
+import { ReviewReadinessAction } from "./ReviewReadinessAction";
 
 const sectionBody = (id: ReviewSectionId) => (
 	<p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
@@ -162,6 +163,43 @@ export const NoModelIsReady: Story = {
 		await expect(canvas.getByRole("note", { name: "Practice review readiness" })).toHaveTextContent(
 			"Reviews cannot start",
 		);
+	},
+};
+
+/** An owner gets the way to the page that fixes it. */
+export const NoModelIsReadyForAnOwner: Story = {
+	args: {
+		readiness: { enabled: true, model: { status: "ready" } },
+		readinessAction: (
+			<ReviewReadinessAction
+				readiness={{ enabled: true, model: { status: "ready" } }}
+				workspaceSlug="acme"
+				isOwner
+				onReviewSettings
+			/>
+		),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Open AI models" })).toBeVisible();
+	},
+};
+
+/** AI models is an owner's page, so an admin is told who can act. */
+export const NoModelIsReadyForAnAdmin: Story = {
+	args: {
+		readiness: { enabled: true, model: { status: "ready" } },
+		readinessAction: (
+			<ReviewReadinessAction
+				readiness={{ enabled: true, model: { status: "ready" } }}
+				workspaceSlug="acme"
+				isOwner={false}
+				onReviewSettings
+			/>
+		),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/A workspace owner chooses the review model/u)).toBeVisible();
+		await expect(canvas.queryByRole("link", { name: "Open AI models" })).toBeNull();
 	},
 };
 
