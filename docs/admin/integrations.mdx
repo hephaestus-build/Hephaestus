@@ -27,6 +27,31 @@ A deployment syncs one GitLab instance. **Create workspace** lets an eligible us
 that configured instance, using their connected GitLab account and an access token. A login provider
 for a different instance permits sign-in, but does not permit a workspace there.
 
+### More than one GitLab
+
+Version 1.0 supports one GitLab instance per install. You cannot add a second instance to an install.
+If your organization has two GitLab instances, run one Hephaestus install for each instance, each with its own release name, database, and host name.
+Installs share no data, so each person has a separate account and separate practice pages on each install.
+
+### GitLab Community Edition
+
+GitLab Community Edition has no group webhooks, and Hephaestus registers only group webhooks.
+Thus, registration fails on Community Edition and on any group without the Premium tier.
+The sync then reports as incomplete, with a reason that names the Owner role and the Premium tier.
+You see this reason even if you are an Owner.
+Do not create a project webhook instead: Hephaestus accepts only the webhooks that it registers.
+
+Hephaestus still works, but it sees changes only when a sync runs:
+
+- The scheduled sync (`MONITORING_SYNC_CRON`, hourly by default) reads new and changed work.
+- **Sync now** on the connection runs a sync at once.
+- A person can request a review only of work that a sync has read.
+- Feedback delivery does not depend on webhooks. Hephaestus still posts its comments through the GitLab API.
+
+If new work must appear sooner, schedule the sync more often.
+
+### Create a workspace
+
 The user also chooses which projects the workspace monitors.
 **All projects** monitors every project of the group and its subgroups, including projects added later.
 **Selected projects** monitors only the chosen projects. Hephaestus checks each chosen project with the user's token.
