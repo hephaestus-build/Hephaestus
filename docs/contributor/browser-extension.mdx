@@ -276,7 +276,7 @@ The manifest `version` is the root
 WXT owns the reload connection and browser lifecycle. Its pinned 0.21.4 release updates runtime registrations, but selects tabs with the entrypoint's declared `matches`.
 This field is deliberately empty here.
 The worker registers optional site access only after the user grants it. The package-manager
-patch `patches/wxt@0.21.4.patch` corrects that framework function to use the actual registered
+patch `patches/wxt@0.21.5.patch` corrects that framework function to use the actual registered
 origins. It does not add host permissions, an application reload service or production code.
 
 This also covers a background reload: WXT asks the new worker to refresh the registered content

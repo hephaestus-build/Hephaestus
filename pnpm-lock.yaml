@@ -151,7 +151,7 @@ packageExtensionsChecksum: sha256-GChmywMC9g5Yc9vtzjyZduZjO11V8kq+EdLHL0WucYw=
 patchedDependencies:
   '@earendil-works/pi-ai@1.4.0': a220a02f7dbac806611a5d0a2992c970210b05389ddb68f14996ee2d12ab8196
   '@hey-api/openapi-ts@0.99.0': 073b5170f4aa526b98778d6e7fcd7a93680e30692d335c408ef6537738f9e08f
-  wxt@0.21.4: d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f
+  wxt@0.21.5: d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f
 
 importers:
 
@@ -393,8 +393,8 @@ importers:
         specifier: 5.102.8
         version: 5.102.8(react@19.2.8)
       '@wxt-dev/browser':
-        specifier: 0.3.0
-        version: 0.3.0
+        specifier: 0.3.7
+        version: 0.3.7
       cn:
         specifier: 0.2.6
         version: 0.2.6
@@ -484,8 +484,8 @@ importers:
         specifier: 5.0.5
         version: 5.0.5(@types/node@24.13.3)(@vitest/browser-playwright@5.0.5)(@vitest/browser-preview@5.0.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.1))(jsdom@30.0.1)(msw@2.15.0(@types/node@24.13.3)(typescript@7.0.2))
       wxt:
-        specifier: 0.21.4
-        version: 0.21.4(patch_hash=d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f)(@rspack/core@1.7.12)(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(oxc-parser@0.148.0)(rolldown@1.2.6)(typescript@7.0.2)(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.26))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.26))
+        specifier: 0.21.5
+        version: 0.21.5(patch_hash=d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f)(@rspack/core@1.7.12)(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(oxc-parser@0.148.0)(rolldown@1.2.6)(typescript@7.0.2)(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.26))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.26))
 
   scripts/api-generator:
     devDependencies:
@@ -740,8 +740,8 @@ packages:
     resolution: {integrity: sha512-7mJJl+wf1AByoT0PknQiQfOPnVNT4fevGrUBVWO4HXsnYn1aQPyRyrELYrNUFleUBM++KzMKN6QaxHPk0t/6/g==}
     engines: {node: '>=11'}
 
-  '@1natsu/wait-element@4.2.0':
-    resolution: {integrity: sha512-Om0Q+WE9mNrpY4AwMTvkFiYHv8VM7TML3PvOqXy+w6kAjLjKhGYHYX+305+a6J8RVpds9s7IF2Z5aOPYwULFNw==}
+  '@1natsu/wait-element@5.0.0':
+    resolution: {integrity: sha512-OY5MEgiBNTfpNJvLn1yVYil2HcSfiJfSh3T3urmO96/mlxvm+frDZxZ1ngT0HO3F9usoyNPd0SnEE0SqrVaaEQ==}
 
   '@actions/expressions@0.3.61':
     resolution: {integrity: sha512-Ig+tXELvTjlqxQAWBQnLNn2dPpNraLMdSnT+vDzDPmJtbNUhIAH/Z9kVT8pZ8UtJi9vUGs8hwHE8JFJmbOnLEA==}
@@ -5753,6 +5753,9 @@ packages:
   '@wxt-dev/browser@0.3.0':
     resolution: {integrity: sha512-GlqW+uqJP8s/pwqfR1buA2DckxC/mttCudDKBmop5iCerTtPZ6emd9bOAEpUdp3yIVdQCBfHT6iIRKPZsqddjw==}
 
+  '@wxt-dev/browser@0.3.7':
+    resolution: {integrity: sha512-TCBcayayb2mycJxt9X3kTq3QZerqltx/I4FW1WVTafBcqQC6vUaDz5Sboummy0rVsSMbYzyKnS5118VTw0dt4A==}
+
   '@wxt-dev/storage@1.2.9':
     resolution: {integrity: sha512-dh9TJwvLBM2x4wyy9nE7eYE3wA8pgz1TXSyz7RbdjkJxLfFfWkbeIqiU7VkGy7Vx8sJBmQjoSpk9zSUb3Bjy0Q==}
 
@@ -7097,10 +7100,6 @@ packages:
   dot-prop@6.0.1:
     resolution: {integrity: sha512-tE7ztYzXHIeyvc7N+hR3oi7FIbf/NIjVP9hmAt3yMXzrQ072/fpjGLx2GxNxGxUl5V73MEqYzioOMoVhGMJ5cA==}
     engines: {node: '>=10'}
-
-  dotenv-expand@13.0.0:
-    resolution: {integrity: sha512-aBfBS8eYIeXmpHI9ThIlA7/WLq+SLt18iXUZhb52rW89QLKQFoIpPG1bPeewoPZsTyjSSO3T7234FBVUM1V2rA==}
-    engines: {node: '>=12'}
 
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
@@ -11785,8 +11784,8 @@ packages:
     resolution: {integrity: sha512-c16PKLIRxBYpR3jSWsdS7SFp0COm5SOQdiFjY818dYFHJbMGuLBszpF07LBWmOS1uzrHa9VGdynsEgoeKy0oOQ==}
     engines: {node: '>=20'}
 
-  wxt@0.21.4:
-    resolution: {integrity: sha512-iyVMTXb37BQAbsPHCuPzrK3ZxnO9pZmvbKl7VJWIHe3RG40On2NyP2FOjArtOITO96plEYnh3o+iUlRp9qE90w==}
+  wxt@0.21.5:
+    resolution: {integrity: sha512-naPKDK3LlU0M2LFJO3udw8ZEAB7DVQCGo26wllvSJQRVd3VaL9kiChjP8zWiVqm851uYkQ5pVI51hA5wjssO4g==}
     engines: {bun: '>=1.2.0', node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -11906,7 +11905,7 @@ snapshots:
       section-matter: 1.0.0
       strip-bom-string: 1.0.0
 
-  '@1natsu/wait-element@4.2.0':
+  '@1natsu/wait-element@5.0.0':
     dependencies:
       defu: 6.1.7
       many-keys-map: 3.0.3
@@ -17622,7 +17621,7 @@ snapshots:
 
   '@webext-core/fake-browser@2.0.1':
     dependencies:
-      '@wxt-dev/browser': 0.3.0
+      '@wxt-dev/browser': 0.3.7
       lodash.merge: 4.6.2
 
   '@webext-core/isolated-element@3.0.0':
@@ -17636,6 +17635,10 @@ snapshots:
   '@wxt-dev/browser@0.3.0':
     dependencies:
       '@types/filesystem': 0.0.36
+      '@types/har-format': 1.2.16
+
+  '@wxt-dev/browser@0.3.7':
+    dependencies:
       '@types/har-format': 1.2.16
 
   '@wxt-dev/storage@1.2.9':
@@ -19046,10 +19049,6 @@ snapshots:
   dot-prop@6.0.1:
     dependencies:
       is-obj: 2.0.0
-
-  dotenv-expand@13.0.0:
-    dependencies:
-      dotenv: 17.4.2
 
   dotenv@17.4.2: {}
 
@@ -24877,9 +24876,9 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.2.1
 
-  wxt@0.21.4(patch_hash=d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f)(@rspack/core@1.7.12)(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(oxc-parser@0.148.0)(rolldown@1.2.6)(typescript@7.0.2)(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.26))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.26)):
+  wxt@0.21.5(patch_hash=d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f)(@rspack/core@1.7.12)(@voidzero-dev/vite-plus-core@1.4.0(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.0)(typescript@7.0.2)(yaml@2.9.1))(esbuild@0.28.2)(eslint@10.10.0(jiti@2.7.0)(supports-color@8.1.1))(oxc-parser@0.148.0)(rolldown@1.2.6)(typescript@7.0.2)(webpack@5.109.2(@swc/core@1.16.1)(@swc/html@1.16.1)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.26))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.26)):
     dependencies:
-      '@1natsu/wait-element': 4.2.0
+      '@1natsu/wait-element': 5.0.0
       '@aklinker1/rollup-plugin-visualizer': 5.12.0
       '@aklinker1/zero-zip': 1.0.1
       '@topcli/prompts': 4.0.0
@@ -24893,7 +24892,6 @@ snapshots:
       chokidar: 5.0.0
       consola: 3.4.2
       defu: 6.1.7
-      dotenv-expand: 13.0.0
       filesize: 11.0.24
       giget: 3.3.1
       hookable: 6.1.2
