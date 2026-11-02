@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { Experimental_DecisionUnsupportedQuestionTypeError, experimental_decide } from "ai";
 
 import type { ModelSlot, SlotAnswer } from "./contract.ts";
+import { decisionOptionsSchema } from "./model-options.ts";
 import { ipcModels } from "./models-ipc.ts";
 import { agent, z } from "./practice-script.ts";
 
@@ -40,6 +41,32 @@ void test("an answer for another slot is refused", async () => {
 			message: "the host answered a decision call with another slot's result",
 		},
 	);
+});
+
+void test("an image in a decision's state crosses to the host as base64 that the host accepts", async () => {
+	const sent: unknown[] = [];
+	const { decision } = ipcModels({ decision: "d" }, async (_slot, options) => {
+		sent.push(options);
+		return {
+			slot: "decision",
+			result: { answers: { met: { type: "boolean", probability: 1 } }, warnings: [] },
+		};
+	});
+	assert.ok(decision !== undefined);
+	await decision.doDecide({
+		state: [
+			{
+				type: "file",
+				mediaType: "image/png",
+				data: { type: "data", data: new Uint8Array([137, 80]) },
+			},
+		],
+		questions: { met: { type: "boolean", instructions: "Is it met?" } },
+	});
+	const [options] = sent;
+	assert.deepEqual(decisionOptionsSchema.parse(options).state, [
+		{ type: "file", mediaType: "image/png", data: { type: "data", data: "iVA=" } },
+	]);
 });
 
 void test("a box question stops in the script, before it reaches the host", async () => {

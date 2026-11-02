@@ -47,6 +47,20 @@ void describe("the practice script primitives", () => {
 		assert.deepEqual(unrated, [{ what: "added comments", count: 1, reason: "off-format" }]);
 	});
 
+	void test("a decision model's refusal is unrated as refused", async () => {
+		const model = new Experimental_DecisionMockModelV4({
+			doDecide: async () => ({ answers: { i1: { type: "refusal" } }, warnings: [] }),
+		});
+		const { ratings, unrated } = await classify({
+			model,
+			set: kinds,
+			items: ["// increment the count"],
+			what: "added comments",
+		});
+		assert.equal(ratings.size, 0);
+		assert.deepEqual(unrated, [{ what: "added comments", count: 1, reason: "refused" }]);
+	});
+
 	void test("classify keeps at most MODEL_CONCURRENCY packs in flight and rates every item", async () => {
 		let calls = 0;
 		let inFlight = 0;

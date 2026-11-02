@@ -420,10 +420,30 @@ void describe("a call to a slot's model", () => {
 
 	for (const [slot, options] of [
 		["chat", { prompt: "Say hi." }],
-		["decision", { state: "s" }],
-		["decision", { state: 1, questions: { q: { type: "boolean", instructions: "q" } } }],
-		["decision", { state: "s", questions: { q: { type: "free", instructions: "q" } } }],
-		["decision", { state: "s", questions: { q: { type: "boolean" } } }],
+		["decision", { state: [{ type: "text", text: "s" }] }],
+		["decision", { state: "s", questions: { q: { type: "boolean", instructions: "q" } } }],
+		[
+			"decision",
+			{
+				state: [{ type: "text", text: "s" }],
+				questions: { q: { type: "free", instructions: "q" } },
+			},
+		],
+		[
+			"decision",
+			{
+				state: [{ type: "text", text: "s" }],
+				questions: { q: { type: "box", instructions: "q" } },
+			},
+		],
+		["decision", { state: [{ type: "text", text: "s" }], questions: { q: { type: "boolean" } } }],
+		[
+			"decision",
+			{
+				state: [{ type: "text", text: "s" }],
+				questions: { q: { type: "boolean", instructions: null, criteria: { true: null } } },
+			},
+		],
 		["embedding", { values: [1, 2] }],
 		["reranking", { documents: { type: "text", values: ["a"] } }],
 		["reranking", { query: "q", documents: { type: "text", values: [{ text: "a" }] } }],

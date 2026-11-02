@@ -133,11 +133,21 @@ export const decisionOptionsSchema = z.object({
 	questions: z.record(
 		z.string(),
 		z.discriminatedUnion("type", [
-			z.object({
-				type: z.literal("boolean"),
-				instructions,
-				criteria: z.object({ true: described.optional(), false: described.optional() }).optional(),
-			}),
+			z
+				.object({
+					type: z.literal("boolean"),
+					instructions,
+					criteria: z
+						.object({ true: described.optional(), false: described.optional() })
+						.optional(),
+				})
+				.refine(
+					(question) =>
+						question.instructions != null ||
+						question.criteria?.true != null ||
+						question.criteria?.false != null,
+					"a boolean question needs instructions or a criterion",
+				),
 			z.object({
 				type: z.literal("choice"),
 				instructions,

@@ -2,6 +2,7 @@
 import {
 	APICallError,
 	experimental_decide,
+	Experimental_DecisionRefusalError,
 	InvalidResponseDataError,
 	isStepCount,
 	NoObjectGeneratedError,
@@ -152,6 +153,9 @@ export function reasonOf(error: unknown): UnratedReason {
 		NoOutputGeneratedError.isInstance(error)
 	) {
 		return "off-format";
+	}
+	if (Experimental_DecisionRefusalError.isInstance(error)) {
+		return "refused";
 	}
 	if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) {
 		return "deadline";
