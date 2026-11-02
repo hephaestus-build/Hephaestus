@@ -297,6 +297,7 @@ The environment seeds **one** default login provider, with registration id `gitl
 An instance admin can add other GitLab instances at runtime under **Instance administration → Login providers**, without redeployment.
 
 GitLab workspaces exist only on `GITLAB_DEFAULT_SERVER_URL`.
+[More than one GitLab](./integrations#more-than-one-gitlab) tells what to do if you have two instances.
 Hephaestus reads every GitLab project, member, and event from that instance.
 It refuses any other server before token validation, group listing, or token storage.
 A login provider for another instance permits sign-in and identity linking, not workspace hosting.
@@ -304,7 +305,8 @@ A login provider for another instance permits sign-in and identity linking, not 
 The workspace owner is the creator's GitLab account on the default instance.
 Workspace creation requires a login provider for that instance and a creator linked to it.
 
-The auto-registered group webhook subscribes to these events:
+The auto-registered group webhook subscribes to these events.
+[GitLab Community Edition](./integrations#gitlab-community-edition) has no group webhooks:
 
 - Merge request, issue, and note.
 - Push, tag push, and pipeline.
