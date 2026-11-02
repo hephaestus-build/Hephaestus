@@ -22,9 +22,10 @@ function outcomeLine(row: ResultRow) {
 	} else if (row.outcome === "NOT_MET") {
 		tone = "text-destructive";
 	}
+	const def = statusDefOr(OUTCOME_DEFS, row.outcome);
 	return {
-		def: OUTCOME_DEFS[row.outcome],
-		label: outcomeLabel(row.outcome, row.problems.length),
+		def,
+		label: row.outcome === "NOT_MET" ? outcomeLabel(row.outcome, row.problems.length) : def.label,
 		tone,
 		severity:
 			row.outcome === "NOT_MET" && row.severity !== null

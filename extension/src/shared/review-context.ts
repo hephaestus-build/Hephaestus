@@ -54,8 +54,12 @@ export interface WorkFeedback {
 }
 
 export interface WorkComment {
-	/** The summary comment on the work, a comment on lines of its changes, or a comment on one changed file. */
-	kind: "SUMMARY" | "LINE_NOTE" | "FILE_NOTE";
+	/**
+	 * The summary comment on the work, a comment on lines of its changes, or a comment on one changed
+	 * file. A store update and a server upgrade happen apart, so a server can send a kind that this
+	 * build has never heard of.
+	 */
+	kind: string;
 	path?: string;
 	startLine?: number;
 	endLine?: number;
@@ -93,12 +97,14 @@ export type ResultRow = Pick<
 	| "practiceName"
 	| "practiceSlug"
 	| "summary"
-	| "outcome"
 	| "severity"
 	| "currentness"
 	| "recordedAt"
 	| "problems"
->;
+> & {
+	/** Open for the reason that {@link WorkComment.kind} is. */
+	outcome: string;
+};
 
 export interface ResultPage {
 	/** The first page, most severe first. */

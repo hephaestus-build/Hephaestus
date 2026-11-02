@@ -2,6 +2,7 @@ import { FEEDBACK_COPY_KIND_DEFS } from "@/components/practice-vocabulary/feedba
 
 import { cn } from "cn";
 import { formatDateTime, formatRelative } from "~/components/common/format";
+import { statusDefOr } from "~/components/common/status";
 import { where } from "~/components/report/comment-location";
 import { PageLink } from "~/components/report/PageLink";
 import { INDENT, ListSkeleton, LoadError } from "~/components/report/report-parts";
@@ -40,7 +41,7 @@ function Comment({
 	pageOrigin: string;
 	now: string;
 }) {
-	const Icon = FEEDBACK_COPY_KIND_DEFS[comment.kind].icon;
+	const Icon = statusDefOr(FEEDBACK_COPY_KIND_DEFS, comment.kind).icon;
 	const label = where(comment, false);
 	const { postedAt } = comment;
 	return (
