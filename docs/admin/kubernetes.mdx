@@ -21,22 +21,30 @@ It uses only stable Kubernetes APIs and the Gateway API `HTTPRoute` resource of 
 
 Hephaestus supports the chart on a cluster with these items:
 
-- A [conformant](https://www.cncf.io/training/certification/software-conformance/) Kubernetes cluster at a minor version that the [Kubernetes project supports](https://kubernetes.io/releases/) when the Hephaestus release ships.
-  The chart refuses a cluster below 1.35.
-  A cluster at an older minor, for example 1.30 or 1.33, must be upgraded before Hephaestus runs on it ([ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md)).
+- A [conformant](https://www.cncf.io/training/certification/software-conformance/) Kubernetes cluster at a supported minor version.
+  The [Kubernetes project](https://kubernetes.io/releases/) must support that minor version when the Hephaestus release ships.
+  Below 1.35, the chart refuses the cluster.
+  Upgrade a cluster at an older minor, for example 1.30 or 1.33, before Hephaestus runs on it.
+  [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
 - A network plugin that enforces NetworkPolicy for egress and for ingress.
   The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the four features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
 
-CI installs and upgrades the chart on Kubernetes 1.35, the lowest version that the chart takes, and on the latest minor version, 1.37, on `amd64`.
+CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
+1.35 is the lowest version that the chart takes.
 It also runs 1.35 on `arm64`.
-A pull request runs only the latest minor version on `amd64`. When a change touches the chart or the sandbox runtime, the merge queue runs all of them before the commit reaches `main`. A nightly run repeats them on `main`.
+A pull request runs only the latest minor version on `amd64`.
+When a change touches the chart or the sandbox runtime, the merge queue runs all of them before the commit reaches `main`.
+A nightly run repeats them on `main`.
+
 One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
 Each run starts two workers with the `dev.yaml` profile, and each worker passes its isolation probe on that cluster.
 In the merge queue, the 1.35 run on `amd64` uses `small.yaml` and `small-16gib.yaml` instead, with one worker, on a runner of 16 GiB.
+
 Each upgrade must keep the PostgreSQL and NATS Pods: only a change to their own image or settings restarts them.
-On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time, as [Backup and restore](#backup-and-restore) describes.
+On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time.
+[Backup and restore](#backup-and-restore) describes these steps.
 [Install on one host (k3s)](#install-on-one-host-k3s) states what the release workflow tests before it publishes a release.
 When a Kubernetes minor version reaches its end of life upstream, the next Hephaestus release can drop it.
 
@@ -87,6 +95,7 @@ You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 
 The release signs the chart with Cosign 3.1 in the Sigstore bundle format.
 Cosign 2 reads that format only from version 2.6 and only with `--new-bundle-format`, and CI does not test it.
 You do not need Node.js or a checkout of the repository.
+
 Use the Helm version that [`.github/actions/setup-helm`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
 CI and the release workflow install that version.
 Contributors also need it: see the [local development prerequisites](/contributor/local-development#prerequisites).
@@ -204,9 +213,11 @@ The chart creates no certificate, no key, and no CA.
 
 The server, the webhook role, and the worker receive only `ca.crt`, read-only, at `/etc/hephaestus/postgresql-ca`.
 No application role receives a private key.
+
 Backup Jobs use a separate client Secret, `postgresql.backup.clientTlsSecret`.
 It holds `ca.crt`, `tls.crt` and `tls.key` for the common name `hephaestus-backup`.
-The PostgreSQL CA signs it. The chart mounts its certificate and key as `backup.crt` and `backup.key`.
+The PostgreSQL CA signs it.
+The chart mounts its certificate and key as `backup.crt` and `backup.key`.
 Do not put the private key of the CA in this Secret.
 
 For the bundled PostgreSQL, the certificate in `tls.crt` must name `<release>-postgresql.<release namespace>.svc`.
@@ -362,6 +373,7 @@ The `/api` rule sets both `timeouts.request` and `timeouts.backendRequest` to `0
 The Hephaestus live stream stays open for much longer than one request.
 The two timeouts are separate: the request timeout covers the client request, and the backend timeout covers the full backend response.
 If a rule omits one of them, the controller selects that behavior.
+
 A zero value asks the controller to disable the timeout.
 A controller that cannot disable it can use its longest possible value instead.
 Thus, the `0s` values do not guarantee a stream without a time limit.
@@ -436,8 +448,10 @@ The same rule applies to `networkPolicy.metrics` and `networkPolicy.traceCollect
 ### A model endpoint on the cluster's own ingress
 
 The worker reaches AI providers through `networkPolicy.externalEgress`, which leaves out private address ranges.
-If the host name of a model endpoint resolves to the cluster's own ingress, the connection ends at an ingress Pod with a private address, and the policy refuses it.
+The host name of a model endpoint can resolve to the cluster's own ingress.
+Then the connection ends at an ingress Pod with a private address, and the policy refuses it.
 An example is a model proxy that the same cluster serves.
+
 Add a NetworkPolicy that lets the worker Pods reach the ingress Pods.
 NetworkPolicies add up, so this policy does not change the chart's policies.
 Use the container ports of the ingress Pods, not the Service ports: the policy applies after address translation.
@@ -490,9 +504,11 @@ If only `config.llmPrivateHosts` names the endpoint, a connection saves, and the
 The chart cannot compare the two lists, because a host name is not an address range.
 [Connect an AI provider](./ai-providers#model-endpoints-on-your-own-network) tells what the application allows.
 
-A `cidr` must be in 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, or fc00::/7, and `ports` must name at least one port.
+A `cidr` must be in `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, or `fc00::/7`.
+`ports` must name at least one port.
 Thus, no item can open the link-local range of the cloud metadata service.
 Use `modelEndpoints` only for addresses outside the cluster.
+
 Do not list a range in `config.llmPrivateHosts` that covers the Pod or Service range of the cluster.
 A range that covers the Pod's own address stops the server or the worker at startup, but the server cannot detect the Service range.
 A NetworkPolicy `ipBlock` does not reliably match Pod addresses.
@@ -632,7 +648,8 @@ If a change of profile changes a volume size, read [Change a volume size](#chang
 | `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
 | `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, bounded streams |
 
-`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review and up to 32 resident conversation turns at a time.
+`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk.
+Its one worker runs one review and up to 32 resident conversation turns at a time.
 A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
@@ -676,8 +693,10 @@ NATS requests less than its limit, because JetStream's caches grow above the req
 | pgBackRest | Not measured | 512 MiB | 512 MiB |
 | NATS, with JetStream's memory and file caches | 1.3 to 2.7 GiB | 1.5 GiB | 3 GiB |
 
-The server's and the worker's caches have a bound of 10 GiB each, so that the node does not run out of disk and evict a draining worker.
-On a node of 16 GiB, the Pods of an upgrade with `small.yaml` alone do not fit beside a running review: they stay pending, the previous release keeps serving, and the upgrade rolls back when its timeout ends.
+The server's and the worker's caches have a bound of 10 GiB each.
+Thus, the node does not run out of disk and evict a draining worker.
+On a node of 16 GiB, the Pods of an upgrade with `small.yaml` alone do not fit beside a running review.
+They stay pending, the previous release keeps serving, and the upgrade rolls back when its timeout ends.
 
 For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 
@@ -690,7 +709,9 @@ The overlay lowers the NATS request to 512 MiB and keeps its limit at 3 GiB.
 It keeps worker updates at `Recreate`, with a drain of at most 10 minutes.
 It admits 32 resident turns with the same tools-Pod quota as `small.yaml`.
 The worker still runs one review and up to 32 resident conversation turns at a time, as in `small.yaml`.
-A second worker's conversation host and turn pool do not fit in 16 GiB beside the first: the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
+
+A second worker's conversation host and turn pool do not fit in 16 GiB beside the first.
+Thus, the upgrade stops reviews and conversation turns for the drain, the new worker's start and its isolation probe.
 The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
 A chart test adds up what one node of 16 GiB holds, with backups on:
@@ -699,7 +720,7 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 | --- | --- | --- |
 | Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.8 GiB of 13.9 GiB | 1.75 of 3.5 |
 | The same, with the isolation probe | 12.5 GiB | — |
-| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.2 GiB of 13.9 GiB | 2.40 of 3.5 |
+| An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.2 GiB of 13.9 GiB | 2.40 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.
@@ -707,12 +728,16 @@ It does not qualify the peak memory of running work.
 Sandbox Pods may use more than they request, up to their limits.
 If every sandbox Pod used its limit at the same time, the node would be full.
 
-A chart test derives the conversation turns of both single-node profiles: 8, the worker's automatic number, as long as one more turn sandbox would still fit.
+A chart test derives the conversation turns of both single-node profiles.
+The result is 8, the worker's automatic number, as long as one more turn sandbox would still fit.
 
 An earlier staging capture recorded these values on one node of 16 GiB with k3s 1.37.
 Its request figures precede the PostgreSQL memory-request change:
 
-- At rest, the release requests 10.3 GiB of 15.6 GiB and uses about 5.9 GiB on the host: the server 2.0 GiB, the worker 1.3 GiB, the webhook role 0.8 GiB, PostgreSQL 0.7 GiB and NATS 60 MiB.
+- At rest, the release requests 10.3 GiB of 15.6 GiB.
+  It uses about 5.9 GiB on the host.
+  The server uses 2.0 GiB and the worker 1.3 GiB.
+  The webhook role uses 0.8 GiB, PostgreSQL 0.7 GiB and NATS 60 MiB.
 - An upgrade that recreated the worker and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
 - A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
 - The peak during a review and a conversation turn is not measured yet.
@@ -729,6 +754,7 @@ That server must have the `pg_partman` extension.
 Also set `wal_compression = lz4` (or `zstd`) on it, as the bundled PostgreSQL does.
 Without it, a streamed answer writes about 1.5 times more write-ahead log, because most of that log is full-page images of index pages.
 Compression costs a little CPU for each full-page image.
+
 The chart connects to `postgresql.external.host` and `postgresql.external.port` with `sslmode=verify-full`.
 The server certificate must name that host.
 The Secret in `postgresql.tls.existingSecret` needs only `ca.crt`, the CA that signed the server certificate.
@@ -738,6 +764,7 @@ Set `nats.bundled=false` to use your NATS JetStream broker.
 Put the broker on a private network that only this release can reach.
 The released NATS client verifies the certificate chain of a `tls://` broker, but not the host name in the certificate.
 Thus, TLS alone does not prevent a connection to another broker that has a certificate from the same CA.
+
 The bundled broker stays inside the release namespace, and network policy admits only the server and the webhook role.
 The application has no setting for the stream replica count.
 A three-server JetStream cluster therefore keeps one replica of each stream.
@@ -776,7 +803,7 @@ The bundle holds these files:
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
-| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, the shutdown grace period, the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
+| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
 | `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
 | `k3s-journald.conf` | Host journal limits: 512 MiB on disk, 128 MiB in memory, and seven days. |
 | `k3s-values.yaml` | The chart values of every one-host install: the Gateway, the Traefik Pods, the Secret names, the sandbox namespace, and reviews with repository checkouts. |
@@ -810,17 +837,20 @@ Pods cannot request all of the host's memory.
 It reserves 512 MiB and 250m CPU for the host's own services.
 The kubelet evicts Pods when less than 256 MiB of memory is available, before the kernel's out-of-memory killer stops a process on the host.
 
-For a Node API capacity of exactly 16 GiB and 4 vCPU, this leaves 14 592 MiB (14.25 GiB) and 3.5 CPUs for Pods.
+For a Node API capacity of exactly 16 GiB and 4 vCPU, Pods get 14 592 MiB (14.25 GiB) and 3.5 CPUs.
 At the recorded capacity of 16 372 036 KiB used in the profile table, Pods get about 13.9 GiB.
 
 The installer restarts k3s when this file changes.
 After the node becomes ready, it reads the kubelet configuration endpoint and Node allocatable.
 It stops before the application upgrade if the configured policy is absent or overridden.
+
 Allocatable must equal measured capacity less the reservations and the hard memory floor.
 The soft threshold does not reduce allocatable again.
 Only Pod allocatable is enforced. The reservations do not impose hard memory caps on the host or k3s system slices.
+
 To repeat these read-only cluster checks with your current kubeconfig, run `sh k3s-install.sh --verify-kubelet`.
-The command uses Helm locally to parse the policy; it does not change the cluster.
+The command uses Helm locally to parse the policy.
+It does not change the cluster.
 After a restart, verification allows 31 checks with two-second pauses for the Node status and configuration endpoint to converge.
 
 Soft eviction is disabled until stateful-service requests and admission protection are qualified.
@@ -829,6 +859,7 @@ Thus, a higher priority cannot protect PostgreSQL or NATS above their requests f
 The existing hard thresholds remain emergency recovery boundaries.
 The kubelet targets an additional 256 MiB of reclaim and holds a pressure condition for five minutes.
 Application admission must stop new background work before those boundaries.
+
 Container logs rotate at 10 MiB with at most five files per container.
 Image garbage collection starts at 75 percent disk use and targets 65 percent.
 It does not reclaim live volumes or database files.
@@ -838,13 +869,15 @@ Host swap must be disabled, including at boot.
 The installer rejects active swap, and the kubelet requires `failSwapOn=true` and `NoSwap`.
 These policies do not qualify a smaller container memory limit or a higher review count.
 Before enabling either, measure synchronized node peaks, pressure, queue waits, and OOM counters under the reference load.
+
 The verifier accepts the declared Ubuntu 24.04/kernel 6.8 GA baseline and rejects unknown OS or kernel families.
 The optional `--allow-unqualified-host` flag permits an explicitly authorized rehearsal on another family.
 It preserves all effective-policy and allocatable checks.
 A matching host family alone does not prove installation, pressure behavior, or loaded capacity.
 
 The current proof consists of policy/parser fixtures, read-only Node API observations, and rendered chart checks.
-The release host smoke targets Ubuntu 24.04 on both architectures; this change has not run a full host installation.
+The release host smoke targets Ubuntu 24.04 on both architectures.
+This change has not run a full host installation.
 
 Before target-host rollout, the release lane must rehearse the exact assets and pinned k3s release on disposable Ubuntu 26.04/kernel 7 with 16 GiB.
 Use the qualification override for that rehearsal and record the actual OS, kernel, CPU count, capacity, and allocatable.
@@ -1127,7 +1160,7 @@ These values set the server's settings of the same meaning ([Production setup](.
 | `config.auth.passkeys.workspaceAdminRequired` | `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `false` |
 | `config.auth.passkeys.rpId` | `HEPHAESTUS_AUTH_PASSKEYS_RP_ID` | Empty: the host |
 | `config.auth.passkeys.allowedOrigins` | `HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS` | Empty: the host |
-| `config.email.tls` | `starttls` sets `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` and `_REQUIRED`; `implicit` sets `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE`. `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` is on when `config.email.username` is set. | `starttls` |
+| `config.email.tls` | `starttls` sets `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` and `_REQUIRED`. `implicit` sets `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE`. `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` is on when `config.email.username` is set. | `starttls` |
 | `config.monitoring.runOnStartup` | `MONITORING_RUN_ON_STARTUP` | `true` |
 | `config.monitoring.timeframeDays` | `MONITORING_TIMEFRAME` | `7` |
 | `config.monitoring.syncCron` | `MONITORING_SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
@@ -1186,12 +1219,15 @@ It writes these objects into it:
   The chart then adds the overhead to each Pod in the quotas.
   Set `worker.sandbox.quota.enabled=false` to manage the quotas yourself.
   `priorityClasses.reviews` and `priorityClasses.conversations` must name different classes, because each quota selects its Pods by class.
-  During a rolling update, the chart's quotas hold the workers of the new and the old version. A worker that still drains during a second update can find no room: its sandbox then waits and is tried again.
+  During a rolling update, the chart's quotas hold the workers of the new and the old version.
+  A worker that still drains during a second update can find no room.
+  Its sandbox then waits and is tried again.
   A worker claims a practice review only when every quota that counts review Pods has room for the review's Pod.
   An unscoped quota counts them, and so does a quota that selects the reviews' PriorityClass.
   It counts the reviews that it claimed but has not started yet.
   Otherwise the review stays queued.
-  The worker's Role lets it list the quotas; its permissions are listed below.
+  The worker's Role lets it list the quotas.
+  Its permissions are listed below.
   It reads the Pod overhead of the sandbox RuntimeClass from its own sandbox Pods.
   A quota with another scope does not hold a review back, and neither do quotas that the worker cannot read.
   Another worker can still take the room after the claim.
@@ -1246,7 +1282,7 @@ Waiting behind running reviews is normal backlog, and it never ends a review.
 Two cases end queued reviews, with the stop reason `NO_SANDBOX_ROOM`:
 
 - A quota is smaller than one review sandbox. The worker cancels the queued reviews within 30 seconds, with "The sandbox quota is smaller than one review sandbox." It logs one warning.
-- Reviews have waited for an hour while the quota had no room for one and no review ran, so nothing frees room. Usually a quota of your own holds the room. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
+- Reviews have waited for an hour while the quota had no room for one and no review ran. Thus, nothing frees room. Usually a quota of your own holds the room. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
 
 A scan that loses a file's job this way ends with the same reason. It does not queue its next file.
 
@@ -1257,10 +1293,12 @@ The waits grow from 30 seconds to 5 minutes. The number of refusals never ends a
 The metric `sandbox_start_failures_total{kind="review",reason}` counts these refusals and cancellations, with the reasons `quota_exceeded` and `quota_cannot_fit`.
 The gauge `sandbox_review_starved_seconds` shows how long no review could start while none ran. Alert on it well before an hour: the quota is too small for the sandboxes beside the reviews.
 
-The worker learns of the refusal from the events of the sandbox namespace, and reads its quotas to tell whether a sandbox can fit at all.
+The worker learns of the refusal from the events of the sandbox namespace.
+It reads its quotas to tell whether a sandbox can fit at all.
 It needs `get` and `list` on `events`, and `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
 Without the verbs on `events`, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
 Without `list` and `watch` on `resourcequotas`, `pods` or `jobs`, the worker stays not ready ([Troubleshooting](#troubleshooting)).
+
 The worker watches the Pods, Jobs and quotas of the sandbox namespace.
 Thus, a claim poll and a readiness probe send no request to the API server.
 A sandbox's credential, not the network, binds it to the worker that started it.
@@ -1280,7 +1318,8 @@ The worker's service account has these permissions in the sandbox namespace, and
 - ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
 
 A practice review attempt runs as one Job.
-The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone, and Kubernetes removes it 15 minutes after it ends.
+The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone.
+Kubernetes removes it 15 minutes after it ends.
 The review-ledger worker identity stays per process.
 The chart does not set `HEPHAESTUS_WORKER_ID`.
 
@@ -1297,13 +1336,14 @@ The sandbox nodes need these items:
    It does not protect against a compromised running node or a privileged workload on the node.
    The kubelet deletes a Pod's volumes with the Pod, but deletion does not erase the data from the disk.
 
-4. [User namespace support](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) on every sandbox node: Linux 6.3 or later and a compatible container runtime, such as containerd 2.0 or later.
+4. [User namespace support](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/) on every sandbox node.
+   It needs Linux 6.3 or later and a compatible container runtime, such as containerd 2.0 or later.
    Every sandbox and probe Pod sets `hostUsers: false`.
    The worker must prove that a real Pod has a private user mapping before it starts sandboxes.
 
 These settings are optional:
 
-- `worker.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. Use only a RuntimeClass that supports `hostUsers: false` and passes the isolation probe. gVisor (`runsc`) with user namespaces is not qualified. Before upgrading an install that uses it, clear this setting to use the default runtime or qualify a compatible runtime first.
+- `worker.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. Use only a RuntimeClass that supports `hostUsers: false` and passes the isolation probe. gVisor (`runsc`) with user namespaces is not qualified. To upgrade an install that uses it, clear this setting to use the default runtime, or qualify a compatible runtime.
 - `worker.runtime.podOverhead`: the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`. The sandbox quotas count it with each Pod.
 - `worker.runtime.seccompProfile`: the bundled `sandbox/agent-seccomp-profile.json` as a Localhost profile. Put the file below the kubelet's seccomp directory on every sandbox node, and set its relative path. Without it, sandbox Pods use `RuntimeDefault`.
 - `worker.runtime.nodeSelector` and `worker.runtime.tolerations`: the nodes of sandbox Pods.
@@ -1323,10 +1363,14 @@ The probe checks these items on the running cluster:
 The worker starts no sandbox while one of these items fails.
 At its start, the worker then logs each failed item and stops, and Kubernetes starts it again.
 On a later probe, it logs each failed item, reports itself not ready, and starts no new sandbox until a probe passes again.
-Until a probe passes, at the start and after a failed later probe, the worker is not ready and claims no practice review and no conversation turn.
+
+Until a probe passes, at the start and after a failed later probe, the worker is not ready.
+It claims no practice review and no conversation turn.
 They stay queued for a ready worker. Reviews and turns that already run continue.
+
 A Pod that reaches a node but cannot start with the sandbox configuration fails the probe.
-A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing: the worker logs a warning and keeps its last passing proof.
+A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing.
+The worker logs a warning and keeps its last passing proof.
 A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
 
 The probe also records the runtime and process limit, which are optional:
@@ -1338,10 +1382,14 @@ The probe also records the runtime and process limit, which are optional:
 
 The worker's log and the metrics `sandbox.isolation.passed`, `sandbox.isolation.user_namespaces` and `sandbox.isolation.process_limit` show the tier.
 The probe Pods use the agent image and the sandbox configuration.
-They prove the nodes on which they run, not every eligible node. Ensure that every node selected for sandboxes meets the prerequisites.
-Each probe Pod is the Pod of a Job, and a run takes 640 MiB of the sandbox quota on the cluster's default runtime: 512 MiB for the Pod that tries 1024 processes, and 128 MiB for the other Pod.
+They prove the nodes on which they run, not every eligible node. Make sure that every node selected for sandboxes meets the prerequisites.
+
+Each probe Pod is the Pod of a Job.
+A run takes 640 MiB of the sandbox quota on the cluster's default runtime.
+That is 512 MiB for the Pod that tries 1024 processes, and 128 MiB for the other Pod.
 The worker deletes the Jobs when the probe ends.
-If the worker stops during a run, the Job's deadline ends a Pod that still waits for a node, and Kubernetes deletes the finished Job with its Pod after 15 minutes.
+If the worker stops during a run, the Job's deadline ends a Pod that still waits for a node.
+Kubernetes deletes the finished Job with its Pod after 15 minutes.
 
 Some network plugins apply the policy of a new Pod a few seconds after the Pod starts.
 Each sandbox Pod therefore starts with an init container that waits, at most 60 seconds, until it cannot reach the Kubernetes API.
@@ -1349,7 +1397,8 @@ Each sandbox Pod therefore starts with an init container that waits, at most 60 
 #### Sandbox sizes
 
 The worker sizes each sandbox Pod from the measured use of that kind of sandbox.
-The Pod-kind table owns the memory and storage sizes; no per-review memory or process setting overrides it.
+The Pod-kind table owns the memory and storage sizes.
+No per-review memory or process setting overrides it.
 
 | Sandbox Pod | CPU request | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1372,7 +1421,8 @@ The host's Node heap stops at 768 MiB.
 `/run` is in memory, with 16 MiB.
 The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
 Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
-The worker counts the eviction as a failure of the infrastructure, and the review spends a retry: a review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
+The worker counts the eviction as a failure of the infrastructure, and the review spends a retry.
+A review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
 The chart's sandbox quota without a scope counts the disk requests of all sandbox Pods.
 
 The sandbox uses the cluster runtime and its volume options.
@@ -1387,7 +1437,8 @@ A sandbox process cannot raise them.
 
 With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest, as [Backup and restore](./backup-restore#automated-off-host-backup) describes.
 The repository is encrypted with `BACKUP_CIPHER_PASS`.
-A CronJob takes a full backup each Sunday at 02:15 UTC, and another takes a differential backup on the other days at the same time.
+A CronJob takes a full backup each Sunday at 02:15 UTC.
+Another takes a differential backup on the other days at the same time.
 `postgresql.backup.retentionFull` full backup chains stay, 2 by default.
 A Job of each release creates the repository's stanza, so that the WAL archive works from the install.
 
@@ -1505,15 +1556,20 @@ The migration Job of the new revision and the new Pods start together.
 The new Pods wait for the migrated schema, and the previous release serves until they are ready.
 `--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
 The timeout is longer than the 10 minutes that a new Pod waits for the schema.
+
 The server stops before its new version starts (`Recreate`).
 The webhook role rolls. In the single-node profiles, the worker drains and stops before its replacement starts.
 The replacement proves the cluster with the isolation probe before it claims work.
-An old worker drains for up to `worker.drainTimeoutSeconds`, 30 minutes by default, and Kubernetes no longer counts it while it terminates.
+
+An old worker drains for up to `worker.drainTimeoutSeconds`, 30 minutes by default, and Kubernetes no longer counts it while it stops.
 Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
 A review runs for up to 3 hours.
-When the drain ends first, the review stops: an attempt that was not yet admitted runs again on another worker, and an admitted one keeps its results.
+
+When the drain ends first, the review stops.
+An attempt that was not yet admitted runs again on another worker, and an admitted one keeps its results.
 A drained attempt spends none of the review's retries. After 3 drains, the next drain cancels the review with the message "Workers stopped this review for updates too often. It is not tried again."
 The metric `agent_job_drained_total{outcome}` counts drained reviews that run again (`requeued`) and that are cancelled (`cancelled`).
+
 Read the release notes before the upgrade.
 If the release notes say **Stop every role**, use [Stopped schema upgrades](#stopped-schema-upgrades).
 For other database maintenance, use [Database maintenance](#database-maintenance).
@@ -1609,7 +1665,8 @@ Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=con
 A failed or timed-out Job does not permit phase 3.
 Keep all roles stopped, preserve the log and failed change set before the Job's 24-hour expiry, and follow [failed-migration recovery](./upgrade#if-migration-fails).
 
-Phase 3 creates another migration Job for the same release; it has no new schema changes to apply.
+Phase 3 creates another migration Job for the same release.
+It has no new schema changes to apply.
 Resume deployment automation only after its release and replica counts match the verified installation.
 
 ### Planned node maintenance
@@ -1618,6 +1675,7 @@ PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL and NATS
 With two or more workers, at most one worker can be unavailable.
 The webhook budget applies only above one replica and keeps at least one receiver available.
 Each budget selects one role in one release. Review Jobs have no budget.
+
 These budgets do not prevent pressure eviction or OOM, and they do not provide high availability on one node.
 Deployment rollouts and direct scaling do not use the eviction API, so the budgets do not block those operations.
 See Kubernetes' [disruption budget guide](https://kubernetes.io/docs/tasks/run-application/configure-pdb/).
@@ -1671,15 +1729,18 @@ The change can be the new release values, a new PostgreSQL configuration, or a n
 Phase 3 runs the new release's migration Job and starts its server alone.
 
 Before phase 1, record the current `worker.replicas`, and back up the database and the NATS JetStream data.
-A count of 0 is a desired state: check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
-Set `worker.replicas=0` to stop the workers; `worker.enabled=false` removes the worker objects.
+A count of 0 is a desired state.
+Check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
+Set `worker.replicas=0` to stop the workers.
+`worker.enabled=false` removes the worker objects.
 A change of NATS itself stops reception: while NATS is down, the receiver answers deliveries with `503`, and each provider decides whether it retries.
 
 ## Uninstall
 
 1. Delete the sandbox namespace first.
    This stops every sandbox at once.
-   If you remove the release first, its network policies go, and the conversation hosts and turn sandboxes that are left run without them.
+   If you remove the release first, its network policies go.
+   Then the conversation hosts and turn sandboxes that are left run without them.
 
    ```bash
    kubectl delete namespace hephaestus-sandboxes
@@ -1720,7 +1781,7 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 ## Known limits
 
 - NATS JetStream runs as one server with one replica of each stream. A lost NATS volume loses the provider deliveries that the server had not processed ([Storage and retention](#storage-and-retention)).
-- PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again; a lost volume needs a [restore](#restore).
+- PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again. A lost volume needs a [restore](#restore).
 - The server runs as one replica until the server processes provider events in order across replicas.
 - The worker records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
 - Turn sandboxes take their commands through `pods/exec` until they pull them through the gateway, as the conversation host does.
@@ -1733,4 +1794,5 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 
 A successful install in CI does not show that your cluster isolates sandboxes.
 The worker's isolation probe checks that on your cluster, at each start and on its schedule.
-CI does not qualify your Gateway controller: check its four `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](#restore) on your own cluster.
+CI does not qualify your Gateway controller.
+Check its four `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](#restore) on your own cluster.
