@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
 import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,6 +71,24 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
                         .isEqualTo(ScmFeedbackFixtures.formatter()
                                 .footer(TARGET.item())
                                 .summary(Objects.requireNonNull(publication.summary()))));
+    }
+
+    @Test
+    void shouldPostCodeAndPunctuationAsWrittenWhenANoteHoldsMarkdown() {
+        var line = new FeedbackAnchor("new.java", null, 21, CitationSide.NEW);
+        var publication = new OnWorkPackage(
+                null,
+                List.of(
+                        note("mention", line, "Ask @alice"),
+                        note("code", line, "`deactivateUser` returns `false` here; log it, @alice.")));
+
+        writer.postPackage(TARGET, publication, (ids, done) -> true);
+
+        assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
+                .extracting(ScriptedCommentThreads.Comment::body)
+                .containsExactly(
+                        delivered("Ask `@alice`", "mention"),
+                        delivered("`deactivateUser` returns `false` here; log it, `@alice`.", "code"));
     }
 
     @Test
@@ -154,7 +173,18 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     }
 
     private static LineNote note(String key, FeedbackAnchor anchor) {
-        return ScmFeedbackFixtures.line(
-                anchor, "Feedback for @everyone.", "<!-- hephaestus-feedback-copy:" + key + " -->", key);
+        return note(key, anchor, "Feedback for @everyone.");
+    }
+
+    private static LineNote note(String key, FeedbackAnchor anchor, String body) {
+        return ScmFeedbackFixtures.line(anchor, body, "<!-- hephaestus-feedback-copy:" + key + " -->", key);
+    }
+
+    private static String delivered(String text, String key) {
+        return text + "\n\n"
+                + "<sub>AI-generated feedback. Answer or disagree in [Hephaestus](https://hephaestus.example/w/team/feedback/"
+                + TARGET.item().itemId() + ").</sub>\n"
+                + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
+                + "<!-- hephaestus-feedback-copy:" + key + " -->\n<!-- hephaestus-diff-note-ck=" + key + " -->";
     }
 }
