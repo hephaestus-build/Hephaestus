@@ -55,7 +55,7 @@ interface Candidate {
  * The files one practice declares, in one order for every practice: the change, the core text, linked
  * work, then the discussion. Practices that declare the same kinds get the same bytes, and a shared
  * leading layer is a shared prompt prefix. The change leads because almost every practice reads it;
- * the discussion changes most often at a fixed head, so it comes last.
+ * the discussion and the checks change most often at a fixed head, so they come last.
  */
 function candidates(
 	root: string,
@@ -109,6 +109,7 @@ function candidates(
 		context("comments.json", "json", "discussion"),
 		context("general_comments.json", "json", "discussion"),
 		context("conversation_thread.json", "json", "discussion"),
+		context("checks.json", "json", "discussion"),
 	].filter((candidate) => candidate.kind !== undefined && scope.declared.has(candidate.kind));
 }
 

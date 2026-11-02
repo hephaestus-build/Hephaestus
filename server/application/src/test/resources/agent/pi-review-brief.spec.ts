@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import test from "node:test";
 
+import type { CitableText } from "../../../main/resources/agent/pi-folder-index.ts";
 import { type BriefScope, buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
+import { SessionReads } from "../../../main/resources/agent/pi-session-reads.ts";
 
 const paths = { contextRoot: "context", repositoryRoot: "repos/reviewed" };
 
@@ -20,6 +22,7 @@ const KIND_BY_FILE: Record<string, string> = {
 	"linked_work_items.json": "scm.linked-work-items",
 	"document.json": "docs.document.core",
 	"document.md": "docs.document.core",
+	"checks.json": "scm.pull-request.checks",
 };
 const KINDS = new Set([...Object.values(KIND_BY_FILE), DIFF]);
 
@@ -177,7 +180,7 @@ void test("a file over its bound is named with its size instead of shown, and an
 		assert.match(brief, /### Captured and empty\n`context\/comments\.json`\n/u);
 		assert.match(
 			brief,
-			/### Not captured — do not look for these\nNothing is known about what they would hold\. Never read one as empty: a fact that depends on one is a collection gap\.\n`docs\.document\.core`, `scm\.general-review-comments`, `scm\.linked-work-items`, `scm\.review-threads`/u,
+			/### Not captured — do not look for these\nNothing is known about what they would hold\. Never read one as empty: a fact that depends on one is a collection gap\.\n`docs\.document\.core`, `scm\.general-review-comments`, `scm\.linked-work-items`, `scm\.pull-request\.checks`, `scm\.review-threads`/u,
 		);
 		assert.match(brief, /Too large to show here[\s\S]*- `work\/change\/diff\.patch` \(60 KB\)/u);
 		assert.doesNotMatch(brief, /```diff/u);
@@ -329,4 +332,42 @@ void test("brief coverage names supplied, empty, and omitted sources, with why, 
 		unavailable.sources.find((source) => source.path === "context/comments.json")?.omitted,
 		"index-limit",
 	);
+});
+
+void test("the checks a practice declares open its session, so a MET result needs no second read of them", () => {
+	const checks = "context/checks.json";
+	const record = "context/citable-records/scm.pull-request.checks/1.txt";
+	const required = [checks, record];
+	const texts: CitableText[] = [
+		{
+			source: "scm.pull-request.checks",
+			side: "NEW",
+			commit: null,
+			sha256: "a",
+			path: checks,
+			stagedPath: checks,
+		},
+		{
+			source: "scm.pull-request.checks",
+			side: "NEW",
+			commit: null,
+			sha256: "b",
+			path: `${checks}#/state`,
+			stagedPath: record,
+		},
+	];
+	const root = workspace({ [checks]: '{"merge_state_status": "CLEAN"}' });
+	try {
+		const declared = new Set(["scm.pull-request.checks"]);
+		const { text, sources } = buildBrief(root, paths, scope(declared));
+		assert.match(text, /### `context\/checks\.json`/u);
+		assert.match(text, /CLEAN/u);
+
+		const opened = new SessionReads(root, { required, supplied: sources }, undefined, texts);
+		assert.equal(opened.coverage().complete, true);
+		const unopened = new SessionReads(root, { required }, undefined, texts);
+		assert.equal(unopened.coverage().complete, false);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
