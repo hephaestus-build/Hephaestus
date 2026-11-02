@@ -5,9 +5,12 @@
 #                         [--external-database [--new-keys]] [--external-nats]
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --export-keys FILE
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --check-keys FILE
+#   sh hephaestus-keys.sh [--namespace …] [--secret …] --rotate KEY
 #
 # --export-keys writes the keys that a restore needs to a new file that only you can read, and
 # --check-keys tells for each key whether that file still matches the Secret. Both change nothing.
+# --rotate replaces a key whose rotation needs only a new value and a restart of the roles that
+# read it: HEPHAESTUS_AUTH_STATE_COOKIE_KEY, or WEBHOOK_ROUTING_SECRET with its previous value.
 #
 # It uses the current kubectl context. It creates the Secret, or adds only the keys that the Secret
 # lacks, and it never changes a key that exists. It prints key names, never a value.
@@ -29,6 +32,7 @@ EXTERNAL_NATS=false
 NEW_KEYS=false
 EXPORT=
 CHECK=
+ROTATE=
 
 die() {
 	printf 'hephaestus-keys: %s\n' "$*" >&2
@@ -46,11 +50,14 @@ while [ $# -gt 0 ]; do
 	--new-keys) NEW_KEYS=true; shift ;;
 	--export-keys) [ $# -ge 2 ] && [ -n "$2" ] || die "--export-keys needs a file"; EXPORT=$2; shift 2 ;;
 	--check-keys) [ $# -ge 2 ] && [ -n "$2" ] || die "--check-keys needs a file"; CHECK=$2; shift 2 ;;
+	--rotate) [ $# -ge 2 ] && [ -n "$2" ] || die "--rotate needs a key name"; ROTATE=$2; shift 2 ;;
 	*) die "unknown argument: $1" ;;
 	esac
 done
-if [ -n "$EXPORT$CHECK" ] && { [ -n "$EXPORT" ] && [ -n "$CHECK" ] || [ "$BACKUPS$EXTERNAL_DATABASE$EXTERNAL_NATS$NEW_KEYS" != falsefalsefalsefalse ]; }; then
-	die "--export-keys and --check-keys run alone, with at most --namespace and --secret"
+modes=0
+for mode in "$EXPORT" "$CHECK" "$ROTATE"; do [ -z "$mode" ] || modes=$((modes + 1)); done
+if [ "$modes" -gt 0 ] && { [ "$modes" -gt 1 ] || [ "$BACKUPS$EXTERNAL_DATABASE$EXTERNAL_NATS$NEW_KEYS" != falsefalsefalsefalse ]; }; then
+	die "--export-keys, --check-keys and --rotate each run alone, with at most --namespace and --secret"
 fi
 [ "$NEW_KEYS" = false ] || [ "$EXTERNAL_DATABASE" = true ] || die "--new-keys needs --external-database: for the bundled PostgreSQL, the script decides from its volume"
 printf '%s\n' "$NAMESPACE" | grep -Eq '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$' || die "not a namespace name: $NAMESPACE"
@@ -156,6 +163,50 @@ supply() {
 }
 # Random bytes as one line. openssl on Windows ends base64 lines with CRLF, and $(...) strips only the LF.
 random() { openssl rand "$@" | tr -d '\r\n'; }
+
+if [ -n "$ROTATE" ]; then
+	[ -n "$secret_json" ] || die "the Secret $NAMESPACE/$SECRET does not exist: there is nothing to rotate"
+	case $ROTATE in
+	HEPHAESTUS_AUTH_STATE_COOKIE_KEY)
+		add HEPHAESTUS_AUTH_STATE_COOKIE_KEY "$(random -base64 32)"
+		roles=server
+		;;
+	WEBHOOK_ROUTING_SECRET)
+		has WEBHOOK_ROUTING_SECRET || die "the Secret has no WEBHOOK_ROUTING_SECRET to rotate: run this without --rotate first"
+		# The receiver accepts the current and one previous value. A second rotation would drop the
+		# previous one, and every hook that it signed would stop.
+		! has WEBHOOK_ROUTING_PREVIOUS_SECRET ||
+			die "WEBHOOK_ROUTING_PREVIOUS_SECRET is set, so a rotation would drop it and stop the hooks that it signed: retire it first, as the Retire the previous routing secret section of Secret custody describes"
+		add WEBHOOK_ROUTING_PREVIOUS_SECRET "$(value_of WEBHOOK_ROUTING_SECRET)"
+		add WEBHOOK_ROUTING_SECRET "$(random -hex 32)"
+		# The webhook role first: a server that already signs with the new value must not register
+		# a hook that a webhook role with the old values refuses.
+		roles="webhook server"
+		;;
+	*) die "--rotate takes HEPHAESTUS_AUTH_STATE_COOKIE_KEY or WEBHOOK_ROUTING_SECRET: the Rotate a value section of Secret custody gives the procedure for $ROTATE" ;;
+	esac
+	# A role reads the Secret only at its start, so each role must restart. Find each one before the
+	# Secret changes: a selector that matches nothing restarts nothing and still succeeds.
+	deployments=
+	for role in $roles; do
+		found=$(kubectl -n "$NAMESPACE" get deployment -l "app.kubernetes.io/component=$role" -o name)
+		[ "$(printf '%s\n' "$found" | grep -c .)" = 1 ] ||
+			die "the namespace $NAMESPACE needs exactly one $role Deployment for --rotate: nothing was changed"
+		deployments="$deployments $found"
+	done
+	jq -Rn '[inputs | capture("^(?<key>[^=]+)=(?<value>.*)$")] | {stringData: (map({(.key): .value}) | add)}' \
+		<"$TEMP/secret.env" >"$TEMP/secret-patch.json"
+	kubectl -n "$NAMESPACE" patch secret "$SECRET" --type merge --patch-file "$TEMP/secret-patch.json" >/dev/null
+	echo "Rotated $ROTATE"
+	remaining=$deployments
+	for deployment in $deployments; do
+		kubectl -n "$NAMESPACE" rollout restart "$deployment" >/dev/null ||
+			die "the Secret has the new value, but these did not restart:$remaining. Restart them with kubectl -n $NAMESPACE rollout restart, and do not run --rotate again"
+		remaining=${remaining#" $deployment"}
+		echo "Restarted $deployment"
+	done
+	exit 0
+fi
 
 if [ "$EXTERNAL_DATABASE" = false ]; then
 	database=$(kubectl -n "$NAMESPACE" get pvc -l app.kubernetes.io/component=postgresql -o name)
