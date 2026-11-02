@@ -97,7 +97,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         verify(spec)
                 .variable(
                         "body",
-                        "body for <code>\\@alice</code>\n\n"
+                        "body for `@alice`\n\n"
                                 + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
                                 + "[Hephaestus](https://hephaestus.example/w/team/feedback/"
                                 + target.item().itemId() + ").</sub>\n"

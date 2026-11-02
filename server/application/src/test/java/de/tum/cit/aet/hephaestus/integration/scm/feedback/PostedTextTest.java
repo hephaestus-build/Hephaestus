@@ -60,15 +60,31 @@ class PostedTextTest extends BaseUnitTest {
 
     private static final Pattern OWN_MARKER = Pattern.compile("<!--[ ]*hephaestus[^<>]*-->");
 
-    /** What a rendered comment must not hold: a mention, an image, a script, an event attribute or hidden markup. */
+    // The bot's own header links the reviewed file.
+    private static final Pattern OWN_LINK = Pattern.compile(
+            "<a [^>]*href=\"https://github\\.com/HephaestusTest/practice-validation/blob/[^\"]*\"[^>]*>");
+
+    /**
+     * What a rendered comment must not hold: a link, a mention, a reference, an image, a block that the text did not
+     * ask for, a script, an event attribute or hidden markup.
+     */
     static void assertQuiet(String html) {
-        String visible = OWN_MARKER.matcher(html).replaceAll("");
+        String visible =
+                OWN_LINK.matcher(OWN_MARKER.matcher(html).replaceAll("")).replaceAll("");
         assertThat(visible)
+                .doesNotContainPattern("<a[\\s>]")
+                .doesNotContain("commit-link")
                 .doesNotContain("user-mention")
                 .doesNotContain("team-mention")
                 .doesNotContain("data-reference-type=")
                 .doesNotContain("issue-link")
+                .doesNotContainPattern("<h[1-6][\\s>]")
+                .doesNotContainPattern("<(?:ul|ol|li)[\\s>]")
+                .doesNotContainPattern("<hr[\\s/>]")
+                .doesNotContain("<input")
                 .doesNotContain("<img")
+                .doesNotContain("<table")
+                .doesNotContain("<blockquote")
                 .doesNotContain("<script")
                 .doesNotContainPattern("<[a-z][^>]*\\son[a-z]+=")
                 .doesNotContain("<!--")
@@ -120,14 +136,13 @@ class PostedTextTest extends BaseUnitTest {
                 "key",
                 "<!-- hephaestus-feedback-copy:1 -->");
         assertThat(PostedText.summary(content))
-                .isEqualTo("Ask <code>\\@alice</code> &lt;b&gt;now&lt;\\/b&gt;\n\n<!-- hephaestus-feedback-copy:1 -->");
+                .isEqualTo("Ask `@alice` &lt;b&gt;now&lt;/b&gt;\n\n<!-- hephaestus-feedback-copy:1 -->");
     }
 
     @Test
     void shouldWriteOneLineOfLiteralTextAndCodeThatNoBacktickEnds() {
-        assertThat(PostedText.plain("Use *x*\nthen @alice, #1"))
-                .isEqualTo("Use \\*x\\* then <code>\\@alice</code>, <code>\\#1</code>");
-        assertThat(PostedText.inlineCode("a`b <c>")).isEqualTo("<code>a\\`b &lt;c&gt;</code>");
+        assertThat(PostedText.plain("Use *x*\nthen @alice, #1")).isEqualTo("Use \\*x\\* then `@alice`, `#1`");
+        assertThat(PostedText.inlineCode("a`b <c>")).isEqualTo("``a`b <c>``");
     }
 
     @Test
@@ -136,8 +151,8 @@ class PostedTextTest extends BaseUnitTest {
                         + " failed save look identical; log the exception here, @alice.\nSee **`deactivateUser`**, such"
                         + " as `Closes #123` and _always_ www.example.com."))
                 .isEqualTo("This catch returns `false` for every exception without logging. A missing user and a"
-                        + " failed save look identical; log the exception here, <code>\\@alice</code>.\nSee"
-                        + " **`deactivateUser`**, such as `Closes #123` and *always* www\\.example\\.com.");
+                        + " failed save look identical; log the exception here, `@alice`.\nSee"
+                        + " **`deactivateUser`**, such as `Closes #123` and *always* `www.example.com`.");
     }
 
     @Test
@@ -146,15 +161,43 @@ class PostedTextTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepEveryLineOutOfBlocksWhenALineStartsWithMarkdown() {
-        assertThat(PostedText.of("# Title\n1. one\n- two\n> quote\n/title x\n---\n[a](https://x.example)"))
-                .isEqualTo("\\# Title\n1\\. one\n\\- two\n&gt; quote\n\\/title x\n\\---\n"
-                        + "\\[a\\](https\\:\\/\\/x\\.example)");
+    void shouldJoinCodeSpansWhenCodeStandsRightNextToANameOrAReference() {
+        assertThat(PostedText.of("`x`@bob and #1`y`")).isEqualTo("`x@bob` and `#1y`");
     }
 
     @Test
-    void shouldTakeOutALineEndOrHiddenCharacterWhenACharacterReferenceDecodesToIt() {
-        assertThat(PostedText.of("a&#10;# b&#x202E;c")).isEqualTo("a # bc");
+    void shouldKeepEveryLineOutOfBlocksWhenALineStartsWithMarkdown() {
+        assertThat(PostedText.of("# Title\n1. one\n- two\n> quote\n/title x\n---\n[a](https://x.example)"))
+                .isEqualTo("\\# Title\n1\\. one\n\\- two\n&gt; quote\n\\/title x\n\\---\n`[a](https://x.example)`");
+    }
+
+    @Test
+    void shouldPostACharacterReferenceAsWrittenWhenItWouldDecodeToAMentionOrABlock() {
+        assertThat(PostedText.of("&#35;1@alice")).isEqualTo("`&#35;1@alice`");
+        assertThat(PostedText.of("@alice&#35;3625")).isEqualTo("`@alice&#35;3625`");
+        assertThat(PostedText.of("&#32;# Forged heading")).isEqualTo("`&#32;#` Forged heading");
+        assertThat(PostedText.of("Hello\n&#32;===")).isEqualTo("Hello\n`&#32;===`");
+        assertThat(PostedText.of("***&#8203;***")).isEqualTo("***`&#8203`;***");
+        assertThat(PostedText.of("R&D &amp; QA")).isEqualTo("R&amp;D &amp;amp; QA");
+    }
+
+    @Test
+    void shouldPostANameAsCodeWhenItFollowsAReference() {
+        assertThat(PostedText.of("#1@alice")).isEqualTo("`#1@alice`");
+    }
+
+    @Test
+    void shouldEscapeTheDelimitersWhenEmphasisHoldsNothingVisible() {
+        assertThat(PostedText.of("a *\u001F* b")).isEqualTo("a \\*\u001F\\* b");
+    }
+
+    @Test
+    void shouldPostAddressesCommitsAndLinkSyntaxAsCode() {
+        assertThat(PostedText.of("See www.@alice, alice@example.com and 11d4b03dff9c29d6f211734ee063fbb8696ceb83."))
+                .isEqualTo("See `www.@alice`, `alice@example.com` and `11d4b03dff9c29d6f211734ee063fbb8696ceb83`.");
+        assertThat(PostedText.of("[text](relative), [some text](//evil.example/) and [x][1]"))
+                .isEqualTo("`[text](relative)`, `[some text](//evil.example/)` and `[x][1]`");
+        assertThat(PostedText.of("a deadbeef, 1234567 and decade")).isEqualTo("a deadbeef, 1234567 and decade");
     }
 
     @Test
@@ -173,8 +216,14 @@ class PostedTextTest extends BaseUnitTest {
 
         String posted = PostedText.of("@a & ".repeat(15_000));
         assertThat(posted.length()).isLessThanOrEqualTo(PostedText.MAX_POSTED_TEXT);
+        assertThat(posted).endsWith(PostedText.SHORTENED).doesNotEndWith("&" + PostedText.SHORTENED);
+    }
+
+    @Test
+    void shouldStayWithinTheCommentLimitWhenTheCutEndsACodeSpanEarly() {
+        // Cut before its closing backtick, the span becomes text whose names are code: longer than the span was.
+        String posted = PostedText.of("`" + "@a ".repeat(5_000) + "`" + "x".repeat(60_000));
+        assertThat(posted.length()).isLessThanOrEqualTo(PostedText.MAX_POSTED_TEXT);
         assertThat(posted).endsWith(PostedText.SHORTENED);
-        assertThat(posted.split("<code>", -1).length).isEqualTo(posted.split("</code>", -1).length);
-        assertThat(posted).doesNotEndWith("&" + PostedText.SHORTENED);
     }
 }

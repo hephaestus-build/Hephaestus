@@ -86,8 +86,9 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
 
         assertThat(provider.threads().on(ScriptedGitLabNotes.mergeRequest(42)))
                 .extracting(ScriptedCommentThreads.Comment::body)
-                .containsExactly(delivered("Ask <code>\\@alice</code>", "mention"), delivered(
-                        "`deactivateUser` returns `false` here; log it, <code>\\@alice</code>.", "code"));
+                .containsExactly(
+                        delivered("Ask `@alice`", "mention"),
+                        delivered("`deactivateUser` returns `false` here; log it, `@alice`.", "code"));
     }
 
     @Test

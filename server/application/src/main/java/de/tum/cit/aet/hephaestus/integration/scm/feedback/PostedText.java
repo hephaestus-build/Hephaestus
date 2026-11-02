@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.feedback;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -22,13 +23,12 @@ import org.commonmark.parser.Parser;
  * GitLab read the same way. Everything else is literal text: no fence, quote, list, heading, footnote, link, image,
  * table, HTML or GitLab quick action, because the two providers read those in dialects that no parser here matches.
  *
- * <p>Literal text escapes only what could open structure. {@code &}, {@code <} and {@code >} become character
- * references. A backslash goes before each of {@code \ ` * _ ~ [ ] | $ / @ { } ! :}, before a dot that a letter or digit
- * follows (so no web or e-mail address becomes a link), and before the punctuation that starts a line or ends the
- * number at its start (so no line becomes a block). Every name a provider links and every issue or merge request
- * reference becomes code: {@code <code>\@name</code>}. A character reference or a backslash before the at sign or the
- * number sign is no escape: the providers link through them. Inside a code span the providers link nothing, so its
- * text stays as written. Only the bot's own template and markers hold other structure.
+ * <p>Each run of non-blank characters that a provider could link becomes a code span: a name, an e-mail address, an
+ * issue or merge request reference, a web address, a commit, or link syntax. Neither provider links anything inside
+ * code, whatever stands next to it. In the rest, {@code &}, {@code <} and {@code >} become character references, and
+ * a backslash goes before each of {@code \ ` * _ ~ [ ] | $ { }} and before the punctuation that starts a line or ends
+ * the number at its start, so no line becomes a block. A character reference is never decoded: it is posted as the
+ * characters it is written with.
  *
  * <p>It runs once on each untrusted text; every write and every readback comparison calls it with the same input.
  */
@@ -36,21 +36,28 @@ public final class PostedText {
 
     private PostedText() {}
 
-    // Both providers link @name after a character that is no ASCII letter or digit; `@org/team` and `@group/sub` name
-    // a team or a subgroup. A name right after another (`@a@b`) is linked once the first is code, so one token runs
-    // to the end of the chain.
-    private static final Pattern MENTION = Pattern.compile("@[A-Za-z0-9_][A-Za-z0-9_-]*(?:[./@][A-Za-z0-9_-]+)*");
+    // What a provider links in a run: a name or an e-mail address; an issue, pull request, merge request, epic,
+    // snippet, label, milestone or iteration reference; a web address; link, image or footnote syntax; a commit.
+    // GitHub and GitLab read link syntax again in the rendered text, through any escape, so it is code too.
+    private static final Pattern LINKABLE = Pattern.compile(
+            "@|[#~%][A-Za-z0-9_\"]|[!&$]\\d|GH-\\d|(?i:www\\.|\\*iteration:)"
+                    + "|://|[\\[\\]]"
+                    + "|(?<![A-Za-z0-9_])(?=[0-9A-Fa-f]{0,39}[0-9])(?=[0-9A-Fa-f]{0,39}[A-Fa-f])[0-9A-Fa-f]{7,40}(?![A-Za-z0-9_])");
 
-    // A reference makes the referenced item list the comment, and GitHub reads it through a backslash. Issue, pull
-    // request, merge request, epic and snippet numbers, `GH-` numbers, cross-repository forms, labels and milestones
-    // become code like names.
-    private static final Pattern REFERENCE = Pattern.compile(
-            "(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)?[#!&$]\\d+|GH-\\d+|[~%](?:\"[^\"\\n]*\"|[A-Za-z0-9_][A-Za-z0-9_.:-]*)");
+    // `[text](address)` and `[text][label]`, whose text may hold spaces, are one code span.
+    private static final Pattern LINK_SYNTAX =
+            Pattern.compile("!?\\[[^\\[\\]]*\\]\\s*(?:\\([^()]*\\)|\\[[^\\[\\]]*\\])");
 
-    // Emphasis, code, links, images, HTML, strikethrough, tables, GitLab math and diff marks, autolinks, quick actions
-    // and names. GitLab reads `[text](address)` again in the rendered text, through escaped brackets: only an escaped
-    // `!` keeps it from an image and an escaped `:` from an absolute link. Other punctuation opens nothing in a line.
-    private static final String ALWAYS_ESCAPED = "\\`*_~[]|$/@{}!:";
+    // Punctuation around a run that stays outside its code span.
+    private static final String OPENING = "(\"'";
+    private static final String CLOSING = ".,;:!?)'\"";
+
+    // Emphasis, code, escapes, strikethrough, tables, GitLab math and diff marks. Other punctuation opens nothing
+    // inside a line.
+    private static final String ALWAYS_ESCAPED = "\\`*_~[]|${}";
+
+    // The parser reads this in place of `&`, so it decodes no character reference.
+    private static final char AMPERSAND = '￿';
 
     // GitHub takes at most 65,536 characters in a comment and GitLab more; the escaped text leaves room for the header
     // and the hidden markers.
@@ -62,8 +69,9 @@ public final class PostedText {
     private static final Pattern LINE_END = Pattern.compile("\\r\\n?|[\\u2028\\u2029\\u0085]");
 
     // Direction controls, zero-width characters and tag characters make the text read differently from its bytes.
-    private static final Pattern INVISIBLE =
-            Pattern.compile("[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\x{E0000}-\\x{E007F}]");
+    // U+FFFF is no character; the parser reads it in place of `&`.
+    private static final Pattern INVISIBLE = Pattern.compile(
+            "[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFFFF\\x{E0000}-\\x{E007F}]");
 
     // Each line is read alone and with no block parser, so only its inline Markdown has a meaning.
     private static final Parser INLINE = Parser.builder()
@@ -73,12 +81,15 @@ public final class PostedText {
 
     /** One line of untrusted text, as literal text: its line ends become spaces. */
     public static String plain(String untrusted) {
-        return literal(untrusted, true);
+        StringBuilder out = new StringBuilder();
+        for (Piece piece : pieces(untrusted, true)) out.append(piece.code() ? codeSpan(piece.text()) : piece.text());
+        return out.toString();
     }
 
-    /** Untrusted text shown as code: an HTML code element around the literal text, which no backtick can end. */
+    /** Untrusted text shown as code: one code span, which no backtick inside it can end. */
     public static String inlineCode(String untrusted) {
-        return "<code>" + plain(untrusted) + "</code>";
+        String text = normalized(untrusted).replace('\n', ' ');
+        return text.isEmpty() ? "" : codeSpan(text);
     }
 
     /**
@@ -89,18 +100,24 @@ public final class PostedText {
         String text = normalized(untrusted);
         String posted = lines(text);
         if (posted.length() <= MAX_POSTED_TEXT) return posted;
-        // Escaping lengthens the text, so the cut is found on the escaped result and made in the text before it, at
-        // the last space before the longest prefix that fits.
+        // A cut changes how the text before it reads, such as a code span that loses its closing backticks, so the
+        // posted length does not grow with the cut. The search keeps only a cut whose posted form it measured to fit;
+        // the empty cut always fits.
         int low = 0;
         int high = text.length();
         while (low < high) {
             int middle = (low + high + 1) >>> 1;
-            if (lines(text.substring(0, middle)).length() + SHORTENED.length() <= MAX_POSTED_TEXT) low = middle;
+            if (shortened(text, middle).length() <= MAX_POSTED_TEXT) low = middle;
             else high = middle - 1;
         }
-        int cut = Math.max(text.lastIndexOf(' ', low), text.lastIndexOf('\n', low));
-        if (cut <= 0) cut = low;
-        if (cut > 0 && Character.isHighSurrogate(text.charAt(cut - 1))) cut--;
+        return shortened(text, low);
+    }
+
+    /** The text cut at the last space before {@code length}, posted, with the note that it was shortened. */
+    private static String shortened(String text, int length) {
+        int cut = Math.max(text.lastIndexOf(' ', length), text.lastIndexOf('\n', length));
+        if (cut <= 0) cut = length;
+        if (cut > 0 && cut < text.length() && Character.isHighSurrogate(text.charAt(cut - 1))) cut--;
         return lines(text.substring(0, cut)) + SHORTENED;
     }
 
@@ -122,7 +139,7 @@ public final class PostedText {
         StringBuilder out = new StringBuilder(text.length() + 64);
         for (int i = 0; i < lines.length; i++) {
             if (i > 0) out.append('\n');
-            String line = lines[i].strip();
+            String line = lines[i].strip().replace('&', AMPERSAND);
             if (!line.isEmpty()) new Line(line, out).children(INLINE.parse(line));
         }
         return out.toString().strip();
@@ -133,10 +150,17 @@ public final class PostedText {
     }
 
     /** Writes one parsed line: its code spans and emphasis again, and the rest of it as literal text. */
-    private record Line(String source, StringBuilder out, StringBuilder text) {
+    private static final class Line {
+        private final String source;
+        private final StringBuilder out;
+        private final StringBuilder text = new StringBuilder();
+        private String code = "";
+        private int codeStart = -1;
+        private int codeEnd = -1;
 
         Line(String source, StringBuilder out) {
-            this(source, out, new StringBuilder());
+            this.source = source;
+            this.out = out;
         }
 
         void children(Node parent) {
@@ -145,9 +169,9 @@ public final class PostedText {
                     case Document document -> children(document);
                     case Paragraph paragraph -> children(paragraph);
                     case Text words -> text.append(words.getLiteral());
-                    case Code code -> {
+                    case Code span -> {
                         flush();
-                        out.append(codeSpan(code.getLiteral()));
+                        code(span.getLiteral().replace(AMPERSAND, '&'));
                     }
                     case Emphasis emphasis -> delimited("*", emphasis);
                     case StrongEmphasis strong -> delimited("**", strong);
@@ -160,9 +184,18 @@ public final class PostedText {
 
         private void delimited(String delimiter, Node node) {
             flush();
+            int start = out.length();
             out.append(delimiter);
             children(node);
-            out.append(delimiter);
+            String content = out.substring(start + delimiter.length());
+            if (content.isBlank()) {
+                // Delimiters around nothing visible would read as a rule or a list marker.
+                String literal = "\\*".repeat(delimiter.length());
+                out.setLength(start);
+                out.append(literal).append(content).append(literal);
+            } else {
+                out.append(delimiter);
+            }
         }
 
         private String written(Node node) {
@@ -175,8 +208,92 @@ public final class PostedText {
         private void flush() {
             if (text.isEmpty()) return;
             boolean lineStart = out.isEmpty() || out.charAt(out.length() - 1) == '\n';
-            out.append(literal(text.toString(), lineStart));
+            for (Piece piece : pieces(text.toString(), lineStart)) {
+                if (piece.code()) code(piece.text());
+                else out.append(piece.text());
+            }
             text.setLength(0);
+        }
+
+        /** A code span; one right after another joins it, because two backtick runs side by side are one run. */
+        private void code(String content) {
+            boolean joined = out.length() == codeEnd;
+            if (joined) out.setLength(codeStart);
+            code = joined ? code + content : content;
+            codeStart = out.length();
+            out.append(codeSpan(code));
+            codeEnd = out.length();
+        }
+    }
+
+    /** Literal text, or the text of a code span. */
+    private record Piece(boolean code, String text) {}
+
+    /** Text that renders as itself: each run that a provider could link is code, the rest is escaped. */
+    private static List<Piece> pieces(String untrusted, boolean lineStart) {
+        String text = normalized(untrusted.replace(AMPERSAND, '&')).replace('\n', ' ');
+        if (lineStart) text = text.stripLeading();
+        int leadingDigits = 0;
+        while (lineStart && leadingDigits < text.length() && isAsciiDigit(text.charAt(leadingDigits))) leadingDigits++;
+        var pieces = new ArrayList<Piece>();
+        var literal = new StringBuilder();
+        int i = 0;
+        while (i < text.length()) {
+            if (Character.isWhitespace(text.charAt(i))) {
+                literal.append(text.charAt(i++));
+                continue;
+            }
+            Matcher link = LINK_SYNTAX.matcher(text).region(i, text.length());
+            int from = i;
+            int to;
+            int end;
+            if (link.lookingAt()) {
+                end = link.end();
+                to = end;
+            } else {
+                end = i;
+                while (end < text.length() && !Character.isWhitespace(text.charAt(end))) end++;
+                while (from < end && OPENING.indexOf(text.charAt(from)) >= 0) from++;
+                to = end;
+                while (to > from && CLOSING.indexOf(text.charAt(to - 1)) >= 0) to--;
+                if (!LINKABLE.matcher(text.substring(from, to)).find()) {
+                    from = end;
+                    to = end;
+                }
+            }
+            escape(text, i, from, lineStart, leadingDigits, literal);
+            if (from < to) {
+                if (!literal.isEmpty()) pieces.add(new Piece(false, literal.toString()));
+                literal.setLength(0);
+                String code = text.substring(from, to);
+                if (!pieces.isEmpty() && pieces.getLast().code())
+                    code = pieces.removeLast().text() + code;
+                pieces.add(new Piece(true, code));
+            }
+            escape(text, to, end, lineStart, leadingDigits, literal);
+            i = end;
+        }
+        if (!literal.isEmpty()) pieces.add(new Piece(false, literal.toString()));
+        return pieces;
+    }
+
+    private static void escape(String text, int from, int to, boolean lineStart, int leadingDigits, StringBuilder out) {
+        for (int i = from; i < to; i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '&' -> out.append("&amp;");
+                case '<' -> out.append("&lt;");
+                case '>' -> out.append("&gt;");
+                default -> {
+                    boolean opens = ALWAYS_ESCAPED.indexOf(c) >= 0
+                            // A heading, a list, a quote, a rule, a setext underline or a quick action.
+                            || (lineStart && i == 0 && isAsciiPunctuation(c))
+                            // An ordered list: `1.` or `1)`.
+                            || (lineStart && i == leadingDigits && i > 0 && (c == '.' || c == ')'));
+                    if (opens) out.append('\\');
+                    out.append(c);
+                }
+            }
         }
     }
 
@@ -195,72 +312,6 @@ public final class PostedText {
                 || code.endsWith("`")
                 || (code.startsWith(" ") && code.endsWith(" ") && !code.isBlank());
         return padded ? fence + " " + code + " " + fence : fence + code + fence;
-    }
-
-    /**
-     * Text that renders as itself; at a line's start a block would open, so more is escaped there. The parser decodes
-     * character references, so a decoded line end or hidden character is taken out again here.
-     */
-    private static String literal(String untrusted, boolean lineStart) {
-        String text = normalized(untrusted).replace('\n', ' ');
-        StringBuilder out = new StringBuilder(text.length() + 16);
-        int leadingDigits = 0;
-        while (lineStart && leadingDigits < text.length() && isAsciiDigit(text.charAt(leadingDigits))) leadingDigits++;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '@' && (i == 0 || !isAsciiAlphanumeric(text.charAt(i - 1)))) {
-                Matcher name = MENTION.matcher(text).region(i, text.length());
-                if (name.lookingAt()) {
-                    out.append("<code>")
-                            .append(punctuationEscaped(name.group()))
-                            .append("</code>");
-                    i = name.end() - 1;
-                    continue;
-                }
-            }
-            if (i == 0 || !isAsciiAlphanumeric(text.charAt(i - 1))) {
-                Matcher reference = REFERENCE.matcher(text).region(i, text.length());
-                if (reference.lookingAt()
-                        && (reference.end() == text.length() || !isAsciiAlphanumeric(text.charAt(reference.end())))) {
-                    out.append("<code>")
-                            .append(punctuationEscaped(reference.group()))
-                            .append("</code>");
-                    i = reference.end() - 1;
-                    continue;
-                }
-            }
-            switch (c) {
-                case '&' -> out.append("&amp;");
-                case '<' -> out.append("&lt;");
-                case '>' -> out.append("&gt;");
-                default -> {
-                    boolean opens = ALWAYS_ESCAPED.indexOf(c) >= 0
-                            // `www.example.com` and `a@b.co` would become links.
-                            || (c == '.' && i + 1 < text.length() && isAsciiAlphanumeric(text.charAt(i + 1)))
-                            // A heading, a list, a quote, a rule, a setext underline or a quick action.
-                            || (lineStart && i == 0 && isAsciiPunctuation(c))
-                            // An ordered list: `1.` or `1)`.
-                            || (i == leadingDigits && i > 0 && (c == '.' || c == ')'));
-                    if (opens) out.append('\\');
-                    out.append(c);
-                }
-            }
-        }
-        return out.toString();
-    }
-
-    private static String punctuationEscaped(String name) {
-        StringBuilder out = new StringBuilder(name.length() * 2);
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            if (isAsciiPunctuation(c)) out.append('\\');
-            out.append(c);
-        }
-        return out.toString();
-    }
-
-    private static boolean isAsciiAlphanumeric(char c) {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || isAsciiDigit(c);
     }
 
     private static boolean isAsciiDigit(char c) {

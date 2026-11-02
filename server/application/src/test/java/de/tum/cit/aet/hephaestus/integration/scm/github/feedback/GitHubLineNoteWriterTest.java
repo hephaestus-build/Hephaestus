@@ -122,8 +122,9 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
 
         assertThat(threads)
                 .extracting(thread -> comment(thread).get("body"))
-                .containsExactly(delivered("Ask <code>\\@alice</code>", "mention"), delivered(
-                        "`deactivateUser` returns `false` here; log it, <code>\\@alice</code>.", "code"));
+                .containsExactly(
+                        delivered("Ask `@alice`", "mention"),
+                        delivered("`deactivateUser` returns `false` here; log it, `@alice`.", "code"));
     }
 
     @Test

@@ -113,7 +113,7 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
                 UUID.randomUUID(), "Ask @alice", "abc", markers, "**[View file](https://example.test/file)**");
         String posted = formatter("https://hephaestus.example").footer(item()).summary(content);
         assertThat(posted)
-                .isEqualTo("**[View file](https://example.test/file)**\n\nAsk <code>\\@alice</code>\n\n"
+                .isEqualTo("**[View file](https://example.test/file)**\n\nAsk `@alice`\n\n"
                         + "<sub>Practice review. This feedback is AI-generated and can be inaccurate. Answer or disagree in "
                         + "[Hephaestus](https://hephaestus.example/w/team/feedback/42).</sub>\n"
                         + "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n\n"
