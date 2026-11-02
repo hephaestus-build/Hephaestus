@@ -50,6 +50,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * {@code pull_request_requested_reviewers} carry a {@code user_id} and are mapped.
      */
     private static final Set<String> NOT_PERSONAL_DATA = Set.of(
+            // GitHub locators left after a product feedback erasure: repository, installation, a random marker.
+            "product_feedback_cleanup",
             // What each practice script of a job did: a status, counts and model slots, no content or person.
             "review_job_script_run",
             // A job's token counters, like the token columns review_job keeps after a person's erasure.

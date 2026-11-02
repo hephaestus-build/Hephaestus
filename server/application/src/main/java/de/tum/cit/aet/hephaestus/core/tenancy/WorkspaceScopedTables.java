@@ -87,6 +87,13 @@ public class WorkspaceScopedTables {
             // whose models are in a pool shares it
             "llm_call_pool",
             "llm_call_permit",
+            // Product feedback goes to the instance's own repositories (ADR 0073): the destination singleton, each
+            // report's filing (deleted with its product_feedback row), account-owned sharing choices, and locators
+            // left after erasure
+            "product_feedback_destination",
+            "product_feedback_filing",
+            "product_feedback_consent",
+            "product_feedback_cleanup",
             // llm_model_workspace_grant is deliberately absent: it carries a workspace_id,
             // so the
             // inspector watches it and its cross-tenant admin reads opt out per method

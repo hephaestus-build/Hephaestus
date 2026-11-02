@@ -65,6 +65,14 @@ class EmailRendererTest extends BaseUnitTest {
                 switch (kind) {
                     case TEST_MESSAGE -> Map.of();
                     case PRODUCT_FEEDBACK -> Map.of("feedbackKind", "BUG");
+                    case PRODUCT_FEEDBACK_UPDATE ->
+                        Map.of(
+                                "updateKind",
+                                "COMMENTED",
+                                "issueUrl",
+                                "https://github.com/example/feedback/issues/1",
+                                "publicIssue",
+                                true);
                     case ACCOUNT_DELETION_SCHEDULED -> Map.of("purgeAfter", "14 September 2026 at 10:00 UTC");
                     case ACCOUNT_SECURITY_CHANGED ->
                         Map.of("change", "A sign-in identity is now linked to your account.");
@@ -96,6 +104,7 @@ class EmailRendererTest extends BaseUnitTest {
             case TEST_MESSAGE, ACCOUNT_DELETION_SCHEDULED -> "";
             case ACCOUNT_SECURITY_CHANGED -> "/settings";
             case PRODUCT_FEEDBACK -> "/admin/feedback";
+            case PRODUCT_FEEDBACK_UPDATE -> "/product-feedback";
             case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";
             case MENTOR_DIGEST -> "/w/delivery-team/conversation?entry=0f8a6c1e-3b0d-4a43-9f43-3bd1d5a0e2c4";
         };
@@ -103,7 +112,7 @@ class EmailRendererTest extends BaseUnitTest {
         assertThat(rendered.text()).contains(actionUrl);
         assertThat(rendered.html()).contains("href=\"" + actionUrl + "\"");
         for (var entry : model.entrySet()) {
-            if (entry.getKey().equals("feedbackKind")) continue;
+            if (entry.getKey().equals("feedbackKind") || entry.getKey().equals("updateKind")) continue;
             Object value = entry.getValue();
             if (value instanceof Boolean) continue;
             assertThat(rendered.text()).contains(value.toString());

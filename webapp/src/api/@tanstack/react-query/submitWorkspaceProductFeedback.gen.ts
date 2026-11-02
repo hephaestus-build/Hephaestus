@@ -4,13 +4,13 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { submitWorkspaceProductFeedback } from '../../sdk/submitWorkspaceProductFeedback.gen.js';
-import type { SubmitWorkspaceProductFeedbackData } from '../../types.gen.js';
+import type { SubmitWorkspaceProductFeedbackData, SubmitWorkspaceProductFeedbackResponse } from '../../types.gen.js';
 
 /**
  * Send product feedback to instance administrators
  */
-export const submitWorkspaceProductFeedbackMutation = (options?: Partial<Options<SubmitWorkspaceProductFeedbackData>>): UseMutationOptions<unknown, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> = {
+export const submitWorkspaceProductFeedbackMutation = (options?: Partial<Options<SubmitWorkspaceProductFeedbackData>>): UseMutationOptions<SubmitWorkspaceProductFeedbackResponse, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> => {
+    const mutationOptions: UseMutationOptions<SubmitWorkspaceProductFeedbackResponse, DefaultError, Options<SubmitWorkspaceProductFeedbackData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await submitWorkspaceProductFeedback({
                 ...options,

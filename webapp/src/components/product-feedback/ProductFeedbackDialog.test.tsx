@@ -15,6 +15,7 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProductFeed
 		kind: "FEEDBACK" as const,
 		onKindChange: vi.fn(),
 		context,
+		sharing: { status: "off" } as const,
 		isSubmitting: false,
 		onSubmit: vi.fn(async () => true),
 		...overrides,
@@ -49,12 +50,15 @@ describe("product feedback dialog", () => {
 		});
 	});
 
-	it("closes and clears the message only after the send was accepted", async () => {
+	it("clears the message only after the send was accepted", async () => {
 		const user = userEvent.setup();
 		const { props, rerender } = renderDialog();
 		await user.type(screen.getByRole("textbox", { name: "Your feedback" }), "An idea");
 		await user.click(screen.getByRole("button", { name: "Send" }));
-		await waitFor(() => expect(props.onOpenChange).toHaveBeenCalledWith(false));
+		await waitFor(() => expect(props.onSubmit).toHaveBeenCalledOnce());
+		await waitFor(() =>
+			expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty("value", ""),
+		);
 		rerender(<ProductFeedbackDialog {...props} open={false} />);
 		rerender(<ProductFeedbackDialog {...props} open />);
 		expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveProperty("value", "");

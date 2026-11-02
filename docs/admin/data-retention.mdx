@@ -82,7 +82,8 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Email notifications waiting for delivery | Deleted when delivered. An account deletion confirmation expires at the purge deadline. Security, alert, and weekly digest mail expires after 24 hours. Product feedback mail expires after 7 days. | None | Delivery and the retry job |
 | Self-service account exports | The download goes 48 hours after it is ready. | None | A server job every hour |
 | Deleted accounts | Removed 48 hours after the request, by the next hourly sweep | `hephaestus.auth.delete-cooldown` | A server job every hour |
-| Product feedback | No automatic deletion | None | Account erasure or workspace purge |
+| Product feedback reports, drafts, and choices | No automatic deletion by age | None | Account or person erasure removes account-owned rows. Workspace purge removes reports from that workspace. Both start applicable GitHub cleanup. |
+| Product feedback cleanup locators | Until external cleanup completes. After 30 days, incomplete work needs manual action. The locator remains until completion or admin confirmation. | None | Cleanup or confirmed manual completion ([Product feedback](./product-feedback.mdx#handle-erasure)) |
 | Research disclosure records | No automatic deletion. The released file is not stored. | None | Closure of the disclosure removes its mapping |
 
 ## NATS JetStream

@@ -24,10 +24,97 @@ erDiagram
         BIGINT resolved_by_account_id FK
     }
 
+    ProductFeedbackCleanup {
+        UUID id PK
+        VARCHAR(200) repository "NOT NULL"
+        BIGINT repository_id "NOT NULL"
+        BIGINT installation_id "NOT NULL"
+        UUID marker "NOT NULL"
+        BIGINT issue_number
+        VARCHAR(100) issue_node_id
+        BOOLEAN public_issue "NOT NULL"
+        TIMESTAMPTZ since "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        INTEGER attempts "NOT NULL"
+    }
+
+    ProductFeedbackConsent {
+        UUID id PK
+        BIGINT account_id "NOT NULL"
+        BOOLEAN allow_public "NOT NULL"
+        BOOLEAN mention "NOT NULL"
+        INTEGER notice_version "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    ProductFeedbackDestination {
+        SMALLINT id PK
+        VARCHAR(200) public_repository
+        VARCHAR(200) private_repository
+        BIGINT llm_model_id
+        INTEGER daily_draft_limit "NOT NULL"
+        BOOLEAN paused "NOT NULL"
+        INTEGER notice_version "NOT NULL"
+        TEXT snapshot
+        TIMESTAMPTZ snapshot_at
+        TIMESTAMPTZ updated_at "NOT NULL"
+        BIGINT updated_by_account_id
+    }
+
+    ProductFeedbackFiling {
+        UUID feedback_id PK,FK
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(16) route
+        VARCHAR(32) reason
+        BOOLEAN allow_public "NOT NULL"
+        VARCHAR(39) mention_login
+        UUID consent_id
+        BOOLEAN risk_latch "NOT NULL"
+        INTEGER attempt "NOT NULL"
+        VARCHAR(100) claimed_by
+        TIMESTAMPTZ lease_until
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        TIMESTAMPTZ filed_after
+        INTEGER failures "NOT NULL"
+        TEXT prompt_input
+        TEXT answer
+        VARCHAR(39) publish_requested_by
+        TIMESTAMPTZ publish_requested_at
+        VARCHAR(200) promotion_repository
+        BIGINT promotion_repository_id
+        BIGINT promotion_installation_id
+        VARCHAR(100) promotion_repository_node_id
+        VARCHAR(500) page_route
+        TEXT draft
+        VARCHAR(200) removed
+        TIMESTAMPTZ drafted_at
+        BIGINT input_tokens "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
+        VARCHAR(200) repository
+        BIGINT repository_id
+        VARCHAR(100) repository_node_id
+        BIGINT installation_id
+        VARCHAR(64) payload_hash
+        TIMESTAMPTZ first_attempt_at
+        BIGINT issue_number
+        VARCHAR(100) issue_node_id
+        VARCHAR(300) issue_url
+        BOOLEAN issue_open
+        VARCHAR(32) issue_state_reason
+        BIGINT last_comment_id
+        TIMESTAMPTZ followed_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
     Account["Account · Core"]
     Workspace["Workspace · Workspace (Tenancy)"]
 
     %% Relationships
+    %% One-to-One relationships
+    ProductFeedback ||--|| ProductFeedbackFiling : has
+
     %% One-to-Many relationships
     Account ||--o{ ProductFeedback : account_id
     Account ||--o{ ProductFeedback : resolved_by_account_id

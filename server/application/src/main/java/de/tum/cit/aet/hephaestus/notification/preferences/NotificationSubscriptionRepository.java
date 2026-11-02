@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 @WorkspaceAgnostic(
@@ -25,6 +26,16 @@ interface NotificationSubscriptionRepository extends JpaRepository<NotificationS
 
     @Query("SELECT s.accountId FROM NotificationSubscription s WHERE s.kind = :kind AND s.enabled = true")
     List<Long> subscribedAccountIds(NotificationSubscriptionKind kind);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO notification_subscription
+                (id, account_id, kind, enabled, enabled_since, unsubscribe_token, version)
+            VALUES (gen_random_uuid(), :accountId, 'PRODUCT_FEEDBACK_UPDATES', true,
+                    TIMESTAMPTZ 'epoch', gen_random_uuid(), 0)
+            ON CONFLICT (account_id, kind) DO NOTHING
+            """, nativeQuery = true)
+    void insertDefaultProductFeedbackUpdates(long accountId);
 
     void deleteAllByAccountId(long accountId);
 }

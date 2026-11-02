@@ -26,6 +26,42 @@ tests:
             exp_annotations:
               summary: A Hephaestus metrics target cannot be scraped
 
+  - name: a product feedback report waiting over 30 minutes fires, a fresh one does not
+    interval: 1m
+    input_series:
+      - series: 'product_feedback_oldest_waiting_seconds{job="hephaestus",instance="server:9090"}'
+        values: "60 60 2000 2000 2000 2000 2000 2000 2000"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusProductFeedbackStuck
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusProductFeedbackStuck
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admin email
+
+  - name: a stopped product feedback filing fires, successful filings do not
+    interval: 1m
+    input_series:
+      - series: 'product_feedback_steps_total{job="hephaestus",instance="server:9090",step="file",outcome="ok"}'
+        values: "0 1 2 3 4"
+      - series: 'product_feedback_steps_total{job="hephaestus",instance="server:9090",step="file",outcome="stopped"}'
+        values: "0 0 0 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusProductFeedbackFilingFailing
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusProductFeedbackFilingFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
+
   - name: a poison event fires, an unchanged poison count does not
     interval: 1m
     input_series:

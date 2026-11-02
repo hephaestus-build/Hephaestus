@@ -49,7 +49,7 @@ import environment from "@/environment";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
-import { useSubmitProductFeedback } from "@/hooks/use-product-feedback";
+import { useProductFeedbackSharing, useSubmitProductFeedback } from "@/hooks/use-product-feedback";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useWorkspaceCreation } from "@/hooks/use-workspace-creation";
@@ -68,6 +68,9 @@ import { isConversationPanelExcludedRoute } from "./-conversation-panel-route";
 import { showConversationUnavailable } from "./-conversation-unavailable";
 
 const GlobalConversationPanel = lazy(async () => import("./-GlobalConversationPanel"));
+/** The receipt, with its hold, withdrawal and edit, loads once a report has been sent. */
+const loadProductFeedbackConfirmation = async () => import("./-ProductFeedbackConfirmation");
+const ProductFeedbackConfirmation = lazy(loadProductFeedbackConfirmation);
 
 interface MyRouterContext {
 	queryClient: QueryClient;
@@ -213,10 +216,14 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 	const feedback = useSubmitProductFeedback(workspaceSlug);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>("FEEDBACK");
+	const { sharing, publicRepository } = useProductFeedbackSharing(feedbackOpen);
 	return (
 		<>
 			<ProductFeedbackMenu
+				workspaceSlug={workspaceSlug}
 				onSendFeedback={(kind) => {
+					// Fetched while the person writes, so the receipt is there when Send returns.
+					void loadProductFeedbackConfirmation();
 					setFeedbackKind(kind);
 					setFeedbackOpen(true);
 				}}
@@ -235,9 +242,22 @@ function ProductFeedbackControls({ workspaceSlug }: { workspaceSlug?: string }) 
 					pagePath: route.slice(0, PAGE_PATH_MAX_LENGTH),
 					userAgent: navigator.userAgent.slice(0, USER_AGENT_MAX_LENGTH),
 				}}
+				sharing={sharing}
+				workspaceSlug={workspaceSlug}
 				isSubmitting={feedback.isPending}
 				error={feedback.error}
 				onSubmit={feedback.submit}
+				confirmation={
+					feedback.receipt === undefined ? undefined : (
+						<Suspense fallback={null}>
+							<ProductFeedbackConfirmation
+								receipt={feedback.receipt}
+								open={feedbackOpen}
+								publicRepository={publicRepository}
+							/>
+						</Suspense>
+					)
+				}
 			/>
 		</>
 	);

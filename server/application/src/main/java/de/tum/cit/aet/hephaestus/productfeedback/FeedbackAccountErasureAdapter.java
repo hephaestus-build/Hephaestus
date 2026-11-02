@@ -9,10 +9,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class FeedbackAccountErasureAdapter implements AccountErasureContributor {
     private final ProductFeedbackRepository feedback;
+    private final ProductFeedbackConsentRepository consents;
+    private final CleanupRecords cleanups;
 
     @Override
     @Transactional
     public void eraseAccount(long accountId) {
+        cleanups.keepForAccount(accountId);
         feedback.deleteAllByAccountId(accountId);
+        consents.deleteAllByAccountId(accountId);
     }
 }

@@ -32,22 +32,28 @@ class FeedbackService {
     private final Clock clock;
     private final ApplicationEventPublisher events;
     private final String appVersion;
+    private final MyReportsService reports;
+    private final DestinationSettings destinations;
 
     FeedbackService(
             ProductFeedbackRepository feedback,
             FeedbackRefs refs,
             Clock clock,
             ApplicationEventPublisher events,
-            @Value("${spring.application.version}") String appVersion) {
+            @Value("${spring.application.version}") String appVersion,
+            MyReportsService reports,
+            DestinationSettings destinations) {
         this.feedback = feedback;
         this.refs = refs;
         this.clock = clock;
         this.events = events;
         this.appVersion = appVersion;
+        this.reports = reports;
+        this.destinations = destinations;
     }
 
     @Transactional
-    public ProductFeedback add(FeedbackRequestDTO request, Long accountId, @Nullable Long workspaceId) {
+    public FilingDTOs.FeedbackReceiptDTO add(FeedbackRequestDTO request, Long accountId, @Nullable Long workspaceId) {
         try {
             ProductFeedback saved = feedback.saveAndFlush(new ProductFeedback(
                     accountId,
@@ -57,15 +63,24 @@ class FeedbackService {
                     request.pagePath(),
                     request.userAgent(),
                     appVersion));
-            events.publishEvent(new ProductFeedbackSubmittedEvent(
-                    saved.getId(),
-                    Objects.requireNonNull(saved.getCreatedAt()),
-                    switch (saved.getKind()) {
-                        case BUG -> ProductFeedbackSubmittedEvent.Kind.BUG;
-                        case IDEA -> ProductFeedbackSubmittedEvent.Kind.IDEA;
-                        case FEEDBACK -> ProductFeedbackSubmittedEvent.Kind.FEEDBACK;
-                    }));
-            return saved;
+            ProductFeedbackFiling filing = reports.open(saved, request.share(), clock.instant());
+            if (filing.getState() == FilingState.EMAILED) {
+                events.publishEvent(new ProductFeedbackSubmittedEvent(
+                        saved.getId(),
+                        Objects.requireNonNull(saved.getCreatedAt()),
+                        switch (saved.getKind()) {
+                            case BUG -> ProductFeedbackSubmittedEvent.Kind.BUG;
+                            case IDEA -> ProductFeedbackSubmittedEvent.Kind.IDEA;
+                            case FEEDBACK -> ProductFeedbackSubmittedEvent.Kind.FEEDBACK;
+                        }));
+                return new FilingDTOs.FeedbackReceiptDTO(
+                        saved.getId(), FilingDTOs.ReportRoute.EMAIL, FilingDTOs.ReportState.SENT_TO_ADMINS, null);
+            }
+            FilingDTOs.ReportRoute route = filing.isAllowPublic()
+                    ? FilingDTOs.ReportRoute.PUBLIC
+                    : destinationHasPrivate() ? FilingDTOs.ReportRoute.PRIVATE : FilingDTOs.ReportRoute.EMAIL;
+            return new FilingDTOs.FeedbackReceiptDTO(
+                    saved.getId(), route, FilingDTOs.ReportState.DRAFTING, filing.getFiledAfter());
         } catch (DataIntegrityViolationException exception) {
             if (DataIntegrityViolationConstraints.hasName(exception, "uk_product_feedback_rate_limit")) {
                 throw new ResponseStatusException(
@@ -75,13 +90,13 @@ class FeedbackService {
         }
     }
 
+    private boolean destinationHasPrivate() {
+        return destinations.current().getPrivateRepository() != null;
+    }
+
     @Transactional(readOnly = true)
     public Page<FeedbackItemDTO> list(FeedbackFilter filter, Pageable pageable) {
-        Page<ProductFeedback> page = switch (filter) {
-            case OPEN -> feedback.findAllByResolvedAtIsNullOrderByCreatedAtDesc(pageable);
-            case RESOLVED -> feedback.findAllByResolvedAtIsNotNullOrderByResolvedAtDesc(pageable);
-            case ALL -> feedback.findAllByOrderByCreatedAtDesc(pageable);
-        };
+        Page<ProductFeedback> page = feedback.findNotOnGitHub(filter.name(), pageable);
         return new PageImpl<>(dtos(page.getContent()), pageable, page.getTotalElements());
     }
 

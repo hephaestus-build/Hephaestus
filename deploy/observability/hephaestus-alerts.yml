@@ -13,6 +13,19 @@ groups:
           severity: warning
         annotations:
           summary: A Hephaestus metrics target cannot be scraped
+      - alert: HephaestusProductFeedbackStuck
+        expr: max(product_feedback_oldest_waiting_seconds{job="hephaestus"}) > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A product feedback report has waited more than 30 minutes to reach GitHub or the admin email
+      - alert: HephaestusProductFeedbackFilingFailing
+        expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="file",outcome="stopped"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Product feedback stopped filing to GitHub; the reports wait in Needs action
       - alert: HephaestusConsumerPoison
         expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0
         labels:

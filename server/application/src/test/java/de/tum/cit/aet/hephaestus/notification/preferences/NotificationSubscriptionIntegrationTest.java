@@ -75,7 +75,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri(path)
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + first))
                 .header(HttpHeaders.IF_MATCH, etag)
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -120,7 +120,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(TestAuthUtils.withCsrf(csrf))
                 .header(HttpHeaders.IF_MATCH, "*")
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, null))
                 .exchange()
                 .expectStatus()
                 .isUnauthorized()
@@ -130,7 +130,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRejectMissingAndStaleHttpPreconditionsWithoutOverwritingChoices() {
         long account = account();
-        var enable = new UpdateNotificationPreferencesDTO(false, true, false);
+        var enable = new UpdateNotificationPreferencesDTO(false, true, false, null);
         String etag = Objects.requireNonNull(web.get()
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
@@ -164,7 +164,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, etag)
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.PRECONDITION_FAILED)
@@ -181,7 +181,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
-                .bodyValue(new UpdateNotificationPreferencesDTO(true, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(true, false, false, null))
                 .exchange()
                 .expectStatus()
                 .isForbidden()
@@ -234,7 +234,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .header(
                         HttpHeaders.IF_MATCH,
                         Objects.requireNonNull(initial.getResponseHeaders().getETag()))
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, false, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.CONFLICT)
@@ -255,7 +255,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, true))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, true, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -274,7 +274,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .header(
                         HttpHeaders.IF_MATCH,
                         Objects.requireNonNull(saved.getResponseHeaders().getETag()))
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, true))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, true, true, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.CONFLICT)
@@ -325,7 +325,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldDefaultToNoSubscriptionsWithoutCreatingRows() {
+    void shouldDefaultToReporterUpdatesWithoutCreatingRows() {
         long account = account();
         Account unverified = accounts.findById(account).orElseThrow();
         unverified.setPrimaryEmailVerifiedAt(null);
@@ -334,6 +334,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         assertThat(preferences.productFeedback()).isFalse();
         assertThat(preferences.workspaceAlerts()).isFalse();
         assertThat(preferences.weeklyDigest()).isFalse();
+        assertThat(preferences.productFeedbackUpdates()).isTrue();
         assertThat(preferences.emailAvailable()).isFalse();
         assertThat(repository.findAllByAccountIdOrderByKind(account)).isEmpty();
     }
@@ -345,7 +346,8 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         var choices = new UpdateNotificationPreferencesDTO(
                 kind == NotificationSubscriptionKind.PRODUCT_FEEDBACK,
                 kind == NotificationSubscriptionKind.WORKSPACE_ALERTS,
-                kind == NotificationSubscriptionKind.MENTOR_DIGEST);
+                kind == NotificationSubscriptionKind.MENTOR_DIGEST,
+                kind == NotificationSubscriptionKind.PRODUCT_FEEDBACK_UPDATES);
         subscriptions.update(
                 account,
                 choices,
@@ -391,7 +393,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         long second = account();
         update(first, true, false);
         update(second, false, true);
-        assertThat(export.preferences(first)).isEqualTo(new Preferences(false, true, false));
+        assertThat(export.preferences(first)).isEqualTo(new Preferences(false, true, false, true));
         String token = subscriptions
                 .unsubscribeToken(first, NotificationSubscriptionKind.WORKSPACE_ALERTS)
                 .orElseThrow();
@@ -409,7 +411,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
 
         var turnedOn = subscriptions.update(
                 account,
-                new UpdateNotificationPreferencesDTO(false, false, true),
+                new UpdateNotificationPreferencesDTO(false, false, true, null),
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
 
@@ -431,7 +433,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         long account = account();
         subscriptions.update(
                 account,
-                new UpdateNotificationPreferencesDTO(false, false, true),
+                new UpdateNotificationPreferencesDTO(false, false, true, null),
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
         var body = mapper.createObjectNode().put("productFeedback", false).put("workspaceAlerts", true);
@@ -463,7 +465,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         long account = account();
         subscriptions.update(
                 account,
-                new UpdateNotificationPreferencesDTO(false, false, true),
+                new UpdateNotificationPreferencesDTO(false, false, true, null),
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
 
@@ -471,7 +473,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .uri("/user/notification-preferences")
                 .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
                 .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
-                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false))
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -488,7 +490,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         long account = account();
         subscriptions.update(
                 account,
-                new UpdateNotificationPreferencesDTO(false, false, true),
+                new UpdateNotificationPreferencesDTO(false, false, true, null),
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
         String token = subscriptions
@@ -510,7 +512,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     private void update(long account, boolean alerts, boolean digest) {
         subscriptions.update(
                 account,
-                new UpdateNotificationPreferencesDTO(false, alerts, digest),
+                new UpdateNotificationPreferencesDTO(false, alerts, digest, null),
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 false);
     }

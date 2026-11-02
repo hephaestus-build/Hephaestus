@@ -76,7 +76,12 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
             Map.entry("GitLabRateLimitTracker#evictStaleEntries", "LOCAL"),
             Map.entry("SlackRateLimitTracker#evictStaleEntries", "LOCAL"),
             Map.entry("ConversationFeedbackTtlSweeper#sweep", "ROW"),
-            Map.entry("FeedbackSendRecovery#recover", "ROW"));
+            Map.entry("FeedbackSendRecovery#recover", "ROW"),
+            Map.entry("CleanupService#cleanDue", "ROW"),
+            Map.entry("FilingService#fileDue", "ROW"),
+            Map.entry("FilingService#measureWaiting", "LOCAL"),
+            Map.entry("FollowService#promoteDue", "ROW"),
+            Map.entry("RoutingService#routeAnswered", "ROW"));
 
     private static final URL MAIN_CLASSES =
             Application.class.getProtectionDomain().getCodeSource().getLocation();

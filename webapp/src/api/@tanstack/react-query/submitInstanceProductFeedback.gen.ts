@@ -4,13 +4,13 @@ import type { DefaultError, UseMutationOptions } from '@tanstack/react-query';
 
 import type { Options } from '../../sdk.gen.js';
 import { submitInstanceProductFeedback } from '../../sdk/submitInstanceProductFeedback.gen.js';
-import type { SubmitInstanceProductFeedbackData } from '../../types.gen.js';
+import type { SubmitInstanceProductFeedbackData, SubmitInstanceProductFeedbackResponse } from '../../types.gen.js';
 
 /**
  * Send instance-scoped product feedback
  */
-export const submitInstanceProductFeedbackMutation = (options?: Partial<Options<SubmitInstanceProductFeedbackData>>): UseMutationOptions<unknown, DefaultError, Options<SubmitInstanceProductFeedbackData>> => {
-    const mutationOptions: UseMutationOptions<unknown, DefaultError, Options<SubmitInstanceProductFeedbackData>> = {
+export const submitInstanceProductFeedbackMutation = (options?: Partial<Options<SubmitInstanceProductFeedbackData>>): UseMutationOptions<SubmitInstanceProductFeedbackResponse, DefaultError, Options<SubmitInstanceProductFeedbackData>> => {
+    const mutationOptions: UseMutationOptions<SubmitInstanceProductFeedbackResponse, DefaultError, Options<SubmitInstanceProductFeedbackData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await submitInstanceProductFeedback({
                 ...options,

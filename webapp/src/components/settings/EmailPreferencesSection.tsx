@@ -34,6 +34,12 @@ export interface EmailPreferencesSectionProps {
 
 const choices = [
 	{
+		key: "productFeedbackUpdates",
+		label: "Your product feedback updates",
+		description:
+			"Get an email when the GitHub issue for your product feedback changes. These emails are on by default.",
+	},
+	{
 		key: "workspaceAlerts",
 		label: "Workspace connection alerts",
 		description:
@@ -43,7 +49,7 @@ const choices = [
 		key: "productFeedback",
 		label: "New product feedback",
 		description:
-			"Get an email when new product feedback arrives. Review it in the private instance-admin inbox. Resolving it does not notify the sender.",
+			"Get an email when new product feedback arrives. Review it in the private instance-admin inbox.",
 	},
 ] as const;
 
@@ -104,7 +110,7 @@ export function EmailPreferencesSection({ state, isAppAdmin }: EmailPreferencesS
 				<p className="text-sm text-muted-foreground">
 					{optOutOnly
 						? "You can turn off your existing email subscriptions below."
-						: "Optional emails are off until you choose to receive them. You can turn each kind off at any time. Essential account emails, such as account-deletion confirmations, are separate."}
+						: "Updates on your own product feedback are on by default. Other optional emails are off until you choose to receive them. You can turn each kind off at any time. Essential account emails, such as account-deletion confirmations, are separate."}
 				</p>
 			</div>
 			{state.status === "loading" && (
