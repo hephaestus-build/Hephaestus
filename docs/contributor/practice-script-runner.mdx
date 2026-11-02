@@ -64,6 +64,9 @@ Every new problem has verified citations and a permitted claim basis.
 An example can appear only on Met or Not met and cannot overlap a problem.
 
 A script returns what `ctx.review` returned, or a candidate that its code decided, without coverage.
+The program ends at `ctx.review`.
+The host stops the script's process when the review starts, so the process holds no memory while the model works.
+Code after `ctx.review` does not run, and the review's result is the program's result.
 The [pipeline](./practice-review-pipeline.mdx#admit-results) owns how the host measures coverage.
 
 Host coverage checks the practice's required sources and the sources that its result cites.

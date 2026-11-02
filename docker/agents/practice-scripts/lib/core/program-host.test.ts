@@ -33,7 +33,12 @@ import {
 	type RequiredSource,
 } from "./program-host.ts";
 import { InputReader } from "./script-inputs.ts";
-import { ProgramSettlementError, RETURN_MS } from "./script-run.ts";
+import {
+	ProgramSettlementError,
+	RETURN_MS,
+	SCRIPT_PROCESS_LEASE_MS,
+	SCRIPT_PROCESSES,
+} from "./script-run.ts";
 
 const roots: string[] = [];
 after(async () =>
@@ -141,6 +146,7 @@ interface RunOptions {
 	signal?: AbortSignal;
 	deadlineMs?: number;
 	requiredSources?: RequiredSource[];
+	log?: (line: string) => void;
 }
 
 async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
@@ -176,6 +182,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 			signal: options.signal ?? new AbortController().signal,
 			log: (line) => {
 				logs.push(line.replace(/^\s*\[[^\]]*\] /u, ""));
+				options.log?.(line);
 			},
 			receipts,
 			requiredSources: options.requiredSources ?? [],
@@ -214,17 +221,6 @@ const slowReview = (ms: number) => async () => {
 	await sleep(ms);
 	return REVIEWED;
 };
-
-/** A program that asks two reviews and returns `returns`, an expression over the second. */
-const reviewsTwice = (returns: string) =>
-	program(
-		"definePracticeScript",
-		`{ meta: {}, run: async (ctx) => {
-				await ctx.review({});
-				const second = await ctx.review({});
-				return ${returns};
-			} }`,
-	);
 
 /** A program that cites the change, and reads the core record first when `read` is set. */
 const decidesFromTheChange = (read: boolean) =>
@@ -353,94 +349,6 @@ void describe("a practice's result", () => {
 		assert.match(outcome.error ?? "", /complete coverage/u);
 	});
 
-	void test("code cannot turn a review's Could not determine into Does not apply after a failed read", async () => {
-		const ws = await workspace({
-			rides: program(
-				"definePracticeScript",
-				`{ meta: {}, run: async (ctx) => {
-					const reviewed = await ctx.review({});
-					await ctx.evidence.record("..").catch(() => undefined);
-					return {
-						outcome: "DOES_NOT_APPLY",
-						summary: "No user interface changes",
-						explanation: "The program replaced the review's outcome.",
-						citations: reviewed.citations,
-						evidence: {
-							inapplicability: {
-								consulted: ["scm.pull-request.core"],
-								prerequisite: "user interface files",
-								ruledOutBy: "No changed file is a view.",
-							},
-						},
-						coverage: reviewed.coverage,
-					};
-				} }`,
-			),
-		});
-		const { outcome } = await run(ws, "rides");
-		assert.equal(outcome.status, "failed");
-		assert.equal(outcome.stopReason, "invalid-candidate");
-		assert.match(outcome.error ?? "", /complete coverage/u);
-	});
-
-	void test("code cannot turn a review's Could not determine into Met on the review's coverage", async () => {
-		const ws = await workspace({
-			rides: program(
-				"definePracticeScript",
-				`{ meta: {}, run: async (ctx) => {
-					const reviewed = await ctx.review({});
-					return {
-						outcome: "MET",
-						summary: "Met",
-						explanation: "The program replaced the review's outcome and read nothing.",
-						citations: reviewed.citations,
-						evidence: {},
-						coverage: reviewed.coverage,
-					};
-				} }`,
-			),
-		});
-		const { outcome } = await run(ws, "rides");
-		assert.equal(outcome.status, "failed");
-		assert.equal(outcome.stopReason, "invalid-candidate");
-		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
-	});
-
-	void test("when two reviews return the same coverage, only their own decisions keep it", async () => {
-		const inapplicable: Candidate = {
-			outcome: "DOES_NOT_APPLY",
-			summary: "No user interface changes",
-			explanation: "The second review found no view.",
-			citations: REVIEWED.citations,
-			evidence: {
-				inapplicability: {
-					consulted: ["scm.pull-request.core"],
-					prerequisite: "user interface files",
-					ruledOutBy: "No changed file is a view.",
-				},
-			},
-			coverage: REVIEWED.coverage,
-		};
-		const ws = await workspace({
-			second: reviewsTwice("second"),
-			changed: reviewsTwice(`{ ...second, outcome: "MET", evidence: {} }`),
-		});
-		let asked = 0;
-		const review = async () => {
-			asked += 1;
-			return asked % 2 === 1 ? REVIEWED : inapplicable;
-		};
-		const kept = await run(ws, "second", { review });
-		assert.equal(kept.outcome.status, "ok", kept.outcome.error);
-		assert.partialDeepStrictEqual(kept.outcome.candidate, {
-			outcome: "DOES_NOT_APPLY",
-			coverage: { source: "host", reads: 3, complete: true },
-		});
-		const changed = await run(ws, "changed", { review });
-		assert.equal(changed.outcome.status, "failed");
-		assert.match(changed.outcome.error ?? "", /^met_coverage_incomplete:/u);
-	});
-
 	void test("code gets no MET until it reads each source that its practice requires", async () => {
 		const ws = await workspace({
 			unread: decidesFromTheChange(false),
@@ -475,7 +383,6 @@ void describe("a practice's result", () => {
 				"definePracticeScript",
 				`{ meta: {}, run: async (ctx) => {
 						await scm(ctx).files?.head.grep("needle");
-						await ctx.review({});
 						await ctx.evidence.record("metadata.json");
 						const found = await scm(ctx).files?.change?.cite("src/cart.ts", "NEW", 2);
 						return { outcome: "MET", summary: "Met", explanation: "The change shows the practice.",
@@ -597,21 +504,19 @@ void describe("a practice's result", () => {
 });
 
 void describe("one review at a time", () => {
-	void test("a second review through the context while one runs is refused", async () => {
+	void test("a second review through the context while one runs never starts", async () => {
 		const ws = await workspace({ "concurrent-review": await fixture("concurrent-review") });
-		const { outcome, reviews, logs } = await run(ws, "concurrent-review", {
+		const { outcome, reviews } = await run(ws, "concurrent-review", {
 			review: slowReview(100),
 		});
-		assert.ok(logs.includes("second review: refused"), logs.join("\n"));
 		assert.deepEqual(reviews, [{ directions: ["The first review."] }]);
 		assert.equal(outcome.status, "ok", outcome.error);
 		assert.deepEqual(outcome.calls, calls(1));
 	});
 
-	void test("a review request sent past the context while one runs is refused by the host", async () => {
+	void test("a review request sent past the context while one runs never starts", async () => {
 		const ws = await workspace({ "nested-review": await fixture("nested-review") });
-		const { outcome, reviews, logs } = await run(ws, "nested-review", { review: slowReview(100) });
-		assert.ok(logs.includes("nested review: refused"), logs.join("\n"));
+		const { outcome, reviews } = await run(ws, "nested-review", { review: slowReview(100) });
 		assert.equal(reviews.length, 1);
 		assert.equal(outcome.status, "ok", outcome.error);
 		assert.deepEqual(outcome.calls, calls(1));
@@ -671,23 +576,167 @@ export default definePracticeScript({
 		);
 	});
 
-	void test("a program may return its review's result with its own words, but never with other host coverage", async () => {
+	void test("a program ends at its review: its process is gone while the model works, and code after it does not run", async () => {
 		const ws = await workspace({
-			reworded: program(
+			after: program(
 				"definePracticeScript",
-				`{ meta: {}, async run(ctx) { const reviewed = await ctx.review(); return { ...reviewed, summary: "The program's own summary" }; } }`,
-			),
-			recounted: program(
-				"definePracticeScript",
-				`{ meta: {}, async run(ctx) { const reviewed = await ctx.review(); return { ...reviewed, coverage: { ...reviewed.coverage, reads: reviewed.coverage.reads + 1 } }; } }`,
+				`{ meta: {}, async run(ctx) {
+					ctx.log("pid " + process.pid);
+					const reviewed = await ctx.review({});
+					ctx.log("after the review");
+					return { ...reviewed, summary: "The program's own summary" };
+				} }`,
 			),
 		});
-		const reworded = await run(ws, "reworded");
-		assert.equal(reworded.outcome.status, "ok", reworded.outcome.error);
-		assert.equal(reworded.outcome.candidate?.summary, "The program's own summary");
-		const recounted = await run(ws, "recounted");
-		assert.equal(recounted.outcome.status, "failed");
-		assert.equal(recounted.outcome.stopReason, "invalid-candidate");
+		let alive: boolean | undefined;
+		const seen: string[] = [];
+		const { outcome, logs } = await run(ws, "after", {
+			log: (line) => {
+				seen.push(line);
+			},
+			review: async () => {
+				await sleep(300);
+				const pid = /pid (?<pid>\d+)/u.exec(seen.join("\n"))?.groups?.pid;
+				assert.ok(pid !== undefined, seen.join("\n"));
+				try {
+					process.kill(Number(pid), 0);
+					alive = true;
+				} catch {
+					alive = false;
+				}
+				return REVIEWED;
+			},
+		});
+		assert.equal(alive, false);
+		assert.ok(!logs.some((line) => line.includes("after the review")), logs.join("\n"));
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.equal(outcome.candidate?.summary, REVIEWED.summary);
+	});
+
+	void test("only a bounded number of script processes run at once, and the rest wait for room", async () => {
+		const ws = await workspace(
+			Object.fromEntries(
+				["a", "b", "c", "d", "e"].map((name) => [
+					name,
+					program(
+						"definePracticeScript",
+						`{ meta: {}, async run(ctx) {
+							ctx.log("span " + Date.now());
+							await new Promise((resolve) => setTimeout(resolve, 150));
+							ctx.log("span " + Date.now());
+							return ctx.review({});
+						} }`,
+					),
+				]),
+			),
+		);
+		const runs = await Promise.all(["a", "b", "c", "d", "e"].map(async (name) => run(ws, name)));
+		const spans = runs.map(({ outcome, logs }) => {
+			assert.equal(outcome.status, "ok", outcome.error);
+			const [from, to] = logs
+				.filter((line) => line.startsWith("span "))
+				.map((line) => Number(line.slice(5)));
+			assert.ok(from !== undefined && to !== undefined, logs.join("\n"));
+			return { from, to };
+		});
+		const overlap = Math.max(
+			...spans.map(
+				({ from }) => spans.filter((span) => span.from <= from && from < span.to).length,
+			),
+		);
+		assert.ok(overlap <= SCRIPT_PROCESSES, `${String(overlap)} ran at once`);
+	});
+
+	void test("scripts that hold their room past the lease do not starve the next one", async () => {
+		const ws = await workspace({
+			hold: program(
+				"definePracticeScript",
+				`{ meta: {}, async run() { return Promise.withResolvers().promise; } }`,
+			),
+			next: program(
+				"definePracticeScript",
+				`{ meta: {}, async run(ctx) { return ctx.review({}); } }`,
+			),
+		});
+		const release = new AbortController();
+		const holding = Array.from({ length: SCRIPT_PROCESSES }, async () =>
+			run(ws, "hold", { signal: release.signal }),
+		);
+		await sleep(200);
+		const { outcome } = await run(ws, "next", { deadlineMs: SCRIPT_PROCESS_LEASE_MS + 5000 });
+		assert.equal(outcome.status, "ok", outcome.error);
+		release.abort(new UnratedError("cancelled", "the attempt was cancelled"));
+		await Promise.all(holding);
+	});
+
+	void test("a program that waits for room stops when the attempt is cancelled", async () => {
+		const ws = await workspace({
+			hold: program(
+				"definePracticeScript",
+				`{ meta: {}, async run() { return Promise.withResolvers().promise; } }`,
+			),
+			next: program(
+				"definePracticeScript",
+				`{ meta: {}, async run(ctx) { return ctx.review({}); } }`,
+			),
+		});
+		const release = new AbortController();
+		const holding = Array.from({ length: SCRIPT_PROCESSES }, async () =>
+			run(ws, "hold", { signal: release.signal }),
+		);
+		await sleep(200);
+		const cancel = new AbortController();
+		const waiting = run(ws, "next", { signal: cancel.signal });
+		await sleep(50);
+		cancel.abort(new UnratedError("cancelled", "the attempt was cancelled"));
+		const { outcome, reviews } = await waiting;
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "cancelled");
+		assert.deepEqual(reviews, []);
+		release.abort(new UnratedError("cancelled", "the attempt was cancelled"));
+		await Promise.all(holding);
+	});
+
+	void test("requests open at its review end with the program and do not lose the review", async () => {
+		const ws = await workspace({
+			busy: program(
+				"definePracticeScript",
+				`{ meta: {}, async run(ctx) {
+					for (let i = 0; i < 28; i += 1) void ctx.evidence.record("metadata.json").catch(() => undefined);
+					return ctx.review({});
+				} }`,
+			),
+		});
+		for (let round = 0; round < 12; round += 1) {
+			const { outcome } = await run(ws, "busy", {
+				review: async () => {
+					await sleep(20);
+					return REVIEWED;
+				},
+			});
+			assert.equal(outcome.status, "ok", outcome.error);
+			assert.deepEqual(outcome.calls, calls(1));
+		}
+	});
+
+	void test("a review that gives no result ends the program with the review's reason", async () => {
+		const ws = await workspace({
+			caught: program(
+				"definePracticeScript",
+				`{ meta: {}, async run(ctx) {
+					try { return await ctx.review({}); }
+					catch { return { outcome: "MET", summary: "Met", explanation: "Code replaced it.", citations: [], evidence: {} }; }
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "caught", {
+			review: async () => {
+				throw new UnratedError("off-format", "the session ended without a result");
+			},
+		});
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "off-format");
+		assert.equal(outcome.candidate, undefined);
 	});
 });
 
@@ -738,11 +787,10 @@ void describe("the host's bounds on a program's messages", () => {
 			next: null,
 		});
 		let active = false;
-		const review = async (_options: ReviewOptions, signal: AbortSignal) => {
+		const review = async () => {
 			assert.equal(active, false);
 			active = true;
 			try {
-				await once(signal, "abort");
 				await sleep(40);
 				return REVIEWED;
 			} finally {
@@ -766,12 +814,12 @@ void describe("the host's bounds on a program's messages", () => {
 		const ws = await workspace({
 			stuck: program(
 				"definePracticeScript",
-				`{ meta: {}, async run(ctx) { void ctx.review(); throw new Error("stop"); } }`,
+				`{ meta: {}, async run(ctx) { return ctx.review(); } }`,
 			),
 		});
 		try {
 			await assert.rejects(
-				run(ws, "stuck", { review: async () => pending.promise }),
+				run(ws, "stuck", { deadlineMs: 2000, review: async () => pending.promise }),
 				ProgramSettlementError,
 			);
 		} finally {
@@ -836,13 +884,13 @@ void describe("the host's bounds on a program's messages", () => {
 			reused: program(
 				"definePracticeScript",
 				`{ meta: {}, async run() {
-					process.send(JSON.stringify({ kind: "review", id: 7, options: {} }));
+					process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
 					process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
 					return Promise.withResolvers().promise;
 				} }`,
 			),
 		});
-		const { outcome } = await run(ws, "reused", { review: slowReview(300) });
+		const { outcome } = await run(ws, "reused");
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "error");
 		assert.equal(outcome.error, "the program reused the id of request 7");
@@ -909,7 +957,7 @@ void describe("a program that does not stop when the host stops it", { concurren
 		assert.equal(outcome.stopReason, "cancelled");
 		assert.equal(outcome.candidate, undefined);
 	});
-	void test("on cancellation, its open review fails, a later reply is not delivered, and the host ends it", async () => {
+	void test("on cancellation, its open review stops and the program is already gone", async () => {
 		const cancel = new AbortController();
 		const ws = await workspace({ cancellation: await fixture("cancellation") });
 		const { outcome, logs } = await run(ws, "cancellation", {
@@ -920,22 +968,18 @@ void describe("a program that does not stop when the host stops it", { concurren
 				return REVIEWED;
 			},
 		});
-		assert.ok(logs.includes("review: cancelled"), logs.join("\n"));
 		assert.ok(
-			!logs.some((line) => line.startsWith("late reply") || line === "review: answered"),
+			!logs.some((line) => line.startsWith("review:") || line.startsWith("late reply")),
 			logs.join("\n"),
 		);
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "cancelled");
 		assert.equal(outcome.error, "the host stopped this program: cancelled");
-		assert.ok(
-			(outcome.durationMs ?? 0) >= RETURN_MS,
-			`ended after ${String(outcome.durationMs)}ms`,
-		);
+		assert.ok((outcome.durationMs ?? 0) < RETURN_MS, `ended after ${String(outcome.durationMs)}ms`);
 		reportEntry("cancellation", outcome);
 	});
 
-	void test("at its deadline, its open review fails, a later reply is not delivered, and the host ends it", async () => {
+	void test("at its deadline, its open review stops and the program is already gone", async () => {
 		const ws = await workspace({ cancellation: await fixture("cancellation") });
 		const { outcome, logs } = await run(ws, "cancellation", {
 			deadlineMs: 1000,
@@ -945,15 +989,14 @@ void describe("a program that does not stop when the host stops it", { concurren
 				return REVIEWED;
 			},
 		});
-		assert.ok(logs.includes("review: deadline"), logs.join("\n"));
 		assert.ok(
-			!logs.some((line) => line.startsWith("late reply") || line === "review: answered"),
+			!logs.some((line) => line.startsWith("review:") || line.startsWith("late reply")),
 			logs.join("\n"),
 		);
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "deadline");
 		assert.ok(
-			(outcome.durationMs ?? 0) >= 1000 + RETURN_MS - 100,
+			(outcome.durationMs ?? 0) < 1000 + RETURN_MS,
 			`ended after ${String(outcome.durationMs)}ms`,
 		);
 	});

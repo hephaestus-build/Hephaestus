@@ -407,39 +407,6 @@ function recordOf(value: unknown): Record<string, unknown> {
 	return Object.fromEntries(Object.entries(value));
 }
 
-void test("a custom program's repeated review sessions spend only its reservation", async () => {
-	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-custom-")));
-	try {
-		const program = `import { definePracticeScript } from "../lib/core/practice-script.ts";
-export default definePracticeScript({ meta: {}, async run(ctx) {
-    await ctx.review({});
-    return ctx.review({});
-} });`;
-		stagePractices(cwd, [{ slug: "script", program }, { slug: "sibling" }, { slug: "other" }]);
-		const exit = await runRunner(
-			cwd,
-			{},
-			{ PI_PRACTICE_CONCURRENCY: "3", PI_PRACTICE_MODEL_CALLS: "2" },
-		);
-		assert.equal(exit.status, 0, exit.stderr);
-		assert.deepEqual(
-			resultsOf(cwd).results.map((result: unknown) => field(result, "practiceSlug")),
-			["other", "script", "sibling"],
-		);
-		const report = executionReportSchema.parse(readJsonFile(cwd, "out/practice-scripts.json"));
-		assert.equal(
-			report.practices.find((practice) => practice.practiceSlug === "script")?.calls.review,
-			2,
-		);
-		assert.partialDeepStrictEqual(readJsonFile(cwd, "out/usage.json"), {
-			totalCalls: 4,
-			outputTokens: 400,
-		});
-	} finally {
-		rmSync(cwd, { recursive: true, force: true });
-	}
-});
-
 void test("a session stop failure preserves completed siblings for admission and starts no further practice", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-stop-")));
 	try {

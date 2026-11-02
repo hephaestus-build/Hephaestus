@@ -96,7 +96,10 @@ export type PracticeScriptContext<M extends ModelNeeds = ModelNeeds> = PracticeI
 
 export interface PracticeScriptDefinition<M extends ModelNeeds> {
 	meta: PracticeScriptMeta<M>;
-	/** Return what `ctx.review` returned, or a result that code decided: without coverage, which the host measures. */
+	/**
+	 * Return what `ctx.review` returned, or a result that code decided: without coverage, which the host measures.
+	 * The program ends at `ctx.review`: code after it does not run, and the session's result is the program's result.
+	 */
 	run: (ctx: PracticeScriptContext<M>) => Promise<Candidate | SessionCandidate>;
 }
 

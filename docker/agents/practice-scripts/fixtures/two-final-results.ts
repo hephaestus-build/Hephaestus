@@ -2,9 +2,10 @@ import { definePracticeScript } from "../lib/core/practice-script.ts";
 
 export default definePracticeScript({
 	meta: {},
-	async run(ctx) {
-		const candidate = await ctx.review();
-		process.send?.(JSON.stringify({ kind: "result", value: candidate }));
-		return candidate;
+	async run() {
+		const final = JSON.stringify({ kind: "result", value: {} });
+		process.send?.(final);
+		process.send?.(final);
+		return Promise.withResolvers<never>().promise;
 	},
 });

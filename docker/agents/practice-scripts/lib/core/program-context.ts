@@ -1,7 +1,7 @@
 import type { Candidate, ReviewOptions, SlotModels } from "./contract.ts";
 import { registerDomainAccess } from "./domain-access.ts";
 import { MAX_LOG_CHARS, type ProgramJob, type ReadRequest, type ReadValues } from "./ipc.ts";
-import { UnratedError, type Evidence, type PracticeScriptContext } from "./practice-script.ts";
+import type { Evidence, PracticeScriptContext } from "./practice-script.ts";
 
 export interface ProgramPort {
 	read: <R extends ReadRequest>(request: R) => Promise<ReadValues[R["op"]]>;
@@ -25,7 +25,6 @@ export function programContext(job: ProgramJob, port: ProgramPort): PracticeScri
 				...(endLine === undefined ? {} : { endLine }),
 			}),
 	};
-	let reviewing = false;
 	const context: PracticeScriptContext = {
 		...job.inputs,
 		evidence,
@@ -36,17 +35,10 @@ export function programContext(job: ProgramJob, port: ProgramPort): PracticeScri
 		now: job.now,
 		abortSignal: port.abortSignal,
 		log: (text) => port.log(text.slice(0, MAX_LOG_CHARS)),
-		review: Object.assign(async (options?: ReviewOptions): Promise<Candidate> => {
-			if (reviewing) {
-				throw new UnratedError("refused", "a review of this practice is already running");
-			}
-			reviewing = true;
-			try {
-				return await port.review(options);
-			} finally {
-				reviewing = false;
-			}
-		}, job.inputs.review),
+		review: Object.assign(
+			async (options?: ReviewOptions): Promise<Candidate> => port.review(options),
+			job.inputs.review,
+		),
 	};
 	registerDomainAccess(context, job.files, port);
 	return context;
