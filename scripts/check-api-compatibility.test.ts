@@ -10,6 +10,7 @@ import {
 	headsForMajorRelease,
 	installOasdiff,
 	latestStableTag,
+	removedFromContract,
 } from "./check-api-compatibility.ts";
 
 const oasdiff = await installOasdiff();
@@ -31,8 +32,15 @@ const draft = (properties: Record<string, object> = {}) => ({
 });
 
 /** One spec with a list, a create and a delete operation, as the base release publishes it. */
-function spec(options: { optional?: Record<string, object>; withDelete?: boolean } = {}) {
-	const { optional = {}, withDelete = true } = options;
+function spec(
+	options: {
+		optional?: Record<string, object>;
+		withDelete?: boolean;
+		deleteDeprecated?: boolean;
+		responseOnly?: Record<string, object>;
+	} = {},
+) {
+	const { optional = {}, withDelete = true, deleteDeprecated = false, responseOnly = {} } = options;
 	return {
 		openapi: "3.1.0",
 		info: { title: "Fixture", version: "1.0.0" },
@@ -41,7 +49,10 @@ function spec(options: { optional?: Record<string, object>; withDelete?: boolean
 				get: {
 					operationId: "listItems",
 					responses: {
-						"200": { description: "Items", ...json({ type: "array", items: item(optional) }) },
+						"200": {
+							description: "Items",
+							...json({ type: "array", items: item({ ...optional, ...responseOnly }) }),
+						},
 					},
 				},
 				post: {
@@ -54,6 +65,7 @@ function spec(options: { optional?: Record<string, object>; withDelete?: boolean
 				"/items/{id}": {
 					delete: {
 						operationId: "deleteItem",
+						deprecated: deleteDeprecated,
 						parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
 						responses: { "204": { description: "Deleted" } },
 					},
@@ -69,10 +81,11 @@ async function compare(
 	acceptedBreaks = "",
 	baseTag = "v0.9.0",
 	majorRelease = false,
+	base: object = spec(),
 ) {
 	fixtures += 1;
 	const name = (role: string) => path.join(directory, `${role}-${fixtures}`);
-	await writeFile(name("base"), JSON.stringify(spec()));
+	await writeFile(name("base"), JSON.stringify(base));
 	await writeFile(name("revision"), JSON.stringify(revision));
 	await writeFile(name("accepted"), acceptedBreaks);
 	return compareSpecs({
@@ -98,6 +111,100 @@ void test("a removed endpoint breaks a client of the base", async () => {
 void test("an added optional field in a request and a response is compatible", async () => {
 	const { compatible } = await compare(spec({ optional: { note: { type: "string" } } }));
 	assert.equal(compatible, true);
+});
+
+const withStatus = (values: string[]) =>
+	spec({ responseOnly: { status: { type: "string", enum: values } } });
+
+for (const baseTag of ["v0.9.0", "v1.2.0"]) {
+	void test(`a new value in a response enum is compatible against ${baseTag}`, async () => {
+		const { compatible, problems } = await compare(
+			withStatus(["OPEN", "CLOSED", "PAUSED"]),
+			"",
+			baseTag,
+			false,
+			withStatus(["OPEN", "CLOSED"]),
+		);
+		assert.equal(compatible, true);
+		assert.deepEqual(problems, []);
+	});
+}
+
+const requestWithStatus = (values: string[]) =>
+	spec({ optional: { status: { type: "string", enum: values } } });
+
+void test("a value removed from a request enum still breaks a client", async () => {
+	const { compatible } = await compare(
+		requestWithStatus(["OPEN"]),
+		"",
+		"v0.9.0",
+		false,
+		requestWithStatus(["OPEN", "CLOSED"]),
+	);
+	assert.equal(compatible, false);
+});
+
+const withNote = spec({ responseOnly: { note: { type: "string" } } });
+
+void test("an optional response property can go before 1.0", async () => {
+	const { compatible } = await compare(spec(), "", "v0.9.0", false, withNote);
+	assert.equal(compatible, true);
+});
+
+void test("from a 1.0 base, a removed optional response property breaks a client", async () => {
+	const { compatible, report } = await compare(spec(), "", "v1.2.0", false, withNote);
+	assert.equal(compatible, false);
+	assert.match(report, /response-optional-property-removed/u);
+});
+
+const deprecatedDelete = spec({ deleteDeprecated: true });
+
+void test("a deprecated operation can go before 1.0", async () => {
+	const { compatible, problems } = await compare(
+		spec({ withDelete: false }),
+		"",
+		"v0.9.0",
+		false,
+		deprecatedDelete,
+	);
+	assert.equal(compatible, true);
+	assert.deepEqual(problems, []);
+});
+
+void test("from a 1.0 base, a deprecated operation stays until a major release", async () => {
+	const minor = await compare(spec({ withDelete: false }), "", "v1.2.0", false, deprecatedDelete);
+	assert.equal(minor.compatible, true, "oasdiff accepts the removal of a deprecated operation");
+	assert.match(minor.problems.join("\n"), /in API DELETE \/items\/\{\}/u);
+	const major = await compare(spec({ withDelete: false }), "", "v1.2.0", true, deprecatedDelete);
+	assert.deepEqual(major.problems, []);
+});
+
+const withParameters = (parameters: string) => `paths:
+  /items:
+    parameters: [{ name: shared, in: query }]
+    get:
+      parameters: ${parameters}
+`;
+
+void test("a removed parameter counts as removed, wherever the spec declares it", () => {
+	assert.deepEqual(
+		removedFromContract(withParameters("[{ name: page, in: query }]"), withParameters("[]")),
+		["in API GET /items parameter query page"],
+	);
+	assert.deepEqual(
+		removedFromContract(withParameters("[]"), withParameters("[{ name: page, in: query }]")),
+		[],
+	);
+});
+
+const withVariable = (variable: string) => `paths:
+  /items/{${variable}}:
+    get:
+      parameters: [{ name: ${variable}, in: path }]
+`;
+
+void test("renaming a path variable removes nothing", () => {
+	assert.deepEqual(removedFromContract(withVariable("id"), withVariable("itemId")), []);
 });
 
 void test("an accepted break passes, and an entry that accepts nothing is obsolete", async () => {
@@ -151,6 +258,16 @@ void test("from a 1.0 base, a higher package.json major lets an accepted break p
 	const { compatible, problems } = await compareWith1x(await checkout("2.0.0"));
 	assert.equal(compatible, true);
 	assert.deepEqual(problems, []);
+});
+
+void test("a major changeset that pre mode consumed heads for no release after that one", async () => {
+	const root = await checkout("1.0.0");
+	await mkdir(path.join(root, ".changeset", "pre"), { recursive: true });
+	await writeFile(
+		path.join(root, ".changeset", "pre", "release-1-0-0.md"),
+		'---\n"hephaestus": major\n---\n\nHephaestus 1.0.\n',
+	);
+	assert.equal(await headsForMajorRelease(root, "v1.0.0"), false);
 });
 
 void test("from a 1.0 base, an obsolete entry does not fail the gate", async () => {

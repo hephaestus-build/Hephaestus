@@ -53,6 +53,19 @@ CI still fails on a 0.x API break until the change lists it as accepted.
 
 :::
 
+## Open enums
+
+A response enum of the REST API is open.
+A client must accept a value that it does not know, and must not fail on it.
+Thus, a new value in a response is a minor change.
+A new recorded reason is an example.
+
+A request enum stays closed: removing a value that a client can send is a breaking change.
+
+The observation outcomes and the problem severities are not open.
+A new outcome or severity is a major change, because it changes what an observation means.
+The [product vocabulary](/contributor/practice-feedback-language#observation-outcomes) defines them.
+
 ## Database migrations
 
 The [migrate run mode](./runtime-roles#database-migrations) applies pending changesets, in order, before the runtime roles of a release start.

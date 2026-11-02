@@ -78,7 +78,7 @@ It does not replace the full quality gate or any CI check.
 | Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, changelog immutability and compatibility guards, legacy-reference guards                                                            | —                                                                        |
-| Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
+| Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze, [public contract](#public-contract-gate)                                                                                                                     | `vp run gate:changesets`, `gate:public-contract`                                                 |
 | Docker → Images, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The App Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
@@ -135,6 +135,31 @@ The `ci:full` label also runs it on the pull request.
 An unreadable label or a missing selection output runs it too.
 A Windows failure first found in the merge group removes the entry from the queue.
 
+### Public contract gate
+
+`vp run gate:public-contract` protects what the [compatibility policy](/admin/compatibility-policy#the-public-contract) promises outside the REST API.
+The `Verify changesets` job runs it for each pull request.
+It compares the checkout with the highest stable `vX.Y.Z` tag on `origin`, as [API compatibility](#api-compatibility) does.
+
+Below `v1.0.0` the gate refuses nothing.
+It only warns about a file that it can no longer find.
+Thus, the 1.0 cutovers can change these surfaces freely.
+A pre-release tag never becomes the base. To rehearse the gate, add `--base v1.0.0-rc.1`.
+
+From `v1.0.0`, the gate fails on these changes, unless the change [heads for a major release](#accept-a-deliberate-break):
+
+| Surface | The gate fails on |
+| --- | --- |
+| Helm chart values | A value that is gone, a lower maximum, a higher minimum, or a lost enum value |
+| Shipped alert rules | An alert that is gone, or a metric that the rules no longer read |
+| Practice definition schema | A field that is gone |
+| Catalog | A practice or group slug that is gone |
+| Practice script entry points | An export that is gone, or a changed contract version, outcome list or severity list |
+| Links in posted text | A route in `DEEP_LINKS` that the web app no longer has |
+
+A change that moves one of these files updates the list in `scripts/check-public-contract.ts`.
+Otherwise, the gate warns below `v1.0.0` and fails from `v1.0.0`.
+
 ### API compatibility
 
 A browser tab can run the SPA of one release against the server of the next release for days.
@@ -159,10 +184,19 @@ It shows `WARN` changes, but they do not fail it.
   To update oasdiff, change the version and all checksums together.
   Compare each checksum in the release's `checksums.txt` with the asset digest on the release page.
 
-A new value in a response enum is an `ERR` change, because an older tab cannot show it.
-Its vocabulary maps have no text for the value, and its generated schemas reject a Hephaestus live event that carries it.
-oasdiff accepts the removal of an operation or parameter that the base release marks `deprecated`.
-This agrees with the [deprecation policy](/admin/compatibility-policy#deprecation-policy).
+The gate changes the level of some oasdiff rules. `scripts/check-api-compatibility.ts` lists them.
+
+- A new value in a response enum is not a break, because [response enums are open](/admin/compatibility-policy#open-enums).
+  Do not add an accepted break for one.
+  The Chrome extension shows such a value as unknown.
+  A web app tab from the previous release can show its route error until the reader reloads the page.
+- From a base of `v1.0.0`, a removed optional response property is an `ERR` change.
+  A changed response media type is an `ERR` change too.
+- From a base of `v1.0.0`, the gate fails on a removed operation or parameter.
+  It also fails when the base release marks that operation or parameter `deprecated`.
+  oasdiff alone accepts these removals, and the [deprecation policy](/admin/compatibility-policy#deprecation-policy) does not.
+
+oasdiff does not compare operation IDs or tags. The policy does not promise them.
 
 #### Accept a deliberate break
 
