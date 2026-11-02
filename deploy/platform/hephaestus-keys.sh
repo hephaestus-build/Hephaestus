@@ -203,6 +203,10 @@ if [ -n "$ROTATE" ]; then
 		kubectl -n "$NAMESPACE" rollout restart "$deployment" >/dev/null ||
 			die "the Secret has the new value, but these did not restart:$remaining. Restart them with kubectl -n $NAMESPACE rollout restart, and do not run --rotate again"
 		remaining=${remaining#" $deployment"}
+		# A restart returns before the new pods run. The webhook pods that still run read only the old
+		# routing value, so the server must not sign a hook with the new one until they are replaced.
+		kubectl -n "$NAMESPACE" rollout status "$deployment" --timeout=10m >/dev/null ||
+			die "$deployment restarted, but it is not ready after 10 minutes. Check it with kubectl -n $NAMESPACE rollout status $deployment${remaining:+, then restart what did not restart yet:$remaining}. Do not run --rotate again"
 		echo "Restarted $deployment"
 	done
 	exit 0

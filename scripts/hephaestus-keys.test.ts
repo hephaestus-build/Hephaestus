@@ -48,9 +48,12 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(args) + "\\n");
 const save = () => fs.writeFileSync(process.env.FAKE_STATE, JSON.stringify(state));
 const has = (word) => args.includes(word);
-// A restart only needs to be logged: the tests read the log. Each role has one Deployment unless
-// the state names others.
-if (has("rollout")) process.exit(0);
+// A restart only needs to be logged: the tests read the log. A rollout status fails for a Deployment
+// that the state names as unready. Each role has one Deployment unless the state names others.
+if (has("rollout")) {
+	const unready = (state.unready ?? []).some((name) => args.includes("deployment.apps/hephaestus-" + name));
+	process.exit(has("status") && unready ? 1 : 0);
+}
 if (has("deployment")) {
 	const role = /component=(\\w+)/.exec(args.join(" "))[1];
 	for (const name of (state.deployments ?? { server: ["server"], webhook: ["webhook"] })[role] ?? []) {
@@ -86,6 +89,8 @@ interface Cluster {
 	volume?: boolean;
 	/** The Deployment names per role; one per role when absent. */
 	deployments?: Record<string, string[]>;
+	/** The Deployments whose rollout does not finish. */
+	unready?: string[];
 }
 
 interface Run {
@@ -596,8 +601,19 @@ const withoutRouting = (secret: Record<string, string>) =>
 const restarts = (argv: string) =>
 	argv
 		.split("\n")
-		.filter((line) => line.includes('"rollout"'))
+		.filter((line) => line.includes('"rollout"') && line.includes('"restart"'))
 		.map((line) => /deployment\.apps\/hephaestus-(?<role>\w+)/u.exec(line)?.groups?.role ?? "");
+
+/** Each rollout command in order, as "restart webhook" or "status webhook". */
+const rollouts = (argv: string) =>
+	argv
+		.split("\n")
+		.map(
+			(line) =>
+				/"rollout","(?<verb>\w+)","deployment\.apps\/hephaestus-(?<role>\w+)"/u.exec(line)?.groups,
+		)
+		.filter((groups) => groups !== undefined)
+		.map((groups) => `${groups.verb ?? ""} ${groups.role ?? ""}`);
 
 await test(
 	"--rotate replaces the state-cookie key alone, and restarts the server",
@@ -640,9 +656,9 @@ await test(
 		assert.match(result.secret.WEBHOOK_ROUTING_SECRET ?? "", /^[0-9a-f]{64}$/u);
 		assert.notEqual(result.secret.WEBHOOK_ROUTING_SECRET, first.secret.WEBHOOK_ROUTING_SECRET);
 		assert.deepEqual(
-			restarts(result.argv),
-			["webhook", "server"],
-			"the webhook role restarts first",
+			rollouts(result.argv),
+			["restart webhook", "status webhook", "restart server", "status server"],
+			"the server restarts only once the webhook pods hold both values",
 		);
 		assert.deepEqual(
 			withoutRouting(result.secret),
@@ -666,6 +682,16 @@ await test(
 		assert.match(again.output, /retire it first/u);
 		assert.deepEqual(again.secret, result.secret);
 		assert.deepEqual(restarts(again.argv), []);
+
+		// Webhook pods that never become ready keep the server on the old value, and the run says so.
+		const stuck = run({
+			cluster: { secret: encoded(first.secret), unready: ["webhook"] },
+			args: ["--rotate", "WEBHOOK_ROUTING_SECRET"],
+		});
+		assert.notEqual(stuck.status, 0);
+		assert.deepEqual(restarts(stuck.argv), ["webhook"], "the server does not restart");
+		assert.match(stuck.output, /hephaestus-webhook restarted, but it is not ready/u);
+		assert.match(stuck.output, /did not restart yet: deployment\.apps\/hephaestus-server\./u);
 	},
 );
 
