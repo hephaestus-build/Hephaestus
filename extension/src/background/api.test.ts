@@ -181,6 +181,11 @@ function refreshHeldBy(refresh: Promise<Response>) {
 /** A real server that redirects a refresh elsewhere, recording every path it was asked for. */
 function redirectingRefresh(received: string[]) {
 	return (request: IncomingMessage, response: ServerResponse) => {
+		// Another local process can probe a newly opened port. Only the refresh call counts.
+		if (request.method !== "POST") {
+			response.writeHead(404).end();
+			return;
+		}
 		received.push(request.url ?? "");
 		if (request.url === "/api/auth/client/refresh") {
 			response.writeHead(307, { Location: "/elsewhere" });

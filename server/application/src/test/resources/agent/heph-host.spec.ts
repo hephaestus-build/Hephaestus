@@ -1890,6 +1890,11 @@ function completionChunk(delta: Record<string, unknown>, finish: string | null):
 /** An OpenAI-compatible endpoint standing in for the worker's LLM proxy. */
 async function fakeProxy(answer: (request: IncomingMessage, body: string) => Promise<string>) {
 	const server = createServer((request, response) => {
+		// Another local process can probe a newly opened port. Only the provider call counts.
+		if (request.method !== "POST") {
+			response.writeHead(404).end();
+			return;
+		}
 		let body = "";
 		request.on("data", (chunk: Buffer) => {
 			body += chunk.toString("utf8");
@@ -2015,6 +2020,11 @@ void test("a summary asks for thinking off through the standard control only, wi
 /** A stand-in for the worker's LLM proxy that answers every model call with `answer`. */
 async function proxyAnswering(answer: (response: ServerResponse) => void) {
 	const server = createServer((request, response) => {
+		// Another local process can probe a newly opened port. Only the provider call counts.
+		if (request.method !== "POST") {
+			response.writeHead(404).end();
+			return;
+		}
 		request.resume();
 		request.on("end", () => answer(response));
 	});
@@ -2411,6 +2421,7 @@ void test("the command channel carries the host's credential, runs its commands,
 
 		assert.deepEqual(commands, ["start t1 1 turn-token", "stop t1 1 developer"]);
 	} finally {
+		server.closeAllConnections();
 		server.close();
 	}
 });
@@ -2457,6 +2468,7 @@ void test("a command channel that did not open is tried again, and the host runs
 
 		assert.equal(upgrades, 2, "a channel that opened and closed is not tried again");
 	} finally {
+		server.closeAllConnections();
 		server.close();
 	}
 });
@@ -2482,6 +2494,7 @@ void test("a command channel that never opens ends after its tries", async () =>
 
 		assert.equal(upgrades, 3);
 	} finally {
+		server.closeAllConnections();
 		server.close();
 	}
 });

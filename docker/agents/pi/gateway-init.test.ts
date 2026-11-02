@@ -15,7 +15,11 @@ void test("retries a truncated workspace from byte zero", async () => {
 	const workspace = Buffer.from("complete workspace archive");
 	let requests = 0;
 	const server = createServer((request, response) => {
-		assert.equal(request.headers.authorization, "Bearer attempt-token");
+		// Another local process can probe a newly opened port. It carries no credential.
+		if (request.headers.authorization !== "Bearer attempt-token") {
+			response.writeHead(401).end();
+			return;
+		}
 		if (request.url === "/runtime") {
 			response.setHeader("Content-Type", "application/json");
 			response.end(
@@ -61,6 +65,11 @@ void test("rejects an archive above the advertised budget without retry", async 
 			response.end(JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 2 }));
 			return;
 		}
+		// Another local process can probe a newly opened port. Only the workspace requests count.
+		if (request.url !== "/runtime/workspace") {
+			response.writeHead(404).end();
+			return;
+		}
 		requests += 1;
 		response.end("too large");
 	});
@@ -93,6 +102,11 @@ void test("rejects a workspace without an exact transfer length without retry", 
 	const server = createServer((request, response) => {
 		if (request.url === "/runtime") {
 			response.end(JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 1024 }));
+			return;
+		}
+		// Another local process can probe a newly opened port. Only the workspace requests count.
+		if (request.url !== "/runtime/workspace") {
+			response.writeHead(404).end();
 			return;
 		}
 		requests += 1;

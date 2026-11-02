@@ -38,6 +38,11 @@ interface Answer {
 async function fakeWorker(answers: Answer[]) {
 	const received: Received[] = [];
 	const server = createServer((request, response) => {
+		// Another local process can probe a newly opened port. It carries no credential.
+		if (request.headers.authorization === undefined) {
+			response.writeHead(401).end();
+			return;
+		}
 		let text = "";
 		request.on("data", (chunk: Buffer) => {
 			text += chunk.toString("utf8");
