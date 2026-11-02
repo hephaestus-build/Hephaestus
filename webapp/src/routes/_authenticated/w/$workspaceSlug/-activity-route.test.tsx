@@ -265,6 +265,41 @@ describe("Activity", () => {
 		expect(reads.some((url) => url.searchParams.get("login") === "ada")).toBe(false);
 	});
 
+	it("says a sync is running when your timeline is empty, and only then", async () => {
+		const progress: string[] = [];
+		const work = { content: [] as Wire<ActivityWork>[], nextCursor: null };
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/me/work", () => HttpResponse.json(work)),
+			http.get("*/workspaces/:workspaceSlug/sync/progress", ({ request }) => {
+				progress.push(request.url);
+				return HttpResponse.json({ syncing: true });
+			}),
+		);
+
+		renderRouteAtWithRouter("/w/acme/activity");
+		await screen.findByText(/A sync is still running/u, undefined, ROUTE_RENDER_WAIT);
+		screen.getByText("No activity in this range");
+		expect(progress).toHaveLength(1);
+	});
+
+	it("does not ask about a sync while your timeline has work", async () => {
+		const progress: string[] = [];
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/activity/me/work", () =>
+				HttpResponse.json({ content: [workItem(1)], nextCursor: null }),
+			),
+			http.get("*/workspaces/:workspaceSlug/sync/progress", ({ request }) => {
+				progress.push(request.url);
+				return HttpResponse.json({ syncing: true });
+			}),
+		);
+
+		renderRouteAtWithRouter("/w/acme/activity");
+		await screen.findByText("Pull request 1", undefined, ROUTE_RENDER_WAIT);
+		expect(progress).toStrictEqual([]);
+		expect(screen.queryByText(/A sync is still running/u)).toBeNull();
+	});
+
 	it("pages your timeline by the server's cursor and asks the server for the period", async () => {
 		server.use(pagedWork(record));
 		const user = userEvent.setup();

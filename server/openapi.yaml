@@ -11188,6 +11188,29 @@ paths:
       summary: Update workspace lifecycle status
       tags:
       - workspace
+  /workspaces/{workspaceSlug}/sync/progress:
+    get:
+      operationId: getWorkspaceSyncProgress
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceSyncProgress"
+          description: OK
+      summary: Whether a sync is running in this workspace
+      tags:
+      - Sync
   /workspaces/{workspaceSlug}/team:
     get:
       description: Returns all teams in the workspace organization
@@ -27618,6 +27641,15 @@ components:
       required:
       - developers
       - standing
+    WorkspaceSyncProgress:
+      type: object
+      description: What a workspace member may know about syncing
+      properties:
+        syncing:
+          type: boolean
+          description: "A sync job is pending or running, so more work may still arrive"
+      required:
+      - syncing
     WorkspaceTile:
       type: object
       description: "One figure: the reader's own value, then the middle half of the\

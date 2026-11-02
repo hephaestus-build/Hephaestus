@@ -4,7 +4,13 @@ import type { ReactElement } from "react";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 
 import { GitLabClockIcon, GitLabUsersIcon } from "@/components/icons/gitlab-icons";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@/components/ui/empty";
 
 import { providerIcon } from "./activity-tones";
 
@@ -12,15 +18,22 @@ export interface ActivityEmptyProps {
 	icon: ReactElement;
 	/** What is missing, in five words or fewer and no closing period: "No activity in this range". */
 	title: string;
+	/** Whether a sync is running, so the list may not stay empty. */
+	syncing?: boolean;
 }
 
 /** An empty list on an activity surface, in the place and at the width of the list it stands for. */
-export function ActivityEmpty({ icon, title }: ActivityEmptyProps) {
+export function ActivityEmpty({ icon, title, syncing = false }: ActivityEmptyProps) {
 	return (
 		<Empty variant="outlined">
 			<EmptyHeader>
 				<EmptyMedia variant="icon">{icon}</EmptyMedia>
 				<EmptyTitle>{title}</EmptyTitle>
+				{syncing && (
+					<EmptyDescription>
+						A sync is still running, so more work may appear here.
+					</EmptyDescription>
+				)}
 			</EmptyHeader>
 		</Empty>
 	);

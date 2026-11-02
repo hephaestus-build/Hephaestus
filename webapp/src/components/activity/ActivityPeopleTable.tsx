@@ -72,6 +72,8 @@ export interface ActivityPeopleTableProps {
 	 * the person's page at the provider.
 	 */
 	personLink: (person: PeopleRow["person"]) => ReactElement;
+	/** A sync is running, so an empty table may not stay empty. Public readers do not get this fact. */
+	syncing?: boolean;
 }
 
 /** A step of rows to render at a time: enough to scroll through, few enough to render at once. */
@@ -111,6 +113,7 @@ export function ActivityPeopleTable({
 	onOrderChange,
 	repo,
 	personLink,
+	syncing = false,
 }: ActivityPeopleTableProps) {
 	const [search, setSearch] = useState("");
 	const [shown, setShown] = useState(ROWS_STEP);
@@ -311,6 +314,7 @@ export function ActivityPeopleTable({
 								? "No activity in these repositories in this range"
 								: "No activity in this range"
 						}
+						syncing={syncing}
 					/>
 				</div>
 			)}

@@ -7195,6 +7195,16 @@ export type WorkspaceSplitPart = {
 };
 
 /**
+ * What a workspace member may know about syncing
+ */
+export type WorkspaceSyncProgress = {
+    /**
+     * A sync job is pending or running, so more work may still arrive
+     */
+    syncing: boolean;
+};
+
+/**
  * One figure: the reader's own value, then the middle half of the developers counted
  */
 export type WorkspaceTile = {
@@ -15098,6 +15108,27 @@ export type UpdateStatusResponses = {
 };
 
 export type UpdateStatusResponse = UpdateStatusResponses[keyof UpdateStatusResponses];
+
+export type GetWorkspaceSyncProgressData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/sync/progress';
+};
+
+export type GetWorkspaceSyncProgressResponses = {
+    /**
+     * OK
+     */
+    200: WorkspaceSyncProgress;
+};
+
+export type GetWorkspaceSyncProgressResponse = GetWorkspaceSyncProgressResponses[keyof GetWorkspaceSyncProgressResponses];
 
 export type GetAllTeamsData = {
     body?: never;

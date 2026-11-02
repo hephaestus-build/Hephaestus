@@ -249,6 +249,26 @@ export const Empty: Story = {
 	},
 };
 
+/** The first sync may still run, so the empty list does not read as no work. */
+export const EmptyWhileSyncing: Story = {
+	args: {
+		state: {
+			status: "ready",
+			stale: false,
+			items: [],
+			hasMore: false,
+			isLoadingMore: false,
+			onLoadMore,
+			onCopy,
+			syncing: true,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("No activity in this range")).toBeVisible();
+		await expect(canvas.getByText(/A sync is still running/u)).toBeVisible();
+	},
+};
+
 export const GitLab: Story = {
 	decorators: [withProvider("GITLAB")],
 	args: {

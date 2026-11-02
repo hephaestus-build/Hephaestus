@@ -32,6 +32,8 @@ import { personLevelLink } from "./people-links";
 export type ActivityFacets = Pick<ActivityPeople, "teams" | "repositories">;
 
 export interface WorkspaceActivityPageProps {
+	/** A sync is running, so an empty table may not stay empty. */
+	syncing?: boolean;
 	view: WorkspaceActivityView;
 	onViewChange: (view: WorkspaceActivityView) => void;
 	providerType: ProviderType;
@@ -58,6 +60,7 @@ export interface WorkspaceActivityPageProps {
  * of the work.
  */
 export function WorkspaceActivityPage({
+	syncing,
 	view,
 	onViewChange,
 	providerType,
@@ -134,6 +137,7 @@ export function WorkspaceActivityPage({
 								onOrderChange={onOrderChange}
 								repo={repo}
 								personLink={personLevelLink}
+								syncing={syncing}
 							/>
 						</Section>
 						{ready && ready.automation.length > 0 && (

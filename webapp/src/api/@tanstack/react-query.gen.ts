@@ -249,6 +249,7 @@ export { getUserViewUserOptions, getUserViewUserQueryKey } from './react-query/g
 export { getWorkspaceOptions, getWorkspaceQueryKey } from './react-query/getWorkspace.gen.js';
 export { getWorkspacePasskeyPolicyOptions, getWorkspacePasskeyPolicyQueryKey } from './react-query/getWorkspacePasskeyPolicy.gen.js';
 export { getWorkspacePublicActivitySettingsOptions, getWorkspacePublicActivitySettingsQueryKey } from './react-query/getWorkspacePublicActivitySettings.gen.js';
+export { getWorkspaceSyncProgressOptions, getWorkspaceSyncProgressQueryKey } from './react-query/getWorkspaceSyncProgress.gen.js';
 export { gitLabPreflightMutation } from './react-query/gitLabPreflight.gen.js';
 export { initiateMutation } from './react-query/initiate.gen.js';
 export { keepMyProductFeedbackPrivateMutation } from './react-query/keepMyProductFeedbackPrivate.gen.js';

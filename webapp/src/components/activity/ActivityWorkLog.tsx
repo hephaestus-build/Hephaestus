@@ -45,7 +45,13 @@ export type ActivityWorkLogItem = Pick<ActivityWork, "id" | "actions" | "lastOcc
  * page; without that capability, the region offers no copy action.
  */
 export type ActivityWorkLogState = PanelState<
-	{ items: ActivityWorkLogItem[]; stale: boolean; onCopy?: () => Promise<void> } & MorePages
+	{
+		items: ActivityWorkLogItem[];
+		stale: boolean;
+		onCopy?: () => Promise<void>;
+		/** A sync is running, so an empty list may not stay empty. */
+		syncing?: boolean;
+	} & MorePages
 >;
 
 /**
@@ -106,6 +112,7 @@ export function ActivityWorkLog({ state, providerType, subject }: ActivityWorkLo
 				<ActivityEmpty
 					icon={<HistoryMark providerType={providerType} />}
 					title="No activity in this range"
+					syncing={state.syncing}
 				/>
 			</div>
 		);
