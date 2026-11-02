@@ -45,6 +45,7 @@ public class LlmCallPermit {
     @Column(name = "renewed_at", nullable = false)
     private Instant renewedAt;
 
+    /** Orders fair grants across a pool's workspaces and scopes nothing. Only a product feedback call has none. */
     @Column(name = "workspace_id")
     private @Nullable Long workspaceId;
 
