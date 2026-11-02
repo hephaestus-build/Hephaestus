@@ -100,7 +100,7 @@ void test("compatibility overrides receive same-major fixes without restricting 
 	const { overrides } = workspace;
 	assert.ok(Array.isArray(config.packageRules));
 	const rules = config.packageRules.filter(isRecord);
-	for (const name of ["js-yaml", "markdown-it", "uuid"]) {
+	for (const name of ["js-yaml", "uuid"]) {
 		const selectors = Object.keys(overrides).filter(
 			(selector) => selector === name || selector.startsWith(`${name}@`),
 		);
