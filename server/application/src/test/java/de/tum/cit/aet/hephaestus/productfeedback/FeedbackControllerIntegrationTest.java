@@ -65,7 +65,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         "userAgent", "Mozilla/5.0 (X11; Linux x86_64)"))
                 .exchange()
                 .expectStatus()
-                .isAccepted()
+                .isOk()
                 .expectBody(Void.class);
         ProductFeedback stored = feedback.findAll().stream()
                 .filter(item -> item.getAccountId().equals(member.accountId()))

@@ -9,10 +9,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class FeedbackWorkspacePurgeAdapter implements WorkspacePurgeContributor {
     private final ProductFeedbackRepository feedback;
+    private final CleanupRecords cleanups;
 
     @Override
     @Transactional
     public void deleteWorkspaceData(Long workspaceId) {
+        cleanups.keepForWorkspace(workspaceId);
         feedback.deleteAllByWorkspaceId(workspaceId);
     }
 }

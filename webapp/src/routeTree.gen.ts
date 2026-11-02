@@ -20,6 +20,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedIntegrationsRouteImport } from './routes/_authenticated/integrations'
+import { Route as AuthenticatedProductFeedbackRouteImport } from './routes/_authenticated/product-feedback'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedVerifyPasskeyRouteImport } from './routes/_authenticated/verify-passkey'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
@@ -136,6 +137,12 @@ const AuthenticatedIntegrationsRoute =
   AuthenticatedIntegrationsRouteImport.update({
     id: '/integrations',
     path: '/integrations',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProductFeedbackRoute =
+  AuthenticatedProductFeedbackRouteImport.update({
+    id: '/product-feedback',
+    path: '/product-feedback',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
@@ -513,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/integrations': typeof AuthenticatedIntegrationsRoute
+  '/product-feedback': typeof AuthenticatedProductFeedbackRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-passkey': typeof AuthenticatedVerifyPasskeyRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -586,6 +594,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/integrations': typeof AuthenticatedIntegrationsRoute
+  '/product-feedback': typeof AuthenticatedProductFeedbackRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/verify-passkey': typeof AuthenticatedVerifyPasskeyRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -655,6 +664,7 @@ export interface FileRoutesById {
   '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/integrations': typeof AuthenticatedIntegrationsRoute
+  '/_authenticated/product-feedback': typeof AuthenticatedProductFeedbackRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/verify-passkey': typeof AuthenticatedVerifyPasskeyRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -731,6 +741,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/admin'
     | '/integrations'
+    | '/product-feedback'
     | '/settings'
     | '/verify-passkey'
     | '/auth/callback'
@@ -804,6 +815,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/unsubscribe'
     | '/integrations'
+    | '/product-feedback'
     | '/settings'
     | '/verify-passkey'
     | '/auth/callback'
@@ -872,6 +884,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/_authenticated/admin'
     | '/_authenticated/integrations'
+    | '/_authenticated/product-feedback'
     | '/_authenticated/settings'
     | '/_authenticated/verify-passkey'
     | '/auth/callback'
@@ -1029,6 +1042,13 @@ declare module '@tanstack/react-router' {
       path: '/integrations'
       fullPath: '/integrations'
       preLoaderRoute: typeof AuthenticatedIntegrationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/product-feedback': {
+      id: '/_authenticated/product-feedback'
+      path: '/product-feedback'
+      fullPath: '/product-feedback'
+      preLoaderRoute: typeof AuthenticatedProductFeedbackRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
@@ -1704,6 +1724,7 @@ const AuthenticatedWWorkspaceSlugRouteRouteWithChildren =
 interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedIntegrationsRoute: typeof AuthenticatedIntegrationsRoute
+  AuthenticatedProductFeedbackRoute: typeof AuthenticatedProductFeedbackRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedVerifyPasskeyRoute: typeof AuthenticatedVerifyPasskeyRoute
   AuthenticatedWWorkspaceSlugRouteRoute: typeof AuthenticatedWWorkspaceSlugRouteRouteWithChildren
@@ -1716,6 +1737,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedIntegrationsRoute: AuthenticatedIntegrationsRoute,
+  AuthenticatedProductFeedbackRoute: AuthenticatedProductFeedbackRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedVerifyPasskeyRoute: AuthenticatedVerifyPasskeyRoute,
   AuthenticatedWWorkspaceSlugRouteRoute:

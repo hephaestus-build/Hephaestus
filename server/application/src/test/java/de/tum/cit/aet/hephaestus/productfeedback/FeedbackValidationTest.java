@@ -17,15 +17,20 @@ class FeedbackValidationTest {
                 "https://example.org/path",
                 "//example.org/path",
                 "/page?token=secret",
+                "/w/mara.lindqvist@example.edu/activity",
                 "/page#secret",
                 "/page\nsecret",
                 "/page\u0085secret",
-                "/page\u009fsecret"
+                "/page\u009fsecret",
+                "/w/Alice/activity",
+                "/w/team.name/activity",
+                "/w//activity"
             })
     void shouldRejectNonLocalOrSensitivePageContext(String path) {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             assertThat(factory.getValidator()
-                            .validate(new FeedbackDTOs.FeedbackRequestDTO(ProductFeedback.Kind.BUG, "Bug", path, null)))
+                            .validate(new FeedbackDTOs.FeedbackRequestDTO(
+                                    ProductFeedback.Kind.BUG, "Bug", path, null, null)))
                     .isNotEmpty();
         }
     }
@@ -34,14 +39,18 @@ class FeedbackValidationTest {
     void shouldAcceptOmittedContextAndOrdinaryPageAndBrowserDetails() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();
-            assertThat(validator.validate(
-                            new FeedbackDTOs.FeedbackRequestDTO(ProductFeedback.Kind.FEEDBACK, "An idea", null, null)))
+            assertThat(validator.validate(new FeedbackDTOs.FeedbackRequestDTO(
+                            ProductFeedback.Kind.FEEDBACK, "An idea", null, null, null)))
                     .isEmpty();
             assertThat(validator.validate(new FeedbackDTOs.FeedbackRequestDTO(
-                            ProductFeedback.Kind.BUG, "Bug", "/w/team/practices", "Mozilla/5.0 (X11; Linux x86_64)")))
+                            ProductFeedback.Kind.BUG,
+                            "Bug",
+                            "/w/$workspaceSlug/practice-profile",
+                            "Mozilla/5.0 (X11; Linux x86_64)",
+                            null)))
                     .isEmpty();
             assertThat(validator.validate(new FeedbackDTOs.FeedbackRequestDTO(
-                            ProductFeedback.Kind.BUG, "Bug", "/w/team", "Mozilla\u0000")))
+                            ProductFeedback.Kind.BUG, "Bug", "/w/team", "Mozilla\u0000", null)))
                     .isNotEmpty();
         }
     }

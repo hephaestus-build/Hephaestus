@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { lazy, type ReactNode, Suspense, useId, useState } from "react";
 
 import type { FeedbackRequest } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 	FieldTitle,
 } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -43,22 +44,54 @@ export interface FeedbackContext {
 	userAgent: string;
 }
 
+/**
+ * Whether this report may become a public GitHub issue, as far as the composer has to ask.
+ * `off`: the instance has no public repository, or the choice could not be read; then nothing is
+ * asked and the server decides. `ask`: the person has not chosen for the current notice.
+ */
+export type ProductFeedbackSharingChoice =
+	| { status: "loading" }
+	| { status: "off" }
+	/** Reports become private GitHub issues; there is no public repository, so nothing is asked. */
+	| { status: "private" }
+	| { status: "ask" }
+	| { status: "remembered"; allowPublic: boolean };
+
+/** Where a report goes, said before Send, from what the instance does with it. */
+function destinationCopy(sharing: ProductFeedbackSharingChoice): string {
+	if (sharing.status === "off" || sharing.status === "loading") {
+		return `This goes straight to ${READERS}. Your name and contact address go with it, so they can follow up.`;
+	}
+	if (sharing.status === "private") {
+		return "Hephaestus drafts a private GitHub issue from your report for the maintainers. Your name and contact address stay on this instance.";
+	}
+	return "Hephaestus drafts a GitHub issue from your report. The choice below decides who can read it.";
+}
+
 export interface ProductFeedbackDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	kind: FeedbackKind;
 	onKindChange: (kind: FeedbackKind) => void;
 	context?: FeedbackContext;
+	sharing: ProductFeedbackSharingChoice;
 	isSubmitting: boolean;
 	error?: string;
 	/** Resolves to whether the submission was accepted; the draft is cleared only then. */
 	onSubmit: (request: FeedbackRequest) => Promise<boolean>;
+	/** The confirmation of the accepted report, shown in place of the form until the dialog closes. */
+	confirmation?: ReactNode;
+	/** The workspace the header keeps, so the settings link stays in it. */
+	workspaceSlug?: string;
 }
 
 /**
  * The message draft lives in this component and survives closing because the header keeps it
  * mounted; only an accepted send clears it. The details box starts ticked for a bug report, where
  * the page and browser are what make it reproducible, and unticked otherwise.
+ *
+ * The sharing choice is asked once: with no choice yet, two options start unselected and Send waits
+ * for one. After that, one switch starts from the remembered choice and applies to this report only.
  */
 export function ProductFeedbackDialog({
 	open,
@@ -66,18 +99,27 @@ export function ProductFeedbackDialog({
 	kind,
 	onKindChange,
 	context,
+	sharing,
 	isSubmitting,
 	error,
 	onSubmit,
+	confirmation,
+	workspaceSlug,
 }: ProductFeedbackDialogProps) {
 	const id = useId();
 	const [message, setMessage] = useState("");
 	const [includeContext, setIncludeContext] = useState<boolean>();
+	const [shareChoice, setShareChoice] = useState<boolean>();
 	const attachContext = includeContext ?? kind === "BUG";
+	const share = shareChoice ?? (sharing.status === "remembered" ? sharing.allowPublic : undefined);
+	const sharingReady =
+		sharing.status === "off" ||
+		sharing.status === "private" ||
+		(sharing.status !== "loading" && share !== undefined);
 	const copy = FEEDBACK_KIND_COPY[kind];
 	const remaining = MESSAGE_MAX_LENGTH - message.length;
 	const submit = async () => {
-		if (!message.trim() || isSubmitting) {
+		if (!message.trim() || isSubmitting || !sharingReady) {
 			return;
 		}
 		const accepted = await onSubmit({
@@ -85,13 +127,37 @@ export function ProductFeedbackDialog({
 			message: message.trim(),
 			pagePath: attachContext ? context?.pagePath : undefined,
 			userAgent: attachContext ? context?.userAgent : undefined,
+			...(sharing.status === "off" || sharing.status === "private" ? {} : { share }),
 		});
 		if (accepted) {
 			setMessage("");
 			setIncludeContext(undefined);
-			onOpenChange(false);
+			setShareChoice(undefined);
 		}
 	};
+	if (confirmation !== undefined) {
+		return (
+			<Dialog open={open} onOpenChange={onOpenChange}>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle>{copy.heading}</DialogTitle>
+						<DialogDescription className="sr-only">What happens to your report</DialogDescription>
+					</DialogHeader>
+					<DialogBody className="py-1">{confirmation}</DialogBody>
+					<DialogFooter>
+						<Button
+							type="button"
+							// oxlint-disable-next-line jsx-a11y/no-autofocus -- The receipt replaces the form and unmounts Send; without this, keyboard focus falls to the page.
+							autoFocus
+							onClick={() => onOpenChange(false)}
+						>
+							Done
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		);
+	}
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
@@ -104,10 +170,7 @@ export function ProductFeedbackDialog({
 				>
 					<DialogHeader>
 						<DialogTitle>{copy.heading}</DialogTitle>
-						<DialogDescription>
-							This goes straight to {READERS}. Your name and contact address go with it, so they can
-							follow up.
-						</DialogDescription>
+						<DialogDescription>{destinationCopy(sharing)}</DialogDescription>
 					</DialogHeader>
 					<DialogBody className="flex flex-col gap-5 py-1">
 						<FieldSet disabled={isSubmitting} className="gap-5">
@@ -179,13 +242,20 @@ export function ProductFeedbackDialog({
 									</FieldContent>
 								</Field>
 							)}
+							<SharingField
+								id={id}
+								sharing={sharing}
+								share={share}
+								onShareChange={setShareChoice}
+								workspaceSlug={workspaceSlug}
+							/>
 						</FieldSet>
 						<p role="alert" className="text-sm text-destructive empty:hidden">
 							{error}
 						</p>
 					</DialogBody>
 					<DialogFooter>
-						<Button type="submit" disabled={!message.trim() || isSubmitting}>
+						<Button type="submit" disabled={!message.trim() || isSubmitting || !sharingReady}>
 							{isSubmitting && <Spinner />}
 							{isSubmitting ? "Sending…" : "Send"}
 						</Button>
@@ -193,5 +263,48 @@ export function ProductFeedbackDialog({
 				</DialogForm>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+interface SharingFieldProps {
+	id: string;
+	sharing: ProductFeedbackSharingChoice;
+	share: boolean | undefined;
+	onShareChange: (share: boolean) => void;
+	workspaceSlug?: string;
+}
+
+/** The question is asked only where a public repository exists, so its code loads only there. */
+const ProductFeedbackSharingField = lazy(async () => {
+	const { ProductFeedbackSharingField: field } = await import("./ProductFeedbackSharingField");
+	return { default: field };
+});
+
+function SharingSkeleton() {
+	return (
+		<>
+			<span className="sr-only">Loading your sharing choice…</span>
+			<Skeleton className="h-10 w-full" />
+		</>
+	);
+}
+
+function SharingField({ id, sharing, share, onShareChange, workspaceSlug }: SharingFieldProps) {
+	if (sharing.status === "off" || sharing.status === "private") {
+		return null;
+	}
+	if (sharing.status === "loading") {
+		return <SharingSkeleton />;
+	}
+	return (
+		<Suspense fallback={<SharingSkeleton />}>
+			<ProductFeedbackSharingField
+				id={id}
+				status={sharing.status}
+				share={share}
+				onShareChange={onShareChange}
+				workspaceSlug={workspaceSlug}
+			/>
+		</Suspense>
 	);
 }

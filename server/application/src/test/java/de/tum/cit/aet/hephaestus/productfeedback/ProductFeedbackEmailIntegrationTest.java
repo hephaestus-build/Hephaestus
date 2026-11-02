@@ -237,10 +237,12 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
     }
 
     private ProductFeedback submit(Account author) {
-        return feedbackService.add(
-                new FeedbackRequestDTO(ProductFeedback.Kind.BUG, "private-feedback-content", "/private/page", null),
+        var receipt = feedbackService.add(
+                new FeedbackRequestDTO(
+                        ProductFeedback.Kind.BUG, "private-feedback-content", "/private/page", null, null),
                 Objects.requireNonNull(author.getId()),
                 null);
+        return feedback.findById(receipt.id()).orElseThrow();
     }
 
     private Account account(Account.AppRole role, Account.Status status, boolean verified, boolean enabled) {
@@ -263,7 +265,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         var current = subscriptions.get(id);
         subscriptions.update(
                 id,
-                new UpdateNotificationPreferencesDTO(enabled, false, false),
+                new UpdateNotificationPreferencesDTO(enabled, false, false, null),
                 EntityTagPrecondition.parse(current.etag()),
                 true);
     }

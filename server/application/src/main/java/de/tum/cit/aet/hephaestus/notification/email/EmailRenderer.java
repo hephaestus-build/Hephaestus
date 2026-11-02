@@ -44,7 +44,12 @@ public class EmailRenderer {
         if (kind == EmailKind.PRODUCT_FEEDBACK) {
             subjectKey += "." + model.get("feedbackKind");
         }
-        String subject = messages.getMessage(subjectKey, null, LOCALE);
+        if (kind == EmailKind.PRODUCT_FEEDBACK_UPDATE) {
+            subjectKey += "." + model.get("updateKind");
+        }
+        Object[] arguments =
+                kind == EmailKind.PRODUCT_FEEDBACK_UPDATE ? new Object[] {model.getOrDefault("detail", "")} : null;
+        String subject = messages.getMessage(subjectKey, arguments, LOCALE);
         variables.put("subject", subject);
         Context context = new Context(LOCALE, variables);
         String text = templateEngine.process("email/text/" + kind.templateName(), context);

@@ -1,7 +1,7 @@
-import { Bug, ExternalLink, Lightbulb, MessageSquare, MessageSquarePlus } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Bug, History, Lightbulb, MessageSquare, MessageSquarePlus } from "lucide-react";
 import { useId } from "react";
 
-import { GitHubIcon } from "@/components/icons/brand";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -14,12 +14,10 @@ import {
 
 import { FEEDBACK_KIND_COPY, type FeedbackKind, READERS } from "./feedback-copy";
 
-/** The public issue tracker, for anyone who would rather talk in the open. */
-export const HEPHAESTUS_GITHUB_ISSUES_URL =
-	"https://github.com/hephaestus-build/Hephaestus/issues/new/choose";
-
 export interface ProductFeedbackMenuProps {
 	onSendFeedback: (kind: FeedbackKind) => void;
+	/** The workspace the header keeps, so Your product feedback stays in it. */
+	workspaceSlug?: string;
 }
 
 const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
@@ -28,7 +26,11 @@ const KINDS: { kind: FeedbackKind; icon: typeof Bug }[] = [
 	{ kind: "FEEDBACK", icon: MessageSquare },
 ];
 
-export function ProductFeedbackMenu({ onSendFeedback }: ProductFeedbackMenuProps) {
+/**
+ * The header's one entry to product feedback: the three kinds to send, and the person's own reports.
+ * The static link to the upstream issue tracker is gone: reports reach GitHub through the instance.
+ */
+export function ProductFeedbackMenu({ onSendFeedback, workspaceSlug }: ProductFeedbackMenuProps) {
 	const id = useId();
 	return (
 		<DropdownMenu>
@@ -68,21 +70,16 @@ export function ProductFeedbackMenu({ onSendFeedback }: ProductFeedbackMenuProps
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
 					<DropdownMenuItem
-						className="items-start"
-						aria-label="Open an issue on GitHub (opens in a new tab)"
-						aria-describedby={`${id}-github`}
-						render={<a href={HEPHAESTUS_GITHUB_ISSUES_URL} target="_blank" rel="noreferrer" />}
+						render={
+							<Link
+								to="/product-feedback"
+								search={{ chromeWorkspace: workspaceSlug }}
+								className="[&]:no-underline"
+							/>
+						}
 					>
-						<GitHubIcon className="mt-0.5" />
-						<span className="flex min-w-0 flex-col">
-							<span className="flex items-center gap-1">
-								Open an issue on GitHub
-								<ExternalLink aria-hidden className="size-3" />
-							</span>
-							<span id={`${id}-github`} className="text-xs text-muted-foreground">
-								Discuss your feedback in public instead.
-							</span>
-						</span>
+						<History />
+						<span>Your product feedback</span>
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>

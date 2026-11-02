@@ -121,6 +121,7 @@ export { adminUpdateUserMutation } from './react-query/adminUpdateUser.gen.js';
 export { adminUpdateWorkspaceLlmBudgetMutation } from './react-query/adminUpdateWorkspaceLlmBudget.gen.js';
 export { adoptGroupMutation } from './react-query/adoptGroup.gen.js';
 export { adoptPracticeMutation } from './react-query/adoptPractice.gen.js';
+export { allowMyProductFeedbackPublicMutation } from './react-query/allowMyProductFeedbackPublic.gen.js';
 export { answerPublicActivityOnboardingMutation } from './react-query/answerPublicActivityOnboarding.gen.js';
 export { assignMemberRoleMutation } from './react-query/assignMemberRole.gen.js';
 export { auditOptions, auditQueryKey } from './react-query/audit.gen.js';
@@ -156,6 +157,7 @@ export { deletePracticeGroupMutation } from './react-query/deletePracticeGroup.g
 export { deleteReviewScheduleMutation } from './react-query/deleteReviewSchedule.gen.js';
 export { dismissMemberOnboardingMutation } from './react-query/dismissMemberOnboarding.gen.js';
 export { downloadDataExportOptions, downloadDataExportQueryKey } from './react-query/downloadDataExport.gen.js';
+export { editMyProductFeedbackDraftMutation } from './react-query/editMyProductFeedbackDraft.gen.js';
 export { exchangeClientSignInMutation } from './react-query/exchangeClientSignIn.gen.js';
 export { exportScanSarifOptions, exportScanSarifQueryKey } from './react-query/exportScanSarif.gen.js';
 export { getAccountAiChoiceOptions, getAccountAiChoiceQueryKey } from './react-query/getAccountAiChoice.gen.js';
@@ -188,6 +190,7 @@ export { getMemberOnboardingLinkOptionsOptions, getMemberOnboardingLinkOptionsQu
 export { getMemberOnboardingSettingsOptions, getMemberOnboardingSettingsQueryKey } from './react-query/getMemberOnboardingSettings.gen.js';
 export { getMentorConversationOptions, getMentorConversationQueryKey } from './react-query/getMentorConversation.gen.js';
 export { getMentorThreadInfiniteOptions, getMentorThreadInfiniteQueryKey, getMentorThreadOptions, getMentorThreadQueryKey } from './react-query/getMentorThread.gen.js';
+export { getMyProductFeedbackOptions, getMyProductFeedbackQueryKey } from './react-query/getMyProductFeedback.gen.js';
 export { getNotificationPreferencesOptions, getNotificationPreferencesQueryKey } from './react-query/getNotificationPreferences.gen.js';
 export { getOpenWorkOptions, getOpenWorkQueryKey } from './react-query/getOpenWork.gen.js';
 export { getOutlineTokenStatusOptions, getOutlineTokenStatusQueryKey } from './react-query/getOutlineTokenStatus.gen.js';
@@ -215,6 +218,8 @@ export { getPracticeReleaseOptions, getPracticeReleaseQueryKey } from './react-q
 export { getPracticeReviewSettingsOptions, getPracticeReviewSettingsQueryKey } from './react-query/getPracticeReviewSettings.gen.js';
 export { getPracticeWorkspaceOverviewOptions, getPracticeWorkspaceOverviewQueryKey } from './react-query/getPracticeWorkspaceOverview.gen.js';
 export { getPracticeWorkspaceTilesOptions, getPracticeWorkspaceTilesQueryKey } from './react-query/getPracticeWorkspaceTiles.gen.js';
+export { getProductFeedbackDestinationsOptions, getProductFeedbackDestinationsQueryKey } from './react-query/getProductFeedbackDestinations.gen.js';
+export { getProductFeedbackSharingOptions, getProductFeedbackSharingQueryKey } from './react-query/getProductFeedbackSharing.gen.js';
 export { getProvidersOptions, getProvidersQueryKey } from './react-query/getProviders.gen.js';
 export { getPublicActivityOptions, getPublicActivityQueryKey } from './react-query/getPublicActivity.gen.js';
 export { getPublicActivityChoiceOptions, getPublicActivityChoiceQueryKey } from './react-query/getPublicActivityChoice.gen.js';
@@ -246,6 +251,7 @@ export { getWorkspacePasskeyPolicyOptions, getWorkspacePasskeyPolicyQueryKey } f
 export { getWorkspacePublicActivitySettingsOptions, getWorkspacePublicActivitySettingsQueryKey } from './react-query/getWorkspacePublicActivitySettings.gen.js';
 export { gitLabPreflightMutation } from './react-query/gitLabPreflight.gen.js';
 export { initiateMutation } from './react-query/initiate.gen.js';
+export { keepMyProductFeedbackPrivateMutation } from './react-query/keepMyProductFeedbackPrivate.gen.js';
 export { listOptions, listQueryKey } from './react-query/list.gen.js';
 export { listAdoptablePracticesOptions, listAdoptablePracticesQueryKey } from './react-query/listAdoptablePractices.gen.js';
 export { listAgentsOptions, listAgentsQueryKey } from './react-query/listAgents.gen.js';
@@ -262,6 +268,7 @@ export { listInstallationDeadLettersInfiniteOptions, listInstallationDeadLetters
 export { listLinkedIdentitiesOptions, listLinkedIdentitiesQueryKey } from './react-query/listLinkedIdentities.gen.js';
 export { listMembershipsInfiniteOptions, listMembershipsInfiniteQueryKey, listMembershipsOptions, listMembershipsQueryKey } from './react-query/listMemberships.gen.js';
 export { listMentorEntriesInfiniteOptions, listMentorEntriesInfiniteQueryKey, listMentorEntriesOptions, listMentorEntriesQueryKey } from './react-query/listMentorEntries.gen.js';
+export { listMyProductFeedbackOptions, listMyProductFeedbackQueryKey } from './react-query/listMyProductFeedback.gen.js';
 export { listOutlineCollectionCandidatesOptions, listOutlineCollectionCandidatesQueryKey } from './react-query/listOutlineCollectionCandidates.gen.js';
 export { listOutlineCollectionsOptions, listOutlineCollectionsQueryKey } from './react-query/listOutlineCollections.gen.js';
 export { listOwnGroupReviewsInfiniteOptions, listOwnGroupReviewsInfiniteQueryKey, listOwnGroupReviewsOptions, listOwnGroupReviewsQueryKey } from './react-query/listOwnGroupReviews.gen.js';
@@ -273,6 +280,7 @@ export { listPracticeReleasesOptions, listPracticeReleasesQueryKey } from './rea
 export { listPracticesOptions, listPracticesQueryKey } from './react-query/listPractices.gen.js';
 export { listPracticeScriptNeedsOptions, listPracticeScriptNeedsQueryKey } from './react-query/listPracticeScriptNeeds.gen.js';
 export { listPracticeVersionsOptions, listPracticeVersionsQueryKey } from './react-query/listPracticeVersions.gen.js';
+export { listProductFeedbackNeedsActionOptions, listProductFeedbackNeedsActionQueryKey } from './react-query/listProductFeedbackNeedsAction.gen.js';
 export { listResultMarksOptions, listResultMarksQueryKey } from './react-query/listResultMarks.gen.js';
 export { listReviewBatchesInfiniteOptions, listReviewBatchesInfiniteQueryKey, listReviewBatchesOptions, listReviewBatchesQueryKey } from './react-query/listReviewBatches.gen.js';
 export { listReviewedPracticesOptions, listReviewedPracticesQueryKey } from './react-query/listReviewedPractices.gen.js';
@@ -295,6 +303,7 @@ export { listWorkspaceConfigAuditEventsInfiniteOptions, listWorkspaceConfigAudit
 export { listWorkspacesOptions, listWorkspacesQueryKey } from './react-query/listWorkspaces.gen.js';
 export { logoutMutation } from './react-query/logout.gen.js';
 export { logoutClientSessionMutation } from './react-query/logoutClientSession.gen.js';
+export { makeMyProductFeedbackPrivateMutation } from './react-query/makeMyProductFeedbackPrivate.gen.js';
 export { markMentorConversationReadMutation } from './react-query/markMentorConversationRead.gen.js';
 export { moveCatalogPracticeMutation } from './react-query/moveCatalogPractice.gen.js';
 export { movePracticeMutation } from './react-query/movePractice.gen.js';
@@ -335,6 +344,7 @@ export { resetPracticeToCatalogMutation } from './react-query/resetPracticeToCat
 export { resolveLegacyFeedbackItemOptions, resolveLegacyFeedbackItemQueryKey } from './react-query/resolveLegacyFeedbackItem.gen.js';
 export { resolveReviewContextOptions, resolveReviewContextQueryKey } from './react-query/resolveReviewContext.gen.js';
 export { retryFeedbackMutation } from './react-query/retryFeedback.gen.js';
+export { retryProductFeedbackFilingMutation } from './react-query/retryProductFeedbackFiling.gen.js';
 export { revokeOtherSessionsMutation } from './react-query/revokeOtherSessions.gen.js';
 export { revokeSessionMutation } from './react-query/revokeSession.gen.js';
 export { setCatalogGroupStatusMutation } from './react-query/setCatalogGroupStatus.gen.js';
@@ -368,6 +378,8 @@ export { updatePasskeyProtectionMutation } from './react-query/updatePasskeyProt
 export { updatePracticeMutation } from './react-query/updatePractice.gen.js';
 export { updatePracticeGroupMutation } from './react-query/updatePracticeGroup.gen.js';
 export { updatePracticeReviewSettingsMutation } from './react-query/updatePracticeReviewSettings.gen.js';
+export { updateProductFeedbackDestinationsMutation } from './react-query/updateProductFeedbackDestinations.gen.js';
+export { updateProductFeedbackSharingMutation } from './react-query/updateProductFeedbackSharing.gen.js';
 export { updatePublicActivityMutation } from './react-query/updatePublicActivity.gen.js';
 export { updatePublicActivityChoiceMutation } from './react-query/updatePublicActivityChoice.gen.js';
 export { updatePublicActivityObjectionMutation } from './react-query/updatePublicActivityObjection.gen.js';

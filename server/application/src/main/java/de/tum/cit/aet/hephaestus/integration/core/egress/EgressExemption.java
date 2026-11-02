@@ -5,4 +5,9 @@ public enum EgressExemption {
     WEBHOOK_REGISTRATION,
     WEBHOOK_REDELIVERY,
     OPERATOR_ALERT,
+    /**
+     * The instance's own GitHub App filing product feedback to the operator's repositories. It still consults Silent
+     * Mode before each write; Pause is its own switch.
+     */
+    PRODUCT_FEEDBACK,
 }

@@ -112,8 +112,14 @@ It also lists your open work, such as review requests and assigned issues.
 Workspace activity can sort people by these counts.
 
 Your sign-in details, connected accounts, memberships, preferences, conversations, and feedback reactions support your account and conversations.
+
 Product feedback submissions support product improvement.
-Submissions include the page path and browser identification you choose to attach, plus the Hephaestus release that received them.
+Submissions include the page route and browser identification you choose to attach, plus the Hephaestus release that received them.
+If your instance admin enables GitHub filing, the named model provider drafts an issue and GitHub receives it after checks.
+Private reports also go to those recipients. Redaction can miss personal details.
+
+Public issues need your permission. You can withdraw permission or use **Make private**, but public copies can remain.
+[Product feedback](./product-feedback) explains the choices, emails, and erasure limits.
 
 These records support security, troubleshooting, and spending controls:
 
@@ -409,7 +415,7 @@ The sections above describe account and export timing.
 - **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to your conversation.
 - **Outline:** selected content stays while its collection and connection stay active.
 - **Conversations and memberships:** records stay with the workspace. Workspace removal or verified person erasure removes them. Deleting one of your messages erases it sooner.
-- **Product feedback submissions:** there is no automatic expiry by age. Account deletion, applicable workspace removal, or verified erasure removes them.
+- **Product feedback submissions:** there is no automatic expiry by age. Account deletion, applicable workspace removal, or verified erasure removes instance records and starts GitHub cleanup. The app cannot delete issues or their edit history. Maintainers complete those steps where needed, and public copies can remain.
 
 ### Security and review history
 

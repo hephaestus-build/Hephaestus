@@ -466,6 +466,9 @@ base.describe("complete processes, keyboard only", () => {
 		await tabTo(page, dialog.getByRole("button", { name: /^Send/u }));
 		await page.keyboard.press("Enter");
 
+		await expect(dialog.getByText("The admins of this instance have it.")).toBeVisible();
+		await expect(dialog.getByRole("button", { name: "Done" })).toBeFocused();
+		await page.keyboard.press("Enter");
 		await expect(dialog).toBeHidden();
 	});
 });

@@ -15,6 +15,7 @@ public enum EmailKind {
     ACCOUNT_DELETION_SCHEDULED("account-deletion-scheduled", false),
     ACCOUNT_SECURITY_CHANGED("account-security-changed", false),
     PRODUCT_FEEDBACK("product-feedback", true),
+    PRODUCT_FEEDBACK_UPDATE("product-feedback-update", true),
     /** The note that a weekly digest is ready, when the developer has no Slack identity. */
     MENTOR_DIGEST("mentor-digest", true);
 

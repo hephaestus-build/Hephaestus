@@ -186,6 +186,38 @@ public class LlmModelResolver {
         return ConnectionRef.NONE;
     }
 
+    /** An enabled instance model with its live credential, for an instance-level caller that has no workspace. */
+    public record InstanceModel(
+            ConnectionRef ref,
+            ProxyCredential credential,
+            LlmApiProtocol protocol,
+            @Nullable ReasoningEffort reasoningEffort) {}
+
+    /**
+     * Resolves an instance model for instance-level work, such as product feedback drafting. Workspace grants and
+     * visibility do not apply: the operator chose the model for the instance. Returns null when the model or its
+     * connection is disabled or gone.
+     */
+    @Transactional(readOnly = true)
+    public @Nullable InstanceModel resolveInstanceModel(long modelId) {
+        LlmModel model =
+                llmModelRepository.findById(modelId).filter(LlmModel::isEnabled).orElse(null);
+        if (model == null) return null;
+        LlmConnection c = model.getConnection();
+        if (!c.isEnabled()) return null;
+        return new InstanceModel(
+                new ConnectionRef(UsageFundingSource.INSTANCE, c.getId(), model.getId(), null),
+                new ProxyCredential(
+                        c.getBaseUrl(),
+                        c.getApiProtocol().wire(),
+                        c.getAuthMode(),
+                        model.getUpstreamModelId(),
+                        blankToNull(c.getApiKey()),
+                        model.getCallPoolId()),
+                c.getApiProtocol(),
+                model.getReasoningEffort());
+    }
+
     /** Pool-lock rechecks must read the database even when the claim already loaded the model entity. */
     @Transactional(readOnly = true)
     public @Nullable Long resolveCallPool(ConnectionRef ref) {

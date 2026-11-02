@@ -139,6 +139,8 @@ public class AuthEvent {
         // Instance emergency brake: GLOBAL, so the workspace-scoped config trail cannot carry it.
         SILENT_MODE_CHANGED,
         PUBLIC_ACTIVITY_CHANGED,
+        // Where instance product feedback is filed: GLOBAL, and it changes where personal data goes.
+        PRODUCT_FEEDBACK_DESTINATIONS_CHANGED,
         // A pseudonymous research dataset left the instance, or its downstream removal was attested.
         // Recorded before the bytes are sent, so it proves the release, not that a client received it.
         RESEARCH_DATASET_RELEASED,

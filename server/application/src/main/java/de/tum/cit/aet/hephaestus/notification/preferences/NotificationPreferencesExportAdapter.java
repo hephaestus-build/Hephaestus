@@ -15,6 +15,9 @@ class NotificationPreferencesExportAdapter implements NotificationPreferencesExp
     public Preferences preferences(long accountId) {
         var preferences = subscriptions.get(accountId);
         return new Preferences(
-                preferences.productFeedback(), preferences.workspaceAlerts(), preferences.weeklyDigest());
+                preferences.productFeedback(),
+                preferences.workspaceAlerts(),
+                preferences.weeklyDigest(),
+                preferences.productFeedbackUpdates());
     }
 }

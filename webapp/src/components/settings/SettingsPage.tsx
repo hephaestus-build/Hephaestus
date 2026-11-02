@@ -19,6 +19,11 @@ import {
 	PracticeFeedbackSection,
 	type PracticeFeedbackSectionProps,
 } from "./PracticeFeedbackSection";
+import {
+	hasProductFeedbackSharing,
+	ProductFeedbackSharingSection,
+	type ProductFeedbackSharingSectionProps,
+} from "./ProductFeedbackSharingSection";
 import { PublicActivitySection, type PublicActivitySectionProps } from "./PublicActivitySection";
 import {
 	ResearchParticipationSection,
@@ -44,6 +49,8 @@ export interface SettingsPageProps {
 	showResearchSection: boolean;
 	aiChoiceProps: AiChoiceSectionProps;
 	publicActivityProps: PublicActivitySectionProps;
+	/** Absent, or with no public repository on the instance, the section is not shown. */
+	productFeedbackSharingProps?: ProductFeedbackSharingSectionProps;
 	linkedAccountsProps: LinkedAccountsSectionProps;
 	slackPreferencesProps: SlackPreferencesSectionProps;
 	showSlackPreferencesSection?: boolean;
@@ -63,6 +70,7 @@ export function SettingsPage({
 	showResearchSection,
 	aiChoiceProps,
 	publicActivityProps,
+	productFeedbackSharingProps,
 	linkedAccountsProps,
 	slackPreferencesProps,
 	showSlackPreferencesSection = true,
@@ -164,6 +172,14 @@ export function SettingsPage({
 
 					<Separator />
 					<PublicActivitySection {...publicActivityProps} />
+
+					{productFeedbackSharingProps !== undefined &&
+						hasProductFeedbackSharing(productFeedbackSharingProps.state) && (
+							<>
+								<Separator />
+								<ProductFeedbackSharingSection {...productFeedbackSharingProps} />
+							</>
+						)}
 
 					{showWeeklyDigest && (
 						<>
