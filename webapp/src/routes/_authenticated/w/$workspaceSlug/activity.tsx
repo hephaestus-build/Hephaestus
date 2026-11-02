@@ -19,6 +19,7 @@ import { type ActivityAccount, ActivityPage } from "@/components/activity/Activi
 import { workLogTitle } from "@/components/activity/work-log-markdown";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
+import { PracticeReviewsOffNote } from "@/components/onboarding/PracticeReviewsOffNote";
 import { reviewLevel } from "@/components/practice-profile/practice-profile-search";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
 import { buttonVariants } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useActivityPerson, useActivityWork, useOpenWork } from "@/hooks/use-activity";
 import { pathNumber, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { pageHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { type ProviderType, toScmProviderType } from "@/lib/provider/provider-terms";
@@ -104,6 +106,10 @@ function Activity() {
 
 	// A user view reads the developer's page; it never spends their workspace's budget.
 	const mayRequestReview = userView === undefined && workspace?.practicesEnabled === true;
+	// From the reader's own membership, so this page makes no admin read: one would ask for a passkey.
+	const { isAdmin } = useWorkspaceAccess();
+	const practiceReviewsOff =
+		isAdmin && userView === undefined && workspace?.practicesEnabled === false;
 	const queryClient = useQueryClient();
 	const reviewRequest = useRequestPracticeReview(workspaceSlug);
 	const requestKey = [...REQUEST_REVIEW_MUTATION_KEY, workspaceSlug];
@@ -143,6 +149,19 @@ function Activity() {
 			: undefined;
 	const acceptedReviewId = answered?.status === "SUBMITTED" ? answered.reviewId : null;
 
+	const reviewRequestedNotice =
+		mayRequestReview && acceptedReviewId !== null ? (
+			<ReviewRequestedNotice
+				review={
+					<Link
+						to="/w/$workspaceSlug/practice-profile"
+						params={{ workspaceSlug }}
+						search={detailSearch(reviewLevel(acceptedReviewId))}
+					/>
+				}
+			/>
+		) : undefined;
+
 	return (
 		<>
 			<ActivityPage
@@ -159,17 +178,16 @@ function Activity() {
 						: undefined
 				}
 				notice={
-					mayRequestReview && acceptedReviewId !== null ? (
-						<ReviewRequestedNotice
-							review={
-								<Link
-									to="/w/$workspaceSlug/practice-profile"
-									params={{ workspaceSlug }}
-									search={detailSearch(reviewLevel(acceptedReviewId))}
-								/>
+					practiceReviewsOff ? (
+						<PracticeReviewsOffNote
+							workspaceName={workspace.displayName}
+							settingsLink={
+								<Link to="/w/$workspaceSlug/admin/settings" params={{ workspaceSlug }} />
 							}
 						/>
-					) : undefined
+					) : (
+						reviewRequestedNotice
+					)
 				}
 				providerType={providerType}
 				account={accountOf(membership, login, userView === undefined)}

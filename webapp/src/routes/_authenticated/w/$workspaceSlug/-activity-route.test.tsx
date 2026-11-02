@@ -196,6 +196,18 @@ async function openWaitingWork(user: ReturnType<typeof userEvent.setup>) {
 }
 
 /** Signed in as `ada`, while the workspace's connected instance knows the same account as `ada-lrz`. */
+/** A workspace with practice reviews off, as a new one starts, and the reader's role in it. */
+function servePracticesOff(readerRole: WorkspaceMembership["role"]) {
+	server.use(
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { practicesEnabled: false })]),
+		),
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(adaMembership(readerRole)),
+		),
+	);
+}
+
 describe("Activity", () => {
 	let reads: URL[] = [];
 	const record = (request: Request) => {
@@ -2533,6 +2545,26 @@ describe("Workspace activity", () => {
 			expect(served).toStrictEqual([200, 503, 200]);
 			await within(region).findByText("Pull request 202");
 			expect(within(region).queryByText("Pull request 101")).toBeNull();
+		});
+	});
+
+	describe("a workspace with practice reviews off", () => {
+		const OFF_NOTE = /Practice reviews are off in/u;
+		it("tells an admin where setup goes on, from their own membership", async () => {
+			servePracticesOff("ADMIN");
+			renderRouteAtWithRouter("/w/acme/activity");
+			const note = await screen.findByText(OFF_NOTE, undefined, ROUTE_RENDER_WAIT);
+			expect(
+				within(note).getByRole("link", { name: "Workspace settings" }).getAttribute("href"),
+			).toBe("/w/acme/admin/settings");
+		});
+
+		it("says nothing to a member, who cannot change it", async () => {
+			servePracticesOff("MEMBER");
+			renderRouteAtWithRouter("/w/acme/activity");
+			await screen.findByRole("heading", { level: 1, name: "Activity" }, ROUTE_RENDER_WAIT);
+			await waitFor(() => expect(testQueryClient().isFetching()).toBe(0));
+			expect(screen.queryByText(OFF_NOTE)).toBeNull();
 		});
 	});
 });
