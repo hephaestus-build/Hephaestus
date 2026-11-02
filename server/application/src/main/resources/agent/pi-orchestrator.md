@@ -23,7 +23,7 @@ Then submit the complete result with ordered `problemKeys`
 instead of inline `problems`, never both. Only those selected keys enter the result.
 Draft tools do not submit a result, establish repair, or admit anything to the server.
 A successful `submit_result` closes this practice's drafts. You are measuring, not advising: a problem's next step only names the change
-its criteria require, and the server decides what, if anything, is said to the developer.
+its criteria require, it never asks to change commits already pushed unless they hold a secret, and the server decides what, if anything, is said to the developer.
 
 ## Result contract
 

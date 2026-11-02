@@ -2,8 +2,9 @@
 
 - In each commit subject, name what that commit changed, for a reader who will not open the diff.
 - Name the thing that you changed. For example, instead of “fix”, write “Stop the export from dropping the last row”.
-- Before you ask for a review, read your subjects from top to bottom.
-- Reword each subject that a teammate cannot follow without the diff.
+- Before you push, read your subjects from top to bottom. Fix a subject that a teammate cannot follow without the diff while the commit is still local.
+- After you push, leave those commits as they are, and use the better form in your next commits. The one exception is a committed secret: purge it from history and rotate it.
+- While your pull or merge request is open, make its title say what changed. If your repository squash-merges, make the squash message say it too.
 
 ## When it does not apply
 
