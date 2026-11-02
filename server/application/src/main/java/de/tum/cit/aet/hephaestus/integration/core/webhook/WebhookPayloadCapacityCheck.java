@@ -20,6 +20,9 @@ class WebhookPayloadCapacityCheck {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookPayloadCapacityCheck.class);
 
+    /** The broker counts a message's headers in {@code max_payload}, and the receiver adds the provider's headers. */
+    static final long PUBLISH_HEADER_ROOM_BYTES = 65536;
+
     private final Connection connection;
     private final WebhookProperties properties;
 
@@ -30,19 +33,19 @@ class WebhookPayloadCapacityCheck {
 
     @PostConstruct
     void verify() {
-        long accepted = properties.http().maxPayloadBytes();
+        long accepted = properties.http().maxPayloadBytes() + PUBLISH_HEADER_ROOM_BYTES;
         long publishable = connection.getMaxPayload();
         if (publishable > 0 && accepted > publishable) {
             log.error(
-                    "The receiver accepts webhooks up to {} bytes but this NATS server caps a message at {}: "
-                            + "every delivery between the two is verified, accepted, and then lost at publish. "
-                            + "Raise max_payload on the broker to at least {}, or lower "
-                            + "hephaestus.webhook.http.max-payload-bytes to {} so oversize deliveries are refused "
-                            + "at the edge instead.",
+                    "The receiver accepts webhooks up to {} bytes, which with their headers need messages of up to {} "
+                            + "bytes, but this NATS server caps a message at {}: a delivery it accepts above that is "
+                            + "verified and then lost at publish. Raise max_payload on the broker to at least {}, or "
+                            + "lower hephaestus.webhook.http.max-payload-bytes so such deliveries are refused at the "
+                            + "edge instead.",
+                    properties.http().maxPayloadBytes(),
                     accepted,
                     publishable,
-                    accepted,
-                    publishable);
+                    accepted);
         }
     }
 }

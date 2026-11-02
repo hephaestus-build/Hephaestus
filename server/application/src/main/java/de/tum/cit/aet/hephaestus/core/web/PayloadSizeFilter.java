@@ -41,6 +41,13 @@ public class PayloadSizeFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
             return;
         }
+        accepted(request, response, chain, contentLength);
+    }
+
+    /** Runs for a request within the limit, for a surface that also bounds what it holds at once. */
+    protected void accepted(
+            HttpServletRequest request, HttpServletResponse response, FilterChain chain, long contentLength)
+            throws ServletException, IOException {
         chain.doFilter(request, response);
     }
 

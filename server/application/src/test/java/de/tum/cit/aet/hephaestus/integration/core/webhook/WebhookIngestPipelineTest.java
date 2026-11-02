@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
@@ -20,6 +21,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.V
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +62,64 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     private JetStreamPublisher publisher;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    @DisplayName(
+            "a large delivery with a valid signature gets 503 when its parse does not fit, and nothing is published")
+    void refusesALargeDeliveryThatDoesNotFitAfterItsSignature() {
+        WebhookInFlightBudget budget = new WebhookInFlightBudget(1024, 1024, Duration.ofMillis(1));
+        MeterRegistry meters = new SimpleMeterRegistry();
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
+                List.of(stubDeriver(IntegrationKind.GITHUB, "github.acme.repo.push", "github-DEADBEEF")),
+                publisher,
+                objectMapper,
+                List.of(),
+                budget,
+                meters);
+        byte[] large = new byte[(int) WebhookInFlightBudget.SMALL_BODY_BYTES + 1];
+
+        try (WebhookInFlightBudget.Holding held = budget.forPublishing()) {
+            assertThat(held.add(1024)).isTrue();
+
+            ResponseEntity<?> refused =
+                    pipeline.handle(IntegrationKind.GITHUB, large, headers("X-GitHub-Event", "push"));
+
+            assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(refused.getHeaders().getFirst("Retry-After")).isEqualTo("30");
+        }
+        verify(publisher, never()).publish(any());
+        assertThat(meters.get(IntegrationCoreMetrics.WEBHOOK_REJECTED)
+                        .tag("reason", "busy")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a small delivery with a valid signature does not wait for the budget")
+    void aSmallDeliveryDoesNotCountAgainstTheBudget() {
+        WebhookInFlightBudget budget = new WebhookInFlightBudget(1024, 1024, Duration.ofMillis(1));
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+                List.of(stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
+                List.of(stubDeriver(IntegrationKind.GITHUB, "github.acme.repo.push", "github-DEADBEEF")),
+                publisher,
+                objectMapper,
+                List.of(),
+                budget,
+                new SimpleMeterRegistry());
+
+        try (WebhookInFlightBudget.Holding held = budget.forPublishing()) {
+            assertThat(held.add(1024)).isTrue();
+
+            ResponseEntity<?> accepted = pipeline.handle(
+                    IntegrationKind.GITHUB,
+                    "{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8),
+                    headers("X-GitHub-Event", "push"));
+
+            assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        }
+    }
 
     @Test
     @DisplayName("verified webhook is published to JetStream with kind-derived subject + dedup-id")

@@ -27,17 +27,28 @@ class WebhookPayloadCapacityCheckTest extends BaseUnitTest {
 
         new WebhookPayloadCapacityCheck(connection, properties).verify();
 
-        assertThat(output.getAll()).contains("accepts webhooks up to 26214400 bytes but this NATS server caps");
+        assertThat(output.getAll()).contains("messages of up to 26279936 bytes, but this NATS server caps");
     }
 
     @Test
     void staysQuietWhenTheBrokerTakesEverythingTheReceiverAccepts(CapturedOutput output) {
         Connection connection = mock(Connection.class);
+        when(connection.getMaxPayload()).thenReturn(26_279_936L);
+
+        new WebhookPayloadCapacityCheck(connection, properties).verify();
+
+        assertThat(output.getAll()).doesNotContain("caps a message at");
+    }
+
+    @Test
+    void reportsABrokerThatLeavesNoRoomForAMessagesHeaders(CapturedOutput output) {
+        // The largest accepted body and its headers do not fit: the broker refuses it at publish.
+        Connection connection = mock(Connection.class);
         when(connection.getMaxPayload()).thenReturn(26_214_400L);
 
         new WebhookPayloadCapacityCheck(connection, properties).verify();
 
-        assertThat(output.getAll()).doesNotContain("caps a message at 26214400");
+        assertThat(output.getAll()).contains("caps a message at 26214400");
     }
 
     @Test

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookInFlightBudget;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookPayloadSizeFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,9 +25,9 @@ class SlackInteractivityHttpConfiguration {
 
     @Bean
     FilterRegistrationBean<WebhookPayloadSizeFilter> slackInteractivityPayloadSizeFilter(
-            WebhookProperties properties, MeterRegistry meterRegistry) {
+            WebhookProperties properties, MeterRegistry meterRegistry, WebhookInFlightBudget budget) {
         FilterRegistrationBean<WebhookPayloadSizeFilter> registration =
-                new FilterRegistrationBean<>(new WebhookPayloadSizeFilter(properties, meterRegistry));
+                new FilterRegistrationBean<>(new WebhookPayloadSizeFilter(properties, meterRegistry, budget));
         // Named apart from the webhook role's registration, whose name the servlet container would otherwise
         // refuse a second time in a process that runs both roles.
         registration.setName("slackInteractivityPayloadSizeFilter");
