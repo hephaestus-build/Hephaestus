@@ -53,7 +53,8 @@ Each set has a separate work budget.
 Each practice gets a fresh model session.
 
 `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the maximum number of practices that an item review evaluates at once.
-The default is 3. Valid values are 1 through 32.
+The default is 27. Valid values are 1 through 32.
+This value bounds the work in one review sandbox. The call pool of the review's model sets how fast the calls run ([AI providers](./ai-providers.mdx#6-sharing-provider-capacity)).
 
 The server starts item-review practices without a current observation first, then the ones with the oldest last verdict.
 The runner fills each free slot with the next practice ready to start.

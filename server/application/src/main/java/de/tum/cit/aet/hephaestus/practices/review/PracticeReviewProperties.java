@@ -46,7 +46,7 @@ public record PracticeReviewProperties(
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
         @Min(1) @DefaultValue("12") int practiceModelCalls,
         @Min(1000) @DefaultValue("16000") int practiceOutputTokens,
-        @Min(1) @Max(32) @DefaultValue("3") int practiceConcurrency,
+        @Min(1) @Max(32) @DefaultValue("27") int practiceConcurrency,
         @Min(1) @DefaultValue("200000") long directModelTokensPerAttempt,
         @Min(1) @DefaultValue("1000") long directModelSearchUnitsPerAttempt,
         @DurationMin(minutes = 1) @DefaultValue("PT10M") Duration compositionTimeout) {}

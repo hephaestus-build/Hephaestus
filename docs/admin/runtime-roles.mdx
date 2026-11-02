@@ -469,7 +469,7 @@ The worker limits the model calls that one attempt has in flight at the same tim
 
 - A conversation turn has at most 2: one call, and one that a stop left open.
 - A practice review has at most 2 × (practice concurrency + 1) + 4.
-  With the default practice concurrency of 3, the limit is 12.
+  With the default practice concurrency of 27, the limit is 60.
 
 The review limit holds two calls for each practice session, 2 more, and the 4 calls of the practice scripts.
 The proxy notices that a client went away only at its next write to that client.

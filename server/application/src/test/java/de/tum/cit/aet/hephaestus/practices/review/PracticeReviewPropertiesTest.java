@@ -19,11 +19,11 @@ class PracticeReviewPropertiesTest extends BaseUnitTest {
             .withUserConfiguration(TestConfiguration.class, ValidationAutoConfiguration.class);
 
     @Test
-    void shouldUseThreeConcurrentPracticesByDefault() {
+    void shouldUseTwentySevenConcurrentPracticesByDefault() {
         runner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(PracticeReviewProperties.class).practiceConcurrency())
-                    .isEqualTo(3);
+                    .isEqualTo(27);
         });
     }
 
