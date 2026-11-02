@@ -263,6 +263,22 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
+        void shouldStoreTheMergeRequestWhenAnIssueHasTheSameGitLabId() throws Exception {
+            jdbcTemplate.update("""
+                    INSERT INTO issue (issue_type, native_id, provider_id, repository_id, number, state, is_locked, comments_count)
+                    VALUES ('ISSUE', ?, ?, ?, ?, 'OPEN', false, 0)
+                    """, NATIVE_MR3_ID, savedRepo.getProvider().getId(), savedRepo.getId(), MR3_IID);
+
+            receive(loadPayload("merge_request.open"));
+
+            assertThat(jdbcTemplate.queryForList(
+                            "SELECT issue_type FROM issue WHERE native_id = ? ORDER BY issue_type",
+                            String.class,
+                            NATIVE_MR3_ID))
+                    .containsExactly("ISSUE", "PULL_REQUEST");
+        }
+
+        @Test
         void shouldReportAnEditedDescriptionButNotAnUpdateThatLeftTheTextAlone() throws Exception {
             receive(update("2026-01-31 19:04:04 +0100", null));
             eventListener.clear();
