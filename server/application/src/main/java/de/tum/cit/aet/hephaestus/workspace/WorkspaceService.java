@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,11 +96,12 @@ public class WorkspaceService {
             String accountLogin,
             AccountType accountType,
             @Nullable Long ownerUserId) {
-        return createWorkspaceInTransaction(rawSlug, displayName, accountLogin, accountType, ownerUserId);
+        return createWorkspaceInTransaction(
+                rawSlug, displayName, accountLogin, accountType, () -> ownerAccount(ownerUserId));
     }
 
     private Workspace createWorkspaceInTransaction(
-            String slug, String displayName, String accountLogin, AccountType accountType, @Nullable Long ownerUserId) {
+            String slug, String displayName, String accountLogin, AccountType accountType, LongSupplier ownerAccount) {
         workspaceSlugService.validate(slug);
 
         if (!workspaceSlugService.isAvailable(slug)) {
@@ -115,7 +118,8 @@ public class WorkspaceService {
 
         try {
             Workspace saved = workspaceRepository.saveAndFlush(workspace);
-            createOwnerRole(saved, ownerUserId);
+            workspaceMembershipService.createMembership(
+                    saved, ownerAccount.getAsLong(), Membership.WorkspaceRole.OWNER);
             return saved;
         } catch (DataIntegrityViolationException e) {
             // Unique constraint violation on slug
@@ -133,8 +137,10 @@ public class WorkspaceService {
      */
     public Workspace createWorkspace(CreateWorkspaceRequestDTO request) {
         @Nullable List<RepositoryIdentity> selected = verifiedSelection(request);
-        return Objects.requireNonNull(transactionTemplate.execute(
-                status -> createWorkspaceInTransaction(request, selected, authenticatedOwner(request))));
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            long owner = authenticatedOwner(request);
+            return createWorkspaceInTransaction(request, selected, () -> owner);
+        }));
     }
 
     /**
@@ -144,34 +150,31 @@ public class WorkspaceService {
      */
     public Workspace createWorkspace(CreateWorkspaceRequestDTO request, Long ownerUserId) {
         @Nullable List<RepositoryIdentity> selected = verifiedSelection(request);
-        return Objects.requireNonNull(
-                transactionTemplate.execute(status -> createWorkspaceInTransaction(request, selected, ownerUserId)));
+        return Objects.requireNonNull(transactionTemplate.execute(
+                status -> createWorkspaceInTransaction(request, selected, () -> ownerAccount(ownerUserId))));
     }
 
     /**
-     * The authenticated account's verified actor on the workspace's provider, never one of its other
-     * links. Creation has no workspace identity yet.
+     * The authenticated account, once it holds a verified link on the workspace's provider, never one
+     * of its other links. Creation has no workspace identity yet, and the link is the proof: sign-in
+     * records it, while only a sync mirrors the actor, so a first workspace has a link and no actor.
      */
-    private Long authenticatedOwner(CreateWorkspaceRequestDTO request) {
+    private long authenticatedOwner(CreateWorkspaceRequestDTO request) {
         if (Objects.requireNonNull(request.kind(), "kind is required") == IntegrationKind.GITLAB) {
-            String serverUrl = gitLabWorkspaceInstance.require(request.serverUrl());
-            var owners = currentAccountUsers.resolve().stream()
-                    .filter(actor -> actor.providerType().equals(IdentityProviderType.GITLAB.name())
-                            && ScmOrigin.of(actor.serverUrl()).equals(ScmOrigin.of(serverUrl)))
-                    .map(actor -> actor.actorId())
-                    .toList();
-            if (owners.size() != 1)
+            var origin = ScmOrigin.of(gitLabWorkspaceInstance.require(request.serverUrl()));
+            long links = currentAccountUsers.providerLinks(IdentityProviderType.GITLAB.name()).stream()
+                    .filter(serverUrl -> ScmOrigin.of(serverUrl).equals(origin))
+                    .count();
+            if (links != 1)
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "Connect exactly one GitLab account on this instance before creating a workspace.");
-            return owners.getFirst();
+        } else if (currentAccountUsers
+                .providerLinks(IdentityProviderType.GITHUB.name())
+                .isEmpty()) {
+            throw new AccessForbiddenException("Connect your GitHub account before you create a GitHub workspace.");
         }
-        return currentAccountUsers.resolve().stream()
-                .filter(user -> user.providerType().equals(IdentityProviderType.GITHUB.name()))
-                .map(user -> user.actorId())
-                .findFirst()
-                .orElseThrow(() -> new AccessForbiddenException(
-                        "Connect your GitHub account before you create" + " a GitHub workspace."));
+        return SecurityUtils.getCurrentAccountId().orElseThrow();
     }
 
     /**
@@ -202,7 +205,7 @@ public class WorkspaceService {
     }
 
     private Workspace createWorkspaceInTransaction(
-            CreateWorkspaceRequestDTO request, @Nullable List<RepositoryIdentity> selected, Long ownerUserId) {
+            CreateWorkspaceRequestDTO request, @Nullable List<RepositoryIdentity> selected, LongSupplier ownerAccount) {
         String workspaceSlug = Objects.requireNonNull(request.workspaceSlug(), "workspaceSlug is required");
         String displayName = Objects.requireNonNull(request.displayName(), "displayName is required");
         String accountLogin = Objects.requireNonNull(request.accountLogin(), "accountLogin is required");
@@ -219,7 +222,7 @@ public class WorkspaceService {
                         : null;
 
         Workspace workspace =
-                createWorkspaceInTransaction(workspaceSlug, displayName, accountLogin, accountType, ownerUserId);
+                createWorkspaceInTransaction(workspaceSlug, displayName, accountLogin, accountType, ownerAccount);
 
         if (isGitLab) {
             // GitLab PAT workspaces monitor all repositories in the group by default. Initialization
@@ -275,15 +278,13 @@ public class WorkspaceService {
         return workspace;
     }
 
-    private void createOwnerRole(Workspace workspace, @Nullable Long ownerUserId) {
+    private long ownerAccount(@Nullable Long ownerUserId) {
         if (ownerUserId == null) {
-            log.warn("Workspace has no owner user: workspaceSlug={}", workspace.getWorkspaceSlug());
             throw new IllegalStateException("We could not create this workspace because your account has no connected"
                     + " GitHub or GitLab account. Connect one in User settings, then try"
                     + " again.");
         }
-        workspaceMembershipService.createMembership(
-                workspace, workspaceMembershipService.accountIdForUser(ownerUserId), Membership.WorkspaceRole.OWNER);
+        return workspaceMembershipService.accountIdForUser(ownerUserId);
     }
 
     @Transactional

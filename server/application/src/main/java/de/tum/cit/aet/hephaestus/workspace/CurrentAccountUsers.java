@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,22 @@ public class CurrentAccountUsers {
     @Transactional(readOnly = true)
     public List<ActorProfile> resolve(Long accountId) {
         return resolveAccountUsers(accountId);
+    }
+
+    /**
+     * The server URL of each active link that the authenticated account holds on a git provider of this
+     * type. A link needs no synced actor.
+     */
+    @Transactional(readOnly = true)
+    public List<String> providerLinks(String providerType) {
+        return SecurityUtils.getCurrentAccountId()
+                .map(accountId -> accountIdentityQuery.activeLinksForAccount(accountId).stream()
+                        .filter(link -> link.teamKey().isEmpty()
+                                && providerType.equals(providers.providerTypeName(link.providerId())))
+                        .map(link -> providers.providerServerUrl(link.providerId()))
+                        .filter(Objects::nonNull)
+                        .toList())
+                .orElseGet(List::of);
     }
 
     private List<ActorProfile> resolveAccountUsers(Long accountId) {

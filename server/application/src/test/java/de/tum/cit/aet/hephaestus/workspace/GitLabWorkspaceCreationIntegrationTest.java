@@ -419,6 +419,29 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
+    void shouldCreateTheFirstWorkspaceForACallerWhoIsLinkedButNotYetSynced() {
+        Account account = accountRepository.save(new Account("first-admin"));
+        Identity link = new Identity();
+        link.setAccount(account);
+        link.setProviderId(persistedId(gitLabInstance(DEFAULT_INSTANCE).getId()));
+        link.setProviderUserKey("71234");
+        identityRepository.save(link);
+
+        postGitLabWorkspace(
+                        headers -> headers.setBearerAuth("mock-jwt-sub-" + persistedId(account.getId())),
+                        "gitlab-first",
+                        null)
+                .expectStatus()
+                .isCreated();
+
+        var workspace = workspaceRepository.findByWorkspaceSlug("gitlab-first").orElseThrow();
+        var membership = workspaceMembershipRepository
+                .findByWorkspace_IdAndId_AccountId(workspace.getId(), persistedId(account.getId()))
+                .orElseThrow();
+        assertThat(membership.getRole()).isEqualTo(Membership.WorkspaceRole.OWNER);
+    }
+
+    @Test
     void shouldAssignOwnershipToTheVerifiedGitLabCallerInsteadOfTheSubmittedNamesake() {
         User namesake = persistUser("mentor");
         GitLabCaller caller = gitLabCallerWithMirror("mentor");
