@@ -6,9 +6,8 @@ import { z } from "zod";
 import { problemType } from "@/lib/problem-detail";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
-import { E2E_BASE_URL } from "./urls";
+import { E2E_BASE_URL, E2E_SERVER_URL } from "./urls";
 
-const serverUrl = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
 const statusSchema = z.object({
 	protectionEnabled: z.boolean(),
 	recoveryRequired: z.boolean(),
@@ -17,14 +16,14 @@ const statusSchema = z.object({
 });
 
 async function passkeyStatus(context: BrowserContext) {
-	const response = await context.request.get(`${serverUrl}/user/passkeys`);
+	const response = await context.request.get(`${E2E_SERVER_URL}/user/passkeys`);
 	expect(response.status()).toBe(200);
 	const body: unknown = await response.json();
 	return statusSchema.parse(body);
 }
 
 async function csrfHeaders(context: BrowserContext) {
-	const cookies = await context.cookies(serverUrl);
+	const cookies = await context.cookies(E2E_SERVER_URL);
 	const csrf = cookies.find((cookie) => cookie.name === "XSRF-TOKEN");
 	if (!csrf) {
 		throw new Error("The real sign-in must issue a CSRF cookie");
@@ -33,7 +32,7 @@ async function csrfHeaders(context: BrowserContext) {
 }
 
 async function expectAdminAccess(context: BrowserContext, allowed: boolean) {
-	const response = await context.request.get(`${serverUrl}/admin/users?page=0&size=1`);
+	const response = await context.request.get(`${E2E_SERVER_URL}/admin/users?page=0&size=1`);
 	expect(response.status()).toBe(allowed ? 200 : 403);
 	if (!allowed) {
 		const body: unknown = await response.json();
@@ -51,7 +50,8 @@ async function submitFromSettings(
 	const [response] = await Promise.all([
 		page.waitForResponse(
 			(value) =>
-				value.request().method() === "POST" && value.url() === `${serverUrl}/user/passkeys${path}`,
+				value.request().method() === "POST" &&
+				value.url() === `${E2E_SERVER_URL}/user/passkeys${path}`,
 		),
 		scope.getByRole("button", { name: button, exact: true }).click(),
 	]);
@@ -68,7 +68,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 	page,
 	context,
 }) => {
-	for (const url of [serverUrl, E2E_BASE_URL]) {
+	for (const url of [E2E_SERVER_URL, E2E_BASE_URL]) {
 		expect(new URL(url).hostname, "Use only the disposable localhost E2E server").toBe("localhost");
 	}
 	const username = `passkey-${randomUUID()}`;
@@ -98,7 +98,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 		expect(enrolled.credentials).toHaveLength(1);
 		await expectAdminAccess(context, false);
 		const unverifiedProtection = await context.request.patch(
-			`${serverUrl}/user/passkeys/protection`,
+			`${E2E_SERVER_URL}/user/passkeys/protection`,
 			{
 				headers: await csrfHeaders(context),
 				data: { enabled: true },
@@ -118,15 +118,18 @@ test("real user verification grants admin access and recovery requires re-enroll
 
 		await submitFromSettings(page, "/verification", "Verify passkey");
 		expect(await passkeyStatus(context)).toMatchObject({ verified: true, recoveryRequired: false });
-		const protection = await context.request.patch(`${serverUrl}/user/passkeys/protection`, {
+		const protection = await context.request.patch(`${E2E_SERVER_URL}/user/passkeys/protection`, {
 			headers: await csrfHeaders(context),
 			data: { enabled: true },
 		});
 		expect(protection.status()).toBe(200);
 		await expectAdminAccess(context, true);
-		const codesResponse = await context.request.post(`${serverUrl}/user/passkeys/recovery-codes`, {
-			headers: await csrfHeaders(context),
-		});
+		const codesResponse = await context.request.post(
+			`${E2E_SERVER_URL}/user/passkeys/recovery-codes`,
+			{
+				headers: await csrfHeaders(context),
+			},
+		);
 		expect(codesResponse.status()).toBe(200);
 		const codesBody: unknown = await codesResponse.json();
 		const { codes } = z.object({ codes: z.tuple([z.string()]).rest(z.string()) }).parse(codesBody);
@@ -161,7 +164,7 @@ test("real user verification grants admin access and recovery requires re-enroll
 		expect(recovered).toMatchObject({ recoveryRequired: true, verified: false });
 		expect(recovered.credentials).toHaveLength(0);
 		await expectAdminAccess(context, false);
-		const replay = await context.request.post(`${serverUrl}/user/passkeys/recovery`, {
+		const replay = await context.request.post(`${E2E_SERVER_URL}/user/passkeys/recovery`, {
 			headers: await csrfHeaders(context),
 			data: { code: recoveryCode },
 		});
