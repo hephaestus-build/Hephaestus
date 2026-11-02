@@ -102,12 +102,13 @@
 			"dependencyDashboardApproval": true
 		},
 		{
-			"description": "zizmor 1.31 adds the self-repository audit, which the Zizmor job fails on until the workflows adopt its syntax or turn it off",
+			"description": "zizmor 1.31 adds the self-repository audit, which the Zizmor job fails on until the workflows adopt its syntax or turn it off. Its own group keeps the approval from holding the other CI updates",
 			"matchDepNames": [
 				"zizmorcore/zizmor",
 				"zizmorcore/zizmor-action",
 				"ghcr.io/zizmorcore/zizmor"
 			],
+			"groupName": "zizmor",
 			"dependencyDashboardApproval": true
 		},
 		{

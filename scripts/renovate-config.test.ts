@@ -224,6 +224,17 @@ void test("updates that need a port or a workflow decision wait for a maintainer
 	);
 });
 
+void test("an update that waits for approval does not hold the CI updates grouped with it", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const zizmor = config.packageRules
+		.filter(isRecord)
+		.find(
+			(rule) =>
+				Array.isArray(rule.matchDepNames) && rule.matchDepNames.includes("zizmorcore/zizmor"),
+		);
+	assert.equal(zizmor?.groupName, "zizmor");
+});
+
 void test("vulnerability remediation bypasses normal update latency", () => {
 	assert.equal(config.osvVulnerabilityAlerts, true);
 	assert.equal(config.dependencyDashboardOSVVulnerabilitySummary, "unresolved");
