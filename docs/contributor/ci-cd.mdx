@@ -275,6 +275,8 @@ It makes the commit on a staging branch, then moves the Version PR's branch to i
 Resetting the branch to a `main` commit first would make GitHub mark the pull request merged.
 
 A failed maintenance run opens or comments on the `Version PR maintenance failed` issue, and the next successful run closes it.
+A timeout or a manual cancel of a started run does the same.
+A waiting run that the concurrency group replaces reports nothing, because the newer run does the same work.
 A stale Version PR alone gives no signal.
 
 The Version PR carries checks like any other pull request.

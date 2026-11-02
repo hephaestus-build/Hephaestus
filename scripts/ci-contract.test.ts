@@ -3147,16 +3147,16 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(maintainerSource, /"workflow",\s*"run"|\/dispatches/u);
 
 		// A failed run reopens nothing by itself, so it reports on one tracking issue, which the
-		// next successful run closes. A run that the concurrency group replaces reports nothing.
+		// next successful run closes. `version-pr-workflow.test.ts` runs the script for each result.
 		const report = ["jobs", "report"];
 		assert.equal(versioning.getIn([...report, "needs"]), "version-pr");
 		assert.equal(
 			versioning.getIn([...report, "if"]),
-			`\${{ always() && contains(fromJSON('["success", "failure"]'), needs.version-pr.result) }}`,
+			`\${{ always() && contains(fromJSON('["success", "failure", "cancelled"]'), needs.version-pr.result) }}`,
 		);
 		const reportPermissions = versioning.getIn([...report, "permissions"]);
 		assert.ok(isMap(reportPermissions));
-		assert.deepEqual(reportPermissions.toJSON(), { issues: "write" });
+		assert.deepEqual(reportPermissions.toJSON(), { actions: "read", issues: "write" });
 		const tracking = asString(
 			namedStep(versioning, report, "Open or close the tracking issue").get("run"),
 			"tracking script",
