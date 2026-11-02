@@ -2520,6 +2520,7 @@ await test("every revision migrates the database once, in a Job that only reache
 			"APP_VERSION",
 			"HEPHAESTUS_RELEASE_COMMIT",
 			"DEPLOYMENT_ENVIRONMENT",
+			"GITLAB_DEFAULT_SERVER_URL",
 			"SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
 			"SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
 			"SPRING_PROFILES_ACTIVE",
@@ -2943,6 +2944,29 @@ await test("a private CA reaches the roles that call a Git provider, and is off 
 	for (const component of ["server", "worker", "webhook"]) {
 		assert.equal(envValue(workload(defaults, component), "SSL_CERT_FILE"), undefined, component);
 	}
+});
+
+await test("the migration knows the configured GitLab, which a connection without a URL used", () => {
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			config: {
+				gitlab: { enabled: true, oauthClientId: "id", oauthBaseUrl: "https://gitlab.corp.example" },
+			},
+		},
+	]);
+	const job = resources.find(
+		(resource) =>
+			kindOf(resource) === "Job" && /migration/u.test(String(get(resource, "metadata", "name"))),
+	);
+	const variables = list(get(list(get(job, "spec", "template", "spec", "containers"))[0], "env"));
+	assert.equal(
+		get(
+			variables.find((entry) => get(entry, "name") === "GITLAB_DEFAULT_SERVER_URL"),
+			"value",
+		),
+		"https://gitlab.corp.example",
+	);
 });
 
 await test("a model endpoint on a private network reaches the server and the worker, never the metadata range", () => {

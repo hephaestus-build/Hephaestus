@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -10,7 +8,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -22,7 +19,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryOriginNotSupportedException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Optional;
 import java.util.Set;
@@ -71,32 +67,6 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseBeforeReadingTheTokenWhenAConnectionWithoutAServerWouldSendItElsewhere() {
-        // Without a URL the connection's mirrors are recorded under gitlab.com, but its token would go to this default.
-        when(connection.getConfig()).thenReturn(withoutServer());
-        when(tokens.serverUrlOf(null)).thenReturn("https://gitlab.custom-default.example.test");
-
-        assertThatThrownBy(() -> lookup.resolve(WORKSPACE_ID, PATH))
-                .isInstanceOf(RepositoryOriginNotSupportedException.class);
-        verify(credentials, never()).credentialsOf(any());
-        verifyNoInteractions(projects);
-    }
-
-    @Test
-    void shouldAskGitLabDotComForAConnectionWithoutAServerWhenThatIsTheDefault() {
-        when(connection.getConfig()).thenReturn(withoutServer());
-        when(tokens.serverUrlOf(null)).thenReturn("https://gitlab.com");
-        when(credentials.credentialsOf(connection)).thenReturn(Optional.of(new BearerToken(TOKEN, null)));
-        GitLabProjectResponse project = mock(GitLabProjectResponse.class);
-        when(project.id()).thenReturn("gid://gitlab/Project/7101");
-        when(project.fullPath()).thenReturn(PATH);
-        when(projects.fetchProject(WORKSPACE_ID, TOKEN, "https://gitlab.com", PATH))
-                .thenReturn(Optional.of(project));
-
-        assertThat(lookup.resolve(WORKSPACE_ID, PATH)).contains(new RepositoryIdentity(7101L, PATH));
-    }
-
-    @Test
     void shouldAskNothingWithoutAStoredToken() {
         when(credentials.credentialsOf(connection)).thenReturn(Optional.empty());
 
@@ -114,9 +84,5 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
         when(projects.fetchProject(WORKSPACE_ID, TOKEN, SERVER, PATH)).thenReturn(Optional.of(project));
 
         assertThat(lookup.resolve(WORKSPACE_ID, PATH)).isEmpty();
-    }
-
-    private static ConnectionConfig.GitLabConfig withoutServer() {
-        return new ConnectionConfig.GitLabConfig(null, null, null, Set.of(), null);
     }
 }

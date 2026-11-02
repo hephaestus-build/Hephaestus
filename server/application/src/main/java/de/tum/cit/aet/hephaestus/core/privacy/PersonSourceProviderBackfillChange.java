@@ -25,7 +25,12 @@ public class PersonSourceProviderBackfillChange implements CustomTaskChange {
         var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection.getUnderlyingConnection(), true));
         try {
             var sources = jdbc.query("SELECT id,kind,config->>'serverUrl' FROM connection ORDER BY id", (rs, row) -> {
-                var namespace = PersonSourceNamespace.from(Objects.requireNonNull(rs.getString(2)), rs.getString(3));
+                String kind = Objects.requireNonNull(rs.getString(2));
+                // This released step ran before every source control connection stored its URL.
+                String url = rs.getString(3);
+                if (url == null && kind.equals("GITHUB")) url = PersonSourceNamespace.GITHUB_DEFAULT_URL;
+                if (url == null && kind.equals("GITLAB")) url = "https://gitlab.com";
+                var namespace = PersonSourceNamespace.from(kind, url);
                 if (namespace.isEmpty()
                         && Boolean.TRUE.equals(jdbc.queryForObject(
                                 "SELECT EXISTS(SELECT 1 FROM" + " outline_document WHERE" + " connection_id=?)",

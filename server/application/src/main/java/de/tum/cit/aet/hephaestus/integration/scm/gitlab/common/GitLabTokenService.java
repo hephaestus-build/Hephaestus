@@ -77,21 +77,19 @@ public class GitLabTokenService {
     /**
      * Resolves the GitLab server URL for a scope.
      * <p>
-     * Returns the workspace's custom server URL if set (for self-hosted instances),
-     * otherwise falls back to the configured default (typically {@code https://gitlab.com}).
+     * Returns the server URL of the workspace's connection. A workspace with no connection gets
+     * the configured default.
      *
      * @param scopeId the workspace/scope ID
      * @return the server URL (never null, never blank)
      */
     public String resolveServerUrl(Long scopeId) {
-        return serverUrlOf(tokenProvider.getServerUrl(scopeId).orElse(null));
+        return tokenProvider.getServerUrl(scopeId).map(this::serverUrlOf).orElseGet(properties::defaultServerUrl);
     }
 
-    /** The server URL a connection configured, or the configured default when it names none. */
-    public String serverUrlOf(@Nullable String configured) {
-        return configured == null || configured.isBlank()
-                ? properties.defaultServerUrl()
-                : stripTrailingSlash(configured);
+    /** The server URL that a connection stores, as the API clients address it. */
+    public String serverUrlOf(String configured) {
+        return stripTrailingSlash(configured);
     }
 
     /**

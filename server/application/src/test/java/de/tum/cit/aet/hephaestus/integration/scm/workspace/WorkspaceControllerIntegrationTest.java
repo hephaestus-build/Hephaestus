@@ -224,7 +224,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(workspace.workspaceSlug()).isEqualTo("controller-space");
         assertThat(workspace.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE.name());
         assertThat(workspace.providerType()).isEqualTo(IdentityProviderType.GITHUB);
-        assertThat(workspace.serverUrl()).isNull();
+        assertThat(workspace.serverUrl()).isEqualTo("https://github.com");
 
         Workspace persistedWorkspace =
                 workspaceRepository.findById(workspace.id()).orElseThrow();

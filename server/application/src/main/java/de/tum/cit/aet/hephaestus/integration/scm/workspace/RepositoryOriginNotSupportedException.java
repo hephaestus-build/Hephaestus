@@ -21,16 +21,6 @@ public final class RepositoryOriginNotSupportedException extends ErrorResponseEx
         super(HttpStatus.CONFLICT, problem, null);
     }
 
-    /**
-     * A GitLab connection that names no server of its own, or one other than the server its token would be sent to.
-     * Its repositories are recorded under one server while GitLab would be asked on another.
-     */
-    public static RepositoryOriginNotSupportedException forUnstatedGitLabServer() {
-        return new RepositoryOriginNotSupportedException(
-                problem("This GitLab connection does not state the GitLab server its token belongs to. Reconnect "
-                        + "GitLab with the server URL stated, then add the project again."));
-    }
-
     private static ProblemDetail problem(String detail) {
         var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, LoggingUtils.sanitizeForLog(detail));
         problem.setTitle("Repository server not supported");

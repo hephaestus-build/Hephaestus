@@ -77,7 +77,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         assertThat(reloaded.getConfig()).isInstanceOf(ConnectionConfig.GitHubPatConfig.class);
         ConnectionConfig.GitHubPatConfig cfg = (ConnectionConfig.GitHubPatConfig) reloaded.getConfig();
         assertThat(cfg.orgLogin()).isEqualTo("acme-org");
-        assertThat(cfg.serverUrl()).isNull();
+        assertThat(cfg.serverUrl()).isEqualTo("https://github.com");
         assertThat(cfg.enabledStreams()).containsExactly("repos");
 
         assertDiscriminator(id, "GITHUB_PAT");

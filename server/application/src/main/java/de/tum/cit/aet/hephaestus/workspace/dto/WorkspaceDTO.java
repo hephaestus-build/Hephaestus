@@ -44,7 +44,7 @@ public record WorkspaceDTO(
         @Nullable
         IdentityProviderType providerType,
 
-        @Schema(description = "Custom server URL for self-hosted instances (null for cloud defaults)") @Nullable
+        @Schema(description = "Server URL of the workspace's SCM connection (null if none bound)") @Nullable
         String serverUrl,
 
         @NonNull @Schema(description = "Timestamp when the workspace was created")

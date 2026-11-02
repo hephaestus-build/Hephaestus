@@ -6753,7 +6753,7 @@ export type Workspace = {
      */
     publicActivityEnabled: boolean;
     /**
-     * Custom server URL for self-hosted instances (null for cloud defaults)
+     * Server URL of the workspace's SCM connection (null if none bound)
      */
     serverUrl?: string;
     /**

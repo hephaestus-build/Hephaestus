@@ -54,6 +54,8 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             {{- include "hephaestus.env.releaseIdentity" . | nindent 12 }}
+            - name: GITLAB_DEFAULT_SERVER_URL
+              value: {{ .Values.config.gitlab.oauthBaseUrl | quote }}
             {{- include "hephaestus.env.databasePool" .Values.migration.databasePool | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod,migrate
