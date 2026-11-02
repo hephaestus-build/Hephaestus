@@ -181,11 +181,12 @@ public class KubernetesPods {
     }
 
     /**
-     * A review: four large reviews at once peaked at 632 to 657 MiB each, p95 596 to 626; 515 MiB of disk each. Its
-     * attempt volumes and scratch places each hold one scratch size.
+     * A review: one loop and at most a few script processes, because a script ends at its review. A large change can
+     * pass the request, so the limit stays well above it. 515 MiB of disk each. Its attempt volumes and scratch places
+     * each hold one scratch size.
      */
     static final Size REVIEW = new Size(
-            640 * MIB,
+            384 * MIB,
             1280 * MIB,
             1024 * MIB,
             SandboxLayout.SCRATCH_BYTES,

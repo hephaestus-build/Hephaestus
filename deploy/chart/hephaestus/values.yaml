@@ -251,7 +251,7 @@ worker:
   # Two workers on different nodes where the cluster has them: one keeps claiming while the other
   # drains. 0 stops every worker and keeps its objects.
   replicas: 2
-  # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
+  # The reviews that one worker runs at once. Each review sandbox requests 384 MiB and is limited to
   # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes). The reviews tier's quota, the compositions and the
   # threads that the worker's heap leaves room for follow it.
   reviews: 5

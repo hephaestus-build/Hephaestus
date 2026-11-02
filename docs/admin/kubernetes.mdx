@@ -656,8 +656,8 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.8 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.8 GiB | 0.75 | The new Pods' caches |
-| The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.2 GiB | 0.50 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 16.8 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
+| The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.0 GiB | 0.50 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
+| Total, against the node less platform reservations and the hard eviction floor | 16.6 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker uses `Recreate` in both single-node profiles.
 The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
@@ -718,8 +718,8 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.8 GiB of 13.9 GiB | 1.70 of 3.5 |
-| The same, with the isolation probe | 12.5 GiB | — |
+| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.6 GiB of 13.9 GiB | 1.70 of 3.5 |
+| The same, with the isolation probe | 12.3 GiB | — |
 | An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.2 GiB of 13.9 GiB | 2.40 of 3.5 |
 
 The table counts requests.
@@ -1402,7 +1402,7 @@ No per-review memory or process setting overrides it.
 
 | Sandbox Pod | CPU request | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
 | --- | --- | --- | --- | --- | --- | --- |
-| Review | 50m | 640 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
+| Review | 50m | 384 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
 | conversation host | 50m | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
 | Turn sandbox | 20m, and 5m for its stager | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
 
