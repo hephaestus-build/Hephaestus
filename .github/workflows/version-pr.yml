@@ -43,11 +43,13 @@ jobs:
   # A failed maintenance leaves the Version PR stale without any other signal.
   report:
     needs: version-pr
-    # A run that the concurrency group replaces ends cancelled; only a finished run reports.
-    if: ${{ always() && contains(fromJSON('["success", "failure"]'), needs.version-pr.result) }}
+    # A timeout or a manual cancel also ends cancelled, so the report step separates those from a
+    # run that the concurrency group replaced while it waited, even with cancel-in-progress off.
+    if: ${{ always() && contains(fromJSON('["success", "failure", "cancelled"]'), needs.version-pr.result) }}
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       issues: write
     steps:
       - name: Open or close the tracking issue
@@ -55,9 +57,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RESULT: ${{ needs.version-pr.result }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          if [ "$RESULT" = cancelled ]; then
+            # GitHub lists no steps for a job that never got a runner.
+            steps=$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT/jobs?per_page=100" \
+              --jq '.jobs[] | select(.name == "version-pr") | .steps | length')
+            if [ "$steps" = 0 ]; then
+              echo "The concurrency group replaced this run before it started."
+              exit 0
+            fi
+          fi
           title="Version PR maintenance failed"
           # A listing, not the search index, so a failure right after another finds its issue.
           number=$(gh issue list -R "$REPOSITORY" --state open --limit 500 --json number,title |
