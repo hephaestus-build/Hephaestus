@@ -46,6 +46,7 @@ import {
 	useActivityPeople,
 	useActivityPerson,
 	useActivityWork,
+	useWorkspaceSyncing,
 } from "@/hooks/use-activity";
 import { filedUnder, pathNumber, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { pageHead } from "@/lib/page-title";
@@ -110,6 +111,7 @@ function WorkspaceActivity() {
 	const people = useActivityPeople({ ...scope, enabled: peopleEnabled });
 	const facets = useActivityFacets({ ...scope, enabled: peopleEnabled });
 	const ready = people.status === "ready" ? people.people : undefined;
+	const syncing = useWorkspaceSyncing(workspaceSlug, ready?.people.length === 0);
 
 	const stackControls = useDetailStack();
 	const targets = detailStack.map(({ target }) => target);
@@ -292,6 +294,7 @@ function WorkspaceActivity() {
 	return (
 		<>
 			<WorkspaceActivityPage
+				syncing={syncing}
 				view={search.view}
 				onViewChange={(view) => setView({ view })}
 				providerType={providerType}

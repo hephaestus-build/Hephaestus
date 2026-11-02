@@ -44,6 +44,9 @@ function notFound() {
 }
 
 export const handlers = [
+	http.get("*/workspaces/:workspaceSlug/sync/progress", () =>
+		HttpResponse.json({ syncing: false }),
+	),
 	http.get("*/user/passkeys", () =>
 		HttpResponse.json({
 			assuranceEnforced: true,

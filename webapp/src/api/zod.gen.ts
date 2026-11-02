@@ -6648,6 +6648,13 @@ export const zWorkspaceGroupSplit = z.object({
 });
 
 /**
+ * What a workspace member may know about syncing
+ */
+export const zWorkspaceSyncProgress = z.object({
+    syncing: z.boolean()
+});
+
+/**
  * One figure: the reader's own value, then the middle half of the developers counted
  */
 export const zWorkspaceTile = z.object({

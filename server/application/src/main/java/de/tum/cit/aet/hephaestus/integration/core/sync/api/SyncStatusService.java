@@ -175,6 +175,10 @@ public class SyncStatusService {
         return new ResourceCountsDTO((long) resources.size(), erroredResources, pending, stale);
     }
 
+    public boolean isSyncing(long workspaceId) {
+        return syncJobRepository.existsByWorkspace_IdAndStatusIn(workspaceId, SyncJobStatus.ACTIVE);
+    }
+
     public List<SyncResourceStateDTO> getResources(Long workspaceId, long connectionId) {
         Connection connection = connectionAdminService.findInWorkspaceOrThrow(workspaceId, connectionId);
         ConnectionSyncStateProvider provider = providerFor(connection.getKind());

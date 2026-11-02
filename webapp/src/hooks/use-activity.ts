@@ -1,14 +1,17 @@
 import { skipToken, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import {
 	getActivityFacetsOptions,
 	getActivityPeopleOptions,
+	getActivityPeopleQueryKey,
 	getActivityPersonQueryKey,
 	getActivityPersonWorkInfiniteQueryKey,
 	getActivityPersonWorkQueryKey,
 	getActivityWorkInfiniteQueryKey,
 	getActivityWorkQueryKey,
 	getOpenWorkOptions,
+	getWorkspaceSyncProgressOptions,
 	getOwnActivityQueryKey,
 	getOwnActivityWorkInfiniteQueryKey,
 	getOwnActivityWorkQueryKey,
@@ -259,6 +262,45 @@ type ActivityWorkRequest = ActivityRequest &
  * it: what is loaded, then the rest of the period read at the server's largest page size, as
  * Markdown and HTML.
  */
+const SYNC_PROGRESS_POLL_MS = 30_000;
+
+/**
+ * Whether a sync is running. A failed read says no, which is what the page said without this fact.
+ * Live sync events reach administrators only, so while a sync runs, and once when it ends, this reads
+ * the lists again: work appears for everyone without a reload.
+ */
+export function useWorkspaceSyncing(workspaceSlug: string, enabled: boolean): boolean {
+	const queryClient = useQueryClient();
+	const { data } = useQuery({
+		...getWorkspaceSyncProgressOptions({ path: { workspaceSlug } }),
+		enabled,
+		refetchInterval: (query) =>
+			query.state.data?.syncing === true ? SYNC_PROGRESS_POLL_MS : false,
+	});
+	const syncing = enabled && data?.syncing === true;
+	useEffect(() => {
+		if (!syncing) {
+			return;
+		}
+		const refresh = () => {
+			const path = { workspaceSlug };
+			for (const queryKey of [
+				getOwnActivityWorkInfiniteQueryKey({ path }),
+				getActivityWorkInfiniteQueryKey({ path }),
+				getActivityPeopleQueryKey({ path }),
+			]) {
+				void queryClient.invalidateQueries({ queryKey });
+			}
+		};
+		const timer = setInterval(refresh, SYNC_PROGRESS_POLL_MS);
+		return () => {
+			clearInterval(timer);
+			refresh();
+		};
+	}, [syncing, queryClient, workspaceSlug]);
+	return syncing;
+}
+
 export function useActivityWork({
 	userId,
 	own = false,
@@ -323,6 +365,12 @@ export function useActivityWork({
 		}),
 	});
 	useQueryReadRefusal(reader.infiniteKey, query.isError, query.error);
+	const syncing = useWorkspaceSyncing(
+		workspaceSlug,
+		query.isSuccess &&
+			!query.isPlaceholderData &&
+			loadedPages(query.data).every((page) => page.content.length === 0),
+	);
 
 	const everything = async (): Promise<ActivityWork[]> => {
 		// A placeholder is the previous period's timeline, so a copy of this period starts over.
@@ -367,5 +415,6 @@ export function useActivityWork({
 		items: pages.flatMap((page) => page.content),
 		stale: query.isPlaceholderData,
 		onCopy,
+		syncing,
 	}));
 }

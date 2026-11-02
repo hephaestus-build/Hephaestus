@@ -200,6 +200,7 @@ export { getUserViewUser } from './sdk/getUserViewUser.gen.js';
 export { getWorkspace } from './sdk/getWorkspace.gen.js';
 export { getWorkspacePasskeyPolicy } from './sdk/getWorkspacePasskeyPolicy.gen.js';
 export { getWorkspacePublicActivitySettings } from './sdk/getWorkspacePublicActivitySettings.gen.js';
+export { getWorkspaceSyncProgress } from './sdk/getWorkspaceSyncProgress.gen.js';
 export { gitLabPreflight } from './sdk/gitLabPreflight.gen.js';
 export { initiate } from './sdk/initiate.gen.js';
 export { keepMyProductFeedbackPrivate } from './sdk/keepMyProductFeedbackPrivate.gen.js';
