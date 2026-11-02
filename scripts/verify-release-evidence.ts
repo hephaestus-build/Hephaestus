@@ -15,7 +15,7 @@ import {
 	evaluate,
 	needsComponentEvidence,
 } from "./check-release-vulnerabilities.ts";
-import { readJsonFileSync } from "./lib/json.ts";
+import { asString, readJsonFileSync } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
 	releaseAtLeast,
@@ -25,6 +25,8 @@ import {
 	releaseRepository,
 } from "./lib/release-identities.ts";
 import { requiresSbomInventory } from "./lib/release-sbom-contract.ts";
+import { assertOwnedCoverage } from "./owned-code-sbom.ts";
+import { scanOwnedSource } from "./owned-source-sbom.ts";
 import { isRelease } from "./release-image-lock.ts";
 import { SOURCE_SBOM_FORMATS, validateReleaseSourceBundle } from "./release-source-sbom.ts";
 
@@ -363,6 +365,12 @@ function requireChecksumCoverage(
 	}
 }
 
+function verifyOwnedCapture(cycloneDx: unknown, commit: unknown, capture: boolean): void {
+	if (capture) {
+		assertOwnedCoverage(cycloneDx, scanOwnedSource(asString(commit, "release commit")));
+	}
+}
+
 export function verifyReleaseEvidence(
 	directory: string,
 	mode: VerificationMode = "verify",
@@ -404,6 +412,7 @@ export function verifyReleaseEvidence(
 			manifestValue.commit,
 			releaseRepository(release, process.env),
 		);
+		verifyOwnedCapture(cycloneDx, manifestValue.commit, covered === undefined);
 	}
 	requireChecksumCoverage(covered, [
 		"manifest.json",
