@@ -211,6 +211,7 @@ Do not put two callouts in a row.
 - Show output in a separate `text` block after the command block.
 - Write a placeholder in angle brackets, such as `<release>`. Under the block, say what the reader must put there.
 - If a block shows a file, add its path after the language, such as `title="values.yaml"`.
+  Under `docs/admin/`, `title="values.yaml"` means the Helm values of the chart: `scripts/kubernetes-chart.test.ts` validates each such block against the chart's schema.
 - A user page has no code blocks. It uses inline code only for text that the reader enters, such as a Slack command.
 
 ## Files and names

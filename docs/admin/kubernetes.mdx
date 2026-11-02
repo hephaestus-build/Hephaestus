@@ -390,7 +390,7 @@ kubectl get pods --namespace <Gateway namespace> --selector <Gateway pod label> 
 Write a regular expression for the Pod network that holds them, not for one address, because a Pod gets a new address when it restarts.
 On a k3s cluster with the default Pod network `10.42.0.0/16`, use this value:
 
-```yaml
+```yaml title="values.yaml"
 trustedProxies: '10\.42\.\d{1,3}\.\d{1,3}'
 ```
 
@@ -487,7 +487,7 @@ spec:
 A model endpoint outside the cluster can have a private address, for example a vLLM server on the LAN.
 The application and the network policy both refuse private addresses by default, so you must allow the endpoint in both places:
 
-```yaml
+```yaml title="values.yaml"
 config:
   # The application: host names, IP addresses, or CIDR ranges that a provider base URL can use.
   llmPrivateHosts: [vllm.lab.example]
@@ -1255,7 +1255,7 @@ By default, the chart creates the three PriorityClasses.
 If your account cannot create cluster-wide objects, ask the cluster's administrator for three classes, with values in the order above.
 Then set `priorityClasses.create=false` and name them:
 
-```yaml
+```yaml title="values.yaml"
 priorityClasses:
   create: false
   roles: platform-high

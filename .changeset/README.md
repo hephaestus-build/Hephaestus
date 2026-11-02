@@ -44,6 +44,9 @@ The fragment contains the complete `#### 🔴 …` migration-guide entry.
 Never edit `MIGRATION.md`.
 The version process assembles and consumes fragments in filename order.
 
+A PR that removes or renames a chart value must name the old value in backticks, such as `` `config.gitlab.workspaceCreation` ``, in its changeset or fragment.
+CI compares the chart's schema with the base, because the chart refuses a value that its schema lacks.
+
 Example:
 
 ```md

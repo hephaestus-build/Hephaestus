@@ -282,6 +282,45 @@ await test("every profile installs from the same templates with only the operato
 	}
 });
 
+await test("the values that the repository shows an operator fit the schema", () => {
+	const repository = new URL("../", import.meta.url);
+	const yaml = (relative: string) =>
+		asRecord(parse(readFileSync(new URL(relative, repository), "utf8")), relative);
+	const admin = new URL("docs/admin/", repository);
+	const documented = readdirSync(admin, { recursive: true, encoding: "utf8" })
+		.filter((name) => /\.mdx?$/u.test(name))
+		.flatMap((name) =>
+			[
+				...readFileSync(new URL(name, admin), "utf8").matchAll(
+					/^```yaml title="values\.yaml"\n(?<block>.*?)^```$/gmsu,
+				),
+			].map((match) => ({ name, values: asRecord(parse(match.groups?.block ?? ""), name) })),
+		);
+	assert.notEqual(documented.length, 0, "the documented values must stay findable");
+	for (const { name, values } of documented) {
+		const merged = install(prepared, operator, values);
+		assert.equal(validate(merged), true, `${name}: ${JSON.stringify(validate.errors)}`);
+	}
+	const small = load("small.yaml");
+	const examples = [
+		["k3s-values.yaml", [small, prepared, operator, yaml("deploy/platform/k3s-values.yaml")]],
+		[
+			"capacity-bench/values.yaml",
+			[small, load("small-16gib.yaml"), prepared, yaml("scripts/capacity-bench/values.yaml")],
+		],
+	] as const;
+	for (const [name, layers] of examples) {
+		assert.equal(validate(install(...layers)), true, `${name}: ${JSON.stringify(validate.errors)}`);
+	}
+});
+
+await test("the schema refuses a value that it does not name, at every level", () => {
+	const valid = install(prepared, operator);
+	for (const change of [{ removed: true }, { config: { gitlab: { workspaceCreation: false } } }]) {
+		assert.equal(validate(merge(valid, change)), false, JSON.stringify(change));
+	}
+});
+
 await test("the schema refuses settings the chart does not own", () => {
 	const valid = install(prepared, operator);
 	assert.equal(validate(valid), true, JSON.stringify(validate.errors));

@@ -77,7 +77,7 @@ await test("a Go duration reads in seconds, and anything else is refused", () =>
 });
 
 /** `helm template` of the small profile, the one-host values and a site.yaml, as k3s-install.sh installs them. */
-function renderOneHost(extra: Record<string, unknown> = {}) {
+function renderOneHost(extra: Record<string, unknown> = {}, siteValues?: unknown) {
 	const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-k3s-"));
 	try {
@@ -92,7 +92,7 @@ function renderOneHost(extra: Record<string, unknown> = {}) {
 				webapp: `ghcr.io/hephaestus-build/webapp${digest("5")}`,
 			},
 		};
-		const site = {
+		const site = siteValues ?? {
 			host: "hephaestus.example.com",
 			networkPolicy: { kubernetesApi: { cidr: "192.168.5.15/32", port: 6443 }, ...extra },
 		};
@@ -680,6 +680,12 @@ await test("--render-site prints the site values of a scripted install, and asks
 	assert.deepEqual(site.config.github, { oauthClientId: "Iv1.client" });
 	assert.deepEqual(site.config.auth, { bootstrapAdmins: "github:1234567" });
 	assert.doesNotMatch(result.stderr, /Host name of this instance/u);
+	// Helm validates the site that the installer writes against the chart's schema. This run found
+	// no API endpoint on the fake host, and a real install writes the one that it finds.
+	renderOneHost(
+		{},
+		{ ...site, networkPolicy: { kubernetesApi: { cidr: "192.168.5.15/32", port: 6443 } } },
+	);
 
 	// Without a terminal, a missing value still stops the run with the flag that it lacks.
 	const scripted = installerAt(PLATFORM, "--email", "ops@example.org", "--render-site");
