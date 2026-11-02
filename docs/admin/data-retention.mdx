@@ -44,13 +44,13 @@ The worker keeps these files under `/data/worker-git-repos`, on the `worker-git-
 | --- | --- | --- | --- |
 | Debug transcript of an agent run | 24 hours. It goes earlier when the job's evidence expires. | None | A worker sweep every minute |
 | Inputs of an attempt | Until the result is admitted. Otherwise, 1 hour after the attempt ends. A worker restart deletes them. | None | The same sweep |
-| Repository checkouts of the worker | No automatic deletion | None | Nothing deletes them |
+| Repository mirrors of the worker, one for each workspace and repository | As [Git repository history and short-lived attempts](./dsms/personal-data-map.md#git-repository-history-and-short-lived-attempts) describes | None | A worker check every minute |
 
 ## Server disk
 
 | Data | Retention | Setting | Deleted by |
 | --- | --- | --- | --- |
-| Repository mirrors, on the `git-repos` volume | No age limit. The server deletes a mirror when no workspace monitors its repository. | None | Repository monitoring |
+| Repository mirrors, on the `git-repos` volume, one for each workspace and repository | As [Git repository history and short-lived attempts](./dsms/personal-data-map.md#git-repository-history-and-short-lived-attempts) describes | None | A server check every minute |
 
 ## PostgreSQL
 
