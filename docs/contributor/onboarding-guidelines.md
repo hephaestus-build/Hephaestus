@@ -135,7 +135,8 @@ The research gives a direction for each point, not a limit.
   These sources are vendor data, so only the direction holds: [Chameleon](https://www.chameleon.io/blog/mastering-product-tours) and [Produktly](https://produktly.com/research/saas-onboarding-benchmarks-2026).
   Thus, the person chooses a chapter and can leave and continue, and a chapter is as long as its answer.
 - **The start follows the moment.** A person starts the tour, or accepts an offer that the page derives from state.
-  The first-run state and a first feedback card make such an offer.
+  The first-run state makes such an offer, and so does a page with a single open feedback card.
+  An offer claims nothing about the reader's history.
   An offer that follows state ends by itself, so it needs no dismissal.
   The tour does not open by itself. The first visit already follows the terms, and perhaps the AI choice.
   If the offers prove too quiet, change them there.

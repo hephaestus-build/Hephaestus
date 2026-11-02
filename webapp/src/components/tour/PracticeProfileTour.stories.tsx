@@ -181,7 +181,9 @@ export const WhereYouAreNowBlocked: Story = {
 			/no review starts by itself on your work/u,
 		);
 		await walkChapter(blockedReader("NO_AI"), "how-it-works");
-		await expect(screen.getByRole("dialog")).toHaveTextContent(/You chose No AI/u);
+		await expect(
+			screen.getByRole("dialog").querySelector("[aria-live='polite']"),
+		).toHaveTextContent(/You chose No AI/u);
 	},
 };
 
@@ -235,21 +237,56 @@ export const YourProfileWithYourCard: Story = {
 	args: { startChapter: "your-profile", page: READER_WITH_CARDS },
 	play: async () => {
 		await walkChapter(READER_WITH_CARDS, "your-profile");
-		await expect(screen.getByRole("region", { name: "Your newest open card" })).toBeVisible();
+		await expect(screen.getByRole("region", { name: "One of your open cards" })).toBeVisible();
 		await expect(screen.queryByText("Example, not your work")).toBeNull();
 	},
 };
 
-export const YourProfileWhilePageLoads: Story = {
+/** Nothing about the reader is stated before the page knows it. */
+export const WhilePageLoads: Story = {
 	args: {
 		startChapter: "your-profile",
 		page: { ...NEW_READER, firstRun: undefined, practices: [], state: { status: "loading" } },
 	},
 	play: async () => {
-		await screen.findByRole("heading", { level: 3, name: "Your newest review" });
-		await expect(
-			document.querySelector('[data-tour-slot="chip"][data-tour-active]'),
-		).not.toBeNull();
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" });
+		await expect(dialog).toHaveTextContent(/still loading/u);
+		await expect(dialog).not.toHaveTextContent(/You have no open card|no review has recorded/u);
+		await expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+	},
+};
+
+export const AfterFailedLoad: Story = {
+	args: {
+		startChapter: "how-it-works",
+		page: {
+			...NEW_READER,
+			firstRun: undefined,
+			practices: [],
+			state: { status: "error", error: new Error("Server error"), onRetry: fn() },
+		},
+	},
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" });
+		await expect(within(dialog).getByRole("alert")).toHaveTextContent(
+			/We could not load your practices/u,
+		);
+		await expect(dialog).not.toHaveTextContent(/has not chosen any practices|your real data/u);
+		await expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+	},
+};
+
+export const GitLabWords: Story = {
+	decorators: [withProvider("GITLAB")],
+	args: { startChapter: "your-profile", provider: "GITLAB" },
+	play: async () => {
+		const next = await screen.findByRole("button", { name: "Next" });
+		for (let step = 0; step < 3; step += 1) {
+			await userEvent.click(next);
+		}
+		await screen.findByRole("heading", { level: 3, name: "One card is one pattern" });
+		await expect(screen.getByRole("dialog")).toHaveTextContent(/merge requests are made up/u);
+		await expect(screen.getByRole("dialog")).toHaveTextContent(/!17/u);
 	},
 };
 
@@ -320,6 +357,36 @@ export const WordsAreAnnounced: Story = {
 		await userEvent.click(screen.getByRole("button", { name: "Next" }));
 		await expect(words?.isConnected).toBe(true);
 		await expect(words).toHaveTextContent(/A review looks at one practice/u);
+	},
+};
+
+/** The main path: the region exists before the chapter does, and the announcement names the chapter. */
+export const ChapterFromTheMenuIsAnnounced: Story = {
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" });
+		const words = dialog.querySelector("[aria-live='polite']");
+		await expect(words).toHaveTextContent(/Choose what you want to know/u);
+		await userEvent.click(within(dialog).getByRole("button", { name: /Going deeper/u }));
+		await screen.findByRole("heading", { level: 3, name: "Each click opens one more panel" });
+		await expect(words?.isConnected).toBe(true);
+		await expect(words).toHaveTextContent(/Going deeper\. Step 1 of 4\./u);
+		await expect(words).toHaveTextContent(/Each click opens one more panel/u);
+	},
+};
+
+export const HeldAndModifiedKeysDoNotStep: Story = {
+	args: { startChapter: "how-it-works" },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog", { name: "Guided tour" });
+		await screen.findByRole("heading", { level: 3, name: "It starts with your work" });
+		for (const init of [{ repeat: true }, { altKey: true }, { metaKey: true }]) {
+			dialog.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, ...init }),
+			);
+		}
+		await expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent(
+			"It starts with your work",
+		);
 	},
 };
 

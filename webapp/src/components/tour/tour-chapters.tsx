@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRightIcon, RepeatIcon } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-import type { GroupRef, MemberReviewReadiness, PracticeStanding } from "@/api/types.gen";
+import type { GroupRef, PracticeStanding } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { newestFirst } from "@/components/practice-profile/practice-feedback-cards";
@@ -15,7 +15,11 @@ import {
 	PracticeProfilePage,
 	type PracticeProfilePageProps,
 } from "@/components/practice-profile/PracticeProfilePage";
-import { firstRunApplies, ProfileFirstRun } from "@/components/practice-profile/ProfileFirstRun";
+import {
+	firstRunApplies,
+	firstRunWords,
+	ProfileFirstRun,
+} from "@/components/practice-profile/ProfileFirstRun";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { reviewEventPhrases } from "@/components/practice-vocabulary/review-event-defs";
@@ -37,10 +41,14 @@ import {
 	PatternScene,
 	PracticesScene,
 	PracticeTabsScene,
+	PRACTICE_TABS,
 	practiceNames,
+	PROFILE_PARTS,
 	ProfileScene,
 	SplitScene,
+	STANDING_DEFS,
 	StandingsScene,
+	TREND_DEFS,
 	WorkScene,
 } from "./tour-scenes";
 
@@ -133,30 +141,42 @@ function plural(n: number, one: string, many: string): string {
 	return `${n} ${n === 1 ? one : many}`;
 }
 
+/**
+ * What "Where you are now" stands on. A card proves that a review recorded something, so a reader
+ * with cards never reads "No review of your work yet" or "Your first review" beside them.
+ */
+function currentState({ page }: TourFacts) {
+	const reviewed = page.latestReview !== undefined || page.feedbackCards.length > 0;
+	return {
+		reviewed,
+		activeReview: reviewed ? undefined : page.firstRun?.activeReview,
+		open: page.feedbackCards.filter((card) => isOpenFeedback(card.state)).length,
+	};
+}
+
 /** How the chain's first link reads for this reader: what starts a review, or that none will. */
-function reviewStartWords(
-	readiness: MemberReviewReadiness | undefined,
-	workspaceName: string,
-	provider?: ItemProvider,
-): ReactNode {
+function reviewStartWords(facts: TourFacts): ReactNode {
+	const readiness = facts.page.firstRun?.readiness;
 	if (readiness === undefined) {
 		return null;
 	}
 	if (readiness.blocker !== null && readiness.blocker !== "PERSON_ERASED") {
+		// A review in flight speaks first on the last step, and then the reason does not appear there.
+		const reasonFollows = currentState(facts).activeReview === undefined;
 		return (
 			<p>
-				Right now, no review starts by itself on your work in {workspaceName}. The last step of this
-				chapter says why.
+				Right now, no review starts by itself on your work in {facts.workspaceName}.
+				{reasonFollows && " The last step of this chapter says why."}
 			</p>
 		);
 	}
-	const phrases = reviewEventPhrases(readiness.events, provider);
+	const phrases = reviewEventPhrases(readiness.events, facts.provider);
 	if (phrases.length === 0) {
 		return null;
 	}
 	return (
 		<>
-			<p>In {workspaceName}, a review of your work can start when:</p>
+			<p>In {facts.workspaceName}, a review of your work can start when:</p>
 			<ul className="list-disc pl-5">
 				{phrases.map((phrase) => (
 					<li key={phrase}>{phrase}</li>
@@ -166,26 +186,47 @@ function reviewStartWords(
 	);
 }
 
+/** What an inert stage shows, for a screen reader. Sighted readers have it in the stage already. */
+function MeaningsForScreenReaders({ items }: { items: readonly (readonly [string, string])[] }) {
+	return (
+		<ul className="sr-only">
+			{items.map(([term, meaning]) => (
+				<li key={`${term}:${meaning}`}>
+					{term}: {meaning}
+				</li>
+			))}
+		</ul>
+	);
+}
+
 /** The chain's last word: where this reader stands now, or nothing where the server has not said. */
 function whereYouAreNow(facts: TourFacts): TourStep | undefined {
-	const { firstRun, latestReview, feedbackCards } = facts.page;
+	const { firstRun } = facts.page;
 	if (firstRun === undefined) {
 		return undefined;
 	}
-	const reviewed = latestReview !== undefined;
-	const open = feedbackCards.filter((card) => isOpenFeedback(card.state)).length;
-	const applies = firstRunApplies(firstRun.readiness, reviewed, firstRun.activeReview);
+	const { reviewed, activeReview, open } = currentState(facts);
+	const applies = firstRunApplies(firstRun.readiness, reviewed, activeReview);
 	const approval = firstRun.readiness.approvalBeforePosting
-		? `In ${facts.workspaceName}, a workspace admin approves feedback before it is posted on your work.`
-		: undefined;
+		? ` In ${facts.workspaceName}, a workspace admin approves feedback before it is posted on your work.`
+		: "";
+	const cards = `You have ${plural(open, "open feedback card", "open feedback cards")}.`;
+	const noneOpen = `A card appears only when reviews find the same problem in at least two pieces of your work.${approval}`;
+	const state = applies
+		? firstRunWords({ ...firstRun, activeReview, reviewed })
+		: open === 0 && `No open feedback right now. ${noneOpen}`;
 	return {
 		id: "now",
 		title: "Where you are now",
 		body: (
-			<p>
-				This is your real state in {facts.workspaceName} today. It changes by itself as your work is
-				reviewed.
-			</p>
+			<>
+				{open > 0 && <p>{cards}</p>}
+				{typeof state === "string" && <p>{state}</p>}
+				<p>
+					This is your real state in {facts.workspaceName} today. It changes by itself as your work
+					is reviewed.
+				</p>
+			</>
 		),
 		caption: "Your real state",
 		stageKey: "now",
@@ -193,24 +234,21 @@ function whereYouAreNow(facts: TourFacts): TourStep | undefined {
 		live: true,
 		stage: (
 			<div className="flex flex-col gap-3">
-				{open > 0 && (
-					<p className="text-sm font-medium">
-						You have {plural(open, "open feedback card", "open feedback cards")}.
-					</p>
-				)}
+				{open > 0 && <p className="text-sm font-medium">{cards}</p>}
 				{applies ? (
-					<ProfileFirstRun {...firstRun} reviewed={reviewed} tourOffer={undefined} />
+					<ProfileFirstRun
+						{...firstRun}
+						activeReview={activeReview}
+						reviewed={reviewed}
+						tourOffer={undefined}
+					/>
 				) : (
 					open === 0 && (
 						// Never "nothing was found": feedback can wait for an admin, and a card needs a repeat.
 						<Empty>
 							<EmptyHeader>
 								<EmptyTitle>No open feedback right now</EmptyTitle>
-								<EmptyDescription>
-									A card appears only when reviews find the same problem in at least two pieces of
-									your work.
-									{approval !== undefined && ` ${approval}`}
-								</EmptyDescription>
+								<EmptyDescription>{noneOpen}</EmptyDescription>
 							</EmptyHeader>
 						</Empty>
 					)
@@ -243,12 +281,12 @@ function howItWorks(facts: TourFacts): TourChapter {
 				body: (
 					<>
 						<p>You work as usual. Hephaestus reads the work you already do, such as a {noun}.</p>
-						{reviewStartWords(firstRun?.readiness, facts.workspaceName, facts.provider)}
+						{reviewStartWords(facts)}
 					</>
 				),
 				caption: EXAMPLE,
 				stageKey: "work",
-				stage: <WorkScene noun={noun} />,
+				stage: <WorkScene noun={noun} provider={facts.provider} />,
 				station: 0,
 			},
 			{
@@ -336,7 +374,7 @@ function howItWorks(facts: TourFacts): TourChapter {
 				),
 				caption: EXAMPLE,
 				stageKey: "pattern",
-				stage: <PatternScene />,
+				stage: <PatternScene provider={facts.provider} />,
 				station: 3,
 				plays: true,
 			},
@@ -347,6 +385,7 @@ function howItWorks(facts: TourFacts): TourChapter {
 					<>
 						<p>It is feedback for learning. Your standing is not a grade.</p>
 						<p>{PROFILE_AUDIENCE}</p>
+						<MeaningsForScreenReaders items={PROFILE_PARTS} />
 					</>
 				),
 				caption: "What your Practice profile holds",
@@ -364,7 +403,7 @@ function yourProfile(facts: TourFacts): TourChapter {
 	const own = ownCardForTour(feedbackCards);
 	const card = own ?? exampleCard(facts.openedAt, facts.provider);
 	const rating = own === undefined ? undefined : ratingProps?.(own.feedbackId);
-	const caption = own === undefined ? EXAMPLE : "Your newest open card";
+	const caption = own === undefined ? EXAMPLE : "One of your open cards";
 	const open = feedbackCards.filter((each) => isOpenFeedback(each.state)).length;
 	const words = standingWords(practices);
 	const page = (
@@ -379,6 +418,15 @@ function yourProfile(facts: TourFacts): TourChapter {
 		/>
 	);
 	const onPage = { stage: page, stageKey: "page", caption: YOUR_PAGE };
+	const reviewInFlight =
+		latestReview === undefined && facts.page.firstRun?.activeReview !== undefined;
+	const noReviewWords = reviewInFlight
+		? "The chip beside the title says that your first review is waiting or running. After it records something, the chip names your newest review and opens every review of your work."
+		: "The chip beside the title says that no review has recorded anything about your work yet. After the first one, it names your newest review and opens every review of your work.";
+	const chipWords =
+		latestReview === undefined
+			? noReviewWords
+			: "The chip beside the title names your newest review. Select it on your page to open every review of your work.";
 	const onCard = {
 		stage: <CardScene card={card} rating={rating} />,
 		stageKey: `card:${card.feedbackId}`,
@@ -394,13 +442,7 @@ function yourProfile(facts: TourFacts): TourChapter {
 				id: "chip",
 				slot: "chip",
 				title: "Your newest review",
-				body: (
-					<p>
-						{latestReview === undefined
-							? "The chip beside the title says that no review has recorded anything about your work yet. After the first one, it names your newest review and opens every review of your work."
-							: "The chip beside the title names your newest review. Select it on your page to open every review of your work."}
-					</p>
-				),
+				body: <p>{chipWords}</p>,
 			},
 			{
 				...onPage,
@@ -438,8 +480,8 @@ function yourProfile(facts: TourFacts): TourChapter {
 				body: (
 					<p>
 						{own === undefined
-							? "This card is an example, not about your work. Its practice and pull requests are made up. "
-							: `This is your newest open card: “${own.headline}”. `}
+							? `This card is an example, not about your work. Its practice and ${itemKindNoun(ITEM_KIND.pullRequest, 2, facts.provider)} are made up. `
+							: `This is one of your open cards: “${own.headline}”. `}
 						The headline says in one line what keeps coming up. Above it are the practice and its
 						group.
 					</p>
@@ -478,8 +520,9 @@ function yourProfile(facts: TourFacts): TourChapter {
 				title: "You can mark it yourself",
 				body: (
 					<p>
-						If you fixed the problem, or it does not fit your work, say so here. The card moves to
-						Marked by you, and your next work confirms it.
+						If you fixed the problem, or it does not fit your work, say so on the card on your page.
+						The picture here does not respond. The card moves to Marked by you, and your next work
+						confirms it.
 					</p>
 				),
 			},
@@ -490,8 +533,8 @@ function yourProfile(facts: TourFacts): TourChapter {
 				title: "Tell Hephaestus what you think",
 				body: (
 					<p>
-						Helpful and Not helpful say whether the feedback helped you. If you think it is wrong,
-						select Disagree. Workspace admins read your sentence.
+						On a card on your page, Helpful and Not helpful say whether the feedback helped you. If
+						you think it is wrong, select Disagree. Workspace admins read your sentence.
 					</p>
 				),
 			},
@@ -533,10 +576,17 @@ function goingDeeper(facts: TourFacts): TourChapter {
 				id: "standings",
 				title: "All practice groups: your standing and trend",
 				body: (
-					<p>
-						One row for each group, with your standing and your trend in it. A trend compares your
-						latest reviewed work with the work before it.
-					</p>
+					<>
+						<p>
+							One row for each group, with your standing and your trend in it. A trend compares your
+							latest reviewed work with the work before it.
+						</p>
+						<MeaningsForScreenReaders
+							items={[...STANDING_DEFS, ...TREND_DEFS].map(
+								(def) => [def.label, def.description] as const,
+							)}
+						/>
+					</>
 				),
 				caption: "What each label means",
 				stageKey: "standings",
@@ -544,12 +594,15 @@ function goingDeeper(facts: TourFacts): TourChapter {
 			},
 			{
 				id: "practice",
-				title: "One practice has three tabs",
+				title: "One practice has its own tabs",
 				body: (
-					<p>
-						Feedback, Observations and Guide. The Guide is a good place to start when a card is
-						unclear.
-					</p>
+					<>
+						<p>
+							Feedback and Observations, and Guide where the practice has something to explain. The
+							Guide is a good place to start when a card is unclear.
+						</p>
+						<MeaningsForScreenReaders items={PRACTICE_TABS} />
+					</>
 				),
 				caption: SCHEMATIC,
 				stageKey: "tabs",

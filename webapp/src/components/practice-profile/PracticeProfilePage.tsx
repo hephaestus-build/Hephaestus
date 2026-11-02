@@ -65,8 +65,9 @@ export interface PracticeProfilePageProps {
 	/** The control that starts the guided tour; absent where the reader cannot take it, such as in a user view. */
 	tourAction?: ReactNode;
 	/**
-	 * The offer to explain a first feedback card, shown while the reader has exactly one card and that
-	 * card is open. It needs no dismissal: the state that shows it ends by itself.
+	 * The offer to explain a feedback card, shown on the Open tab while the reader has exactly one card
+	 * and that card is open. It claims nothing about the reader's history, since older cards leave this
+	 * list. It needs no dismissal: the state that shows it ends by itself.
 	 */
 	firstCardOffer?: ReactNode;
 }
@@ -194,6 +195,7 @@ export function PracticeProfilePage({
 						<span className="pb-2 text-sm text-muted-foreground">Newest first</span>
 					</PracticeTabsRail>
 					{!isLoading &&
+						feedbackTab === "open" &&
 						feedbackCards.length === 1 &&
 						cardsByTab.open.length === 1 &&
 						firstCardOffer}

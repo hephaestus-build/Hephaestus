@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { CompassIcon } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
 import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
@@ -116,6 +117,8 @@ function TourOffer({
 			size="sm"
 			className="w-fit self-center"
 			onClick={onSelect}
+			onPointerEnter={preloadTour}
+			onFocus={preloadTour}
 			aria-busy={pending}
 		>
 			{pending ? <Spinner /> : <CompassIcon aria-hidden />}
@@ -128,7 +131,8 @@ function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
 	const [tour, setTour] = useState<{ startChapter?: TourChapterId } | null>(null);
-	const [tourPending, startTourTransition] = useTransition();
+	const [tourLoading, startTourTransition] = useTransition();
+	const tourPending = useSpinDelay(tourLoading, { delay: 1000, minDuration: 500 });
 	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
 	const { isAdmin } = useWorkspaceAccess();
@@ -340,7 +344,8 @@ function PracticeProfile() {
 					}
 				}
 				tourAction={
-					readOnly ? undefined : (
+					// Offered once the page has loaded: until then the tour has no real data to speak from.
+					readOnly || page.status !== "ready" ? undefined : (
 						<Button
 							variant="quiet"
 							size="sm"
@@ -357,21 +362,22 @@ function PracticeProfile() {
 				firstCardOffer={
 					readOnly ? undefined : (
 						<TourOffer onSelect={() => startTour("your-profile")} pending={tourPending}>
-							This is your first feedback card. See how to read it
+							See how to read a feedback card
 						</TourOffer>
 					)
 				}
 			/>
-			{tour !== null && (
-				<CatchBoundary
-					getResetKey={() => "tour"}
-					onCatch={() => {
-						setTour(null);
-						toast.error("The tour could not load. Reload the page to try again.");
-					}}
-					errorComponent={() => null}
-				>
-					<Suspense fallback={null}>
+			<CatchBoundary
+				getResetKey={() => (tour === null ? "closed" : "open")}
+				onCatch={() => {
+					setTour(null);
+					toast.error("The tour could not load. Reload the page to try again.");
+				}}
+				errorComponent={() => null}
+			>
+				{/* Stays mounted: a transition holds its pending state only for a boundary that already exists. */}
+				<Suspense fallback={null}>
+					{tour !== null && (
 						<PracticeProfileTour
 							workspaceSlug={workspaceSlug}
 							workspaceName={workspaceName}
@@ -381,9 +387,9 @@ function PracticeProfile() {
 							startChapter={tour.startChapter}
 							onClose={() => setTour(null)}
 						/>
-					</Suspense>
-				</CatchBoundary>
-			)}
+					)}
+				</Suspense>
+			</CatchBoundary>
 			<PracticeGroupDetailDrawer
 				detail={readOnly ? { ...detail, responses: undefined } : detail}
 				detailStack={detailStack}

@@ -20,8 +20,11 @@ import {
 import { useMediaQuery } from "usehooks-ts";
 
 import { cn } from "cn";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { pageHeading } from "@/components/onboarding/PublicActivityNotice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import {
 	suggestedChapter,
@@ -40,6 +43,13 @@ export interface PracticeProfileTourProps extends Omit<TourFacts, "openedAt"> {
 	startChapter?: TourChapterId;
 	onClose: () => void;
 }
+
+/** What the window says when it shows no step: its menu, or why the tour has to wait for the page. */
+const MENU_WORDS: Record<PracticeProfileTourProps["page"]["state"]["status"], string> = {
+	ready: "Choose what you want to know. You can leave at any time and continue later.",
+	loading: "Your Practice profile is still loading. The tour goes on when it is ready.",
+	error: "The tour shows your own Practice profile, and that page could not load.",
+};
 
 type View = { kind: "menu" } | { kind: "step"; chapter: TourChapterId; step: string };
 
@@ -74,20 +84,27 @@ export function PracticeProfileTour({ startChapter, onClose, ...facts }: Practic
 		}
 	});
 
-	const showStep = (chapter: TourChapter, step: TourStep) => {
-		tour.stopAt(chapter.id, step.id);
+	const show = (chapter: TourChapterId, step: string) => {
 		// A new step starts with its words in view on a small screen, where the window scrolls as a whole.
 		if (body.current) {
 			body.current.scrollTop = 0;
 		}
-		setView({ kind: "step", chapter: chapter.id, step: step.id });
+		setView({ kind: "step", chapter, step });
+	};
+	const showStep = (chapter: TourChapter, step: TourStep) => {
+		tour.stopAt(chapter.id, step.id);
+		show(chapter.id, step.id);
 	};
 
 	const chapter =
 		view.kind === "step" ? chapters.find((each) => each.id === view.chapter) : undefined;
 	const stepIndex =
 		view.kind === "step" && chapter ? chapter.steps.findIndex((each) => each.id === view.step) : -1;
-	const step = chapter?.steps.at(stepIndex);
+	// A step can leave while it is open, when the data it stands on changes. The menu then takes over.
+	const step =
+		stepIndex >= 0 && facts.page.state.status === "ready"
+			? chapter?.steps.at(stepIndex)
+			: undefined;
 	const nextChapter = chapter && chapters.at(chapters.indexOf(chapter) + 1);
 	const onLastStep = chapter !== undefined && stepIndex === chapter.steps.length - 1;
 	const finishLabel = nextChapter ? `Next chapter: ${nextChapter.name}` : "Done";
@@ -111,14 +128,19 @@ export function PracticeProfileTour({ startChapter, onClose, ...facts }: Practic
 		tour.finish(chapter.id);
 		const opening = nextChapter?.steps.at(0);
 		if (nextChapter && opening) {
-			setView({ kind: "step", chapter: nextChapter.id, step: opening.id });
+			show(nextChapter.id, opening.id);
 		} else {
 			onClose();
 		}
 	};
 
 	const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (view.kind !== "step" || (event.target instanceof Element && event.target.closest("a"))) {
+		// A held key must not run through the chapters, and Alt+Left belongs to the browser's history.
+		const modified = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+		if (step === undefined || event.repeat || modified) {
+			return;
+		}
+		if (event.target instanceof Element && event.target.closest("a")) {
 			return;
 		}
 		if (event.key === "ArrowRight") {
@@ -130,6 +152,10 @@ export function PracticeProfileTour({ startChapter, onClose, ...facts }: Practic
 
 	// A link in the tour leads to the reader's own data, so the tour gets out of its way.
 	const onClickCapture = (event: MouseEvent<HTMLElement>) => {
+		// A modified click opens the link elsewhere, so the reader stays here.
+		if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+			return;
+		}
 		if (event.target instanceof Element && event.target.closest("a[href]:not([target])")) {
 			closedByLink.current = true;
 			onClose();
@@ -154,9 +180,10 @@ export function PracticeProfileTour({ startChapter, onClose, ...facts }: Practic
 						if (closedByLink.current) {
 							return false;
 						}
-						return opener instanceof HTMLElement && opener.isConnected
+						// Safari leaves focus on the body after a click, and an offer can have left the page.
+						return opener instanceof HTMLElement && opener !== document.body && opener.isConnected
 							? opener
-							: document.querySelector<HTMLElement>("h1");
+							: pageHeading(document.body);
 					}}
 					onKeyDown={onKeyDown}
 					onClickCapture={onClickCapture}
@@ -171,7 +198,9 @@ export function PracticeProfileTour({ startChapter, onClose, ...facts }: Practic
 					<header className="flex items-center justify-between gap-3 border-b px-4 py-3">
 						<div className="flex min-w-0 flex-col">
 							<Dialog.Title className="font-semibold">Guided tour</Dialog.Title>
-							{chapter && <span className="text-xs text-muted-foreground">{chapter.name}</span>}
+							{step && chapter && (
+								<span className="text-xs text-muted-foreground">{chapter.name}</span>
+							)}
 						</div>
 						<Dialog.Close
 							render={<Button variant="ghost" size="icon-sm" />}
@@ -180,18 +209,64 @@ export function PracticeProfileTour({ startChapter, onClose, ...facts }: Practic
 							<XIcon aria-hidden />
 						</Dialog.Close>
 					</header>
-					{chapter && step ? (
-						<StepView chapter={chapter} step={step} stepIndex={stepIndex} bodyRef={body} />
-					) : (
-						<Menu
-							chapters={chapters}
-							suggested={suggestedChapter(facts.page.feedbackCards)}
-							progress={tour.progress}
-							onReset={tour.reset}
-							onChoose={(choice, stored) => showStep(choice, stored)}
-							firstRef={primary}
-						/>
-					)}
+					<div
+						ref={body}
+						className={cn(
+							"min-h-0 flex-1 gap-4 overflow-y-auto p-4",
+							step === undefined
+								? "flex flex-col"
+								: "grid grid-rows-[auto_minmax(16rem,1fr)] lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-1",
+						)}
+					>
+						{/*
+						 * One live region for the whole life of the window, so the first step of a chapter is
+						 * announced as well: a region that mounts with its text says nothing. The words come
+						 * first for a screen reader and on a small screen, and sit beside the stage on a wide one.
+						 */}
+						<Dialog.Description
+							render={<div />}
+							aria-live="polite"
+							aria-atomic
+							className={cn("flex flex-col gap-3", step !== undefined && "lg:order-last")}
+						>
+							{chapter && step ? (
+								<>
+									<span className="sr-only">
+										{chapter.name}. Step {stepIndex + 1} of {chapter.steps.length}.
+									</span>
+									{chapter.steps.some((each) => each.station !== undefined) && (
+										<Stations current={step.station} />
+									)}
+									<StepWords key={step.id} title={step.title}>
+										{step.body}
+									</StepWords>
+								</>
+							) : (
+								<span className="text-muted-foreground">{MENU_WORDS[facts.page.state.status]}</span>
+							)}
+						</Dialog.Description>
+						{step && <StepStage step={step} />}
+						{step === undefined && facts.page.state.status === "loading" && (
+							<Skeleton className="h-48 w-full" />
+						)}
+						{step === undefined && facts.page.state.status === "error" && (
+							<QueryErrorAlert
+								error={facts.page.state.error}
+								title="We could not load your practices"
+								onRetry={facts.page.state.onRetry}
+							/>
+						)}
+						{step === undefined && facts.page.state.status === "ready" && (
+							<Menu
+								chapters={chapters}
+								suggested={suggestedChapter(facts.page.feedbackCards)}
+								progress={tour.progress}
+								onReset={tour.reset}
+								onChoose={(choice, stored) => showStep(choice, stored)}
+								firstRef={primary}
+							/>
+						)}
+					</div>
 					{chapter && step && (
 						<footer className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
 							<Button variant="ghost" size="sm" onClick={() => setView({ kind: "menu" })}>
@@ -236,10 +311,7 @@ function Menu({
 	firstRef: RefObject<HTMLButtonElement | null>;
 }) {
 	return (
-		<div className="flex min-h-0 flex-col gap-3 overflow-y-auto p-4">
-			<Dialog.Description className="text-muted-foreground">
-				Choose what you want to know. You can leave at any time and continue later.
-			</Dialog.Description>
+		<>
 			<ul className="flex flex-col gap-2">
 				{chapters.map((chapter, index) => {
 					const storedIndex =
@@ -290,58 +362,27 @@ function Menu({
 					Start over
 				</Button>
 			)}
-		</div>
+		</>
 	);
 }
 
-function StepView({
-	chapter,
-	step,
-	stepIndex,
-	bodyRef,
-}: {
-	chapter: TourChapter;
-	step: TourStep;
-	stepIndex: number;
-	bodyRef: RefObject<HTMLDivElement | null>;
-}) {
+/** The caption, the stage and the way to play the stage's scene again. */
+function StepStage({ step }: { step: TourStep }) {
 	const [replays, setReplays] = useState(0);
 	const still = useMediaQuery("(prefers-reduced-motion: reduce)", { initializeWithValue: true });
 
 	return (
-		<div
-			ref={bodyRef}
-			className="grid min-h-0 flex-1 grid-rows-[auto_minmax(16rem,1fr)] gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:grid-rows-1"
-		>
-			{/* The words come first for a screen reader and on a small screen, and sit beside the stage on a wide one. */}
-			<Dialog.Description
-				render={<div />}
-				aria-live="polite"
-				aria-atomic
-				className="flex flex-col gap-3 lg:order-last"
-			>
-				<span className="sr-only">
-					Step {stepIndex + 1} of {chapter.steps.length}
-				</span>
-				{chapter.steps.some((each) => each.station !== undefined) && (
-					<Stations current={step.station} />
+		<div className="flex min-h-0 flex-col gap-2">
+			<div className="flex min-h-7 items-center justify-between gap-2">
+				<span className="text-xs font-medium text-muted-foreground">{step.caption}</span>
+				{step.plays === true && !still && (
+					<Button variant="quiet" size="xs" onClick={() => setReplays((count) => count + 1)}>
+						<RotateCcwIcon aria-hidden />
+						Play again
+					</Button>
 				)}
-				<StepWords key={step.id} title={step.title}>
-					{step.body}
-				</StepWords>
-			</Dialog.Description>
-			<div className="flex min-h-0 flex-col gap-2">
-				<div className="flex min-h-7 items-center justify-between gap-2">
-					<span className="text-xs font-medium text-muted-foreground">{step.caption}</span>
-					{step.plays === true && !still && (
-						<Button variant="quiet" size="xs" onClick={() => setReplays((count) => count + 1)}>
-							<RotateCcwIcon aria-hidden />
-							Play again
-						</Button>
-					)}
-				</div>
-				<Stage key={`${step.stageKey}:${replays}`} step={step} />
 			</div>
+			<Stage key={`${step.stageKey}:${replays}`} step={step} />
 		</div>
 	);
 }

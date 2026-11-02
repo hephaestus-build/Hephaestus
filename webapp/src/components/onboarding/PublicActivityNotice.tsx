@@ -120,7 +120,7 @@ export function PublicActivityNotice({
 }
 
 /** The page's own heading, or its main region where it has none. */
-function pageHeading(from: HTMLElement): HTMLElement | null {
+export function pageHeading(from: HTMLElement): HTMLElement | null {
 	const main = from.closest("main") ?? document.getElementById("main-content");
 	const heading = main?.querySelector("h1");
 	if (heading) {

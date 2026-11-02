@@ -128,6 +128,35 @@ export function firstRunApplies(
 	return blocked || (!reviewed && (readiness.blocker === null || activeReview !== undefined));
 }
 
+const FIRST_REVIEW_TITLE = {
+	QUEUED: "Your first review is waiting to start",
+	RUNNING: "Your first review is running",
+};
+
+const NO_REVIEW_TITLE = "No review of your work yet";
+
+/**
+ * What {@link ProfileFirstRun} says, as one sentence for a place that needs the words alone: the same
+ * order of states and the same titles, so the two cannot disagree.
+ */
+export function firstRunWords({
+	workspaceName,
+	readiness,
+	activeReview,
+	reviewed,
+}: Pick<ProfileFirstRunProps, "workspaceName" | "readiness" | "activeReview" | "reviewed">):
+	| string
+	| undefined {
+	const { blocker } = readiness;
+	if (activeReview !== undefined && !reviewed) {
+		return `${FIRST_REVIEW_TITLE[activeReview.status === "QUEUED" ? "QUEUED" : "RUNNING"]}.`;
+	}
+	if (blocker !== null && blocker !== "PERSON_ERASED") {
+		return `${BLOCKERS[blocker].title}. ${BLOCKERS[blocker].description(workspaceName)}`;
+	}
+	return !reviewed && blocker === null ? `${NO_REVIEW_TITLE}.` : undefined;
+}
+
 /**
  * What the Practice profile says before it has any feedback, from the reader's real state: why no
  * review can run, a first review that is under way, or what starts one. Nothing once a review has
@@ -158,11 +187,7 @@ export function ProfileFirstRun({
 			<FirstRunEmpty
 				offer={tourOffer}
 				icon={<SparklesIcon />}
-				title={
-					status === "QUEUED"
-						? "Your first review is waiting to start"
-						: "Your first review is running"
-				}
+				title={FIRST_REVIEW_TITLE[status]}
 				description={
 					<>
 						It is on{" "}
@@ -213,7 +238,7 @@ export function ProfileFirstRun({
 			<FirstRunEmpty
 				offer={tourOffer}
 				icon={<MessageSquareTextIcon />}
-				title="No review of your work yet"
+				title={NO_REVIEW_TITLE}
 				description={`Hephaestus reviews your work against the practices that ${workspaceName} chose.`}
 				action={
 					<InlineLink

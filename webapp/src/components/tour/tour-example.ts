@@ -13,12 +13,17 @@ import { ITEM_KIND, type ItemProvider } from "@/lib/item-kinds";
 
 const DAY_MS = 86_400_000;
 
+/** How the provider names a piece of work: #17 on GitHub, !17 on GitLab. */
+export function exampleWorkLabel(number: number, provider: ItemProvider | undefined): string {
+	return `${provider === "GITLAB" ? "!" : "#"}${number}`;
+}
+
 function exampleWork(number: number, provider: ItemProvider | undefined): ItemRef {
 	return {
 		id: String(1000 + number),
 		kind: ITEM_KIND.pullRequest,
 		provider: provider ?? "GITHUB",
-		label: `#${number}`,
+		label: exampleWorkLabel(number, provider),
 		url: "",
 		container: "example/web-shop",
 		parentId: null,
@@ -45,7 +50,7 @@ export function exampleCard(now: Date, provider?: ItemProvider): PracticeFeedbac
 			icon: PackageIcon,
 		},
 		headline: "Descriptions say what changed, not why",
-		body: "The description of #17 says only what was added, and #19 has no description. A reviewer has to guess which problem each change solves.",
+		body: `The description of ${exampleWorkLabel(17, provider)} says only what was added, and ${exampleWorkLabel(19, provider)} has no description. A reviewer has to guess which problem each change solves.`,
 		reviewedWork: [
 			{ ref: exampleWork(17, provider), date: daysAgo(9), outcome: "NOT_MET" },
 			{ ref: exampleWork(19, provider), date: daysAgo(4), outcome: "NOT_MET" },

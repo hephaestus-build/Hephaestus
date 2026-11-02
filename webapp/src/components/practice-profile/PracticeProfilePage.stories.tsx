@@ -41,7 +41,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The tour's offer stands with a first card, and goes by itself when a second card arrives. */
+/** The tour's offer stands with a single open card, and goes by itself when a second card arrives. */
 export const FirstCardOffer: Story = {
 	args: {
 		feedbackCards: ALL_FEEDBACK_CARDS.filter((card) => card.state === "new").slice(0, 1),
@@ -59,6 +59,21 @@ export const FirstCardOffer: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "See how to read it" })).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Take the tour" })).toBeVisible();
+	},
+};
+
+export const NoOfferOnAnotherTab: Story = {
+	args: {
+		feedbackCards: ALL_FEEDBACK_CARDS.filter((card) => card.state === "new").slice(0, 1),
+		feedbackTab: "resolved",
+		firstCardOffer: (
+			<Button variant="quiet" size="sm">
+				See how to read it
+			</Button>
+		),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("button", { name: "See how to read it" })).toBeNull();
 	},
 };
 

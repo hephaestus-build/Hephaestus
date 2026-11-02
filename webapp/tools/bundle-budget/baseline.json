@@ -87,7 +87,7 @@
 		"monaco-editor/esm/vs/languages/features/json/jsonMode.js": 1307156,
 		"monaco-editor/esm/vs/languages/features/typescript/tsMode.js": 1301717,
 		"src/components/product-feedback/ProductFeedbackSharingField.tsx": 13939,
-		"src/components/tour/PracticeProfileTour.tsx": 392656,
+		"src/components/tour/PracticeProfileTour.tsx": 396081,
 		"src/routes/_authenticated.tsx?tsr-split=component": 86,
 		"src/routes/_authenticated/admin.audit.tsx?tsr-split=component": 81462,
 		"src/routes/_authenticated/admin.catalog.index.tsx?tsr-split=component": 1333470,

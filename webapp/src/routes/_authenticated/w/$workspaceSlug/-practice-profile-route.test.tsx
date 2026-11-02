@@ -38,6 +38,7 @@ import {
 	profileReviews,
 } from "@/stories/profile-reviews-story-mock-data";
 import { STORY_NOW } from "@/stories/story-clock";
+import { pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
@@ -323,7 +324,9 @@ describe("practice profile route", () => {
 		await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("dialog", { name: "Guided tour" })).toBeNull();
 
-		fireEvent.click(screen.getByRole("button", { name: "Take the tour" }));
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT),
+		);
 		const dialog = await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
 		fireEvent.click(within(dialog).getByRole("button", { name: /Going deeper/u }));
 		for (let step = 0; step < 3; step += 1) {
@@ -337,6 +340,32 @@ describe("practice profile route", () => {
 				"practice-groups:all",
 			]),
 		);
+	});
+
+	it("returns focus to what started the tour, and to the heading after a click that left none", async () => {
+		await renderProfile();
+		const start = await screen.findByRole("button", { name: "Take the tour" }, ROUTE_RENDER_WAIT);
+		start.focus();
+		fireEvent.click(start);
+		await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		fireEvent.click(screen.getByRole("button", { name: "Close the tour" }));
+		await waitFor(() => expect(document.activeElement).toBe(start));
+
+		// Safari leaves focus on the body after a click on a button.
+		start.blur();
+		fireEvent.click(start);
+		await screen.findByRole("dialog", { name: "Guided tour" }, ROUTE_RENDER_WAIT);
+		fireEvent.click(screen.getByRole("button", { name: "Close the tour" }));
+		const heading = screen.getByRole("heading", { level: 1, name: "Practice profile" });
+		await waitFor(() => expect(document.activeElement).toBe(heading));
+	});
+
+	it("does not offer the guided tour until the page has loaded", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", async () => pending()),
+		);
+		await renderProfile();
+		expect(screen.queryByRole("button", { name: "Take the tour" })).toBeNull();
 	});
 
 	it("keeps the guided tour out of a user view", async () => {

@@ -23,8 +23,14 @@ import {
 	type PracticeFeedbackCardEntry,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { WorkspaceSplitBar } from "@/components/practices-across-the-workspace/WorkspaceSplitBar";
+import type { ItemProvider } from "@/lib/item-kinds";
 
-import { EXAMPLE_OBSERVATIONS, EXAMPLE_SPLIT, EXAMPLE_WORK } from "./tour-example";
+import {
+	EXAMPLE_OBSERVATIONS,
+	EXAMPLE_SPLIT,
+	EXAMPLE_WORK,
+	exampleWorkLabel,
+} from "./tour-example";
 import styles from "./tour.module.css";
 
 /** Its handlers never run: the stage is inert. They make the card draw the controls that a step names. */
@@ -41,12 +47,14 @@ export const TOUR_STATIONS = [
 	{ label: "Your profile", Icon: UserRoundIcon },
 ];
 
-export function WorkScene({ noun }: { noun: string }) {
+export function WorkScene({ noun, provider }: { noun: string; provider?: ItemProvider }) {
 	return (
 		<div className={cn(styles.rise, FRAME, "flex flex-col gap-3")}>
 			<p className="text-base font-semibold">
 				{EXAMPLE_WORK.title}{" "}
-				<span className="font-normal text-muted-foreground">#{EXAMPLE_WORK.number}</span>
+				<span className="font-normal text-muted-foreground">
+					{exampleWorkLabel(EXAMPLE_WORK.number, provider)}
+				</span>
 			</p>
 			<p className="text-xs text-muted-foreground">
 				An open {noun}, with {EXAMPLE_WORK.files} files changed
@@ -173,7 +181,7 @@ export function DestinationsScene() {
 }
 
 /** Two pieces of work with the same problem, then the one card about the pattern. */
-export function PatternScene() {
+export function PatternScene({ provider }: { provider?: ItemProvider }) {
 	return (
 		<div className="grid items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
 			<ul className="flex flex-col gap-2">
@@ -183,7 +191,8 @@ export function PatternScene() {
 						className={cn(styles.rise, FRAME, "flex items-center gap-2")}
 						style={{ "--tour-delay": `${index * 200}ms` }}
 					>
-						<StatusBadge def={OUTCOME_DEFS.NOT_MET} />#{number}
+						<StatusBadge def={OUTCOME_DEFS.NOT_MET} />
+						{exampleWorkLabel(number, provider)}
 					</li>
 				))}
 			</ul>
@@ -204,12 +213,12 @@ export function PatternScene() {
 	);
 }
 
-const PROFILE_PARTS = [
+export const PROFILE_PARTS = [
 	["Your standing and trend", "For each practice and each group"],
 	["Your feedback cards", "Each with one next step"],
 	["Your observations", "For each practice, with the evidence"],
 	["The guide of each practice", "Why it matters and what good looks like"],
-];
+] as const;
 
 export function ProfileScene() {
 	return (
@@ -273,18 +282,19 @@ export function LevelsScene({ levels }: { levels: string[] }) {
 	);
 }
 
+export const STANDING_DEFS = statusValues(PRACTICE_STANDING_DEFS).map(
+	(value) => PRACTICE_STANDING_DEFS[value],
+);
+export const TREND_DEFS = statusValues(PRACTICE_TREND_DEFS).map(
+	(value) => PRACTICE_TREND_DEFS[value],
+);
+
 /** Every standing and trend with its own words, from the registries that the page itself reads. */
 export function StandingsScene() {
 	return (
 		<div className="grid gap-4 md:grid-cols-2">
-			<DefinitionList
-				title="Standing"
-				defs={statusValues(PRACTICE_STANDING_DEFS).map((value) => PRACTICE_STANDING_DEFS[value])}
-			/>
-			<DefinitionList
-				title="Trend"
-				defs={statusValues(PRACTICE_TREND_DEFS).map((value) => PRACTICE_TREND_DEFS[value])}
-			/>
+			<DefinitionList title="Standing" defs={STANDING_DEFS} />
+			<DefinitionList title="Trend" defs={TREND_DEFS} />
 		</div>
 	);
 }
@@ -311,11 +321,14 @@ function DefinitionList({
 	);
 }
 
-const PRACTICE_TABS = [
+export const PRACTICE_TABS = [
 	["Feedback", "The feedback card for this practice, if there is one."],
 	["Observations", "Every observation of this practice on your work, with its evidence."],
-	["Guide", "Why the practice matters and what good looks like, with examples."],
-];
+	[
+		"Guide",
+		"Why the practice matters and what good looks like, where it has something to explain.",
+	],
+] as const;
 
 export function PracticeTabsScene() {
 	return (
