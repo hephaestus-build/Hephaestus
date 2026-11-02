@@ -377,6 +377,13 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     private ReviewJobExecutor runFailingInitializer(ReviewJob job) {
+        when(sandbox.execute(any()))
+                .thenThrow(new SandboxInitializationException(
+                        2, false, "tar: work: Cannot utime: Operation not permitted\n"));
+        return executorThatReachesTheSandbox(job);
+    }
+
+    private ReviewJobExecutor executorThatReachesTheSandbox(ReviewJob job) {
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(policy.permitsReview(job)).thenReturn(true);
@@ -395,9 +402,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
         when(jobs.markExecutionStarted(eq(job.getId()), any(UUID.class), anyInt(), any()))
                 .thenReturn(1);
-        when(sandbox.execute(any()))
-                .thenThrow(new SandboxInitializationException(
-                        2, false, "tar: work: Cannot utime: Operation not permitted\n"));
         var pool = mock(AsyncTaskExecutor.class);
         doAnswer(invocation -> {
                     Runnable work = invocation.getArgument(0);
@@ -912,6 +916,52 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(handler, never()).finishInterrupted(any(), any());
         verify(handler, never()).completeStaged(any());
         verifyNoInteractions(composer, sandbox);
+    }
+
+    @Test
+    void shouldLeaveTheLaterAttemptsRowAloneWhenAClaimTakesItWhileTheSandboxRuns() {
+        var job = configuredJob();
+        job.setAttempt(1);
+        var later = configuredJob();
+        later.setId(job.getId());
+        later.setStatus(ReviewJobStatus.RUNNING);
+        later.setAttempt(2);
+        UUID laterLease = UUID.randomUUID();
+        later.setLeaseId(laterLease);
+        var measured = new SandboxResult(0, Map.of(), "measured", false, Duration.ofSeconds(1));
+        when(sandbox.execute(any())).thenAnswer(invocation -> {
+            when(jobs.findById(job.getId())).thenReturn(Optional.of(later));
+            return measured;
+        });
+        when(practiceAgent.parseResult(measured))
+                .thenReturn(new AgentResult(true, Map.of("rawOutput", ADMITTED_RESULT), RETURNED_USAGE));
+        // Stubbed as if unfenced: a write that passes the executor's own fence lands on the later row, where this
+        // test sees it. Staged work gives a passing attempt something to seal or interrupt.
+        lenient().when(jobs.lockById(job.getId())).thenReturn(Optional.of(later));
+        lenient()
+                .when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), any(UUID.class), anyInt()))
+                .thenReturn(1);
+        lenient().when(handler.hasStaged(later)).thenReturn(true);
+        recovery = mock(ReviewJobRecovery.class);
+        var composer = mock(WorkerFeedbackComposer.class);
+        var executor = executorThatReachesTheSandbox(job);
+        executor.setFeedbackComposer(composer);
+
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        verify(sandbox).execute(any());
+        assertThat(later.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(later.getAttempt()).isEqualTo(2);
+        assertThat(later.getLeaseId()).isEqualTo(laterLease);
+        assertThat(later.getOutput()).isNull();
+        assertThat(later.getExitCode()).isNull();
+        assertThat(later.getProcessingStatus()).isEqualTo(ProcessingStatus.NONE);
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
+        verify(jobs, never()).saveAndFlush(any());
+        // Only the attempt's own check before the sandbox started.
+        verify(handler).completeStaged(any());
+        verify(handler, never()).finishInterrupted(any(), any());
+        verifyNoInteractions(recovery, composer);
     }
 
     /** An admitted job queued again to compose what its lost attempt left open, claimable by this worker. */
