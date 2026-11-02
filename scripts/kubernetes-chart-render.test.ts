@@ -1668,6 +1668,13 @@ const workerCapacity = (reviewCount: number) => {
 	};
 };
 
+await test("the webhook role's heap is sized from what that role loads", () => {
+	const webhook = workload(rendered(layersFor("small")), "webhook");
+	assert.equal(envValue(webhook, "BPL_JVM_THREAD_COUNT"), "80");
+	assert.equal(envValue(webhook, "BPL_JVM_LOADED_CLASS_COUNT"), "18000");
+	assert.equal(envValue(webhook, "JAVA_TOOL_OPTIONS"), "-XX:ReservedCodeCacheSize=64M");
+});
+
 await test("what a worker holds for its reviews follows worker.reviews", () => {
 	// Up to eight reviews, the application's defaults hold. A larger worker must not stop at them.
 	assert.deepEqual(workerCapacity(1), {
