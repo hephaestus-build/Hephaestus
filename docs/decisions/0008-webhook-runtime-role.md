@@ -314,6 +314,11 @@ disk-safety limit this update adds unreachable on every stream that already exis
 | Stream state unavailable | Withholds everything — nothing can be proven safe |
 | Live shape has drifted | Withholds everything, logs at ERROR |
 
+Compression follows the first row. It is neither a bound nor shape, and it deletes nothing: the broker never
+rewrites a stored block. Startup writes it on every stream. The broker reads it when it opens the store, so a stream that
+had none compresses new blocks only after the broker's next restart. Its stored blocks stay as they are until they age out. Byte bounds and
+`nats stream info` still count uncompressed bytes.
+
 The fourth row is the one that is easy to get wrong. Dropping `max-messages` only ever admits more, so
 a loss estimate says it costs nothing and it looks unconditionally safe. But every existing deployment
 arrives at reconciliation bounded **only** by that count, and the same pass can withhold the byte

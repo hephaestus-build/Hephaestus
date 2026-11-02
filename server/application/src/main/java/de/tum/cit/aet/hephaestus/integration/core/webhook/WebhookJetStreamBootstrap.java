@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
+import io.nats.client.api.CompressionOption;
 import io.nats.client.api.DiscardPolicy;
 import io.nats.client.api.RetentionPolicy;
 import io.nats.client.api.StorageType;
@@ -45,6 +46,9 @@ public class WebhookJetStreamBootstrap {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookJetStreamBootstrap.class);
     static final String[] STREAMS = {"gitlab", "github", "slack", "outline"};
+
+    /** Deliveries are JSON that repeats itself, and the broker compresses a block only once it is full. */
+    static final CompressionOption COMPRESSION = CompressionOption.S2;
 
     /**
      * {@code Old} sheds the oldest retained messages to admit the newest. {@code New} would reject
@@ -125,6 +129,7 @@ public class WebhookJetStreamBootstrap {
                 .maxAge(s.maxAgeFor(name))
                 .maxMessages(UNLIMITED)
                 .maxBytes(s.maxBytesFor(name))
+                .compressionOption(COMPRESSION)
                 .build();
         try {
             jsm.addStream(config);
@@ -168,6 +173,11 @@ public class WebhookJetStreamBootstrap {
                 plan.consider("maxBytes", live.getMaxBytes(), maxBytes, byteLoss(state, maxBytes), allowDestructive);
         if (byteBoundApplied) {
             plan.update.maxBytes(maxBytes);
+        }
+        // The broker reads this when it opens the store: a stream that had none compresses new blocks after its
+        // next restart. It rewrites no block, so stored messages stay readable and age out as they are.
+        if (plan.consider("compression", live.getCompressionOption(), COMPRESSION, null, allowDestructive)) {
+            plan.update.compressionOption(COMPRESSION);
         }
         // Whether a byte bound is in force afterwards is the condition, not whether this pass wrote
         // one: a stream already at the configured bound produces no update at all.

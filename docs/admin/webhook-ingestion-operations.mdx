@@ -245,6 +245,18 @@ Nothing can recover one removed outside it.
 2. The byte bound only protects the disk.
    Keep it above twice your daily GitHub volume times the age, so the age binds first.
 
+The broker compresses each stream's full blocks on disk with S2.
+Both bounds and `nats stream info` count uncompressed bytes, so size them as if there were no compression.
+To see the disk use, read the volume.
+On GitHub deliveries, blocks took about 5 % of their size in a test.
+A stream from an earlier release needs no recreation:
+
+1. The webhook role turns compression on when it starts after the upgrade.
+2. The broker applies it to new blocks after its next restart.
+   Run `kubectl -n hephaestus rollout restart statefulset/hephaestus-nats` at a quiet time.
+   Or wait for the next upgrade of the broker.
+3. Blocks that the stream already holds stay readable and uncompressed until their age bound removes them.
+
 By default, streams with personal message content, `slack` and `outline`, have a 72-hour age bound.
 Their `hephaestus.webhook.stream.max-age-by-stream` entries take precedence over the shared age.
 PostgreSQL is the system of record. An erasure request cannot reach inside a broker stream.
