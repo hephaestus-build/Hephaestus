@@ -1,7 +1,6 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-# To regenerate this file, run: ./gradlew dependencies --write-locks
 com.diffplug.durian:durian-collect:1.2.0=classpath
 com.diffplug.durian:durian-core:1.2.0=classpath
 com.diffplug.durian:durian-io:1.2.0=classpath
@@ -28,6 +27,7 @@ com.github.java-json-tools:json-schema-core:1.2.14=classpath
 com.github.java-json-tools:json-schema-validator:2.2.14=classpath
 com.github.java-json-tools:msg-simple:1.2=classpath
 com.github.java-json-tools:uri-template:0.10=classpath
+com.github.javaparser:javaparser-core:3.24.9=classpath
 com.github.jknack:handlebars-jackson2:4.3.1=classpath
 com.github.jknack:handlebars:4.5.8=classpath
 com.github.joschi.jackson:jackson-datatype-threetenbp:2.18.2=classpath
@@ -64,11 +64,11 @@ io.spring.gradle:dependency-management-plugin:1.1.7=classpath
 io.swagger.core.v3:swagger-annotations:2.2.52=classpath
 io.swagger.core.v3:swagger-core:2.2.52=classpath
 io.swagger.core.v3:swagger-models:2.2.52=classpath
-io.swagger.parser.v3:swagger-parser-core:2.1.46=classpath
-io.swagger.parser.v3:swagger-parser-safe-url-resolver:2.1.46=classpath
-io.swagger.parser.v3:swagger-parser-v2-converter:2.1.46=classpath
-io.swagger.parser.v3:swagger-parser-v3:2.1.46=classpath
-io.swagger.parser.v3:swagger-parser:2.1.46=classpath
+io.swagger.parser.v3:swagger-parser-core:2.1.47=classpath
+io.swagger.parser.v3:swagger-parser-safe-url-resolver:2.1.47=classpath
+io.swagger.parser.v3:swagger-parser-v2-converter:2.1.47=classpath
+io.swagger.parser.v3:swagger-parser-v3:2.1.47=classpath
+io.swagger.parser.v3:swagger-parser:2.1.47=classpath
 io.swagger:swagger-annotations:1.6.16=classpath
 io.swagger:swagger-compat-spec-parser:1.0.76=classpath
 io.swagger:swagger-core:1.6.16=classpath
@@ -100,17 +100,17 @@ org.commonmark:commonmark:0.21.0=classpath
 org.eclipse.jgit:org.eclipse.jgit:7.8.0.202609011348-r=classpath
 org.eclipse.platform:org.eclipse.osgi:3.24.300=classpath
 org.freemarker:freemarker:2.3.35=classpath
-org.jetbrains.kotlin:kotlin-stdlib-common:2.4.0=classpath
+org.jetbrains.kotlin:kotlin-stdlib-common:2.4.10=classpath
 org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10=classpath
 org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10=classpath
-org.jetbrains.kotlin:kotlin-stdlib:2.4.0=classpath
+org.jetbrains.kotlin:kotlin-stdlib:2.4.10=classpath
 org.jetbrains:annotations:13.0=classpath
 org.jspecify:jspecify:1.0.1=classpath
 org.mozilla:rhino:1.7.15.1=classpath
-org.openapi.generator:org.openapi.generator.gradle.plugin:7.25.0=classpath
-org.openapitools:openapi-generator-core:7.25.0=classpath
-org.openapitools:openapi-generator-gradle-plugin:7.25.0=classpath
-org.openapitools:openapi-generator:7.25.0=classpath
+org.openapi.generator:org.openapi.generator.gradle.plugin:7.26.0=classpath
+org.openapitools:openapi-generator-core:7.26.0=classpath
+org.openapitools:openapi-generator-gradle-plugin:7.26.0=classpath
+org.openapitools:openapi-generator:7.26.0=classpath
 org.projectlombok:lombok:1.18.38=classpath
 org.reactivestreams:reactive-streams:1.0.3=classpath
 org.slf4j:slf4j-api:2.0.20=classpath
