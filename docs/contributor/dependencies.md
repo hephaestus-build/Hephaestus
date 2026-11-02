@@ -58,7 +58,9 @@ Each held version has a row, with the condition that makes us try it again.
 | Package | Held at | Reason | Try again when |
 |---|---|---|---|
 | `react`, `react-dom` | 19.2.8 | 19.3 adds 29,236 bytes to the entry, which every page loads. `react-dom` is part of the entry, so no route split can move it. | The entry budget has room for it. |
+| `@axe-core/playwright` | 4.13.0 | 4.14.0 brings axe-core 4.14, which takes the `label-content-name-mismatch` rule (WCAG 2.5.3, Label in Name) out of `experimental`. The browser suite's axe check then fails on the review navigation links, such as "Observations, 0", and on Base UI controls. | The links' accessible names contain their visible text. |
 | `lucide-react` | 1.41.0 | 1.64.0 adds 2,687 gzip bytes to the entry. The bundle budget in `webapp/tools/bundle-budget` allows 1,024. | A release does not grow the entry. |
+| `@base-ui/react` | 1.8.0 | 1.9.0 adds 2,088 gzip bytes to the entry. The bundle budget allows 1,024. 1.9 also renders a disabled accordion trigger with the native `disabled` attribute instead of `aria-disabled`, so `ui/accordion.tsx` and the catalog story move with it. | A release does not grow the entry. |
 | `monaco-editor` | 0.56.0 | 0.57.0 adds about 30,000 gzip bytes to each page with the code editor. No feature that we use needs 0.57. | We need a feature of a newer release, or a release does not grow these pages. |
 | `com.graphql-java:graphql-java` | 25.0 | Every release shades Guava 32.1.2-jre. `security/vulnerability-policy.json` has a reviewed CVE-2026-102554 decision for the 25.0 jar only. The 25.1 jar that Spring Boot 4.1.2 manages has not been reviewed. | A release shades a fixed Guava, or a newer jar gets its own reviewed decision. |
 

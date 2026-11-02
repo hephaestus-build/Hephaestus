@@ -95,7 +95,7 @@ export function mockPiCodingAgent(
 	beforeRuntime?: Parameters<typeof codingAgentExports>[3],
 ) {
 	mock.module("@earendil-works/pi-coding-agent", {
-		namedExports: {
+		exports: {
 			...codingAgentExports(cwd, manager, onResourceLoad, beforeRuntime),
 			...overrides,
 		},
@@ -106,7 +106,7 @@ export async function mockChange(overrides: Record<string, unknown>) {
 	const change = new URL("../../../main/resources/agent/pi-change.ts", import.meta.url).href;
 	const derived: unknown = await import(change);
 	assert.ok(typeof derived === "object" && derived !== null);
-	mock.module(change, { namedExports: { ...derived, ...overrides } });
+	mock.module(change, { exports: { ...derived, ...overrides } });
 }
 
 export type SessionBehaviour =
@@ -395,7 +395,7 @@ if (scenario !== undefined && scenario !== "") {
 		const host =
 			await import("../../../../../../docker/agents/practice-scripts/lib/core/program-host.ts");
 		mock.module(nodePath.join(LIB, "core/program-host.ts"), {
-			namedExports: {
+			exports: {
 				...host,
 				runPracticeProgram: async (...args: Parameters<typeof host.runPracticeProgram>) => {
 					const outcome = await host.runPracticeProgram(...args);
