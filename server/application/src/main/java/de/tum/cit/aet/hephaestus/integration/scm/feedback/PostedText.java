@@ -77,6 +77,11 @@ public final class PostedText {
     private static final Pattern INVISIBLE = Pattern.compile(
             "[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFFF\\x{E0000}-\\x{E007F}]");
 
+    // GitHub reads no run of more than 80 backticks as a fence, so what the span holds would go live, and a fence is
+    // longer than each run inside it. No run that long has a meaning in code, so each stops one below.
+    private static final Pattern LONG_BACKTICK_RUN = Pattern.compile("`{80,}");
+    private static final String LONGEST_BACKTICK_RUN = "`".repeat(79);
+
     // Each line is read alone and with no block parser, so only its inline Markdown has a meaning.
     private static final Parser INLINE = Parser.builder()
             .enabledBlockTypes(Set.of())
@@ -303,8 +308,9 @@ public final class PostedText {
         }
     }
 
-    /** A code span that holds the text as written: its fence is longer than any run of backticks inside it. */
-    private static String codeSpan(String code) {
+    /** A code span that holds the text: its fence is longer than any run of backticks inside it. */
+    private static String codeSpan(String text) {
+        String code = LONG_BACKTICK_RUN.matcher(text).replaceAll(LONGEST_BACKTICK_RUN);
         int longest = 0;
         int run = 0;
         for (int i = 0; i < code.length(); i++) {

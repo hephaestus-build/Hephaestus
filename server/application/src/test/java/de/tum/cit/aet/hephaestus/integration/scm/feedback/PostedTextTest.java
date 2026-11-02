@@ -167,6 +167,40 @@ class PostedTextTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepEveryFenceWithinWhatTheProvidersReadWhenTheTextHoldsALongBacktickRun() {
+        String fence = "`".repeat(80);
+        String longest = "`".repeat(79);
+        String name = fence + " " + longest + "@alice " + fence;
+        assertThat(PostedText.of("`".repeat(80) + "@alice")).isEqualTo(name);
+        assertThat(PostedText.plain("`".repeat(500) + "@alice")).isEqualTo(name);
+        assertThat(PostedText.inlineCode("`".repeat(500) + " @alice"))
+                .isEqualTo(fence + " " + longest + " @alice " + fence);
+        // A code span of the text, whose own fence is too long for a provider as well.
+        assertThat(PostedText.of("`".repeat(101) + " " + "`".repeat(100) + " @alice " + "`".repeat(101)))
+                .isEqualTo(fence + " " + longest + " @alice " + fence);
+        // Link syntax and the run after it join one span, and only then the run decides the fence.
+        assertThat(PostedText.of("[a](b)" + "`".repeat(80) + "@alice"))
+                .isEqualTo(fence + "[a](b)" + longest + "@alice" + fence);
+    }
+
+    @ParameterizedTest
+    @MethodSource("cases")
+    void shouldWriteNoBacktickRunThatGitHubDoesNotReadAsAFence(Case text) {
+        assertThat(text.wire()).doesNotContainPattern("`{81,}");
+    }
+
+    @Test
+    void shouldKeepABacktickRunAsWrittenWhenItsFenceIsWithinWhatTheProvidersRead() {
+        assertThat(PostedText.of("`".repeat(79) + "@alice"))
+                .isEqualTo("`".repeat(80) + " " + "`".repeat(79) + "@alice " + "`".repeat(80));
+    }
+
+    @Test
+    void shouldEscapeBackticksWhateverTheirNumberWhenNothingInTheRunIsLinkable() {
+        assertThat(PostedText.of("`".repeat(200) + " and text")).isEqualTo("\\`".repeat(200) + " and text");
+    }
+
+    @Test
     void shouldJoinCodeSpansWhenCodeStandsRightNextToANameOrAReference() {
         assertThat(PostedText.of("`x`@bob and #1`y`")).isEqualTo("`x@bob` and `#1y`");
     }
