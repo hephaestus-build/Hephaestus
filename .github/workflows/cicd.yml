@@ -666,7 +666,7 @@ jobs:
         run: node scripts/check-workflows.ts
 
       # Without file arguments Actionlint reads every workflow, so an empty list must skip it.
-      - uses: reviewdog/action-actionlint@d290e336d5a743810aef4404f757dc862276d2ae # v1.73.4
+      - uses: reviewdog/action-actionlint@5d802a8ebdcb24d712925118c3a4596f571d8fcd # v1.81.0
         if: steps.native.outputs.compatible != ''
         env:
           SHELLCHECK_OPTS: --severity=warning
@@ -693,11 +693,11 @@ jobs:
         with:
           persist-credentials: false
       - id: zizmor
-        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           min-confidence: medium
           # renovate: datasource=github-releases depName=zizmorcore/zizmor
-          version: 1.29.0
+          version: 1.31.1
 
       - name: Enforce Zizmor findings
         env:
@@ -778,7 +778,7 @@ jobs:
         run: node scripts/resolve-server-build.ts
       - name: Download the validated server build
         if: steps.reuse.outputs.artifact-id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ steps.reuse.outputs.artifact-id }}
           run-id: ${{ steps.reuse.outputs.run-id }}
@@ -805,7 +805,7 @@ jobs:
           (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
           unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep '^Main-Class: org.springframework.boot.loader' >/dev/null
       - name: Upload the packaged server
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.SERVER_BUILD_ARTIFACT }}
           path: |
@@ -858,7 +858,7 @@ jobs:
           install-syft: "false"
       - uses: ./.github/actions/download-trivy-db
         id: database
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: snapshot
         with:
           name: trivy-db-${{ github.run_id }}-${{ github.run_attempt }}
@@ -925,7 +925,7 @@ jobs:
       # The gate's exit status alone cannot say which digest carries which finding.
       - name: Upload the vulnerability policy results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vulnerability-policy-upstream
           path: reports
@@ -1157,7 +1157,7 @@ jobs:
       # An exit status cannot say which subject carries which finding.
       - name: Upload the evidence bundle
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-evidence-preflight
           path: evidence

@@ -91,7 +91,7 @@ runs:
         key: pnpm-bin-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm.outputs.version }}
     # Both modes end here: pnpm/setup installs a Node runtime of its own, so the pinned one is
     # selected last to win on PATH. setup-node reads `pnpm store path`, which needs pnpm installed.
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       env:
         SEGMENT_DOWNLOAD_TIMEOUT_MINS: "1"
       with:
