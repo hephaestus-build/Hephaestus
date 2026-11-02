@@ -1,5 +1,5 @@
 const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
-const SEMVER = /^\d+\.\d+\.\d+$/u;
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 export type EnvironmentTone = "staging" | "preview" | "local";
 
