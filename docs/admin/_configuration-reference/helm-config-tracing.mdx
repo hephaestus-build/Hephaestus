@@ -1,0 +1,7 @@
+### `config.tracing`
+
+| Key | Type | Default | Required in object | Constraints |
+| --- | --- | --- | --- | --- |
+| `config.tracing.otlpEnabled` | boolean | `false` | yes | — |
+| `config.tracing.otlpEndpoint` | string | `"http://localhost:4318/v1/traces"` | yes | — |
+| `config.tracing.samplingProbability` | string | `"0.0"` | yes | `pattern: "^(?:0(?:\\.[0-9]+)?\|1(?:\\.0+)?)$"` |
