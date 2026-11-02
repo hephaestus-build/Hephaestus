@@ -224,6 +224,8 @@ It fails when a size grows by more than 1 KiB, a new lazy chunk counting from ze
 It also fails when the entry holds a route-only package, or when a lazy chunk is gone while the entry grew.
 
 For intended growth, run `BUNDLE_BUDGET=update vp run build:webapp` and commit `tools/bundle-budget/baseline.json`.
+The update keeps every size that moved by 1 KiB or less. It records the rest, adds new chunks and drops removed chunks.
+Two pull requests then conflict less often.
 A saving passes with a notice that the baseline can be lowered.
 Do not add a baseline commit only for a saving: the next pull request that touches the baseline lowers it in passing.
 

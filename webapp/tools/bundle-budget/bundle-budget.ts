@@ -104,6 +104,32 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 	};
 }
 
+function settled(now: number, recorded: number | undefined): number {
+	return recorded !== undefined && Math.abs(now - recorded) <= TOLERANCE_BYTES ? recorded : now;
+}
+
+/**
+ * The baseline after an update. A size that moved by no more than the tolerance keeps its recorded
+ * value: a change elsewhere renames the hashed chunks that a chunk imports, which moves its gzip size
+ * by a few bytes, and rewriting those sizes makes pull requests conflict over sizes that neither
+ * changed. It uses the tolerance of `checkBudget`, so the build that it records checks clean.
+ * Without a readable baseline, it records the build.
+ */
+export function updatedBaseline(
+	measured: BundleSizes,
+	baseline: BundleSizes | undefined,
+): BundleSizes {
+	return {
+		entry: settled(measured.entry, baseline?.entry),
+		lazy: Object.fromEntries(
+			Object.entries(measured.lazy).map(([facade, now]) => [
+				facade,
+				settled(now, baseline?.lazy[facade]),
+			]),
+		),
+	};
+}
+
 export interface BudgetCheck {
 	/** Why the build breaks its budget. */
 	violations: string[];

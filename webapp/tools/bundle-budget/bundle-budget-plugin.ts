@@ -10,6 +10,7 @@ import {
 	bundleSizes,
 	measure,
 	TOLERANCE_BYTES,
+	updatedBaseline,
 } from "./bundle-budget.ts";
 
 /**
@@ -38,6 +39,10 @@ const routeOnlyPackages = [
 	"streamdown",
 ];
 
+async function readBaseline() {
+	return bundleSizes.parse(JSON.parse(await readFile(BASELINE, "utf8")));
+}
+
 export function bundleBudget(): Plugin {
 	let outDir = "";
 	return {
@@ -55,11 +60,14 @@ export function bundleBudget(): Plugin {
 				);
 				const measured = measure(metadata.chunks);
 				if (process.env.BUNDLE_BUDGET === "update") {
-					await writeFile(BASELINE, `${JSON.stringify(measured.sizes, null, "\t")}\n`);
+					// A conflicted file holds merge markers, and this update is how to resolve it.
+					const recorded = await readBaseline().catch(() => undefined);
+					const updated = updatedBaseline(measured.sizes, recorded);
+					await writeFile(BASELINE, `${JSON.stringify(updated, null, "\t")}\n`);
 					this.info(`bundle budget: wrote ${BASELINE.pathname}`);
 					return;
 				}
-				const baseline = bundleSizes.parse(JSON.parse(await readFile(BASELINE, "utf8")));
+				const baseline = await readBaseline();
 				const { violations, lowerable } = checkBudget(measured, baseline, routeOnlyPackages);
 				if (violations.length > 0) {
 					throw new Error(
