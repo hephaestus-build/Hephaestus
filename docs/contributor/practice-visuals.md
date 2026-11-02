@@ -549,7 +549,7 @@ Use **Defer** to find what to leave out: do not teach what **Defer** gives to an
 - **How to do it**: 3 to 5 bullets. Each bullet gives one instruction in the imperative. A condition can come before it. Give exactly one realistic example in the form "instead of …, do …".
 - **When it does not apply**: one bullet for each fact in the **Applies when**, in the developer's words. Add no case and drop no case. If the criteria name a case that still counts, end with "It still applies when …".
 - **Common mistakes**: 2 to 4 bullets. Each names a wrong action and what to do instead. Start with the misreading that the criteria reject, such as a line limit.
-- **Sources**: 2 to 4 entries. The next section gives the quality bar.
+- **Sources**: 2 to 9 entries. The next section gives the quality bar.
 
 More rules:
 

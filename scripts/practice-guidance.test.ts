@@ -34,7 +34,7 @@ const THEME_CLASSES = new Set([
 	"pv-mono",
 ]);
 const GUIDE_SECTIONS = ["How to do it", "When it does not apply", "Common mistakes", "Sources"];
-const SOURCES = { min: 2, max: 4 };
+const SOURCES = { min: 2, max: 9 };
 const DESCRIPTION_LENGTH = 250;
 // The words of a visual: titles, labels and examples together. A guide figure has no limit.
 const VISUAL_WORDS = 24;
