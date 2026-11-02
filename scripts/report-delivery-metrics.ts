@@ -506,6 +506,20 @@ const RELEASES_QUERY = `query($owner: String!, $name: String!, $endCursor: Strin
   }
 }`;
 
+const utcDate = (instant: number) => new Date(instant).toISOString().slice(0, 10);
+
+/**
+ * The UTC date ranges of a search for merged pull requests, a week each, without a gap or an overlap.
+ * GitHub's search returns at most 1,000 results, so a month of merges can exceed one search.
+ */
+export function mergedDateRanges(since: number, until: number): string[] {
+	const ranges: string[] = [];
+	for (let start = since; start <= until; start += 7 * DAY) {
+		ranges.push(`${utcDate(start)}..${utcDate(Math.min(start + 6 * DAY, until))}`);
+	}
+	return ranges;
+}
+
 /** The number of results the search found, which can exceed what it returns. */
 export function searchCount(pages: unknown): number {
 	const [first] = asArray(pages, "pull request pages");
@@ -595,27 +609,30 @@ if (import.meta.main) {
 	const until = Date.now();
 	const windows = [7, 28].map((days) => ({ days, since: until - days * DAY, until }));
 	const since = Math.min(...windows.map((window) => window.since));
-	const sinceDate = new Date(since).toISOString().slice(0, 10);
 
 	const firstParents = await output("git", ["rev-list", "--first-parent", "origin/main"]);
 	const history = firstParents.trim().split("\n");
 	const position = new Map(history.map((sha, index) => [sha, history.length - index]));
 
-	const pulls = await api([
-		"graphql",
-		"--paginate",
-		"--slurp",
-		"-f",
-		`query=${PULLS_QUERY}`,
-		"-f",
-		`q=repo:${repository} is:pr is:merged base:main merged:>=${sinceDate}`,
-	]);
-	const changes = parseChanges(pulls, versionBranch(await readJsonFile(".changeset/config.json")));
-	if (changes.length < searchCount(pulls)) {
-		// GitHub's search returns at most 1,000 results.
-		throw new Error(
-			`only ${changes.length} of ${searchCount(pulls)} merged pull requests were listed`,
-		);
+	const releaseBranch = versionBranch(await readJsonFile(".changeset/config.json"));
+	const changes: Change[] = [];
+	for (const range of mergedDateRanges(since, until)) {
+		const pulls = await api([
+			"graphql",
+			"--paginate",
+			"--slurp",
+			"-f",
+			`query=${PULLS_QUERY}`,
+			"-f",
+			`q=repo:${repository} is:pr is:merged base:main merged:${range}`,
+		]);
+		const listed = parseChanges(pulls, releaseBranch);
+		if (listed.length < searchCount(pulls)) {
+			throw new Error(
+				`only ${listed.length} of ${searchCount(pulls)} pull requests merged in ${range} were listed`,
+			);
+		}
+		changes.push(...listed);
 	}
 	const releases = parseReleases(
 		await api([

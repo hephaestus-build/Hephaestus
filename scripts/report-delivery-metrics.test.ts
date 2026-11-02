@@ -6,6 +6,7 @@ import {
 	deliveryMetrics,
 	duration,
 	isRevert,
+	mergedDateRanges,
 	parseChanges,
 	parseDeployment,
 	parseReleases,
@@ -477,4 +478,16 @@ await test("the report shows missing measurements as missing, not as zero", () =
 	assert.equal(duration(90 * MINUTE), "90 min");
 	assert.equal(duration(3 * 60 * MINUTE), "3.0 h");
 	assert.equal(duration(72 * 60 * MINUTE), "3.0 d");
+});
+
+void test("the searches cover each day of the window once, a week at a time", () => {
+	const until = Date.parse("2026-11-02T13:46:00Z");
+	assert.deepEqual(mergedDateRanges(until - 28 * DAY, until), [
+		"2026-10-05..2026-10-11",
+		"2026-10-12..2026-10-18",
+		"2026-10-19..2026-10-25",
+		"2026-10-26..2026-11-01",
+		"2026-11-02..2026-11-02",
+	]);
+	assert.deepEqual(mergedDateRanges(until - 3 * DAY, until), ["2026-10-30..2026-11-02"]);
 });
