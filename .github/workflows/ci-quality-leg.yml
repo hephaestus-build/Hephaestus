@@ -89,7 +89,7 @@ jobs:
       # The log names a file that PMD could not analyze, not why; its XML report keeps the stack trace.
       - name: Retain the PMD report
         if: inputs.leg == 'server' && failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: server-pmd-report-${{ github.run_attempt }}
           path: server/application/build/reports/pmd
@@ -160,7 +160,7 @@ jobs:
 
       - name: Retain application test reports
         if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.leg }}-unit-reports-${{ github.run_attempt }}
           path: ${{ inputs.leg }}/test-results
@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload application test metrics
         if: (inputs.leg == 'webapp' || inputs.leg == 'extension') && !cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-metrics-${{ inputs.leg }}-unit
           path: ci-metrics/${{ inputs.leg }}-unit.json
@@ -186,7 +186,7 @@ jobs:
       # The zip a Chrome Web Store submission uploads, from the same build the gates just judged.
       - name: Upload the extension package
         if: inputs.leg == 'extension'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: extension-chrome-${{ github.run_attempt }}
           path: extension/.output/*-production-chrome.zip

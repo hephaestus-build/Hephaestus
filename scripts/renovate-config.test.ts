@@ -164,7 +164,7 @@ void test("routine update groups preserve repository boundaries", () => {
 			["npm"],
 			["webapp/package.json", "extension/package.json"],
 		],
-		["server dependencies", ["gradle"], undefined],
+		["server dependencies", ["gradle", "gradle-wrapper"], undefined],
 		["AI SDK and practice runtime", ["npm"], ["docker/agents/practice-scripts/package.json"]],
 		["CI and build tooling", undefined, [".github/**"]],
 	] as const;
@@ -195,6 +195,32 @@ void test("what the chart and the release image set ship moves as its own group"
 	assert.ok(
 		Array.isArray(rule.matchFileNames) &&
 			rule.matchFileNames.includes("security/release-images.json"),
+	);
+});
+
+void test("updates that need a port or a workflow decision wait for a maintainer on the dashboard", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rules = config.packageRules.filter(isRecord);
+	const gated = (match: (rule: Record<string, unknown>) => boolean) =>
+		rules.some((rule) => rule.dependencyDashboardApproval === true && match(rule));
+	assert.ok(
+		gated(
+			(rule) =>
+				Array.isArray(rule.matchFileNames) &&
+				rule.matchFileNames.includes("docker/agents/practice-scripts/package.json"),
+		),
+	);
+	assert.ok(
+		gated(
+			(rule) =>
+				Array.isArray(rule.matchPackageNames) && rule.matchPackageNames.includes("@ai-sdk/**"),
+		),
+	);
+	assert.ok(
+		gated(
+			(rule) =>
+				Array.isArray(rule.matchDepNames) && rule.matchDepNames.includes("zizmorcore/zizmor"),
+		),
 	);
 });
 
