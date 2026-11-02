@@ -15,7 +15,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Every table of the migrated schema that holds workspace data carries a {@code NOT NULL workspace_id}. Then a query
  * can always scope it, and the table can later be distributed by workspace. A table that belongs to no workspace is in
  * {@link WorkspaceScopedTables#GLOBAL_TABLES}, a security decision, or in {@link #GLOBAL_WITHOUT_ENTITY} if no entity
- * maps it. {@code docs/contributor/database-migration.mdx} § Workspace column gives the rule.
+ * maps it. If such a table has a {@code workspace_id}, {@link #GLOBAL_NAMING_A_WORKSPACE} says why.
+ * {@code docs/contributor/database-migration.mdx} § Workspace column gives the rule.
  */
 class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
 
@@ -29,6 +30,19 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
     /** These nullable-workspace tables still require SQL tenancy enforcement. */
     private static final Map<String, String> MIXED_SCOPE_TABLES =
             Map.of("consumer_dead_letter", "Installation lifecycle failures can arrive before a workspace exists");
+
+    /**
+     * Global tables that still have a {@code workspace_id}, and why it does not make the row workspace data. SQL tenancy
+     * enforcement does not check these tables, so the column gives them no isolation.
+     */
+    private static final Map<String, String> GLOBAL_NAMING_A_WORKSPACE = Map.of(
+            "auth_event",
+            "an account's audit trail; workspace_id only names the workspace of an event that has one",
+            "llm_call_permit",
+            "instance-owned admission to shared provider capacity; workspace_id only orders fair grants, and is NULL"
+                    + " only for a product feedback call",
+            "workspace_slug_history",
+            "a former slug resolves to its workspace before any workspace context exists");
 
     private static final String MIRROR =
             "a provider mirror that reaches its workspace through its repository or" + " organization";
@@ -102,6 +116,25 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
                 .as("These tables now carry a NOT NULL workspace_id or no longer exist. Remove them from"
                         + " BEFORE_THE_RULE")
                 .isEmpty();
+    }
+
+    @Test
+    void shouldGiveAReasonWhenAGlobalTableNamesAWorkspace() {
+        List<String> naming = jdbc.queryForList("""
+                SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'workspace_id' AND NOT a.attisdropped
+                WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+                """, String.class).stream()
+                .map(Objects::requireNonNull)
+                .toList();
+
+        assertThat(naming)
+                .filteredOn(table ->
+                        WorkspaceScopedTables.GLOBAL_TABLES.contains(table) || GLOBAL_WITHOUT_ENTITY.contains(table))
+                .as("A global table with a workspace_id is a security decision. Record why in"
+                        + " GLOBAL_NAMING_A_WORKSPACE, as docs/contributor/database-migration.mdx § Workspace column"
+                        + " describes, or remove the column")
+                .containsExactlyInAnyOrderElementsOf(GLOBAL_NAMING_A_WORKSPACE.keySet());
     }
 
     @Test

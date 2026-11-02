@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793646997627-1" author="hephaestus">
+        <comment>A model call request names its workspace, except a product feedback call, which has none. The database now holds this rule, not only the worker that writes the request.</comment>
+        <sql>ALTER TABLE llm_call_permit DROP CONSTRAINT IF EXISTS ck_llm_call_permit_workspace_by_class</sql>
+        <sql>ALTER TABLE llm_call_permit ADD CONSTRAINT ck_llm_call_permit_workspace_by_class CHECK ((workspace_id IS NULL) = (call_class = 'PRODUCT_FEEDBACK'))</sql>
+        <rollback>
+            <sql>ALTER TABLE llm_call_permit DROP CONSTRAINT ck_llm_call_permit_workspace_by_class</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

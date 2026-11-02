@@ -58,6 +58,9 @@ A table that belongs to no workspace is a security decision:
 - If an entity maps it, add the table to `WorkspaceScopedTables.GLOBAL_TABLES` and the entity to `DataIsolationArchitectureTest.GLOBAL_ENTITIES`.
 - If no entity maps it, add it to `GLOBAL_WITHOUT_ENTITY` in the test.
 
+If a global table has a `workspace_id`, also record why in `GLOBAL_NAMING_A_WORKSPACE` in the test.
+SQL tenancy enforcement does not check a global table, so its `workspace_id` gives no isolation.
+
 The test also lists the tables from before this rule. Do not add to that list.
 
 `consumer_dead_letter` is a mixed-scope exception: installation lifecycle failures can arrive before a workspace exists.
