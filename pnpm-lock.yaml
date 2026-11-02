@@ -150,6 +150,7 @@ packageExtensionsChecksum: sha256-GChmywMC9g5Yc9vtzjyZduZjO11V8kq+EdLHL0WucYw=
 
 patchedDependencies:
   '@earendil-works/pi-ai@1.4.0': a220a02f7dbac806611a5d0a2992c970210b05389ddb68f14996ee2d12ab8196
+  '@hey-api/openapi-ts@0.99.0': 073b5170f4aa526b98778d6e7fcd7a93680e30692d335c408ef6537738f9e08f
   wxt@0.21.4: d10a10b9acda18891b4a868a545c209f3450fff5046871ac09bed66b4a825c7f
 
 importers:
@@ -490,7 +491,7 @@ importers:
     devDependencies:
       '@hey-api/openapi-ts':
         specifier: 0.99.0
-        version: 0.99.0(magicast@0.5.4)(typescript@6.0.3)
+        version: 0.99.0(patch_hash=073b5170f4aa526b98778d6e7fcd7a93680e30692d335c408ef6537738f9e08f)(magicast@0.5.4)(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -14886,7 +14887,7 @@ snapshots:
       '@types/json-schema': 7.0.15
       js-yaml: 4.3.2
 
-  '@hey-api/openapi-ts@0.99.0(magicast@0.5.4)(typescript@6.0.3)':
+  '@hey-api/openapi-ts@0.99.0(patch_hash=073b5170f4aa526b98778d6e7fcd7a93680e30692d335c408ef6537738f9e08f)(magicast@0.5.4)(typescript@6.0.3)':
     dependencies:
       '@hey-api/codegen-core': 0.9.1(magicast@0.5.4)
       '@hey-api/json-schema-ref-parser': 1.4.4
