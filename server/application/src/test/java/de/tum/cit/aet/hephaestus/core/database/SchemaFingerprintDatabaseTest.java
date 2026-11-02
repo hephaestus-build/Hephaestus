@@ -83,6 +83,7 @@ class SchemaFingerprintDatabaseTest {
             execute(connection, """
                     CREATE SCHEMA partman;
                     CREATE EXTENSION pg_partman WITH SCHEMA partman;
+                    CREATE EXTENSION citext;
                     CREATE TABLE kinds (id bigint PRIMARY KEY, v text DEFAULT 'a');
                     CREATE INDEX kinds_v ON kinds (v);
                     CREATE SEQUENCE kinds_seq;
@@ -94,6 +95,9 @@ class SchemaFingerprintDatabaseTest {
                     """);
             List<String> base = SchemaFingerprint.of(connection);
             assertThat(base).anyMatch(line -> line.startsWith("extension|pg_partman|partman|"));
+            assertThat(base)
+                    .as("an extension's functions move with its minor version, which the extension line leaves out")
+                    .noneMatch(line -> line.startsWith("function|citext"));
 
             connection.setAutoCommit(false);
             for (String change : List.of(
@@ -124,6 +128,37 @@ class SchemaFingerprintDatabaseTest {
                     .as("rows, sequence positions, runtime partitions and Liquibase's own tables are not the schema")
                     .isEqualTo(base);
             connection.rollback();
+        }
+    }
+
+    @Test
+    void shouldNotChangeWithTheFormOfALiteralListOrTheNameOfANotNullConstraint() throws SQLException {
+        var database = PostgreSQLTestContainer.createDatabase("fingerprint_forms");
+        try (Connection connection =
+                DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password())) {
+            execute(connection, """
+                    CREATE SCHEMA partman;
+                    CREATE EXTENSION pg_partman WITH SCHEMA partman;
+                    CREATE TABLE kinds (
+                        v varchar(8) CONSTRAINT old_name NOT NULL,
+                        CONSTRAINT kinds_v CHECK (v::text = ANY ((ARRAY['a'::varchar, 'b'::varchar])::text[])));
+                    """);
+            List<String> base = SchemaFingerprint.of(connection);
+
+            execute(connection, """
+                    ALTER TABLE kinds DROP CONSTRAINT kinds_v;
+                    ALTER TABLE kinds ADD CONSTRAINT kinds_v
+                        CHECK ((v)::text = ANY (ARRAY[('a'::varchar)::text, ('b'::varchar)::text]));
+                    ALTER TABLE kinds RENAME CONSTRAINT old_name TO new_name;
+                    """);
+            assertThat(SchemaFingerprint.of(connection)).isEqualTo(base);
+
+            execute(connection, """
+                    ALTER TABLE kinds DROP CONSTRAINT kinds_v;
+                    ALTER TABLE kinds ADD CONSTRAINT kinds_v
+                        CHECK ((v)::text = ANY (ARRAY[('a'::varchar)::text, ('c'::varchar)::text]));
+                    """);
+            assertThat(SchemaFingerprint.of(connection)).as("a different list").isNotEqualTo(base);
         }
     }
 

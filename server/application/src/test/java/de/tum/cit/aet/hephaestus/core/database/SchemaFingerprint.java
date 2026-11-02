@@ -26,10 +26,14 @@ final class SchemaFingerprint {
     /** The fingerprint of the database behind {@code connection}. */
     static List<String> of(Connection connection) throws SQLException {
         List<String> lines = new ArrayList<>();
-        try (var statement = connection.createStatement();
-                var rows = statement.executeQuery(QUERY)) {
-            while (rows.next()) {
-                lines.add(rows.getString(1));
+        try (var statement = connection.createStatement()) {
+            // What pg_get_* prints depends on both: a name is qualified off the path, and a timestamp shows the zone.
+            statement.execute("SET search_path TO public");
+            statement.execute("SET TIME ZONE 'UTC'");
+            try (var rows = statement.executeQuery(QUERY)) {
+                while (rows.next()) {
+                    lines.add(rows.getString(1));
+                }
             }
         }
         return List.copyOf(lines);
