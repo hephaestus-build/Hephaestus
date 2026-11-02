@@ -43,9 +43,10 @@ import org.jspecify.annotations.Nullable;
             @UniqueConstraint(
                     name = "uk_issue_repository_type_number",
                     columnNames = {"repository_id", "issue_type", "number"}),
+            // GitLab numbers issues and merge requests in separate sequences, so one id can name one of each.
             @UniqueConstraint(
-                    name = "uq_issue_provider_native_id",
-                    columnNames = {"provider_id", "native_id"}),
+                    name = "uq_issue_provider_type_native_id",
+                    columnNames = {"provider_id", "issue_type", "native_id"}),
         })
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 @DiscriminatorColumn(name = "issue_type", discriminatorType = DiscriminatorType.STRING)
