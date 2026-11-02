@@ -904,18 +904,28 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 
 ### 2. Run the installer
 
-1. Type the client secret of your GitHub OAuth app. The shell does not show it:
+1. Run the installer in a terminal:
 
    ```bash
-   read -rs GITHUB_OAUTH_CLIENT_SECRET && export GITHUB_OAUTH_CLIENT_SECRET
+   sh k3s-install.sh
    ```
 
-2. Run the installer. Give your host name, and the address that gets the expiry notices of `Let's Encrypt`. Also give your OAuth client ID and your numeric GitHub user ID:
+   It asks for each value that a first install needs and that you did not give as a flag:
+   - The release, the host name, and the address that gets the expiry notices of `Let's Encrypt`.
+   - The client ID and the client secret of a GitHub OAuth app. The installer prints the homepage URL and the callback URL to enter at GitHub first. The terminal does not show the secret.
+   - Your GitHub login. The installer looks up your numeric GitHub user ID and puts it in the admin list.
+
+2. To run the installer without questions, for example from a script, give every value instead.
+   Put the client secret in `GITHUB_OAUTH_CLIENT_SECRET` from your secret store, for example from a file that only you can read:
 
    ```bash
+   GITHUB_OAUTH_CLIENT_SECRET=$(cat /run/secrets/github-oauth-client-secret) && export GITHUB_OAUTH_CLIENT_SECRET
    sh k3s-install.sh --version "$VERSION" --host hephaestus.example.com --email ops@example.com \
      --github-client-id <the client ID of your OAuth app> --bootstrap-admins github:<your numeric GitHub user ID>
    ```
+
+   Without a terminal, the installer asks nothing. It stops and names the missing flag or variable.
+   The value never appears in a command line, so other users of the host do not see it.
 
    For a first try, add `--staging`: the `Let's Encrypt` staging service has higher rate limits, and no browser trusts its certificate.
    Later, run the installer again without `--staging`, with the explicit certificate choice described below.
@@ -925,7 +935,8 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 3. Back up the encryption keys before you continue.
    Hephaestus cannot make them again: without them, the data that they protect is lost.
    The installer ends with the command that copies them to a file that only you can read.
-   [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) gives the command, and [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) says where to keep the file.
+   [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) gives the command.
+   [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) says where to keep the file.
    For `kubectl` on this host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first.
 
 4. Open `https://<host>` and sign in as the bootstrap admin.
@@ -939,6 +950,15 @@ The installer writes `site.yaml` only when the file does not exist.
 It holds the host name, the Kubernetes API endpoint, the OAuth client ID, the admin list, and `config.gitCheckoutEnabled: true`.
 Change the file to change these values, and run the installer again.
 
+Without a login provider, Hephaestus starts, but nobody can sign in.
+Thus, a first install stops when it has no GitHub OAuth client ID or client secret.
+A repeat run stops when the kept `site.yaml` names no GitHub or GitLab login provider.
+Set `config.github.oauthClientId` in `site.yaml`, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes, and run the installer again.
+
+The installer waits up to 10 minutes for the `Let's Encrypt` certificate.
+`Let's Encrypt` must reach the host on port 80 from the internet.
+If the host has no such path, stop the installer, and run it again with your own certificate in `--certificates`.
+
 On a repeat run, select certificates explicitly:
 
 - For standard apex certificates, pass `--standard-certificates`. Omit `--staging` to use the production issuer.
@@ -948,6 +968,8 @@ On a repeat run, select certificates explicitly:
 
 This check prevents a repeat run from replacing wildcard TLS with an implicit apex-only certificate.
 `--render-certificates` previews the selected manifest without host changes and needs no repeat-install choice.
+`--render-site` prints the `site.yaml` that a first install would write, and stops without host changes.
+It leaves out the Kubernetes API endpoint, which only the running cluster knows.
 
 The installed manifest is root-only, mode 0600.
 Before using it with `--certificates`, copy it to a file that you own:

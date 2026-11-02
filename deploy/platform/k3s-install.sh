@@ -51,10 +51,13 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --lock FILE                the joint lock of the release, already downloaded (a draft release)
   --skip-check NAME          skip one host check: dns, size or clock. Repeat it for each.
   --render-certificates      print the certificates file that this run would install, and stop
+  --render-site              print the site.yaml that this run would write, and stop
   --verify-kubelet           check the running kubelet policy and allocatable, and stop
   --allow-unqualified-host   explicitly permit a host outside the Ubuntu 24.04/kernel 6.8 baseline
 
 The environment variable GITHUB_OAUTH_CLIENT_SECRET, when set, goes into the release Secret.
+On a terminal, the installer asks for each of these that a first install lacks: the release, the
+host, the e-mail address, the GitHub OAuth app and its client secret, and your GitHub login.
 EOF
 	exit 2
 }
@@ -80,6 +83,7 @@ STANDARD_CERTIFICATES=false
 LOCK=
 SKIPPED=
 RENDER=false
+RENDER_SITE=false
 VERIFY=false
 ALLOW_UNQUALIFIED_HOST=false
 while [ $# -gt 0 ]; do
@@ -126,10 +130,61 @@ while [ $# -gt 0 ]; do
 		RENDER=true
 		shift
 		;;
+	--render-site)
+		RENDER_SITE=true
+		shift
+		;;
 	*) usage ;;
 	esac
 done
 skipped() { case " $SKIPPED " in *" $1 "*) return 0 ;; *) return 1 ;; esac }
+
+# On a terminal, ask for what a first install lacks. A run without a terminal, such as a script or
+# the release smoke, gets no question and stops below with the flag that it lacks.
+ask() {
+	printf '%s' "$1" >&2
+	IFS= read -r answer || die "no answer: give the value as a flag instead"
+}
+if [ -t 0 ] && [ -t 2 ] && [ "$VERIFY" = false ] && [ "$RENDER" = false ]; then
+	[ -n "$VERSION" ] || { ask "Release of these files, without the leading v (for example 1.0.0): " && VERSION=$answer; }
+	[ -n "$HOST" ] || { ask "Host name of this instance (its DNS A record points to this host): " && HOST=$answer; }
+	[ -n "$EMAIL" ] || [ -n "$CERTIFICATES" ] || { ask "E-mail address for the expiry notices of Let's Encrypt: " && EMAIL=$answer; }
+	if [ ! -f "$(dirname "$0")/site.yaml" ]; then
+		if [ -z "$GITHUB_CLIENT_ID" ]; then
+			# GitHub documents no link that fills in the form of an OAuth app, so give the two values.
+			printf '\nSign-in uses a GitHub OAuth app. Register one at https://github.com/settings/applications/new with:\n' >&2
+			printf '  Homepage URL:               https://%s\n' "$HOST" >&2
+			printf '  Authorization callback URL: https://%s/api/login/oauth2/code/github\n' "$HOST" >&2
+			printf 'Then generate a client secret on the page of the app.\n' >&2
+			ask "Client ID of the OAuth app: " && GITHUB_CLIENT_ID=$answer
+		fi
+		if [ -z "${GITHUB_OAUTH_CLIENT_SECRET:-}" ] && [ "$RENDER_SITE" = false ]; then
+			# Echo goes off before the prompt, so that a fast paste after it is never shown, and it comes
+			# back on every way out, Ctrl-C included.
+			echo_state=$(stty -g)
+			trap 'stty "$echo_state"; exit 130' HUP INT TERM
+			stty -echo
+			printf 'Client secret of the OAuth app (the terminal does not show it): ' >&2
+			IFS= read -r GITHUB_OAUTH_CLIENT_SECRET || GITHUB_OAUTH_CLIENT_SECRET=
+			stty "$echo_state"
+			trap - HUP INT TERM
+			printf '\n' >&2
+			export GITHUB_OAUTH_CLIENT_SECRET
+		fi
+		if [ -z "$BOOTSTRAP_ADMINS" ]; then
+			ask "Your GitHub login (you become the first instance admin): "
+			matches "$answer" '[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?' || die "a GitHub login takes letters, digits and '-'"
+			# The numeric ID, because a login that its owner gives up can be claimed by another person.
+			id=$(curl -fsS --max-time 10 "https://api.github.com/users/$answer" 2>/dev/null | jq -r 'select(.type == "User") | .id // empty' 2>/dev/null || true)
+			if matches "$id" '[1-9][0-9]*'; then
+				BOOTSTRAP_ADMINS="github:$id"
+			else
+				warn "could not look up the numeric ID of $answer, so the admin list names the login: edit site.yaml to use the ID"
+				BOOTSTRAP_ADMINS="github:@$answer"
+			fi
+		fi
+	fi
+fi
 
 if [ "$VERIFY" = false ]; then
 	LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
@@ -160,8 +215,43 @@ for file in k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
 # instead of parsing YAML in shell or replacing that certificate with an implicit apex-only one.
-if [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ -f "$HERE/site.yaml" ] && [ "$STANDARD_CERTIFICATES" = false ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
+if [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ "$RENDER_SITE" = false ] && [ -f "$HERE/site.yaml" ] && [ "$STANDARD_CERTIFICATES" = false ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
 	die "site.yaml exists: choose --standard-certificates, --workspace-subdomains --dns01-issuer NAME, or --certificates FILE"
+fi
+# An instance without a login provider starts, but nobody can sign in to it. So a first install needs
+# the GitHub OAuth app, and a kept site.yaml must name a GitHub login provider or an enabled GitLab one.
+# Slack and Outline only link accounts. Helm reads site.yaml for the install, so Helm also reads it
+# here, through a chart whose only template names the provider: any YAML form that Helm accepts works.
+login_provider() {
+	command -v helm >/dev/null 2>&1 || die "helm is not installed"
+	probe=$(mktemp -d)
+	mkdir "$probe/templates"
+	printf 'apiVersion: v2\nname: login-provider\nversion: 0.0.0\n' >"$probe/Chart.yaml"
+	cat >"$probe/templates/provider.yaml" <<'TEMPLATE'
+{{- $config := .Values.config | default dict }}
+{{- $github := $config.github | default dict }}
+{{- $gitlab := $config.gitlab | default dict }}
+loginProvider: {{ if or $github.oauthClientId (and $gitlab.enabled $gitlab.oauthClientId) }}found{{ else }}none{{ end }}
+TEMPLATE
+	# site.yaml holds no secret, so the parse error of Helm can be shown as it is.
+	if ! provider=$(helm template login-provider "$probe" -f "$1" 2>"$probe/error"); then
+		problem=$(head -n 1 "$probe/error")
+		rm -rf "$probe"
+		die "Helm cannot read $1: $problem"
+	fi
+	rm -rf "$probe"
+	case $provider in *"loginProvider: found"*) return 0 ;; *) return 1 ;; esac
+}
+if [ "$VERIFY" = false ] && [ "$RENDER" = false ]; then
+	if [ -f "$HERE/site.yaml" ] && [ "$RENDER_SITE" = false ]; then
+		login_provider "$HERE/site.yaml" ||
+			die "site.yaml names no login provider, so nobody could sign in: set config.github.oauthClientId, or enable GitLab with config.gitlab.oauthClientId, in site.yaml (admin docs, First steps § 1), and run this again"
+	elif [ ! -f "$HERE/site.yaml" ]; then
+		[ -n "$GITHUB_CLIENT_ID" ] ||
+			die "a first install needs --github-client-id: without a login provider, nobody can sign in"
+		[ "$RENDER_SITE" = true ] || [ -n "${GITHUB_OAUTH_CLIENT_SECRET:-}" ] ||
+			die "a first install needs the client secret of the GitHub OAuth app in GITHUB_OAUTH_CLIENT_SECRET"
+	fi
 fi
 # The certificates file: the operator's host name and address, which passed the checks above and so
 # hold no sed metacharacter, and the staging service of Let's Encrypt on request.
@@ -184,6 +274,25 @@ render_certificates() {
 }
 if [ "$RENDER" = true ]; then
 	render_certificates
+	exit 0
+fi
+# The site values: $1 and $2 are the address and port of the Kubernetes API, which only a running
+# cluster knows. --render-site prints the file without them.
+render_site() {
+	printf 'host: %s\n' "$HOST"
+	printf 'workspaceSubdomains:\n  enabled: %s\n' "$WORKSPACE_SUBDOMAINS"
+	printf 'deploymentEnvironment: production\n'
+	if [ -n "$1" ]; then
+		printf 'networkPolicy:\n  kubernetesApi:\n    cidr: %s\n    port: %s\n' "$1" "$2"
+	else
+		printf '# networkPolicy.kubernetesApi: the installer reads it from the cluster\n'
+	fi
+	printf 'config:\n  gitCheckoutEnabled: true\n'
+	if [ -n "$GITHUB_CLIENT_ID" ]; then printf '  github:\n    oauthClientId: %s\n' "$GITHUB_CLIENT_ID"; fi
+	if [ -n "$BOOTSTRAP_ADMINS" ]; then printf '  auth:\n    bootstrapAdmins: "%s"\n' "$BOOTSTRAP_ADMINS"; fi
+}
+if [ "$RENDER_SITE" = true ]; then
+	render_site "" ""
 	exit 0
 fi
 
@@ -502,6 +611,12 @@ if [ "$WORKSPACE_SUBDOMAINS" = true ]; then
 fi
 kubectl -n "$NAMESPACE" wait --for=create certificate/hephaestus-postgresql-tls --timeout=10m >/dev/null
 kubectl -n "$NAMESPACE" wait --for=condition=Ready certificate/hephaestus-postgresql-tls --timeout=10m >/dev/null
+ready=$(kubectl -n "$GATEWAY_NAMESPACE" get certificate hephaestus-tls --ignore-not-found \
+	-o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+if [ -z "$CERTIFICATES" ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ "$ready" != True ]; then
+	say "Waiting up to 10 minutes for Let's Encrypt, which must reach this host on port 80 from the internet"
+	echo "    Without that path, stop now, and run this again with --certificates and your own certificate."
+fi
 kubectl -n "$GATEWAY_NAMESPACE" wait --for=create certificate/hephaestus-tls --timeout=10m >/dev/null
 kubectl -n "$GATEWAY_NAMESPACE" wait --for=condition=Ready certificate/hephaestus-tls --timeout=10m >/dev/null ||
 	die "cert-manager issued no certificate for $HOST in 10 minutes: kubectl describe challenges --all-namespaces shows why"
@@ -518,15 +633,7 @@ else
 	port=$(kubectl get endpointslices -n default -l kubernetes.io/service-name=kubernetes \
 		-o jsonpath='{.items[0].ports[0].port}')
 	case $address in *:*) cidr="$address/128" ;; *) cidr="$address/32" ;; esac
-	{
-		printf 'host: %s\n' "$HOST"
-		printf 'workspaceSubdomains:\n  enabled: %s\n' "$WORKSPACE_SUBDOMAINS"
-		printf 'deploymentEnvironment: production\n'
-		printf 'networkPolicy:\n  kubernetesApi:\n    cidr: %s\n    port: %s\n' "$cidr" "$port"
-		printf 'config:\n  gitCheckoutEnabled: true\n'
-		if [ -n "$GITHUB_CLIENT_ID" ]; then printf '  github:\n    oauthClientId: %s\n' "$GITHUB_CLIENT_ID"; fi
-		if [ -n "$BOOTSTRAP_ADMINS" ]; then printf '  auth:\n    bootstrapAdmins: "%s"\n' "$BOOTSTRAP_ADMINS"; fi
-	} >"$HERE/site.yaml"
+	render_site "$cidr" "$port" >"$HERE/site.yaml"
 fi
 
 say "Verifying the release chart"

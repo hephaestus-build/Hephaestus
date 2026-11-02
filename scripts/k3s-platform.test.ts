@@ -582,3 +582,236 @@ await test("the installer ends with the backup command for exactly the keys a re
 		],
 	);
 });
+
+/** A copy of the platform folder with stub commands, so that no test reaches the network or sudo. */
+function platformWith(stubs: Record<string, string>): { directory: string; done: () => void } {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-prompts-"));
+	cpSync(PLATFORM, directory, { recursive: true });
+	mkdirSync(path.join(directory, "bin"));
+	writeFileSync(path.join(directory, "bin", "sudo"), "#!/bin/sh\nexit 97\n", { mode: 0o755 });
+	for (const [name, body] of Object.entries(stubs)) {
+		writeFileSync(path.join(directory, "bin", name), body, { mode: 0o755 });
+	}
+	return { directory, done: () => rmSync(directory, { recursive: true, force: true }) };
+}
+
+/**
+ * Runs the installer on a pseudo-terminal and types each answer only after its prompt appears, as a
+ * person does. Typed text that arrives before `stty -echo` would be echoed, so the order matters for
+ * the check that the client secret is not shown.
+ */
+const TERMINAL_DRIVER = `
+import json, os, pty, select, sys
+steps = json.loads(sys.argv[1])
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(sys.argv[2], sys.argv[2:])
+out, seen, step = b"", 0, 0
+while True:
+    ready, _, _ = select.select([fd], [], [], 20)
+    if not ready:
+        break
+    try:
+        chunk = os.read(fd, 4096)
+    except OSError:
+        break
+    if not chunk:
+        break
+    out += chunk
+    while step < len(steps) and steps[step][0].encode() in out[seen:]:
+        seen = len(out)
+        os.write(fd, (steps[step][1] + "\\n").encode())
+        step += 1
+_, status = os.waitpid(pid, 0)
+sys.stdout.write(out.decode(errors="replace"))
+sys.exit(os.waitstatus_to_exitcode(status))
+`;
+const hasPty = spawnSync("python3", ["-c", "import pty, select"]).status === 0;
+
+function onTerminal(directory: string, steps: [string, string][], ...args: string[]) {
+	const result = spawnSync(
+		"python3",
+		[
+			"-c",
+			TERMINAL_DRIVER,
+			JSON.stringify(steps),
+			"sh",
+			path.join(directory, "k3s-install.sh"),
+			...args,
+		],
+		{
+			encoding: "utf8",
+			timeout: 60_000,
+			env: {
+				...process.env,
+				PATH: `${path.join(directory, "bin")}${path.delimiter}${process.env.PATH ?? ""}`,
+			},
+		},
+	);
+	return { status: result.status, output: result.stdout };
+}
+
+// --render-site writes no Secret, so it asks for no client secret.
+const FIRST_INSTALL_ANSWERS: [string, string][] = [
+	["Release of these files", "1.0.0"],
+	["Host name of this instance", "heph.example.org"],
+	["E-mail address", "ops@example.org"],
+	["Client ID of the OAuth app", "Iv1.client"],
+	["Your GitHub login", "octo"],
+];
+
+await test("--render-site prints the site values of a scripted install, and asks nothing", () => {
+	const result = installerAt(
+		PLATFORM,
+		"--host",
+		"heph.example.org",
+		"--email",
+		"ops@example.org",
+		"--github-client-id",
+		"Iv1.client",
+		"--bootstrap-admins",
+		"github:1234567",
+		"--render-site",
+	);
+	assert.equal(result.status, 0, result.stderr);
+	const [site] = result.resources;
+	assert.ok(isRecord(site) && isRecord(site.config));
+	assert.equal(site.host, "heph.example.org");
+	assert.deepEqual(site.config.github, { oauthClientId: "Iv1.client" });
+	assert.deepEqual(site.config.auth, { bootstrapAdmins: "github:1234567" });
+	assert.doesNotMatch(result.stderr, /Host name of this instance/u);
+
+	// Without a terminal, a missing value still stops the run with the flag that it lacks.
+	const scripted = installerAt(PLATFORM, "--email", "ops@example.org", "--render-site");
+	assert.notEqual(scripted.status, 0);
+	assert.match(scripted.stderr, /--host takes a lowercase DNS name/u);
+});
+
+await test(
+	"on a terminal, a first install asks for each missing value and stores the admin's numeric ID",
+	{ skip: hasPty ? false : "needs python3 with pty" },
+	() => {
+		const platform = platformWith({
+			curl: '#!/bin/sh\nprintf \'{"id": 4242, "login": "octo", "type": "User"}\'\n',
+		});
+		try {
+			const result = onTerminal(platform.directory, FIRST_INSTALL_ANSWERS, "--render-site");
+			assert.equal(result.status, 0, result.output);
+			assert.match(result.output, /Homepage URL: +https:\/\/heph\.example\.org/u);
+			assert.match(
+				result.output,
+				/Authorization callback URL: https:\/\/heph\.example\.org\/api\/login\/oauth2\/code\/github/u,
+			);
+			assert.match(result.output, /^host: heph\.example\.org/mu);
+			assert.match(result.output, /oauthClientId: Iv1\.client/u);
+			assert.match(result.output, /bootstrapAdmins: "github:4242"/u);
+			assert.doesNotMatch(result.output, /Client secret of the OAuth app/u);
+		} finally {
+			platform.done();
+		}
+	},
+);
+
+await test(
+	"on a terminal, a login that cannot be looked up is kept as the login, with a warning",
+	{ skip: hasPty ? false : "needs python3 with pty" },
+	() => {
+		const platform = platformWith({ curl: "#!/bin/sh\nexit 22\n" });
+		try {
+			const result = onTerminal(platform.directory, FIRST_INSTALL_ANSWERS, "--render-site");
+			assert.equal(result.status, 0, result.output);
+			assert.match(result.output, /bootstrapAdmins: "github:@octo"/u);
+			assert.match(result.output, /could not look up the numeric ID of octo/u);
+		} finally {
+			platform.done();
+		}
+	},
+);
+
+await test("no install writes or keeps a site.yaml without a login provider", () => {
+	const firstInstall = installerAt(
+		PLATFORM,
+		"--host",
+		"heph.example.org",
+		"--email",
+		"ops@example.org",
+		"--render-site",
+	);
+	assert.notEqual(firstInstall.status, 0);
+	assert.match(firstInstall.stderr, /a first install needs --github-client-id/u);
+
+	const platform = platformWith({});
+	try {
+		const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
+		const withoutSecret = installerAt(
+			platform.directory,
+			...args,
+			"--github-client-id",
+			"Iv1.client",
+		);
+		assert.notEqual(withoutSecret.status, 0);
+		assert.match(withoutSecret.stderr, /needs the client secret of the GitHub OAuth app/u);
+
+		const site = path.join(platform.directory, "site.yaml");
+		const kept = (contents: string) => {
+			writeFileSync(site, contents);
+			return installerAt(platform.directory, ...args, "--standard-certificates");
+		};
+		for (const contents of [
+			"host: heph.example.org\nconfig:\n  gitCheckoutEnabled: true\n",
+			// Outline links accounts; it is no sign-in.
+			"host: heph.example.org\nconfig:\n  outline:\n    oauthClientId: outline-client\n",
+			// A GitLab client that is not enabled signs nobody in.
+			"config:\n  gitlab:\n    enabled: false\n    oauthClientId: gitlab-client\n",
+		]) {
+			const refused = kept(contents);
+			assert.notEqual(refused.status, 0);
+			assert.match(refused.stderr, /site\.yaml names no login provider/u);
+		}
+		for (const contents of [
+			"host: heph.example.org\nconfig:\n  github:\n    oauthClientId: Iv1.client\n",
+			'config:\n  gitlab:\n    enabled: true\n    oauthClientId: "gitlab-client"\n',
+			// A comment after a key and Windows line ends, as an editor may leave them.
+			"config:\r\n  github: # the sign-in app\r\n    oauthClientId: Iv1.client\r\n",
+			// Flow style: valid YAML that Helm reads like the block style above.
+			"config: {github: {oauthClientId: Iv1.client}}\n",
+		]) {
+			assert.doesNotMatch(kept(contents).stderr, /names no login provider|cannot read/u);
+		}
+		// A file that Helm cannot read gets the error of Helm, not a wrong claim about the provider.
+		const unreadable = kept("config: [unclosed\n");
+		assert.notEqual(unreadable.status, 0);
+		assert.match(unreadable.stderr, /Helm cannot read .*site\.yaml/u);
+	} finally {
+		platform.done();
+	}
+});
+
+await test(
+	"on a terminal, the client secret prompt does not show what is typed",
+	{ skip: hasPty ? false : "needs python3 with pty" },
+	() => {
+		// The real path, which stops at a later host check: the stub sudo fails, so nothing changes.
+		const platform = platformWith({ curl: '#!/bin/sh\nprintf \'{"id": 4242, "type": "User"}\'\n' });
+		try {
+			const result = onTerminal(platform.directory, [
+				["Release of these files", "1.0.0"],
+				["Host name of this instance", "heph.example.org"],
+				["E-mail address", "ops@example.org"],
+				["Client ID of the OAuth app", "Iv1.client"],
+				["Client secret of the OAuth app", "client-secret-typed-here"],
+				["Your GitHub login", "octo"],
+			]);
+			assert.match(
+				result.output,
+				/Client secret of the OAuth app \(the terminal does not show it\)/u,
+			);
+			assert.ok(
+				!result.output.includes("client-secret-typed-here"),
+				"the terminal did not show the secret",
+			);
+		} finally {
+			platform.done();
+		}
+	},
+);

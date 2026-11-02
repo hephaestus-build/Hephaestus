@@ -1677,6 +1677,9 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 		version,
 		"--host",
 		SMOKE_HOST,
+		// A first install needs a login provider. The smoke never signs in, so any client ID will do.
+		"--github-client-id",
+		"release-smoke",
 		"--certificates",
 		certificatesFile,
 		"--lock",
@@ -1688,7 +1691,11 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 		"--skip-check",
 		"clock",
 	];
-	await run("sh", installer);
+	// No terminal: the installer asks nothing, and every value comes from its flags.
+	await run("sh", installer, {
+		env: { GITHUB_OAUTH_CLIENT_SECRET: "release-smoke-secret" },
+		stdin: "ignore",
+	});
 	process.env.KUBECONFIG = path.join(options.assets, "kubeconfig");
 	const workers = await verify();
 	await reviewsOn();
@@ -1718,7 +1725,10 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 
 	// The same command again: it keeps every key of the Secret, and the release stays ready.
 	const secretBefore = await secretDigest();
-	await run("sh", installer);
+	await run("sh", installer, {
+		env: { GITHUB_OAUTH_CLIENT_SECRET: "release-smoke-secret" },
+		stdin: "ignore",
+	});
 	if ((await secretDigest()) !== secretBefore) {
 		throw new Error("a second run of k3s-install.sh changed the release Secret");
 	}
