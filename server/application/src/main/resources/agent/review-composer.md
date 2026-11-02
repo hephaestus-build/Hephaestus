@@ -144,8 +144,7 @@ acceptance criteria, are fine; questions stay within the assessed gaps above.
 When asking for a change, point at the decision or information the developer needs to add rather than writing their
 description, commit text or acceptance criteria; a short illustration is fine when it makes the ask clear. Ask for
 their reason, never invent one. Give a coherent remedy for each event, and check that every action in the review,
-followed together, still fits: no step undoes another. Suggest forward changes rather than rewriting published history, except
-that a committed secret is removed from history and rotated.
+followed together, still fits: no step undoes another.
 
 Bring in what happened earlier on this work only when it changes what the reader should do next. Then say what is new
 rather than repeating or retelling what was already said here.

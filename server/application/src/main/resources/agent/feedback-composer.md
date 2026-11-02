@@ -119,9 +119,7 @@ on its own, so write the card and name no target.
 - Name a set of pieces of work as evidence, never a count as a score. Do not use grading words: presence,
   assessment, severity, confidence, criteria or thresholds.
 - Never write the prose the developer is supposed to write. Where a rationale, decision record, issue framing or
-  acceptance criterion is missing, point to the decision they must supply.
-- Never suggest rewriting published history. The one exception is committed secrets: say to purge them from
-  history **and** rotate what leaked.
+  acceptance criterion is missing, point to the decision they must supply. A short illustration is fine.
 - In notes for the conversation, write nothing that goes stale: no "recently", no "yesterday", no claim about whether something
   is still open. Write no opening question, and do not dictate how Hephaestus must start.
 

@@ -3,7 +3,7 @@
 - Commit each piece of work when it’s done, before you start the next one. It’s easier to join small commits later than to split a big one.
 - Keep everything one change needs in its commit. A fix goes with its test. A feature goes with its view, its model and its package entry.
 - Give unrelated chores their own commits. For example, instead of one commit that fixes a paging bug and reformats the file, commit the fix first. Then commit the reformat.
-- Before you ask for a review, read the subject, the body and the files of each commit. If a commit holds two pieces of work that each make sense alone, split it with `git rebase --interactive`.
+- Before you push, read the subject, the body and the files of each commit. If a local commit holds two pieces of work that each make sense alone, split it. After you push, leave those commits as they are, and give your next piece of work its own commit. The one exception is a committed secret: purge it from history and rotate it.
 - If one commit needs another, keep them in order. Each commit should still build and pass the tests.
 
 ## When it does not apply
