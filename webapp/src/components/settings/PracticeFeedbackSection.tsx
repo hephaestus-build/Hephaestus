@@ -23,8 +23,8 @@ export function PracticeFeedbackSection({
 					Practice feedback
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					Your workspaces can deliver AI-generated practice feedback on work you author. You can
-					turn it off below.
+					Hephaestus reviews work you author against the practices that your workspace admins chose.
+					A review can post AI-generated feedback on that work. You can turn it off below.
 				</p>
 			</div>
 

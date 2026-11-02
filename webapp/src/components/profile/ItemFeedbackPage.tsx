@@ -41,6 +41,8 @@ function feedbackTitle(item: ItemRef | undefined): string {
 export function ItemFeedbackPage({ feed, responses, profileLink }: ItemFeedbackPageProps) {
 	// Every review here is of the one item the page is for.
 	const item = feed.status === "ready" ? feed.reviews[0]?.review.item : undefined;
+	// Anyone who can see a comment can follow its link, so the reader here may not be the author.
+	const nothingToAnswer = feed.status === "ready" && feed.reviews.length === 0;
 	const name = item && (hasText(item.title) ? item.title : item.label);
 	return (
 		<div className="flex max-w-4xl min-w-0 flex-col gap-6">
@@ -49,7 +51,7 @@ export function ItemFeedbackPage({ feed, responses, profileLink }: ItemFeedbackP
 					icon={<MessageSquareTextIcon />}
 					title={feedbackTitle(item)}
 					// Read-only, the page offers no responses, so it does not describe them.
-					description={responses === undefined ? undefined : RESPONSE_GUIDE}
+					description={responses === undefined || nothingToAnswer ? undefined : RESPONSE_GUIDE}
 					actions={profileLink}
 				/>
 				{item !== undefined && hasText(name) && (
@@ -68,8 +70,8 @@ export function ItemFeedbackPage({ feed, responses, profileLink }: ItemFeedbackP
 				feed={feed}
 				responses={responses}
 				skeletonRows={2}
-				emptyTitle="No observations are available here"
-				emptyDescription="There are no observations you can read here. Observations can be hidden when access to their sources cannot be verified."
+				emptyTitle="You have no feedback on this work"
+				emptyDescription="Feedback on a piece of work goes to its author, so only they can answer it here. If this is your work, its observations can be hidden when access to their sources cannot be verified."
 			/>
 		</div>
 	);

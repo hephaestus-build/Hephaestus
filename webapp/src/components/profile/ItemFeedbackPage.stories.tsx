@@ -61,8 +61,11 @@ export const WithProfileLink: Story = {
 export const NoReadableResults: Story = {
 	args: { feed: { ...readyFeed, reviews: [] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No observations are available here")).toBeVisible();
-		canvas.getByText(/Observations can be hidden/u);
+		await expect(canvas.getByText("You have no feedback on this work")).toBeVisible();
+		canvas.getByText(/only they can answer it here/u);
+		canvas.getByText(/Observations can be hidden|observations can be hidden/u);
+		// Nothing is here to mark or disagree with, so the page does not say how.
+		await expect(canvas.queryByText(/Mark feedback addressed/u)).toBeNull();
 		await expect(canvas.queryByText(/written for somebody else/u)).toBeNull();
 		await expect(canvas.queryByRole("list", { name: "Reviews" })).toBeNull();
 	},
