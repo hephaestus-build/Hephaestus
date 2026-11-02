@@ -25,9 +25,9 @@ runs:
       env:
         INSTALL_SYFT: ${{ inputs.install-syft }}
         # renovate: datasource=github-releases depName=anchore/syft
-        SYFT_VERSION: 1.51.1
+        SYFT_VERSION: 1.55.0
         # renovate: datasource=github-releases depName=aquasecurity/trivy
-        TRIVY_VERSION: 0.74.0
+        TRIVY_VERSION: 0.76.1
       run: |
         set -euo pipefail
         # Image builds scan on the runner of the platform they built, so the tools follow its CPU.

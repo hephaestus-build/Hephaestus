@@ -47,7 +47,7 @@ runs:
     - id: pnpm-setup-1
       if: inputs.install == 'frozen' && steps.pnpm-cache.outputs.cache-hit != 'true'
       continue-on-error: true
-      uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         cache: false
         cache-dependency-path: pnpm-lock.yaml
@@ -59,7 +59,7 @@ runs:
     - id: pnpm-setup-2
       if: steps.pnpm-setup-1.outcome == 'failure'
       continue-on-error: true
-      uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         cache: false
         cache-dependency-path: pnpm-lock.yaml
@@ -69,7 +69,7 @@ runs:
       shell: bash
       run: sleep 10
     - if: steps.pnpm-setup-2.outcome == 'failure'
-      uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         cache: false
         cache-dependency-path: pnpm-lock.yaml
@@ -91,7 +91,7 @@ runs:
         key: pnpm-bin-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm.outputs.version }}
     # Both modes end here: pnpm/setup installs a Node runtime of its own, so the pinned one is
     # selected last to win on PATH. setup-node reads `pnpm store path`, which needs pnpm installed.
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       env:
         SEGMENT_DOWNLOAD_TIMEOUT_MINS: "1"
       with:
