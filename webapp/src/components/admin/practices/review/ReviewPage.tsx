@@ -17,6 +17,8 @@ export interface ReviewPageProps {
 	 * that guessed at the answer would be reassuring on exactly the evidence it does not have.
 	 */
 	readiness: ReviewReadinessState | undefined;
+	/** The way out of the banner, from the route that knows the reader's role. */
+	readinessAction?: ReactNode;
 	/**
 	 * The three tab bodies, as elements. Passing an element does not run it — Base UI mounts only the
 	 * open panel — so the sections a reader has not opened cost nothing, which is the whole reason
@@ -25,13 +27,21 @@ export interface ReviewPageProps {
 	sections: Record<ReviewSectionId, ReactNode>;
 }
 
-export function ReviewPage({ section, onSectionChange, readiness, sections }: ReviewPageProps) {
+export function ReviewPage({
+	section,
+	onSectionChange,
+	readiness,
+	readinessAction,
+	sections,
+}: ReviewPageProps) {
 	const active = REVIEW_SECTIONS.find((candidate) => candidate.id === section);
 
 	return (
 		<PageLayout>
 			<PageHeader icon={<ScanEye />} title="Review settings" description={active?.description} />
-			{readiness && <ReviewReadinessBanner readiness={readiness} />}
+			{readiness && (
+				<ReviewReadinessBanner readiness={readiness}>{readinessAction}</ReviewReadinessBanner>
+			)}
 			<Tabs
 				value={section}
 				onValueChange={(next) => {

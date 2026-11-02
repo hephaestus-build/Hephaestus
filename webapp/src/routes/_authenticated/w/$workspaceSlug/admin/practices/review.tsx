@@ -58,11 +58,13 @@ import {
 	reviewSearchSchema,
 } from "@/components/admin/practices/review/review-sections";
 import { ReviewPage } from "@/components/admin/practices/review/ReviewPage";
+import { ReviewReadinessAction } from "@/components/admin/practices/review/ReviewReadinessAction";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { usePracticeFeedbackModeMutations } from "@/hooks/use-practice-feedback-mode-mutations";
 import { usePracticeReviewSettingsMutation } from "@/hooks/use-practice-review-settings";
 import { reviewModelOf, useReviewReadiness } from "@/hooks/use-review-readiness";
 import { useUpdateWorkspaceFeatures } from "@/hooks/use-update-workspace-features";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { ITEM_KIND } from "@/lib/item-kinds";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
@@ -107,6 +109,7 @@ function ReviewRoute() {
 	const setSearch = useSearchState();
 
 	const readiness = useReviewReadiness(workspaceSlug);
+	const { role } = useWorkspaceAccess();
 
 	return (
 		<ReviewPage
@@ -120,6 +123,16 @@ function ReviewRoute() {
 				});
 			}}
 			readiness={readiness}
+			readinessAction={
+				readiness && (
+					<ReviewReadinessAction
+						readiness={readiness}
+						workspaceSlug={workspaceSlug}
+						isOwner={role === "OWNER"}
+						onReviewSettings
+					/>
+				)
+			}
 			sections={{
 				"feedback-mode": (
 					<FeedbackModeSection

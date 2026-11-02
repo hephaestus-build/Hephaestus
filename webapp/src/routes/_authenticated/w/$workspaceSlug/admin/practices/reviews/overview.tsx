@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { listPracticesOptions } from "@/api/@tanstack/react-query.gen";
 import { PracticeReviewOverviewPage } from "@/components/admin/practice-reviews/PracticeReviewOverviewPage";
@@ -14,8 +14,8 @@ import { clearedScope, readScope } from "@/components/admin/practice-reviews/rev
 import { overviewSearchSchema } from "@/components/admin/practice-reviews/review-search";
 import { ReviewScopeFilters } from "@/components/admin/practice-reviews/ReviewScopeFilters";
 import { reviewReadinessTone } from "@/components/admin/practices/review/review-readiness";
+import { ReviewReadinessAction } from "@/components/admin/practices/review/ReviewReadinessAction";
 import { ReviewReadinessBanner } from "@/components/admin/practices/review/ReviewReadinessBanner";
-import { InlineLink } from "@/components/common/InlineLink";
 import { useNow } from "@/components/common/use-now";
 import {
 	useDeliveryBreakdown,
@@ -28,6 +28,7 @@ import {
 } from "@/hooks/use-practice-review-overview";
 import { useReviewReadiness } from "@/hooks/use-review-readiness";
 import { useReviewScopeSources } from "@/hooks/use-review-scope-sources";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { useSearchState } from "@/lib/search-params";
 
 export const Route = createFileRoute(
@@ -72,6 +73,7 @@ function PracticeReviewOverviewRoute() {
 	const queue = usePracticeReviewQueue(workspaceSlug, overview);
 	useSettleWhenReviewsFinish(workspaceSlug, overview);
 	const readiness = useReviewReadiness(workspaceSlug);
+	const { role } = useWorkspaceAccess();
 	const practices = useQuery(listPracticesOptions({ path: { workspaceSlug } })).data;
 	// Stated only while reviews are not known to run: a working workspace is not told so on every visit.
 	const stopped =
@@ -141,13 +143,11 @@ function PracticeReviewOverviewRoute() {
 				banner={
 					stopped && (
 						<ReviewReadinessBanner readiness={readiness}>
-							<InlineLink
-								render={
-									<Link to="/w/$workspaceSlug/admin/practices/review" params={{ workspaceSlug }} />
-								}
-							>
-								Open Review settings
-							</InlineLink>
+							<ReviewReadinessAction
+								readiness={readiness}
+								workspaceSlug={workspaceSlug}
+								isOwner={role === "OWNER"}
+							/>
 						</ReviewReadinessBanner>
 					)
 				}
