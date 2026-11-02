@@ -311,7 +311,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 d.name(),
                 d.reviewOn(),
                 new AppliesWhen(
-                        List.of(new AppliesWhenClause(List.of("**/*.swift"), null, null)),
+                        List.of(new AppliesWhenClause(List.of("**/*.swift"), null, null, null)),
                         "The change touches no Swift file."),
                 d.about(),
                 new PracticeReads(

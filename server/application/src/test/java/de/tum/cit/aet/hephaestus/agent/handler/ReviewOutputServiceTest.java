@@ -374,7 +374,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 d.name(),
                 d.reviewOn(),
                 new AppliesWhen(
-                        List.of(new AppliesWhenClause(null, null, "scm.inline-review-comments")),
+                        List.of(new AppliesWhenClause(null, null, "scm.inline-review-comments", null)),
                         "No inline review comments were captured."),
                 d.about(),
                 new PracticeReads(

@@ -38,6 +38,11 @@ const CONDITIONS = {
 		values: "Source",
 		description: "Choose the source to check.",
 	},
+	MERGED: {
+		label: "The work has merged",
+		values: "",
+		description: "",
+	},
 } satisfies Record<ApplicabilityClause, { label: string; values: string; description: string }>;
 
 function clauseOf(kind: ApplicabilityClause, text = ""): AppliesWhenClause {
@@ -50,6 +55,9 @@ function clauseOf(kind: ApplicabilityClause, text = ""): AppliesWhenClause {
 		}
 		case "HAS_ITEMS": {
 			return { hasItems: text };
+		}
+		case "MERGED": {
+			return { merged: true };
 		}
 	}
 }
@@ -131,55 +139,57 @@ export function PracticeAppliesWhenEditor({
 								</SelectContent>
 							</Select>
 						</Field>
-						<Field data-invalid={hasText(error) || undefined}>
-							<FieldLabel htmlFor={`${controlId}-values`}>
-								{presentation.values} {index + 1}
-							</FieldLabel>
-							<FieldDescription id={`${controlId}-help`}>
-								{presentation.description}
-							</FieldDescription>
-							{kind === "HAS_ITEMS" ? (
-								<Select
-									value={hasText(text) ? text : null}
-									disabled={disabled}
-									items={sources.map((source) => ({ value: source.source, label: source.label }))}
-									onValueChange={(next) => {
-										if (next !== null) {
-											replace(index, { hasItems: next });
-										}
-									}}
-								>
-									<SelectTrigger
+						{kind === "MERGED" ? null : (
+							<Field data-invalid={hasText(error) || undefined}>
+								<FieldLabel htmlFor={`${controlId}-values`}>
+									{presentation.values} {index + 1}
+								</FieldLabel>
+								<FieldDescription id={`${controlId}-help`}>
+									{presentation.description}
+								</FieldDescription>
+								{kind === "HAS_ITEMS" ? (
+									<Select
+										value={hasText(text) ? text : null}
+										disabled={disabled}
+										items={sources.map((source) => ({ value: source.source, label: source.label }))}
+										onValueChange={(next) => {
+											if (next !== null) {
+												replace(index, { hasItems: next });
+											}
+										}}
+									>
+										<SelectTrigger
+											id={`${controlId}-values`}
+											className="w-full"
+											aria-describedby={`${controlId}-help`}
+											aria-invalid={hasText(error)}
+										>
+											<SelectValue placeholder="Choose a source" />
+										</SelectTrigger>
+										<SelectContent aria-label={`Source ${index + 1}`}>
+											<SelectGroup>
+												{sources.map((source) => (
+													<SelectItem key={source.source} value={source.source}>
+														{source.label}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+								) : (
+									<Textarea
 										id={`${controlId}-values`}
-										className="w-full"
+										value={text}
+										disabled={disabled}
 										aria-describedby={`${controlId}-help`}
 										aria-invalid={hasText(error)}
-									>
-										<SelectValue placeholder="Choose a source" />
-									</SelectTrigger>
-									<SelectContent aria-label={`Source ${index + 1}`}>
-										<SelectGroup>
-											{sources.map((source) => (
-												<SelectItem key={source.source} value={source.source}>
-													{source.label}
-												</SelectItem>
-											))}
-										</SelectGroup>
-									</SelectContent>
-								</Select>
-							) : (
-								<Textarea
-									id={`${controlId}-values`}
-									value={text}
-									disabled={disabled}
-									aria-describedby={`${controlId}-help`}
-									aria-invalid={hasText(error)}
-									rows={3}
-									spellCheck={false}
-									onChange={(event) => replace(index, clauseOf(kind, event.target.value))}
-								/>
-							)}
-						</Field>
+										rows={3}
+										spellCheck={false}
+										onChange={(event) => replace(index, clauseOf(kind, event.target.value))}
+									/>
+								)}
+							</Field>
+						)}
 						<Button
 							type="button"
 							variant="outline"

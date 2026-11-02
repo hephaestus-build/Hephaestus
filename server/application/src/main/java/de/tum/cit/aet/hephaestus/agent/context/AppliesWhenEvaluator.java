@@ -40,7 +40,8 @@ public class AppliesWhenEvaluator {
     private List<AppliesWhenCheck.Clause> clauses(
             ItemKind kind, AppliesWhen conditions, List<SourceCapture> captures, Map<String, byte[]> files) {
         var declared = conditions.anyOf().stream()
-                .map(c -> new CapturedApplicability.Condition(c.changedPath(), c.diffContains(), c.hasItems()))
+                .map(c -> new CapturedApplicability.Condition(
+                        c.changedPath(), c.diffContains(), c.hasItems(), Boolean.TRUE.equals(c.merged())))
                 .toList();
         var decisions = evaluators.stream()
                 .map(e -> e.evaluate(kind, declared, captures, files))

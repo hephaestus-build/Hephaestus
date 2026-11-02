@@ -439,6 +439,14 @@
 							"events": ["scm.pull_request.merged"],
 							"state": {}
 						},
+						"appliesWhen": {
+							"anyOf": [
+								{
+									"merged": true
+								}
+							],
+							"otherwise": "the record of this pull request shows it open, not merged"
+						},
 						"about": "AUTHOR",
 						"reads": {
 							"contract": "3.0.0",
@@ -932,6 +940,40 @@
 								"scm.pull_request.synchronized"
 							],
 							"state": {}
+						},
+						"appliesWhen": {
+							"anyOf": [
+								{
+									"changedPath": [
+										"**/*.snap",
+										"**/*E2E*",
+										"**/*E2E*/**",
+										"**/*Spec*",
+										"**/*Spec*/**",
+										"**/*TEST*",
+										"**/*TEST*/**",
+										"**/*Test*",
+										"**/*Test*/**",
+										"**/*e2e*",
+										"**/*e2e*/**",
+										"**/*spec*",
+										"**/*spec*/**",
+										"**/*test*",
+										"**/*test*/**",
+										"**/__snapshots__/**",
+										"**/fixtures/**"
+									]
+								},
+								{
+									"diffContains": [
+										"#[cfg(test)]",
+										"#[test]",
+										"#[tokio::test]",
+										"doctest"
+									]
+								}
+							],
+							"otherwise": "the change touches no path or line that marks a test"
 						},
 						"about": "AUTHOR",
 						"reads": {
@@ -1680,6 +1722,76 @@
 							],
 							"state": {}
 						},
+						"appliesWhen": {
+							"anyOf": [
+								{
+									"changedPath": [
+										"**/*.bzl",
+										"**/*.cabal",
+										"**/*.cfg",
+										"**/*.cmake",
+										"**/*.conf",
+										"**/*.csproj",
+										"**/*.dockerfile",
+										"**/*.fsproj",
+										"**/*.gemspec",
+										"**/*.gradle",
+										"**/*.hcl",
+										"**/*.ini",
+										"**/*.json",
+										"**/*.kts",
+										"**/*.lock",
+										"**/*.mk",
+										"**/*.nix",
+										"**/*.nuspec",
+										"**/*.pbxproj",
+										"**/*.properties",
+										"**/*.props",
+										"**/*.sbt",
+										"**/*.sln",
+										"**/*.targets",
+										"**/*.tf",
+										"**/*.toml",
+										"**/*.vbproj",
+										"**/*.xcconfig",
+										"**/*.xml",
+										"**/*.yaml",
+										"**/*.yml",
+										"**/*constraints*",
+										"**/*lock*",
+										"**/*requirements*",
+										"**/.nvmrc",
+										"**/.python-version",
+										"**/.ruby-version",
+										"**/.sdkmanrc",
+										"**/.tool-versions",
+										"**/BUILD*",
+										"**/CMakeLists.txt",
+										"**/Cartfile*",
+										"**/Dockerfile*",
+										"**/Gemfile*",
+										"**/Makefile",
+										"**/Package.resolved",
+										"**/Package.swift",
+										"**/Pipfile*",
+										"**/Podfile*",
+										"**/WORKSPACE*",
+										"**/conanfile*",
+										"**/go.mod",
+										"**/go.sum",
+										"**/go.work",
+										"**/mix.exs",
+										"**/rebar.config",
+										"**/setup.cfg",
+										"**/setup.py",
+										"**/third_party/**",
+										"**/vcpkg*",
+										"**/vendor/**"
+									]
+								}
+							],
+							"otherwise": "the change touches no file that can declare a dependency"
+						},
 						"about": "AUTHOR",
 						"reads": {
 							"contract": "3.0.0",
@@ -2324,6 +2436,14 @@
 							"events": ["scm.pull_request.merged"],
 							"state": {}
 						},
+						"appliesWhen": {
+							"anyOf": [
+								{
+									"merged": true
+								}
+							],
+							"otherwise": "the record of this pull request shows it open, not merged"
+						},
 						"about": "AUTHOR",
 						"reads": {
 							"contract": "3.0.0",
@@ -2382,6 +2502,14 @@
 						"reviewOn": {
 							"events": ["scm.pull_request.merged"],
 							"state": {}
+						},
+						"appliesWhen": {
+							"anyOf": [
+								{
+									"merged": true
+								}
+							],
+							"otherwise": "the record of this pull request shows it open, not merged"
 						},
 						"about": "AUTHOR",
 						"reads": {

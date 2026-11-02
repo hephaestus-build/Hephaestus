@@ -12482,6 +12482,8 @@ components:
             type: string
         hasItems:
           type: string
+        merged:
+          type: boolean
     AssignRoleRequest:
       type: object
       properties:
@@ -19007,6 +19009,7 @@ components:
             - CHANGED_PATH
             - DIFF_CONTAINS
             - HAS_ITEMS
+            - MERGED
         applicabilitySources:
           type: array
           items:

@@ -9,6 +9,9 @@ export function clauseKind(clause: AppliesWhenClause): ApplicabilityClause {
 	if (clause.changedPath !== undefined) {
 		return "CHANGED_PATH";
 	}
+	if (clause.merged === true) {
+		return "MERGED";
+	}
 	return clause.diffContains === undefined ? "HAS_ITEMS" : "DIFF_CONTAINS";
 }
 
@@ -42,7 +45,9 @@ export function parseAppliesWhen(
 				clausesError: "This kind of work cannot check one of these conditions.",
 			};
 		}
-		if (clause.changedPath !== undefined || clause.diffContains !== undefined) {
+		if (clause.merged === true) {
+			anyOf.push({ merged: true });
+		} else if (clause.changedPath !== undefined || clause.diffContains !== undefined) {
 			const values = clause.changedPath ?? clause.diffContains ?? [];
 			if (values.length === 0 || values.some((value) => !hasText(value.trim()))) {
 				return { value: null, clausesError: "Enter a value for each condition." };

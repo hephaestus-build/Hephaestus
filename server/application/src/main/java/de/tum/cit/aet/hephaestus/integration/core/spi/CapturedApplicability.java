@@ -18,10 +18,14 @@ public interface CapturedApplicability {
     record Condition(
             @Nullable List<String> changedPath,
             @Nullable List<String> diffContains,
-            @Nullable String hasItems) {
+            @Nullable String hasItems,
+            boolean merged) {
         public Condition {
-            if ((changedPath == null ? 0 : 1) + (diffContains == null ? 0 : 1) + (hasItems == null ? 0 : 1) != 1)
-                throw new IllegalArgumentException("A condition must have exactly one aspect");
+            if ((changedPath == null ? 0 : 1)
+                            + (diffContains == null ? 0 : 1)
+                            + (hasItems == null ? 0 : 1)
+                            + (merged ? 1 : 0)
+                    != 1) throw new IllegalArgumentException("A condition must have exactly one aspect");
             if (changedPath != null) changedPath = List.copyOf(changedPath);
             if (diffContains != null) diffContains = List.copyOf(diffContains);
         }

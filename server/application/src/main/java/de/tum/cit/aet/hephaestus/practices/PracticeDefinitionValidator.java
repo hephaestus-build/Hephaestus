@@ -68,7 +68,9 @@ public class PracticeDefinitionValidator {
             for (var clause : definition.appliesWhen().anyOf()) {
                 String aspect = clause.changedPath() != null
                         ? "CHANGED_PATH"
-                        : clause.diffContains() != null ? "DIFF_CONTAINS" : "HAS_ITEMS";
+                        : clause.diffContains() != null
+                                ? "DIFF_CONTAINS"
+                                : clause.hasItems() != null ? "HAS_ITEMS" : "MERGED";
                 if (!capabilities.appliesWhenSupportedAspects().contains(aspect)) {
                     throw new IllegalArgumentException("This item kind cannot check the selected condition.");
                 }

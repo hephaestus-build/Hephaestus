@@ -73,6 +73,12 @@ Capture requests use each collection's owning source from `EvidenceCollection`.
 For example, `scm.inline-review-comments` reads the complete `scm.pull-request.comments` capture.
 SCM changed-path conditions use Spring Ant path patterns with `/` as the separator.
 
+A merged condition reads the pull request's work record.
+Only a record that says open and not merged proves no merge.
+A closed record, or a record with a merge time, does not prove it, because a webhook can store a merged pull request that way.
+Thus, a request on open work records Does not apply for a practice that only a merge can concern, and no session starts for it.
+The record comes from the mirror, so a merge that the mirror has not synced still reads as open.
+
 If every alternative is proven false, admission records Does not apply with the authored `otherwise` reason.
 Only complete captured sources can prove absence.
 An undecidable alternative keeps the practice eligible.

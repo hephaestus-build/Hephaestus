@@ -23,7 +23,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 class AppliesWhenEvaluatorTest extends BaseUnitTest {
     private final AppliesWhen conditions =
-            new AppliesWhen(List.of(new AppliesWhenClause(List.of("**/*.java"), null, null)), "No Java files.");
+            new AppliesWhen(List.of(new AppliesWhenClause(List.of("**/*.java"), null, null, null)), "No Java files.");
     private final JobFolderIndex manifest = new JobFolderIndex(
             new SourceContractVersion("3.0.0"),
             "0".repeat(64),

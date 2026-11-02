@@ -56,6 +56,19 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
 
     private static final String COMMENT_GATED = "engaging-with-inline-review-comments";
 
+    private static final Set<String> MERGE_GATED = Set.of(
+            "merged-past-unresolved-review-threads",
+            "merge-confirms-the-linked-issue-outcome",
+            "defers-review-asks-into-tracked-work");
+
+    private static final String TEST_GATED = "keeps-the-test-suite-honest";
+
+    private static final String DEPENDENCY_GATED = "changes-dependencies-deliberately";
+
+    private static final SourceKind CORE = new SourceKind("scm.pull-request.core");
+    private static final String METADATA_PATH = "context/metadata.json";
+    private static final String OPEN_RECORD = "{\"is_merged\":false,\"state\":\"OPEN\"}";
+
     /** A collection the comment gate reads: its owning source, its file, and the file with and without a comment. */
     private record CommentCollection(SourceKind owner, String path, String empty, String withComment) {}
 
@@ -156,7 +169,7 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
                     "the change touches no test file and holds no test marker",
                     List.of(
                             changedPath(List.of("**/*Test*")),
-                            new AppliesWhenClause(null, null, "scm.review-threads")));
+                            new AppliesWhenClause(null, null, "scm.review-threads", null)));
 
             AppliesWhenCheck check = evaluate(
                     subject,
@@ -324,7 +337,7 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
                 EvidenceSnapshotFixtures.citation(comments),
                 List.of(new CapturedSource("context/comments.json", "application/json", sha(), 1)));
         var subject = applies(
-                "No inline comments.", List.of(new AppliesWhenClause(null, null, "scm.inline-review-comments")));
+                "No inline comments.", List.of(new AppliesWhenClause(null, null, "scm.inline-review-comments", null)));
         var check = evaluate(
                 subject,
                 captures(capture),
@@ -364,7 +377,11 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
         void shouldCarryFixturesForEveryBundledGate() {
             assertThat(BUNDLED_GATES.keySet())
                     .as("a bundled Applies when gate without fixtures here")
-                    .containsExactlyInAnyOrderElementsOf(Stream.concat(SWIFT_GATED.stream(), Stream.of(COMMENT_GATED))
+                    .containsExactlyInAnyOrderElementsOf(Stream.of(
+                                    SWIFT_GATED.stream(),
+                                    MERGE_GATED.stream(),
+                                    Stream.of(COMMENT_GATED, TEST_GATED, DEPENDENCY_GATED))
+                            .flatMap(slugs -> slugs)
                             .toList());
             assertThat(BUNDLED_GATES.values())
                     .extracting(CatalogPracticeDocument::kind)
@@ -473,6 +490,157 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
             }
         }
 
+        @Test
+        void shouldAskEachMergePracticeOnlyWhenTheRecordSaysItMerged() {
+            for (String slug : MERGE_GATED) {
+                var merged = evaluate(
+                        gate(slug),
+                        mergeCapture(SourceCompleteness.COMPLETE),
+                        metadata("{\"is_merged\":true,\"state\":\"MERGED\"}"),
+                        null);
+                assertThat(merged.absent()).as("%s on merged work", slug).isFalse();
+                var open = evaluate(gate(slug), mergeCapture(SourceCompleteness.COMPLETE), metadata(OPEN_RECORD), null);
+                assertThat(open.absent()).as("%s on open work", slug).isTrue();
+                assertThat(open.otherwise()).isEqualTo("the record of this pull request shows it open, not merged");
+                assertThat(open.clauses())
+                        .extracting(AppliesWhenCheck.Clause::readFrom)
+                        .containsExactly(CORE);
+            }
+        }
+
+        @Test
+        void shouldKeepEachMergePracticeEligibleWhenTheRecordCannotSay() {
+            for (String slug : MERGE_GATED) {
+                assertUndecided(
+                        evaluate(gate(slug), mergeCapture(SourceCompleteness.PARTIAL), metadata(OPEN_RECORD), null),
+                        slug + " with a partial record");
+                assertUndecided(
+                        evaluate(gate(slug), mergeCapture(SourceCompleteness.COMPLETE), Map.of(), null),
+                        slug + " with no record");
+                assertUndecided(
+                        evaluate(
+                                gate(slug),
+                                mergeCapture(SourceCompleteness.COMPLETE),
+                                Map.of(METADATA_PATH, "{not json".getBytes(StandardCharsets.UTF_8)),
+                                null),
+                        slug + " with an unreadable record");
+                assertUndecided(
+                        evaluate(
+                                gate(slug),
+                                mergeCapture(SourceCompleteness.COMPLETE),
+                                Map.of(METADATA_PATH, "{}".getBytes(StandardCharsets.UTF_8)),
+                                null),
+                        slug + " with a record that omits the merge");
+            }
+        }
+
+        @Test
+        void shouldAskEachMergePracticeWhenARecordHoldsAMergeTimeButNoMergeFlag() {
+            var record = "{\"is_merged\":false,\"state\":\"CLOSED\",\"merged_at\":\"2026-11-02T10:00:00Z\"}";
+            for (String slug : MERGE_GATED) {
+                var check = evaluate(gate(slug), mergeCapture(SourceCompleteness.COMPLETE), metadata(record), null);
+                assertThat(check.absent()).as(slug).isFalse();
+                assertThat(check.clauses())
+                        .extracting(AppliesWhenCheck.Clause::result)
+                        .containsExactly(AppliesWhenCheck.Result.FOUND);
+            }
+        }
+
+        @Test
+        void shouldNotProveNoMergeFromARecordThatIsNotOpen() {
+            for (String record : List.of(
+                    "{\"is_merged\":false,\"state\":\"CLOSED\"}", "{\"is_merged\":false}", "{\"state\":\"OPEN\"}")) {
+                for (String slug : MERGE_GATED) {
+                    assertUndecided(
+                            evaluate(gate(slug), mergeCapture(SourceCompleteness.COMPLETE), metadata(record), null),
+                            slug + " with " + record);
+                }
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+            "src/test/java/AppTest.java",
+            "src/AppTest.java",
+            "tests/helpers.py",
+            "app/models/user_spec.rb",
+            "web/login.spec.ts",
+            "pkg/parser_test.go",
+            "ThingTests/ThingTests.swift",
+            "e2e/login.ts",
+            "src/__snapshots__/view.snap",
+        })
+        void shouldAskTheTestPracticeWhenAPathCouldHoldATest(String path) {
+            var check = evaluate(
+                    gate(TEST_GATED),
+                    captures(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    change(Set.of(path), "+a line\n"));
+            assertThat(check.absent()).as(path).isFalse();
+        }
+
+        @Test
+        void shouldAskTheTestPracticeWhenTheDiffHoldsATestInSourceCode() {
+            var check = evaluate(
+                    gate(TEST_GATED),
+                    captures(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    change(Set.of("src/lib.rs"), "-#[cfg(test)]\n-mod tests {}\n"));
+            assertThat(check.absent()).isFalse();
+        }
+
+        @Test
+        void shouldRecordThatNoTestLooksTouchedWhenPathsAndLinesHoldNone() {
+            var check = evaluate(
+                    gate(TEST_GATED),
+                    captures(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    change(Set.of("src/App.java", "docs/readme.md"), "+int answer = 42;\n"));
+            assertThat(check.absent()).isTrue();
+            assertThat(check.otherwise()).isEqualTo("the change touches no path or line that marks a test");
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+            "package.json",
+            "web/pnpm-lock.yaml",
+            "server/build.gradle.kts",
+            "pom.xml",
+            "go.mod",
+            "Cargo.toml",
+            "Cargo.lock",
+            "requirements-dev.txt",
+            "ios/Podfile",
+            "Package.resolved",
+            "App.xcodeproj/project.pbxproj",
+            "Lib/Lib.csproj",
+            ".github/workflows/ci.yml",
+            "docker/Dockerfile.worker",
+            "vendor/acme/lib.c",
+        })
+        void shouldAskTheDependencyPracticeWhenAPathCanDeclareADependency(String path) {
+            var check = evaluate(
+                    gate(DEPENDENCY_GATED),
+                    captures(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    change(Set.of(path), "+a line\n"));
+            assertThat(check.absent()).as(path).isFalse();
+        }
+
+        @Test
+        void shouldRecordNoDependencyFileWhenOnlySourceChanged() {
+            var check = evaluate(
+                    gate(DEPENDENCY_GATED),
+                    captures(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
+                    change(Set.of("App/ContentView.swift", "README.md"), "+import SwiftData\n"));
+            assertThat(check.absent()).isTrue();
+            assertThat(check.otherwise()).isEqualTo("the change touches no file that can declare a dependency");
+        }
+
+        private static List<SourceCapture> mergeCapture(SourceCompleteness completeness) {
+            return List.of(available(CORE, METADATA_PATH, completeness));
+        }
+
+        private static Map<String, byte[]> metadata(String record) {
+            return Map.of(METADATA_PATH, record.getBytes(StandardCharsets.UTF_8));
+        }
+
         private static AppliesWhen gate(String slug) {
             var practice = Objects.requireNonNull(BUNDLED_GATES.get(slug), slug);
             return Objects.requireNonNull(practice.definition().appliesWhen(), slug);
@@ -537,7 +705,8 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
 
     private static List<CapturedApplicability.Condition> conditions(AppliesWhen subject) {
         return subject.anyOf().stream()
-                .map(c -> new CapturedApplicability.Condition(c.changedPath(), c.diffContains(), c.hasItems()))
+                .map(c -> new CapturedApplicability.Condition(
+                        c.changedPath(), c.diffContains(), c.hasItems(), Boolean.TRUE.equals(c.merged())))
                 .toList();
     }
 
@@ -560,11 +729,11 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
     }
 
     private static AppliesWhenClause changedPath(List<String> globs) {
-        return new AppliesWhenClause(globs, null, null);
+        return new AppliesWhenClause(globs, null, null, null);
     }
 
     private static AppliesWhenClause diffContains(List<String> text) {
-        return new AppliesWhenClause(null, text, null);
+        return new AppliesWhenClause(null, text, null, null);
     }
 
     private static AppliesWhen dependencySubject() {
@@ -576,7 +745,7 @@ class ScmCapturedApplicabilityTest extends BaseUnitTest {
     private static AppliesWhen threadSubject() {
         return applies(
                 "nobody left a review comment on this pull request",
-                List.of(new AppliesWhenClause(null, null, "scm.review-threads")));
+                List.of(new AppliesWhenClause(null, null, "scm.review-threads", null)));
     }
 
     private static SourceCapture availableDiff(SourceCompleteness completeness, SourceContentState content) {

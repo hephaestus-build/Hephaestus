@@ -187,7 +187,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var definition = new PracticeDefinition(
                 d.name(),
                 d.reviewOn(),
-                new AppliesWhen(List.of(new AppliesWhenClause(List.of("**/*.swift"), null, null)), OTHERWISE),
+                new AppliesWhen(List.of(new AppliesWhenClause(List.of("**/*.swift"), null, null, null)), OTHERWISE),
                 d.about(),
                 new PracticeReads("3.0.0", List.of(new PracticeReadSource(DIFF, ReadNeed.REQUIRED))),
                 d.reviewedBy(),

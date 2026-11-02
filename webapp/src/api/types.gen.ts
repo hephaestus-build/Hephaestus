@@ -336,6 +336,7 @@ export type AppliesWhenClause = {
     changedPath?: Array<string>;
     diffContains?: Array<string>;
     hasItems?: string;
+    merged?: boolean;
 };
 
 export type AssignRoleRequest = {
@@ -3650,7 +3651,7 @@ export type PracticeGuide = {
 
 export type PracticeItemTypeOption = {
     aboutRoles: Array<'AUTHOR' | 'REVIEWER' | 'ASSIGNEE' | 'MERGER'>;
-    applicabilityClauses: Array<'CHANGED_PATH' | 'DIFF_CONTAINS' | 'HAS_ITEMS'>;
+    applicabilityClauses: Array<'CHANGED_PATH' | 'DIFF_CONTAINS' | 'HAS_ITEMS' | 'MERGED'>;
     applicabilitySources: Array<ReadSourceOption>;
     events: Array<ItemEventOption>;
     kind: string;
