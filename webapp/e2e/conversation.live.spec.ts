@@ -9,12 +9,12 @@ import {
 import { completeTransparencyNotice } from "../../scripts/lib/research-consent.ts";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
+import { E2E_SERVER_URL } from "./urls.ts";
 
 // Hephaestus answering for real: a server with the worker role (the `e2e` profile, not `playwright`), Docker for the
 // Hephaestus host, and an OpenAI-compatible model. The model is read and provisioned by the same code as
 // `scripts/e2e-setup.ts`, so the variables and defaults are the same. The key goes to the server in a
 // request body and nowhere else.
-const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
 const SEEDED_MENTOR_MODEL = 2;
 const ANSWER_TIMEOUT = 240_000;
 
@@ -29,7 +29,7 @@ test.skip(
 test.describe.configure({ mode: "serial", timeout: 2 * ANSWER_TIMEOUT });
 
 async function adminApi(): Promise<APIRequestContext> {
-	const signIn = await playwrightRequest.newContext({ baseURL: SERVER_URL });
+	const signIn = await playwrightRequest.newContext({ baseURL: E2E_SERVER_URL });
 	const login = await signIn.post("/auth/dev-login", { data: { username: "e2e", admin: true } });
 	expect(login.ok()).toBe(true);
 	const cookie = login.headers()["set-cookie"] ?? "";
@@ -37,7 +37,7 @@ async function adminApi(): Promise<APIRequestContext> {
 	await signIn.dispose();
 	expect(token, "dev login returns an access token").not.toBe("");
 	return playwrightRequest.newContext({
-		baseURL: SERVER_URL,
+		baseURL: E2E_SERVER_URL,
 		extraHTTPHeaders: { authorization: `Bearer ${token}` },
 	});
 }

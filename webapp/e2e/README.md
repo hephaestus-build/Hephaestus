@@ -28,6 +28,10 @@ Run the suite:
 vp run --filter webapp test:e2e
 ```
 
+Keep the server and the web app on the same host. The default is `localhost` for both.
+The session cookie goes only to the same site, and `localhost` and `127.0.0.1` are different sites.
+The extension suite uses `E2E_SERVER_URL=http://127.0.0.1:…`. Do not reuse it here: the suite stops at start if the hosts differ.
+
 Provider-backed integration checks are opt-in because they require configured live workspaces:
 
 ```bash
