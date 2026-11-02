@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.provider;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,8 +21,9 @@ public class LoginProviderConfiguration {
     public LoginProviderClientRegistrationRepository loginProviderClientRegistrationRepository(
             LoginProviderRepository loginProviderRepository,
             AuthProperties authProperties,
-            OutlineOriginPolicy outlineOriginPolicy) {
+            OutlineOriginPolicy outlineOriginPolicy,
+            ScmServerEndpointPolicy scmEndpoints) {
         return new LoginProviderClientRegistrationRepository(
-                loginProviderRepository, authProperties.oauthCallbackBase(), outlineOriginPolicy);
+                loginProviderRepository, authProperties.oauthCallbackBase(), outlineOriginPolicy, scmEndpoints);
     }
 }

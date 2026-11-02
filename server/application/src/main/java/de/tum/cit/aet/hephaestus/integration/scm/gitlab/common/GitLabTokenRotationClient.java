@@ -42,9 +42,9 @@ public class GitLabTokenRotationClient {
     private final GitLabTokenService tokenService;
     private final WebClient webClient;
 
-    public GitLabTokenRotationClient(GitLabTokenService tokenService, WebClient.Builder webClientBuilder) {
+    public GitLabTokenRotationClient(GitLabTokenService tokenService, GitLabWebClients webClientBuilder) {
         this.tokenService = tokenService;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.builder().build();
     }
 
     private record ScopeCredentials(String serverUrl, String token) {

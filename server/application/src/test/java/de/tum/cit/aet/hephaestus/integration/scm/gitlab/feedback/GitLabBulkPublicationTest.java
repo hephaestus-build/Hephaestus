@@ -41,7 +41,7 @@ class GitLabBulkPublicationTest extends BaseUnitTest {
     void setUp() {
         writer = new GitLabLineNoteWriter(
                 provider.provider(),
-                provider.rest(),
+                () -> provider.rest(),
                 tokens,
                 guard,
                 ScmFeedbackFixtures.resolver(),

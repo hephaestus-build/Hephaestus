@@ -3,10 +3,12 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noConstructors;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
 import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.haveExplicitSecurityIfEndpoint;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.lang.ArchCondition;
@@ -15,6 +17,7 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityManager;
+import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * Spring & DDD Architecture Tests.
@@ -52,6 +56,22 @@ import org.springframework.web.bind.annotation.RestController;
 class AdvancedArchitectureTest extends HephaestusArchitectureTest {
 
     // LAYERED ARCHITECTURE - Strict dependency direction
+
+    /** A GitLab client that takes a plain builder resolves through system DNS, which no egress check sees. */
+    @Test
+    void gitLabClientsConnectThroughTheCheckedBuilder() {
+        ArchRule rule = noConstructors()
+                .that()
+                .areDeclaredInClassesThat()
+                .resideInAPackage(BASE_PACKAGE + ".integration.scm.gitlab..")
+                .should()
+                .haveRawParameterTypes(DescribedPredicate.describe(
+                        "a WebClient.Builder parameter",
+                        (List<JavaClass> types) ->
+                                types.stream().anyMatch(type -> type.isAssignableTo(WebClient.Builder.class))))
+                .because("every GitLab API client takes GitLabWebClients");
+        rule.check(classes);
+    }
 
     @Nested
     class LayeredArchitectureTests {

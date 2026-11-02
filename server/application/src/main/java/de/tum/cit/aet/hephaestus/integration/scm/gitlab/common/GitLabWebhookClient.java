@@ -47,10 +47,10 @@ public class GitLabWebhookClient {
     public GitLabWebhookClient(
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabTokenService tokenService,
-            WebClient.Builder webClientBuilder) {
+            GitLabWebClients webClientBuilder) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.tokenService = tokenService;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.builder().build();
     }
 
     /** Resolved server URL and access token for a given scope. */

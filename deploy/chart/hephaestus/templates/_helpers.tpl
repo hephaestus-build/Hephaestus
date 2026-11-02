@@ -442,11 +442,13 @@ readinessProbe:
   value: {{ join "," .Values.config.llmPrivateHosts | quote }}
 - name: HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP
   value: {{ .Values.config.llmPrivateHostsAllowHttp | quote }}
+- name: HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS
+  value: {{ join "," .Values.config.scmPrivateHosts | quote }}
 {{- end -}}
 
-{{/* Model endpoints on a private network outside the cluster, which externalEgress leaves out. */}}
+{{/* Model endpoints and Git providers on a private network outside the cluster, which externalEgress leaves out. */}}
 {{- define "hephaestus.policy.modelEgress" -}}
-{{- range .Values.networkPolicy.modelEndpoints }}
+{{- range concat .Values.networkPolicy.modelEndpoints .Values.networkPolicy.scmEndpoints }}
 - to:
     - ipBlock:
         cidr: {{ .cidr }}

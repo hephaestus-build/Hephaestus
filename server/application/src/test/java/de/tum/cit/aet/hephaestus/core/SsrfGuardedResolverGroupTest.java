@@ -13,6 +13,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -183,6 +185,124 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
         void shouldBlockMetadataAddressEvenForListedHostName() throws Exception {
             assertThat(resolve("vllm.lab.test", "169.254.169.254").isSuccess()).isFalse();
         }
+    }
+
+    /** Each resolution reads the answer that the connection uses, so a later answer gets its own check. */
+    @Test
+    void shouldCheckEachResolutionWhenDnsRebindsAfterAPublicAnswer() throws Exception {
+        var answers = new ArrayDeque<>(List.of(
+                new InetSocketAddress(InetAddress.getByName("8.8.8.8"), 443),
+                new InetSocketAddress(InetAddress.getByName("169.254.169.254"), 443)));
+        var resolver = new SsrfGuardedResolverGroup.GuardedResolver(EXEC, new SequenceResolver(answers));
+
+        assertThat(resolver.resolve(UNRESOLVED).isSuccess()).isTrue();
+        var rebound = resolver.resolve(UNRESOLVED);
+
+        assertThat(rebound.isSuccess()).isFalse();
+        assertThat(rebound.cause()).isInstanceOf(UnknownHostException.class);
+    }
+
+    @Test
+    void shouldRefuseEveryAnswerWhenOneOfThemIsNotPublic() throws Exception {
+        var resolver = new SsrfGuardedResolverGroup.GuardedResolver(
+                EXEC,
+                new SequenceResolver(new ArrayDeque<>(List.of(
+                        new InetSocketAddress(InetAddress.getByName("8.8.8.8"), 443),
+                        new InetSocketAddress(InetAddress.getByName("::ffff:169.254.169.254"), 443)))));
+
+        assertThat(resolver.resolveAll(UNRESOLVED).isSuccess()).isFalse();
+    }
+
+    @Test
+    void shouldLetAListedNameReachOnlyItsPrivateAnswerAtConnectTime() throws Exception {
+        var list = PrivateHostAllowlist.parse(List.of("host.test"), List.of(InetAddress.getByName("10.2.0.7")));
+        for (var refused : List.of("169.254.169.254", "127.0.0.1", "::1", "100.100.100.200", "10.2.0.7")) {
+            assertThat(SsrfGuardedResolverGroup.blockedReason(
+                            "host.test", new InetSocketAddress(InetAddress.getByName(refused), 443), false, list))
+                    .as(refused)
+                    .isInstanceOf(UnknownHostException.class);
+        }
+        assertThat(SsrfGuardedResolverGroup.blockedReason(
+                        "host.test", new InetSocketAddress(InetAddress.getByName("10.20.30.40"), 443), false, list))
+                .isNull();
+        assertThat(SsrfGuardedResolverGroup.blockedReason(
+                        "other.test", new InetSocketAddress(InetAddress.getByName("10.20.30.40"), 443), false, list))
+                .isInstanceOf(UnknownHostException.class);
+    }
+
+    /** An IP literal arrives resolved. Netty would skip the resolver for it, so the guard claims nothing is. */
+    @Test
+    void shouldCheckAnAddressThatArrivesAlreadyResolved() throws Exception {
+        var literal = new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 443);
+        var resolver = new SsrfGuardedResolverGroup.GuardedResolver(
+                EXEC, new StubResolver(literal), false, PrivateHostAllowlist.NONE);
+
+        assertThat(resolver.isResolved(literal)).isFalse();
+        assertThat(resolver.resolve(literal).isSuccess()).isFalse();
+    }
+
+    @Test
+    void shouldRefuseThisProcessEvenAtAPublicAddress() throws Exception {
+        var own = InetAddress.getByAddress(new byte[] {(byte) 192, 0, 43, 8});
+        var list = PrivateHostAllowlist.parse(List.of(), List.of(own));
+
+        assertThat(SsrfGuardedResolverGroup.blockedReason(
+                        "self.example.com", new InetSocketAddress(own, 443), false, list))
+                .isInstanceOf(UnknownHostException.class);
+    }
+
+    @Test
+    void shouldExemptOnlyTheSimulatorsLoopbackPort() throws Exception {
+        var loopback = InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
+        assertThat(SsrfGuardedResolverGroup.blockedReason(
+                        "127.0.0.1", new InetSocketAddress(loopback, 38171), true, 38171, PrivateHostAllowlist.NONE))
+                .isNull();
+        assertThat(SsrfGuardedResolverGroup.blockedReason(
+                        "attacker.example",
+                        new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 2}), 38171),
+                        true,
+                        38171,
+                        PrivateHostAllowlist.NONE))
+                .isInstanceOf(UnknownHostException.class);
+        assertThat(SsrfGuardedResolverGroup.blockedReason(
+                        "sim.test", new InetSocketAddress(loopback, 5432), true, 38171, PrivateHostAllowlist.NONE))
+                .isInstanceOf(UnknownHostException.class);
+    }
+
+    private record SequenceResolver(Deque<InetSocketAddress> answers) implements AddressResolver<InetSocketAddress> {
+        @Override
+        public boolean isSupported(SocketAddress address) {
+            return true;
+        }
+
+        @Override
+        public boolean isResolved(SocketAddress address) {
+            return false;
+        }
+
+        @Override
+        public Future<InetSocketAddress> resolve(SocketAddress address) {
+            return EXEC.newSucceededFuture(answers.removeFirst());
+        }
+
+        @Override
+        public Future<InetSocketAddress> resolve(SocketAddress address, Promise<InetSocketAddress> promise) {
+            return promise.setSuccess(answers.removeFirst());
+        }
+
+        @Override
+        public Future<List<InetSocketAddress>> resolveAll(SocketAddress address) {
+            return EXEC.newSucceededFuture(List.copyOf(answers));
+        }
+
+        @Override
+        public Future<List<InetSocketAddress>> resolveAll(
+                SocketAddress address, Promise<List<InetSocketAddress>> promise) {
+            return promise.setSuccess(List.copyOf(answers));
+        }
+
+        @Override
+        public void close() {}
     }
 
     /** Delegate resolver that always succeeds with one fixed, already-resolved address. */

@@ -100,8 +100,14 @@ public class GitRepositoryManager {
     private final FabricLayout layout;
     private final Semaphore ingestionPermits;
 
+    private final GuardedGitTransport transports;
+
     public GitRepositoryManager(
-            GitRepositoryProperties properties, GitRepositoryLockManager locks, FabricLayout layout) {
+            GitRepositoryProperties properties,
+            GitRepositoryLockManager locks,
+            FabricLayout layout,
+            GuardedGitTransport transports) {
+        this.transports = transports;
         this.properties = properties;
         this.locks = locks;
         this.layout = layout;
@@ -231,6 +237,7 @@ public class GitRepositoryManager {
                             .setTagOpt(TagOpt.NO_TAGS)
                             .setRemoveDeletedRefs(true)
                             .setCredentialsProvider(credentials(token))
+                            .setTransportConfigCallback(transports.callback(cloneUrl))
                             .setTimeout(timeoutSeconds)
                             .call();
                 }
@@ -274,6 +281,7 @@ public class GitRepositoryManager {
                         .setRefSpecs(new RefSpec("+" + remoteRef + ":" + localRef))
                         .setTagOpt(TagOpt.NO_TAGS)
                         .setCredentialsProvider(credentials(token))
+                        .setTransportConfigCallback(transports.callback(cloneUrl))
                         .setTimeout(timeoutSeconds)
                         .call();
                 ObjectId resolved = git.getRepository().resolve(localRef);
@@ -705,6 +713,8 @@ public class GitRepositoryManager {
                     if (originals.isEmpty()) {
                         git.fetch()
                                 .setRemote(mirror.toUri().toString())
+                                .setTransportConfigCallback(
+                                        transports.callback(mirror.toUri().toString()))
                                 .setRefSpecs(SNAPSHOT_REFSPECS)
                                 .setTagOpt(TagOpt.NO_TAGS)
                                 .call();
@@ -715,6 +725,8 @@ public class GitRepositoryManager {
                         // original commit.
                         git.fetch()
                                 .setRemote(mirror.toUri().toString())
+                                .setTransportConfigCallback(
+                                        transports.callback(mirror.toUri().toString()))
                                 .setRefSpecs((originals.isEmpty() ? List.of(sha) : originals)
                                         .stream()
                                                 .map(id -> new RefSpec(id + ":" + REVIEW_REFS + id))

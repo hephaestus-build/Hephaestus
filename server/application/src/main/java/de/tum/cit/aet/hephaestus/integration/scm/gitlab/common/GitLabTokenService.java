@@ -44,9 +44,9 @@ public class GitLabTokenService {
     private final Cache<Long, ValidatedToken> validationCache;
 
     public GitLabTokenService(
-            InstallationTokenProvider tokenProvider, WebClient.Builder webClientBuilder, GitLabProperties properties) {
+            InstallationTokenProvider tokenProvider, GitLabWebClients webClientBuilder, GitLabProperties properties) {
         this.tokenProvider = tokenProvider;
-        this.validationWebClient = webClientBuilder.build();
+        this.validationWebClient = webClientBuilder.builder().build();
         this.properties = properties;
         this.validationCache = Caffeine.newBuilder()
                 .expireAfterWrite(properties.tokenValidationCacheDuration())

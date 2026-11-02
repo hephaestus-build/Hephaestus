@@ -17,6 +17,8 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
+import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import java.util.List;
@@ -29,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -62,7 +66,9 @@ class LoginProviderServiceTest extends BaseUnitTest {
                 AuthPropertiesFixture.withLoginProviders(providers),
                 authEventLogger,
                 new ObjectMapper(),
-                new OutlineOriginPolicy(Set.of("https://wiki.example.com", "https://wiki.acme.test")));
+                new OutlineOriginPolicy(Set.of("https://wiki.example.com", "https://wiki.acme.test")),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
     }
 
     private LoginProviderService adminService() {

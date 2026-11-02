@@ -274,7 +274,7 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
                 tokens,
                 properties,
                 transactions,
-                WebClient.builder()
+                () -> WebClient.builder()
                         .exchangeFunction(request -> request.url().getPath().matches(".*/notes/[0-9]+")
                                 ? confirmation.exchange(request)
                                 : exchange.exchange(request)),

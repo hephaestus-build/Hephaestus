@@ -48,6 +48,16 @@ public final class ServerUrlValidator {
      * @throws IllegalArgumentException if the URL is unsafe or malformed
      */
     public static void validate(@Nullable String url) {
+        validate(url, PrivateHostAllowlist.NONE);
+    }
+
+    /**
+     * Like {@link #validate(String)}, but an operator's list can admit a private address or a host name under a private
+     * TLD. Loopback, link-local and the known metadata addresses stay refused.
+     *
+     * @throws IllegalArgumentException if the URL is unsafe or malformed
+     */
+    public static void validate(@Nullable String url, PrivateHostAllowlist privateHosts) {
         if (url == null || url.isBlank()) {
             throw new IllegalArgumentException("Server URL must not be blank");
         }
@@ -74,7 +84,8 @@ public final class ServerUrlValidator {
             throw new IllegalArgumentException("Server URL must have a valid hostname");
         }
 
-        String hostLower = host.toLowerCase(Locale.ROOT);
+        // A trailing dot names the same host, so "localhost." must not pass as another name.
+        String hostLower = host.toLowerCase(Locale.ROOT).replaceAll("\\.+$", "");
 
         // Block known dangerous hostnames
         if (BLOCKED_HOSTNAMES.contains(hostLower)) {
@@ -88,7 +99,7 @@ public final class ServerUrlValidator {
 
         // Block private TLDs
         for (String tld : BLOCKED_TLDS) {
-            if (hostLower.endsWith(tld)) {
+            if (hostLower.endsWith(tld) && !privateHosts.listsHostName(hostLower)) {
                 throw new IllegalArgumentException("Server URL must not use a private TLD: " + tld);
             }
         }
@@ -103,14 +114,14 @@ public final class ServerUrlValidator {
         }
 
         // If the hostname looks like an IP address, validate its range
-        validateIpRangeIfApplicable(host);
+        validateIpRangeIfApplicable(host, privateHosts);
     }
 
     /**
      * If the hostname parses as an IP address, reject loopback/link-local/site-local/wildcard ranges.
      * This catches direct IP-based SSRF like {@code https://10.0.0.1} or {@code https://[fe80::1]}.
      */
-    private static void validateIpRangeIfApplicable(String host) {
+    private static void validateIpRangeIfApplicable(String host, PrivateHostAllowlist privateHosts) {
         // Strip IPv6 brackets if present
         String ipCandidate = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
 
@@ -123,19 +134,30 @@ public final class ServerUrlValidator {
             throw new IllegalArgumentException("Server URL must not use a non-canonical numeric host: " + host);
         }
 
+        // A zone id names an interface, so "[::1%25eth0]" is loopback that the parser cannot read.
+        if (ipCandidate.contains("%")) {
+            throw new IllegalArgumentException("Server URL must not use an IPv6 zone id: " + host);
+        }
+        // A name is never resolved here: getByName would look it up in DNS, on every check of a stored URL. The
+        // connect-time resolver checks the addresses a name has when a client connects.
+        if (!host.startsWith("[") && !isCanonicalDottedQuad(ipCandidate)) return;
         InetAddress addr;
         try {
-            // InetAddress.getByName() parses numeric IPs without DNS lookup
+            // Only an IP literal reaches this point, which getByName parses without a lookup.
             addr = InetAddress.getByName(ipCandidate);
         } catch (UnknownHostException e) {
-            // Not a parseable IP — it's a hostname, which is fine (DNS check is caller's concern)
-            return;
+            // Brackets always hold an IP literal, so one that does not parse is refused, not taken for a name.
+            throw new IllegalArgumentException("Server URL has an invalid IPv6 literal", e);
         }
 
         // Only range-check IP literals (canonical dotted-quad or bracketed IPv6); a DNS hostname's resolved
         // address varies over time and is the HTTP client's concern. Non-canonical numeric forms are already
         // rejected above, so this equality check is now exact for the literals that reach it.
         if (!addr.getHostAddress().equalsIgnoreCase(ipCandidate) && !host.startsWith("[")) {
+            return;
+        }
+
+        if (privateHosts.permits(ipCandidate, addr)) {
             return;
         }
 
@@ -150,6 +172,10 @@ public final class ServerUrlValidator {
         }
         if (addr.isAnyLocalAddress()) {
             throw new IllegalArgumentException("Server URL must not point to a wildcard address");
+        }
+        if (PrivateAddressGuard.isNonPublic(addr)
+                && !(addr instanceof Inet6Address && (addr.getAddress()[0] & 0xFE) == 0xFC)) {
+            throw new IllegalArgumentException("Server URL must not point to a non-public address");
         }
         // IPv6 Unique-Local Addresses (fc00::/7) are private — the dominant self-hosted IPv6 range — but
         // Java has no isUniqueLocalAddress() and isSiteLocalAddress() returns false for them, so check the

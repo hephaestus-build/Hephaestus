@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamRepositorySettings;
@@ -141,7 +142,8 @@ class ScmRepositoryCheckoutsIntegrationTest extends BaseIntegrationTest {
         var mirrors = new GitRepositoryManager(
                 new GitRepositoryProperties(true, 1, 1024 * 1024),
                 new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("fabric").toString()));
+                new FabricLayout(temporary.resolve("fabric").toString()),
+                GitTransportFixtures.guarded());
         // The provider URL has no Git server behind it: the mirror fetches from the local upstream instead.
         git = mock(GitRepositoryManager.class, AdditionalAnswers.delegatesTo(mirrors));
         doAnswer(invocation -> {

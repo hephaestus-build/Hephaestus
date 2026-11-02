@@ -51,7 +51,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         WebClient.Builder builder = mock(WebClient.Builder.class);
         when(builder.build()).thenReturn(mockWebClient);
 
-        rotationClient = new GitLabTokenRotationClient(tokenService, builder);
+        rotationClient = new GitLabTokenRotationClient(tokenService, () -> builder);
     }
 
     /** Sets up token service mocks for REST API tests. */

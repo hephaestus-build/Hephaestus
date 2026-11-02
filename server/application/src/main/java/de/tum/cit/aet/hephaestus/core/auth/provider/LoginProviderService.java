@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ public class LoginProviderService {
     private final AuthEventLogger authEventLogger;
     private final ObjectMapper objectMapper;
     private final OutlineOriginPolicy outlineOriginPolicy;
+    private final ScmServerEndpointPolicy scmEndpoints;
 
     public LoginProviderService(
             LoginProviderRepository repository,
@@ -66,13 +68,15 @@ public class LoginProviderService {
             AuthProperties authProperties,
             AuthEventLogger authEventLogger,
             ObjectMapper objectMapper,
-            OutlineOriginPolicy outlineOriginPolicy) {
+            OutlineOriginPolicy outlineOriginPolicy,
+            ScmServerEndpointPolicy scmEndpoints) {
         this.repository = repository;
         this.registrationCache = registrationCache;
         this.authProperties = authProperties;
         this.authEventLogger = authEventLogger;
         this.objectMapper = objectMapper;
         this.outlineOriginPolicy = outlineOriginPolicy;
+        this.scmEndpoints = scmEndpoints;
     }
 
     /** Enabled providers for the login page / discovery, stable order. */
@@ -362,7 +366,8 @@ public class LoginProviderService {
         }
         String value = baseUrl == null ? "" : baseUrl.trim();
         try {
-            ServerUrlValidator.validate(value);
+            if (type == LoginProvider.ProviderType.GITLAB) scmEndpoints.validate(value);
+            else ServerUrlValidator.validate(value);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_CONTENT, "The base URL is not valid: " + e.getMessage(), e);

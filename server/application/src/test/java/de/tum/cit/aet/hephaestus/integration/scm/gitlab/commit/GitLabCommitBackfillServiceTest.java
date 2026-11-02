@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissionTestFixtures;
@@ -225,7 +226,8 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
         return new GitRepositoryManager(
                 new GitRepositoryProperties(true, 2, 8L * 1024 * 1024 * 1024),
                 new GitRepositoryLockManager(),
-                new FabricLayout(temporary.resolve("fabric").toString()));
+                new FabricLayout(temporary.resolve("fabric").toString()),
+                GitTransportFixtures.guarded());
     }
 
     private GitLabCommitBackfillService localBackfill(GitRepositoryManager git, CommitDetailsPersister persister) {

@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
 import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,7 +29,16 @@ import org.springframework.security.util.matcher.InetAddressMatchers;
  */
 public final class PrivateHostAllowlist {
 
-    public static final PrivateHostAllowlist NONE = new PrivateHostAllowlist(Set.of(), List.of());
+    public static final PrivateHostAllowlist NONE = new PrivateHostAllowlist(Set.of(), List.of(), Set.of());
+
+    /** Names that mean this machine or a metadata service, whatever their DNS says. */
+    private static final Set<String> NEVER_LISTED = Set.of(
+            "localhost",
+            "metadata",
+            "metadata.goog",
+            "metadata.google.internal",
+            "instance-data",
+            "instance-data.ec2.internal");
 
     private static final int WIDEST_IPV4_PREFIX = 16;
     private static final int WIDEST_IPV6_PREFIX = 48;
@@ -58,15 +69,17 @@ public final class PrivateHostAllowlist {
 
     private final Set<String> hostNames;
     private final List<Range> ranges;
+    private final Set<InetAddress> ownAddresses;
 
-    private PrivateHostAllowlist(Set<String> hostNames, List<Range> ranges) {
+    private PrivateHostAllowlist(Set<String> hostNames, List<Range> ranges, Set<InetAddress> ownAddresses) {
         this.hostNames = hostNames;
         this.ranges = ranges;
+        this.ownAddresses = ownAddresses;
     }
 
     /**
      * @param ownAddresses the addresses of this process. A range that covers one of them would admit the
-     *     deployment's own services, so it is refused.
+     *     deployment's own services, so it is refused, and no entry ever admits one of them at connect time.
      * @throws IllegalArgumentException for an entry that is no host name, IP address or CIDR range, or a
      *     range that is outside the private ranges, wider than one network, inside a metadata range, or
      *     covers one of {@code ownAddresses}
@@ -81,13 +94,15 @@ public final class PrivateHostAllowlist {
             }
             if (entry.contains("/") || entry.contains(":") || entry.matches("[0-9.]+")) {
                 ranges.add(admittedRange(entry, raw, ownAddresses));
+            } else if (NEVER_LISTED.contains(entry) || entry.endsWith(".localhost") || entry.matches("0x[0-9a-f.x]*")) {
+                throw new IllegalArgumentException("This name can never be listed: " + raw);
             } else if (entry.matches("[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?(\\.[a-z0-9_]([a-z0-9_-]*[a-z0-9_])?)*")) {
                 hostNames.add(entry);
             } else {
                 throw new IllegalArgumentException("Not a host name, IP address or CIDR range: " + raw);
             }
         }
-        return new PrivateHostAllowlist(Set.copyOf(hostNames), List.copyOf(ranges));
+        return new PrivateHostAllowlist(Set.copyOf(hostNames), List.copyOf(ranges), Set.copyOf(ownAddresses));
     }
 
     private static Range admittedRange(String entry, String raw, Collection<InetAddress> ownAddresses) {
@@ -118,10 +133,40 @@ public final class PrivateHostAllowlist {
         return range;
     }
 
-    /** True if {@code address} is private, and {@code host} or the address is listed. */
-    public boolean permits(String host, InetAddress address) {
+    /** True if an operator listed this exact host name, which trusts its DNS. */
+    public boolean listsHostName(String host) {
+        return hostNames.contains(host.toLowerCase(Locale.ROOT));
+    }
+
+    /** The addresses of this process, for {@link #parse}. */
+    public static List<InetAddress> ownAddresses() {
+        try {
+            return NetworkInterface.networkInterfaces()
+                    .flatMap(NetworkInterface::inetAddresses)
+                    .toList();
+        } catch (SocketException e) {
+            throw new IllegalStateException("Cannot read this server's network addresses", e);
+        }
+    }
+
+    /** True if {@code address} is one of this process's own addresses, which no setting admits. */
+    public boolean isOwn(InetAddress address) {
+        InetAddress unmapped = PrivateAddressGuard.unmapped(address);
+        if (ownAddresses.contains(unmapped)) return true;
+        // Interfaces can gain an address after startup, so the current set decides too. Failing to read it refuses.
+        try {
+            return NetworkInterface.getByInetAddress(unmapped) != null;
+        } catch (SocketException unreadable) {
+            return true;
+        }
+    }
+
+    /** True if {@code address} is private, is not this process, and {@code host} or the address is listed. */
+    public boolean permits(String host, InetAddress mapped) {
+        InetAddress address = PrivateAddressGuard.unmapped(mapped);
         if (PRIVATE_RANGES.stream().noneMatch(range -> range.matches(address))
-                || METADATA.stream().anyMatch(range -> range.matches(address))) {
+                || METADATA.stream().anyMatch(range -> range.matches(address))
+                || ownAddresses.contains(address)) {
             return false;
         }
         return hostNames.contains(host.toLowerCase(Locale.ROOT))

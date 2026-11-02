@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -108,7 +109,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
-                new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder()),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
                 WebClient.builder());
     }
 
@@ -253,7 +255,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
-                new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder()),
+                new ScmServerEndpointPolicy(
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
                 WebClient.builder());
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
                 .thenReturn(List.of(gitlabWorkspace, githubDuplicate));
@@ -287,7 +290,7 @@ class WorkspaceProvisioningServiceTest {
                     workspaceMembershipService,
                     connectionService,
                     List.of(),
-                    new ScmServerEndpointPolicy(environment, WebClient.builder()),
+                    new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())),
                     WebClient.builder());
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")

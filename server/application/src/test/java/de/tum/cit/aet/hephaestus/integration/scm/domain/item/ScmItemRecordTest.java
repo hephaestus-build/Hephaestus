@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
@@ -150,7 +151,8 @@ class ScmItemRecordTest extends BaseUnitTest {
         var manager = new GitRepositoryManager(
                 new GitRepositoryProperties(true, 2, 64 * 1024 * 1024),
                 new GitRepositoryLockManager(),
-                new FabricLayout(root.resolve("fabric").toString()));
+                new FabricLayout(root.resolve("fabric").toString()),
+                GitTransportFixtures.guarded());
         var gitTree = new ScmGitTree(manager);
         var versions = new ScmFileVersions(mapper);
         ReflectionTestUtils.setField(service, "tree", gitTree);

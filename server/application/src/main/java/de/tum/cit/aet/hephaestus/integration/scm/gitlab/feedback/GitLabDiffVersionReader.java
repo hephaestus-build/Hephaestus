@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -33,9 +34,9 @@ class GitLabDiffVersionReader {
     private final GitLabTokenService tokens;
     private final WebClient client;
 
-    GitLabDiffVersionReader(GitLabTokenService tokens, WebClient.Builder builder) {
+    GitLabDiffVersionReader(GitLabTokenService tokens, GitLabWebClients builder) {
         this.tokens = tokens;
-        client = builder.clone()
+        client = builder.builder()
                 .codecs(config -> config.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
                 .build();
     }

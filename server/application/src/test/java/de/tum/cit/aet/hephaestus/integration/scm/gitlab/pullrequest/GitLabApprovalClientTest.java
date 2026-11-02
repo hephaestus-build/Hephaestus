@@ -31,22 +31,25 @@ class GitLabApprovalClientTest extends BaseUnitTest {
         var tokens = mock(GitLabTokenService.class);
         when(tokens.resolveServerUrl(9L)).thenReturn("https://gitlab.example");
         when(tokens.getAccessToken(9L)).thenReturn("test-token");
-        var client = new GitLabApprovalClient(tokens, WebClient.builder().exchangeFunction(request -> {
-            assertThat(request.url().toString())
-                    .isEqualTo("https://gitlab.example/api/v4/projects/273327/merge_requests/11/approvals");
-            assertThat(request.headers().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer test-token");
-            assertThat(request.attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE))
-                    .contains(9L);
-            return Mono.just(ClientResponse.create(HttpStatus.OK)
-                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                    .body("""
+        var client = new GitLabApprovalClient(
+                tokens,
+                () -> WebClient.builder().exchangeFunction(request -> {
+                    assertThat(request.url().toString())
+                            .isEqualTo("https://gitlab.example/api/v4/projects/273327/merge_requests/11/approvals");
+                    assertThat(request.headers().getFirst(HttpHeaders.AUTHORIZATION))
+                            .isEqualTo("Bearer test-token");
+                    assertThat(request.attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE))
+                            .contains(9L);
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                            .body("""
                             {"id":384516,"iid":11,"project_id":273327,"state":"merged",
                              "updated_at":"2026-10-01T14:43:39.777Z","title":"Checklist","description":"Why",
                              "approved_by":[
                              {"user":{"id":90393,"username":"tutor"},"approved_at":"2026-10-01T14:11:19.087Z"}]}
                             """)
-                    .build());
-        }));
+                            .build());
+                }));
 
         var snapshot = Objects.requireNonNull(client.read(9L, 273327, 11));
         assertThat(snapshot.updatedAt()).isEqualTo(Instant.parse("2026-10-01T14:43:39.777Z"));
@@ -64,7 +67,7 @@ class GitLabApprovalClientTest extends BaseUnitTest {
         when(tokens.getAccessToken(9L)).thenReturn("test-token");
         var client = new GitLabApprovalClient(
                 tokens,
-                WebClient.builder()
+                () -> WebClient.builder()
                         .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
                                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
                                 .body(body)

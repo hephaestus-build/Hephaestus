@@ -49,18 +49,32 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
     public static final SsrfGuardedResolverGroup LOOPBACK_EXEMPT_INSTANCE =
             new SsrfGuardedResolverGroup(true, PrivateHostAllowlist.NONE);
 
+    /** The only host the e2e simulator listens on, which {@code ScmServerEndpointPolicy} requires of its origin. */
+    private static final String SIMULATOR_HOST = "127.0.0.1";
+
     private final boolean allowLoopback;
+    private final int loopbackPort;
     private final PrivateHostAllowlist privateHosts;
 
     public SsrfGuardedResolverGroup(boolean allowLoopback, PrivateHostAllowlist privateHosts) {
+        this(allowLoopback, 0, privateHosts);
+    }
+
+    /** @param loopbackPort the one loopback port that {@code allowLoopback} admits, or 0 for any port */
+    public SsrfGuardedResolverGroup(boolean allowLoopback, int loopbackPort, PrivateHostAllowlist privateHosts) {
         this.allowLoopback = allowLoopback;
+        this.loopbackPort = loopbackPort;
         this.privateHosts = privateHosts;
     }
 
     @Override
     protected AddressResolver<InetSocketAddress> newResolver(EventExecutor executor) {
         return new GuardedResolver(
-                executor, DefaultAddressResolverGroup.INSTANCE.getResolver(executor), allowLoopback, privateHosts);
+                executor,
+                DefaultAddressResolverGroup.INSTANCE.getResolver(executor),
+                allowLoopback,
+                loopbackPort,
+                privateHosts);
     }
 
     /**
@@ -71,14 +85,28 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
         return blockedReason("", resolved, false, PrivateHostAllowlist.NONE);
     }
 
-    static @Nullable UnknownHostException blockedReason(
+    public static @Nullable UnknownHostException blockedReason(
             String host, InetSocketAddress resolved, boolean allowLoopback, PrivateHostAllowlist privateHosts) {
+        return blockedReason(host, resolved, allowLoopback, 0, privateHosts);
+    }
+
+    public static @Nullable UnknownHostException blockedReason(
+            String host,
+            InetSocketAddress resolved,
+            boolean allowLoopback,
+            int loopbackPort,
+            PrivateHostAllowlist privateHosts) {
         InetAddress addr = (resolved == null) ? null : resolved.getAddress();
         if (addr == null) {
             return new UnknownHostException("address did not resolve");
         }
-        if (allowLoopback && addr.isLoopbackAddress()) {
+        if (allowLoopback
+                && PrivateAddressGuard.unmapped(addr).isLoopbackAddress()
+                && (loopbackPort == 0 || (resolved.getPort() == loopbackPort && SIMULATOR_HOST.equals(host)))) {
             return null;
+        }
+        if (privateHosts.isOwn(addr)) {
+            return new UnknownHostException("blocked address of this process (SSRF guard): " + addr.getHostAddress());
         }
         if (PrivateAddressGuard.isNonPublic(addr) && !privateHosts.permits(host, addr)) {
             return new UnknownHostException("blocked non-public address (SSRF guard): " + addr.getHostAddress());
@@ -92,6 +120,7 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
         private final EventExecutor executor;
         private final AddressResolver<InetSocketAddress> delegate;
         private final boolean allowLoopback;
+        private final int loopbackPort;
         private final PrivateHostAllowlist privateHosts;
 
         GuardedResolver(EventExecutor executor, AddressResolver<InetSocketAddress> delegate) {
@@ -103,9 +132,19 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
                 AddressResolver<InetSocketAddress> delegate,
                 boolean allowLoopback,
                 PrivateHostAllowlist privateHosts) {
+            this(executor, delegate, allowLoopback, 0, privateHosts);
+        }
+
+        GuardedResolver(
+                EventExecutor executor,
+                AddressResolver<InetSocketAddress> delegate,
+                boolean allowLoopback,
+                int loopbackPort,
+                PrivateHostAllowlist privateHosts) {
             this.executor = executor;
             this.delegate = delegate;
             this.allowLoopback = allowLoopback;
+            this.loopbackPort = loopbackPort;
             this.privateHosts = privateHosts;
         }
 
@@ -114,9 +153,11 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
             return delegate.isSupported(address);
         }
 
+        // Netty connects to an address that is already resolved, such as an IP literal in a URL, without asking the
+        // resolver. Answering false sends every address through resolve, so the gate checks literals as well.
         @Override
         public boolean isResolved(SocketAddress address) {
-            return delegate.isResolved(address);
+            return false;
         }
 
         // CRITICAL on the 2-arg overloads: resolve the delegate into its OWN (1-arg) future and gate the
@@ -157,7 +198,8 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
                     target.setFailure(f.cause());
                     return;
                 }
-                UnknownHostException blocked = blockedReason(host, f.getNow(), allowLoopback, privateHosts);
+                UnknownHostException blocked =
+                        blockedReason(host, f.getNow(), allowLoopback, loopbackPort, privateHosts);
                 if (blocked != null) {
                     target.setFailure(blocked);
                 } else {
@@ -175,7 +217,7 @@ public final class SsrfGuardedResolverGroup extends AddressResolverGroup<InetSoc
                     return;
                 }
                 for (InetSocketAddress isa : f.getNow()) {
-                    UnknownHostException blocked = blockedReason(host, isa, allowLoopback, privateHosts);
+                    UnknownHostException blocked = blockedReason(host, isa, allowLoopback, loopbackPort, privateHosts);
                     if (blocked != null) {
                         target.setFailure(blocked);
                         return;

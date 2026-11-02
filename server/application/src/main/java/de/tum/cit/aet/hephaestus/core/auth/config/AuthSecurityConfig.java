@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -24,8 +25,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.ReactorClientHttpRequestFactory;
+import org.springframework.http.converter.FormHttpMessageConverter;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
+import org.springframework.security.oauth2.client.endpoint.RestClientAuthorizationCodeTokenResponseClient;
+import org.springframework.security.oauth2.client.http.OAuth2ErrorResponseErrorHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -34,11 +42,14 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 
 /**
  * Wires the OAuth login flow on a dedicated, medium-precedence
@@ -70,19 +81,20 @@ public class AuthSecurityConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AuthSecurityConfig.class);
 
-    private static final String GITHUB_USERINFO_PREFIX = "https://api.github.com";
-
     private final LoginProviderRepository loginProviderRepository;
     private final RestClient.Builder restClients;
     private final WebClient.Builder webClients;
+    private final ScmServerEndpointPolicy scmEndpoints;
 
     public AuthSecurityConfig(
             LoginProviderRepository loginProviderRepository,
             RestClient.Builder restClients,
-            WebClient.Builder webClients) {
+            WebClient.Builder webClients,
+            ScmServerEndpointPolicy scmEndpoints) {
         this.loginProviderRepository = loginProviderRepository;
         this.restClients = restClients;
         this.webClients = webClients;
+        this.scmEndpoints = scmEndpoints;
     }
 
     @Bean
@@ -138,6 +150,7 @@ public class AuthSecurityConfig {
         var github = new GitHubEmailOAuth2UserService(restClients);
         var outline = new OutlineAuthInfoUserService(webClients);
         var fallback = new DefaultOAuth2UserService();
+        fallback.setRestOperations(guardedUserInfoClient());
         return request -> {
             ClientRegistration registration = request.getClientRegistration();
             if (isGitHub(registration)) {
@@ -150,16 +163,45 @@ public class AuthSecurityConfig {
         };
     }
 
-    private static boolean isGitHub(ClientRegistration registration) {
-        String userInfoUri =
-                registration.getProviderDetails().getUserInfoEndpoint().getUri();
-        return userInfoUri != null && userInfoUri.startsWith(GITHUB_USERINFO_PREFIX);
+    /** A GitLab server comes from configuration, so its user info call checks the address that it connects to. */
+    private RestTemplate guardedUserInfoClient() {
+        var rest = new RestTemplate(guardedRequestFactory());
+        rest.setErrorHandler(new OAuth2ErrorResponseErrorHandler());
+        return rest;
+    }
+
+    private ClientHttpRequestFactory guardedRequestFactory() {
+        return new ReactorClientHttpRequestFactory(
+                HttpClient.create().resolver(scmEndpoints.resolverGroup()).followRedirect(false));
+    }
+
+    /** The code exchange sends the client secret, so it checks the address that it connects to as well. */
+    OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> guardedTokenClient() {
+        var client = new RestClientAuthorizationCodeTokenResponseClient();
+        client.setRestClient(restClients
+                .clone()
+                .requestFactory(guardedRequestFactory())
+                .configureMessageConverters(converters -> converters
+                        .addCustomConverter(new FormHttpMessageConverter())
+                        .addCustomConverter(new OAuth2AccessTokenResponseHttpMessageConverter()))
+                .defaultStatusHandler(new OAuth2ErrorResponseErrorHandler())
+                .build());
+        return client;
+    }
+
+    /** By the stored type: a GitLab whose URL merely begins like GitHub's must not get GitHub's client. */
+    private boolean isGitHub(ClientRegistration registration) {
+        return hasType(registration, LoginProvider.ProviderType.GITHUB);
     }
 
     private boolean isOutline(ClientRegistration registration) {
+        return hasType(registration, LoginProvider.ProviderType.OUTLINE);
+    }
+
+    private boolean hasType(ClientRegistration registration, LoginProvider.ProviderType type) {
         return loginProviderRepository
                 .findByRegistrationId(registration.getRegistrationId())
-                .map(provider -> provider.getType() == LoginProvider.ProviderType.OUTLINE)
+                .map(provider -> provider.getType() == type)
                 .orElse(false);
     }
 
@@ -181,6 +223,7 @@ public class AuthSecurityConfig {
                     req.anyRequest().permitAll(); // oauth2Login handles the actual auth
                 })
                 .oauth2Login(oauth -> {
+                    oauth.tokenEndpoint(token -> token.accessTokenResponseClient(guardedTokenClient()));
                     // Explicit loginPage: the SPA owns the login UI, and without this Spring Security's
                     // OAuth2LoginConfigurer ENUMERATES the ClientRegistrationRepository at config time to build
                     // default login links. That repo is DB-backed (LoginProviderClientRegistrationRepository

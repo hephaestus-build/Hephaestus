@@ -37,7 +37,7 @@ class PracticeRoleResolutionEndToEndIntegrationTest extends RealAuthIntegrationT
     // can
     // hold), not a no-op. LoginProvider.setBaseUrl already strips trailing slashes; a path would be
     // invalid.
-    private static final String LOGIN_BASE_URL = "https://gitlab.lrz.de:8443";
+    private static final String LOGIN_BASE_URL = "https://gitlab.example.com:8443";
     private static final String REGISTRATION_ID = "gitlab-e2e";
     private static final long NATIVE_ID = 583231L; // numeric provider user id, shared by login + sync
 

@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResol
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -99,14 +100,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
 
     public GitLabLineNoteWriter(
             GitLabGraphQlClientProvider gitLabProvider,
-            WebClient.Builder rest,
+            GitLabWebClients rest,
             GitLabTokenService tokenService,
             OutboundEgressGuard egressGuard,
             ScmFeedbackTargetResolver targets,
             GitLabDiffVersionReader diffVersions,
             ScmFeedbackFormatter formatter) {
         this.gitLabProvider = gitLabProvider;
-        this.rest = rest.clone().build();
+        this.rest = rest.builder().build();
         this.tokenService = tokenService;
         this.egressGuard = egressGuard;
         this.targets = targets;

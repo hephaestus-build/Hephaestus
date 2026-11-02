@@ -283,6 +283,9 @@ springdoc:
     paths-to-exclude: /internal/**
 
 hephaestus:
+    scm:
+        egress:
+            private-hosts: ${HEPHAESTUS_SCM_EGRESS_PRIVATE_HOSTS:}
     # What the verified release lock handed this container (docs/admin/release-image-lock.md).
     # The check asks GitHub for the newest published release; disable it on an air-gapped host.
     release:

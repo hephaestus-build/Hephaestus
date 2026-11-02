@@ -8,14 +8,11 @@ import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import io.netty.resolver.AddressResolverGroup;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -67,7 +64,7 @@ public class EgressPolicy {
     /** @throws IllegalArgumentException for a private-hosts entry that {@link PrivateHostAllowlist#parse} refuses */
     @Autowired
     public EgressPolicy(InstanceLlmSettingsRepository settingsRepository, LlmProperties llmProperties) {
-        this(settingsRepository, llmProperties, ownAddresses());
+        this(settingsRepository, llmProperties, PrivateHostAllowlist.ownAddresses());
     }
 
     EgressPolicy(
@@ -129,16 +126,6 @@ public class EgressPolicy {
     }
 
     /** The addresses of this process: on Compose its network, on Kubernetes its Pod's address. */
-    private static List<InetAddress> ownAddresses() {
-        try {
-            return NetworkInterface.networkInterfaces()
-                    .flatMap(NetworkInterface::inetAddresses)
-                    .toList();
-        } catch (SocketException e) {
-            throw new IllegalStateException("Cannot read this server's network addresses", e);
-        }
-    }
-
     private static URI parse(String baseUrl) {
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);

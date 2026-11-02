@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -407,7 +408,10 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                     .name();
         }
         var manager = new GitRepositoryManager(
-                new GitRepositoryProperties(true, 1, 1L << 20), new GitRepositoryLockManager(), layout);
+                new GitRepositoryProperties(true, 1, 1L << 20),
+                new GitRepositoryLockManager(),
+                layout,
+                GitTransportFixtures.guarded());
         manager.ensureRepository(key, source.toUri().toString(), null);
         Path staging;
         try (var snapshot = manager.readTreeSnapshot(key, sha)) {

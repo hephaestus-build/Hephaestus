@@ -169,11 +169,11 @@ class GitLabReadbackLiveTest {
         var guard = mock(OutboundEgressGuard.class);
         return new GitLabLineNoteWriter(
                 provider,
-                rest,
+                () -> rest,
                 tokens,
                 guard,
                 ScmFeedbackFixtures.resolver(),
-                new GitLabDiffVersionReader(tokens, rest),
+                new GitLabDiffVersionReader(tokens, () -> rest),
                 formatter);
     }
 

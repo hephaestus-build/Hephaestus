@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitMirrorRetenti
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.github.connect.GitHubConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceProvisioningAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabConnectionStrategy;
@@ -159,7 +160,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                     new GitRepositoryManager(
                             new GitRepositoryProperties(true, 1, 1024),
                             new GitRepositoryLockManager(),
-                            new FabricLayout(root.toString())),
+                            new FabricLayout(root.toString()),
+                            GitTransportFixtures.guarded()),
                     repositoryRepository);
             assertThat(retention.removeUnretainedMirrors()).isEqualTo(1);
             assertThat(retention.removeUnretainedMirrors())
@@ -191,7 +193,8 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
                 new GitRepositoryManager(
                         new GitRepositoryProperties(true, 1, 1024),
                         new GitRepositoryLockManager(),
-                        new FabricLayout(mirrorRoot.toString())),
+                        new FabricLayout(mirrorRoot.toString()),
+                        GitTransportFixtures.guarded()),
                 repositoryRepository);
 
         assertThat(retention.removeUnretainedMirrors()).isZero();

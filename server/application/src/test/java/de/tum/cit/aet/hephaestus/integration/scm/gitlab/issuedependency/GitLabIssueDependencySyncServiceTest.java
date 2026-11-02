@@ -75,7 +75,7 @@ class GitLabIssueDependencySyncServiceTest extends BaseUnitTest {
                 repositoryRepository,
                 tokenService,
                 rateLimitTracker,
-                webClientBuilder,
+                () -> webClientBuilder,
                 projectAdmission);
     }
 

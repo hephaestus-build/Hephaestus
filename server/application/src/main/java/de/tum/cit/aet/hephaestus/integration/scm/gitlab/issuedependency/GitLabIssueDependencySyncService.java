@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import java.time.Duration;
 import java.time.Instant;
@@ -69,14 +70,14 @@ public class GitLabIssueDependencySyncService {
             RepositoryRepository repositoryRepository,
             GitLabTokenService tokenService,
             GitLabRateLimitTracker rateLimitTracker,
-            WebClient.Builder webClientBuilder,
+            GitLabWebClients webClientBuilder,
             GitLabProjectAdmission admission) {
         this.issueRepository = issueRepository;
         this.repositoryRepository = repositoryRepository;
         this.tokenService = tokenService;
         this.rateLimitTracker = rateLimitTracker;
         this.admission = admission;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.builder().build();
     }
 
     /**

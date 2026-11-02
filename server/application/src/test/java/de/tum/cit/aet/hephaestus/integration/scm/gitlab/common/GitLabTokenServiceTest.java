@@ -48,7 +48,7 @@ class GitLabTokenServiceTest extends BaseUnitTest {
                 Duration.ofMillis(200),
                 Duration.ofMinutes(5));
 
-        tokenService = new GitLabTokenService(tokenProvider, builder, properties);
+        tokenService = new GitLabTokenService(tokenProvider, () -> builder, properties);
     }
 
     @Nested

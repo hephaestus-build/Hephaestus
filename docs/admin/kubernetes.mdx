@@ -506,6 +506,45 @@ The server and the worker add this CA at start, and the public CAs stay trusted.
 After you replace the CA, restart the server and the worker.
 This option does not change what GitLab trusts. If Hephaestus uses a private certificate, add its CA to the trusted certificates of your GitLab, so that GitLab can deliver webhooks.
 
+### A Git provider on a private network
+
+Hephaestus refuses a Git provider on a private address by default.
+Keep this protection unless your GitLab runs on your own network.
+To admit one, name it in both places:
+
+```yaml title="values.yaml"
+config:
+  # The application: host names, IP addresses, or CIDR ranges that the GitLab server URL can use.
+  scmPrivateHosts: [gitlab.corp.example]
+networkPolicy:
+  # The network: the address range and the ports of your GitLab.
+  scmEndpoints:
+    - cidr: 10.30.0.0/16
+      ports: [443]
+```
+
+The list has the same rules as `config.llmPrivateHosts`: [Connect an AI provider](./ai-providers#model-endpoints-on-your-own-network) describes them.
+A host name entry trusts the DNS of that name, so list only a name whose DNS you control.
+A listed host name can also use a private TLD such as `.internal`.
+
+Each GitLab API call and sign-in request checks the address when it connects.
+Thus, a name that later resolves elsewhere gets no access.
+Loopback, link-local, and known cloud metadata addresses stay refused, and so do the addresses of the Pod itself.
+A range that covers the address of the Pod stops the server or the worker at startup.
+
+These requests never follow a redirect.
+Git fetches check the connected address before they send the request, and they follow no redirect either.
+A refused address gets a connection attempt, but no request.
+Git fetches through an HTTP proxy are refused, because the proxy chooses the address.
+Git fetches with certificate verification turned off are refused too.
+
+If you remove a host from the list, sign-in and API calls to it stop after the next restart.
+
+If your GitLab runs in this cluster, an `ipBlock` does not reliably match its Pod addresses.
+Use a policy with a `podSelector` for the server and the worker instead, as the section on endpoints in this cluster shows.
+
+If your GitLab uses a certificate from a private CA, also follow [A Git provider with a private CA](#a-git-provider-with-a-private-ca).
+
 ### A model endpoint on a private network
 
 A model endpoint outside the cluster can have a private address, for example a vLLM server on the LAN.

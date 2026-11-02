@@ -15,6 +15,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
@@ -58,7 +59,8 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         mockWebClient = mock(WebClient.class);
-        endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder()));
+        endpoints = spy(new ScmServerEndpointPolicy(
+                new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
         lenient().doReturn(mockWebClient).when(endpoints).clientFor(anyString());
         WorkspaceProviderAvailability defaultInstance = new WorkspaceProviderAvailability() {
             @Override

@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebClients;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -73,14 +74,14 @@ public class GitLabCommitSyncService {
             CommitAuthorResolver authorResolver,
             GitLabTokenService tokenService,
             ApplicationEventPublisher eventPublisher,
-            WebClient.Builder webClientBuilder,
+            GitLabWebClients webClientBuilder,
             GitLabProjectAdmission admission) {
         this.commitRepository = commitRepository;
         this.contributorRepository = contributorRepository;
         this.authorResolver = authorResolver;
         this.tokenService = tokenService;
         this.eventPublisher = eventPublisher;
-        this.webClient = webClientBuilder.build();
+        this.webClient = webClientBuilder.builder().build();
         this.admission = admission;
     }
 

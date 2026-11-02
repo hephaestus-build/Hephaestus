@@ -52,6 +52,12 @@ networkPolicy:
   #   - cidr: 10.20.0.0/16
   #     ports: [8000]
   modelEndpoints: []
+  # Optional. A Git provider on a private network outside the cluster: each item opens `ports` on
+  # `cidr` for the server and the worker. The `cidr` must be private. Also list the host in
+  # `config.scmPrivateHosts`.
+  #   - cidr: 10.30.0.0/16
+  #     ports: [443]
+  scmEndpoints: []
   # The metrics scraper that may read the management port. An empty namespace admits no scraper.
   # A namespace needs at least one pod label.
   metrics:
@@ -328,6 +334,9 @@ config:
   privateCa:
     existingSecret: ""
     key: ca.crt
+  # A Git provider on a private network: host names, IP addresses or CIDR ranges that its server URL
+  # may use. Empty allows public hosts only. docs/admin/integrations.mdx.
+  scmPrivateHosts: []
   # The organization that runs research on this instance, as the privacy notice names it.
   researchOrganization: ""
   publicActivity:

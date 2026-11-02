@@ -1290,7 +1290,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 repositories,
                 tokens,
                 mock(GitLabRateLimitTracker.class),
-                WebClient.builder()
+                () -> WebClient.builder()
                         .exchangeFunction(request -> Mono.just(
                                 request.url().getPath().endsWith("/projects/8101/issues/1/links")
                                         ? ClientResponse.create(HttpStatus.OK)
@@ -1409,7 +1409,7 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
                 repositories,
                 tokens,
                 mock(GitLabRateLimitTracker.class),
-                WebClient.builder()
+                () -> WebClient.builder()
                         .exchangeFunction(request -> Mono.just(
                                 !request.url().getPath().endsWith("/projects/" + projectId + "/issues/1/links")
                                         ? ClientResponse.create(HttpStatus.NOT_FOUND)

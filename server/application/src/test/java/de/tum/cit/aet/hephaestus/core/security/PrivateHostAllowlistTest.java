@@ -110,6 +110,89 @@ class PrivateHostAllowlistTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAdmitNothingByDefault() throws UnknownHostException {
+        for (var list : List.of(PrivateHostAllowlist.NONE, parse())) {
+            assertThat(list.permits("gitlab.corp.example", ip("10.0.0.1"))).isFalse();
+            assertThat(list.listsHostName("gitlab.corp.example")).isFalse();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "169.254.169.254",
+                "::ffff:169.254.169.254",
+                "fe80::1",
+                "127.0.0.1",
+                "::ffff:127.0.0.1",
+                "::1",
+                "0.0.0.0",
+                "::",
+                "100.100.100.200",
+                "fd00:ec2::254",
+                "8.8.8.8",
+                "::a9fe:a9fe",
+            })
+    void shouldNeverLetAListedNameReachLinkLocalLoopbackMetadataOrPublic(String literal) throws UnknownHostException {
+        assertThat(ALLOWLIST.permits("vllm.lab.test", ip(literal))).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "evil.vllm.lab.test",
+                "vllm.lab.test.evil.example",
+                "vllm.lab.test.",
+                "xvllm.lab.test",
+                "lab.test",
+            })
+    void shouldMatchAHostNameExactly(String host) throws UnknownHostException {
+        assertThat(ALLOWLIST.permits(host, ip("172.16.4.4"))).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "localhost",
+                "LOCALHOST",
+                "foo.localhost",
+                "metadata",
+                "metadata.google.internal",
+                "metadata.goog",
+                "instance-data.ec2.internal",
+                "*.corp.example",
+                "corp.example:443",
+                "https://gitlab.corp.example",
+                ".corp.example",
+                "0.0.0.0/0",
+                "::/0",
+                "10.0.0.0/15",
+                "169.254.0.0/16",
+                "169.254.169.254",
+                "127.0.0.0/8",
+                "127.0.0.1",
+                "::1",
+                "fe80::/10",
+                "8.8.8.8",
+                "2130706433",
+                "0x7f000001",
+                "10.1",
+            })
+    void shouldStopStartupOnAnEntryThatMatchesTooMuchOrCanNeverBeListed(String entry) {
+        assertThatThrownBy(() -> parse(entry)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldNeverLetAnEntryReachThisProcessAtConnectTime() throws UnknownHostException {
+        var list = PrivateHostAllowlist.parse(List.of("gitlab.corp.example", "10.3.0.0/16"), List.of(ip("10.2.0.7")));
+
+        assertThat(list.permits("gitlab.corp.example", ip("10.2.0.7"))).isFalse();
+        assertThat(list.permits("gitlab.corp.example", ip("::ffff:10.2.0.7"))).isFalse();
+        assertThat(list.permits("gitlab.corp.example", ip("10.2.0.8"))).isTrue();
+        assertThat(list.permits("other.corp.example", ip("10.3.0.1"))).isTrue();
+    }
+
+    @Test
     void shouldRejectRangeThatCoversThisServersOwnAddress() throws UnknownHostException {
         List<InetAddress> own = List.of(ip("127.0.0.1"), ip("172.29.47.5"));
 
