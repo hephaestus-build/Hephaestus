@@ -282,10 +282,10 @@ await test(
 		assert.match(result.secret.HEPHAESTUS_SECURITY_ENCRYPTION_KEY ?? "", /^[0-9a-f]{32}$/u);
 		assert.ok(!result.output.includes("password"));
 
-		// A value copied from a Windows file keeps its CR, which no login contains.
+		// No login contains a CR. It sits mid-value, because Git Bash drops a trailing CRLF from $(...).
 		const carriage = run({
 			args: ["--external-database", "--new-keys", "--external-nats"],
-			env: { ...login, NATS_PASSWORD: "broker-password\r" },
+			env: { ...login, NATS_PASSWORD: "broker\rpassword" },
 		});
 		assert.notEqual(carriage.status, 0);
 		assert.match(carriage.output, /the value of NATS_PASSWORD holds a line break/u);
@@ -332,7 +332,10 @@ await test(
 				args: ["--export-keys", file],
 			});
 			assert.equal(result.status, 0, result.output);
-			assert.equal((statSync(file).mode % 0o1000).toString(8), "600");
+			// Windows has no POSIX mode: Node reports 0666 for any writable file there.
+			if (process.platform !== "win32") {
+				assert.equal((statSync(file).mode % 0o1000).toString(8), "600");
+			}
 			const written = Object.fromEntries(
 				readFileSync(file, "utf8")
 					.split("\n")
@@ -366,7 +369,7 @@ await test(
 );
 
 await test(
-	"--export-keys refuses a Secret without its encryption keys, and a mixed run",
+	"--export-keys refuses a Secret without its encryption keys or with an empty key, and a mixed run",
 	{ skip },
 	() => {
 		const folder = keyFolder();
@@ -380,6 +383,16 @@ await test(
 			assert.notEqual(lacking.status, 0);
 			assert.match(lacking.output, /lacks an encryption key/u);
 			assert.ok(!existsSync(folder.file("a.env")));
+
+			for (const key of ["HEPHAESTUS_SECURITY_ENCRYPTION_KEY", "DATABASE_USERNAME"]) {
+				const empty = run({
+					cluster: { secret: encoded({ ...first.secret, [key]: "" }) },
+					args: ["--export-keys", folder.file("c.env")],
+				});
+				assert.notEqual(empty.status, 0);
+				assert.match(empty.output, new RegExp(`holds an empty ${key}:`, "u"));
+				assert.ok(!existsSync(folder.file("c.env")), "nothing is exported");
+			}
 
 			const mixed = run({ args: ["--backups", "--export-keys", folder.file("b.env")] });
 			assert.notEqual(mixed.status, 0);
@@ -421,6 +434,18 @@ await test(
 				/^HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: differs from the Secret$/mu,
 			);
 			assert.ok(!differs.output.includes("f".repeat(32)), "the output holds no value");
+
+			// A line break at the end of a Secret value is a difference, though $(...) would drop it.
+			const trailing = {
+				...first.secret,
+				HEPHAESTUS_SECURITY_ENCRYPTION_KEY: `${first.secret.HEPHAESTUS_SECURITY_ENCRYPTION_KEY ?? ""}\n`,
+			};
+			const broken = run({ cluster: { secret: encoded(trailing) }, args: ["--check-keys", file] });
+			assert.notEqual(broken.status, 0);
+			assert.match(
+				broken.stdout,
+				/^HEPHAESTUS_SECURITY_ENCRYPTION_KEY: differs from the Secret$/mu,
+			);
 
 			const added = { ...first.secret, BACKUP_CIPHER_PASS: "passphrase" };
 			const missing = run({ cluster: { secret: encoded(added) }, args: ["--check-keys", file] });

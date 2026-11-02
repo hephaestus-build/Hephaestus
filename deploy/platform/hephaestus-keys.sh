@@ -78,6 +78,10 @@ if [ -n "$EXPORT" ]; then
 	[ -n "$secret_json" ] || die "the Secret $NAMESPACE/$SECRET does not exist: there is nothing to back up"
 	{ has HEPHAESTUS_SECURITY_ENCRYPTION_KEY && has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY; } ||
 		die "the Secret $NAMESPACE/$SECRET lacks an encryption key: restore it before you back it up"
+	# An empty key restores nothing, so a file that holds one is no backup.
+	empty=$(printf '%s' "$secret_json" | jq -r --arg keys "$RESTORE_KEYS" \
+		'[.data | to_entries[] | select(.key | test($keys)) | select(.value | @base64d == "") | .key] | join(" ")' | tr -d '\r')
+	[ -z "$empty" ] || die "the Secret $NAMESPACE/$SECRET holds an empty $empty: restore it before you back it up"
 	directory=$(cd "$(dirname "$EXPORT")" && pwd -P) || die "the folder of $EXPORT does not exist"
 	case $directory in /var/lib/rancher | /var/lib/rancher/*) die "write the file outside the k3s data folder" ;; esac
 	[ ! -e "$EXPORT" ] && [ ! -L "$EXPORT" ] || die "$EXPORT exists: name a new file, so that no older copy is overwritten"
@@ -112,7 +116,9 @@ if [ -n "$CHECK" ]; then
 		if ! has "$key"; then
 			echo "$key: not in the Secret"
 			status=1
-		elif [ "$(value_of "$key")" = "$value" ]; then
+		# The encoded values compare exactly: $(...) would drop a trailing line break from the Secret value.
+		elif [ "$(printf '%s' "$secret_json" | jq -r --arg key "$key" '.data[$key]' | tr -d '\r')" = \
+			"$(printf '%s' "$value" | openssl base64 -A | tr -d '\r\n')" ]; then
 			echo "$key: matches"
 		else
 			echo "$key: differs from the Secret"

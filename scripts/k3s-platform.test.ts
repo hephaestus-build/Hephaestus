@@ -553,7 +553,9 @@ await test("the installer ends with the command that backs up the keys a restore
 	);
 	const message = installer.slice(installer.lastIndexOf('say "Hephaestus $VERSION runs at'));
 	// The installer and the custody page give one command; the key rule lives in the script alone.
-	assert.match(message, /sh \$HERE\/hephaestus-keys\.sh --export-keys /u);
+	// Quoted, so that a bundle folder with a space in its path still gives one argument.
+	assert.match(message, /sh "\$HERE\/hephaestus-keys\.sh" --export-keys /u);
+	assert.match(message, /export KUBECONFIG="\$KUBECONFIG"$/mu);
 	assert.match(custody, /sh hephaestus-keys\.sh --export-keys /u);
 	assert.match(custody, /sh hephaestus-keys\.sh --check-keys /u);
 	const selection = /^RESTORE_KEYS='(?<keys>[^']+)'$/mu.exec(keysScript)?.groups?.keys ?? "";

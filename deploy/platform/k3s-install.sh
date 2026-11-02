@@ -523,14 +523,14 @@ fi
 
 say "Hephaestus $VERSION runs at https://$HOST"
 cat <<EOF
-- For kubectl and helm on this host: export KUBECONFIG=$KUBECONFIG
+- For kubectl and helm on this host: export KUBECONFIG="$KUBECONFIG"
 
 Back up the encryption keys now. Hephaestus cannot make them again.
 If you lose them, sign-in stops, and the stored provider secrets, AI keys and integration
 credentials are lost for good. A new install cannot read them.
 This command writes the keys to a new file that only you can read. It prints no key:
 
-  sh $HERE/hephaestus-keys.sh --export-keys hephaestus-keys-\$(date +%F).env
+  sh "$HERE/hephaestus-keys.sh" --export-keys hephaestus-keys-\$(date +%F).env
 
 The file is not encrypted: put it in a password manager or encrypt it, keep it with site.yaml
 off this host, then delete it here. After each key change, export a new copy.
