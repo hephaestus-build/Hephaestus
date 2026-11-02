@@ -400,7 +400,7 @@ function skipHint(data: WorkspaceOnboarding | undefined): string {
 	}
 	return data?.aiChoiceRequired === true
 		? "This workspace cannot use AI for you until you save an answer."
-		: "Workspaces that do not require an answer may use a model whose handling is not declared.";
+		: "Without an answer, a workspace that does not require one may use a model that does not say how it handles data.";
 }
 
 function onboardingNarration({

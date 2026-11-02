@@ -950,7 +950,7 @@ export const OptionalChoiceSkipped: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Skip for now" })).toHaveAccessibleDescription(
-			"Skipping does not save an answer selected above. Workspaces that do not require an answer may use a model whose handling is not declared.",
+			"Skipping does not save an answer selected above. Without an answer, a workspace that does not require one may use a model that does not say how it handles data.",
 		);
 	},
 };
