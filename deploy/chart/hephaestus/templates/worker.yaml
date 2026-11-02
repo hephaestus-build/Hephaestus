@@ -330,6 +330,14 @@ spec:
             # writes its feedback after its sandbox ends holds no slot; AGENT_MAX_CONCURRENT_COMPOSITIONS bounds those.
             - name: SANDBOX_MAX_CONCURRENT
               value: {{ .Values.worker.reviews | int | quote }}
+            # What a review needs after its sandbox follows the reviews, from the floors that the application defaults to.
+            - name: AGENT_MAX_ACTIVE_COMPOSITIONS
+              value: {{ include "hephaestus.activeCompositions" . | quote }}
+            - name: AGENT_MAX_CONCURRENT_COMPOSITIONS
+              value: {{ include "hephaestus.concurrentCompositions" . | quote }}
+            # The buildpack sizes the heap from this count. A worker runs about 100 threads, and about 7 more per review.
+            - name: BPL_JVM_THREAD_COUNT
+              value: {{ add 120 (mul 8 (int .Values.worker.reviews)) | quote }}
             - name: HEPHAESTUS_WORKER_DRAIN_TIMEOUT
               value: {{ printf "%ds" $drain | quote }}
             # The review-ledger worker identity stays per process: no HEPHAESTUS_WORKER_ID here.

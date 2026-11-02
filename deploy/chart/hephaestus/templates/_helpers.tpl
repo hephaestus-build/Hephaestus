@@ -613,6 +613,16 @@ PostgreSQL volume.
 {{- end -}}
 {{- end -}}
 
+{{/* Compositions run after a review's sandbox ends, and they take about half as long as the sandbox. */}}
+{{- define "hephaestus.activeCompositions" -}}
+{{- max 4 (div (add (int .Values.worker.reviews) 1) 2) -}}
+{{- end -}}
+
+{{/* Every local review attempt: those that hold a sandbox, and those that compose. */}}
+{{- define "hephaestus.concurrentCompositions" -}}
+{{- max 16 (div (add (mul 3 (int .Values.worker.reviews)) 1) 2) -}}
+{{- end -}}
+
 {{/* The existing review tier CPU reservation, including each running worker's probe and Pod overhead. */}}
 {{- define "hephaestus.reviewCpuMillis" -}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
@@ -657,7 +667,7 @@ independent pool and quota admission. The ceiling is the qualified model-only re
 {{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}
 {{- $perWorker := div $turns (max 1 $replicas) -}}
 {{- if and .Values.worker.enabled (gt $replicas 0) (lt $perWorker 1) -}}
-{{- fail "Automatic turn admission has no CPU room; reduce reservations or set worker.conversationTurns to 0 to disable turns" -}}
+{{- fail "Automatic turn admission has no CPU room in its budget of one small node; set worker.conversationTurns to a count, or to 0 to disable turns" -}}
 {{- end -}}
 {{- $perWorker -}}
 {{- else -}}

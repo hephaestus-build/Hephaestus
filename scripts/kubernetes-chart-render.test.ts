@@ -1655,6 +1655,47 @@ await test("the worker schema refuses the retired hephTurns value", () => {
 	assert.match(result.stderr, /hephTurns/u);
 });
 
+const workerCapacity = (reviewCount: number) => {
+	const worker = workload(
+		rendered([...layersFor("small"), { worker: { reviews: reviewCount, conversationTurns: 8 } }]),
+		"worker",
+	);
+	return {
+		active: envValue(worker, "AGENT_MAX_ACTIVE_COMPOSITIONS"),
+		attempts: envValue(worker, "AGENT_MAX_CONCURRENT_COMPOSITIONS"),
+		threads: envValue(worker, "BPL_JVM_THREAD_COUNT"),
+		sandboxes: envValue(worker, "SANDBOX_MAX_CONCURRENT"),
+	};
+};
+
+await test("what a worker holds for its reviews follows worker.reviews", () => {
+	// Up to eight reviews, the application's defaults hold. A larger worker must not stop at them.
+	assert.deepEqual(workerCapacity(1), {
+		active: "4",
+		attempts: "16",
+		threads: "128",
+		sandboxes: "1",
+	});
+	assert.deepEqual(workerCapacity(16), {
+		active: "8",
+		attempts: "24",
+		threads: "248",
+		sandboxes: "16",
+	});
+	assert.deepEqual(workerCapacity(32), {
+		active: "16",
+		attempts: "48",
+		threads: "376",
+		sandboxes: "32",
+	});
+	assert.deepEqual(workerCapacity(64), {
+		active: "32",
+		attempts: "96",
+		threads: "632",
+		sandboxes: "64",
+	});
+});
+
 await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
 	// Without a worker, a submitted review job would wait for a worker that never comes.
 	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");
@@ -1711,8 +1752,8 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			},
 		]),
 		{
-			worker: "2",
-			server: "6",
+			worker: "3",
+			server: "9",
 		},
 	);
 	assert.deepEqual(
@@ -1729,12 +1770,12 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		},
 	);
 	assert.deepEqual(capacities([...layersFor("small"), { worker: { reviews: 15 } }]), {
-		worker: "9",
-		server: "9",
+		worker: "24",
+		server: "24",
 	});
 	assert.deepEqual(
 		capacities([...layersFor("small"), { server: { resources: { requests: { cpu: "2" } } } }]),
-		{ worker: "2", server: "2" },
+		{ worker: "3", server: "3" },
 	);
 	const exhausted = render([
 		...layersFor("small"),
