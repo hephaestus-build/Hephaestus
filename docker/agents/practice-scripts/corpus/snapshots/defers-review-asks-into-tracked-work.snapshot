@@ -1,0 +1,478 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T11:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": true,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false,
+						"path": "web/cart.ts",
+						"line": 3,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "linter",
+						"at": "2026-01-02T11:50:00Z",
+						"authorReplied": false,
+						"issueNamedInReply": false,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": true,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": true,
+						"path": "web/cart.ts",
+						"line": 5,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"outdated": true
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A comment by someone other than the author in the conversation.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T12:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false
+					}
+				}
+			],
+			"facts": {
+				"asks": 3,
+				"inlineAsks": 2,
+				"conversationAsks": 1,
+				"asksWithAuthorReply": 2,
+				"asksNamingAnIssueInReply": 2,
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0
+			},
+			"directions": [
+				"3 comment(s) by others are listed, one lead each; a remark that asks nothing of this change is not an ask.",
+				"Decide every ask. One about the code is addressed when the head diff carries the change asked for.",
+				"One about the pull request itself — mark it ready, retitle it, link an issue, fill in the description — is addressed when the captured record shows it done (metadata.json, description.md, the linked work items).",
+				"A merged pull request was not a draft when it merged.",
+				"An ask is deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up; otherwise deferred bare.",
+				"A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and \"approved on the condition that you do it next time\" is a deferral to track, not a waiver.",
+				"A two-part ask is two asks: address one part and the other still stands."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T11:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": true,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false,
+						"path": "web/cart.ts",
+						"line": 3,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "linter",
+						"at": "2026-01-02T11:50:00Z",
+						"authorReplied": false,
+						"issueNamedInReply": false,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": true,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": true,
+						"path": "web/cart.ts",
+						"line": 5,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"outdated": true
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A comment by someone other than the author in the conversation.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T12:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false
+					}
+				}
+			],
+			"facts": {
+				"asks": 3,
+				"inlineAsks": 2,
+				"conversationAsks": 1,
+				"asksWithAuthorReply": 2,
+				"asksNamingAnIssueInReply": 2,
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0
+			},
+			"directions": [
+				"3 comment(s) by others are listed, one lead each; a remark that asks nothing of this change is not an ask.",
+				"Decide every ask. One about the code is addressed when the head diff carries the change asked for.",
+				"One about the pull request itself — mark it ready, retitle it, link an issue, fill in the description — is addressed when the captured record shows it done (metadata.json, description.md, the linked work items).",
+				"A merged pull request was not a draft when it merged.",
+				"An ask is deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up; otherwise deferred bare.",
+				"A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and \"approved on the condition that you do it next time\" is a deferral to track, not a waiver.",
+				"A two-part ask is two asks: address one part and the other still stands."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T11:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": true,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false,
+						"path": "web/cart.ts",
+						"line": 3,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "linter",
+						"at": "2026-01-02T11:50:00Z",
+						"authorReplied": false,
+						"issueNamedInReply": false,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": true,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": true,
+						"path": "web/cart.ts",
+						"line": 5,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"outdated": true
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A comment by someone other than the author in the conversation.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T12:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false
+					}
+				}
+			],
+			"facts": {
+				"asks": 3,
+				"inlineAsks": 2,
+				"conversationAsks": 1,
+				"asksWithAuthorReply": 2,
+				"asksNamingAnIssueInReply": 2,
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0
+			},
+			"directions": [
+				"3 comment(s) by others are listed, one lead each; a remark that asks nothing of this change is not an ask.",
+				"Decide every ask. One about the code is addressed when the head diff carries the change asked for.",
+				"One about the pull request itself — mark it ready, retitle it, link an issue, fill in the description — is addressed when the captured record shows it done (metadata.json, description.md, the linked work items).",
+				"A merged pull request was not a draft when it merged.",
+				"An ask is deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up; otherwise deferred bare.",
+				"A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and \"approved on the condition that you do it next time\" is a deferral to track, not a waiver.",
+				"A two-part ask is two asks: address one part and the other still stands."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T11:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": true,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false,
+						"path": "web/cart.ts",
+						"line": 3,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "linter",
+						"at": "2026-01-02T11:50:00Z",
+						"authorReplied": false,
+						"issueNamedInReply": false,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": true,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": true,
+						"path": "web/cart.ts",
+						"line": 5,
+						"fileInChange": true,
+						"changeNearLine": true,
+						"outdated": true
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A comment by someone other than the author in the conversation.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T12:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false
+					}
+				}
+			],
+			"facts": {
+				"asks": 3,
+				"inlineAsks": 2,
+				"conversationAsks": 1,
+				"asksWithAuthorReply": 2,
+				"asksNamingAnIssueInReply": 2,
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0
+			},
+			"directions": [
+				"3 comment(s) by others are listed, one lead each; a remark that asks nothing of this change is not an ask.",
+				"Decide every ask. One about the code is addressed when the head diff carries the change asked for.",
+				"One about the pull request itself — mark it ready, retitle it, link an issue, fill in the description — is addressed when the captured record shows it done (metadata.json, description.md, the linked work items).",
+				"A merged pull request was not a draft when it merged.",
+				"An ask is deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up; otherwise deferred bare.",
+				"A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and \"approved on the condition that you do it next time\" is a deferral to track, not a waiver.",
+				"A two-part ask is two asks: address one part and the other still stands."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 9
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T11:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": true,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false,
+						"path": "web/cart.ts",
+						"line": 3,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "comments.json",
+						"line": 32
+					},
+					"label": "A comment by someone other than the author that opens a thread on a line of the change.",
+					"facts": {
+						"by": "linter",
+						"at": "2026-01-02T11:50:00Z",
+						"authorReplied": false,
+						"issueNamedInReply": false,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": true,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": true,
+						"path": "web/cart.ts",
+						"line": 5,
+						"fileInChange": false,
+						"changeNearLine": false,
+						"outdated": true
+					}
+				},
+				{
+					"at": {
+						"record": "general_comments.json",
+						"line": 4
+					},
+					"label": "A comment by someone other than the author in the conversation.",
+					"facts": {
+						"by": "reviewer",
+						"at": "2026-01-02T12:30:00Z",
+						"authorReplied": true,
+						"issueNamedInReply": true,
+						"deferralWordsInReply": false,
+						"waiverWordsInAsk": false,
+						"reviewerFollowedUp": false,
+						"waiverWordsInFollowUp": false,
+						"approvedAfterAsk": true,
+						"threadResolved": false
+					}
+				}
+			],
+			"facts": {
+				"asks": 3,
+				"inlineAsks": 2,
+				"conversationAsks": 1,
+				"asksWithAuthorReply": 2,
+				"asksNamingAnIssueInReply": 2,
+				"commentsFileAbsent": 0,
+				"generalCommentsFileAbsent": 0
+			},
+			"directions": [
+				"3 comment(s) by others are listed, one lead each; a remark that asks nothing of this change is not an ask.",
+				"Decide every ask. One about the code is addressed when the head diff carries the change asked for.",
+				"One about the pull request itself — mark it ready, retitle it, link an issue, fill in the description — is addressed when the captured record shows it done (metadata.json, description.md, the linked work items).",
+				"A merged pull request was not a draft when it merged.",
+				"An ask is deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up; otherwise deferred bare.",
+				"A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and \"approved on the condition that you do it next time\" is a deferral to track, not a waiver.",
+				"A two-part ask is two asks: address one part and the other still stands."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"asks": 0,
+				"inlineAsks": 0,
+				"conversationAsks": 0,
+				"asksWithAuthorReply": 0,
+				"asksNamingAnIssueInReply": 0,
+				"commentsFileAbsent": 1,
+				"generalCommentsFileAbsent": 1
+			},
+			"directions": [
+				"A required comments file is missing or malformed (comments.json or general_comments.json): report a collection gap and record no problem; an unread source does not establish that no ask exists."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

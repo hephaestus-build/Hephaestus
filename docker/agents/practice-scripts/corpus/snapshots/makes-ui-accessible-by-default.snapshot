@@ -1,0 +1,596 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 76,
+						"endLine": 76
+					},
+					"label": "A selected Image(systemName:).",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 77,
+						"endLine": 77
+					},
+					"label": "A selected Image from an asset or a decorative image.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 78,
+						"endLine": 78
+					},
+					"label": "A selected Button.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 78,
+						"endLine": 78
+					},
+					"label": "A selected Image(systemName:).",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 79,
+						"endLine": 79
+					},
+					"label": "A selected system font with a point size.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 80,
+						"endLine": 80
+					},
+					"label": "A selected semantic font, such as .headline or .body.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 80,
+						"endLine": 80
+					},
+					"label": "A selected foreground colour that a condition selects, such as red or green.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 82,
+						"endLine": 82
+					},
+					"label": "A selected Toggle.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 83,
+						"endLine": 83
+					},
+					"label": "A selected Label with a text title.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 86,
+						"endLine": 86
+					},
+					"label": "A selected frame with a fixed height.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 87,
+						"endLine": 87
+					},
+					"label": "A selected lineLimit with a number.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 101,
+						"endLine": 101
+					},
+					"label": "A selected custom font with fixedSize:, which does not scale with the text size.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 102,
+						"endLine": 102
+					},
+					"label": "A selected custom font with size:, which scales with the body style.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 103,
+						"endLine": 103
+					},
+					"label": "A selected accessibility modifier, such as accessibilityLabel or accessibilityHidden.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				}
+			],
+			"facts": {
+				"interfaceLinesSelected": 14,
+				"symbolImages": 2,
+				"assetImages": 1,
+				"accessibilityModifiers": 1,
+				"fixedSizeCustomFonts": 1,
+				"systemFontsWithPointSize": 1,
+				"scaledCustomFonts": 1,
+				"semanticFonts": 1,
+				"heightCaps": 1,
+				"colourByState": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 2,
+				"linesSelected": 174
+			},
+			"directions": [
+				"3 image(s) selected against 1 accessibility modifier(s) — for each image inside a Button, Toggle or tap gesture, read the whole view chain for a label or a Label title.",
+				"1 custom font(s) with fixedSize: selected — these do not scale with the user's text size.",
+				"1 system font(s) with a point size selected — fixed unless the size itself scales (a @ScaledMetric value); read where each size comes from. A custom font given size: scales with the body style and is not fixed.",
+				"1 height cap(s) selected — a cap clips only when the container holds text."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"interfaceLinesSelected": 0,
+				"symbolImages": 0,
+				"assetImages": 0,
+				"accessibilityModifiers": 0,
+				"fixedSizeCustomFonts": 0,
+				"systemFontsWithPointSize": 0,
+				"scaledCustomFonts": 0,
+				"semanticFonts": 0,
+				"heightCaps": 0,
+				"colourByState": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"interfaceLinesSelected": 0,
+				"symbolImages": 0,
+				"assetImages": 0,
+				"accessibilityModifiers": 0,
+				"fixedSizeCustomFonts": 0,
+				"systemFontsWithPointSize": 0,
+				"scaledCustomFonts": 0,
+				"semanticFonts": 0,
+				"heightCaps": 0,
+				"colourByState": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 1
+			},
+			"directions": [
+				"Scanned 1 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"interfaceLinesSelected": 0,
+				"symbolImages": 0,
+				"assetImages": 0,
+				"accessibilityModifiers": 0,
+				"fixedSizeCustomFonts": 0,
+				"systemFontsWithPointSize": 0,
+				"scaledCustomFonts": 0,
+				"semanticFonts": 0,
+				"heightCaps": 0,
+				"colourByState": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"interfaceLinesSelected": 0,
+				"symbolImages": 0,
+				"assetImages": 0,
+				"accessibilityModifiers": 0,
+				"fixedSizeCustomFonts": 0,
+				"systemFontsWithPointSize": 0,
+				"scaledCustomFonts": 0,
+				"semanticFonts": 0,
+				"heightCaps": 0,
+				"colourByState": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"interfaceLinesSelected": 0,
+				"symbolImages": 0,
+				"assetImages": 0,
+				"accessibilityModifiers": 0,
+				"fixedSizeCustomFonts": 0,
+				"systemFontsWithPointSize": 0,
+				"scaledCustomFonts": 0,
+				"semanticFonts": 0,
+				"heightCaps": 0,
+				"colourByState": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 76,
+						"endLine": 76
+					},
+					"label": "A selected Image(systemName:).",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 77,
+						"endLine": 77
+					},
+					"label": "A selected Image from an asset or a decorative image.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 78,
+						"endLine": 78
+					},
+					"label": "A selected Button.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 78,
+						"endLine": 78
+					},
+					"label": "A selected Image(systemName:).",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 79,
+						"endLine": 79
+					},
+					"label": "A selected system font with a point size.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 80,
+						"endLine": 80
+					},
+					"label": "A selected semantic font, such as .headline or .body.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 80,
+						"endLine": 80
+					},
+					"label": "A selected foreground colour that a condition selects, such as red or green.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 82,
+						"endLine": 82
+					},
+					"label": "A selected Toggle.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 83,
+						"endLine": 83
+					},
+					"label": "A selected Label with a text title.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 86,
+						"endLine": 86
+					},
+					"label": "A selected frame with a fixed height.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 87,
+						"endLine": 87
+					},
+					"label": "A selected lineLimit with a number.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 101,
+						"endLine": 101
+					},
+					"label": "A selected custom font with fixedSize:, which does not scale with the text size.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 102,
+						"endLine": 102
+					},
+					"label": "A selected custom font with size:, which scales with the body style.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 103,
+						"endLine": 103
+					},
+					"label": "A selected accessibility modifier, such as accessibilityLabel or accessibilityHidden.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false
+					}
+				}
+			],
+			"facts": {
+				"interfaceLinesSelected": 14,
+				"symbolImages": 2,
+				"assetImages": 1,
+				"accessibilityModifiers": 1,
+				"fixedSizeCustomFonts": 1,
+				"systemFontsWithPointSize": 1,
+				"scaledCustomFonts": 1,
+				"semanticFonts": 1,
+				"heightCaps": 1,
+				"colourByState": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 113
+			},
+			"directions": [
+				"3 image(s) selected against 1 accessibility modifier(s) — for each image inside a Button, Toggle or tap gesture, read the whole view chain for a label or a Label title.",
+				"1 custom font(s) with fixedSize: selected — these do not scale with the user's text size.",
+				"1 system font(s) with a point size selected — fixed unless the size itself scales (a @ScaledMetric value); read where each size comes from. A custom font given size: scales with the body style and is not fixed.",
+				"1 height cap(s) selected — a cap clips only when the container holds text."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [],
+			"facts": {
+				"interfaceLinesSelected": 0,
+				"symbolImages": 0,
+				"assetImages": 0,
+				"accessibilityModifiers": 0,
+				"fixedSizeCustomFonts": 0,
+				"systemFontsWithPointSize": 0,
+				"scaledCustomFonts": 0,
+				"semanticFonts": 0,
+				"heightCaps": 0,
+				"colourByState": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	]
+}

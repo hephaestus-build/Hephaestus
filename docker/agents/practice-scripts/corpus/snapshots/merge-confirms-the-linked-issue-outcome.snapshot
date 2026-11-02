@@ -1,0 +1,103 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "linked_work_items/12.md"
+					},
+					"label": "A linked issue with a task list, an outcome heading or a positive sub-issue count.",
+					"facts": {
+						"number": 12,
+						"how": "a provider closing candidate",
+						"taskItems": 2,
+						"ticked": 1,
+						"unticked": 1,
+						"outcomeHeading": true,
+						"subIssuesTotal": 2,
+						"subIssuesCompleted": 1,
+						"subIssuesSource": "provider",
+						"state": "OPEN"
+					}
+				},
+				{
+					"at": {
+						"record": "linked_work_items/13.md"
+					},
+					"label": "A linked issue with no task list, no outcome heading, and no count that shows it has no sub-issues.",
+					"facts": {
+						"number": 13,
+						"how": "named by the title, body or branch",
+						"taskItems": 0,
+						"ticked": 0,
+						"unticked": 0,
+						"outcomeHeading": false,
+						"subIssuesTotal": 0,
+						"subIssuesSource": "children",
+						"state": "CLOSED"
+					}
+				}
+			],
+			"facts": {
+				"linkedItems": 2,
+				"checkableItems": 1,
+				"untickedItems": 1
+			},
+			"directions": [
+				"1 captured linked issue(s) state a checkable outcome. Each is a candidate: the criteria decide which of them this change implements, from the provider's closing link and the author's own words; a mention alone asks nothing of it.",
+				"For an issue it implements, assess confirmation in the captured record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves.",
+				"Work delivered in the diff but neither ticked nor named is unconfirmed. A confirmation captured after the merge counts; when it was written is unknown unless independently dated evidence establishes it.",
+				"subIssuesSource=children counts only the child issues stored at capture. That mirror may omit other children, so all of them closed does not show that the whole hierarchy is complete."
+			],
+			"limitations": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	]
+}

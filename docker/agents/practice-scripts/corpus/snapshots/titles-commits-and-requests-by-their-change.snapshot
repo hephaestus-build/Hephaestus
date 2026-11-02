@@ -1,0 +1,328 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 4
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "1111111",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 40
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "3333333",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 79
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "5555555",
+						"category": "meaningless"
+					}
+				}
+			],
+			"facts": {
+				"titleLength": 14,
+				"titleCues": 0,
+				"changedFiles": 30,
+				"authoredCommits": 4,
+				"vagueSubjects": 3,
+				"repeatedSubjects": 1
+			},
+			"directions": [
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"3 of 4 authored commit subject(s) match the authored program's vague patterns, and 1 subject(s) repeat.",
+				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 4
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "1111111",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 40
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "3333333",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 79
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "5555555",
+						"category": "meaningless"
+					}
+				}
+			],
+			"facts": {
+				"titleLength": 14,
+				"titleCues": 0,
+				"changedFiles": 30,
+				"authoredCommits": 4,
+				"vagueSubjects": 3,
+				"repeatedSubjects": 1
+			},
+			"directions": [
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"3 of 4 authored commit subject(s) match the authored program's vague patterns, and 1 subject(s) repeat.",
+				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip.",
+				"The change touches 30 files in 12 directories. Read whether one title can describe it or whether it holds separate changes."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 4
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "1111111",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 40
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "3333333",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 79
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "5555555",
+						"category": "meaningless"
+					}
+				}
+			],
+			"facts": {
+				"titleLength": 14,
+				"titleCues": 0,
+				"changedFiles": 30,
+				"authoredCommits": 4,
+				"vagueSubjects": 3,
+				"repeatedSubjects": 1
+			},
+			"directions": [
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"3 of 4 authored commit subject(s) match the authored program's vague patterns, and 1 subject(s) repeat.",
+				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 4
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "1111111",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 40
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "3333333",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 79
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "5555555",
+						"category": "meaningless"
+					}
+				}
+			],
+			"facts": {
+				"titleLength": 14,
+				"titleCues": 0,
+				"changedFiles": 30,
+				"authoredCommits": 4,
+				"vagueSubjects": 3,
+				"repeatedSubjects": 1
+			},
+			"directions": [
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"3 of 4 authored commit subject(s) match the authored program's vague patterns, and 1 subject(s) repeat.",
+				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 4
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "1111111",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 40
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "3333333",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 79
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "5555555",
+						"category": "meaningless"
+					}
+				}
+			],
+			"facts": {
+				"titleLength": 14,
+				"titleCues": 0,
+				"changedFiles": 30,
+				"authoredCommits": 4,
+				"vagueSubjects": 3,
+				"repeatedSubjects": 1
+			},
+			"directions": [
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"3 of 4 authored commit subject(s) match the authored program's vague patterns, and 1 subject(s) repeat.",
+				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 0
+			},
+			"directions": [
+				"The title was not captured, so it is unknown, not empty: no title cue was read.",
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"The commit range was not captured; its subjects are unknown, not clean."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 4
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "1111111",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 40
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "3333333",
+						"category": "bareVerb"
+					}
+				},
+				{
+					"at": {
+						"record": "commits.json",
+						"line": 79
+					},
+					"label": "An authored commit whose subject does not say what changed.",
+					"facts": {
+						"sha": "5555555",
+						"category": "meaningless"
+					}
+				}
+			],
+			"facts": {
+				"titleLength": 14,
+				"titleCues": 0,
+				"changedFiles": 30,
+				"authoredCommits": 4,
+				"vagueSubjects": 3,
+				"repeatedSubjects": 1
+			},
+			"directions": [
+				"The authored practice asks that a title and each commit subject say what changed, so a reader can follow the history without opening the diff. Merge commits are not read.",
+				"3 of 4 authored commit subject(s) match the authored program's vague patterns, and 1 subject(s) repeat.",
+				"Half or more of the authored commits have vague subjects. Read whether this is a pattern for the change as a whole, not one slip."
+			]
+		}
+	]
+}

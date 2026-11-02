@@ -1,0 +1,91 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"capturedCommitCount": 5
+			},
+			"directions": [
+				"Captured source branch: 12-cart-total; target branch: main.",
+				"The captured pull request range contains 5 commit(s); this is not a count of commits ahead of the integration branch.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"capturedCommitCount": 5
+			},
+			"directions": [
+				"Captured source branch: 12-cart-total; target branch: main.",
+				"The captured pull request range contains 5 commit(s); this is not a count of commits ahead of the integration branch.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"capturedCommitCount": 5
+			},
+			"directions": [
+				"Captured source branch: 12-cart-total; target branch: main.",
+				"The captured pull request range contains 5 commit(s); this is not a count of commits ahead of the integration branch.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"capturedCommitCount": 5
+			},
+			"directions": [
+				"Captured source branch: 12-cart-total; target branch: main.",
+				"The captured pull request range contains 5 commit(s); this is not a count of commits ahead of the integration branch.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"capturedCommitCount": 5
+			},
+			"directions": [
+				"Captured source branch: 12-cart-total; target branch: main.",
+				"The captured pull request range contains 5 commit(s); this is not a count of commits ahead of the integration branch.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Captured source branch: feature; target branch: main.",
+				"The commit range was not captured; its size is unknown, not zero.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"capturedCommitCount": 5
+			},
+			"directions": [
+				"Captured source branch: 12-cart-total; target branch: main.",
+				"The captured pull request range contains 5 commit(s); this is not a count of commits ahead of the integration branch.",
+				"A target name alone does not establish where this branch was created or which branch the team uses for integration. Inspect the captured branch and history evidence before deciding; do not infer a clean cut or an off-integration cut from a name or commit count."
+			]
+		}
+	]
+}

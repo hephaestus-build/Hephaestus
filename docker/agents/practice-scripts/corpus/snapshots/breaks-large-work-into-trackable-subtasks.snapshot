@@ -1,0 +1,51 @@
+{
+	"issue-with-outcome": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 66,
+				"taskCheckboxes": 2,
+				"childIssueRefs": 2,
+				"subIssuesTotal": 3,
+				"subIssuesCompleted": 1
+			},
+			"directions": [
+				"Captured: 2 task-list item(s) (1 ticked), 2 issue-number mention(s); labels feature, billing.",
+				"Sub-issues: 3 sub-issue(s), 1 completed, as the provider reports them.",
+				"Judge the standard once: whether the work is large and whether these items or mentions break it down is read from what they say, never from how many there are."
+			]
+		}
+	],
+	"issue-empty": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 0,
+				"taskCheckboxes": 0,
+				"childIssueRefs": 0
+			},
+			"directions": [
+				"The captured body is empty: the title is the only text the issue itself carries.",
+				"Captured: 0 task-list item(s) (0 ticked), 0 issue-number mention(s); labels none.",
+				"Sub-issues: sub-issue rollup not reported by the provider (unknown, not zero).",
+				"Judge the standard once: whether the work is large and whether these items or mentions break it down is read from what they say, never from how many there are."
+			]
+		}
+	],
+	"issue-closed": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 39,
+				"taskCheckboxes": 1,
+				"childIssueRefs": 0,
+				"subIssuesTotal": 0
+			},
+			"directions": [
+				"Captured: 1 task-list item(s) (0 ticked), 0 issue-number mention(s); labels epic.",
+				"Sub-issues: 0 sub-issue(s), completed count not reported, counted from the child issues this repository stored at capture; that mirror may omit other children.",
+				"Judge the standard once: whether the work is large and whether these items or mentions break it down is read from what they say, never from how many there are."
+			]
+		}
+	]
+}

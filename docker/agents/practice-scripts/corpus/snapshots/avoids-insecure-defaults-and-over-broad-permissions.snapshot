@@ -1,0 +1,348 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 44,
+						"endLine": 44
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 45,
+						"endLine": 45
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 46,
+						"endLine": 46
+					},
+					"label": "A selected line that puts a credential-named value into a URL path or query.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 46,
+						"endLine": 46
+					},
+					"label": "A selected line that allows plain HTTP or turns off the verification of TLS certificates.",
+					"facts": {
+						"language": "swift"
+					}
+				}
+			],
+			"facts": {
+				"insecureDefaultCandidates": 4,
+				"credentialNamedValueInUrlPathQuery": 1,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 1,
+				"overBroadPermissionWildcard": 0,
+				"credentialNamedLiteral": 2
+			},
+			"directions": [
+				"Found 4 insecure-default or secret-exposure candidate(s) on selected lines. Investigate each on the reachable auth and transport surface.",
+				"For credential-named URL, literal and logging leads, establish the value’s role under class 5 of the standard before deciding whether it exposes credential material.",
+				"A keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself.",
+				"Disabled TLS, wildcard CORS and world-writable permissions are over-broad. Confirm whether each is real and exploitable before deciding."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 17,
+						"endLine": 17
+					},
+					"label": "A selected line that allows plain HTTP or turns off the verification of TLS certificates.",
+					"facts": {
+						"language": "python"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected line that allows plain HTTP or turns off the verification of TLS certificates.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected line that grants world-writable file modes, permits all requests, or allows every origin.",
+					"facts": {
+						"language": "typescript"
+					}
+				}
+			],
+			"facts": {
+				"insecureDefaultCandidates": 4,
+				"credentialNamedValueInUrlPathQuery": 0,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 2,
+				"overBroadPermissionWildcard": 1,
+				"credentialNamedLiteral": 1
+			},
+			"directions": [
+				"Found 4 insecure-default or secret-exposure candidate(s) on selected lines. Investigate each on the reachable auth and transport surface.",
+				"For credential-named URL, literal and logging leads, establish the value’s role under class 5 of the standard before deciding whether it exposes credential material.",
+				"A keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself.",
+				"Disabled TLS, wildcard CORS and world-writable permissions are over-broad. Confirm whether each is real and exploitable before deciding."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"insecureDefaultCandidates": 0,
+				"credentialNamedValueInUrlPathQuery": 0,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 0,
+				"overBroadPermissionWildcard": 0,
+				"credentialNamedLiteral": 0
+			},
+			"directions": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected line that allows plain HTTP or turns off the verification of TLS certificates.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected line that grants world-writable file modes, permits all requests, or allows every origin.",
+					"facts": {
+						"language": "typescript"
+					}
+				}
+			],
+			"facts": {
+				"insecureDefaultCandidates": 3,
+				"credentialNamedValueInUrlPathQuery": 0,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 1,
+				"overBroadPermissionWildcard": 1,
+				"credentialNamedLiteral": 1
+			},
+			"directions": [
+				"Found 3 insecure-default or secret-exposure candidate(s) on selected lines. Investigate each on the reachable auth and transport surface.",
+				"For credential-named URL, literal and logging leads, establish the value’s role under class 5 of the standard before deciding whether it exposes credential material.",
+				"A keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself.",
+				"Disabled TLS, wildcard CORS and world-writable permissions are over-broad. Confirm whether each is real and exploitable before deciding."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"insecureDefaultCandidates": 0,
+				"credentialNamedValueInUrlPathQuery": 0,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 0,
+				"overBroadPermissionWildcard": 0,
+				"credentialNamedLiteral": 0
+			},
+			"directions": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"insecureDefaultCandidates": 0
+			},
+			"directions": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 44,
+						"endLine": 44
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 45,
+						"endLine": 45
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 46,
+						"endLine": 46
+					},
+					"label": "A selected line that puts a credential-named value into a URL path or query.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 46,
+						"endLine": 46
+					},
+					"label": "A selected line that allows plain HTTP or turns off the verification of TLS certificates.",
+					"facts": {
+						"language": "swift"
+					}
+				}
+			],
+			"facts": {
+				"insecureDefaultCandidates": 4,
+				"credentialNamedValueInUrlPathQuery": 1,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 1,
+				"overBroadPermissionWildcard": 0,
+				"credentialNamedLiteral": 2
+			},
+			"directions": [
+				"Found 4 insecure-default or secret-exposure candidate(s) on selected lines. Investigate each on the reachable auth and transport surface.",
+				"For credential-named URL, literal and logging leads, establish the value’s role under class 5 of the standard before deciding whether it exposes credential material.",
+				"A keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself.",
+				"Disabled TLS, wildcard CORS and world-writable permissions are over-broad. Confirm whether each is real and exploitable before deciding."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected line that allows plain HTTP or turns off the verification of TLS certificates.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected line that assigns a literal value to a credential-named field.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected line that grants world-writable file modes, permits all requests, or allows every origin.",
+					"facts": {
+						"language": "typescript"
+					}
+				}
+			],
+			"facts": {
+				"insecureDefaultCandidates": 3,
+				"credentialNamedValueInUrlPathQuery": 0,
+				"keychainWrite": 0,
+				"logsCredentialNamedValueResponseBody": 0,
+				"insecureTransportTlsOff": 1,
+				"overBroadPermissionWildcard": 1,
+				"credentialNamedLiteral": 1
+			},
+			"directions": [
+				"Found 3 insecure-default or secret-exposure candidate(s) on selected lines. Investigate each on the reachable auth and transport surface.",
+				"For credential-named URL, literal and logging leads, establish the value’s role under class 5 of the standard before deciding whether it exposes credential material.",
+				"A keychain write takes its accessibility from kSecAttrAccessible, WhenUnlocked when omitted, which is not a defect by itself.",
+				"Disabled TLS, wildcard CORS and world-writable permissions are over-broad. Confirm whether each is real and exploitable before deciding."
+			]
+		}
+	]
+}

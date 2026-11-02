@@ -1,0 +1,92 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 76
+					},
+					"label": "A changed Image(systemName:) with no accessibility label or hiding nearby and no text label around it."
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 79
+					},
+					"label": "A changed .font(.system(size:)) with a fixed point size."
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 85
+					},
+					"label": "A changed .onTapGesture with no accessibility trait or label nearby."
+				}
+			],
+			"facts": {
+				"unlabeledImage": 1,
+				"fixedFontSize": 1,
+				"tapWithoutTraits": 1
+			},
+			"directions": [
+				"Each lead is a changed line of a Swift file that declares a view. Nearby means three lines before to five lines after; a label set further away or on a parent view is yours to read.",
+				"The authored practice asks that VoiceOver users hear what an icon means, that text follows Dynamic Type, and that a tappable element is announced as a button. A decorative image can be hidden instead of labelled, and a fixed size can be right for a graphic that is not text."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a Swift file that declares a view. Nearby means three lines before to five lines after; a label set further away or on a parent view is yours to read.",
+				"The authored practice asks that VoiceOver users hear what an icon means, that text follows Dynamic Type, and that a tappable element is announced as a button. A decorative image can be hidden instead of labelled, and a fixed size can be right for a graphic that is not text."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a Swift file that declares a view. Nearby means three lines before to five lines after; a label set further away or on a parent view is yours to read.",
+				"The authored practice asks that VoiceOver users hear what an icon means, that text follows Dynamic Type, and that a tappable element is announced as a button. A decorative image can be hidden instead of labelled, and a fixed size can be right for a graphic that is not text."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a Swift file that declares a view. Nearby means three lines before to five lines after; a label set further away or on a parent view is yours to read.",
+				"The authored practice asks that VoiceOver users hear what an icon means, that text follows Dynamic Type, and that a tappable element is announced as a button. A decorative image can be hidden instead of labelled, and a fixed size can be right for a graphic that is not text."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a Swift file that declares a view. Nearby means three lines before to five lines after; a label set further away or on a parent view is yours to read.",
+				"The authored practice asks that VoiceOver users hear what an icon means, that text follows Dynamic Type, and that a tappable element is announced as a button. A decorative image can be hidden instead of labelled, and a fixed size can be right for a graphic that is not text."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a Swift file that declares a view. Nearby means three lines before to five lines after; a label set further away or on a parent view is yours to read.",
+				"The authored practice asks that VoiceOver users hear what an icon means, that text follows Dynamic Type, and that a tappable element is announced as a button. A decorative image can be hidden instead of labelled, and a fixed size can be right for a graphic that is not text."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

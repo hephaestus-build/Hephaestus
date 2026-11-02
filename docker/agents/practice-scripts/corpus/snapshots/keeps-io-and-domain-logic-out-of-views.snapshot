@@ -1,0 +1,137 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26
+					},
+					"label": "A changed line in a view file that uses a networking type or call.",
+					"facts": {
+						"networkType": "URLSession",
+						"view": "CartView"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27
+					},
+					"label": "A changed line in a view file that creates a JSON encoder or decoder.",
+					"facts": {
+						"view": "CartView"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 28
+					},
+					"label": "A changed line in a view file that uses UserDefaults.standard.",
+					"facts": {
+						"view": "CartView"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 29
+					},
+					"label": "A changed line in a view file that uses FileManager.default.",
+					"facts": {
+						"view": "CartView"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 31
+					},
+					"label": "A changed line in a view file that creates a Timer.",
+					"facts": {
+						"view": "CartView"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 25
+					},
+					"label": "A changed private function of more than 15 lines in a view file, with no UI code.",
+					"facts": {
+						"function": "refresh",
+						"lines": 42,
+						"view": "CartView"
+					}
+				}
+			],
+			"facts": {
+				"networking": 1,
+				"jsonCoding": 1,
+				"userDefaults": 1,
+				"fileManager": 1,
+				"timer": 1,
+				"longPrivateFunction": 1
+			},
+			"directions": [
+				"Leads are changed lines of Swift files that declare a SwiftUI view, so a networking or storage line can belong to another type in the same file. Read which type owns each line.",
+				"The authored practice keeps views to layout and user intent: networking, JSON coding, storage, timers and multi-step domain rules belong in a model, service or view model that the view calls. A small private helper that formats a value for display can stay."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Leads are changed lines of Swift files that declare a SwiftUI view, so a networking or storage line can belong to another type in the same file. Read which type owns each line.",
+				"The authored practice keeps views to layout and user intent: networking, JSON coding, storage, timers and multi-step domain rules belong in a model, service or view model that the view calls. A small private helper that formats a value for display can stay."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Leads are changed lines of Swift files that declare a SwiftUI view, so a networking or storage line can belong to another type in the same file. Read which type owns each line.",
+				"The authored practice keeps views to layout and user intent: networking, JSON coding, storage, timers and multi-step domain rules belong in a model, service or view model that the view calls. A small private helper that formats a value for display can stay."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Leads are changed lines of Swift files that declare a SwiftUI view, so a networking or storage line can belong to another type in the same file. Read which type owns each line.",
+				"The authored practice keeps views to layout and user intent: networking, JSON coding, storage, timers and multi-step domain rules belong in a model, service or view model that the view calls. A small private helper that formats a value for display can stay."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Leads are changed lines of Swift files that declare a SwiftUI view, so a networking or storage line can belong to another type in the same file. Read which type owns each line.",
+				"The authored practice keeps views to layout and user intent: networking, JSON coding, storage, timers and multi-step domain rules belong in a model, service or view model that the view calls. A small private helper that formats a value for display can stay."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Leads are changed lines of Swift files that declare a SwiftUI view, so a networking or storage line can belong to another type in the same file. Read which type owns each line.",
+				"The authored practice keeps views to layout and user intent: networking, JSON coding, storage, timers and multi-step domain rules belong in a model, service or view model that the view calls. A small private helper that formats a value for display can stay."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

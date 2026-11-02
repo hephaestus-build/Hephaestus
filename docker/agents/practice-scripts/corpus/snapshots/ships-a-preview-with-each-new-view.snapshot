@@ -1,0 +1,103 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": "App/CartView.swift",
+						"line": 3
+					},
+					"label": "An added struct that conforms to View, with its name.",
+					"facts": {
+						"name": "CartView"
+					}
+				},
+				{
+					"at": {
+						"change": "App/CartView.swift",
+						"line": 110
+					},
+					"label": "An added #Preview or PreviewProvider."
+				},
+				{
+					"at": {
+						"change": "App/Report.swift",
+						"line": 2
+					},
+					"label": "An added struct that conforms to View, with its name.",
+					"facts": {
+						"name": "Report"
+					}
+				}
+			],
+			"facts": {
+				"newViews": 2,
+				"previewsAdded": 1,
+				"filesWithNewViewAndNoPreview": 1
+			},
+			"directions": [
+				"2 new view type(s) declared and 1 preview(s) added; 1 file(s) declare a view and add no preview — a preview may live in another file of the change, so scan the whole diff before deciding.",
+				"These counts pair no preview with a view. Read the previews and view bodies to trace the presentation coverage described in the criteria, including nested views and content delegated by an effect-only owner."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"newViews": 0,
+				"previewsAdded": 0,
+				"filesWithNewViewAndNoPreview": 0
+			},
+			"directions": []
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"newViews": 0,
+				"previewsAdded": 0,
+				"filesWithNewViewAndNoPreview": 0
+			},
+			"directions": []
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"newViews": 0,
+				"previewsAdded": 0,
+				"filesWithNewViewAndNoPreview": 0
+			},
+			"directions": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"newViews": 0,
+				"previewsAdded": 0,
+				"filesWithNewViewAndNoPreview": 0
+			},
+			"directions": []
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"newViews": 0,
+				"previewsAdded": 0,
+				"filesWithNewViewAndNoPreview": 0
+			},
+			"directions": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

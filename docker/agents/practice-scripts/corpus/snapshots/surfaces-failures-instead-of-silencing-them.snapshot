@@ -1,0 +1,115 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26
+					},
+					"label": "A changed try? await on a network call.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 50
+					},
+					"label": "A changed catch block with no statement.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 54
+					},
+					"label": "A changed catch block that only prints.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 57
+					},
+					"label": "A changed try? on a save call.",
+					"facts": {}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 67
+					},
+					"label": "A changed function with a data-changing name and an empty body.",
+					"facts": {
+						"function": "saveDraft"
+					}
+				}
+			],
+			"facts": {
+				"optionalTryNetwork": 1,
+				"emptyCatch": 1,
+				"catchOnlyPrints": 1,
+				"optionalTrySave": 1,
+				"emptyStatefulFunction": 1
+			},
+			"directions": [
+				"Each lead is a changed line of non-test Swift. A catch block that throws, stops the app or sets an error property is not a lead, and a try? with a ?? fallback is not a lead.",
+				"The authored practice asks that a failure the user or the developer needs to know about is not lost: read whether each lead shows, logs with context, rethrows or deliberately ignores the error, and whether returning nil hides why the work failed."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of non-test Swift. A catch block that throws, stops the app or sets an error property is not a lead, and a try? with a ?? fallback is not a lead.",
+				"The authored practice asks that a failure the user or the developer needs to know about is not lost: read whether each lead shows, logs with context, rethrows or deliberately ignores the error, and whether returning nil hides why the work failed."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of non-test Swift. A catch block that throws, stops the app or sets an error property is not a lead, and a try? with a ?? fallback is not a lead.",
+				"The authored practice asks that a failure the user or the developer needs to know about is not lost: read whether each lead shows, logs with context, rethrows or deliberately ignores the error, and whether returning nil hides why the work failed."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of non-test Swift. A catch block that throws, stops the app or sets an error property is not a lead, and a try? with a ?? fallback is not a lead.",
+				"The authored practice asks that a failure the user or the developer needs to know about is not lost: read whether each lead shows, logs with context, rethrows or deliberately ignores the error, and whether returning nil hides why the work failed."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of non-test Swift. A catch block that throws, stops the app or sets an error property is not a lead, and a try? with a ?? fallback is not a lead.",
+				"The authored practice asks that a failure the user or the developer needs to know about is not lost: read whether each lead shows, logs with context, rethrows or deliberately ignores the error, and whether returning nil hides why the work failed."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of non-test Swift. A catch block that throws, stops the app or sets an error property is not a lead, and a try? with a ?? fallback is not a lead.",
+				"The authored practice asks that a failure the user or the developer needs to know about is not lost: read whether each lead shows, logs with context, rethrows or deliberately ignores the error, and whether returning nil hides why the work failed."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

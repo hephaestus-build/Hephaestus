@@ -1,0 +1,51 @@
+{
+	"issue-with-outcome": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 66,
+				"labelCount": 2,
+				"emptyOrTitleEcho": 0,
+				"hasDeliverableType": 1,
+				"looksUmbrella": 0
+			},
+			"directions": [
+				"Captured: 66 body character(s); labels feature, billing; native type task.",
+				"Judge the standard once over the title, the whole body, the comments and any materialised document the issue delegates to."
+			]
+		}
+	],
+	"issue-empty": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 0,
+				"labelCount": 0,
+				"emptyOrTitleEcho": 1,
+				"hasDeliverableType": 0,
+				"looksUmbrella": 0
+			},
+			"directions": [
+				"The captured body is empty: the title is the only text the issue itself carries.",
+				"Captured: 0 body character(s); labels none; native type none.",
+				"Judge the standard once over the title, the whole body, the comments and any materialised document the issue delegates to."
+			]
+		}
+	],
+	"issue-closed": [
+		{
+			"leads": [],
+			"facts": {
+				"bodyLength": 39,
+				"labelCount": 1,
+				"emptyOrTitleEcho": 0,
+				"hasDeliverableType": 1,
+				"looksUmbrella": 1
+			},
+			"directions": [
+				"Captured: 39 body character(s); labels epic; native type none.",
+				"Judge the standard once over the title, the whole body, the comments and any materialised document the issue delegates to."
+			]
+		}
+	]
+}

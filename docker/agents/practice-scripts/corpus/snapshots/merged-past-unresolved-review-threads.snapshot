@@ -1,0 +1,127 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "The merge of the pull request: who merged it, when, and the review decision of the provider.",
+					"facts": {
+						"mergedBy": "author",
+						"mergedByIsAuthor": true,
+						"mergedAt": "2026-01-04T10:00:00Z",
+						"author": "author"
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review thread that the record does not show as resolved.",
+					"facts": {
+						"id": 1,
+						"state": "UNRESOLVED",
+						"createdAt": "2026-01-02T11:30:00Z",
+						"path": "web/cart.ts",
+						"line": 3,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review thread that the record shows as resolved after the merge.",
+					"facts": {
+						"id": 2,
+						"state": "RESOLVED",
+						"createdAt": "2026-01-02T11:50:00Z",
+						"resolvedAt": "2026-01-05T09:00:00Z",
+						"resolvedBy": "reviewer",
+						"path": "web/cart.ts",
+						"line": 5,
+						"outdated": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A resolved review thread with no usable resolution time.",
+					"facts": {
+						"id": 3,
+						"state": "RESOLVED",
+						"createdAt": "2026-01-02T11:51:00Z",
+						"path": "web/cart.ts",
+						"line": 7,
+						"outdated": false
+					}
+				}
+			],
+			"facts": {
+				"mergedByIsAuthor": 1,
+				"threads": 3,
+				"candidateThreads": 3,
+				"resolutionTimeUnknown": 1,
+				"resolvedBeforeMerge": 0,
+				"threadsFileAbsent": 0
+			},
+			"directions": [
+				"Merged by author (the author); 3 thread(s) captured, 3 candidate thread(s), 3 thread lead(s).",
+				"A candidate thread is not marked RESOLVED now, was resolved after the merge, or was resolved at a time that the record does not establish.",
+				"These are not proven open at merge: compare opening and resolution times; where the record cannot settle that order, name the missing date and decide as the criteria say.",
+				"Read each thread's comments in comments.json by its id (the comments' `thread`) before deciding what it asked."
+			],
+			"limitations": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	]
+}

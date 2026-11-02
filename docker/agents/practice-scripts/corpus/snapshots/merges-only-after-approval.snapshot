@@ -1,0 +1,210 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"record": "metadata.json"
+					},
+					"label": "The merge of the pull request: who merged it and when.",
+					"facts": {
+						"mergedBy": "author",
+						"mergedByIsAuthor": true,
+						"mergedAt": "2026-01-04T10:00:00Z",
+						"author": "author"
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "The aggregate review decision reported by the provider.",
+					"facts": {
+						"reviewDecision": "APPROVED"
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review decision that the record holds, placed against the time of the merge.",
+					"facts": {
+						"state": "COMMENTED",
+						"author": "reviewer",
+						"submittedAt": "2026-01-02T11:35:00Z",
+						"beforeMerge": true,
+						"isAuthor": false,
+						"dismissed": false,
+						"bot": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review decision that the record holds, placed against the time of the merge.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "reviewer",
+						"submittedAt": "2026-01-03T12:00:00Z",
+						"beforeMerge": true,
+						"isAuthor": false,
+						"dismissed": false,
+						"bot": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review decision that the record holds, placed against the time of the merge.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "author",
+						"submittedAt": "2026-01-03T12:05:00Z",
+						"beforeMerge": true,
+						"isAuthor": true,
+						"dismissed": false,
+						"bot": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review decision that the record holds, placed against the time of the merge.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "helper",
+						"isAuthor": false,
+						"dismissed": false,
+						"bot": true
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "A review decision that the record holds, placed against the time of the merge.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "former",
+						"submittedAt": "2026-01-03T12:06:00Z",
+						"beforeMerge": true,
+						"isAuthor": false,
+						"dismissed": true,
+						"bot": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "The last decision of a reviewer whose decision times are all known.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "reviewer",
+						"submittedAt": "2026-01-03T12:00:00Z",
+						"beforeMerge": true,
+						"isAuthor": false,
+						"dismissed": false,
+						"bot": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "The last decision of a reviewer whose decision times are all known.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "author",
+						"submittedAt": "2026-01-03T12:05:00Z",
+						"beforeMerge": true,
+						"isAuthor": true,
+						"dismissed": false,
+						"bot": false
+					}
+				},
+				{
+					"at": {
+						"record": "review_threads.json"
+					},
+					"label": "The last decision of a reviewer whose decision times are all known.",
+					"facts": {
+						"state": "APPROVED",
+						"author": "former",
+						"submittedAt": "2026-01-03T12:06:00Z",
+						"beforeMerge": true,
+						"isAuthor": false,
+						"dismissed": true,
+						"bot": false
+					}
+				}
+			],
+			"facts": {
+				"mergedByIsAuthor": 1,
+				"decisions": 5,
+				"unknownDecisionTimes": 1,
+				"approvalsBeforeMergeByOthers": 1,
+				"decisionsByBots": 1,
+				"threadsFileAbsent": 0
+			},
+			"directions": [
+				"Merged by author (the author) at 2026-01-04T10:00:00Z; 5 captured decision(s), 1 of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot.",
+				"The last captured decision of each reviewer whose decision times are all known is listed apart.",
+				"1 decision time(s) are unknown: the dated approval count is a lower bound, and no historical last decision is established for those reviewers.",
+				"Read decisionHistoryComplete in review_threads.json: the order of the leads does not establish complete historical coverage. Apply the practice criteria to that qualification."
+			],
+			"limitations": []
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	],
+	"change-not-captured": [
+		{
+			"leads": [],
+			"directions": [
+				"The pull request is not merged. This practice reviews the merge, so it has nothing to check yet."
+			]
+		}
+	]
+}

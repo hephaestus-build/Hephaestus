@@ -1,0 +1,164 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 5
+					},
+					"label": "A changed @State property that is not declared private.",
+					"facts": {
+						"name": "shared"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 5
+					},
+					"label": "A changed non-private @State property with no default value.",
+					"facts": {
+						"name": "shared"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 6
+					},
+					"label": "A changed @State property that is not declared private.",
+					"facts": {
+						"name": "store"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 6
+					},
+					"label": "A changed non-private @State property with no default value.",
+					"facts": {
+						"name": "store"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 6
+					},
+					"label": "A changed @State property of a non-value type with no default value.",
+					"facts": {
+						"name": "store",
+						"type": "CartStore"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 13
+					},
+					"label": "A changed @StateObject property.",
+					"facts": {
+						"name": "model"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 14
+					},
+					"label": "A changed @ObservedObject property that creates its own instance.",
+					"facts": {
+						"name": "made"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 15
+					},
+					"label": "A changed @EnvironmentObject property.",
+					"facts": {
+						"name": "settings"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 1
+					},
+					"label": "A changed view file with five or more @Binding properties.",
+					"facts": {
+						"bindings": 5
+					}
+				}
+			],
+			"facts": {
+				"stateNotPrivate": 2,
+				"stateWithoutDefault": 2,
+				"stateReferenceType": 1,
+				"stateObject": 1,
+				"observedObjectCreates": 1,
+				"environmentObject": 1,
+				"manyBindings": 1
+			},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file; preview blocks and commented lines are skipped. A line pattern cannot see which type owns the state.",
+				"An @ObservedObject that creates its own instance is recreated whenever the parent rebuilds the view. Read whether a parent owns and passes this object.",
+				"A @State without a default is set once from the initializer and then keeps its first value. Read whether the parent expects later values to reach the view.",
+				"2 changed line(s) use ObservableObject-era wrappers. The authored practice prefers @Observable with @State, @Bindable and @Environment; read the project's deployment target before asking for a migration.",
+				"A view with five or more @Binding properties can take one @Observable model with @Bindable instead. Read whether the bindings belong to one model."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file; preview blocks and commented lines are skipped. A line pattern cannot see which type owns the state."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file; preview blocks and commented lines are skipped. A line pattern cannot see which type owns the state."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file; preview blocks and commented lines are skipped. A line pattern cannot see which type owns the state."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file; preview blocks and commented lines are skipped. A line pattern cannot see which type owns the state."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {},
+			"directions": [
+				"Each lead is a changed line of a changed Swift file; preview blocks and commented lines are skipped. A line pattern cannot see which type owns the state."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

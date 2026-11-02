@@ -1,0 +1,153 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/Report.swift",
+						"line": 3,
+						"endLine": 60
+					},
+					"label": "The body of the changed view Report.",
+					"facts": {
+						"bodyLines": 56,
+						"stateProperties": 0,
+						"nestingDepth": 0,
+						"topLevelContainers": 0,
+						"sameTaskAndRefresh": false
+					}
+				}
+			],
+			"facts": {
+				"viewBodies": 1,
+				"bodiesOver50Lines": 1,
+				"bodiesOver80Lines": 0,
+				"bodiesOver120Lines": 0,
+				"viewsOver5State": 0,
+				"viewsOver8State": 0,
+				"deepNesting": 0,
+				"containerSprawl": 0,
+				"sameTaskAndRefresh": 0
+			},
+			"directions": [
+				"Leads are view bodies of changed files with more than 50 lines, more than five @State properties, more than five nested layout containers, four or more top-level containers, or .task and .refreshable blocks with nearly the same code.",
+				"The authored program read bodies over 80 and 120 lines and views with over eight and twelve @State properties as stronger signs.",
+				"These are counts of text lines and braces. Read whether the body mixes separate parts that a named subview or a shared method would make clearer; a long body of one simple list can be fine."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"viewBodies": 0,
+				"bodiesOver50Lines": 0,
+				"bodiesOver80Lines": 0,
+				"bodiesOver120Lines": 0,
+				"viewsOver5State": 0,
+				"viewsOver8State": 0,
+				"deepNesting": 0,
+				"containerSprawl": 0,
+				"sameTaskAndRefresh": 0
+			},
+			"directions": [
+				"Leads are view bodies of changed files with more than 50 lines, more than five @State properties, more than five nested layout containers, four or more top-level containers, or .task and .refreshable blocks with nearly the same code.",
+				"The authored program read bodies over 80 and 120 lines and views with over eight and twelve @State properties as stronger signs.",
+				"These are counts of text lines and braces. Read whether the body mixes separate parts that a named subview or a shared method would make clearer; a long body of one simple list can be fine.",
+				"No changed SwiftUI view body of ten or more lines was found."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"viewBodies": 0,
+				"bodiesOver50Lines": 0,
+				"bodiesOver80Lines": 0,
+				"bodiesOver120Lines": 0,
+				"viewsOver5State": 0,
+				"viewsOver8State": 0,
+				"deepNesting": 0,
+				"containerSprawl": 0,
+				"sameTaskAndRefresh": 0
+			},
+			"directions": [
+				"Leads are view bodies of changed files with more than 50 lines, more than five @State properties, more than five nested layout containers, four or more top-level containers, or .task and .refreshable blocks with nearly the same code.",
+				"The authored program read bodies over 80 and 120 lines and views with over eight and twelve @State properties as stronger signs.",
+				"These are counts of text lines and braces. Read whether the body mixes separate parts that a named subview or a shared method would make clearer; a long body of one simple list can be fine.",
+				"No changed SwiftUI view body of ten or more lines was found."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"viewBodies": 0,
+				"bodiesOver50Lines": 0,
+				"bodiesOver80Lines": 0,
+				"bodiesOver120Lines": 0,
+				"viewsOver5State": 0,
+				"viewsOver8State": 0,
+				"deepNesting": 0,
+				"containerSprawl": 0,
+				"sameTaskAndRefresh": 0
+			},
+			"directions": [
+				"Leads are view bodies of changed files with more than 50 lines, more than five @State properties, more than five nested layout containers, four or more top-level containers, or .task and .refreshable blocks with nearly the same code.",
+				"The authored program read bodies over 80 and 120 lines and views with over eight and twelve @State properties as stronger signs.",
+				"These are counts of text lines and braces. Read whether the body mixes separate parts that a named subview or a shared method would make clearer; a long body of one simple list can be fine.",
+				"No changed SwiftUI view body of ten or more lines was found."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"viewBodies": 0,
+				"bodiesOver50Lines": 0,
+				"bodiesOver80Lines": 0,
+				"bodiesOver120Lines": 0,
+				"viewsOver5State": 0,
+				"viewsOver8State": 0,
+				"deepNesting": 0,
+				"containerSprawl": 0,
+				"sameTaskAndRefresh": 0
+			},
+			"directions": [
+				"Leads are view bodies of changed files with more than 50 lines, more than five @State properties, more than five nested layout containers, four or more top-level containers, or .task and .refreshable blocks with nearly the same code.",
+				"The authored program read bodies over 80 and 120 lines and views with over eight and twelve @State properties as stronger signs.",
+				"These are counts of text lines and braces. Read whether the body mixes separate parts that a named subview or a shared method would make clearer; a long body of one simple list can be fine.",
+				"No changed SwiftUI view body of ten or more lines was found."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"viewBodies": 0,
+				"bodiesOver50Lines": 0,
+				"bodiesOver80Lines": 0,
+				"bodiesOver120Lines": 0,
+				"viewsOver5State": 0,
+				"viewsOver8State": 0,
+				"deepNesting": 0,
+				"containerSprawl": 0,
+				"sameTaskAndRefresh": 0
+			},
+			"directions": [
+				"Leads are view bodies of changed files with more than 50 lines, more than five @State properties, more than five nested layout containers, four or more top-level containers, or .task and .refreshable blocks with nearly the same code.",
+				"The authored program read bodies over 80 and 120 lines and views with over eight and twelve @State properties as stronger signs.",
+				"These are counts of text lines and braces. Read whether the body mixes separate parts that a named subview or a shared method would make clearer; a long body of one simple list can be fine.",
+				"No changed SwiftUI view body of ten or more lines was found."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

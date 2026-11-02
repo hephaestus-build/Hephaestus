@@ -1,0 +1,199 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 2,
+				"filesWithoutLineChanges": 0,
+				"addedLines": 174,
+				"removedLines": 0,
+				"imageFiles": 0,
+				"diagramFiles": 0,
+				"proseFiles": 0,
+				"projectConfigFiles": 0,
+				"testFiles": 0,
+				"codeFiles": 2,
+				"previewFiles": 1,
+				"screenshotsInDescription": 1,
+				"testingSectionLines": 4,
+				"linkedIssues": 2,
+				"namedIssues": 1,
+				"secretReadLines": 0
+			},
+			"directions": [
+				"Files with line changes: 2 code, 0 test, 0 project-configuration, 0 prose, 0 image.",
+				"The description's testing section (\"## Testing\") holds 4 line(s) of author text.",
+				"Issue(s) the author names: #12 (provider closing link, closing keyword in the description, title, branch).",
+				"Captured as linked_work_items/<n>.md but not named by a closing keyword, the title, the branch or a provider closing link: #13.",
+				"The patch adds an authored preview or story in: App/CartView.swift.",
+				"The description embeds 1 image(s); read their captions and the sentences around them — the image bytes are not available to you."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"change": ".gitignore",
+						"line": 1
+					},
+					"label": "A line that the change adds to an ignore file and that names a secret or a configuration file."
+				},
+				{
+					"at": {
+						"change": ".gitignore",
+						"line": 2
+					},
+					"label": "A line that the change adds to an ignore file and that names a secret or a configuration file."
+				}
+			],
+			"facts": {
+				"changedFiles": 18,
+				"filesWithoutLineChanges": 0,
+				"addedLines": 130,
+				"removedLines": 0,
+				"imageFiles": 1,
+				"diagramFiles": 1,
+				"proseFiles": 1,
+				"projectConfigFiles": 1,
+				"testFiles": 2,
+				"codeFiles": 12,
+				"previewFiles": 0,
+				"screenshotsInDescription": 1,
+				"testingSectionLines": 4,
+				"linkedIssues": 2,
+				"namedIssues": 1,
+				"secretReadLines": 0
+			},
+			"directions": [
+				"Files with line changes: 12 code, 2 test, 1 project-configuration, 1 prose, 1 image.",
+				"The description's testing section (\"## Testing\") holds 4 line(s) of author text.",
+				"Issue(s) the author names: #12 (provider closing link, closing keyword in the description, title, branch).",
+				"Captured as linked_work_items/<n>.md but not named by a closing keyword, the title, the branch or a provider closing link: #13.",
+				"The description embeds 1 image(s); read their captions and the sentences around them — the image bytes are not available to you."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 12,
+				"filesWithoutLineChanges": 0,
+				"addedLines": 21,
+				"removedLines": 8,
+				"imageFiles": 0,
+				"diagramFiles": 0,
+				"proseFiles": 1,
+				"projectConfigFiles": 8,
+				"testFiles": 0,
+				"codeFiles": 1,
+				"previewFiles": 0,
+				"screenshotsInDescription": 1,
+				"testingSectionLines": 4,
+				"linkedIssues": 2,
+				"namedIssues": 1,
+				"secretReadLines": 0
+			},
+			"directions": [
+				"Files with line changes: 1 code, 0 test, 8 project-configuration, 1 prose, 0 image.",
+				"The description's testing section (\"## Testing\") holds 4 line(s) of author text.",
+				"Issue(s) the author names: #12 (provider closing link, closing keyword in the description, title, branch).",
+				"Captured as linked_work_items/<n>.md but not named by a closing keyword, the title, the branch or a provider closing link: #13.",
+				"The description embeds 1 image(s); read their captions and the sentences around them — the image bytes are not available to you."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 1,
+				"filesWithoutLineChanges": 0,
+				"addedLines": 19,
+				"removedLines": 0,
+				"imageFiles": 0,
+				"diagramFiles": 0,
+				"proseFiles": 0,
+				"projectConfigFiles": 0,
+				"testFiles": 0,
+				"codeFiles": 1,
+				"previewFiles": 0,
+				"screenshotsInDescription": 1,
+				"testingSectionLines": 4,
+				"linkedIssues": 2,
+				"namedIssues": 1,
+				"secretReadLines": 0
+			},
+			"directions": [
+				"Files with line changes: 1 code, 0 test, 0 project-configuration, 0 prose, 0 image.",
+				"The description's testing section (\"## Testing\") holds 4 line(s) of author text.",
+				"Issue(s) the author names: #12 (provider closing link, closing keyword in the description, title, branch).",
+				"Captured as linked_work_items/<n>.md but not named by a closing keyword, the title, the branch or a provider closing link: #13.",
+				"The description embeds 1 image(s); read their captions and the sentences around them — the image bytes are not available to you."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 1,
+				"filesWithoutLineChanges": 0,
+				"addedLines": 220,
+				"removedLines": 0,
+				"imageFiles": 0,
+				"diagramFiles": 0,
+				"proseFiles": 0,
+				"projectConfigFiles": 0,
+				"testFiles": 0,
+				"codeFiles": 1,
+				"previewFiles": 0,
+				"screenshotsInDescription": 1,
+				"testingSectionLines": 4,
+				"linkedIssues": 2,
+				"namedIssues": 1,
+				"secretReadLines": 0
+			},
+			"directions": [
+				"Files with line changes: 1 code, 0 test, 0 project-configuration, 0 prose, 0 image.",
+				"The description's testing section (\"## Testing\") holds 4 line(s) of author text.",
+				"Issue(s) the author names: #12 (provider closing link, closing keyword in the description, title, branch).",
+				"Captured as linked_work_items/<n>.md but not named by a closing keyword, the title, the branch or a provider closing link: #13.",
+				"The description embeds 1 image(s); read their captions and the sentences around them — the image bytes are not available to you."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"changedFiles": 0,
+				"filesWithoutLineChanges": 0,
+				"addedLines": 0,
+				"removedLines": 0,
+				"imageFiles": 0,
+				"diagramFiles": 0,
+				"proseFiles": 0,
+				"projectConfigFiles": 0,
+				"testFiles": 0,
+				"codeFiles": 0,
+				"previewFiles": 0,
+				"screenshotsInDescription": 0,
+				"testingSectionLines": 0,
+				"linkedIssues": 0,
+				"namedIssues": 0,
+				"secretReadLines": 0
+			},
+			"directions": [
+				"The pinned range changes no lines: an empty diff is one of the kinds the criteria's applicability section names; cite it through metadata.json changed_files or work/change/files.json.",
+				"The description has no testing heading. That settles nothing either way: the entry, action and expected result can be in other sections, an adopted issue, a preview, the documented setup or the author's discussion."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

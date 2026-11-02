@@ -1,0 +1,104 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 110
+					},
+					"label": "A changed view file with a switch or more than three @State and one #Preview.",
+					"facts": {
+						"previewBlocks": 1,
+						"stateProperties": 9,
+						"hasConditional": true,
+						"hasSwitch": false
+					}
+				}
+			],
+			"facts": {
+				"viewFiles": 2,
+				"complexWithoutPreview": 0,
+				"complexWithOnePreview": 1
+			},
+			"directions": [
+				"A view counts as complex here when its file has more than two @State lines, an if/else or a switch line. These are whole-file line counts: a state or a branch can belong to another type in the file.",
+				"For each lead, read which states the view can show and whether the file's previews render those states. A single preview can be enough when the other states are trivial."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"viewFiles": 0,
+				"complexWithoutPreview": 0,
+				"complexWithOnePreview": 0
+			},
+			"directions": [
+				"A view counts as complex here when its file has more than two @State lines, an if/else or a switch line. These are whole-file line counts: a state or a branch can belong to another type in the file.",
+				"No changed SwiftUI view file was found."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"viewFiles": 0,
+				"complexWithoutPreview": 0,
+				"complexWithOnePreview": 0
+			},
+			"directions": [
+				"A view counts as complex here when its file has more than two @State lines, an if/else or a switch line. These are whole-file line counts: a state or a branch can belong to another type in the file.",
+				"No changed SwiftUI view file was found."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"viewFiles": 0,
+				"complexWithoutPreview": 0,
+				"complexWithOnePreview": 0
+			},
+			"directions": [
+				"A view counts as complex here when its file has more than two @State lines, an if/else or a switch line. These are whole-file line counts: a state or a branch can belong to another type in the file.",
+				"No changed SwiftUI view file was found."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"viewFiles": 0,
+				"complexWithoutPreview": 0,
+				"complexWithOnePreview": 0
+			},
+			"directions": [
+				"A view counts as complex here when its file has more than two @State lines, an if/else or a switch line. These are whole-file line counts: a state or a branch can belong to another type in the file.",
+				"No changed SwiftUI view file was found."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"viewFiles": 0,
+				"complexWithoutPreview": 0,
+				"complexWithOnePreview": 0
+			},
+			"directions": [
+				"A view counts as complex here when its file has more than two @State lines, an if/else or a switch line. These are whole-file line counts: a state or a branch can belong to another type in the file.",
+				"No changed SwiftUI view file was found."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

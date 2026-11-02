@@ -1,0 +1,1211 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 32,
+						"endLine": 32
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 33,
+						"endLine": 33
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "debugPrint(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 34,
+						"endLine": 34
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "dump(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 35,
+						"endLine": 35
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "swift",
+						"call": "NSLog",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 36,
+						"endLine": 36
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "swift",
+						"call": "Logger",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 55,
+						"endLine": 55
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				}
+			],
+			"facts": {
+				"printsSelected": 4,
+				"loggerCallsSelected": 2,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 1,
+				"filesScanned": 2,
+				"linesSelected": 174
+			},
+			"directions": [
+				"4 print-style call(s) selected (0 listed under a tool or script path) against 2 logger call(s); the checkout matches a logger (App/CartView.swift).",
+				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "ios/Cart.m",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "objective-c",
+						"call": "printf(",
+						"enclosing": "unknown",
+						"inScope": "unknown",
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "ios/Cart.m",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "objective-c",
+						"call": "NSLog",
+						"enclosing": "unknown",
+						"inScope": "unknown",
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "kotlin",
+						"call": "println(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "kotlin",
+						"call": "android.util.Log",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "java",
+						"call": "printStackTrace()",
+						"enclosing": "class App",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "java",
+						"call": "System.out/err",
+						"enclosing": "class App",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "java",
+						"call": "logger",
+						"enclosing": "class App",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "typescript",
+						"call": "logger",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "python",
+						"call": "print(",
+						"enclosing": "unknown",
+						"inScope": "unknown",
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "python",
+						"call": "logging",
+						"enclosing": "unknown",
+						"inScope": "unknown",
+						"toolPath": false
+					}
+				}
+			],
+			"facts": {
+				"printsSelected": 7,
+				"loggerCallsSelected": 5,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 1,
+				"filesScanned": 7,
+				"linesSelected": 70
+			},
+			"directions": [
+				"7 print-style call(s) selected (0 listed under a tool or script path) against 5 logger call(s); the checkout matches a logger (ios/Cart.m).",
+				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"printsSelected": 0,
+				"loggerCallsSelected": 0,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 0,
+				"filesScanned": 2,
+				"linesSelected": 2
+			},
+			"directions": [
+				"Scanned 2 added lines in 2 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "typescript",
+						"call": "logger",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				}
+			],
+			"facts": {
+				"printsSelected": 2,
+				"loggerCallsSelected": 1,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 0,
+				"filesScanned": 1,
+				"linesSelected": 19
+			},
+			"directions": [
+				"2 print-style call(s) selected (0 listed under a tool or script path) against 1 logger call(s); a bounded search of the checkout matched no logger definition, which does not show there is none.",
+				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 1,
+						"endLine": 1
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 2,
+						"endLine": 2
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 10,
+						"endLine": 10
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 11,
+						"endLine": 11
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 13,
+						"endLine": 13
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 14,
+						"endLine": 14
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 16,
+						"endLine": 16
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 17,
+						"endLine": 17
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 18,
+						"endLine": 18
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 19,
+						"endLine": 19
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 20,
+						"endLine": 20
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 21,
+						"endLine": 21
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 22,
+						"endLine": 22
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 23,
+						"endLine": 23
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 24,
+						"endLine": 24
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 25,
+						"endLine": 25
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 27,
+						"endLine": 27
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 28,
+						"endLine": 28
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 29,
+						"endLine": 29
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 30,
+						"endLine": 30
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 31,
+						"endLine": 31
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 32,
+						"endLine": 32
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 33,
+						"endLine": 33
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 34,
+						"endLine": 34
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 35,
+						"endLine": 35
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 36,
+						"endLine": 36
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 37,
+						"endLine": 37
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 38,
+						"endLine": 38
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 39,
+						"endLine": 39
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/Many.swift",
+						"line": 40,
+						"endLine": 40
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				}
+			],
+			"facts": {
+				"printsSelected": 220,
+				"loggerCallsSelected": 0,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 0,
+				"filesScanned": 1,
+				"linesSelected": 220
+			},
+			"directions": [
+				"220 diagnostic line(s) selected; 40 are listed. The counts by kind cover every line; the tool-path count covers only the listed rows.",
+				"220 print-style call(s) selected (0 listed under a tool or script path) against 0 logger call(s); a bounded search of the checkout matched no logger definition, which does not show there is none.",
+				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"printsSelected": 0,
+				"loggerCallsSelected": 0,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 32,
+						"endLine": 32
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 33,
+						"endLine": 33
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "debugPrint(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 34,
+						"endLine": 34
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "dump(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 35,
+						"endLine": 35
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "swift",
+						"call": "NSLog",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 36,
+						"endLine": 36
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "swift",
+						"call": "Logger",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 55,
+						"endLine": 55
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "swift",
+						"call": "print(",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": false,
+						"toolPath": false
+					}
+				}
+			],
+			"facts": {
+				"printsSelected": 4,
+				"loggerCallsSelected": 2,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 1,
+				"filesScanned": 1,
+				"linesSelected": 113
+			},
+			"directions": [
+				"4 print-style call(s) selected (0 listed under a tool or script path) against 2 logger call(s); the checkout matches a logger (App/CartView.swift).",
+				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A selected call to a logger, such as Logger, os_log, NSLog, android.util.Log or logging.",
+					"facts": {
+						"language": "typescript",
+						"call": "logger",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				}
+			],
+			"facts": {
+				"printsSelected": 2,
+				"loggerCallsSelected": 1,
+				"printsInToolPaths": 0,
+				"checkoutHasLogger": 0,
+				"filesScanned": 1,
+				"linesSelected": 19
+			},
+			"directions": [
+				"2 print-style call(s) selected (0 listed under a tool or script path) against 1 logger call(s); a bounded search of the checkout matched no logger definition, which does not show there is none.",
+				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
+			]
+		}
+	]
+}

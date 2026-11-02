@@ -1,0 +1,502 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A Swift `try?` that turns a thrown error into nil.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 50,
+						"endLine": 51
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 54,
+						"endLine": 56
+					},
+					"label": "A Swift catch block whose only statement is a print call.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 57,
+						"endLine": 57
+					},
+					"label": "A Swift `try?` that turns a thrown error into nil.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 62,
+						"endLine": 62
+					},
+					"label": "A `??` fallback on a failable conversion, which the criteria ask to classify.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 63,
+						"endLine": 63
+					},
+					"label": "A Swift guard whose else branch only returns, which the criteria ask to classify.",
+					"facts": {
+						"language": "swift"
+					}
+				}
+			],
+			"facts": {
+				"errorSwallowCandidates": 6,
+				"filesScanned": 2,
+				"linesSelected": 174,
+				"swift": 6
+			},
+			"directions": [
+				"Found 6 possible error-discard constructs in 1 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
+				"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "app/models/cart.rb",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A Ruby rescue that binds the error and ends the line.",
+					"facts": {
+						"language": "ruby"
+					}
+				},
+				{
+					"at": {
+						"file": "app/models/cart.rb",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A Ruby rescue that ends with no statement.",
+					"facts": {
+						"language": "ruby"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A Python except clause whose body is only `pass`.",
+					"facts": {
+						"language": "python"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 12,
+						"endLine": 12
+					},
+					"label": "A Python except clause that names no exception type.",
+					"facts": {
+						"language": "python"
+					}
+				},
+				{
+					"at": {
+						"file": "app/tool.py",
+						"line": 15,
+						"endLine": 15
+					},
+					"label": "A Python except clause whose body is only `continue`.",
+					"facts": {
+						"language": "python"
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A Go assignment of a call result to the blank identifier, which can drop an error.",
+					"facts": {
+						"language": "go"
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A Go `if err != nil` block with an empty body.",
+					"facts": {
+						"language": "go"
+					}
+				},
+				{
+					"at": {
+						"file": "pkg/load.go",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A Go assignment of a call result to the blank identifier, which can drop an error.",
+					"facts": {
+						"language": "go"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "java"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.java",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A Java catch block whose only statement is printStackTrace.",
+					"facts": {
+						"language": "java"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A Kotlin runCatching block that ends in getOrNull.",
+					"facts": {
+						"language": "kotlin"
+					}
+				},
+				{
+					"at": {
+						"file": "src/main/App.kt",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "kotlin"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A catch block whose only statement is a console call.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A promise `.catch` whose handler has an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				}
+			],
+			"facts": {
+				"errorSwallowCandidates": 15,
+				"filesScanned": 11,
+				"linesSelected": 96,
+				"typescript": 3,
+				"javascript": 0,
+				"python": 3,
+				"go": 3,
+				"java": 2,
+				"kotlin": 2,
+				"rust": 0,
+				"ruby": 2,
+				"swift": 0
+			},
+			"directions": [
+				"Found 15 possible error-discard constructs in 9 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
+				"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"errorSwallowCandidates": 0,
+				"filesScanned": 2,
+				"linesSelected": 2,
+				"kotlin": 0,
+				"swift": 0
+			},
+			"directions": [
+				"Scanned 2 added lines in 2 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A catch block whose only statement is a console call.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A promise `.catch` whose handler has an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				}
+			],
+			"facts": {
+				"errorSwallowCandidates": 3,
+				"filesScanned": 1,
+				"linesSelected": 19,
+				"typescript": 3
+			},
+			"directions": [
+				"Found 3 possible error-discard constructs in 1 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
+				"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"errorSwallowCandidates": 0,
+				"filesScanned": 1,
+				"linesSelected": 220,
+				"swift": 0
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"errorSwallowCandidates": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A Swift `try?` that turns a thrown error into nil.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 50,
+						"endLine": 51
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 54,
+						"endLine": 56
+					},
+					"label": "A Swift catch block whose only statement is a print call.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 57,
+						"endLine": 57
+					},
+					"label": "A Swift `try?` that turns a thrown error into nil.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 62,
+						"endLine": 62
+					},
+					"label": "A `??` fallback on a failable conversion, which the criteria ask to classify.",
+					"facts": {
+						"language": "swift"
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 63,
+						"endLine": 63
+					},
+					"label": "A Swift guard whose else branch only returns, which the criteria ask to classify.",
+					"facts": {
+						"language": "swift"
+					}
+				}
+			],
+			"facts": {
+				"errorSwallowCandidates": 6,
+				"filesScanned": 1,
+				"linesSelected": 113,
+				"swift": 6
+			},
+			"directions": [
+				"Found 6 possible error-discard constructs in 1 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
+				"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 4,
+						"endLine": 4
+					},
+					"label": "A catch block whose only statement is a console call.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/cart.ts",
+						"line": 5,
+						"endLine": 5
+					},
+					"label": "A promise `.catch` whose handler has an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				}
+			],
+			"facts": {
+				"errorSwallowCandidates": 3,
+				"filesScanned": 1,
+				"linesSelected": 19,
+				"typescript": 3
+			},
+			"directions": [
+				"Found 3 possible error-discard constructs in 1 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
+				"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler."
+			]
+		}
+	]
+}

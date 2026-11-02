@@ -1,0 +1,56 @@
+{
+	"issue-with-outcome": [
+		{
+			"leads": [],
+			"facts": {
+				"issueClosed": 0,
+				"checkedBoxes": 1,
+				"uncheckedBoxes": 1,
+				"subIssuesTotal": 3,
+				"subIssuesCompleted": 1
+			},
+			"directions": [
+				"Captured issue state: OPEN; reason: none recorded; closed at: unknown.",
+				"The captured body has 1 ticked and 1 unticked task-list item(s).",
+				"Sub-issues: 3 sub-issue(s), 1 completed, as the provider reports them.",
+				"These values describe the capture, not necessarily the moment of closing. Compare the dated closing and comment evidence before saying an outcome remained open when the issue closed; leave that historical question unresolved when the evidence is absent.",
+				"Judge the authored standard once. Read the closure disposition and any explanation or follow-up for the remainder; an unchecked line or an open stored child alone proves neither unfinished work nor an improper close."
+			]
+		}
+	],
+	"issue-empty": [
+		{
+			"leads": [],
+			"facts": {
+				"issueClosed": 0,
+				"checkedBoxes": 0,
+				"uncheckedBoxes": 0
+			},
+			"directions": [
+				"Captured issue state: OPEN; reason: none recorded; closed at: unknown.",
+				"The captured body has 0 ticked and 0 unticked task-list item(s).",
+				"Sub-issues: sub-issue rollup not reported by the provider (unknown, not zero).",
+				"These values describe the capture, not necessarily the moment of closing. Compare the dated closing and comment evidence before saying an outcome remained open when the issue closed; leave that historical question unresolved when the evidence is absent.",
+				"Judge the authored standard once. Read the closure disposition and any explanation or follow-up for the remainder; an unchecked line or an open stored child alone proves neither unfinished work nor an improper close."
+			]
+		}
+	],
+	"issue-closed": [
+		{
+			"leads": [],
+			"facts": {
+				"issueClosed": 1,
+				"checkedBoxes": 0,
+				"uncheckedBoxes": 1,
+				"subIssuesTotal": 0
+			},
+			"directions": [
+				"Captured issue state: CLOSED; reason: COMPLETED; closed at: 2026-01-05T09:00:00Z.",
+				"The captured body has 0 ticked and 1 unticked task-list item(s).",
+				"Sub-issues: 0 sub-issue(s), completed count not reported, counted from the child issues this repository stored at capture; that mirror may omit other children.",
+				"These values describe the capture, not necessarily the moment of closing. Compare the dated closing and comment evidence before saying an outcome remained open when the issue closed; leave that historical question unresolved when the evidence is absent.",
+				"Judge the authored standard once. Read the closure disposition and any explanation or follow-up for the remainder; an unchecked line or an open stored child alone proves neither unfinished work nor an improper close."
+			]
+		}
+	]
+}

@@ -1,0 +1,47 @@
+{
+	"issue-with-outcome": [
+		{
+			"leads": [],
+			"facts": {
+				"labelCount": 2,
+				"assigneeCount": 1,
+				"hasMilestone": 1
+			},
+			"directions": [
+				"Captured labels: feature, billing; assignees: owner; milestone: 1.0.",
+				"These are presence facts from the capture, not proof that a label is useful or correct, that an assignee is the right owner, or that the routing metadata was the same at an earlier time.",
+				"Judge the authored routing standard over the issue and its captured context. Distinguish a substantive work item from a discussion or process placeholder; do not prescribe a house taxonomy or turn missing evidence into an empty routing set."
+			]
+		}
+	],
+	"issue-empty": [
+		{
+			"leads": [],
+			"facts": {
+				"labelCount": 0,
+				"assigneeCount": 0,
+				"hasMilestone": 0
+			},
+			"directions": [
+				"Captured labels: none; assignees: none; milestone: none recorded.",
+				"These are presence facts from the capture, not proof that a label is useful or correct, that an assignee is the right owner, or that the routing metadata was the same at an earlier time.",
+				"Judge the authored routing standard over the issue and its captured context. Distinguish a substantive work item from a discussion or process placeholder; do not prescribe a house taxonomy or turn missing evidence into an empty routing set."
+			]
+		}
+	],
+	"issue-closed": [
+		{
+			"leads": [],
+			"facts": {
+				"labelCount": 1,
+				"assigneeCount": 0,
+				"hasMilestone": 0
+			},
+			"directions": [
+				"Captured labels: epic; assignees: none; milestone: none recorded.",
+				"These are presence facts from the capture, not proof that a label is useful or correct, that an assignee is the right owner, or that the routing metadata was the same at an earlier time.",
+				"Judge the authored routing standard over the issue and its captured context. Distinguish a substantive work item from a discussion or process placeholder; do not prescribe a house taxonomy or turn missing evidence into an empty routing set."
+			]
+		}
+	]
+}

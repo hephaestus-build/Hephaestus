@@ -1,0 +1,284 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A selected line that uses URLSession or makes a URLRequest.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27,
+						"endLine": 27
+					},
+					"label": "A selected line that makes a JSONDecoder or a JSONEncoder.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 28,
+						"endLine": 28
+					},
+					"label": "A selected line that uses UserDefaults.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 29,
+						"endLine": 29
+					},
+					"label": "A selected line that uses FileManager.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 30,
+						"endLine": 30
+					},
+					"label": "A selected line that reads a file with Data(contentsOf:).",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				}
+			],
+			"facts": {
+				"ioCallsInViews": 5,
+				"viewLinesSelected": 5,
+				"swiftLinesSelected": 174,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 2,
+				"linesSelected": 174
+			},
+			"directions": [
+				"5 candidate I/O calls were selected inside or possibly inside view types. Read the enclosing type of each lead. A line in a store or model is not the view's I/O.",
+				"SwiftUI @AppStorage and @SceneStorage, Core Data @FetchRequest, and the supported SwiftData view-side APIs are not direct I/O."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"ioCallsInViews": 0,
+				"viewLinesSelected": 0,
+				"swiftLinesSelected": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"ioCallsInViews": 0,
+				"viewLinesSelected": 0,
+				"swiftLinesSelected": 1,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 1
+			},
+			"directions": [
+				"Scanned 1 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"ioCallsInViews": 0,
+				"viewLinesSelected": 0,
+				"swiftLinesSelected": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"ioCallsInViews": 0,
+				"viewLinesSelected": 0,
+				"swiftLinesSelected": 220,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 220
+			},
+			"directions": [
+				"Scanned 220 added lines in 1 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"ioCallsInViews": 0,
+				"viewLinesSelected": 0,
+				"swiftLinesSelected": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	},
+	"scan-swift": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26,
+						"endLine": 26
+					},
+					"label": "A selected line that uses URLSession or makes a URLRequest.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 27,
+						"endLine": 27
+					},
+					"label": "A selected line that makes a JSONDecoder or a JSONEncoder.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 28,
+						"endLine": 28
+					},
+					"label": "A selected line that uses UserDefaults.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 29,
+						"endLine": 29
+					},
+					"label": "A selected line that uses FileManager.",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 30,
+						"endLine": 30
+					},
+					"label": "A selected line that reads a file with Data(contentsOf:).",
+					"facts": {
+						"language": "swift",
+						"enclosing": "struct CartView",
+						"supertypes": "View",
+						"inScope": true
+					}
+				}
+			],
+			"facts": {
+				"ioCallsInViews": 5,
+				"viewLinesSelected": 5,
+				"swiftLinesSelected": 113,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 1,
+				"linesSelected": 113
+			},
+			"directions": [
+				"5 candidate I/O calls were selected inside or possibly inside view types. Read the enclosing type of each lead. A line in a store or model is not the view's I/O.",
+				"SwiftUI @AppStorage and @SceneStorage, Core Data @FetchRequest, and the supported SwiftData view-side APIs are not direct I/O."
+			]
+		}
+	],
+	"scan-typescript": [
+		{
+			"leads": [],
+			"facts": {
+				"ioCallsInViews": 0,
+				"viewLinesSelected": 0,
+				"swiftLinesSelected": 0,
+				"filesWithUnknownLocation": 0,
+				"filesScanned": 0,
+				"linesSelected": 0
+			},
+			"directions": [
+				"Scanned 0 added lines in 0 files for this practice's line patterns; none matched.",
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff."
+			]
+		}
+	]
+}

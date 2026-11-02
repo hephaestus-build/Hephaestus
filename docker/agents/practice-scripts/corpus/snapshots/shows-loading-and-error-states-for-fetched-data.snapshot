@@ -1,0 +1,130 @@
+{
+	"swift-view": [
+		{
+			"leads": [
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 26
+					},
+					"label": "A changed view that loads data, without a loading or an error state in its file.",
+					"facts": {
+						"source": "URLSession",
+						"hasLoadingState": true,
+						"hasErrorState": false,
+						"hasProgressView": true
+					}
+				},
+				{
+					"at": {
+						"file": "App/CartView.swift",
+						"line": 81
+					},
+					"label": "A changed view that shows an error's localizedDescription as text."
+				}
+			],
+			"facts": {
+				"fetchingViews": 1,
+				"withoutLoadingOrError": 0,
+				"withoutLoading": 0,
+				"withoutError": 1,
+				"spinnerWithoutError": 1,
+				"rawErrorText": 1
+			},
+			"directions": [
+				"Leads are changed SwiftUI view files that fetch data, by URLSession, Alamofire, a remote Data(contentsOf:) or an awaited fetch in .task or .onAppear. Loading and error states are matched by name anywhere in the file, such as ProgressView, isLoading, errorMessage or ContentUnavailableView.",
+				"A state may live in a view model or a parent. Read whether the user sees progress while the data loads and a message with a way forward when it fails; a spinner with no error path can spin forever.",
+				"localizedDescription is written for developers and can be technical. Read whether the text shown is one a user can act on."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"fetchingViews": 0,
+				"withoutLoadingOrError": 0,
+				"withoutLoading": 0,
+				"withoutError": 0,
+				"spinnerWithoutError": 0,
+				"rawErrorText": 0
+			},
+			"directions": [
+				"Leads are changed SwiftUI view files that fetch data, by URLSession, Alamofire, a remote Data(contentsOf:) or an awaited fetch in .task or .onAppear. Loading and error states are matched by name anywhere in the file, such as ProgressView, isLoading, errorMessage or ContentUnavailableView.",
+				"A state may live in a view model or a parent. Read whether the user sees progress while the data loads and a message with a way forward when it fails; a spinner with no error path can spin forever."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"fetchingViews": 0,
+				"withoutLoadingOrError": 0,
+				"withoutLoading": 0,
+				"withoutError": 0,
+				"spinnerWithoutError": 0,
+				"rawErrorText": 0
+			},
+			"directions": [
+				"Leads are changed SwiftUI view files that fetch data, by URLSession, Alamofire, a remote Data(contentsOf:) or an awaited fetch in .task or .onAppear. Loading and error states are matched by name anywhere in the file, such as ProgressView, isLoading, errorMessage or ContentUnavailableView.",
+				"A state may live in a view model or a parent. Read whether the user sees progress while the data loads and a message with a way forward when it fails; a spinner with no error path can spin forever."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"fetchingViews": 0,
+				"withoutLoadingOrError": 0,
+				"withoutLoading": 0,
+				"withoutError": 0,
+				"spinnerWithoutError": 0,
+				"rawErrorText": 0
+			},
+			"directions": [
+				"Leads are changed SwiftUI view files that fetch data, by URLSession, Alamofire, a remote Data(contentsOf:) or an awaited fetch in .task or .onAppear. Loading and error states are matched by name anywhere in the file, such as ProgressView, isLoading, errorMessage or ContentUnavailableView.",
+				"A state may live in a view model or a parent. Read whether the user sees progress while the data loads and a message with a way forward when it fails; a spinner with no error path can spin forever."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"fetchingViews": 0,
+				"withoutLoadingOrError": 0,
+				"withoutLoading": 0,
+				"withoutError": 0,
+				"spinnerWithoutError": 0,
+				"rawErrorText": 0
+			},
+			"directions": [
+				"Leads are changed SwiftUI view files that fetch data, by URLSession, Alamofire, a remote Data(contentsOf:) or an awaited fetch in .task or .onAppear. Loading and error states are matched by name anywhere in the file, such as ProgressView, isLoading, errorMessage or ContentUnavailableView.",
+				"A state may live in a view model or a parent. Read whether the user sees progress while the data loads and a message with a way forward when it fails; a spinner with no error path can spin forever."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"fetchingViews": 0,
+				"withoutLoadingOrError": 0,
+				"withoutLoading": 0,
+				"withoutError": 0,
+				"spinnerWithoutError": 0,
+				"rawErrorText": 0
+			},
+			"directions": [
+				"Leads are changed SwiftUI view files that fetch data, by URLSession, Alamofire, a remote Data(contentsOf:) or an awaited fetch in .task or .onAppear. Loading and error states are matched by name anywhere in the file, such as ProgressView, isLoading, errorMessage or ContentUnavailableView.",
+				"A state may live in a view model or a parent. Read whether the user sees progress while the data loads and a message with a way forward when it fails; a spinner with no error path can spin forever."
+			]
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

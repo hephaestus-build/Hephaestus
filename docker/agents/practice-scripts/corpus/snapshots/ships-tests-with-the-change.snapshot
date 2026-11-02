@@ -1,0 +1,81 @@
+{
+	"swift-view": [
+		{
+			"leads": [],
+			"facts": {
+				"diffProductionFiles": 2,
+				"diffTestFiles": 0
+			},
+			"directions": [
+				"The diff changes 2 production source file(s) and 0 test file(s), by path.",
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+			]
+		}
+	],
+	"every-language": [
+		{
+			"leads": [],
+			"facts": {
+				"diffProductionFiles": 13,
+				"diffTestFiles": 2
+			},
+			"directions": [
+				"The diff changes 13 production source file(s) and 2 test file(s), by path: web/cart.test.ts, AppTests/CartTests.swift.",
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+			]
+		}
+	],
+	"manifests": [
+		{
+			"leads": [],
+			"facts": {
+				"diffProductionFiles": 2,
+				"diffTestFiles": 0
+			},
+			"directions": [
+				"The diff changes 2 production source file(s) and 0 test file(s), by path.",
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+			]
+		}
+	],
+	"merged": [
+		{
+			"leads": [],
+			"facts": {
+				"diffProductionFiles": 1,
+				"diffTestFiles": 0
+			},
+			"directions": [
+				"The diff changes 1 production source file(s) and 0 test file(s), by path.",
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+			]
+		}
+	],
+	"more-sites-than-any-list": [
+		{
+			"leads": [],
+			"facts": {
+				"diffProductionFiles": 1,
+				"diffTestFiles": 0
+			},
+			"directions": [
+				"The diff changes 1 production source file(s) and 0 test file(s), by path.",
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+			]
+		}
+	],
+	"empty-change-nothing-captured": [
+		{
+			"leads": [],
+			"facts": {
+				"diffProductionFiles": 0,
+				"diffTestFiles": 0
+			},
+			"directions": []
+		}
+	],
+	"change-not-captured": {
+		"stopped": "the change was not captured",
+		"reviews": []
+	}
+}

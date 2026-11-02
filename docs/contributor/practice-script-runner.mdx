@@ -130,6 +130,24 @@ Drafts belong to one practice session and create no product records.
 Only the complete candidate returned by the script reaches admission.
 Removing a draft does not repair or remove a recorded Problem.
 
+## Compare what programs send
+
+`docker/agents/practice-scripts/corpus.test.ts` runs every bundled program on the authored work in `corpus-cases.ts`.
+It records each program's review input in `corpus/snapshots/<slug>.snapshot`, or the reason that the program stopped.
+It uses no network and no model.
+
+A library change shows its effect on each program as a snapshot difference.
+No difference means that the programs send the same input for this work.
+A difference changes what a review reads, so the [catalog rules](./practice-catalog.md#changing-bundled-defaults) apply to it.
+
+To record a change on purpose, run this command and review the difference:
+
+```bash
+node --test --test-update-snapshots docker/agents/practice-scripts/corpus.test.ts
+```
+
+A snapshot proves what a program sends, not that a review judges better.
+
 ## Models and limits
 
 `meta.models` declares required or optional chat, decision, embedding and reranking slots.
