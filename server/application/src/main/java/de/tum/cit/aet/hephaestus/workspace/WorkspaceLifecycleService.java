@@ -76,7 +76,7 @@ public class WorkspaceLifecycleService {
 
     private Workspace suspendWorkspaceInTransaction(String workspaceSlug) {
         Workspace workspace = workspaceRepository
-                .findByWorkspaceSlug(workspaceSlug)
+                .findByWorkspaceSlugForUpdate(workspaceSlug)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
@@ -117,7 +117,7 @@ public class WorkspaceLifecycleService {
 
     private Workspace resumeWorkspaceInTransaction(String workspaceSlug) {
         Workspace workspace = workspaceRepository
-                .findByWorkspaceSlug(workspaceSlug)
+                .findByWorkspaceSlugForUpdate(workspaceSlug)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
