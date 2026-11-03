@@ -192,7 +192,7 @@ public class ResultPresentation {
     }
 
     public @Nullable ResultCoverage coverage(Result r, boolean permitted) {
-        return permitted && r.getCoverage() != null ? json.convertValue(r.getCoverage(), ResultCoverage.class) : null;
+        return permitted ? ResultCoverage.stored(json, r.getCoverage()) : null;
     }
 
     public ResultMarkDTO mark(long ws, ResultMark m) {

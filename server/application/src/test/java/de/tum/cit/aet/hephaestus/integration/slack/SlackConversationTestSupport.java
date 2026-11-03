@@ -24,9 +24,9 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -183,7 +184,7 @@ public final class SlackConversationTestSupport {
                 .itemVersion("test-version")
                 .developerId(developerId)
                 .outcome(ResultOutcome.MET)
-                .coverage(OM.valueToTree(new ClaimedCoverage(true, null, 1, 1, 1)))
+                .coverage(OM.valueToTree(new HostCoverage(true, null, 1, 0, 0, List.of())))
                 .recordedAt(at)
                 .build());
         assignment.setState(ReviewItemState.JUDGED);

@@ -4,7 +4,7 @@ INSERT INTO membership(workspace_id,account_id,role) VALUES(978001,978007,'MEMBE
 INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,developer_id,outcome,summary,coverage,recorded_at)
 VALUES('00000000-0000-0000-0000-000000978021',978001,'00000000-0000-0000-0000-000000978011',978004,978005,978006,
  'native-v1',978003,'MET','The change explains its purpose.',
- '{"source":"claimed","complete":true,"selected":1,"checked":1,"total":1}',now());
+ '{"source":"host","complete":true,"reads":1,"truncatedReads":0,"failedReads":0,"receipts":[]}',now());
 INSERT INTO feedback(id,workspace_id,review_id,item_id,developer_id,destination,state,body,created_at,delivered_at)
 VALUES('00000000-0000-0000-0000-000000978041',978001,'00000000-0000-0000-0000-000000978011',978006,978003,
  'ON_WORK','DELIVERED','Explain the purpose.',now(),now()),

@@ -15,7 +15,6 @@ import static de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateLimits.
 import static de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateLimits.WARRANT_FIELD_CHARS;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.CoverageOmission;
 import de.tum.cit.aet.hephaestus.practices.spi.DutyBasis;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
@@ -170,19 +169,6 @@ final class CandidateValidation {
                 .field("receipts")
                 .constraint(new SizeDef().max(RECEIPTS))
                 .valid()
-                .field("omitted")
-                .constraint(new SizeDef().max(OMISSIONS))
-                .valid();
-        mapping.type(ClaimedCoverage.class)
-                .field("selected")
-                .constraint(new PositiveOrZeroDef())
-                .constraint(new MaxDef().value(MAX_COUNT))
-                .field("checked")
-                .constraint(new PositiveOrZeroDef())
-                .constraint(new MaxDef().value(MAX_COUNT))
-                .field("total")
-                .constraint(new PositiveOrZeroDef())
-                .constraint(new MaxDef().value(MAX_COUNT))
                 .field("omitted")
                 .constraint(new SizeDef().max(OMISSIONS))
                 .valid();

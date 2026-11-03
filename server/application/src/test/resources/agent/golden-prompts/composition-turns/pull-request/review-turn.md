@@ -351,11 +351,12 @@ catch (IOException e) { return null; }
    "summary": "The new catch swallows the failure",
    "explanation": "The catch block returns null and records nothing.",
    "coverage": {
-    "source": "claimed",
+    "source": "host",
     "complete": true,
-    "selected": 1,
-    "checked": 1,
-    "total": 1
+    "reads": 1,
+    "truncatedReads": 0,
+    "failedReads": 0,
+    "receipts": []
    },
    "summaryOnly": false,
    "publicEligible": true,
@@ -498,11 +499,12 @@ The description says why the change is needed, not only what it changes.
    "summary": "The description omits the reason",
    "explanation": "It names the change but not why it is needed.",
    "coverage": {
-    "source": "claimed",
+    "source": "host",
     "complete": true,
-    "selected": 1,
-    "checked": 1,
-    "total": 1
+    "reads": 1,
+    "truncatedReads": 0,
+    "failedReads": 0,
+    "receipts": []
    },
    "summaryOnly": true,
    "publicEligible": true,

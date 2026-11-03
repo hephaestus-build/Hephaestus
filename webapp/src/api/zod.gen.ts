@@ -3353,15 +3353,6 @@ export const zResultCoverage = z.object({
     source: z.string()
 });
 
-export const zClaimedCoverage = zResultCoverage.and(z.object({
-    checked: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    complete: z.boolean().optional(),
-    omitted: z.array(zCoverageOmission).optional(),
-    selected: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    total: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    source: z.literal('ClaimedCoverage')
-}));
-
 export const zHostCoverage = zResultCoverage.and(z.object({
     complete: z.boolean().optional(),
     failedReads: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -6632,10 +6623,7 @@ export const zProblem = z.object({
 
 export const zResultDetail = z.object({
     acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-    coverage: z.union([
-        zClaimedCoverage,
-        zHostCoverage
-    ]).nullable(),
+    coverage: zHostCoverage.nullable(),
     currentness: z.enum([
         'CURRENT',
         'STALE',
@@ -6722,10 +6710,7 @@ export const zReviewProblemDetail = z.object({
 
 export const zReviewResultDetail = z.object({
     acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-    coverage: z.union([
-        zClaimedCoverage,
-        zHostCoverage
-    ]).nullable(),
+    coverage: zHostCoverage.nullable(),
     currentness: z.enum([
         'CURRENT',
         'STALE',

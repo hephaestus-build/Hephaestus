@@ -41,8 +41,7 @@ public class ScanReuseCandidateQuery {
                 assignment.developerId());
         if (candidate.isEmpty()) return Optional.empty();
         var result = candidate.orElseThrow();
-        if (result.getCoverage() == null
-                || !(json.convertValue(result.getCoverage(), ResultCoverage.class) instanceof HostCoverage host)
+        if (!(ResultCoverage.stored(json, result.getCoverage()) instanceof HostCoverage host)
                 || !trusted(host)
                 || !authorization.permits(workspaceId, result, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
             return Optional.empty();

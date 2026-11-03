@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.proxy.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationEligibility;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -12,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
@@ -102,7 +102,7 @@ class AdmissionResponseDTOTest {
                 "The catch returns without recording the error.",
                 mapper.readTree("{\"citations\":[]}"),
                 null,
-                new ClaimedCoverage(true, null, 1, 1, 1),
+                new HostCoverage(true, null, 1, 0, 0, List.of()),
                 List.of(problem),
                 true,
                 true);

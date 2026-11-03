@@ -630,15 +630,6 @@ export type ClaimBasis = {
     type: string;
 };
 
-export type ClaimedCoverage = Omit<ResultCoverage, 'source'> & {
-    checked?: number;
-    complete?: boolean;
-    omitted?: Array<CoverageOmission>;
-    selected?: number;
-    total?: number;
-    source: 'ClaimedCoverage';
-};
-
 export type ClientRefreshRequest = {
     refreshToken: string;
 };
@@ -4598,7 +4589,7 @@ export type ResultCoverage = {
 
 export type ResultDetail = {
     acceptedAt: Date | null;
-    coverage: ClaimedCoverage | HostCoverage | null;
+    coverage: HostCoverage | null;
     currentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
     endReason: 'REPLACED' | 'OUTRANKED' | 'WORK_CHANGED' | 'REPAIRED' | 'REMOVED' | null;
     endedAt: Date | null;
@@ -5101,7 +5092,7 @@ export type ReviewResultCounts = {
 
 export type ReviewResultDetail = {
     acceptedAt: Date | null;
-    coverage: ClaimedCoverage | HostCoverage | null;
+    coverage: HostCoverage | null;
     currentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
     developer: ReviewDeveloper | null;
     disagreements: Array<FeedbackDisagreement>;

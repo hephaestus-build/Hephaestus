@@ -332,7 +332,7 @@ void describe("a practice's result", () => {
 		const { outcome } = await run(ws, "typed");
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "invalid-candidate");
-		assert.match(outcome.error ?? "", /coverage_inconsistent/u);
+		assert.match(outcome.error ?? "", /coverage/u);
 	});
 
 	void test("code that cites a source it did not read gets no MET", async () => {

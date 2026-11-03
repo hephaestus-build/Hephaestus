@@ -54,6 +54,8 @@ public class ResultProofMapper {
                 || result.getEvidence() == null
                 || result.getCoverage() == null)
             throw new IllegalArgumentException("Archived or redacted proof cannot be admitted.");
+        var coverage = ResultCoverage.stored(json, result.getCoverage());
+        if (coverage == null) throw new IllegalArgumentException("Proof without measured coverage cannot be admitted.");
         var children = storedChildren.stream()
                 .map(p -> {
                     if (p.getBasis() == null)
@@ -89,7 +91,7 @@ public class ResultProofMapper {
                         result.getExample() == null
                                 ? null
                                 : json.convertValue(result.getExample(), ResultExample.class),
-                        json.convertValue(result.getCoverage(), ResultCoverage.class),
+                        coverage,
                         children.stream()
                                 .map(AdmittedProblemSnapshot::candidate)
                                 .toList()),

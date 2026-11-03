@@ -352,12 +352,13 @@ final class CompositionEvalCases {
             entry.put("explanation", result.path("explanation").asString());
             entry.putObject("evidence").set("citations", citations(id, result.path("citations"), sources, shas));
             entry.putNull("example");
-            entry.putObject("coverage")
-                    .put("source", "claimed")
+            var coverage = entry.putObject("coverage")
+                    .put("source", "host")
                     .put("complete", true)
-                    .put("selected", 1)
-                    .put("checked", 1)
-                    .put("total", 1);
+                    .put("reads", 1)
+                    .put("truncatedReads", 0)
+                    .put("failedReads", 0);
+            coverage.putArray("receipts");
             var problems = entry.putArray("problems");
             int position = 0;
             for (JsonNode problem : result.path("problems")) {
@@ -396,12 +397,19 @@ final class CompositionEvalCases {
             if (outcome.equals("COULD_NOT_DETERMINE")) evidence.set("openQuestions", limit.path("openQuestions"));
             else evidence.put("inapplicability", limit.path("inapplicability").asString());
             entry.putNull("example");
-            entry.putObject("coverage")
-                    .put("source", "claimed")
+            var limitCoverage = entry.putObject("coverage")
+                    .put("source", "host")
                     .put("complete", false)
-                    .put("selected", 0)
-                    .put("checked", 0)
-                    .put("total", 1);
+                    .put("reads", 0)
+                    .put("truncatedReads", 0)
+                    .put("failedReads", 0);
+            limitCoverage.putArray("receipts");
+            limitCoverage
+                    .putArray("omitted")
+                    .addObject()
+                    .put("what", "sources")
+                    .put("count", 1)
+                    .put("reason", "selection");
             entry.putArray("problems");
             entry.put("summaryOnly", false);
             entry.put("publicEligible", true);

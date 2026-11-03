@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.review.report;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.Comparison;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
@@ -143,14 +142,6 @@ class ScanReportComparisonTest extends BaseUnitTest {
                 .isFalse();
         assertThat(ProblemComparison.provesAbsence(
                         old, candidate("new", ResultOutcome.DOES_NOT_APPLY, host), true, true, false, true))
-                .isFalse();
-        assertThat(ProblemComparison.provesAbsence(
-                        old,
-                        candidate("new", ResultOutcome.MET, new ClaimedCoverage(true, List.of(), 1, 1, 1)),
-                        true,
-                        true,
-                        false,
-                        true))
                 .isFalse();
     }
 }

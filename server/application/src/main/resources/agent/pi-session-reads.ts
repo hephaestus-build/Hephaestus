@@ -562,7 +562,7 @@ export function unreadCheckoutClaim(
 	coverage: Coverage,
 	{ checkout, ask }: { checkout?: CheckoutState; ask: boolean },
 ): UnreadCheckoutClaim | undefined {
-	const searched = (coverage.source === "host" ? coverage.receipts : []).some(
+	const searched = coverage.receipts.some(
 		(receipt) =>
 			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
 	);

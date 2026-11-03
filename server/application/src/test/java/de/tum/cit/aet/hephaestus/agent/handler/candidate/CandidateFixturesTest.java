@@ -303,7 +303,7 @@ class CandidateFixturesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseClaimedCoverageWhenAnyOutcomeCarriesIt() throws IOException {
+    void shouldRefuseCoverageThatTheHostDidNotMeasureWhenAnyOutcomeCarriesIt() throws IOException {
         for (String name : CANDIDATES.keySet()) {
             ObjectNode candidate = fixture(name);
             candidate
@@ -311,11 +311,8 @@ class CandidateFixturesTest extends BaseUnitTest {
                     .put("source", "claimed")
                     .put("selected", 1)
                     .put("checked", 1)
-                    .putNull("total")
+                    .put("total", 1)
                     .put("complete", true);
-            assertRefused(candidate, CandidateRefusal.COVERAGE_INCONSISTENT);
-
-            ((ObjectNode) candidate.get("coverage")).remove("total");
             assertRefused(candidate, CandidateRefusal.MALFORMED_CANDIDATE);
         }
     }

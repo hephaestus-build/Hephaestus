@@ -1,13 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.handler.candidate;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.StrictJson;
 import de.tum.cit.aet.hephaestus.practices.spi.CitationProof;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.CoverageOmission;
 import de.tum.cit.aet.hephaestus.practices.spi.DutyBasis;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceCitation;
@@ -45,7 +43,6 @@ final class CandidateWireMapper {
                 .addMixIn(WorsenedBasis.class, WorsenedFields.class)
                 .addMixIn(DutyBasis.class, DutyFields.class)
                 .addMixIn(HostCoverage.class, HostFields.class)
-                .addMixIn(ClaimedCoverage.class, ClaimedFields.class)
                 .addMixIn(CoverageOmission.class, OmissionFields.class)
                 .build();
     }
@@ -116,13 +113,4 @@ final class CandidateWireMapper {
             @JsonProperty(required = true) int count,
             @JsonProperty(required = true) OmissionReason reason,
             @Nullable List<String> items) {}
-
-    private record ClaimedFields(
-            @JsonProperty(required = true) boolean complete,
-            @Nullable List<CoverageOmission> omitted,
-            @JsonProperty(required = true) int selected,
-            @JsonProperty(required = true) int checked,
-
-            @JsonProperty(required = true) @JsonInclude(JsonInclude.Include.ALWAYS) @Nullable
-            Integer total) {}
 }

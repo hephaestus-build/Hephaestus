@@ -56,7 +56,7 @@ The [pipeline](../contributor/practice-review-pipeline.mdx#admit-results) owns a
 
 - A code-only practice can produce Met, Not met and Does not apply without a model, on the same trust as a review session.
 - A script cannot hide a failed read behind its own counts.
-- Claimed coverage stays only as a stored form of earlier results. A custom script that returns coverage stops as an invalid result.
+- Claimed coverage has no type from 1.0. A stored result that holds it reads as no coverage. A custom script that returns coverage stops as an invalid result.
 - Per-criterion absence checks (`criterion.where`) and classifier receipts with a calibration gate are the next parts of this contract. They need the practice definition to name its criteria. The maintainers own the criteria.
 
 ## Revisit trigger

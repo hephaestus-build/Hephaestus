@@ -252,7 +252,6 @@ void test(
 		const { coverage: expectedCoverage, ...reviewed } = REVIEWED;
 		assert.deepEqual(candidate, reviewed, log);
 		assert.equal(coverage.source, expectedCoverage.source, log);
-		assert.ok(coverage.source === "host", log);
 		assert.equal(coverage.reads, outcome.coverageReached.reads, log);
 		assert.equal(coverage.truncatedReads, outcome.coverageReached.truncatedReads, log);
 		assert.equal(coverage.failedReads, outcome.coverageReached.failedReads, log);

@@ -293,7 +293,7 @@ BEGIN
         'Synthetic explanation for deterministic browser validation only.',
         jsonb_build_object('citations', CASE WHEN f.ordinal IN (1, 2) THEN jsonb_build_array(citation)
           ELSE '[]'::jsonb END, 'openQuestions', '[]'::jsonb),
-        '{"source":"claimed","complete":true,"selected":1,"checked":1,"total":1}'::jsonb, fixture_time)
+        '{"source":"host","complete":true,"reads":1,"truncatedReads":0,"failedReads":0,"receipts":[]}'::jsonb, fixture_time)
       ON CONFLICT (id) DO NOTHING;
       -- A not met result has at least one problem; the check runs when the transaction commits.
       IF f.outcome = 'NOT_MET' THEN

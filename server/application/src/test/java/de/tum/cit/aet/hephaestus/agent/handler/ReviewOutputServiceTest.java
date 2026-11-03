@@ -160,7 +160,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldWithholdAClaimedMetWithoutWritingAResultWhenTheCoverageIsNotMeasured() {
+    void shouldWithholdAMetWithoutWritingAResultWhenItsCoverageIsNotMeasured() {
         var submission = submission("clear-names", "docs:one");
         var claimed = ((ObjectNode) submission.results().getFirst().candidate());
         claimed.putObject("coverage")
@@ -179,7 +179,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .withhold(
                         eq(1L),
                         eq(RuntimeReviewTestData.assignment(5L, null).id()),
-                        eq(CandidateRefusal.COVERAGE_INCONSISTENT),
+                        eq(CandidateRefusal.MALFORMED_CANDIDATE),
                         any());
     }
 

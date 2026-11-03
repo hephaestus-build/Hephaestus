@@ -1040,8 +1040,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                     .explanation("The captured event loses its failure context.")
                     .evidence(evidence)
                     .evidenceVersion((short) 1)
-                    .coverage(objectMapper.readTree(
-                            "{\"source\":\"claimed\",\"complete\":true,\"selected\":1,\"checked\":1,\"total\":1}"))
+                    .coverage(
+                            objectMapper.readTree(
+                                    "{\"source\":\"host\",\"complete\":true,\"reads\":1,\"truncatedReads\":0,\"failedReads\":0,\"receipts\":[]}"))
                     .recordedAt(Instant.now())
                     .build());
             privateProblems.saveAndFlush(Problem.builder()
@@ -1717,8 +1718,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                     .summary("Stored result")
                     .explanation("The recorded quote supports it.")
                     .evidence(AdmittedResultFixtures.evidence("scm.pull-request.core"))
-                    .coverage(objectMapper.readTree(
-                            "{\"source\":\"claimed\",\"complete\":true,\"selected\":1,\"checked\":1,\"total\":1}"))
+                    .coverage(
+                            objectMapper.readTree(
+                                    "{\"source\":\"host\",\"complete\":true,\"reads\":1,\"truncatedReads\":0,\"failedReads\":0,\"receipts\":[]}"))
                     .recordedAt(Instant.now())
                     .build();
             practiceResultRepository.saveAndFlush(row);

@@ -843,11 +843,12 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				outcome: "NOT_MET",
 				recordedAt: "2026-07-28T13:38:00Z",
 				coverage: {
-					source: "ClaimedCoverage",
+					source: "HostCoverage",
 					complete: false,
-					checked: 2,
-					selected: 3,
-					total: 3,
+					reads: 2,
+					truncatedReads: 0,
+					failedReads: 0,
+					receipts: [],
 					omitted: [{ reason: "budget", what: "test files", count: 1 }],
 				},
 				marks: [
