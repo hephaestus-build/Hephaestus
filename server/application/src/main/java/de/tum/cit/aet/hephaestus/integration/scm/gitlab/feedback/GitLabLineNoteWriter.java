@@ -225,12 +225,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     private static boolean sameDraftPosition(JsonNode actual, @Nullable Object expected) {
+        // GitLab answers a draft without a position with a position whose type is "text" and whose location is null.
         if (expected == null)
             return actual.isNull()
                     || actual.isMissingNode()
                     || (actual.isObject()
                             && actual.properties().stream()
-                                    .allMatch(entry -> entry.getValue().isNull()));
+                                    .allMatch(entry -> entry.getValue().isNull()
+                                            || entry.getKey().equals("position_type")));
         var wanted = MAPPER.valueToTree(expected);
         return wanted.properties().stream().allMatch(entry -> entry.getValue().equals(actual.path(entry.getKey())));
     }
