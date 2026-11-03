@@ -13,12 +13,12 @@ import type {
 	IntegrationCatalogEntry,
 	ItemRef,
 	MentorConversation,
-	MentorEntryPage,
+	CursorPageDtoMentorEntry,
 	PracticeGroupStanding,
 	PracticePageFeedback,
 	PracticeProfileOverview,
 	PracticeStanding,
-	PageResponseDtoReviewFeedback,
+	OffsetPageDtoReviewFeedback,
 	PracticeStandingResult,
 	ReviewedPractice,
 	Workspace,
@@ -359,8 +359,8 @@ const practiceFeedback: Wire<PracticePageFeedback>[] =
 
 const minutesAgo = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
 
-const entries: MentorEntryPage = {
-	entries: [
+const entries: CursorPageDtoMentorEntry = {
+	content: [
 		entry({
 			id: "entry-1",
 			seq: 1,
@@ -389,7 +389,7 @@ const entries: MentorEntryPage = {
 
 const conversation: MentorConversation = {
 	activeTurns: [],
-	id: entries.entries[0]?.conversationId,
+	id: entries.content[0]?.conversationId,
 	lastAnswerAt: minutesAgo(3),
 	lastReadAt: minutesAgo(3),
 	latestSeq: 2,
@@ -495,23 +495,10 @@ const feedbackModes = buildFeedbackModeFixture({
 	})),
 });
 
-const noReviewFeedback: Wire<PageResponseDtoReviewFeedback> = {
+const noReviewFeedback: Wire<OffsetPageDtoReviewFeedback> = {
 	content: [],
-	empty: true,
-	first: true,
-	last: true,
-	number: 0,
-	numberOfElements: 0,
-	pageable: {
-		offset: 0,
-		pageNumber: 0,
-		pageSize: 20,
-		paged: true,
-		unpaged: false,
-		sort: { empty: true, sorted: false, unsorted: true },
-	},
+	page: 0,
 	size: 20,
-	sort: { empty: true, sorted: false, unsorted: true },
 	totalElements: 0,
 	totalPages: 0,
 };

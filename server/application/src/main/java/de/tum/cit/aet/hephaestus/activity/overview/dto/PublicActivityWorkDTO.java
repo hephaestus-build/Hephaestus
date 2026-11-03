@@ -6,17 +6,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
-/** One page of the selected person's published work; no account, author or other participant data. */
-public record PublicActivityWorkPageDTO(
-        @NonNull List<PublicActivityWorkDTO> content,
-        @Nullable String nextCursor) {
-    public record PublicActivityWorkDTO(
-            @NonNull String id,
-            @NonNull PublicActivityWorkSummaryDTO work,
-            @NonNull List<ActivityActionDTO> actions,
-            @NonNull Instant lastOccurredAt) {}
+/** One piece of the selected person's published work; no account, author or other participant data. */
+public record PublicActivityWorkDTO(
+        @NonNull String id,
+        @NonNull PublicActivityWorkSummaryDTO work,
+        @NonNull List<ActivityActionDTO> actions,
+        @NonNull Instant lastOccurredAt) {
 
     public record PublicActivityWorkSummaryDTO(
             @NonNull WorkItemType type,

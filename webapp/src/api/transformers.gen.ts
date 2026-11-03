@@ -7,13 +7,13 @@ const authEventViewSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoAuthEventViewSchemaResponseTransformer = (data: any) => {
+const cursorPageDtoAuthEventViewSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => authEventViewSchemaResponseTransformer(item));
     return data;
 };
 
 export const adminListAuthEventsResponseTransformer = async (data: any): Promise<AdminListAuthEventsResponse> => {
-    data = pageResponseDtoAuthEventViewSchemaResponseTransformer(data);
+    data = cursorPageDtoAuthEventViewSchemaResponseTransformer(data);
     return data;
 };
 
@@ -24,13 +24,13 @@ const configAuditEntryViewSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer = (data: any) => {
+const cursorPageDtoConfigAuditEntryViewSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => configAuditEntryViewSchemaResponseTransformer(item));
     return data;
 };
 
 export const adminListConfigAuditEventsResponseTransformer = async (data: any): Promise<AdminListConfigAuditEventsResponse> => {
-    data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
+    data = cursorPageDtoConfigAuditEntryViewSchemaResponseTransformer(data);
     return data;
 };
 
@@ -43,8 +43,13 @@ const consumerDeadLetterSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
+const cursorPageDtoConsumerDeadLetterSchemaResponseTransformer = (data: any) => {
+    data.content = data.content.map((item: any) => consumerDeadLetterSchemaResponseTransformer(item));
+    return data;
+};
+
 export const listInstallationDeadLettersResponseTransformer = async (data: any): Promise<ListInstallationDeadLettersResponse> => {
-    data = data.map((item: any) => consumerDeadLetterSchemaResponseTransformer(item));
+    data = cursorPageDtoConsumerDeadLetterSchemaResponseTransformer(data);
     return data;
 };
 
@@ -208,15 +213,13 @@ const feedbackItemSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pagedModelFeedbackItemSchemaResponseTransformer = (data: any) => {
-    if (data.content) {
-        data.content = data.content.map((item: any) => feedbackItemSchemaResponseTransformer(item));
-    }
+const offsetPageDtoFeedbackItemSchemaResponseTransformer = (data: any) => {
+    data.content = data.content.map((item: any) => feedbackItemSchemaResponseTransformer(item));
     return data;
 };
 
 export const adminListProductFeedbackResponseTransformer = async (data: any): Promise<AdminListProductFeedbackResponse> => {
-    data = pagedModelFeedbackItemSchemaResponseTransformer(data);
+    data = offsetPageDtoFeedbackItemSchemaResponseTransformer(data);
     return data;
 };
 
@@ -492,13 +495,13 @@ const publicActivityWorkSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const publicActivityWorkPageSchemaResponseTransformer = (data: any) => {
+const cursorPageDtoPublicActivityWorkSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => publicActivityWorkSchemaResponseTransformer(item));
     return data;
 };
 
 export const getPublicActivityPersonWorkResponseTransformer = async (data: any): Promise<GetPublicActivityPersonWorkResponse> => {
-    data = publicActivityWorkPageSchemaResponseTransformer(data);
+    data = cursorPageDtoPublicActivityWorkSchemaResponseTransformer(data);
     return data;
 };
 
@@ -666,13 +669,13 @@ const activityWorkSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const activityWorkPageSchemaResponseTransformer = (data: any) => {
+const cursorPageDtoActivityWorkSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => activityWorkSchemaResponseTransformer(item));
     return data;
 };
 
 export const getOwnActivityWorkResponseTransformer = async (data: any): Promise<GetOwnActivityWorkResponse> => {
-    data = activityWorkPageSchemaResponseTransformer(data);
+    data = cursorPageDtoActivityWorkSchemaResponseTransformer(data);
     return data;
 };
 
@@ -722,17 +725,17 @@ export const getActivityPersonResponseTransformer = async (data: any): Promise<G
 };
 
 export const getActivityPersonWorkResponseTransformer = async (data: any): Promise<GetActivityPersonWorkResponse> => {
-    data = activityWorkPageSchemaResponseTransformer(data);
+    data = cursorPageDtoActivityWorkSchemaResponseTransformer(data);
     return data;
 };
 
 export const getActivityWorkResponseTransformer = async (data: any): Promise<GetActivityWorkResponse> => {
-    data = activityWorkPageSchemaResponseTransformer(data);
+    data = cursorPageDtoActivityWorkSchemaResponseTransformer(data);
     return data;
 };
 
 export const listWorkspaceConfigAuditEventsResponseTransformer = async (data: any): Promise<ListWorkspaceConfigAuditEventsResponse> => {
-    data = pageResponseDtoConfigAuditEntryViewSchemaResponseTransformer(data);
+    data = cursorPageDtoConfigAuditEntryViewSchemaResponseTransformer(data);
     return data;
 };
 
@@ -830,13 +833,13 @@ export const getConnectionSyncStatusResponseTransformer = async (data: any): Pro
     return data;
 };
 
-const pageResponseDtoSyncJobSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoSyncJobSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => syncJobSchemaResponseTransformer(item));
     return data;
 };
 
 export const listConnectionSyncJobsResponseTransformer = async (data: any): Promise<ListConnectionSyncJobsResponse> => {
-    data = pageResponseDtoSyncJobSchemaResponseTransformer(data);
+    data = offsetPageDtoSyncJobSchemaResponseTransformer(data);
     return data;
 };
 
@@ -920,7 +923,7 @@ export const updateFeaturesResponseTransformer = async (data: any): Promise<Upda
 };
 
 export const listConsumerDeadLettersResponseTransformer = async (data: any): Promise<ListConsumerDeadLettersResponse> => {
-    data = data.map((item: any) => consumerDeadLetterSchemaResponseTransformer(item));
+    data = cursorPageDtoConsumerDeadLetterSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1001,13 +1004,13 @@ const workspaceMembershipSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoWorkspaceMembershipSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoWorkspaceMembershipSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => workspaceMembershipSchemaResponseTransformer(item));
     return data;
 };
 
 export const listMembershipsResponseTransformer = async (data: any): Promise<ListMembershipsResponse> => {
-    data = pageResponseDtoWorkspaceMembershipSchemaResponseTransformer(data);
+    data = offsetPageDtoWorkspaceMembershipSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1114,19 +1117,19 @@ const mentorEntrySchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const mentorEntryPageSchemaResponseTransformer = (data: any) => {
-    data.entries = data.entries.map((item: any) => mentorEntrySchemaResponseTransformer(item));
+const cursorPageDtoMentorEntrySchemaResponseTransformer = (data: any) => {
+    data.content = data.content.map((item: any) => mentorEntrySchemaResponseTransformer(item));
     return data;
 };
 
 export const listMentorEntriesResponseTransformer = async (data: any): Promise<ListMentorEntriesResponse> => {
-    data = mentorEntryPageSchemaResponseTransformer(data);
+    data = cursorPageDtoMentorEntrySchemaResponseTransformer(data);
     return data;
 };
 
 const mentorThreadSchemaResponseTransformer = (data: any) => {
-    data.entries = data.entries.map((item: any) => mentorEntrySchemaResponseTransformer(item));
     data.parent = mentorEntrySchemaResponseTransformer(data.parent);
+    data.replies = cursorPageDtoMentorEntrySchemaResponseTransformer(data.replies);
     return data;
 };
 
@@ -1339,13 +1342,13 @@ const profileReviewSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoProfileReviewSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoProfileReviewSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => profileReviewSchemaResponseTransformer(item));
     return data;
 };
 
 export const listOwnGroupReviewsResponseTransformer = async (data: any): Promise<ListOwnGroupReviewsResponse> => {
-    data = pageResponseDtoProfileReviewSchemaResponseTransformer(data);
+    data = offsetPageDtoProfileReviewSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1380,7 +1383,7 @@ export const getOwnPracticeProfileOverviewResponseTransformer = async (data: any
 };
 
 export const listOwnReviewsResponseTransformer = async (data: any): Promise<ListOwnReviewsResponse> => {
-    data = pageResponseDtoProfileReviewSchemaResponseTransformer(data);
+    data = offsetPageDtoProfileReviewSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1492,13 +1495,13 @@ export const replaceOwnFeedbackResponseResponseTransformer = async (data: any): 
     return data;
 };
 
-const pageResponseDtoItemRefSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoItemRefSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => itemRefSchemaResponseTransformer(item));
     return data;
 };
 
 export const listReviewItemsResponseTransformer = async (data: any): Promise<ListReviewItemsResponse> => {
-    data = pageResponseDtoItemRefSchemaResponseTransformer(data);
+    data = offsetPageDtoItemRefSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1518,7 +1521,7 @@ export const getOwnItemTraceResponseTransformer = async (data: any): Promise<Get
 };
 
 export const listOwnItemReviewsResponseTransformer = async (data: any): Promise<ListOwnItemReviewsResponse> => {
-    data = pageResponseDtoProfileReviewSchemaResponseTransformer(data);
+    data = offsetPageDtoProfileReviewSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1572,13 +1575,13 @@ export const acceptPracticeReleaseResponseTransformer = async (data: any): Promi
     return data;
 };
 
-const pageResponseDtoResultListSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoResultListSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => resultListSchemaResponseTransformer(item));
     return data;
 };
 
 export const listOwnResultsResponseTransformer = async (data: any): Promise<ListOwnResultsResponse> => {
-    data = pageResponseDtoResultListSchemaResponseTransformer(data);
+    data = offsetPageDtoResultListSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1620,13 +1623,13 @@ const reviewBatchSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoReviewBatchSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoReviewBatchSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => reviewBatchSchemaResponseTransformer(item));
     return data;
 };
 
 export const listReviewBatchesResponseTransformer = async (data: any): Promise<ListReviewBatchesResponse> => {
-    data = pageResponseDtoReviewBatchSchemaResponseTransformer(data);
+    data = offsetPageDtoReviewBatchSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1708,13 +1711,13 @@ const reviewSummarySchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoReviewSummarySchemaResponseTransformer = (data: any) => {
+const offsetPageDtoReviewSummarySchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => reviewSummarySchemaResponseTransformer(item));
     return data;
 };
 
 export const listReviewsResponseTransformer = async (data: any): Promise<ListReviewsResponse> => {
-    data = pageResponseDtoReviewSummarySchemaResponseTransformer(data);
+    data = offsetPageDtoReviewSummarySchemaResponseTransformer(data);
     return data;
 };
 
@@ -1732,13 +1735,13 @@ const reviewFeedbackSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoReviewFeedbackSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoReviewFeedbackSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => reviewFeedbackSchemaResponseTransformer(item));
     return data;
 };
 
 export const listReviewFeedbackResponseTransformer = async (data: any): Promise<ListReviewFeedbackResponse> => {
-    data = pageResponseDtoReviewFeedbackSchemaResponseTransformer(data);
+    data = offsetPageDtoReviewFeedbackSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1892,13 +1895,13 @@ const reviewProblemSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoReviewProblemSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoReviewProblemSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => reviewProblemSchemaResponseTransformer(item));
     return data;
 };
 
 export const listReviewProblemsResponseTransformer = async (data: any): Promise<ListReviewProblemsResponse> => {
-    data = pageResponseDtoReviewProblemSchemaResponseTransformer(data);
+    data = offsetPageDtoReviewProblemSchemaResponseTransformer(data);
     return data;
 };
 
@@ -1955,13 +1958,13 @@ const reviewResultSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoReviewResultSchemaResponseTransformer = (data: any) => {
+const offsetPageDtoReviewResultSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => reviewResultSchemaResponseTransformer(item));
     return data;
 };
 
 export const listReviewResultsResponseTransformer = async (data: any): Promise<ListReviewResultsResponse> => {
-    data = pageResponseDtoReviewResultSchemaResponseTransformer(data);
+    data = offsetPageDtoReviewResultSchemaResponseTransformer(data);
     return data;
 };
 
@@ -2112,13 +2115,13 @@ const scanSummarySchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const pageResponseDtoScanSummarySchemaResponseTransformer = (data: any) => {
+const offsetPageDtoScanSummarySchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => scanSummarySchemaResponseTransformer(item));
     return data;
 };
 
 export const listScansResponseTransformer = async (data: any): Promise<ListScansResponse> => {
-    data = pageResponseDtoScanSummarySchemaResponseTransformer(data);
+    data = offsetPageDtoScanSummarySchemaResponseTransformer(data);
     return data;
 };
 
@@ -2284,13 +2287,13 @@ const scanReportItemSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const scanReportItemsPageSchemaResponseTransformer = (data: any) => {
+const cursorPageDtoScanReportItemSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => scanReportItemSchemaResponseTransformer(item));
     return data;
 };
 
 export const listScanReportItemsResponseTransformer = async (data: any): Promise<ListScanReportItemsResponse> => {
-    data = scanReportItemsPageSchemaResponseTransformer(data);
+    data = cursorPageDtoScanReportItemSchemaResponseTransformer(data);
     return data;
 };
 
@@ -2299,13 +2302,13 @@ const scanReportProblemSchemaResponseTransformer = (data: any) => {
     return data;
 };
 
-const scanReportProblemsPageSchemaResponseTransformer = (data: any) => {
+const cursorPageDtoScanReportProblemSchemaResponseTransformer = (data: any) => {
     data.content = data.content.map((item: any) => scanReportProblemSchemaResponseTransformer(item));
     return data;
 };
 
 export const listScanReportProblemsResponseTransformer = async (data: any): Promise<ListScanReportProblemsResponse> => {
-    data = scanReportProblemsPageSchemaResponseTransformer(data);
+    data = cursorPageDtoScanReportProblemSchemaResponseTransformer(data);
     return data;
 };
 

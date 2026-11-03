@@ -17,7 +17,9 @@ import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -157,11 +159,9 @@ public class AccountService {
         return type.equals("GITHUB") || type.equals("GITLAB");
     }
 
-    public List<Account> adminList(int page, int size) {
+    public Page<Account> adminList(int page, int size) {
         int capped = Math.min(Math.max(size, 1), 200);
-        return accountRepository
-                .findAll(PageRequest.of(Math.max(page, 0), capped))
-                .getContent();
+        return accountRepository.findAll(PageRequest.of(Math.max(page, 0), capped, Sort.by("id")));
     }
 
     @Transactional

@@ -613,7 +613,7 @@ describe("feedback approval level", () => {
 					return HttpResponse.json({
 						content: waiting,
 						// One more waits beyond this page.
-						number: 0,
+						page: 0,
 						size: 100,
 						totalElements: waiting.length + 1,
 						totalPages: 2,

@@ -156,12 +156,10 @@ paths:
       operationId: adminListAuthEvents
       parameters:
       - in: query
-        name: page
+        name: cursor
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 0
+          type: string
       - in: query
         name: size
         required: false
@@ -254,9 +252,103 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOAuthEventView"
+                $ref: "#/components/schemas/CursorPageDTOAuthEventView"
           description: OK
-      summary: "List auth audit events (paged, newest first)"
+      summary: List auth audit events (newest first)
+      tags:
+      - Admin
+  /admin/audit/count:
+    get:
+      operationId: adminCountAuthEvents
+      parameters:
+      - in: query
+        name: accountId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: actingAccountId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: eventType
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - USER_VIEW
+            - LOGIN
+            - PASSKEY_CHANGED
+            - PASSKEY_VERIFIED
+            - LOGIN_FAILED
+            - LOGOUT
+            - TOKEN_REFRESH
+            - JWT_REVOKED
+            - IDENTITY_LINKED
+            - IDENTITY_UNLINKED
+            - IMPERSONATION_BEGIN
+            - IMPERSONATION_END
+            - ACCOUNT_DELETED
+            - EXPORT_REQUESTED
+            - PERSON_DATA_PREVIEWED
+            - PERSON_DATA_EXPORTED
+            - PERSON_DATA_ERASURE_REQUESTED
+            - APP_ROLE_CHANGED
+            - RESEARCH_CONSENT_REVOKED
+            - WORKSPACE_ELEVATION
+            - INSTALLATION_EVENT_REPLAYED
+            - LLM_CONNECTION_CREATED
+            - LLM_CONNECTION_UPDATED
+            - LLM_CONNECTION_DELETED
+            - LLM_MODEL_CREATED
+            - LLM_MODEL_UPDATED
+            - LLM_MODEL_DELETED
+            - LLM_MODEL_PRICE_CHANGED
+            - LLM_MODEL_SHARING_CHANGED
+            - LLM_SETTINGS_CHANGED
+            - LOGIN_PROVIDER_CREATED
+            - LOGIN_PROVIDER_UPDATED
+            - LOGIN_PROVIDER_DELETED
+            - SILENT_MODE_CHANGED
+            - PUBLIC_ACTIVITY_CHANGED
+            - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
+            - RESEARCH_DATASET_RELEASED
+            - RESEARCH_REMOVAL_RECORDED
+      - in: query
+        name: result
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - SUCCESS
+            - FAILURE
+      - in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotalCount"
+          description: OK
+      summary: Count the auth audit events a filter matches
       tags:
       - Admin
   /admin/audit/export:
@@ -364,12 +456,10 @@ paths:
           type: integer
           format: int64
       - in: query
-        name: page
+        name: cursor
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 0
+          type: string
       - in: query
         name: size
         required: false
@@ -454,10 +544,101 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
+                $ref: "#/components/schemas/CursorPageDTOConfigAuditEntryView"
           description: OK
-      summary: "List admin configuration changes across workspaces (paged, newest\
-        \ first)"
+      summary: List admin configuration changes across workspaces (newest first)
+      tags:
+      - Admin
+  /admin/config-audit/count:
+    get:
+      operationId: adminCountConfigAuditEvents
+      parameters:
+      - in: query
+        name: workspaceId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: entityType
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - PRACTICE_REVIEW_SETTINGS
+            - AGENT_BINDING
+            - AGENT_CONFIG
+            - AI_CONFIG_BINDING
+            - WORKSPACE_ROLE
+            - ACTIVITY_AUTOMATION
+            - WORKSPACE_FEATURES
+            - WORKSPACE_STATUS
+            - WORKSPACE_TOKEN
+            - WORKSPACE_VISIBILITY
+            - PRACTICE_ACTIVE
+            - PRACTICE_USAGE
+            - PRACTICE_DEFINITION
+            - PRACTICE_GROUP
+            - CATALOG_PRACTICE
+            - CATALOG_GROUP
+            - WORKSPACE_INSTANCE_LLM_BUDGET
+            - WORKSPACE_OWN_PROVIDER_LLM_BUDGET
+            - WORKSPACE_LLM_BUDGET
+            - WORKSPACE_BYO_LLM_BUDGET
+            - REVIEW_BATCH
+            - REVIEW_SCHEDULE
+            - FEEDBACK_DELIVERY_RECHECK
+            - WORKSPACE_LLM_CONNECTION
+            - WORKSPACE_LLM_MODEL
+      - in: query
+        name: entityId
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: changedKey
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: action
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - CREATED
+            - UPDATED
+            - DELETED
+      - in: query
+        name: actorId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotalCount"
+          description: OK
+      summary: Count the configuration changes a filter matches
       tags:
       - Admin
   /admin/configuration-readiness:
@@ -506,21 +687,25 @@ paths:
       operationId: listInstallationDeadLetters
       parameters:
       - in: query
-        name: after
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: size
         required: false
         schema:
           type: integer
-          format: int64
-          default: 0
-          minimum: 0
+          format: int32
+          default: 100
+          maximum: 100
+          minimum: 1
       responses:
         "200":
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ConsumerDeadLetter"
+                $ref: "#/components/schemas/CursorPageDTOConsumerDeadLetter"
           description: OK
       summary: List unassigned installation dead letters
       tags:
@@ -1659,7 +1844,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PagedModelFeedbackItem"
+                $ref: "#/components/schemas/OffsetPageDTOFeedbackItem"
           description: OK
       summary: "List product feedback, newest first"
       tags:
@@ -1974,9 +2159,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AdminAccountView"
+                $ref: "#/components/schemas/OffsetPageDTOAdminAccountView"
           description: OK
       summary: List accounts (paged)
       tags:
@@ -2791,7 +2974,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PublicActivityWorkPage"
+                $ref: "#/components/schemas/CursorPageDTOPublicActivityWork"
           description: Public work listed
       security: []
       summary: Read a person's published work timeline
@@ -3472,13 +3655,10 @@ paths:
       operationId: listGitLabProjects
       parameters:
       - in: query
-        name: page
+        name: cursor
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 1
-          exclusiveMinimum: 0
+          type: string
       - in: query
         name: search
         required: false
@@ -3497,8 +3677,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GitLabProjectPage"
-          description: One page of projects; nextPage is absent on the last page
+                $ref: "#/components/schemas/CursorPageDTOGitLabProject"
+          description: "One page of projects, ordered by path; nextCursor is absent\
+            \ on the last page"
       summary: List one page of the projects in a GitLab group and its subgroups that
         a PAT can read
       tags:
@@ -3814,7 +3995,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ActivityWorkPage"
+                $ref: "#/components/schemas/CursorPageDTOActivityWork"
           description: Your work listed
         "400":
           content:
@@ -4240,7 +4421,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ActivityWorkPage"
+                $ref: "#/components/schemas/CursorPageDTOActivityWork"
           description: One page of contributor work
         "400":
           content:
@@ -4403,7 +4584,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ActivityWorkPage"
+                $ref: "#/components/schemas/CursorPageDTOActivityWork"
           description: One page of work
         "400":
           content:
@@ -4560,12 +4741,10 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
-        name: page
+        name: cursor
         required: false
         schema:
-          type: integer
-          format: int32
-          default: 0
+          type: string
       - in: query
         name: size
         required: false
@@ -4650,9 +4829,104 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOConfigAuditEntryView"
+                $ref: "#/components/schemas/CursorPageDTOConfigAuditEntryView"
           description: OK
-      summary: "List this workspace's admin configuration changes (paged, newest first)"
+      summary: List this workspace's admin configuration changes (newest first)
+      tags:
+      - Config Audit
+  /workspaces/{workspaceSlug}/config-audit/count:
+    get:
+      operationId: countWorkspaceConfigAuditEvents
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: query
+        name: entityType
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - PRACTICE_REVIEW_SETTINGS
+            - AGENT_BINDING
+            - AGENT_CONFIG
+            - AI_CONFIG_BINDING
+            - WORKSPACE_ROLE
+            - ACTIVITY_AUTOMATION
+            - WORKSPACE_FEATURES
+            - WORKSPACE_STATUS
+            - WORKSPACE_TOKEN
+            - WORKSPACE_VISIBILITY
+            - PRACTICE_ACTIVE
+            - PRACTICE_USAGE
+            - PRACTICE_DEFINITION
+            - PRACTICE_GROUP
+            - CATALOG_PRACTICE
+            - CATALOG_GROUP
+            - WORKSPACE_INSTANCE_LLM_BUDGET
+            - WORKSPACE_OWN_PROVIDER_LLM_BUDGET
+            - WORKSPACE_LLM_BUDGET
+            - WORKSPACE_BYO_LLM_BUDGET
+            - REVIEW_BATCH
+            - REVIEW_SCHEDULE
+            - FEEDBACK_DELIVERY_RECHECK
+            - WORKSPACE_LLM_CONNECTION
+            - WORKSPACE_LLM_MODEL
+      - in: query
+        name: entityId
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: changedKey
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: action
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - CREATED
+            - UPDATED
+            - DELETED
+      - in: query
+        name: actorId
+        required: false
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: from
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: to
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotalCount"
+          description: OK
+      summary: Count this workspace's configuration changes a filter matches
       tags:
       - Config Audit
   /workspaces/{workspaceSlug}/connections:
@@ -4828,7 +5102,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOSyncJob"
+                $ref: "#/components/schemas/OffsetPageDTOSyncJob"
           description: OK
       summary: Paginated sync job history for one connection
       tags:
@@ -5136,21 +5410,25 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
-        name: after
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: size
         required: false
         schema:
           type: integer
-          format: int64
-          default: 0
-          minimum: 0
+          format: int32
+          default: 100
+          maximum: 100
+          minimum: 1
       responses:
         "200":
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ConsumerDeadLetter"
+                $ref: "#/components/schemas/CursorPageDTOConsumerDeadLetter"
           description: OK
       summary: List this workspace's dead letters
       tags:
@@ -5654,7 +5932,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOWorkspaceMembership"
+                $ref: "#/components/schemas/OffsetPageDTOWorkspaceMembership"
           description: OK
       summary: List workspace memberships
       tags:
@@ -5842,13 +6120,12 @@ paths:
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
       - in: query
-        name: before
+        name: cursor
         required: false
         schema:
-          type: integer
-          format: int64
+          type: string
       - in: query
-        name: limit
+        name: size
         required: false
         schema:
           type: integer
@@ -5859,10 +6136,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MentorEntryPage"
+                $ref: "#/components/schemas/CursorPageDTOMentorEntry"
           description: OK
-      summary: "A page of top-level messages, oldest first; pass before=<seq> for\
-        \ older ones"
+      summary: "A page of top-level messages, oldest first; pass nextCursor as cursor\
+        \ for older ones"
       tags:
       - Mentor
   /workspaces/{workspaceSlug}/mentor/entries/{entryId}:
@@ -5918,13 +6195,12 @@ paths:
           type: string
           format: uuid
       - in: query
-        name: before
+        name: cursor
         required: false
         schema:
-          type: integer
-          format: int64
+          type: string
       - in: query
-        name: limit
+        name: size
         required: false
         schema:
           type: integer
@@ -6967,7 +7243,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOProfileReview"
+                $ref: "#/components/schemas/OffsetPageDTOProfileReview"
           description: OK
       summary: List your reviews in a practice group
       tags:
@@ -7082,7 +7358,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOProfileReview"
+                $ref: "#/components/schemas/OffsetPageDTOProfileReview"
           description: OK
       summary: List reviews with results about you
       tags:
@@ -7445,7 +7721,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOItemRef"
+                $ref: "#/components/schemas/OffsetPageDTOItemRef"
           description: OK
       summary: List items in the workspace
       tags:
@@ -7555,7 +7831,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOProfileReview"
+                $ref: "#/components/schemas/OffsetPageDTOProfileReview"
           description: OK
       summary: List your reviews of an item
       tags:
@@ -7823,7 +8099,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOResultList"
+                $ref: "#/components/schemas/OffsetPageDTOResultList"
           description: Paginated results returned
       summary: List results for current developer
       tags:
@@ -7891,7 +8167,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOReviewBatch"
+                $ref: "#/components/schemas/OffsetPageDTOReviewBatch"
           description: OK
       summary: List review batches
       tags:
@@ -8434,7 +8710,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOReviewSummary"
+                $ref: "#/components/schemas/OffsetPageDTOReviewSummary"
           description: Paginated review summaries returned
         "400":
           content:
@@ -8636,7 +8912,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOReviewFeedback"
+                $ref: "#/components/schemas/OffsetPageDTOReviewFeedback"
           description: OK
       tags:
       - feedback-review
@@ -9432,7 +9708,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOReviewProblem"
+                $ref: "#/components/schemas/OffsetPageDTOReviewProblem"
           description: OK
       summary: List review problems
       tags:
@@ -9632,7 +9908,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOReviewResult"
+                $ref: "#/components/schemas/OffsetPageDTOReviewResult"
           description: OK
       summary: List review results
       tags:
@@ -9978,7 +10254,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOScanSummary"
+                $ref: "#/components/schemas/OffsetPageDTOScanSummary"
           description: OK
       summary: List repository scans
       tags:
@@ -10143,7 +10419,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ScanReportItemsPage"
+                $ref: "#/components/schemas/CursorPageDTOScanReportItem"
           description: OK
       summary: List the items in a scan report
       tags:
@@ -10222,7 +10498,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ScanReportProblemsPage"
+                $ref: "#/components/schemas/CursorPageDTOScanReportProblem"
           description: OK
       summary: List the problems in a scan report
       tags:
@@ -11417,7 +11693,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PageResponseDTOUserViewAccount"
+                $ref: "#/components/schemas/OffsetPageDTOUserViewAccount"
           description: OK
       summary: List workspace users and their linked account status
       tags:
@@ -11916,22 +12192,6 @@ components:
       - id
       - lastOccurredAt
       - people
-    ActivityWorkPage:
-      type: object
-      description: "One page of activity grouped by the pull request or issue it happened\
-        \ on, latest first"
-      properties:
-        content:
-          type: array
-          description: "The work on this page, by its latest activity, newest first"
-          items:
-            $ref: "#/components/schemas/ActivityWork"
-        nextCursor:
-          type: string
-          description: Opaque cursor that fetches the next page when passed back as
-            cursor; absent on the last page
-      required:
-      - content
     AdminAccountView:
       type: object
       properties:
@@ -14212,6 +14472,123 @@ components:
           type: string
       required:
       - consent
+    CursorPageDTOActivityWork:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityWork"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOAuthEventView:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuthEventView"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOConfigAuditEntryView:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigAuditEntryView"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOConsumerDeadLetter:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsumerDeadLetter"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOGitLabProject:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitLabProject"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOMentorEntry:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/MentorEntry"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOPublicActivityWork:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicActivityWork"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOScanReportItem:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanReportItem"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
+    CursorPageDTOScanReportProblem:
+      type: object
+      description: One page of a list that a client reads forward with a cursor
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanReportProblem"
+        nextCursor:
+          type: string
+          description: Pass as cursor to read the next page; absent on the last page
+      required:
+      - content
     DeliveredFeedbackPractice:
       type: object
       properties:
@@ -15408,22 +15785,6 @@ components:
       - fullPath
       - id
       - name
-    GitLabProjectPage:
-      type: object
-      description: One page of the projects of a GitLab group that the provided PAT
-        can read
-      properties:
-        nextPage:
-          type: integer
-          format: int32
-          description: The page that follows this one; absent on the last page
-        projects:
-          type: array
-          description: "Projects on this page, ordered by path"
-          items:
-            $ref: "#/components/schemas/GitLabProject"
-      required:
-      - projects
     GitLabProvider:
       type: object
       description: GitLab provider configuration
@@ -16947,21 +17308,6 @@ components:
       - seq
       - surface
       - text
-    MentorEntryPage:
-      type: object
-      description: "One page of a conversation's messages, oldest first"
-      properties:
-        earlierBefore:
-          type: integer
-          format: int64
-          description: Pass as before to read the older messages; absent when there
-            are none
-        entries:
-          type: array
-          items:
-            $ref: "#/components/schemas/MentorEntry"
-      required:
-      - entries
     MentorLink:
       type: object
       description: "A practice result, problem or prepared feedback Hephaestus showed\
@@ -17035,20 +17381,13 @@ components:
           format: uuid
           description: The thread's conversation; absent until the first reply opens
             it
-        earlierBefore:
-          type: integer
-          format: int64
-          description: Pass as before to read the older replies; absent when there
-            are none
-        entries:
-          type: array
-          items:
-            $ref: "#/components/schemas/MentorEntry"
         parent:
           $ref: "#/components/schemas/MentorEntry"
+        replies:
+          $ref: "#/components/schemas/CursorPageDTOMentorEntry"
       required:
-      - entries
       - parent
+      - replies
     MentorThreadSummary:
       type: object
       description: The thread on a top-level message
@@ -17386,6 +17725,426 @@ components:
       - weeklyDigest
       - weeklyDigestAvailable
       - workspaceAlerts
+    OffsetPageDTOAdminAccountView:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAccountView"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOFeedbackItem:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedbackItem"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOItemRef:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemRef"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOProfileReview:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileReview"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOResultList:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResultList"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOReviewBatch:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewBatch"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOReviewFeedback:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewFeedback"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOReviewProblem:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewProblem"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOReviewResult:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewResult"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOReviewSummary:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewSummary"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOScanSummary:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanSummary"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOSyncJob:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncJob"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOUserViewAccount:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserViewAccount"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
+    OffsetPageDTOWorkspaceMembership:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceMembership"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
     OpenQuestion:
       type: object
       properties:
@@ -17717,731 +18476,6 @@ components:
       - item
       - results
       - review
-    PageMetadata:
-      properties:
-        number:
-          type: integer
-          format: int64
-        size:
-          type: integer
-          format: int64
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int64
-      required:
-      - number
-      - size
-      - totalElements
-      - totalPages
-    PageResponseDTOAuthEventView:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/AuthEventView"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOConfigAuditEntryView:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ConfigAuditEntryView"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOItemRef:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ItemRef"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOProfileReview:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ProfileReview"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOResultList:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ResultList"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOReviewBatch:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReviewBatch"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOReviewFeedback:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReviewFeedback"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOReviewProblem:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReviewProblem"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOReviewResult:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReviewResult"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOReviewSummary:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ReviewSummary"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOScanSummary:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ScanSummary"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOSyncJob:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/SyncJob"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOUserViewAccount:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserViewAccount"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    PageResponseDTOWorkspaceMembership:
-      type: object
-      description: |-
-        Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
-         is an implementation detail, not a JSON contract; these fields preserve the existing clients'
-         response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/WorkspaceMembership"
-        empty:
-          type: boolean
-        first:
-          type: boolean
-        last:
-          type: boolean
-        number:
-          type: integer
-          format: int32
-        numberOfElements:
-          type: integer
-          format: int32
-        pageable:
-          $ref: "#/components/schemas/Pageable"
-        size:
-          type: integer
-          format: int32
-        sort:
-          $ref: "#/components/schemas/Sort"
-        totalElements:
-          type: integer
-          format: int64
-        totalPages:
-          type: integer
-          format: int32
-      required:
-      - content
-      - empty
-      - first
-      - last
-      - number
-      - numberOfElements
-      - pageable
-      - size
-      - sort
-      - totalElements
-      - totalPages
-    Pageable:
-      type: object
-      properties:
-        offset:
-          type: integer
-          format: int64
-        pageNumber:
-          type: integer
-          format: int32
-        pageSize:
-          type: integer
-          format: int32
-        paged:
-          type: boolean
-        sort:
-          $ref: "#/components/schemas/Sort"
-        unpaged:
-          type: boolean
-      required:
-      - offset
-      - pageNumber
-      - pageSize
-      - paged
-      - sort
-      - unpaged
-    PagedModelFeedbackItem:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/FeedbackItem"
-        page:
-          $ref: "#/components/schemas/PageMetadata"
     PasskeyCredential:
       type: object
       properties:
@@ -20711,6 +20745,8 @@ components:
       - commentReviews
     PublicActivityWork:
       type: object
+      description: "One piece of the selected person's published work; no account,\
+        \ author or other participant data."
       properties:
         actions:
           type: array
@@ -20728,19 +20764,6 @@ components:
       - id
       - lastOccurredAt
       - work
-    PublicActivityWorkPage:
-      type: object
-      description: "One page of the selected person's published work; no account,\
-        \ author or other participant data."
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/PublicActivityWork"
-        nextCursor:
-          type: string
-      required:
-      - content
     PublicActivityWorkSummary:
       type: object
       properties:
@@ -24687,23 +24710,6 @@ components:
           type: string
       required:
       - status
-    ScanReportItemsPage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ScanReportItem"
-        hasNext:
-          type: boolean
-        nextCursor:
-          type:
-          - string
-          - "null"
-      required:
-      - content
-      - hasNext
-      - nextCursor
     ScanReportProblem:
       type: object
       properties:
@@ -24749,23 +24755,6 @@ components:
       - previousProblemId
       - problem
       - resultId
-    ScanReportProblemsPage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: "#/components/schemas/ScanReportProblem"
-        hasNext:
-          type: boolean
-        nextCursor:
-          type:
-          - string
-          - "null"
-      required:
-      - content
-      - hasNext
-      - nextCursor
     ScanSummary:
       type: object
       properties:
@@ -25126,19 +25115,6 @@ components:
       - slackUserId
       - workspaceName
       - workspaceSlug
-    Sort:
-      type: object
-      properties:
-        empty:
-          type: boolean
-        sorted:
-          type: boolean
-        unsorted:
-          type: boolean
-      required:
-      - empty
-      - sorted
-      - unsorted
     StartScanRequest:
       type: object
       properties:
@@ -25497,6 +25473,15 @@ components:
       - hidden
       - id
       - name
+    TotalCount:
+      type: object
+      description: How many rows match
+      properties:
+        total:
+          type: integer
+          format: int64
+      required:
+      - total
     TrendSupport:
       type: object
       properties:

@@ -7,7 +7,7 @@ import type {
 	DeliveredWorkFeedback,
 	ItemRef,
 	OwnItemTrace,
-	PageResponseDtoProfileReview,
+	OffsetPageDtoProfileReview,
 	ReviewRef,
 	ReviewRequestOutcome,
 } from "~/api/types.gen";
@@ -109,7 +109,7 @@ function ownTrace(review: ReviewRef, item = review.item): OwnItemTrace {
 	return { item, review, events: [], results: [] };
 }
 
-function ownReviews(...reviews: ReviewRef[]): PageResponseDtoProfileReview {
+function ownReviews(...reviews: ReviewRef[]): OffsetPageDtoProfileReview {
 	const content = reviews.map((review) => ({
 		review,
 		results: [],
@@ -117,19 +117,12 @@ function ownReviews(...reviews: ReviewRef[]): PageResponseDtoProfileReview {
 		positionOnWork: 1,
 		totalOnWork: 1,
 	}));
-	const sort = { empty: false, sorted: true, unsorted: false };
 	return {
 		content,
 		totalElements: content.length,
 		totalPages: content.length === 0 ? 0 : 1,
-		number: 0,
+		page: 0,
 		size: 10,
-		numberOfElements: content.length,
-		first: true,
-		last: true,
-		empty: content.length === 0,
-		sort,
-		pageable: { offset: 0, pageNumber: 0, pageSize: 10, paged: true, unpaged: false, sort },
 	};
 }
 

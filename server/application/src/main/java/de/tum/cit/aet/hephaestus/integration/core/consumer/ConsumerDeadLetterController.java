@@ -2,12 +2,14 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,9 +33,11 @@ public class ConsumerDeadLetterController {
 
     @GetMapping
     @Operation(operationId = "listConsumerDeadLetters", summary = "List this workspace's dead letters")
-    public List<ConsumerDeadLetterDTO> list(
-            WorkspaceContext workspace, @RequestParam(defaultValue = "0") @Min(0) long after) {
-        return service.listWorkspace(workspace.id(), after);
+    public CursorPageDTO<ConsumerDeadLetterDTO> list(
+            WorkspaceContext workspace,
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(defaultValue = "100") @Min(1) @Max(100) int size) {
+        return service.listWorkspace(workspace.id(), cursor, size);
     }
 
     @PostMapping("/{id}/replays")

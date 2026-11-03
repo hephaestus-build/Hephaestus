@@ -11,7 +11,7 @@ import { REVIEW_PAGE_SIZE } from "@/hooks/use-practice-group-detail";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 
 const ITEM_ID = /^[1-9]\d{0,18}$/u;
 
@@ -38,7 +38,7 @@ function ItemFeedbackRoute() {
 	});
 	const reviews = useInfiniteQuery({
 		...listOptions,
-		...springPageParams,
+		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, reviews.isError, reviews.error);
 	const responses = useFeedbackResponseWrite(workspaceSlug);

@@ -123,13 +123,13 @@ function streamedText(text: string) {
 		element?.tagName === "P" && element.textContent === text;
 }
 
-/** The `before` cursor of each read of the pages whose path ends with `path`, in order. */
+/** The `cursor` of each read of the pages whose path ends with `path`, in order. */
 function recordPageReads(path: string): (string | null)[] {
 	const cursors: (string | null)[] = [];
 	server.events.on("request:start", ({ request }) => {
 		const url = new URL(request.url);
 		if (url.pathname.endsWith(path)) {
-			cursors.push(url.searchParams.get("before"));
+			cursors.push(url.searchParams.get("cursor"));
 		}
 	});
 	return cursors;
@@ -202,7 +202,7 @@ it("says older messages are loading once Retry reads them again after they faile
 				"*/workspaces/acme/mentor/entries",
 				async () => {
 					await held.promise;
-					return HttpResponse.json({ entries: fake.entries.slice(0, 1) });
+					return HttpResponse.json({ content: fake.entries.slice(0, 1) });
 				},
 				{ once: true },
 			),
@@ -455,7 +455,7 @@ it("keeps a successful send visible until an in-flight read lets its stored copy
 			http.get(
 				"*/workspaces/acme/mentor/entries",
 				async () => {
-					const page = { entries: [...fake.entries] };
+					const page = { content: [...fake.entries] };
 					pagesStarted.resolve();
 					await pagesAnswer.promise;
 					return HttpResponse.json(page);
@@ -757,7 +757,7 @@ it("says the thread is loading in its panel while the conversation beside it sho
 				return HttpResponse.json({
 					parent,
 					conversationId: reply.conversationId,
-					entries: [reply],
+					replies: { content: [reply] },
 				});
 			},
 			{ once: true },
@@ -1208,7 +1208,9 @@ it("keeps a message that arrives live while a reconnect's reread is still answer
 		http.get(
 			"*/workspaces/acme/mentor/entries",
 			async () => {
-				const page = { entries: fake.entries.filter((entry) => entry.parentEntryId === undefined) };
+				const page = {
+					content: fake.entries.filter((entry) => entry.parentEntryId === undefined),
+				};
 				readStarted.resolve();
 				await answer.promise;
 				return HttpResponse.json(page);
@@ -1279,7 +1281,9 @@ it("shows no phantom turn when a send's answer lands after Hephaestus already an
 		http.get(
 			"*/workspaces/acme/mentor/entries",
 			async () => {
-				const page = { entries: fake.entries.filter((entry) => entry.parentEntryId === undefined) };
+				const page = {
+					content: fake.entries.filter((entry) => entry.parentEntryId === undefined),
+				};
 				pagesStarted.resolve();
 				await pagesAnswer.promise;
 				return HttpResponse.json(page);

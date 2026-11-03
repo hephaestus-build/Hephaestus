@@ -341,9 +341,9 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                     .expectStatus()
                     .isOk()
                     .expectBody()
-                    .jsonPath("$.entries.length()")
+                    .jsonPath("$.content.length()")
                     .isEqualTo(1)
-                    .jsonPath("$.entries[0].id")
+                    .jsonPath("$.content[0].id")
                     .isEqualTo(tenantA.entryId().toString());
         }
 

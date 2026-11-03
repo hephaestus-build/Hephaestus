@@ -53,18 +53,11 @@ const entries: ConfigAuditEntryView[] = [
 ];
 
 function page(content: ConfigAuditEntryView[]) {
-	return {
-		content,
-		number: 0,
-		size: 50,
-		totalElements: content.length,
-		totalPages: 1,
-		last: true,
-		first: true,
-	};
+	return { content };
 }
 
 const handlers = (content: ConfigAuditEntryView[] = entries) => [
+	http.get("*/admin/config-audit/count", () => HttpResponse.json({ total: content.length })),
 	http.get("*/admin/config-audit", () => HttpResponse.json(page(content))),
 ];
 
@@ -101,7 +94,12 @@ export const WorkspaceScope: StoryObj<typeof WorkspaceConfigAuditPanel> = {
 	),
 	parameters: {
 		msw: {
-			handlers: [http.get("*/workspaces/*/config-audit", () => HttpResponse.json(page(entries)))],
+			handlers: [
+				http.get("*/workspaces/*/config-audit/count", () =>
+					HttpResponse.json({ total: entries.length }),
+				),
+				http.get("*/workspaces/*/config-audit", () => HttpResponse.json(page(entries))),
+			],
 		},
 	},
 };

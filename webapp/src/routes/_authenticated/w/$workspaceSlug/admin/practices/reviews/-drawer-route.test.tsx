@@ -459,14 +459,10 @@ describe("a new review from a row of the Reviews table", () => {
 			http.get("*/workspaces/:workspaceSlug/practices/reviews", () =>
 				HttpResponse.json({
 					content: [reviewDetail()],
-					number: 0,
+					page: 0,
 					size: 25,
 					totalElements: 1,
 					totalPages: 1,
-					numberOfElements: 1,
-					first: true,
-					last: true,
-					empty: false,
 				}),
 			),
 			http.post(REQUESTS, async ({ request }) => {
@@ -928,14 +924,10 @@ describe("another review of the work from a review's sheet", () => {
 				const content = active().slice(0, 1);
 				return HttpResponse.json({
 					content,
-					number: 0,
+					page: 0,
 					size: 1,
 					totalElements: active().length,
 					totalPages: active().length,
-					numberOfElements: content.length,
-					first: true,
-					last: active().length <= 1,
-					empty: content.length === 0,
 				});
 			}),
 		);
@@ -1024,14 +1016,10 @@ describe("another review of the work from a review's sheet", () => {
 function pageOf(content: readonly unknown[]) {
 	return {
 		content,
-		number: 0,
+		page: 0,
 		size: 25,
 		totalElements: content.length,
 		totalPages: 1,
-		numberOfElements: content.length,
-		first: true,
-		last: true,
-		empty: content.length === 0,
 	};
 }
 

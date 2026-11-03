@@ -20,7 +20,8 @@ const allProjects = (
 		onSelectedChange={fn()}
 		choices={{ status: "loading" }}
 		onSearch={fn()}
-		onPageChange={fn()}
+		onPreviousPage={fn()}
+		onNextPage={fn()}
 	/>
 );
 
@@ -87,11 +88,12 @@ export const SelectedProjects: Story = {
 						{ id: 12, name: "Docs", fullPath: "ls1intum/hephaestus/docs" },
 					],
 					page: 1,
-					nextPage: 2,
+					hasNextPage: true,
 					search: "",
 				}}
 				onSearch={fn()}
-				onPageChange={fn()}
+				onPreviousPage={fn()}
+				onNextPage={fn()}
 			/>
 		),
 	},

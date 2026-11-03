@@ -877,7 +877,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 null,
                 1,
                 new ScanMembershipQueries.ProblemFilter(null, null, null, null, false));
-        assertThat(page.hasNext()).isTrue();
+        assertThat(page.nextCursor()).isNotNull();
         var second = data.scan(scenario, ReviewStatus.COMPLETE, Instant.now());
         assertThatThrownBy(() -> reportItems.problems(
                         second.getWorkspaceId(),

@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.validation.AccountId;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -70,7 +70,7 @@ public class MembershipController {
 
     @GetMapping
     @Operation(operationId = "listMemberships", summary = "List workspace memberships")
-    public ResponseEntity<PageResponseDTO<WorkspaceMembershipDTO>> listMembers(
+    public ResponseEntity<OffsetPageDTO<WorkspaceMembershipDTO>> listMembers(
             WorkspaceContext context,
             @RequestParam(required = false) @Nullable String q,
             @Parameter(schema = @Schema(type = "string")) @RequestParam(required = false) @Positive @Nullable Long team,
@@ -82,7 +82,7 @@ public class MembershipController {
         var references = accounts.references(context.id(), accountIds);
         var eligible = selections.eligibleAccountIds(context.id(), accountIds);
         var answered = workspaceMembershipService.publicActivityAnswered(context.id(), page.getContent());
-        return ResponseEntity.ok(PageResponseDTO.from(page.map(member -> toDTO(
+        return ResponseEntity.ok(OffsetPageDTO.from(page.map(member -> toDTO(
                 member,
                 member.getRole(),
                 Objects.requireNonNull(references.get(member.getAccountId())),

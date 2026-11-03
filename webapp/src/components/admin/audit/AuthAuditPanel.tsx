@@ -1,8 +1,11 @@
-import { hashKey, useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { hashKey, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
 import { toast } from "@/lib/toast";
 
-import { adminListAuthEventsInfiniteOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	adminCountAuthEventsOptions,
+	adminListAuthEventsInfiniteOptions,
+} from "@/api/@tanstack/react-query.gen";
 import { adminExportAuthEvents } from "@/api/sdk.gen";
 import type { AdminExportAuthEventsData } from "@/api/types.gen";
 import { AdminAuditTable } from "@/components/admin/audit/AdminAuditTable";
@@ -26,7 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { saveTextFile } from "@/lib/download";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { nextCursorOf } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 const PAGE_SIZE = 50;
@@ -77,12 +80,19 @@ export function AuthAuditPanel({
 	const listOptions = adminListAuthEventsInfiniteOptions({
 		query: { size: PAGE_SIZE, ...filters },
 	});
-	const listQuery = useInfiniteQuery({ ...listOptions, ...springPageParams });
+	const listQuery = useInfiniteQuery({
+		...listOptions,
+		initialPageParam: { query: { cursor: undefined } },
+		getNextPageParam: nextCursorOf,
+	});
 	useQueryReadRefusal(listOptions.queryKey, listQuery.isError, listQuery.error);
 	const list = infiniteListState(listQuery, auditRows);
+	const countOptions = adminCountAuthEventsOptions({ query: filters });
+	const countQuery = useQuery(countOptions);
+	useQueryReadRefusal(countOptions.queryKey, countQuery.isError, countQuery.error);
 	// Names, the count and the export come only from a read that stands, never from one refused.
 	const events = list.status === "ready" ? list.rows : [];
-	const total = list.status === "ready" ? list.total : undefined;
+	const total = list.status === "ready" ? countQuery.data?.total : undefined;
 	const hasAppliedFilter =
 		(filters.eventType?.length ?? 0) > 0 ||
 		(filters.result?.length ?? 0) > 0 ||

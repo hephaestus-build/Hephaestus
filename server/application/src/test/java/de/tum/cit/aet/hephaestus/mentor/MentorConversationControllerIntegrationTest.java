@@ -148,7 +148,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .isEqualTo(0)
                 .jsonPath("$.activeTurns.length()")
                 .isEqualTo(0);
-        get("/entries").jsonPath("$.entries.length()").isEqualTo(0);
+        get("/entries").jsonPath("$.content.length()").isEqualTo(0);
     }
 
     @Test
@@ -271,9 +271,9 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .extracting(MentorTurn::getId)
                 .containsExactly(turn.getId());
         get("/entries")
-                .jsonPath("$.entries.length()")
+                .jsonPath("$.content.length()")
                 .isEqualTo(1)
-                .jsonPath("$.entries[0].turnId")
+                .jsonPath("$.content[0].turnId")
                 .isEqualTo(turn.getId().toString());
     }
 
@@ -356,18 +356,18 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .findByWorkspaceIdAndParentEntryId(workspace.getId(), parent)
                 .orElseThrow();
         get("/entries")
-                .jsonPath("$.entries[0].id")
+                .jsonPath("$.content[0].id")
                 .isEqualTo(parent.toString())
-                .jsonPath("$.entries[0].thread.conversationId")
+                .jsonPath("$.content[0].thread.conversationId")
                 .isEqualTo(thread.getId().toString())
-                .jsonPath("$.entries[0].thread.replyCount")
+                .jsonPath("$.content[0].thread.replyCount")
                 .isEqualTo(1);
         get("/entries/" + parent + "/thread")
                 .jsonPath("$.parent.id")
                 .isEqualTo(parent.toString())
                 .jsonPath("$.conversationId")
                 .isEqualTo(thread.getId().toString())
-                .jsonPath("$.entries[0].text")
+                .jsonPath("$.replies.content[0].text")
                 .isEqualTo("And for a small fix?");
         get("/conversation")
                 .jsonPath("$.activeTurns.length()")
@@ -383,16 +383,26 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
         MentorEntry second = entryService.append(workspace.getId(), main.getId(), MentorLedgerFixtures.heph("Two"));
         MentorEntry third = entryService.append(workspace.getId(), main.getId(), MentorLedgerFixtures.heph("Three"));
 
-        get("/entries?limit=2")
-                .jsonPath("$.entries[*].id")
+        get("/entries?size=2")
+                .jsonPath("$.content[*].id")
                 .isEqualTo(List.of(second.getId().toString(), third.getId().toString()))
-                .jsonPath("$.earlierBefore")
-                .isEqualTo(second.getSeq());
-        get("/entries?limit=2&before=" + second.getSeq())
-                .jsonPath("$.entries[*].id")
+                .jsonPath("$.nextCursor")
+                .isEqualTo(String.valueOf(second.getSeq()));
+        get("/entries?size=2&cursor=" + second.getSeq())
+                .jsonPath("$.content[*].id")
                 .isEqualTo(List.of(first.getId().toString()))
-                .jsonPath("$.earlierBefore")
+                .jsonPath("$.nextCursor")
                 .doesNotExist();
+    }
+
+    @Test
+    void shouldRefuseACursorThatIsNotAPosition() {
+        client.get()
+                .uri("/workspaces/heph-api/mentor/entries?cursor=not-a-position")
+                .headers(headers -> headers.setBearerAuth(MEMBER))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -437,24 +447,24 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                         null));
 
         get("/entries")
-                .jsonPath("$.entries[*].kind")
+                .jsonPath("$.content[*].kind")
                 .isEqualTo(List.of("USER", "HEPH", "HEPH"))
-                .jsonPath("$.entries[0].id")
+                .jsonPath("$.content[0].id")
                 .isEqualTo(question.question().getId().toString())
-                .jsonPath("$.entries[1].text")
+                .jsonPath("$.content[1].text")
                 .isEqualTo("")
-                .jsonPath("$.entries[1].links.length()")
+                .jsonPath("$.content[1].links.length()")
                 .isEqualTo(1)
-                .jsonPath("$.entries[1].links[0].kind")
+                .jsonPath("$.content[1].links[0].kind")
                 .isEqualTo("FEEDBACK")
-                .jsonPath("$.entries[1].links[0].id")
+                .jsonPath("$.content[1].links[0].id")
                 .isEqualTo(shown.toString())
-                .jsonPath("$.entries[1].links[0].text")
+                .jsonPath("$.content[1].links[0].text")
                 .isEqualTo("Name why.")
                 // Feedback the developer cannot read names no practice or item to link to.
-                .jsonPath("$.entries[1].links[0].practiceSlug")
+                .jsonPath("$.content[1].links[0].practiceSlug")
                 .doesNotExist()
-                .jsonPath("$.entries[2].text")
+                .jsonPath("$.content[2].text")
                 .isEqualTo("That is all I saw.");
     }
 
@@ -465,9 +475,9 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
 
         get("/entries")
                 // The second answer shows nothing: its only call was refused, so the app does not list it.
-                .jsonPath("$.entries[*].kind")
+                .jsonPath("$.content[*].kind")
                 .isEqualTo(List.of("USER", "HEPH", "USER"))
-                .jsonPath("$.entries[1].links[0].text")
+                .jsonPath("$.content[1].links[0].text")
                 .isEqualTo("Shown in the first turn.");
     }
 
@@ -525,11 +535,11 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
 
         assertThat(turnRepository.findById(turnId).orElseThrow().getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
         get("/entries")
-                .jsonPath("$.entries[0].id")
+                .jsonPath("$.content[0].id")
                 .isEqualTo(question.question().getId().toString())
-                .jsonPath("$.entries[0].turnStatus")
+                .jsonPath("$.content[0].turnStatus")
                 .isEqualTo("STOPPED")
-                .jsonPath("$.entries[0].turnError")
+                .jsonPath("$.content[0].turnError")
                 .doesNotExist();
     }
 
@@ -549,11 +559,11 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                         "Hephaestus could not finish this reply. Try again."));
 
         get("/entries")
-                .jsonPath("$.entries[0].id")
+                .jsonPath("$.content[0].id")
                 .isEqualTo(question.question().getId().toString())
-                .jsonPath("$.entries[0].turnStatus")
+                .jsonPath("$.content[0].turnStatus")
                 .isEqualTo("FAILED")
-                .jsonPath("$.entries[0].turnError")
+                .jsonPath("$.content[0].turnError")
                 .isEqualTo("Hephaestus could not finish this reply. Try again.");
     }
 
@@ -612,9 +622,9 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                         .getStatus())
                 .isEqualTo(MentorTurn.Status.STOPPED);
         get("/entries")
-                .jsonPath("$.entries[1].deleted")
+                .jsonPath("$.content[1].deleted")
                 .isEqualTo(true)
-                .jsonPath("$.entries[1].text")
+                .jsonPath("$.content[1].text")
                 .isEqualTo("");
         write("DELETE", "/entries/" + answer.getId(), null)
                 .expectStatus()

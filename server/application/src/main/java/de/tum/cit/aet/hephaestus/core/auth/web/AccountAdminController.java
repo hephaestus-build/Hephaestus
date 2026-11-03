@@ -9,12 +9,12 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -56,12 +56,10 @@ public class AccountAdminController {
 
     @GetMapping
     @Operation(summary = "List accounts (paged)", operationId = "adminListUsers")
-    public ResponseEntity<List<AdminAccountViewDTO>> list(
+    public ResponseEntity<OffsetPageDTO<AdminAccountViewDTO>> list(
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
-        List<AdminAccountViewDTO> views = accountService.adminList(page, size).stream()
-                .map(AccountAdminController::toView)
-                .toList();
-        return ResponseEntity.ok(views);
+        return ResponseEntity.ok(
+                OffsetPageDTO.from(accountService.adminList(page, size).map(AccountAdminController::toView)));
     }
 
     @PatchMapping("/{id}")

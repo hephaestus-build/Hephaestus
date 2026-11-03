@@ -21,11 +21,10 @@ const REVIEWS = "*/workspaces/:workspaceSlug/practice-groups/:groupSlug/reviews"
 
 const page = (number: number, totalPages = 1) => ({
 	content: [],
-	number,
+	page: number,
 	size: 10,
 	totalElements: 0,
 	totalPages,
-	last: number >= totalPages - 1,
 });
 
 const practiceStandings = [standing("scope-one-concern", "packaging"), standing("write-tests")];

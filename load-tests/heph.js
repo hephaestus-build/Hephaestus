@@ -117,11 +117,16 @@ let threadParent = null;
 function terminalStatus(questionId, parentEntryId) {
 	const page =
 		parentEntryId === null
-			? `${url(hephPaths.entries)}?limit=20`
-			: `${url(hephPaths.thread, parentEntryId)}?limit=20`;
+			? `${url(hephPaths.entries)}?size=20`
+			: `${url(hephPaths.thread, parentEntryId)}?size=20`;
 	const listed = http.get(page, { headers, tags: { operation: "heph_poll" } });
 	const status =
-		listed.status === 200 ? jsonField(listed, `entries.#(id=="${questionId}").turnStatus`) : null;
+		listed.status === 200
+			? jsonField(
+					listed,
+					`${parentEntryId === null ? "content" : "replies.content"}.#(id=="${questionId}").turnStatus`,
+				)
+			: null;
 	return typeof status === "string" && ["DONE", "FAILED", "STOPPED"].includes(status)
 		? status
 		: null;

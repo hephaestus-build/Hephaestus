@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -126,7 +126,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .expectBody(new ParameterizedTypeReference<PageResponseDTO<WorkspaceMembershipDTO>>() {})
+                .expectBody(new ParameterizedTypeReference<OffsetPageDTO<WorkspaceMembershipDTO>>() {})
                 .returnResult()
                 .getResponseBody());
         Map<String, @Nullable Boolean> answers = new HashMap<>();
@@ -361,14 +361,14 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
         User member = persistUser("membership-member");
         workspaceMembershipService.createMembership(workspace, accountId(member), WorkspaceRole.MEMBER);
 
-        PageResponseDTO<WorkspaceMembershipDTO> response = webTestClient
+        OffsetPageDTO<WorkspaceMembershipDTO> response = webTestClient
                 .get()
                 .uri("/workspaces/{slug}/members", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isOk()
-                .expectBody(new ParameterizedTypeReference<PageResponseDTO<WorkspaceMembershipDTO>>() {})
+                .expectBody(new ParameterizedTypeReference<OffsetPageDTO<WorkspaceMembershipDTO>>() {})
                 .returnResult()
                 .getResponseBody();
 
@@ -398,7 +398,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.number")
+                .jsonPath("$.page")
                 .isEqualTo(0)
                 .jsonPath("$.size")
                 .isEqualTo(50);

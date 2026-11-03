@@ -78,11 +78,7 @@ function sectionLink(navigation: HTMLElement, name: string) {
 function countPage(total: number) {
 	return {
 		content: [],
-		empty: true,
-		first: true,
-		last: true,
-		number: 0,
-		numberOfElements: 0,
+		page: 0,
 		size: 1,
 		totalElements: total,
 		totalPages: total,

@@ -3,12 +3,13 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityFacetsDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserInfoDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -166,7 +167,7 @@ public class ActivityController {
     @GetMapping("/people/{userId}/work")
     @Operation(operationId = "getActivityPersonWork", summary = "List a contributor's work one page at a time")
     @ApiResponse(responseCode = "200", description = "One page of contributor work")
-    public ResponseEntity<ActivityWorkPageDTO> getActivityPersonWork(
+    public ResponseEntity<CursorPageDTO<ActivityWorkDTO>> getActivityPersonWork(
             WorkspaceContext workspaceContext,
             @PathVariable long userId,
             @ParameterObject ActivityPeopleRangeParams range,
@@ -185,7 +186,7 @@ public class ActivityController {
                     + " the team. With both, the member's activity within the team's scope. Each pull request or"
                     + " issue is listed once, by its latest activity in the range, newest first.")
     @ApiResponse(responseCode = "200", description = "One page of work")
-    public ResponseEntity<ActivityWorkPageDTO> getActivityWork(
+    public ResponseEntity<CursorPageDTO<ActivityWorkDTO>> getActivityWork(
             WorkspaceContext workspaceContext,
             @RequestParam(required = false) @Nullable String login,
             @RequestParam(required = false) @Nullable String team,
@@ -211,7 +212,7 @@ public class ActivityController {
     @GetMapping("/me/work")
     @Operation(operationId = "getOwnActivityWork", summary = "List the work on which your activity happened")
     @ApiResponse(responseCode = "200", description = "Your work listed")
-    public ResponseEntity<ActivityWorkPageDTO> getOwnActivityWork(
+    public ResponseEntity<CursorPageDTO<ActivityWorkDTO>> getOwnActivityWork(
             WorkspaceContext workspaceContext,
             @ParameterObject ActivityPeopleRangeParams range,
             @RequestParam(required = false) @Nullable String team,

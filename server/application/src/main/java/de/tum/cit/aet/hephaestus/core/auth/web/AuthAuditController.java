@@ -5,7 +5,9 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthAuditService;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.Csv;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
+import de.tum.cit.aet.hephaestus.core.web.TimeIdCursor;
+import de.tum.cit.aet.hephaestus.core.web.TotalCountDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
@@ -17,9 +19,6 @@ import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -93,18 +92,31 @@ public class AuthAuditController {
             @Nullable String details) {}
 
     @GetMapping
-    @Operation(summary = "List auth audit events (paged, newest first)", operationId = "adminListAuthEvents")
-    public ResponseEntity<PageResponseDTO<AuthEventViewDTO>> list(
-            @RequestParam(defaultValue = "0") int page,
+    @Operation(summary = "List auth audit events (newest first)", operationId = "adminListAuthEvents")
+    public ResponseEntity<CursorPageDTO<AuthEventViewDTO>> list(
+            @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(defaultValue = "50") int size,
             @ParameterObject AuditFilterParams filter) {
-        int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        // The query carries its own ORDER BY occurred_at DESC; keep the Pageable sort empty.
-        Pageable pageable = PageRequest.of(safePage, safeSize);
-        AuthAuditService.AuditPage result0 = authAuditService.list(filter.toFilter(), pageable);
-        Page<AuthEventViewDTO> events = result0.events().map(e -> toView(e, result0.identities()));
-        return ResponseEntity.ok(PageResponseDTO.from(events));
+        AuthAuditService.AuditPage read =
+                authAuditService.list(filter.toFilter(), TimeIdCursor.decode(cursor), safeSize + 1);
+        boolean more = read.events().size() > safeSize;
+        List<AuthEvent> events =
+                read.events().subList(0, Math.min(safeSize, read.events().size()));
+        return ResponseEntity.ok(new CursorPageDTO<>(
+                events.stream().map(e -> toView(e, read.identities())).toList(),
+                more
+                        ? new TimeIdCursor(
+                                        events.getLast().getId().getOccurredAt(),
+                                        events.getLast().getId().getId())
+                                .encode()
+                        : null));
+    }
+
+    @GetMapping("/count")
+    @Operation(summary = "Count the auth audit events a filter matches", operationId = "adminCountAuthEvents")
+    public TotalCountDTO count(@ParameterObject AuditFilterParams filter) {
+        return new TotalCountDTO(authAuditService.count(filter.toFilter()));
     }
 
     @GetMapping(value = "/export", produces = "text/csv")
@@ -112,7 +124,7 @@ public class AuthAuditController {
             summary = "Export the filtered audit log as CSV (newest first, capped)",
             operationId = "adminExportAuthEvents")
     public ResponseEntity<String> export(@ParameterObject AuditFilterParams filter) {
-        AuthAuditService.AuditPage data = authAuditService.list(filter.toFilter(), PageRequest.of(0, EXPORT_MAX_ROWS));
+        AuthAuditService.AuditPage data = authAuditService.list(filter.toFilter(), null, EXPORT_MAX_ROWS);
         var identities = data.identities();
         StringBuilder csv = new StringBuilder();
         // A new column is APPENDED, never inserted: an operator's parser keyed on column order
@@ -120,7 +132,7 @@ public class AuthAuditController {
         // working, and one keyed on the header picks the new column up.
         csv.append(
                 "occurred_at_utc,event_type,result,account_id,account_name,account_email,acting_account_id,actor_name,actor_email,failure_reason,workspace_id,ip_address,user_agent,details,elevated_via_instance_admin,viewed_actor_id,viewed_account_id\n");
-        for (AuthEvent e : data.events().getContent()) {
+        for (AuthEvent e : data.events()) {
             AuthAuditService.AccountRef account = AuthAuditService.refOf(e.getAccountId(), identities);
             AuthAuditService.AccountRef actor = AuthAuditService.refOf(e.getActingAccountId(), identities);
             Csv.appendRow(

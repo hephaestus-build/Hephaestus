@@ -31,14 +31,14 @@ export const getMentorThreadInfiniteQueryKey = (options: Options<GetMentorThread
  * The thread on a top-level message: the message and a page of replies, oldest first
  */
 export const getMentorThreadInfiniteOptions = (options: Options<GetMentorThreadData>) => {
-    const opts = infiniteQueryOptions<GetMentorThreadResponse, GetMentorThreadError, InfiniteData<GetMentorThreadResponse>, QueryKey<Options<GetMentorThreadData>>, number | Pick<QueryKey<Options<GetMentorThreadData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    const opts = infiniteQueryOptions<GetMentorThreadResponse, GetMentorThreadError, InfiniteData<GetMentorThreadResponse>, QueryKey<Options<GetMentorThreadData>>, string | Pick<QueryKey<Options<GetMentorThreadData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
     // @ts-ignore
     {
         queryFn: async ({ pageParam, queryKey, signal }) => {
             // @ts-ignore
             const page: Pick<QueryKey<Options<GetMentorThreadData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
                 query: {
-                    before: pageParam
+                    cursor: pageParam
                 }
             };
             const params = createInfiniteParams(queryKey, page);

@@ -1,7 +1,7 @@
 import type {
 	DeliveredWorkFeedback,
 	OwnItemTrace,
-	PageResponseDtoResultList,
+	OffsetPageDtoResultList,
 	ReviewContext as ReviewContextDTO,
 	Workspace,
 	WorkspaceListItem,
@@ -38,7 +38,7 @@ export interface ContextApi {
 }
 
 export interface DetailsApi extends ContextApi {
-	ownResults: (slug: string, itemId: string, size: number) => Promise<PageResponseDtoResultList>;
+	ownResults: (slug: string, itemId: string, size: number) => Promise<OffsetPageDtoResultList>;
 	workFeedback: (slug: string, workUrl: string) => Promise<DeliveredWorkFeedback>;
 }
 

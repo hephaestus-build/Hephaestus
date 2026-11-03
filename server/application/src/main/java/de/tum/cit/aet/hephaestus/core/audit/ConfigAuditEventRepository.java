@@ -2,8 +2,9 @@ package de.tum.cit.aet.hephaestus.core.audit;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilter;
+import java.time.Instant;
+import java.util.List;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -31,6 +32,12 @@ public interface ConfigAuditEventRepository extends JpaRepository<ConfigAuditEve
           AND (CAST(:#{#f.to()} AS timestamptz) IS NULL OR e.occurred_at < CAST(:#{#f.to()} AS timestamptz))
         """;
 
+    /** Reads by keyset, so a deep page costs the same as the first. A null {@code cursorAt} reads the first page. */
+    String AFTER_CURSOR = """
+          AND (CAST(:cursorAt AS timestamptz) IS NULL OR e.occurred_at < CAST(:cursorAt AS timestamptz)
+               OR (e.occurred_at = CAST(:cursorAt AS timestamptz) AND e.id < CAST(:cursorId AS bigint)))
+        """;
+
     String ORDER = " ORDER BY e.occurred_at DESC, e.id DESC";
 
     /**
@@ -39,12 +46,20 @@ public interface ConfigAuditEventRepository extends JpaRepository<ConfigAuditEve
      */
     @Query(
             value = "SELECT * FROM config_audit_event e WHERE e.workspace_id = :workspaceId" + FILTER_PREDICATES
+                    + AFTER_CURSOR
                     + ORDER,
-            countQuery =
-                    "SELECT count(*) FROM config_audit_event e WHERE e.workspace_id = :workspaceId" + FILTER_PREDICATES,
             nativeQuery = true)
-    Page<ConfigAuditEvent> findForWorkspace(
-            @Param("workspaceId") Long workspaceId, @Param("f") ConfigAuditFilter filter, Pageable pageable);
+    List<ConfigAuditEvent> findForWorkspace(
+            @Param("workspaceId") Long workspaceId,
+            @Param("f") ConfigAuditFilter filter,
+            @Param("cursorAt") @Nullable Instant cursorAt,
+            @Param("cursorId") @Nullable Long cursorId,
+            Pageable pageable);
+
+    @Query(
+            value = "SELECT count(*) FROM config_audit_event e WHERE e.workspace_id = :workspaceId" + FILTER_PREDICATES,
+            nativeQuery = true)
+    long countForWorkspace(@Param("workspaceId") Long workspaceId, @Param("f") ConfigAuditFilter filter);
 
     /** Instance-admin view; here {@code workspaceId} is an optional filter rather than a boundary. */
     @WorkspaceAgnostic(
@@ -53,13 +68,24 @@ public interface ConfigAuditEventRepository extends JpaRepository<ConfigAuditEve
             value = "SELECT * FROM config_audit_event e WHERE (CAST(:workspaceId AS bigint) IS NULL OR"
                     + " e.workspace_id = CAST(:workspaceId AS bigint))"
                     + FILTER_PREDICATES
+                    + AFTER_CURSOR
                     + ORDER,
-            countQuery = "SELECT count(*) FROM config_audit_event e WHERE (CAST(:workspaceId AS bigint) IS NULL OR"
+            nativeQuery = true)
+    List<ConfigAuditEvent> findForAdmin(
+            @Param("workspaceId") @Nullable Long workspaceId,
+            @Param("f") ConfigAuditFilter filter,
+            @Param("cursorAt") @Nullable Instant cursorAt,
+            @Param("cursorId") @Nullable Long cursorId,
+            Pageable pageable);
+
+    @WorkspaceAgnostic(
+            "Instance-admin config audit spans workspaces; gated by hasAuthority('app_admin') on AdminConfigAuditController")
+    @Query(
+            value = "SELECT count(*) FROM config_audit_event e WHERE (CAST(:workspaceId AS bigint) IS NULL OR"
                     + " e.workspace_id = CAST(:workspaceId AS bigint))"
                     + FILTER_PREDICATES,
             nativeQuery = true)
-    Page<ConfigAuditEvent> findForAdmin(
-            @Param("workspaceId") @Nullable Long workspaceId, @Param("f") ConfigAuditFilter filter, Pageable pageable);
+    long countForAdmin(@Param("workspaceId") @Nullable Long workspaceId, @Param("f") ConfigAuditFilter filter);
 
     /**
      * Retention sweep.

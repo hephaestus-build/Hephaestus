@@ -1,4 +1,10 @@
-import { hashKey, type InfiniteData, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+	hashKey,
+	type InfiniteData,
+	infiniteQueryOptions,
+	type QueryClient,
+	type QueryKey,
+} from "@tanstack/react-query";
 
 import {
 	getMentorConversationOptions,
@@ -10,11 +16,12 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type {
 	MentorConversation,
+	CursorPageDtoMentorEntry,
 	MentorEntry,
-	MentorEntryPage,
 	MentorThread,
 	MentorThreadSummary,
 	MentorTurn,
+	ProblemDetail,
 } from "@/api/types.gen";
 import { isRemovedEntry } from "@/lib/conversation-entry";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
@@ -26,7 +33,7 @@ import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-wo
 
 /**
  * Pages are cached newest first, as TanStack Query keeps a list read backwards: the first read names
- * no cursor and gets the newest page, and each older page is the next one, read with `earlierBefore`.
+ * no cursor and gets the newest page, and each older page is the next one, read with its `nextCursor`.
  * A refetch starts at the newest page and walks back through as many pages as were loaded.
  */
 export function conversationEntriesOptions(workspaceSlug: string) {
@@ -36,18 +43,42 @@ export function conversationEntriesOptions(workspaceSlug: string) {
 		...read,
 		queryFn: orderedRead(workspaceSlug, read.queryFn),
 		initialPageParam: options,
-		getNextPageParam: (older: MentorEntryPage) => older.earlierBefore,
+		getNextPageParam: (older: CursorPageDtoMentorEntry) => older.nextCursor,
 	};
 }
 
 export function conversationThreadOptions(workspaceSlug: string, parentEntryId: string) {
 	const options = { path: { workspaceSlug, entryId: parentEntryId } };
 	const read = getMentorThreadInfiniteOptions(options);
-	return {
-		...read,
-		queryFn: orderedRead(workspaceSlug, read.queryFn),
+	return infiniteQueryOptions<
+		ConversationThreadPage,
+		ProblemDetail,
+		InfiniteData<ConversationThreadPage>,
+		typeof read.queryKey,
+		string | typeof options
+	>({
+		queryKey: read.queryKey,
+		queryFn: orderedRead(workspaceSlug, flatThread(read.queryFn)),
 		initialPageParam: options,
-		getNextPageParam: (older: MentorThread) => older.earlierBefore,
+		getNextPageParam: (older: ConversationThreadPage) => older.nextCursor,
+	});
+}
+
+/**
+ * A thread as the cache keeps it: the message and its page of replies at one level, so the functions
+ * here patch a thread's pages and the timeline's pages alike.
+ */
+export type ConversationThreadPage = Omit<MentorThread, "replies"> & CursorPageDtoMentorEntry;
+
+function flatThread<Context>(
+	read: ((context: Context) => MentorThread | Promise<MentorThread>) | undefined | symbol,
+): (context: Context) => Promise<ConversationThreadPage> {
+	return async (context) => {
+		if (typeof read !== "function") {
+			throw new TypeError("The generated read has no query function");
+		}
+		const { replies, ...thread } = await read(context);
+		return { ...thread, ...replies };
 	};
 }
 
@@ -58,8 +89,8 @@ export function conversationOptions(workspaceSlug: string) {
 }
 
 /** The loaded entries in the order they were written: the oldest page first. */
-export function entriesOf(pages: { entries: MentorEntry[] }[]): MentorEntry[] {
-	return [...pages].reverse().flatMap((page) => page.entries);
+export function entriesOf(pages: { content: MentorEntry[] }[]): MentorEntry[] {
+	return [...pages].reverse().flatMap((page) => page.content);
 }
 
 const entriesKey = (workspaceSlug: string) =>
@@ -203,10 +234,10 @@ export function rereadInOrder(
 	);
 }
 
-type Pages<P extends { entries: MentorEntry[] }> = InfiniteData<P>;
+type Pages<P extends { content: MentorEntry[] }> = InfiniteData<P>;
 
-function newestSeq(pages: { entries: MentorEntry[] }[]): number | undefined {
-	return pages[0]?.entries.at(-1)?.seq;
+function newestSeq(pages: { content: MentorEntry[] }[]): number | undefined {
+	return pages[0]?.content.at(-1)?.seq;
 }
 
 /**
@@ -233,12 +264,12 @@ function laterCopy(stored: MentorEntry, incoming: MentorEntry): MentorEntry {
  * or in order inside the loaded range. An entry older than every loaded page is left for the read
  * that reaches it.
  */
-function upsertEntry<P extends { entries: MentorEntry[]; earlierBefore?: number }>(
+function upsertEntry<P extends { content: MentorEntry[]; nextCursor?: string }>(
 	data: Pages<P>,
 	entry: MentorEntry,
 ): Pages<P> {
 	const remove = isRemovedEntry(entry);
-	const index = data.pages.findIndex((page) => page.entries.some(({ id }) => id === entry.id));
+	const index = data.pages.findIndex((page) => page.content.some(({ id }) => id === entry.id));
 	if (index !== -1) {
 		return {
 			...data,
@@ -246,9 +277,9 @@ function upsertEntry<P extends { entries: MentorEntry[]; earlierBefore?: number 
 				pageIndex === index
 					? {
 							...page,
-							entries: remove
-								? page.entries.filter(({ id }) => id !== entry.id)
-								: page.entries.map((stored) =>
+							content: remove
+								? page.content.filter(({ id }) => id !== entry.id)
+								: page.content.map((stored) =>
 										stored.id === entry.id ? laterCopy(stored, entry) : stored,
 									),
 						}
@@ -262,9 +293,9 @@ function upsertEntry<P extends { entries: MentorEntry[]; earlierBefore?: number 
 	const newest = newestSeq(data.pages);
 	let target = 0;
 	if (newest !== undefined && entry.seq < newest) {
-		target = data.pages.findIndex((page) => (page.entries[0]?.seq ?? Infinity) <= entry.seq);
+		target = data.pages.findIndex((page) => (page.content[0]?.seq ?? Infinity) <= entry.seq);
 		if (target === -1) {
-			if (data.pages.at(-1)?.earlierBefore !== undefined) {
+			if (data.pages.at(-1)?.nextCursor !== undefined) {
 				return data;
 			}
 			target = data.pages.length - 1;
@@ -274,13 +305,13 @@ function upsertEntry<P extends { entries: MentorEntry[]; earlierBefore?: number 
 		...data,
 		pages: data.pages.map((page, pageIndex) =>
 			pageIndex === target
-				? { ...page, entries: [...page.entries, entry].sort((a, b) => a.seq - b.seq) }
+				? { ...page, content: [...page.content, entry].sort((a, b) => a.seq - b.seq) }
 				: page,
 		),
 	};
 }
 
-function patchEntry<P extends { entries: MentorEntry[] }>(
+function patchEntry<P extends { content: MentorEntry[] }>(
 	data: Pages<P>,
 	entryId: string,
 	patch: (entry: MentorEntry) => MentorEntry,
@@ -288,10 +319,10 @@ function patchEntry<P extends { entries: MentorEntry[] }>(
 	return {
 		...data,
 		pages: data.pages.map((page) =>
-			page.entries.some(({ id }) => id === entryId)
+			page.content.some(({ id }) => id === entryId)
 				? {
 						...page,
-						entries: page.entries.map((entry) => (entry.id === entryId ? patch(entry) : entry)),
+						content: page.content.map((entry) => (entry.id === entryId ? patch(entry) : entry)),
 					}
 				: page,
 		),
@@ -340,11 +371,11 @@ function patchThreadSummary(
 		...parent,
 		thread: update(parent.thread),
 	});
-	queryClient.setQueryData<Pages<MentorEntryPage>>(
+	queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
 		entriesKey(workspaceSlug),
 		(data) => data && patchEntry(data, parentEntryId, patch),
 	);
-	queryClient.setQueryData<Pages<MentorThread>>(
+	queryClient.setQueryData<Pages<ConversationThreadPage>>(
 		threadKey(workspaceSlug, parentEntryId),
 		(data) =>
 			data && {
@@ -408,12 +439,12 @@ export function applyEntry(queryClient: QueryClient, workspaceSlug: string, entr
 	applyAnswer(queryClient, workspaceSlug, entry);
 	const { parentEntryId } = entry;
 	if (parentEntryId === undefined) {
-		queryClient.setQueryData<Pages<MentorEntryPage>>(
+		queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
 			entriesKey(workspaceSlug),
 			(data) => data && upsertEntry(data, entry),
 		);
 		// The message may head an open thread, which shows it too.
-		queryClient.setQueryData<Pages<MentorThread>>(
+		queryClient.setQueryData<Pages<ConversationThreadPage>>(
 			threadKey(workspaceSlug, entry.id),
 			(data) =>
 				data && {
@@ -424,7 +455,7 @@ export function applyEntry(queryClient: QueryClient, workspaceSlug: string, entr
 		return;
 	}
 	const reply = { ...entry, parentEntryId };
-	queryClient.setQueryData<Pages<MentorThread>>(
+	queryClient.setQueryData<Pages<ConversationThreadPage>>(
 		threadKey(workspaceSlug, parentEntryId),
 		(data) => data && upsertEntry(data, entry),
 	);
@@ -441,12 +472,12 @@ export function patchShownEntry(
 	patch: (entry: MentorEntry) => MentorEntry,
 ) {
 	if (entry.parentEntryId === undefined) {
-		queryClient.setQueryData<Pages<MentorEntryPage>>(
+		queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
 			entriesKey(workspaceSlug),
 			(data) => data && patchEntry(data, entry.id, patch),
 		);
 		// The message may head an open thread, which shows it too.
-		queryClient.setQueryData<Pages<MentorThread>>(
+		queryClient.setQueryData<Pages<ConversationThreadPage>>(
 			threadKey(workspaceSlug, entry.id),
 			(data) =>
 				data && {
@@ -456,7 +487,7 @@ export function patchShownEntry(
 		);
 		return;
 	}
-	queryClient.setQueryData<Pages<MentorThread>>(
+	queryClient.setQueryData<Pages<ConversationThreadPage>>(
 		threadKey(workspaceSlug, entry.parentEntryId),
 		(data) => data && patchEntry(data, entry.id, patch),
 	);
@@ -518,15 +549,15 @@ function withTurnOutcome(entry: MentorEntry, turn: MentorTurn): MentorEntry {
 	};
 }
 
-function patchQuestion<P extends { entries: MentorEntry[] }>(
+function patchQuestion<P extends { content: MentorEntry[] }>(
 	data: Pages<P>,
 	turn: MentorTurn,
 ): Pages<P> {
 	return {
 		...data,
 		pages: data.pages.map((page) =>
-			page.entries.some(({ turnId }) => turnId === turn.id)
-				? { ...page, entries: page.entries.map((entry) => withTurnOutcome(entry, turn)) }
+			page.content.some(({ turnId }) => turnId === turn.id)
+				? { ...page, content: page.content.map((entry) => withTurnOutcome(entry, turn)) }
 				: page,
 		),
 	};
@@ -545,10 +576,10 @@ function cachedTurn(
 		return { active, order: turnOrder(active) };
 	}
 	const question = queryClient
-		.getQueryData<Pages<MentorEntryPage | MentorThread>>(
+		.getQueryData<Pages<CursorPageDtoMentorEntry | ConversationThreadPage>>(
 			scopeKey(workspaceSlug, turn.parentEntryId),
 		)
-		?.pages.flatMap(({ entries }) => entries)
+		?.pages.flatMap(({ content }) => content)
 		.find((entry) => entry.kind === "USER" && entry.turnId === turn.id);
 	return isEnded(question?.turnStatus) ? { order: Infinity } : {};
 }
@@ -567,12 +598,12 @@ export function applyTurn(queryClient: QueryClient, workspaceSlug: string, turn:
 		return;
 	}
 	if (turn.parentEntryId === undefined) {
-		queryClient.setQueryData<Pages<MentorEntryPage>>(
+		queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
 			entriesKey(workspaceSlug),
 			(data) => data && patchQuestion(data, turn),
 		);
 	} else {
-		queryClient.setQueryData<Pages<MentorThread>>(
+		queryClient.setQueryData<Pages<ConversationThreadPage>>(
 			threadKey(workspaceSlug, turn.parentEntryId),
 			(data) => data && patchQuestion(data, turn),
 		);

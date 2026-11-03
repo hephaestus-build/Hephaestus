@@ -526,11 +526,10 @@ it("closes the panel when a link in an answer opens another page, which is then 
 		http.get("*/workspaces/:workspaceSlug/practices/items/:itemId/reviews", () =>
 			HttpResponse.json({
 				content: [detailReview],
-				number: 0,
+				page: 0,
 				size: 10,
 				totalElements: 1,
 				totalPages: 1,
-				last: true,
 			}),
 		),
 	);
@@ -576,11 +575,10 @@ function serveReviews() {
 		http.get("*/workspaces/:workspaceSlug/practices/items/:itemId/reviews", () =>
 			HttpResponse.json({
 				content: [detailReview],
-				number: 0,
+				page: 0,
 				size: 10,
 				totalElements: 1,
 				totalPages: 1,
-				last: true,
 			}),
 		),
 	);

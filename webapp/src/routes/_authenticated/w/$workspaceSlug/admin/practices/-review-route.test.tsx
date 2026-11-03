@@ -87,14 +87,10 @@ function stubWorkspace(extra: Parameters<typeof server.use>) {
 		http.get("*/workspaces/:workspaceSlug/members", () =>
 			HttpResponse.json({
 				content: [membership({}), unclaimed],
-				number: 0,
+				page: 0,
 				size: 100,
 				totalElements: 2,
 				totalPages: 1,
-				last: true,
-				first: true,
-				empty: false,
-				numberOfElements: 2,
 			}),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/items", () =>
@@ -536,7 +532,7 @@ describe("review route", () => {
 				HttpResponse.json(
 					repositoryPage(
 						[repositoryItem("101", { label: "owner/retired", removedAt: "2026-09-01T00:00:00Z" })],
-						{ number: 0, last: true, totalElements: 1 },
+						{ page: 0, totalPages: 1, totalElements: 1 },
 					),
 				),
 			),
@@ -728,7 +724,7 @@ describe("review route", () => {
 				HttpResponse.json(
 					repositoryPage(
 						["101", "102"].map((id) => repositoryItem(id, { label: "Repository", unnamed: true })),
-						{ number: 0, last: true, totalElements: 2 },
+						{ page: 0, totalPages: 1, totalElements: 2 },
 					),
 				),
 			),
@@ -823,30 +819,22 @@ function repositoryItem(id: string, fields: { label: string; unnamed?: true; rem
 
 function repositoryPage(
 	content: readonly ReturnType<typeof repositoryItem>[],
-	page: { number: number; last: boolean; totalElements: number },
+	page: { page: number; totalPages: number; totalElements: number },
 ) {
-	return {
-		content,
-		...page,
-		first: page.number === 0,
-		empty: content.length === 0,
-		numberOfElements: content.length,
-		size: 100,
-		totalPages: page.last ? page.number + 1 : page.number + 2,
-	};
+	return { content, ...page, size: 100 };
 }
 
 /** A current repository on the first page and a removed one on the second. */
 function twoRepositoryPages(page: string) {
 	return page === "0"
 		? repositoryPage([repositoryItem("101", { label: "owner/current" })], {
-				number: 0,
-				last: false,
+				page: 0,
+				totalPages: 2,
 				totalElements: 2,
 			})
 		: repositoryPage(
 				[repositoryItem("102", { label: "owner/retired", removedAt: "2026-09-01T00:00:00Z" })],
-				{ number: 1, last: true, totalElements: 2 },
+				{ page: 1, totalPages: 2, totalElements: 2 },
 			);
 }
 

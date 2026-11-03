@@ -120,6 +120,7 @@ const policyGates = [
 	"gate:contracts",
 	"gate:env",
 	"gate:quarantine",
+	"gate:api-pagination",
 	"gate:configuration-reference",
 	"gate:shell",
 ];
@@ -282,6 +283,9 @@ export default defineConfig({
 			"gate:api-compatibility": run("node scripts/check-api-compatibility.ts"),
 			"gate:public-contract": run(
 				"node --test scripts/check-public-contract.test.ts && node scripts/check-public-contract.ts",
+			),
+			"gate:api-pagination": run(
+				"node --test scripts/check-api-pagination.test.ts && node scripts/check-api-pagination.ts",
 			),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(

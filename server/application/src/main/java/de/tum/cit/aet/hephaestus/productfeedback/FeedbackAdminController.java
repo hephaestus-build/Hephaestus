@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackFilter;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackItemDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackTriageDTO;
@@ -15,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.data.web.PagedModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,10 +35,10 @@ public class FeedbackAdminController {
 
     @GetMapping
     @Operation(operationId = "adminListProductFeedback", summary = "List product feedback, newest first")
-    public PagedModel<FeedbackItemDTO> list(
+    public OffsetPageDTO<FeedbackItemDTO> list(
             @RequestParam(defaultValue = "OPEN") FeedbackFilter status,
             @ParameterObject @PageableDefault(size = 50) Pageable pageable) {
-        return new PagedModel<>(service.list(status, pageable));
+        return OffsetPageDTO.from(service.list(status, pageable));
     }
 
     @PatchMapping("/{feedbackId}")

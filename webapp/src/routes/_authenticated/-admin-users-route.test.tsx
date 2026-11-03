@@ -14,6 +14,14 @@ import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/tes
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
 vi.setConfig({ testTimeout: 20_000 });
 
+const accountPage = (content: unknown[], page = 0, totalPages = 1) => ({
+	content,
+	page,
+	size: 25,
+	totalElements: content.length,
+	totalPages,
+});
+
 const stepUpRefusal = () =>
 	HttpResponse.json(
 		{
@@ -50,7 +58,10 @@ function serveRoleChanges(earlierAccounts: AdminAccountView[] = [], failFirstCha
 			const page = Number(new URL(request.url).searchParams.get("page") ?? 0);
 			reads.push(account.appRole);
 			pages.push(page);
-			return HttpResponse.json([...earlierAccounts, account].slice(page * 25, (page + 1) * 25));
+			const all = [...earlierAccounts, account];
+			return HttpResponse.json(
+				accountPage(all.slice(page * 25, (page + 1) * 25), page, Math.ceil(all.length / 25)),
+			);
 		}),
 		http.patch("*/admin/users/:id", async ({ params, request }) => {
 			changes.push({ id: String(params.id), body: await request.json() });
@@ -96,15 +107,17 @@ describe("instance users route", () => {
 		const held = deferred();
 		server.use(
 			http.get("*/admin/users", () =>
-				HttpResponse.json([
-					{
-						id: 7,
-						displayName: "Ada Lovelace",
-						primaryEmail: "ada@example.com",
-						appRole: "USER",
-						status: "ACTIVE",
-					},
-				]),
+				HttpResponse.json(
+					accountPage([
+						{
+							id: 7,
+							displayName: "Ada Lovelace",
+							primaryEmail: "ada@example.com",
+							appRole: "USER",
+							status: "ACTIVE",
+						},
+					]),
+				),
 			),
 			http.patch("*/admin/users/:id", async () => {
 				await held.promise;
@@ -288,7 +301,7 @@ function serveSearchContinuation(
 			const page = Number(new URL(request.url).searchParams.get("page") ?? 0);
 			reads.push(page);
 			if (page === 0) {
-				return HttpResponse.json(accounts);
+				return HttpResponse.json(accountPage(accounts, 0, 2));
 			}
 			if (reads.length === 2) {
 				return continuation.promise;
@@ -297,7 +310,7 @@ function serveSearchContinuation(
 			if (!explicitRetry) {
 				return unexpectedContinuation.promise;
 			}
-			return HttpResponse.json([nextAccount]);
+			return HttpResponse.json(accountPage([nextAccount], 1, 2));
 		}),
 	);
 	return {
@@ -395,8 +408,8 @@ describe("instance users list lifecycle", () => {
 			expect(reads).toStrictEqual([0, 1, 1]);
 		} finally {
 			cleanup();
-			continuation.resolve(HttpResponse.json([]));
-			unexpectedContinuation.resolve(HttpResponse.json([]));
+			continuation.resolve(HttpResponse.json(accountPage([])));
+			unexpectedContinuation.resolve(HttpResponse.json(accountPage([])));
 		}
 	});
 
@@ -415,7 +428,7 @@ describe("instance users list lifecycle", () => {
 			appRole: "USER",
 			status: "ACTIVE",
 		} satisfies AdminAccountView;
-		let response: Response = HttpResponse.json([oldAccount]);
+		let response: Response = HttpResponse.json(accountPage([oldAccount]));
 		const reads: { page: number; status: number }[] = [];
 		let mutations = 0;
 		server.use(
@@ -477,7 +490,7 @@ describe("instance users list lifecycle", () => {
 		expect
 			.soft(screen.queryByText("Lifecycle Ada"), "No refused account identity after 503")
 			.toBeNull();
-		response = HttpResponse.json([freshAccount]);
+		response = HttpResponse.json(accountPage([freshAccount]));
 		await refresh();
 		await screen.findByText("lifecycle-grace@example.com");
 		expect
@@ -511,7 +524,7 @@ function serveFirstReads(statuses: readonly number[], account: AdminAccountView)
 			const status = statuses[reads.length] ?? 200;
 			reads.push(status);
 			return status === 200
-				? HttpResponse.json([account])
+				? HttpResponse.json(accountPage([account]))
 				: HttpResponse.json({ status, detail: "Account read unavailable." }, { status });
 		}),
 	);

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.mentor;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryQuery;
@@ -24,8 +25,10 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -98,18 +101,20 @@ public class MentorTimeline {
                 main.getLastReadAt());
     }
 
-    /** A page of the main conversation's messages before {@code beforeSeq}, or the newest page. */
+    /** A page of the main conversation's messages before {@code cursor}, or the newest page. */
     @Transactional(readOnly = true)
-    public MentorEntryPageDTO entries(long workspaceId, long accountId, @Nullable Long beforeSeq, int limit) {
+    public CursorPageDTO<MentorEntryDTO> entries(long workspaceId, long accountId, @Nullable String cursor, int size) {
+        long before = seqBefore(cursor);
         return main(workspaceId, accountId)
-                .map(main -> page(main, beforeSeq, limit))
-                .orElse(MentorEntryPageDTO.EMPTY);
+                .map(main -> page(main, before, size))
+                .orElse(CursorPageDTO.empty());
     }
 
     /** The thread on one of the main conversation's messages; a message without a thread has no replies yet. */
     @Transactional(readOnly = true)
     public MentorThreadDTO thread(
-            long workspaceId, long accountId, UUID parentEntryId, @Nullable Long beforeSeq, int limit) {
+            long workspaceId, long accountId, UUID parentEntryId, @Nullable String cursor, int size) {
+        long before = seqBefore(cursor);
         MentorEntry parent = ownedEntry(workspaceId, accountId, parentEntryId)
                 .filter(entry -> entry.getKind().isMessage())
                 .orElseThrow(() -> new EntityNotFoundException("MentorEntry", parentEntryId.toString()));
@@ -121,10 +126,9 @@ public class MentorTimeline {
         Optional<MentorConversation> thread =
                 conversations.findByWorkspaceIdAndParentEntryId(workspaceId, parentEntryId);
         if (thread.isEmpty()) {
-            return new MentorThreadDTO(parentDto, null, List.of(), null);
+            return new MentorThreadDTO(parentDto, null, CursorPageDTO.empty());
         }
-        MentorEntryPageDTO page = page(thread.get(), beforeSeq, limit);
-        return new MentorThreadDTO(parentDto, thread.get().getId(), page.entries(), page.earlierBefore());
+        return new MentorThreadDTO(parentDto, thread.get().getId(), page(thread.get(), before, size));
     }
 
     @Transactional(readOnly = true)
@@ -234,17 +238,27 @@ public class MentorTimeline {
                 : conversation(main.getWorkspaceId(), conversationId).getParentEntryId();
     }
 
-    private MentorEntryPageDTO page(MentorConversation conversation, @Nullable Long beforeSeq, int limit) {
-        int size = Math.clamp(limit, 1, MAX_PAGE);
-        List<MentorEntry> newestFirst = entries.findShownBefore(
-                conversation.getWorkspaceId(),
-                conversation.getId(),
-                beforeSeq == null ? Long.MAX_VALUE : beforeSeq,
-                size + 1);
+    private CursorPageDTO<MentorEntryDTO> page(MentorConversation conversation, long before, int requested) {
+        int size = Math.clamp(requested, 1, MAX_PAGE);
+        List<MentorEntry> newestFirst =
+                entries.findShownBefore(conversation.getWorkspaceId(), conversation.getId(), before, size + 1);
         List<MentorEntry> page = new ArrayList<>(newestFirst.subList(0, Math.min(size, newestFirst.size())));
         // A page can show fewer messages than it read, so the cursor is the oldest entry read, not the oldest shown.
-        Long earlierBefore = newestFirst.size() > size ? page.getLast().getSeq() : null;
-        return new MentorEntryPageDTO(shown(conversation, page.reversed()), earlierBefore);
+        String nextCursor =
+                newestFirst.size() > size ? String.valueOf(page.getLast().getSeq()) : null;
+        return new CursorPageDTO<>(shown(conversation, page.reversed()), nextCursor);
+    }
+
+    private static long seqBefore(@Nullable String cursor) {
+        if (cursor == null) {
+            return Long.MAX_VALUE;
+        }
+        try {
+            return Long.parseLong(cursor);
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The cursor is not valid. Reload the conversation and try again.", e);
+        }
     }
 
     /**

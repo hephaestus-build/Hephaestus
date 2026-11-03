@@ -128,11 +128,10 @@ const plainGuidance: PracticeGuidanceDto = {
 
 const pageOf = (reviews: ProfileReview[]) => ({
 	content: reviews,
-	number: 0,
+	page: 0,
 	size: 10,
 	totalElements: reviews.length,
 	totalPages: 1,
-	last: true,
 });
 
 function reviewDetailOf(reviewId: string): ProfileReviewDetail | undefined {
@@ -1082,13 +1081,13 @@ describe("complete practice observations", () => {
 				"*/workspaces/:workspaceSlug/practice-groups/:groupSlug/reviews",
 				({ request }) => {
 					pages.push(new URL(request.url).searchParams.get("page"));
-					return HttpResponse.json({ ...pageOf([]), totalPages: 2, totalElements: 1, last: false });
+					return HttpResponse.json({ ...pageOf([]), totalPages: 2, totalElements: 1 });
 				},
 				{ once: true },
 			),
 			http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/reviews", ({ request }) => {
 				pages.push(new URL(request.url).searchParams.get("page"));
-				return HttpResponse.json({ ...pageOf([groupReview]), number: 1, totalPages: 2 });
+				return HttpResponse.json({ ...pageOf([groupReview]), page: 1, totalPages: 2 });
 			}),
 		);
 		renderRouteAtWithRouter(observationPage());

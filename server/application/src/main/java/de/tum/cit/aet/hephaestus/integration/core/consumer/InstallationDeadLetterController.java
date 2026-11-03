@@ -7,9 +7,11 @@ import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,8 +39,10 @@ public class InstallationDeadLetterController {
 
     @GetMapping
     @Operation(operationId = "listInstallationDeadLetters", summary = "List unassigned installation dead letters")
-    public List<ConsumerDeadLetterDTO> list(@RequestParam(defaultValue = "0") @Min(0) long after) {
-        return service.listInstallation(after);
+    public CursorPageDTO<ConsumerDeadLetterDTO> list(
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(defaultValue = "100") @Min(1) @Max(100) int size) {
+        return service.listInstallation(cursor, size);
     }
 
     @PostMapping("/{id}/replays")

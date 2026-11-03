@@ -16,11 +16,10 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPeopleDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.OpenWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkPageDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ReviewerDTO.ReviewerState;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.TeamRefDTO;
@@ -37,6 +36,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -104,6 +104,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.StatusAssertions;
@@ -117,6 +118,11 @@ import org.springframework.web.util.UriComponentsBuilder;
  */
 @WithMentorUser
 class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    private static final ParameterizedTypeReference<CursorPageDTO<ActivityWorkDTO>> WORK_PAGE =
+            new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<CursorPageDTO<PublicActivityWorkDTO>> PUBLIC_WORK_PAGE =
+            new ParameterizedTypeReference<>() {};
 
     private static final String FROM = "2026-01-01T00:00:00Z";
     private static final String TO = "2026-02-01T00:00:00Z";
@@ -1478,10 +1484,10 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .getResponseBody());
         }
 
-        private PublicActivityWorkPageDTO personWork(User user, Function<UriBuilder, UriBuilder> query) {
+        private CursorPageDTO<PublicActivityWorkDTO> personWork(User user, Function<UriBuilder, UriBuilder> query) {
             return Objects.requireNonNull(personRead(user, "/work", query)
                     .isOk()
-                    .expectBody(PublicActivityWorkPageDTO.class)
+                    .expectBody(PUBLIC_WORK_PAGE)
                     .returnResult()
                     .getResponseBody());
         }
@@ -1856,7 +1862,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(detail.counts().contributions()).isEqualTo(1);
         get("/me/work", uri -> uri)
                 .isOk()
-                .expectBody(ActivityWorkPageDTO.class)
+                .expectBody(WORK_PAGE)
                 .value(page -> assertThat(page.content()).hasSize(1));
     }
 
@@ -2089,7 +2095,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                                         : ActivityContributorKind.PERSON);
                 var page = Objects.requireNonNull(get(path + "/work", uri -> uri)
                         .isOk()
-                        .expectBody(ActivityWorkPageDTO.class)
+                        .expectBody(WORK_PAGE)
                         .returnResult()
                         .getResponseBody());
                 assertThat(page.content()).singleElement().satisfies(work -> {
@@ -2154,7 +2160,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                             uri -> uri.queryParam("repo", monitored.getNameWithOwner())
                                     .queryParam("size", 1))
                     .isOk()
-                    .expectBody(ActivityWorkPageDTO.class)
+                    .expectBody(WORK_PAGE)
                     .returnResult()
                     .getResponseBody());
             assertThat(page.content()).singleElement().satisfies(work -> {
@@ -2171,7 +2177,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                                     .queryParam("size", 1)
                                     .queryParam("cursor", Objects.requireNonNull(page.nextCursor())))
                     .isOk()
-                    .expectBody(ActivityWorkPageDTO.class)
+                    .expectBody(WORK_PAGE)
                     .returnResult()
                     .getResponseBody());
             assertThat(next.content())
@@ -2282,13 +2288,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             record(ada, ActivityEventType.ISSUE_CLOSED, ActivityTargetType.ISSUE, -136L, DAY.plusSeconds(150));
             record(ada, ActivityEventType.ISSUE_CLOSED, ActivityTargetType.ISSUE, -134L, DAY.plusSeconds(180));
 
-            ActivityWorkPageDTO first =
+            CursorPageDTO<ActivityWorkDTO> first =
                     work(uri -> uri.queryParam("login", ada.getLogin()).queryParam("size", 2));
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -135L, DAY.plusSeconds(240));
-            ActivityWorkPageDTO second = work(uri -> uri.queryParam("login", ada.getLogin())
+            CursorPageDTO<ActivityWorkDTO> second = work(uri -> uri.queryParam("login", ada.getLogin())
                     .queryParam("size", 2)
                     .queryParam("cursor", Objects.requireNonNull(first.nextCursor())));
-            ActivityWorkPageDTO third = work(uri -> uri.queryParam("login", ada.getLogin())
+            CursorPageDTO<ActivityWorkDTO> third = work(uri -> uri.queryParam("login", ada.getLogin())
                     .queryParam("size", 2)
                     .queryParam("cursor", Objects.requireNonNull(second.nextCursor())));
 
@@ -2336,13 +2342,13 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             @Nullable String cursor = null;
             do {
                 @Nullable String after = cursor;
-                ActivityWorkPageDTO page = Objects.requireNonNull(status("/work", uri -> {
+                CursorPageDTO<ActivityWorkDTO> page = Objects.requireNonNull(status("/work", uri -> {
                             UriBuilder query =
                                     uri.queryParam("login", ada.getLogin()).queryParam("size", 1);
                             return after == null ? query : query.queryParam("cursor", after);
                         })
                         .isOk()
-                        .expectBody(ActivityWorkPageDTO.class)
+                        .expectBody(WORK_PAGE)
                         .returnResult()
                         .getResponseBody());
                 page.content().forEach(entry -> walked.add(entry.id()));
@@ -2384,7 +2390,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     DAY.plusSeconds(30));
             record(ada, ActivityEventType.ISSUE_CREATED, ActivityTargetType.ISSUE, -140L, DAY.plusSeconds(60));
 
-            ActivityWorkPageDTO reviews = work(uri ->
+            CursorPageDTO<ActivityWorkDTO> reviews = work(uri ->
                     uri.queryParam("login", ada.getLogin()).queryParam("kinds", ActivityKind.REVIEW_APPROVED.name()));
 
             assertThat(reviews.content()).singleElement().satisfies(entry -> {
@@ -2413,7 +2419,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectBody(Void.class);
         }
 
-        private static ActivityWorkDTO entry(ActivityWorkPageDTO page, Issue work) {
+        private static ActivityWorkDTO entry(CursorPageDTO<ActivityWorkDTO> page, Issue work) {
             return page.content().stream()
                     .filter(entry -> entry.id().equals("work:" + work.getId()))
                     .findFirst()
@@ -2647,7 +2653,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             assertThat(members(uri -> uri.queryParam("team", empty.getSlug()))).isEmpty();
             assertThat(summary(uri -> uri.queryParam("team", empty.getSlug())))
                     .isEqualTo(new TypeCounts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
-            ActivityWorkPageDTO work = work(uri -> uri.queryParam("team", empty.getSlug()));
+            CursorPageDTO<ActivityWorkDTO> work = work(uri -> uri.queryParam("team", empty.getSlug()));
             assertThat(work.content()).isEmpty();
             assertThat(work.nextCursor()).isNull();
         }
@@ -3337,12 +3343,9 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .people();
     }
 
-    private ActivityWorkPageDTO work(Function<UriBuilder, UriBuilder> query) {
-        return Objects.requireNonNull(get("/work", query)
-                .isOk()
-                .expectBody(ActivityWorkPageDTO.class)
-                .returnResult()
-                .getResponseBody());
+    private CursorPageDTO<ActivityWorkDTO> work(Function<UriBuilder, UriBuilder> query) {
+        return Objects.requireNonNull(
+                get("/work", query).isOk().expectBody(WORK_PAGE).returnResult().getResponseBody());
     }
 
     /**
@@ -3368,7 +3371,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @Nullable String cursor = null;
         do {
             @Nullable String after = cursor;
-            ActivityWorkPageDTO page = work(uri -> {
+            CursorPageDTO<ActivityWorkDTO> page = work(uri -> {
                 UriBuilder query = scope.apply(uri).queryParam("size", 2);
                 kinds.forEach(kind -> query.queryParam("kinds", kind.name()));
                 return after == null ? query : query.queryParam("cursor", after);

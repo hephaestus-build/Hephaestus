@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
-import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Contact;
@@ -39,7 +38,6 @@ import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.web.PagedModel;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -104,10 +102,7 @@ public class OpenAPIConfiguration {
      * Domain objects to include even without DTO suffix
      */
     private static final List<String> ALLOWED_DOMAIN_OBJECTS = List.of(
-            "PageableObject",
-            "SortObject",
             "ProblemDetail",
-            "PageMetadata",
             "PracticeDefinition",
             "ReviewOn",
             "AppliesWhen",
@@ -156,7 +151,6 @@ public class OpenAPIConfiguration {
             @Value("${spring.application.version:0.0.0-development}") String appVersion) {
         return openApi -> {
             openApi.getInfo().setVersion(appVersion);
-            includeSpringDataPageMetadata(openApi);
             Map<String, String> schemaNames = processApplicationServerSchemas(openApi);
             processAllPaths(openApi, schemaNames);
             normalizeDiscriminatedUnions(openApi);
@@ -179,15 +173,6 @@ public class OpenAPIConfiguration {
                             .pattern("^[0-9a-f]{32}$")
                             .description("The request's trace id, the same as the X-Request-Id header"));
         }
-    }
-
-    private void includeSpringDataPageMetadata(OpenAPI openApi) {
-        ModelConverters.getInstance().read(PagedModel.PageMetadata.class).forEach((name, schema) -> {
-            Schema<?> metadata = schema;
-            if (metadata.getProperties() != null)
-                metadata.setRequired(new ArrayList<>(metadata.getProperties().keySet()));
-            openApi.getComponents().addSchemas(name, schema);
-        });
     }
 
     /*

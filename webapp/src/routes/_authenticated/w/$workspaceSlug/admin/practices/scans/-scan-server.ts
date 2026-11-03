@@ -3,11 +3,11 @@ import type {
 	Practice,
 	PracticeDefinition,
 	ScanCounts,
+	CursorPageDtoScanReportItem,
+	CursorPageDtoScanReportProblem,
 	ScanDetail,
 	ScanReport,
-	ScanReportItemsPage,
 	ScanReportProblem,
-	ScanReportProblemsPage,
 	ScanSummary,
 } from "@/api/types.gen";
 import {
@@ -83,16 +83,14 @@ export function wireReport(
 		...overrides,
 	};
 }
-export type WireItemsPage = Wire<ScanReportItemsPage>;
-export type WireProblemsPage = Wire<ScanReportProblemsPage>;
+export type WireItemsPage = Wire<CursorPageDtoScanReportItem>;
+export type WireProblemsPage = Wire<CursorPageDtoScanReportProblem>;
 export type WireProblem = Wire<ScanReportProblem>;
 
 export const ITEMS_PAGE: WireItemsPage = {
 	content: toWire(ITEM_ENTRIES).map((item) =>
 		item.status === "NOT_REVIEWED" ? { ...item, reason: "SOMETHING_THE_PAGE_DOES_NOT_KNOW" } : item,
 	),
-	nextCursor: null,
-	hasNext: false,
 };
 
 export function wireProblem(
@@ -190,11 +188,7 @@ export function adminHandlers() {
 export function scanPage(scans: Wire<ScanSummary>[]) {
 	return {
 		content: scans,
-		empty: scans.length === 0,
-		first: true,
-		last: true,
-		number: 0,
-		numberOfElements: scans.length,
+		page: 0,
 		size: 20,
 		totalElements: scans.length,
 		totalPages: 1,

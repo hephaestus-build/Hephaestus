@@ -10,7 +10,7 @@ import type { AdminListConfigAuditEventsData, AdminListConfigAuditEventsResponse
 export const adminListConfigAuditEventsQueryKey = (options?: Options<AdminListConfigAuditEventsData>) => createQueryKey('adminListConfigAuditEvents', options, false, ['Admin']);
 
 /**
- * List admin configuration changes across workspaces (paged, newest first)
+ * List admin configuration changes across workspaces (newest first)
  */
 export const adminListConfigAuditEventsOptions = (options?: Options<AdminListConfigAuditEventsData>) => queryOptions<AdminListConfigAuditEventsResponse, DefaultError, AdminListConfigAuditEventsResponse, ReturnType<typeof adminListConfigAuditEventsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -28,17 +28,17 @@ export const adminListConfigAuditEventsOptions = (options?: Options<AdminListCon
 export const adminListConfigAuditEventsInfiniteQueryKey = (options?: Options<AdminListConfigAuditEventsData>): QueryKey<Options<AdminListConfigAuditEventsData>> => createQueryKey('adminListConfigAuditEvents', options, true);
 
 /**
- * List admin configuration changes across workspaces (paged, newest first)
+ * List admin configuration changes across workspaces (newest first)
  */
 export const adminListConfigAuditEventsInfiniteOptions = (options?: Options<AdminListConfigAuditEventsData>) => {
-    const opts = infiniteQueryOptions<AdminListConfigAuditEventsResponse, DefaultError, InfiniteData<AdminListConfigAuditEventsResponse>, QueryKey<Options<AdminListConfigAuditEventsData>>, number | Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    const opts = infiniteQueryOptions<AdminListConfigAuditEventsResponse, DefaultError, InfiniteData<AdminListConfigAuditEventsResponse>, QueryKey<Options<AdminListConfigAuditEventsData>>, string | Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
     // @ts-ignore
     {
         queryFn: async ({ pageParam, queryKey, signal }) => {
             // @ts-ignore
             const page: Pick<QueryKey<Options<AdminListConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
                 query: {
-                    page: pageParam
+                    cursor: pageParam
                 }
             };
             const params = createInfiniteParams(queryKey, page);

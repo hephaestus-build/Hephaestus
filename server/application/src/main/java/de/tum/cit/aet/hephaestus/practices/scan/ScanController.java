@@ -3,12 +3,13 @@ package de.tum.cit.aet.hephaestus.practices.scan;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.CancelScanRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportDTO;
-import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportItemsPageDTO;
-import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportProblemsPageDTO;
+import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportItemDTO;
+import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportProblemDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.StartScanRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
@@ -55,13 +56,13 @@ public class ScanController {
 
     @GetMapping
     @Operation(operationId = "listScans", summary = "List repository scans")
-    public PageResponseDTO<ScanSummaryDTO> listScans(
+    public OffsetPageDTO<ScanSummaryDTO> listScans(
             WorkspaceContext context,
             @RequestParam(required = false) @Nullable String repositoryItemId,
             @RequestParam(required = false) @Nullable ReviewStatus status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        return PageResponseDTO.from(query.list(
+        return OffsetPageDTO.from(query.list(
                 context.id(),
                 repositoryItemId == null ? null : Long.parseLong(repositoryItemId),
                 status,
@@ -113,7 +114,7 @@ public class ScanController {
 
     @GetMapping("/{scanId}/report/items")
     @Operation(operationId = "listScanReportItems", summary = "List the items in a scan report")
-    public ScanReportItemsPageDTO listScanReportItems(
+    public CursorPageDTO<ScanReportItemDTO> listScanReportItems(
             WorkspaceContext context,
             @PathVariable UUID scanId,
             @Valid @ParameterObject ScanReportItemFilterParams filter) {
@@ -122,7 +123,7 @@ public class ScanController {
 
     @GetMapping("/{scanId}/report/problems")
     @Operation(operationId = "listScanReportProblems", summary = "List the problems in a scan report")
-    public ScanReportProblemsPageDTO listScanReportProblems(
+    public CursorPageDTO<ScanReportProblemDTO> listScanReportProblems(
             WorkspaceContext context,
             @PathVariable UUID scanId,
             @Valid @ParameterObject ScanReportProblemFilterParams filter) {

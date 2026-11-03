@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.scan;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
@@ -30,9 +31,7 @@ import de.tum.cit.aet.hephaestus.practices.scan.dto.NotReviewedScanReportItemDTO
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ReusedScanReportItemDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanPracticeReportDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportItemDTO;
-import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportItemsPageDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportProblemDTO;
-import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanReportProblemsPageDTO;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.WithheldScanReportItemDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ProblemBaselineState;
@@ -73,7 +72,7 @@ public class ScanReportItemsService {
     private final ProblemRepository problems;
     private final JsonMapper json;
 
-    public ScanReportItemsPageDTO items(
+    public CursorPageDTO<ScanReportItemDTO> items(
             long workspaceId, UUID id, @Nullable String cursor, int size, ItemFilter filter) {
         var review = reports.require(workspaceId, id);
         reports.requireRaw(review);
@@ -160,7 +159,7 @@ public class ScanReportItemsService {
                             previous.get(claimsByKey.get(new Key(member.getPracticeId(), member.getItemId()))));
                 })
                 .toList();
-        return new ScanReportItemsPageDTO(content, more ? encode(page.getLast().cursor()) : null, more);
+        return new CursorPageDTO<>(content, more ? encode(page.getLast().cursor()) : null);
     }
 
     private ScanReportItemDTO item(
@@ -234,7 +233,7 @@ public class ScanReportItemsService {
                 : item.getState().name();
     }
 
-    public ScanReportProblemsPageDTO problems(
+    public CursorPageDTO<ScanReportProblemDTO> problems(
             long workspaceId, UUID id, @Nullable String cursor, int size, ProblemFilter filter) {
         var review = reports.require(workspaceId, id);
         reports.requireRaw(review);
@@ -242,10 +241,9 @@ public class ScanReportItemsService {
         var rows = problemRows(review, filter, after, size + 1);
         boolean more = rows.size() > size;
         var page = rows.subList(0, Math.min(size, rows.size()));
-        return new ScanReportProblemsPageDTO(
+        return new CursorPageDTO<>(
                 page.stream().map(ProblemRow::dto).toList(),
-                more ? encode(page.getLast().key()) : null,
-                more);
+                more ? encode(page.getLast().key()) : null);
     }
 
     public List<ProblemRow> problemRows(

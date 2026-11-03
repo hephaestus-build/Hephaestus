@@ -597,7 +597,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     private WeeklyDigestDTO digestOnTheTimeline() {
-        return timeline.entries(workspaceId, accountId, null, 50).entries().stream()
+        return timeline.entries(workspaceId, accountId, null, 50).content().stream()
                 .filter(entry -> entry.kind() == MentorEntryDTO.Kind.DIGEST)
                 .map(MentorEntryDTO::digest)
                 .filter(Objects::nonNull)

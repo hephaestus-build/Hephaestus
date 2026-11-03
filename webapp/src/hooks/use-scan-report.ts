@@ -30,6 +30,7 @@ import type { ScanEntryStatus } from "@/components/practice-vocabulary/scan-entr
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { saveBlobFile } from "@/lib/download";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
+import { nextCursorOf } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 import { useInvalidateOnSettle } from "./use-invalidate-on-settle";
@@ -49,11 +50,7 @@ export interface ScanReportData {
 	exportSarif: ScanAction;
 }
 
-function nextCursor(page: { hasNext: boolean; nextCursor: string | null }) {
-	return page.hasNext ? (page.nextCursor ?? undefined) : undefined;
-}
-
-function listState<TPage extends { content: readonly TEntry[]; hasNext: boolean }, TEntry>(
+function listState<TPage extends { content: readonly TEntry[] }, TEntry>(
 	query: UseInfiniteQueryResult<InfiniteData<TPage>>,
 ): ScanListState<TEntry> {
 	const state = infiniteListState(query, (pages) => ({
@@ -117,7 +114,7 @@ export function useScanReport(
 	const problemsQuery = useInfiniteQuery({
 		...problemsOptions,
 		initialPageParam: { path, query: { cursor: undefined } },
-		getNextPageParam: nextCursor,
+		getNextPageParam: nextCursorOf,
 		refetchInterval: listsPoll,
 	});
 	useQueryReadRefusal(problemsOptions.queryKey, problemsQuery.isError, problemsQuery.error);
@@ -128,7 +125,7 @@ export function useScanReport(
 	const itemsQuery = useInfiniteQuery({
 		...itemsOptions,
 		initialPageParam: { path, query: { cursor: undefined } },
-		getNextPageParam: nextCursor,
+		getNextPageParam: nextCursorOf,
 		refetchInterval: listsPoll,
 	});
 

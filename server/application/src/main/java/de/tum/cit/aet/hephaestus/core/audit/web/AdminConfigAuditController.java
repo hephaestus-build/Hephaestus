@@ -5,7 +5,8 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntryViewDTO;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilterParams;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
+import de.tum.cit.aet.hephaestus.core.web.TotalCountDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -33,14 +34,23 @@ public class AdminConfigAuditController {
 
     @GetMapping
     @Operation(
-            summary = "List admin configuration changes across workspaces (paged, newest first)",
+            summary = "List admin configuration changes across workspaces (newest first)",
             operationId = "adminListConfigAuditEvents")
-    public ResponseEntity<PageResponseDTO<ConfigAuditEntryViewDTO>> list(
+    public ResponseEntity<CursorPageDTO<ConfigAuditEntryViewDTO>> list(
             @RequestParam(required = false) @Nullable Long workspaceId,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(defaultValue = "50") int size,
             @ParameterObject ConfigAuditFilterParams filter) {
-        return ResponseEntity.ok(PageResponseDTO.from(configAuditQuery.listForAdmin(
-                workspaceId, filter.toFilter(), ConfigAuditFilterParams.pageable(page, size))));
+        return ResponseEntity.ok(configAuditQuery.listForAdmin(workspaceId, filter.toFilter(), cursor, size));
+    }
+
+    @GetMapping("/count")
+    @Operation(
+            summary = "Count the configuration changes a filter matches",
+            operationId = "adminCountConfigAuditEvents")
+    public TotalCountDTO count(
+            @RequestParam(required = false) @Nullable Long workspaceId,
+            @ParameterObject ConfigAuditFilterParams filter) {
+        return new TotalCountDTO(configAuditQuery.countForAdmin(workspaceId, filter.toFilter()));
     }
 }

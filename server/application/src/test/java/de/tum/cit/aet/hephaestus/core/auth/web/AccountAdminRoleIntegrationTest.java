@@ -50,6 +50,32 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
     private IssuedJwtRepository issuedJwtRepository;
 
     @Test
+    void listsAccountsAsANumberedPageInAStableOrder() {
+        Account reader = persistAdmin("Reading Admin");
+        persistAdmin("Second Admin");
+        long total = accountRepository.count();
+
+        webTestClient
+                .get()
+                .uri("/admin/users?page=0&size=1")
+                .headers(h -> h.setBearerAuth(tokenFor(reader)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.page")
+                .isEqualTo(0)
+                .jsonPath("$.size")
+                .isEqualTo(1)
+                .jsonPath("$.totalElements")
+                .isEqualTo(total)
+                .jsonPath("$.totalPages")
+                .isEqualTo(total);
+    }
+
+    @Test
     void demotingOneAdminWhileAnotherRemainsPersistsToTheDatabase() {
         Account keeper = persistAdmin("Keeper Admin");
         Account victim = persistAdmin("Demote Me");

@@ -17,6 +17,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
 
@@ -67,7 +69,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.totalElements")
+                .jsonPath("$.content.length()")
                 .isEqualTo(2)
                 // Newest first: the role change leads.
                 .jsonPath("$.content[0].eventType")
@@ -101,7 +103,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.totalElements")
+                .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].eventType")
                 .isEqualTo("APP_ROLE_CHANGED");
@@ -135,7 +137,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.totalElements")
+                .jsonPath("$.content.length()")
                 .isEqualTo(2)
                 .jsonPath("$.content[0].eventType")
                 .isEqualTo("LOGOUT")
@@ -184,7 +186,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.totalElements")
+                .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].result")
                 .isEqualTo("FAILURE")
@@ -209,7 +211,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.totalElements")
+                .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].occurredAt")
                 .value(v -> assertThat((String) v).startsWith("2026-06-05"));
@@ -238,7 +240,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.totalElements")
+                .jsonPath("$.content.length()")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].eventType")
                 .isEqualTo("IMPERSONATION_BEGIN");
@@ -303,7 +305,10 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
     void pageSizeIsClampedToTheMaximum() {
         // MAX_PAGE_SIZE caps a malicious/typo'd size so it can't scan a whole monthly partition.
         Account admin = persist("Keeper Admin", Account.AppRole.APP_ADMIN);
-        seed(1L, AuthEvent.EventType.LOGIN, Instant.parse("2026-06-01T10:00:00Z"), persistedId(admin.getId()), null);
+        Instant start = Instant.parse("2026-06-01T10:00:00Z");
+        for (long id = 1; id <= 201; id++) {
+            seed(id, AuthEvent.EventType.LOGIN, start.plusSeconds(id), persistedId(admin.getId()), null);
+        }
 
         webTestClient
                 .get()
@@ -315,8 +320,85 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.size")
-                .isEqualTo(200);
+                .jsonPath("$.content.length()")
+                .isEqualTo(200)
+                .jsonPath("$.nextCursor")
+                .exists();
+    }
+
+    @Test
+    void pagesWalkTheLogOnceWhileNewEventsArrive() {
+        Account admin = persist("Keeper Admin", Account.AppRole.APP_ADMIN);
+        Long actor = persistedId(admin.getId());
+        Instant tied = Instant.parse("2026-06-02T10:00:00Z");
+        seed(1L, AuthEvent.EventType.LOGIN, Instant.parse("2026-06-01T10:00:00Z"), actor, null);
+        seed(2L, AuthEvent.EventType.LOGIN, tied, actor, null);
+        seed(3L, AuthEvent.EventType.LOGOUT, tied, actor, null);
+
+        var first = auditPage(admin, null);
+        assertThat(first.at("/content")
+                        .valueStream()
+                        .map(e -> e.get("eventType").asString()))
+                .containsExactly("LOGOUT", "LOGIN");
+        String cursor = first.get("nextCursor").asString();
+
+        // An offset read would now repeat the event that the new one pushed across the page edge.
+        seed(4L, AuthEvent.EventType.LOGIN, Instant.parse("2026-06-03T10:00:00Z"), actor, null);
+
+        var second = auditPage(admin, cursor);
+        assertThat(second.at("/content")
+                        .valueStream()
+                        .map(e -> e.get("occurredAt").asString()))
+                .containsExactly("2026-06-01T10:00:00Z");
+        assertThat(second.has("nextCursor")).isFalse();
+    }
+
+    @Test
+    void countAnswersForTheFilterAndAMalformedCursorIsRefused() {
+        Account admin = persist("Keeper Admin", Account.AppRole.APP_ADMIN);
+        Long actor = persistedId(admin.getId());
+        seed(1L, AuthEvent.EventType.LOGIN, Instant.parse("2026-06-01T10:00:00Z"), actor, null);
+        seed(2L, AuthEvent.EventType.LOGOUT, Instant.parse("2026-06-02T10:00:00Z"), actor, null);
+
+        webTestClient
+                .get()
+                .uri(builder -> builder.path("/admin/audit/count")
+                        .queryParam("eventType", "LOGOUT")
+                        .build())
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.total")
+                .isEqualTo(1);
+
+        webTestClient
+                .get()
+                .uri(builder -> builder.path("/admin/audit")
+                        .queryParam("cursor", "not-a-cursor")
+                        .build())
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+    }
+
+    private JsonNode auditPage(Account admin, @Nullable String cursor) {
+        String body = webTestClient
+                .get()
+                .uri(builder -> {
+                    builder.path("/admin/audit").queryParam("size", "2");
+                    return (cursor == null ? builder : builder.queryParam("cursor", cursor)).build();
+                })
+                .headers(h -> h.setBearerAuth(tokenFor(admin)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+        return new JsonMapper().readTree(body);
     }
 
     @Test

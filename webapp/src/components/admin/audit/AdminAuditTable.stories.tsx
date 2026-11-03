@@ -67,7 +67,6 @@ function loaded(rows: AuthEventView[]) {
 	return {
 		status: "ready",
 		rows,
-		total: rows.length,
 		hasMore: false,
 		isLoadingMore: false,
 		onLoadMore: fn(),

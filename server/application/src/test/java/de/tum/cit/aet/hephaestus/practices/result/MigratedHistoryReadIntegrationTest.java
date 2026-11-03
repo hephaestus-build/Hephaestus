@@ -630,9 +630,9 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                     .expectStatus()
                     .isOk()
                     .expectBody()
-                    .jsonPath("$.entries[0].id")
+                    .jsonPath("$.content[0].id")
                     .isEqualTo(message.toString())
-                    .jsonPath("$.entries[0].text")
+                    .jsonPath("$.content[0].text")
                     .isEqualTo(body);
             get(operator, "/mentor/entries/" + message + "/thread")
                     .expectStatus()

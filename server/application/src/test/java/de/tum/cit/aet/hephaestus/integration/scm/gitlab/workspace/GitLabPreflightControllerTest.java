@@ -32,7 +32,7 @@ class GitLabPreflightControllerTest {
 
         assertForbidden(() -> controller.gitLabPreflight(request));
         assertForbidden(() -> controller.listGitLabGroups(request));
-        assertForbidden(() -> controller.listGitLabProjects(request, 1, null));
+        assertForbidden(() -> controller.listGitLabProjects(request, null, null));
         verifyNoInteractions(service);
     }
 

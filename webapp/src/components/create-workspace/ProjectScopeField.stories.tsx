@@ -31,10 +31,10 @@ const meta = {
 		onScopeChange: fn(),
 		selectedIds: [11],
 		onSelectedChange: fn(),
-		// The server names the page that follows; it need not be page 2.
-		choices: { status: "ready", projects: PROJECTS, page: 1, nextPage: 3, search: "" },
+		choices: { status: "ready", projects: PROJECTS, page: 1, hasNextPage: true, search: "" },
 		onSearch: fn(),
-		onPageChange: fn(),
+		onPreviousPage: fn(),
+		onNextPage: fn(),
 	},
 	decorators: [
 		(Story) => (
@@ -119,7 +119,7 @@ export const LoadError: Story = {
 export const Empty: Story = {
 	args: {
 		selectedIds: [],
-		choices: { status: "ready", projects: [], page: 1, nextPage: undefined, search: "" },
+		choices: { status: "ready", projects: [], page: 1, hasNextPage: false, search: "" },
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No projects to show on this page.")).toBeVisible();
@@ -134,7 +134,7 @@ export const Empty: Story = {
 export const EmptyIntermediatePage: Story = {
 	args: {
 		selectedIds: [],
-		choices: { status: "ready", projects: [], page: 2, nextPage: 3, search: "" },
+		choices: { status: "ready", projects: [], page: 2, hasNextPage: true, search: "" },
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No projects to show on this page.")).toBeVisible();
@@ -149,7 +149,7 @@ export const EmptyIntermediatePage: Story = {
 /** This search page has nothing to show. */
 export const NoMatch: Story = {
 	args: {
-		choices: { status: "ready", projects: [], page: 1, nextPage: undefined, search: "zzz" },
+		choices: { status: "ready", projects: [], page: 1, hasNextPage: false, search: "zzz" },
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No matching projects on this page.")).toBeVisible();
@@ -170,7 +170,7 @@ export const Phone: Story = {
 				...PROJECTS,
 			],
 			page: 2,
-			nextPage: 3,
+			hasNextPage: true,
 			search: "",
 		},
 	},

@@ -11,7 +11,7 @@ import type { PublicPersonActivityState } from "@/components/activity/public-per
 import { panelState } from "@/components/common/panel-state";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
-import { loadedPages } from "@/runtime/tanstack-query/spring-page";
+import { loadedPages } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 interface PublicPersonScope {
@@ -59,7 +59,7 @@ export function usePublicPersonWork({
 	const query = useInfiniteQuery({
 		...options,
 		initialPageParam: { path, query: { cursor: undefined } },
-		getNextPageParam: (last) => last.nextCursor ?? undefined,
+		getNextPageParam: (last) => last.nextCursor,
 		enabled: enabled && login !== undefined,
 		gcTime: 0,
 	});

@@ -29,14 +29,10 @@ function recordRequests() {
 	const urls = { reviews: [] as URL[], feedback: [] as URL[] };
 	const emptyPage = {
 		content: [],
-		number: 0,
+		page: 0,
 		size: 25,
 		totalElements: 0,
 		totalPages: 0,
-		numberOfElements: 0,
-		first: true,
-		last: true,
-		empty: true,
 	};
 	server.use(
 		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
@@ -46,8 +42,6 @@ function recordRequests() {
 				content: [{ ...fixtureReview, id: REVIEW }],
 				totalElements: 1,
 				totalPages: 1,
-				numberOfElements: 1,
-				empty: false,
 			});
 		}),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", ({ request }) => {

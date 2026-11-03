@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -51,6 +52,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 
@@ -136,10 +138,10 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 message,
                 new IllegalStateException("wrapper", new PayloadParsingException("private-canary")));
         service.capture(workspace.getId(), message, new PayloadParsingException("private-canary"));
-        var rows = service.listWorkspace(workspace.getId(), 0);
+        var rows = service.listWorkspace(workspace.getId(), null, 100).content();
         assertThat(rows).hasSize(1);
         assertThat(rows.getFirst().errorClass()).isEqualTo(PayloadParsingException.class.getName());
-        assertThat(service.listWorkspace(other.getId(), 0)).isEmpty();
+        assertThat(service.listWorkspace(other.getId(), null, 100).content()).isEmpty();
         client.get()
                 .uri("/workspaces/deadletters-a/integrations/dead-letters")
                 .headers(TestAuthUtils.withCurrentUser())
@@ -147,11 +149,11 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$[0].id")
+                .jsonPath("$.content[0].id")
                 .isEqualTo(rows.getFirst().id())
-                .jsonPath("$[0].payload")
+                .jsonPath("$.content[0].payload")
                 .doesNotExist()
-                .jsonPath("$[0].subject")
+                .jsonPath("$.content[0].subject")
                 .doesNotExist();
         client.post()
                 .uri(
@@ -174,13 +176,34 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldReadRecordsForwardOnceWithACursor() throws Exception {
+        for (String durable : List.of("page-a", "page-b", "page-c")) {
+            service.capture(
+                    workspace.getId(),
+                    delivery("github.acme.repo.issues", "not-json", durable),
+                    new PayloadParsingException("private-canary"));
+        }
+
+        var first = service.listWorkspace(workspace.getId(), null, 2);
+        assertThat(first.content()).hasSize(2);
+        var second = service.listWorkspace(workspace.getId(), first.nextCursor(), 2);
+        assertThat(second.content()).hasSize(1);
+        assertThat(second.nextCursor()).isNull();
+        assertThat(second.content().getFirst().id())
+                .isGreaterThan(first.content().getLast().id());
+
+        assertThatThrownBy(() -> service.listWorkspace(workspace.getId(), "not-a-cursor", 2))
+                .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
     @WithAdminUser
     void shouldKeepFailedReplayPending() throws Exception {
         service.capture(
                 workspace.getId(),
                 delivery("github.acme.repo.issues", "not-json", "scope-b"),
                 new PayloadParsingException("invalid JSON"));
-        var row = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         client.post()
                 .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
                 .headers(TestAuthUtils.withCurrentUser())
@@ -188,7 +211,10 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody(Void.class);
-        assertThat(service.listWorkspace(workspace.getId(), 0).getFirst().replayedAt())
+        assertThat(service.listWorkspace(workspace.getId(), null, 100)
+                        .content()
+                        .getFirst()
+                        .replayedAt())
                 .isNull();
     }
 
@@ -200,7 +226,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 workspace.getId(),
                 delivery("github.acme.repo.issues", "{\"action\":\"ignored\"}", "scope-c"),
                 new PayloadParsingException("older parser"));
-        var row = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         for (int call = 0; call < 2; call++) {
             client.post()
                     .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
@@ -212,7 +238,10 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .jsonPath("$.replayedAt")
                     .exists();
         }
-        assertThat(service.listWorkspace(workspace.getId(), 0).getFirst().replayedAt())
+        assertThat(service.listWorkspace(workspace.getId(), null, 100)
+                        .content()
+                        .getFirst()
+                        .replayedAt())
                 .isNotNull();
     }
 
@@ -223,8 +252,9 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 null,
                 delivery("github.installation.123.installation", "not-json", "installation"),
                 new PayloadParsingException("invalid JSON"));
-        var row = service.listInstallation(0).getFirst();
-        assertThat(service.listWorkspace(workspace.getId(), 0)).isEmpty();
+        var row = service.listInstallation(null, 100).content().getFirst();
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .isEmpty();
         client.get()
                 .uri("/admin/integration/dead-letters")
                 .headers(TestAuthUtils.withCurrentUser())
@@ -232,7 +262,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$[0].id")
+                .jsonPath("$.content[0].id")
                 .isEqualTo(row.id());
         client.post()
                 .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
@@ -274,14 +304,16 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
         Message lostTerm = spy(first);
         doThrow(new IllegalStateException("connection closed")).when(lostTerm).term();
         poison.handleFailure(workspace.getId(), lostTerm, new PayloadParsingException("bad"));
-        assertThat(service.listWorkspace(workspace.getId(), 0)).hasSize(1);
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .hasSize(1);
         Message redelivery = context.next(Duration.ofSeconds(5));
         assertThat(redelivery).isNotNull();
         if (redelivery == null) throw new AssertionError("Missing redelivery");
         assertThat(redelivery.metaData().streamSequence())
                 .isEqualTo(first.metaData().streamSequence());
         poison.handleFailure(workspace.getId(), redelivery, new PayloadParsingException("bad"));
-        assertThat(service.listWorkspace(workspace.getId(), 0)).hasSize(1);
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .hasSize(1);
         Message next = context.next(Duration.ofSeconds(5));
         assertThat(next).isNotNull();
         if (next == null) throw new AssertionError("Next sequence was blocked");
@@ -297,7 +329,8 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
         poison.handleFailure(Long.MAX_VALUE, first, new PayloadParsingException("bad"));
         verify(first, never()).term();
         verify(first).nakWithDelay(any(Duration.class));
-        assertThat(service.listWorkspace(workspace.getId(), 0)).isEmpty();
+        assertThat(service.listWorkspace(workspace.getId(), null, 100).content())
+                .isEmpty();
         Message redelivery =
                 broker.getStreamContext(stream).getConsumerContext("capture").next(Duration.ofSeconds(5));
         assertThat(redelivery).isNotNull();
@@ -312,7 +345,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldReturnGoneWhenTheOriginalBrokerEventHasExpired() throws Exception {
         Message message = delivery("github.acme.repo.issues", "{}", "expired");
         service.capture(workspace.getId(), message, new PayloadParsingException("old"));
-        var row = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         broker.jetStreamManagement().deleteMessage(stream, message.metaData().streamSequence());
         client.post()
                 .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
@@ -321,7 +354,10 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isEqualTo(410)
                 .expectBody(Void.class);
-        assertThat(service.listWorkspace(workspace.getId(), 0).getFirst().replayedAt())
+        assertThat(service.listWorkspace(workspace.getId(), null, 100)
+                        .content()
+                        .getFirst()
+                        .replayedAt())
                 .isNull();
     }
 
@@ -333,7 +369,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 workspace.getId(),
                 delivery("github.acme.repo.issues", "{}", "rollback"),
                 new PayloadParsingException("old"));
-        var row = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         IntegrationMessageDispatcher original =
                 (IntegrationMessageDispatcher) ReflectionTestUtils.getField(consumer, "dispatcher");
         var dispatcher = mock(IntegrationMessageDispatcher.class);
@@ -361,7 +397,10 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                             .orElseThrow()
                             .getDisplayName())
                     .isEqualTo("Events A");
-            assertThat(service.listWorkspace(workspace.getId(), 0).getFirst().replayedAt())
+            assertThat(service.listWorkspace(workspace.getId(), null, 100)
+                            .content()
+                            .getFirst()
+                            .replayedAt())
                     .isNull();
         } finally {
             ReflectionTestUtils.setField(consumer, "dispatcher", original);
@@ -375,7 +414,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 workspace.getId(),
                 delivery("github.acme.repo.issues", "{\"action\":\"ignored\"}", "unsubscribed"),
                 new PayloadParsingException("old"));
-        var row = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         ReflectionTestUtils.setField(
                 consumer, "subscriptionProvider", (NatsSubscriptionProvider) scope -> Optional.empty());
         client.post()
@@ -385,7 +424,10 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isEqualTo(409)
                 .expectBody(Void.class);
-        assertThat(service.listWorkspace(workspace.getId(), 0).getFirst().replayedAt())
+        assertThat(service.listWorkspace(workspace.getId(), null, 100)
+                        .content()
+                        .getFirst()
+                        .replayedAt())
                 .isNull();
     }
 
@@ -396,7 +438,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 workspace.getId(),
                 delivery("github.acme.repo.issues", "{\"action\":\"ignored\"}", "privacy"),
                 new PayloadParsingException("old"));
-        var row = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var row = service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         client.post()
                 .uri("/workspaces/deadletters-a/integrations/dead-letters/{id}/replays", row.id())
                 .headers(TestAuthUtils.withCurrentUser())
@@ -404,7 +446,8 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectStatus()
                 .isOk()
                 .expectBody(Void.class);
-        var replayed = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var replayed =
+                service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         Long actor = Objects.requireNonNull(replayed.replayedBy());
         var scope = new PersonScope(actor, List.of(), List.of());
         var store = privacy.contributors().stream()
@@ -419,7 +462,8 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(exported.getFirst().has("payload")).isFalse();
         transactions.executeWithoutResult(
                 status -> assertThat(store.erase(selected, scope)).isEqualTo(1));
-        var erased = service.listWorkspace(workspace.getId(), 0).getFirst();
+        var erased =
+                service.listWorkspace(workspace.getId(), null, 100).content().getFirst();
         assertThat(erased.replayedBy()).isNull();
         assertThat(erased.replayedAt()).isEqualTo(replayed.replayedAt());
     }
@@ -431,7 +475,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                 null,
                 delivery("github.?.?.installation", "{\"action\":\"ignored\"}", "installation-replay"),
                 new PayloadParsingException("old"));
-        var row = service.listInstallation(0).getFirst();
+        var row = service.listInstallation(null, 100).content().getFirst();
         for (int attempt = 0; attempt < 2; attempt++) {
             client.post()
                     .uri("/admin/integration/dead-letters/{id}/replays", row.id())
@@ -441,7 +485,7 @@ class ConsumerDeadLetterIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isOk()
                     .expectBody(Void.class);
         }
-        var replayed = service.listInstallation(0).getFirst();
+        var replayed = service.listInstallation(null, 100).content().getFirst();
         assertThat(replayed.replayedAt()).isNotNull();
         assertThat(authEvents.findAll().stream()
                         .filter(event -> event.getEventType() == AuthEvent.EventType.INSTALLATION_EVENT_REPLAYED

@@ -2,9 +2,10 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkPageDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -46,7 +47,7 @@ class PublicActivityService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public Published<PublicActivityWorkPageDTO> work(
+    public Published<CursorPageDTO<PublicActivityWorkDTO>> work(
             String slug,
             String login,
             ActivityPeopleRangeParams range,

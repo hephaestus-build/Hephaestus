@@ -164,6 +164,11 @@ Never write cleanup that another test depends on having run.
   that component must also appear in the generated schema's `required` list. A primitive takes
   `@Schema(requiredMode = RequiredMode.REQUIRED)` instead, since a nullness annotation on it fails the
   build. A component the API may omit is `@Nullable`, never bare.
+- A paginated response is one of two DTOs in `core/web`, and `vp run gate:api-pagination` refuses any other shape.
+  `CursorPageDTO` serves a long append-only list: `{content, nextCursor}`, read with `cursor` and `size`.
+  `OffsetPageDTO` serves a list that a person pages through by number or that shows its total: `{content, page, size, totalElements, totalPages}`, read with `page` and `size`.
+  A cursor page does not count its list. If a screen shows the total, add a count read that returns `TotalCountDTO`.
+  A resource with one page of children holds the page in one property.
 - **Never wrap a DTO component in `Optional<>`.** springdoc unwraps it to the value type but still marks it required.
   Thus, the generated TypeScript declares it non-optional.
   Its response transformer converts it unconditionally.

@@ -7,7 +7,7 @@ import { listWorkspaceConfigAuditEventsResponseTransformer } from '../transforme
 import type { ListWorkspaceConfigAuditEventsData, ListWorkspaceConfigAuditEventsResponses } from '../types.gen.js';
 
 /**
- * List this workspace's admin configuration changes (paged, newest first)
+ * List this workspace's admin configuration changes (newest first)
  */
 export const listWorkspaceConfigAuditEvents = <ThrowOnError extends boolean = false>(options: Options<ListWorkspaceConfigAuditEventsData, ThrowOnError>): RequestResult<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListWorkspaceConfigAuditEventsResponses, unknown, ThrowOnError>({
     responseTransformer: listWorkspaceConfigAuditEventsResponseTransformer,

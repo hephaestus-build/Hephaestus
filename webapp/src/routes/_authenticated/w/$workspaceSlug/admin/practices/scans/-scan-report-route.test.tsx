@@ -61,8 +61,6 @@ function serveReport({ scan, report = (current) => wireReport(current), problems
 				const all = problems?.(url) ?? PROBLEMS;
 				return HttpResponse.json({
 					content: state === null ? all : all.filter((entry) => entry.baselineState === state),
-					nextCursor: null,
-					hasNext: false,
 				});
 			},
 		),

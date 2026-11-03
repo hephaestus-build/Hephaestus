@@ -21,7 +21,7 @@ import { useReviewScopeSources } from "@/hooks/use-review-scope-sources";
 import { useScopeRecordFilter } from "@/hooks/use-scope-record-filter";
 import { useSearchState } from "@/lib/search-params";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
-import { loadedPages, springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { loadedPages, offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 import { RequestOutcome } from "./-PracticeReviewDrawer";
@@ -46,7 +46,7 @@ function ReviewsRoute() {
 	});
 	const reviewsResult = useInfiniteQuery({
 		...listOptions,
-		...springPageParams,
+		...offsetPageParams,
 		refetchInterval: (query) =>
 			loadedPages(query.state.data).some((page) =>
 				page.content.some((review) => isActiveReview(review.status)),

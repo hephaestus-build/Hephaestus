@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
@@ -12,7 +13,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SelectedRepositoryVerifier
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabProjectDTO;
-import de.tum.cit.aet.hephaestus.workspace.dto.GitLabProjectPageDTO;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -213,11 +213,11 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
      * @throws ResponseStatusException 400 without a group, 422 when GitLab refuses the token or the group, 502 when
      *     GitLab cannot answer or does not say whether more pages follow
      */
-    public GitLabProjectPageDTO listGroupProjects(
+    public CursorPageDTO<GitLabProjectDTO> listGroupProjects(
             String token,
             @Nullable String serverUrl,
             @Nullable String groupFullPath,
-            int page,
+            @Nullable String cursor,
             @Nullable String search) {
         String resolvedUrl = instance.require(serverUrl);
         if (groupFullPath == null || groupFullPath.isBlank()) {
@@ -227,6 +227,7 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
         Map<String, Object> variables = new HashMap<>();
         variables.put("group", group);
         variables.put("perPage", DEFAULT_PAGE_SIZE);
+        int page = pageOf(cursor);
         variables.put("page", page);
         String uri = resolvedUrl + GROUP_PROJECTS_PATH;
         if (search != null && !search.isBlank()) {
@@ -295,7 +296,27 @@ public class GitLabPreflightService implements SelectedRepositoryVerifier {
             projects.add(new GitLabProjectDTO(
                     id, name != null && !name.isBlank() ? name : fullPath, fullPath, item.webUrl()));
         }
-        return new GitLabProjectPageDTO(projects, nextPage);
+        return new CursorPageDTO<>(projects, nextPage == null ? null : nextPage.toString());
+    }
+
+    /** GitLab numbers its pages from 1, and that number is the cursor. */
+    private static int pageOf(@Nullable String cursor) {
+        if (cursor == null) {
+            return 1;
+        }
+        try {
+            int page = Integer.parseInt(cursor);
+            if (page >= 1) {
+                return page;
+            }
+        } catch (NumberFormatException e) {
+            throw invalidCursor(e);
+        }
+        throw invalidCursor(null);
+    }
+
+    private static ResponseStatusException invalidCursor(@Nullable Throwable cause) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "The cursor is not valid.", cause);
     }
 
     /**

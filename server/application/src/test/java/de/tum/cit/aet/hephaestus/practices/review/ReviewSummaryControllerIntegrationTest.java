@@ -364,9 +364,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.content[0].id")
                 .isEqualTo(older.getReviewId().toString())
                 .jsonPath("$.content[1].id")
-                .isEqualTo(newer.getReviewId().toString())
-                .jsonPath("$.sort.sorted")
-                .isEqualTo(true);
+                .isEqualTo(newer.getReviewId().toString());
     }
 
     @Test

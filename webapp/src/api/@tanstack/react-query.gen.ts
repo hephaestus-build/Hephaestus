@@ -73,6 +73,8 @@ export { acknowledgeCatalogPracticeMutation } from './react-query/acknowledgeCat
 export { addLabelToTeamMutation } from './react-query/addLabelToTeam.gen.js';
 export { addRepositoryToMonitorMutation } from './react-query/addRepositoryToMonitor.gen.js';
 export { adminCheckReleaseMutation } from './react-query/adminCheckRelease.gen.js';
+export { adminCountAuthEventsOptions, adminCountAuthEventsQueryKey } from './react-query/adminCountAuthEvents.gen.js';
+export { adminCountConfigAuditEventsOptions, adminCountConfigAuditEventsQueryKey } from './react-query/adminCountConfigAuditEvents.gen.js';
 export { adminCreateLlmCallPoolMutation } from './react-query/adminCreateLlmCallPool.gen.js';
 export { adminCreateLlmConnectionMutation } from './react-query/adminCreateLlmConnection.gen.js';
 export { adminCreateLlmModelMutation } from './react-query/adminCreateLlmModel.gen.js';
@@ -137,6 +139,7 @@ export { completeFirstLoginConsentMutation } from './react-query/completeFirstLo
 export { configureAgentMutation } from './react-query/configureAgent.gen.js';
 export { countReviewFeedbackByLocationOptions, countReviewFeedbackByLocationQueryKey } from './react-query/countReviewFeedbackByLocation.gen.js';
 export { countReviewFeedbackByReasonOptions, countReviewFeedbackByReasonQueryKey } from './react-query/countReviewFeedbackByReason.gen.js';
+export { countWorkspaceConfigAuditEventsOptions, countWorkspaceConfigAuditEventsQueryKey } from './react-query/countWorkspaceConfigAuditEvents.gen.js';
 export { createCatalogGroupMutation } from './react-query/createCatalogGroup.gen.js';
 export { createCatalogPracticeMutation } from './react-query/createCatalogPractice.gen.js';
 export { createFeedbackDecisionMutation } from './react-query/createFeedbackDecision.gen.js';

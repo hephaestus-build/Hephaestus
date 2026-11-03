@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -40,13 +40,13 @@ public class ResultController {
             summary = "List results for current developer",
             description = "Paginated results for the authenticated developer with optional filters")
     @ApiResponse(responseCode = "200", description = "Paginated results returned")
-    public ResponseEntity<PageResponseDTO<ResultListDTO>> listResults(
+    public ResponseEntity<OffsetPageDTO<ResultListDTO>> listResults(
             WorkspaceContext workspaceContext, @Valid @ParameterObject ResultFeedFilterParams filter) {
         Pageable pageable = filter.pageable();
 
         Page<ResultListDTO> practiceResults =
                 resultQueryService.listOwnResults(workspaceContext.id(), filter.toQuery(), pageable);
-        return ResponseEntity.ok(PageResponseDTO.from(practiceResults));
+        return ResponseEntity.ok(OffsetPageDTO.from(practiceResults));
     }
 
     @GetMapping("/{resultId}")

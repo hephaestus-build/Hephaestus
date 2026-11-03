@@ -30,21 +30,19 @@ function change(id: number, operator: string) {
 function page(number: number, operator: string) {
 	return {
 		content: [change(51 + number, operator)],
-		number,
-		size: 1,
-		totalElements: 2,
-		last: number === 1,
+		...(number === 0 ? { nextCursor: "after-first" } : {}),
 	};
 }
 
-/** Answers the instance settings log in order, recording which page each read asked for. */
+/** Answers the instance settings log in order, recording which cursor each read named. */
 function serveSettingsChanges(answers: readonly (ReturnType<typeof page> | { status: number })[]) {
 	const asked: (string | null)[] = [];
 	server.use(
+		http.get("*/admin/config-audit/count", () => HttpResponse.json({ total: 2 })),
 		http.get("*/admin/config-audit", ({ request }) => {
 			const answer = answers[asked.length];
 			assert(answer, "Settings audit read exceeded the prepared responses");
-			asked.push(new URL(request.url).searchParams.get("page"));
+			asked.push(new URL(request.url).searchParams.get("cursor"));
 			return "status" in answer
 				? HttpResponse.json({ status: answer.status }, { status: answer.status })
 				: HttpResponse.json(answer);
@@ -63,7 +61,7 @@ it("keeps instance settings changes when the next page fails, and asks for that 
 		http.get("*/admin/workspaces", () => HttpResponse.json([])),
 		http.get("*/admin/audit", () => {
 			accessReads += 1;
-			return HttpResponse.json({ content: [], number: 0, totalElements: 0, last: true });
+			return HttpResponse.json({ content: [] });
 		}),
 	);
 	const asked = serveSettingsChanges([
@@ -85,7 +83,7 @@ it("keeps instance settings changes when the next page fails, and asks for that 
 	expect(within(table).getAllByRole("button", { name: /^View details for/u })).toHaveLength(2);
 	expect(screen.queryByText("We could not load more changes.")).toBeNull();
 	expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
-	expect(asked).toStrictEqual(["0", "1", "1"]);
+	expect(asked).toStrictEqual([null, "after-first", "after-first"]);
 	// The Access tab is not open, so its log is never read.
 	expect(accessReads).toBe(0);
 });

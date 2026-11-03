@@ -31,14 +31,14 @@ export const listConsumerDeadLettersInfiniteQueryKey = (options: Options<ListCon
  * List this workspace's dead letters
  */
 export const listConsumerDeadLettersInfiniteOptions = (options: Options<ListConsumerDeadLettersData>) => {
-    const opts = infiniteQueryOptions<ListConsumerDeadLettersResponse, DefaultError, InfiniteData<ListConsumerDeadLettersResponse>, QueryKey<Options<ListConsumerDeadLettersData>>, number | Pick<QueryKey<Options<ListConsumerDeadLettersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    const opts = infiniteQueryOptions<ListConsumerDeadLettersResponse, DefaultError, InfiniteData<ListConsumerDeadLettersResponse>, QueryKey<Options<ListConsumerDeadLettersData>>, string | Pick<QueryKey<Options<ListConsumerDeadLettersData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
     // @ts-ignore
     {
         queryFn: async ({ pageParam, queryKey, signal }) => {
             // @ts-ignore
             const page: Pick<QueryKey<Options<ListConsumerDeadLettersData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
                 query: {
-                    after: pageParam
+                    cursor: pageParam
                 }
             };
             const params = createInfiniteParams(queryKey, page);

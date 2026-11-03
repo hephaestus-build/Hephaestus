@@ -16,13 +16,13 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityTeamDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWeekDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO.PublicActivityRepositoryDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkPageDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkPageDTO.PublicActivityWorkDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkPageDTO.PublicActivityWorkSummaryDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO.PublicActivityWorkSummaryDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.WorkItemDTO.WorkItemType;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State;
 import java.time.Clock;
 import java.util.ArrayDeque;
@@ -212,7 +212,7 @@ public class ActivityPeopleService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
-    public PublicActivityWorkPageDTO publicPersonWork(
+    public CursorPageDTO<PublicActivityWorkDTO> publicPersonWork(
             long workspace,
             String login,
             ActivityPeopleRangeParams params,
@@ -239,7 +239,7 @@ public class ActivityPeopleService {
                 page.position(range));
         boolean hasNext = groups.size() > page.pageSize();
         var content = hasNext ? groups.subList(0, page.pageSize()) : groups;
-        return new PublicActivityWorkPageDTO(
+        return new CursorPageDTO<>(
                 content.stream()
                         .map(group -> new PublicActivityWorkDTO(
                                 group.getId(),

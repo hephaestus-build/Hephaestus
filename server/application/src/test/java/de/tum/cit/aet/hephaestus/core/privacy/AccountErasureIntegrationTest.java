@@ -1369,7 +1369,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                                 Objects.requireNonNull(accountFor(other).getId()),
                                 null,
                                 MentorTimeline.MAX_PAGE)
-                        .entries())
+                        .content())
                 .filteredOn(entry -> entry.id().equals(linkedAnswer))
                 .singleElement()
                 .satisfies(entry -> assertThat(entry.links()).isNotEmpty());

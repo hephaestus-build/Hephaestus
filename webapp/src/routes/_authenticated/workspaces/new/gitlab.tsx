@@ -265,17 +265,25 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	// A POST, so the token travels in the body and never in a URL or a cache key.
 	const listProjects = useMutation(listGitLabProjectsMutation());
 
-	const readProjects = (page: number, search: string) => {
+	// The cursors of the pages from the second to the one shown. GitLab gives no total, so the wizard
+	// remembers the way back.
+	const [pageTrail, setPageTrail] = useState<readonly string[]>([]);
+	const readProjects = (trail: readonly string[], search: string) => {
 		if (!state.selectedGroup) {
 			return;
 		}
+		setPageTrail(trail);
+		const cursor = trail.at(-1);
 		listProjects.mutate({
 			body: {
 				personalAccessToken: state.personalAccessToken,
 				serverUrl: state.serverUrl,
 				groupFullPath: state.selectedGroup.fullPath,
 			},
-			query: hasText(search) ? { page, search } : { page },
+			query: {
+				...(cursor === undefined ? {} : { cursor }),
+				...(hasText(search) ? { search } : {}),
+			},
 		});
 	};
 
@@ -295,9 +303,9 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	} else if (projectsRead !== undefined && listProjects.isSuccess) {
 		projectChoices = {
 			status: "ready",
-			projects: listProjects.data.projects,
-			page: projectsRead.query?.page ?? 1,
-			nextPage: listProjects.data.nextPage,
+			projects: listProjects.data.content,
+			page: pageTrail.length + 1,
+			hasNextPage: listProjects.data.nextCursor !== undefined,
 			search: projectsRead.query?.search ?? "",
 		};
 	}
@@ -441,7 +449,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 										dispatch({ type: "SET_PROJECT_SCOPE", scope });
 										// The list is read on first need; all projects needs none.
 										if (scope === "SELECTED" && projectsRead === undefined) {
-											readProjects(1, "");
+											readProjects([], "");
 										}
 									}}
 									selectedIds={state.selectedProjectIds}
@@ -449,8 +457,18 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 										dispatch({ type: "SET_PROJECT_SELECTED", projectId, selected })
 									}
 									choices={projectChoices}
-									onSearch={(search) => readProjects(1, search)}
-									onPageChange={(page) => readProjects(page, projectsRead?.query?.search ?? "")}
+									onSearch={(search) => readProjects([], search)}
+									onPreviousPage={() =>
+										readProjects(pageTrail.slice(0, -1), projectsRead?.query?.search ?? "")
+									}
+									onNextPage={() => {
+										if (listProjects.data?.nextCursor !== undefined) {
+											readProjects(
+												[...pageTrail, listProjects.data.nextCursor],
+												projectsRead?.query?.search ?? "",
+											);
+										}
+									}}
 								/>
 							}
 						/>

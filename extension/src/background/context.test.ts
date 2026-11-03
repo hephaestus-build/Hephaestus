@@ -6,7 +6,7 @@ import type {
 	DeliveredWorkFeedbackItem,
 	ItemRef,
 	OwnItemTrace,
-	PageResponseDtoResultList,
+	OffsetPageDtoResultList,
 	ResultList,
 	ReviewContext as ReviewContextDTO,
 	Workspace,
@@ -353,20 +353,13 @@ function ownRow(overrides: Partial<ResultList> = {}): ResultList {
 function resultResponse(
 	content: ResultList[],
 	totalElements = content.length,
-): PageResponseDtoResultList {
-	const sort = { empty: false, sorted: true, unsorted: false };
+): OffsetPageDtoResultList {
 	return {
 		content,
 		totalElements,
 		totalPages: Math.ceil(totalElements / 10),
-		number: 0,
+		page: 0,
 		size: 10,
-		numberOfElements: content.length,
-		first: true,
-		last: totalElements <= 10,
-		empty: content.length === 0,
-		sort,
-		pageable: { offset: 0, pageNumber: 0, pageSize: 10, paged: true, unpaged: false, sort },
 	};
 }
 

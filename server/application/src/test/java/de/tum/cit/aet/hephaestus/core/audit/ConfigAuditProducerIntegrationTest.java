@@ -149,7 +149,7 @@ class ConfigAuditProducerIntegrationTest extends AbstractWorkspaceIntegrationTes
     private List<ConfigAuditEvent> rowsFor(Workspace workspace, ConfigAuditEntityType entityType) {
         entityManager.flush();
         var filter = new ConfigAuditFilter(List.of(entityType), null, null, null, null, null, null);
-        return repository.findForWorkspace(workspace.getId(), filter, PageRequest.of(0, 50)).getContent().stream()
+        return repository.findForWorkspace(workspace.getId(), filter, null, null, PageRequest.of(0, 50)).stream()
                 .sorted(Comparator.comparing(ConfigAuditEvent::getId))
                 .toList();
     }

@@ -1,18 +1,18 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
-import de.tum.cit.aet.hephaestus.workspace.dto.GitLabProjectPageDTO;
+import de.tum.cit.aet.hephaestus.workspace.dto.GitLabProjectDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -84,14 +84,13 @@ public class GitLabPreflightController {
     @Operation(summary = "List one page of the projects in a GitLab group and its subgroups that a PAT can read")
     @ApiResponse(
             responseCode = "200",
-            description = "One page of projects; nextPage is absent on the last page",
-            content = @Content(schema = @Schema(implementation = GitLabProjectPageDTO.class)))
-    public ResponseEntity<GitLabProjectPageDTO> listGitLabProjects(
+            description = "One page of projects, ordered by path; nextCursor is absent on the last page")
+    public ResponseEntity<CursorPageDTO<GitLabProjectDTO>> listGitLabProjects(
             @Valid @RequestBody GitLabPreflightRequestDTO request,
-            @RequestParam(defaultValue = "1") @Positive int page,
+            @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Size(max = 255) @Nullable String search) {
         requireWorkspaceCreator();
         return ResponseEntity.ok(gitLabPreflightService.listGroupProjects(
-                request.personalAccessToken(), request.serverUrl(), request.groupFullPath(), page, search));
+                request.personalAccessToken(), request.serverUrl(), request.groupFullPath(), cursor, search));
     }
 }

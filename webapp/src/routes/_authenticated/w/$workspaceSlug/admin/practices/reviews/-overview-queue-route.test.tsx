@@ -151,14 +151,10 @@ function serveQueueAndList() {
 				.slice(0, size);
 			return HttpResponse.json({
 				content,
-				number: 0,
+				page: 0,
 				size,
 				totalElements: content.length,
 				totalPages: 1,
-				numberOfElements: content.length,
-				first: true,
-				last: true,
-				empty: content.length === 0,
 			});
 		}),
 		...reviewHandlers(),
