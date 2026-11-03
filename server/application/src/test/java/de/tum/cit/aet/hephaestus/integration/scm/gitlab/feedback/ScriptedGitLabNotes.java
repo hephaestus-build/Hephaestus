@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.testconfig.ScriptedCommentThreads;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient.Request;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +38,8 @@ public final class ScriptedGitLabNotes {
     private final SummaryWriter channel;
     private boolean rejectPositions;
     private final List<Map<String, Object>> drafts = new ArrayList<>();
+    // GitLab CE 19.5 answers a draft created without a position with this position, not with null.
+    private static final Map<String, Object> UNPOSITIONED = unpositioned();
     private int draftCalls;
     private int failDraft;
     private boolean losePublish;
@@ -170,14 +173,14 @@ public final class ScriptedGitLabNotes {
             draft.put("author_id", 1);
             draft.put("note", fields.get("note"));
             draft.put("discussion_id", null);
-            draft.put("position", fields.get("position"));
+            draft.put("position", fields.get("position") == null ? UNPOSITIONED : fields.get("position"));
             drafts.add(draft);
             return ScriptedGitLabRest.respond(201, draft);
         }
         if (!endpoint.equals("draft_notes/bulk_publish")) return Mono.error(new IllegalArgumentException(endpoint));
         bulkPublications++;
         for (var draft : drafts) {
-            Object position = draft.get("position");
+            Object position = Objects.equals(draft.get("position"), UNPOSITIONED) ? null : draft.get("position");
             String id = threads.append(
                     parent,
                     position == null ? "gid://gitlab/DiscussionNote/" : "gid://gitlab/DiffNote/",
@@ -189,6 +192,15 @@ public final class ScriptedGitLabNotes {
         return losePublish
                 ? Mono.error(new IllegalStateException("Response lost after bulk publication"))
                 : ScriptedGitLabRest.respond(204, "");
+    }
+
+    private static Map<String, Object> unpositioned() {
+        var position = new LinkedHashMap<String, Object>();
+        for (String field : List.of("base_sha", "start_sha", "head_sha", "old_path", "new_path"))
+            position.put(field, null);
+        position.put("position_type", "text");
+        for (String field : List.of("old_line", "new_line", "line_range")) position.put(field, null);
+        return Collections.unmodifiableMap(position);
     }
 
     private Map<String, Object> discussion(String id, String body) {
