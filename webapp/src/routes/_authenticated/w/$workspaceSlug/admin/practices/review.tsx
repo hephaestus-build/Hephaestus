@@ -6,7 +6,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
 	createReviewBatchMutation,
 	createReviewScheduleMutation,
@@ -15,7 +15,7 @@ import {
 	getPracticeReviewSettingsOptions,
 	getWorkspaceOptions,
 	listAgentsOptions,
-	listMembershipsOptions,
+	listMembershipsInfiniteOptions,
 	listPracticeGroupsOptions,
 	listPracticesOptions,
 	listReviewBatchesOptions,
@@ -72,7 +72,7 @@ import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { toast } from "@/lib/toast";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
-import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
+import { loadedPages, offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/review")({
@@ -314,9 +314,14 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 		repositoriesQuery.isError,
 		repositoriesQuery.error,
 	);
-	const membersQuery = useQuery(
-		listMembershipsOptions({ path: { workspaceSlug }, query: { size: PICKER_PAGE_SIZE } }),
-	);
+	const membersQuery = useInfiniteQuery({
+		...listMembershipsInfiniteOptions({
+			path: { workspaceSlug },
+			query: { size: PICKER_PAGE_SIZE },
+		}),
+		...offsetPageParams,
+	});
+	useEveryPage(membersQuery);
 	const scopePreview = useMutation(previewReviewScopeMutation());
 
 	const updatePracticeReviewSettings = usePracticeReviewSettingsMutation(workspaceSlug, {
@@ -403,7 +408,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 	}
 
 	let peopleOptions: PeopleScopeOptions;
-	if (membersQuery.isPending) {
+	if (membersQuery.isPending || membersQuery.hasNextPage) {
 		peopleOptions = { status: "loading" };
 	} else if (membersQuery.isError) {
 		peopleOptions = {
@@ -416,7 +421,8 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 	} else {
 		peopleOptions = {
 			status: "ready",
-			options: membersQuery.data.content
+			options: loadedPages(membersQuery.data)
+				.flatMap((page) => page.content)
 				.filter((member) => member.eligibleForPracticeReview)
 				.map((member) => ({
 					value: member.account.id,
@@ -533,11 +539,26 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 
 const ACTIVE_BATCH_POLL_MS = 15_000;
 
+/** A count of the chosen people needs all of a workspace's members, so this list reads to the end by itself. */
+function useEveryPage(query: {
+	hasNextPage: boolean;
+	isFetchingNextPage: boolean;
+	isError: boolean;
+	fetchNextPage: () => unknown;
+}) {
+	const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = query;
+	useEffect(() => {
+		if (hasNextPage && !isFetchingNextPage && !isError) {
+			void fetchNextPage();
+		}
+	}, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
+}
+
 function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const queryClient = useQueryClient();
 
 	const batchesQuery = useQuery({
-		...listReviewBatchesOptions({ path: { workspaceSlug } }),
+		...listReviewBatchesOptions({ path: { workspaceSlug }, query: { origin: "BACKFILL" } }),
 		refetchInterval: (query) =>
 			query.state.data?.content.some(
 				(batch) => batch.status === "RUNNING" || batch.status === "PAUSED",
@@ -587,6 +608,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 		<div className="max-w-3xl">
 			<PracticeReviewBatch
 				batches={batchesQuery.data?.content ?? []}
+				totalBatches={batchesQuery.data?.totalElements ?? 0}
 				isLoading={batchesQuery.isLoading}
 				isError={batchesQuery.isError}
 				onRetry={() => {

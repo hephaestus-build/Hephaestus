@@ -556,6 +556,31 @@ describe("review route", () => {
 		expect(within(scope).queryByText(/no longer syncs/u)).toBeNull();
 	});
 
+	it("counts a chosen person who is past the first page of members", async () => {
+		const later = membership({
+			account: { ...membership({}).account, id: "101", displayName: "Later Member" },
+		});
+		const persisted = reviewSettings({
+			reviewScope: {
+				people: "SELECTED",
+				repositories: "ALL",
+				accountIds: ["101"],
+				selectedRepositories: [],
+			},
+		});
+		const settings = stubSettings(persisted);
+		stubWorkspace([
+			...settings.handlers(true),
+			http.get("*/workspaces/:workspaceSlug/members", ({ request }) =>
+				HttpResponse.json(twoMemberPages(pageOf(request), later)),
+			),
+		]);
+
+		renderRouteAt("/w/acme/admin/practices/review?section=automated-review");
+
+		await screen.findByText(/^1 of 8 eligible people/u, {}, ROUTE_RENDER_WAIT);
+	});
+
 	it("widens the review scope only after the preview is confirmed, with the read ETag", async () => {
 		const persisted = reviewSettings({
 			etag: '"7"',
@@ -836,6 +861,18 @@ function twoRepositoryPages(page: string) {
 				[repositoryItem("102", { label: "owner/retired", removedAt: "2026-09-01T00:00:00Z" })],
 				{ page: 1, totalPages: 2, totalElements: 2 },
 			);
+}
+
+/** Two pages of one member each: the chosen person is on the second. */
+function twoMemberPages(page: string, later: WorkspaceMembership) {
+	const first = page === "0";
+	return {
+		content: [first ? unclaimed : later],
+		page: first ? 0 : 1,
+		size: 1,
+		totalElements: 2,
+		totalPages: 2,
+	};
 }
 
 /** The page a list read asks for; the first when it names none. */

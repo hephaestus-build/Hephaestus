@@ -234,12 +234,17 @@ function JumpTo({
 		}
 	}, [loaded, loadEarlier]);
 
-	const notFound =
-		!loaded &&
-		(earlier?.status === "none" || (earlier?.status === "available" && loadEarlier === undefined));
-	return notFound ? (
+	// A read that stopped at its limit has not seen the older messages, so it says neither where the message is nor
+	// that it is gone.
+	const pastLimit = !loaded && earlier?.status === "available" && loadEarlier === undefined;
+	const notFound = !loaded && earlier?.status === "none";
+	return notFound || pastLimit ? (
 		<Marker>
-			<MarkerContent>We could not find that message. It may have been deleted.</MarkerContent>
+			<MarkerContent>
+				{notFound
+					? "We could not find that message. It may have been deleted."
+					: `That message is not among the latest ${String(JUMP_READ_LIMIT)} messages. Scroll up to look further back.`}
+			</MarkerContent>
 		</Marker>
 	) : null;
 }

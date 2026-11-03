@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.review.schedule.dto.CreateReviewBatchRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.review.schedule.dto.ReviewBatchDTO;
 import de.tum.cit.aet.hephaestus.practices.review.schedule.dto.UpdateReviewBatchStatusRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchOrigin;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -40,9 +41,10 @@ public class ReviewBatchController {
     @Operation(operationId = "listReviewBatches", summary = "List review batches")
     public OffsetPageDTO<ReviewBatchDTO> list(
             WorkspaceContext ws,
+            @RequestParam(required = false) @Nullable ReviewBatchOrigin origin,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return OffsetPageDTO.from(batches.list(ws, PageRequest.of(page, size)));
+        return OffsetPageDTO.from(batches.list(ws, origin, PageRequest.of(page, size)));
     }
 
     @PostMapping
