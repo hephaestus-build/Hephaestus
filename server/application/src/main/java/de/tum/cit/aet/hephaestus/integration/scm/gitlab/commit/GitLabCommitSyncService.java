@@ -131,7 +131,10 @@ public class GitLabCommitSyncService {
                 List<Map<String, Object>> commits =
                         fetchCommitPage(scopeId, serverUrl, token, nativeId, branch, since, page);
 
-                if (commits == null || commits.isEmpty()) break;
+                if (commits == null || commits.isEmpty()) {
+                    hasMore = false;
+                    break;
+                }
 
                 for (Map<String, Object> commitData : commits) {
                     if (!admission.runWrite(read, () -> processCommit(commitData, repository, providerId, scopeId))) {
