@@ -464,7 +464,7 @@ export const ProblemsFoldUnderTheirResult: Story = {
 			?.groups?.number;
 		const list = canvas.getByRole("list", { name: `Problems of observation ${String(number)}` });
 		await expect(
-			within(list).getAllByRole("button", { name: /^Problem \d+ of observation \d+: /u }).length,
+			within(list).getAllByRole("button", { name: /: problem \d+ of observation \d+$/u }).length,
 		).toBeGreaterThan(0);
 		await userEvent.click(toggle);
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");

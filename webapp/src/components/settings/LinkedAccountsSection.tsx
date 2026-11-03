@@ -423,7 +423,7 @@ function UnlinkControl({
 						size="sm"
 						aria-busy={isUnlinking}
 						aria-disabled={isUnlinking}
-						aria-label={isUnlinking ? `Disconnecting ${name}` : `Disconnect ${name}`}
+						aria-label={isUnlinking ? `Disconnecting… ${name}` : `Disconnect ${name}`}
 						className="shrink-0 hover:text-destructive"
 					>
 						{isUnlinking ? (
@@ -431,7 +431,7 @@ function UnlinkControl({
 						) : (
 							<Unlink className="mr-1.5 size-3.5" aria-hidden="true" />
 						)}
-						Disconnect
+						{isUnlinking ? "Disconnecting…" : "Disconnect"}
 					</Button>
 				}
 			/>

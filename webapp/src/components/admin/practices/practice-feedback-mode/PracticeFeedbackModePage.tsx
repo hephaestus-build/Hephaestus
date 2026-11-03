@@ -785,7 +785,7 @@ function AllSetByHandNote({
 			<Button
 				variant="link"
 				size="inline"
-				aria-label={`Reset the practices in ${name} to follow ${setting}`}
+				aria-label={`Reset them to follow it: the practices in ${name}, to ${setting}`}
 				disabled={disabled}
 				onClick={onReset}
 			>

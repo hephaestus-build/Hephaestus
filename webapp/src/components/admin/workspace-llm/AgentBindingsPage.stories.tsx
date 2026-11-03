@@ -35,7 +35,7 @@ type Scope = StoryContext["canvas"];
 const UNCHOSEN_ROW = "Members who have not chosen";
 
 function trigger(canvas: Scope, title: string): HTMLElement {
-	return canvas.getByRole("button", { name: title });
+	return canvas.getByRole("button", { name: new RegExp(`^${title}`, "u") });
 }
 
 async function openPurpose(canvas: Scope, title: string): Promise<Scope> {
@@ -162,7 +162,7 @@ export const Loading: Story = {
 		await expect(
 			canvas.getByRole("heading", { name: "Models for practice scripts" }),
 		).toBeVisible();
-		await expect(canvas.queryByRole("button", { name: "Practice reviews" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /Practice reviews/u })).toBeNull();
 		await expect(screen.queryByRole("status")).toBeNull();
 	},
 };
@@ -199,7 +199,7 @@ export const LoadFailed: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("We could not load AI models")).toBeVisible();
-		await expect(canvas.queryByRole("button", { name: "Decision model" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /Decision model/u })).toBeNull();
 		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
 		await expect(retryLoad).toHaveBeenCalledOnce();
 	},
@@ -218,11 +218,13 @@ export const Quiet: Story = {
 			await expect(trigger(canvas, title)).toHaveAttribute("aria-expanded", "false");
 		}
 		await expectNoStatusBadge(canvas);
-		await expect(trigger(canvas, "Practice reviews")).toHaveAccessibleDescription(
-			`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house`,
+		await expect(trigger(canvas, "Practice reviews")).toHaveAccessibleName(
+			expect.stringContaining(
+				`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house`,
+			),
 		);
-		await expect(trigger(canvas, "Decision model")).toHaveAccessibleDescription(
-			"No practice uses it In-house: none Cloud: none",
+		await expect(trigger(canvas, "Decision model")).toHaveAccessibleName(
+			expect.stringContaining("No practice uses it In-house: none Cloud: none"),
 		);
 	},
 };
@@ -231,8 +233,10 @@ export const PartlySet: Story = {
 	args: { bindings: [binding("CLOUD", cloudModel)], aiChoiceRequired: true },
 	play: async ({ canvas }) => {
 		const reviews = trigger(canvas, "Practice reviews");
-		await expect(reviews).toHaveAccessibleDescription(
-			`In-house: none Cloud: ${cloudModel.displayName} ${statusLabel("PARTLY_SET")}`,
+		await expect(reviews).toHaveAccessibleName(
+			expect.stringContaining(
+				`In-house: none Cloud: ${cloudModel.displayName} ${statusLabel("PARTLY_SET")}`,
+			),
 		);
 		await expect(
 			within(reviews).getByText(statusLabel("PARTLY_SET"), { ignore: ".sr-only" }),
@@ -250,8 +254,10 @@ export const RequiredNeedUnmet: Story = {
 	play: async ({ canvas }) => {
 		const decision = trigger(canvas, "Decision model");
 		await expect(decision).toHaveAttribute("aria-expanded", "true");
-		await expect(decision).toHaveAccessibleDescription(
-			`Used by 1 practice In-house: none Cloud: ${mockDecisionModel.displayName} ${statusLabel("NEEDS_ATTENTION")}`,
+		await expect(decision).toHaveAccessibleName(
+			expect.stringContaining(
+				`Used by 1 practice In-house: none Cloud: ${mockDecisionModel.displayName} ${statusLabel("NEEDS_ATTENTION")}`,
+			),
 		);
 		const region = within(canvas.getByRole("region", { name: "Decision model" }));
 		await expect(region.queryByRole("alert")).toBeNull();
@@ -278,8 +284,10 @@ export const RequiredNeedUnmet: Story = {
 
 		const embedding = trigger(canvas, "Embedding model");
 		await expect(embedding).toHaveAttribute("aria-expanded", "false");
-		await expect(embedding).toHaveAccessibleDescription(
-			`Used by 2 practices In-house: none Cloud: none ${statusLabel("NOT_SET")}`,
+		await expect(embedding).toHaveAccessibleName(
+			expect.stringContaining(
+				`Used by 2 practices In-house: none Cloud: none ${statusLabel("NOT_SET")}`,
+			),
 		);
 	},
 };
@@ -315,8 +323,10 @@ export const SeveralPracticesNeedIt: Story = {
 export const CloudModelUnused: Story = {
 	args: { bindings: [...everyoneCovered, decisionForCloudUnserved], aiChoiceRequired: true },
 	play: async ({ canvas }) => {
-		await expect(trigger(canvas, "Decision model")).toHaveAccessibleDescription(
-			`No practice uses it In-house: none Cloud: ${mockDecisionModel.displayName} Not used`,
+		await expect(trigger(canvas, "Decision model")).toHaveAccessibleName(
+			expect.stringContaining(
+				`No practice uses it In-house: none Cloud: ${mockDecisionModel.displayName} Not used`,
+			),
 		);
 		const cloud = row(await openPurpose(canvas, "Decision model"), "Cloud");
 		const note =
@@ -331,8 +341,8 @@ export const CloudModelUnused: Story = {
 export const PracticeScriptNeedsLoading: Story = {
 	args: { practiceScriptNeeds: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(trigger(canvas, "Decision model")).toHaveAccessibleDescription(
-			"In-house: none Cloud: none Not chosen: none",
+		await expect(trigger(canvas, "Decision model")).toHaveAccessibleName(
+			expect.stringContaining("In-house: none Cloud: none Not chosen: none"),
 		);
 		const reviews = await openPurpose(canvas, "Practice reviews");
 		await expect(
@@ -355,8 +365,8 @@ export const PracticeScriptNeedsFailed: Story = {
 			section.getByText("We could not load which practices use these models"),
 		).toBeVisible();
 		await expect(canvas.queryByText("We could not load AI models")).toBeNull();
-		await expect(trigger(canvas, "Decision model")).toHaveAccessibleDescription(
-			"In-house: none Cloud: none Not chosen: none",
+		await expect(trigger(canvas, "Decision model")).toHaveAccessibleName(
+			expect.stringContaining("In-house: none Cloud: none Not chosen: none"),
 		);
 		await expect(trigger(canvas, "Practice reviews")).toBeEnabled();
 	},
@@ -387,8 +397,10 @@ export const TiersPartiallyCovered: Story = {
 	play: async ({ canvas }) => {
 		const reviewsTrigger = trigger(canvas, "Practice reviews");
 		await expect(reviewsTrigger).toHaveAttribute("aria-expanded", "true");
-		await expect(reviewsTrigger).toHaveAccessibleDescription(
-			`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house Not chosen: ${undeclaredModel.displayName} ${statusLabel("NEEDS_ATTENTION")}`,
+		await expect(reviewsTrigger).toHaveAccessibleName(
+			expect.stringContaining(
+				`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house Not chosen: ${undeclaredModel.displayName} ${statusLabel("NEEDS_ATTENTION")}`,
+			),
 		);
 		const reviews = within(canvas.getByRole("region", { name: "Practice reviews" }));
 
@@ -396,7 +408,7 @@ export const TiersPartiallyCovered: Story = {
 		await expect(row(reviews, "Cloud").getByText("Not ready")).toBeVisible();
 
 		await userEvent.click(row(reviews, "Cloud").getByRole("combobox", { name: /Cloud/u }));
-		await expect(await screen.findByRole("option", { name: /^GPT-5,/u })).toBeVisible();
+		await expect(await screen.findByRole("option", { name: /^GPT-5 /u })).toBeVisible();
 		await expect(screen.queryByRole("option", { name: /Local Llama/u })).toBeNull();
 		await expect(screen.queryByRole("option", { name: /My OpenAI key/u })).toBeNull();
 	},
@@ -405,8 +417,10 @@ export const TiersPartiallyCovered: Story = {
 export const NothingCovered: Story = {
 	args: { bindings: [binding("UNDECLARED", undeclaredModel)] },
 	play: async ({ canvas }) => {
-		await expect(trigger(canvas, "Practice reviews")).toHaveAccessibleDescription(
-			`In-house: none Cloud: none Not chosen: ${undeclaredModel.displayName} ${statusLabel("PARTLY_SET")}`,
+		await expect(trigger(canvas, "Practice reviews")).toHaveAccessibleName(
+			expect.stringContaining(
+				`In-house: none Cloud: none Not chosen: ${undeclaredModel.displayName} ${statusLabel("PARTLY_SET")}`,
+			),
 		);
 		const unchosen = row(await openPurpose(canvas, "Practice reviews"), UNCHOSEN_ROW);
 		await expect(unchosen.getByRole("heading", { level: 4 })).toHaveTextContent(UNCHOSEN_ROW);
@@ -417,9 +431,7 @@ export const NothingCovered: Story = {
 export const ChoiceRequired: Story = {
 	args: { bindings: partiallyCovered, aiChoiceRequired: true },
 	play: async ({ canvas }) => {
-		await expect(trigger(canvas, "Practice reviews")).not.toHaveAccessibleDescription(
-			/Not chosen/u,
-		);
+		await expect(trigger(canvas, "Practice reviews")).not.toHaveAccessibleName(/Not chosen/u);
 		await expect(canvas.queryByText("Not chosen")).toBeNull();
 		const reviews = await openPurpose(canvas, "Practice reviews");
 		await expect(row(reviews, UNCHOSEN_ROW).getByText(/no one uses it now/u)).toBeVisible();
@@ -506,7 +518,7 @@ export const OffersOnlyModelsThatServeThePurpose: Story = {
 			embeddings.getByRole("combobox", { name: new RegExp(UNCHOSEN_ROW, "u") }),
 		);
 		await expect(await screen.findByRole("option", { name: /Text embeddings/u })).toBeVisible();
-		await expect(screen.queryByRole("option", { name: /^GPT-5,/u })).toBeNull();
+		await expect(screen.queryByRole("option", { name: /^GPT-5 /u })).toBeNull();
 		await expect(screen.queryByRole("option", { name: /Local Llama/u })).toBeNull();
 	},
 };
@@ -581,7 +593,7 @@ export const ProjectReviewsDisabled: Story = {
 	},
 	play: async ({ canvas }) => {
 		for (const title of ["Practice reviews", "Decision model", "Embedding model"]) {
-			await expect(trigger(canvas, title)).toHaveAccessibleDescription(
+			await expect(trigger(canvas, title)).toHaveAccessibleName(
 				new RegExp(`${statusLabel("OFF")}$`, "u"),
 			);
 		}
@@ -597,8 +609,8 @@ export const ProjectReviewsDisabled: Story = {
 			);
 		}
 
-		await expect(trigger(canvas, "Practice reviews")).toHaveAccessibleDescription(
-			`In-house: none Cloud: none Not chosen: none ${statusLabel("OFF")}`,
+		await expect(trigger(canvas, "Practice reviews")).toHaveAccessibleName(
+			expect.stringContaining(`In-house: none Cloud: none Not chosen: none ${statusLabel("OFF")}`),
 		);
 		const reviews = await openPurpose(canvas, "Practice reviews");
 		await expect(reviews.queryByText("Not ready")).toBeNull();
@@ -606,8 +618,10 @@ export const ProjectReviewsDisabled: Story = {
 		await expect(
 			row(reviews, "In-house").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
-		await expect(trigger(canvas, "Conversations")).toHaveAccessibleDescription(
-			`In-house: none Cloud: none Not chosen: none ${statusLabel("NOT_SET")}`,
+		await expect(trigger(canvas, "Conversations")).toHaveAccessibleName(
+			expect.stringContaining(
+				`In-house: none Cloud: none Not chosen: none ${statusLabel("NOT_SET")}`,
+			),
 		);
 	},
 };
@@ -735,14 +749,18 @@ export const InUse: Story = {
 			return getComputedStyle(glyph).color;
 		};
 		await expect(glyphTone("Conversations")).toBe(glyphTone("Practice reviews"));
-		await expect(trigger(canvas, "Conversations")).toHaveAccessibleDescription(
-			`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house Not chosen: none ${statusLabel("PARTLY_SET")}`,
+		await expect(trigger(canvas, "Conversations")).toHaveAccessibleName(
+			expect.stringContaining(
+				`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house Not chosen: none ${statusLabel("PARTLY_SET")}`,
+			),
 		);
-		await expect(trigger(canvas, "Embedding model")).toHaveAccessibleDescription(
-			`Used by 2 practices In-house: ${mockEmbeddingModel.displayName} Cloud: ${mockEmbeddingModel.displayName} In-house Not chosen: none ${statusLabel("PARTLY_SET")}`,
+		await expect(trigger(canvas, "Embedding model")).toHaveAccessibleName(
+			expect.stringContaining(
+				`Used by 2 practices In-house: ${mockEmbeddingModel.displayName} Cloud: ${mockEmbeddingModel.displayName} In-house Not chosen: none ${statusLabel("PARTLY_SET")}`,
+			),
 		);
-		await expect(trigger(canvas, "Reranking model")).toHaveAccessibleDescription(
-			"No practice uses it In-house: none Cloud: none Not chosen: none",
+		await expect(trigger(canvas, "Reranking model")).toHaveAccessibleName(
+			expect.stringContaining("No practice uses it In-house: none Cloud: none Not chosen: none"),
 		);
 	},
 };

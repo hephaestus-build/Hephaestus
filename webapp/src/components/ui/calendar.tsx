@@ -3,7 +3,13 @@
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type * as React from "react";
 import { useEffect, useRef } from "react";
-import { type DayButton, DayPicker, getDefaultClassNames, type Locale } from "react-day-picker";
+import {
+	DateLib,
+	type DayButton,
+	DayPicker,
+	getDefaultClassNames,
+	type Locale,
+} from "react-day-picker";
 
 import { cn } from "cn";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -17,6 +23,7 @@ function Calendar({
 	locale,
 	formatters,
 	components,
+	labels,
 	...props
 }: React.ComponentProps<typeof DayPicker> & {
 	buttonVariant?: React.ComponentProps<typeof Button>["variant"];
@@ -34,6 +41,15 @@ function Calendar({
 			)}
 			captionLayout={captionLayout}
 			locale={locale}
+			labels={{
+				// The visible day number is a word of the name (WCAG 2.5.3): "Sunday 1 November 2026",
+				// not the default "Sunday, November 1st, 2026".
+				labelDayButton: (date, modifiers, options, dateLib) => {
+					const day = (dateLib ?? new DateLib(options)).format(date, "EEEE d MMMM yyyy");
+					return `${modifiers.today === true ? "Today, " : ""}${day}${modifiers.selected === true ? ", selected" : ""}`;
+				},
+				...labels,
+			}}
 			formatters={{
 				formatMonthDropdown: (date) => date.toLocaleString(locale?.code, { month: "short" }),
 				...formatters,

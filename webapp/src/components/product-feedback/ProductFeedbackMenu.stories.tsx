@@ -24,10 +24,11 @@ export const Default: Story = {
 	play: async ({ canvas, args }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Product feedback" }));
 		const menu = within(await screen.findByRole("menu"));
-		const idea = menu.getByRole("menuitem", { name: "Share an idea" });
+		// The name holds every word the item shows (WCAG 2.5.3), the detail too.
+		const idea = menu.getByRole("menuitem", {
+			name: "Share an idea A feature or change that would help.",
+		});
 		await expectSettledVisible(idea);
-		// The detail is announced as a description, not folded into the item's name.
-		await expect(idea).toHaveAccessibleDescription("A feature or change that would help.");
 		await expect(menu.getByText("Help make Hephaestus better")).toBeVisible();
 		// The person's own reports, in the workspace the header keeps; no static link leaves the instance.
 		await expect(menu.getByRole("menuitem", { name: "Your product feedback" })).toHaveAttribute(
@@ -35,7 +36,7 @@ export const Default: Story = {
 			"/product-feedback?chromeWorkspace=acme",
 		);
 		await expect(menu.queryByRole("menuitem", { name: /GitHub/u })).toBeNull();
-		await userEvent.click(menu.getByRole("menuitem", { name: "Report a bug" }));
+		await userEvent.click(menu.getByRole("menuitem", { name: /^Report a bug /u }));
 		await expect(args.onSendFeedback).toHaveBeenCalledWith("BUG");
 	},
 };

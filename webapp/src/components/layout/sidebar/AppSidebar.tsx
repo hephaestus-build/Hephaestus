@@ -96,7 +96,12 @@ export function AppSidebar({
 		contextHeader = (
 			<NavContextHeader
 				title="Workspace administration"
-				backLink={<Link to="/admin/workspaces" aria-label="Back to instance workspaces" />}
+				backLink={
+					<Link
+						to="/admin/workspaces"
+						aria-label="Workspace administration: back to instance workspaces"
+					/>
+				}
 			/>
 		);
 	}
@@ -107,7 +112,12 @@ export function AppSidebar({
 		contextHeader = (
 			<NavContextHeader
 				title={`${administrationWorkspace.displayName} administration`}
-				backLink={<Link to="/admin/workspaces" aria-label="Back to instance workspaces" />}
+				backLink={
+					<Link
+						to="/admin/workspaces"
+						aria-label={`${administrationWorkspace.displayName} administration: back to instance workspaces`}
+					/>
+				}
 			/>
 		);
 		sidebarContent = (

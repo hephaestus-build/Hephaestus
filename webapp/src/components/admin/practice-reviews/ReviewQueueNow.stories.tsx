@@ -89,12 +89,12 @@ export const Busy: Story = {
 		// Waiting and running open the Reviews table at their queue state, whatever the range.
 		const opens = (name: string) =>
 			new URL(canvas.getByRole<HTMLAnchorElement>("link", { name }).href).searchParams;
-		await expect(opens("5 reviews waiting").get("queueState")).toBe("WAITING");
-		await expect(opens("2 reviews running").get("queueState")).toBe("RUNNING");
-		await expect(opens("2 reviews running").getAll("status")).toStrictEqual([]);
-		await expect(opens("2 reviews running").get("from")).toBeNull();
+		await expect(opens("5 waiting").get("queueState")).toBe("WAITING");
+		await expect(opens("2 running").get("queueState")).toBe("RUNNING");
+		await expect(opens("2 running").getAll("status")).toStrictEqual([]);
+		await expect(opens("2 running").get("from")).toBeNull();
 		// Number and word are one link, as the outcome counts are; the number is black, the word muted.
-		const running = canvas.getByRole("link", { name: "2 reviews running" });
+		const running = canvas.getByRole("link", { name: "2 running" });
 		await expect(running.textContent).toBe("2 running");
 		const number = figureValue(canvas, "running") ?? now;
 		await expect(getComputedStyle(number).color).toBe(getComputedStyle(now).color);
@@ -103,7 +103,7 @@ export const Busy: Story = {
 		// Nothing on hold: a quiet zero opens nothing.
 		await expect(canvas.queryByRole("link", { name: /on hold/u })).toBeNull();
 		// The oldest wait opens the review that waits, number and word as one link too.
-		const oldest = canvas.getByRole("link", { name: "Oldest wait 4 min: open that review" });
+		const oldest = canvas.getByRole("link", { name: "4 min oldest wait: open that review" });
 		await expect(oldest.textContent).toBe("4 min oldest wait");
 		await expect(levelsOpenedBy(oldest)).toEqual(["review:0c0c0c0c-0000-4000-8000-000000000003"]);
 		const rows = rowsOf(canvas);
@@ -148,14 +148,11 @@ export const FiguresOpenTheirQueueState: Story = {
 			).getByRole<HTMLAnchorElement>("link"),
 		);
 		await expect(
-			counted.map(
-				(link) =>
-					`${link.getAttribute("aria-label") ?? ""} -> ${new URL(link.href).searchParams.toString()}`,
-			),
+			counted.map((link) => `${link.textContent} -> ${new URL(link.href).searchParams.toString()}`),
 		).toStrictEqual([
-			"4 reviews waiting -> queueState=WAITING",
-			"2 reviews running -> queueState=RUNNING",
-			"1 review on hold for budget, needs a look -> queueState=HELD",
+			"4 waiting -> queueState=WAITING",
+			"2 running -> queueState=RUNNING",
+			"Needs a look: 1 on hold for budget -> queueState=HELD",
 		]);
 	},
 };
@@ -190,7 +187,7 @@ export const LongWait: Story = {
 		await expect(wait?.querySelector(".text-warning, .text-destructive")).toBeNull();
 		// The link's name keeps the mark its own name would hide.
 		await expect(
-			canvas.getByRole("link", { name: "Oldest wait 45 min, needs a look: open that review" }),
+			canvas.getByRole("link", { name: "45 min oldest wait, needs a look: open that review" }),
 		).toHaveTextContent("Needs a look: 45 min oldest wait");
 		await expect(canvas.queryByRole("link", { name: /^See all/u })).toBeNull();
 	},
@@ -248,7 +245,7 @@ export const OnHold: Story = {
 		await expect(figureValue(canvas, "held")?.querySelector(".text-destructive")).not.toBeNull();
 		// The hold opens the reviews it holds; its name keeps the mark's words.
 		const held = canvas.getByRole<HTMLAnchorElement>("link", {
-			name: "1 review on hold for budget, needs a look",
+			name: "Needs a look: 1 on hold for budget",
 		});
 		await expect(new URL(held.href).searchParams.get("queueState")).toBe("HELD");
 		await expect(rowsOf(canvas)).toHaveLength(1);

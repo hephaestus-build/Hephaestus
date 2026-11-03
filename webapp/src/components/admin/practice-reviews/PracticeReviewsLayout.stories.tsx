@@ -249,10 +249,10 @@ export const TabCounts: Story = {
 		const sections = within(canvas.getByRole("navigation", { name: "Practice review sections" }));
 		await expect(sections.getAllByRole("link").map((link) => link.textContent)).toEqual([
 			"Overview",
-			"Reviews1,688",
-			"Observations13,308",
-			"Problems4,210",
-			"Feedback1,951",
+			"Reviews 1,688",
+			"Observations 13,308",
+			"Problems 4,210",
+			"Feedback 1,951",
 		]);
 		await expect(sections.getByRole("link", { name: "Observations, 13,308" })).toHaveAttribute(
 			"aria-current",

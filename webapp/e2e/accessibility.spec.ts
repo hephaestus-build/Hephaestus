@@ -121,16 +121,7 @@ async function axeViolations(page: Page, { overlay = false } = {}): Promise<stri
 	// widget names itself, so `region` has nothing to say about it.
 	const { violations } = await (overlay ? builder.disableRules("region") : builder).analyze();
 	return violations.flatMap((violation) =>
-		violation.nodes
-			// An ARIA menu keeps focus by script, so its items are `tabindex="-1"` and axe, which
-			// looks for a tab stop, calls a menu taller than the window unreachable. It is reached by
-			// arrow keys. Fixed in axe-core after 4.13.0; drop this once the pin moves.
-			// https://github.com/dequelabs/axe-core/pull/5364
-			.filter(
-				(node) =>
-					violation.id !== "scrollable-region-focusable" || !node.html.includes('role="menu"'),
-			)
-			.map((node) => `${violation.id}: ${node.target.join(" ")}`),
+		violation.nodes.map((node) => `${violation.id}: ${node.target.join(" ")}`),
 	);
 }
 
@@ -308,7 +299,7 @@ base.describe("keyboard", () => {
 		"a menu takes focus, passes axe, and gives focus back on Escape",
 		async ({ page }) => {
 			await open(page, "/w/e2e/admin/practices");
-			const account = page.getByRole("button", { name: "Account" });
+			const account = page.getByRole("button", { name: /^Account/u });
 			await account.focus();
 			await page.keyboard.press("Enter");
 

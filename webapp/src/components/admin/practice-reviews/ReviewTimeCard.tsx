@@ -258,7 +258,6 @@ function finishedFigure(workspaceSlug: string, { state, list }: FinishedInRange)
 		link: counted
 			? {
 					render: <ReviewListLink workspaceSlug={workspaceSlug} destination={list} />,
-					label: `${state.total} ${state.total === 1 ? "review" : "reviews"} finished`,
 				}
 			: undefined,
 	};

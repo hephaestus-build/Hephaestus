@@ -67,6 +67,7 @@ export default function Header({
 	onLogout,
 	onRetrySession,
 }: HeaderProps) {
+	const initials = getInitials(name, username);
 	const hasWorkspace = Boolean(workspaceSlug);
 	const badge = resolveHeaderBadge(version, environmentName, isProduction, pullRequest);
 	const logo = (
@@ -153,7 +154,8 @@ export default function Header({
 						<div className="flex items-center gap-1 sm:gap-2">
 							<DropdownMenu>
 								<DropdownMenuTrigger
-									aria-label="Account"
+									// The initials show when there is no picture, so the name holds them too (WCAG 2.5.3).
+									aria-label={`Account, ${initials}`}
 									render={<Button variant="ghost" size="icon" shape="pill" />}
 								>
 									<Avatar className="hover:brightness-90">
@@ -161,7 +163,7 @@ export default function Header({
 											src={firstNonBlank(avatarUrl)}
 											alt={hasText(username) ? `${username}’s avatar` : ""}
 										/>
-										<AvatarFallback>{getInitials(name, username)}</AvatarFallback>
+										<AvatarFallback>{initials}</AvatarFallback>
 									</Avatar>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent className="w-56" align="end">

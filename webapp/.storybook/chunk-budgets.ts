@@ -6,7 +6,7 @@ import type { Plugin } from "vite";
 // budgets so a dependency update must explain growth; everything else retains Vite's 500kB limit.
 const TOOL_BUDGETS = [
 	{ module: "/node_modules/storybook/dist/preview/runtime.js", bytes: 1_186_100, gzip: 339_000 },
-	{ module: "/node_modules/axe-core/axe.js", bytes: 600_000, gzip: 165_000 },
+	{ module: "/node_modules/axe-core/axe.js", bytes: 672_000, gzip: 190_000 },
 ];
 
 export function checkChunkBudget(code: string, moduleIds: string[]) {

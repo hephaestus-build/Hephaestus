@@ -18,7 +18,7 @@ export interface ModelKindMarkProps {
 	 * keeps the name for a screen reader alone, where the tile stands by itself in a cell or beside
 	 * a heading that names the kind already.
 	 */
-	label?: "visible" | "sr-only";
+	label?: "visible" | "sr-only" | "none";
 	/**
 	 * The words in place of the kind's title, where the mark names a model rather than a purpose,
 	 * such as "Review model" in a script's needs.
@@ -48,7 +48,11 @@ export function ModelKindMark({
 			>
 				<Icon size={GLYPH[size]} />
 			</span>
-			<span className={label === "sr-only" ? "sr-only" : "min-w-0 truncate"}>{name ?? title}</span>
+			{label !== "none" && (
+				<span className={label === "sr-only" ? "sr-only" : "min-w-0 truncate"}>
+					{name ?? title}
+				</span>
+			)}
 		</span>
 	);
 }

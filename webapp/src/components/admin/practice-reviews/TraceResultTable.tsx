@@ -444,11 +444,12 @@ function TraceProblemList({
 			{problems.map((problem, index) => {
 				const severity = SEVERITY_DEFS[problem.severity];
 				// Observations can share a summary, so each name says which one and which of its problems.
-				const name = `Problem ${String(index + 1)} of observation ${String(number)}: ${severity.label}, ${problem.summary}`;
+				// The visible words lead (WCAG 2.5.3); which observation and problem follow.
+				const name = `${severity.label} ${problem.summary}: problem ${String(index + 1)} of observation ${String(number)}`;
 				const words = (
 					<>
 						<ToneIcon def={severity} className="size-3 shrink-0" />
-						<span className="shrink-0">{severity.label}</span>
+						<span className="shrink-0">{severity.label}</span>{" "}
 						<span className="min-w-0 break-words text-muted-foreground">{problem.summary}</span>
 					</>
 				);

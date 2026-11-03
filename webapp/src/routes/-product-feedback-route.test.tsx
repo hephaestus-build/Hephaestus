@@ -44,7 +44,7 @@ describe("product feedback sent from a workspace page", () => {
 		await user.click(
 			await screen.findByRole("button", { name: "Product feedback" }, ROUTE_RENDER_WAIT),
 		);
-		await user.click(await screen.findByRole("menuitem", { name: "Report a bug" }));
+		await user.click(await screen.findByRole("menuitem", { name: /^Report a bug /u }));
 		await user.type(
 			await screen.findByRole("textbox", { name: "What happened?" }, ROUTE_RENDER_WAIT),
 			"The list is empty.",
@@ -70,7 +70,7 @@ async function composeIdea(user: ReturnType<typeof userEvent.setup>) {
 	await user.click(
 		await screen.findByRole("button", { name: "Product feedback" }, ROUTE_RENDER_WAIT),
 	);
-	await user.click(await screen.findByRole("menuitem", { name: "Share an idea" }));
+	await user.click(await screen.findByRole("menuitem", { name: /^Share an idea /u }));
 	await user.type(
 		await screen.findByRole("textbox", { name: "Your idea" }, ROUTE_RENDER_WAIT),
 		"Pin a practice.",

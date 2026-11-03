@@ -404,7 +404,7 @@ export const RichReview: Story = {
 			await userEvent.click(disclosure);
 		}
 		await expect(
-			within(results).getAllByRole("button", { name: /^Problem \d+ of observation/u }),
+			within(results).getAllByRole("button", { name: /: problem \d+ of observation \d+$/u }),
 		).toHaveLength(12);
 
 		await userEvent.click(

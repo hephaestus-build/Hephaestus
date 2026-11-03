@@ -153,15 +153,17 @@ async function renderModelsRoute(bindings: () => AgentBinding[], aiChoiceRequire
 	mockModelsRoute(bindings, aiChoiceRequired);
 	const queryClient = renderRouteAt("/w/acme/admin/models");
 	await screen.findByRole("heading", { name: "AI models" }, ROUTE_RENDER_WAIT);
-	await screen.findByRole("button", { name: "Practice reviews" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: /Practice reviews/u }, ROUTE_RENDER_WAIT);
 	return queryClient;
 }
 
 type PurposeTitle = "Practice reviews" | "Conversations";
 const UNCHOSEN = "Members who have not chosen";
 
+const rowName = (title: string) => new RegExp(`^${title}`, "u");
+
 function purposeRegion(purpose: string): HTMLElement {
-	const trigger = screen.getByRole("button", { name: purpose });
+	const trigger = screen.getByRole("button", { name: rowName(purpose) });
 	if (trigger.getAttribute("aria-expanded") !== "true") {
 		fireEvent.click(trigger);
 	}
@@ -173,10 +175,7 @@ function row(purpose: PurposeTitle, title: string = UNCHOSEN): HTMLElement {
 }
 
 const rowSummary = (purpose: PurposeTitle) =>
-	(screen.getByRole("button", { name: purpose }).getAttribute("aria-describedby") ?? "")
-		.split(" ")
-		.map((id) => document.getElementById(id)?.textContent ?? "")
-		.join(" ");
+	screen.getByRole("button", { name: rowName(purpose) }).textContent;
 
 const saveButton = (purpose: PurposeTitle, title: string = UNCHOSEN) =>
 	within(row(purpose, title)).getByRole<HTMLButtonElement>("button", {
@@ -531,18 +530,18 @@ describe("workspace AI models route", () => {
 		await refreshAssignments();
 		expect(served).toStrictEqual([403]);
 		await screen.findByText(refusal);
-		expect(screen.queryByRole("button", { name: "Practice reviews" })).toBeNull();
+		expect(screen.queryByRole("button", { name: /Practice reviews/u })).toBeNull();
 
 		await refreshAssignments();
 		expect(served).toStrictEqual([403, 503]);
 		// The query settles before its observers hear of it; the screen has caught up once the refusal
 		// it was showing is gone.
 		await waitFor(() => expect(screen.queryByText(refusal)).toBeNull());
-		expect(screen.queryByRole("button", { name: "Practice reviews" })).toBeNull();
+		expect(screen.queryByRole("button", { name: /Practice reviews/u })).toBeNull();
 
 		await refreshAssignments();
 		expect(served).toStrictEqual([403, 503, 200]);
-		await screen.findByRole("button", { name: "Practice reviews" });
+		await screen.findByRole("button", { name: /Practice reviews/u });
 		expect(pickerOf(row("Practice reviews")).textContent).toContain("GPT Other");
 		fireEvent.click(advancedButton(row("Practice reviews")));
 		expect(timeoutInput(row("Practice reviews")).value).toBe("1200");
@@ -573,7 +572,7 @@ describe("workspace AI models route", () => {
 		});
 
 		await screen.findByText(/Ask a workspace admin or instance admin for access/u);
-		expect(screen.queryByRole("button", { name: "Practice reviews" })).toBeNull();
+		expect(screen.queryByRole("button", { name: /Practice reviews/u })).toBeNull();
 		expect(screen.queryByText("We could not refresh AI models")).toBeNull();
 	});
 
@@ -589,9 +588,9 @@ describe("workspace AI models route", () => {
 		renderRouteAt("/w/acme/admin/models");
 
 		const retry = await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("button", { name: "Practice reviews" })).toBeNull();
+		expect(screen.queryByRole("button", { name: /Practice reviews/u })).toBeNull();
 		fireEvent.click(retry);
-		await screen.findByRole("button", { name: "Practice reviews" });
+		await screen.findByRole("button", { name: /Practice reviews/u });
 	});
 });
 
@@ -639,7 +638,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 		}),
 	);
 	const queryClient = renderRouteAt("/w/acme/admin/models");
-	await screen.findByRole("button", { name: "Practice reviews" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: /Practice reviews/u }, ROUTE_RENDER_WAIT);
 	const reviews = within(purposeRegion("Practice reviews"));
 
 	await user.click(reviews.getByRole("combobox", { name: /Cloud/u }));
@@ -760,7 +759,7 @@ it.each([
 			...new ConversationFake().handlers(),
 		);
 		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/models");
-		await screen.findByRole("button", { name: "Conversations" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: /Conversations/u }, ROUTE_RENDER_WAIT);
 		await waitFor(() =>
 			expect(
 				queryClient.getQueryState(getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } }))
@@ -783,7 +782,7 @@ it.each([
 				params: { workspaceSlug: "acme" },
 			});
 		});
-		await screen.findByRole("button", { name: "Conversations" }, ROUTE_RENDER_WAIT);
+		await screen.findByRole("button", { name: /Conversations/u }, ROUTE_RENDER_WAIT);
 		await user.click(clearButton(row("Conversations", title)));
 		await waitFor(
 			() => expect(screen.queryByRole("link", { name: /Ask Hephaestus/u })).toBeNull(),
@@ -830,7 +829,7 @@ it("resets model drafts on workspace navigation while a previous workspace save 
 		}),
 	);
 	const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/models");
-	await screen.findByRole("button", { name: "Practice reviews" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: /Practice reviews/u }, ROUTE_RENDER_WAIT);
 	fireEvent.click(advancedButton(row("Practice reviews")));
 	fireEvent.change(timeoutInput(row("Practice reviews")), { target: { value: "900" } });
 	fireEvent.click(saveButton("Practice reviews"));
@@ -863,13 +862,13 @@ it("opens the purpose a link names, and drops the name from the address when the
 	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=PRACTICE_RERANKING");
 	const reranking = await screen.findByRole(
 		"button",
-		{ name: "Reranking model" },
+		{ name: /Reranking model/u },
 		ROUTE_RENDER_WAIT,
 	);
 	expect(reranking.getAttribute("aria-expanded")).toBe("true");
-	expect(screen.getByRole("button", { name: "Decision model" }).getAttribute("aria-expanded")).toBe(
-		"false",
-	);
+	expect(
+		screen.getByRole("button", { name: /Decision model/u }).getAttribute("aria-expanded"),
+	).toBe("false");
 
 	fireEvent.click(reranking);
 
@@ -880,7 +879,7 @@ it("opens the purpose a link names, and drops the name from the address when the
 it("ignores a purpose the page does not have", async () => {
 	mockModelsRoute(() => [binding("PRACTICE_REVIEW", 20)]);
 	const { router } = renderRouteAtWithRouter("/w/acme/admin/models?purpose=SOMETHING_ELSE");
-	await screen.findByRole("button", { name: "Reranking model" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: /Reranking model/u }, ROUTE_RENDER_WAIT);
 	expect(router.state.location.search.purpose).toBeUndefined();
 	expect(screen.queryAllByRole("button", { expanded: true })).toStrictEqual([]);
 });
@@ -896,7 +895,11 @@ it("counts the practices whose scripts use a model, from the workspace's practic
 		},
 	]);
 	renderRouteAt("/w/acme/admin/models");
-	const decision = await screen.findByRole("button", { name: "Decision model" }, ROUTE_RENDER_WAIT);
+	const decision = await screen.findByRole(
+		"button",
+		{ name: /Decision model/u },
+		ROUTE_RENDER_WAIT,
+	);
 	await waitFor(() => expect(decision.getAttribute("aria-expanded")).toBe("true"));
 	const region = within(screen.getByRole("region", { name: "Decision model" }));
 	expect(levelsOpenedBy(region.getByRole("link", { name: "Comment quality" }))).toStrictEqual([
@@ -904,7 +907,7 @@ it("counts the practices whose scripts use a model, from the workspace's practic
 	]);
 	region.getByText(/^1 practice needs a decision model for In-house members\./u);
 	expect(
-		within(screen.getByRole("button", { name: "Embedding model" })).queryByText(/Used by/u),
+		within(screen.getByRole("button", { name: /Embedding model/u })).queryByText(/Used by/u),
 	).toBeNull();
 });
 
@@ -934,7 +937,7 @@ it("keeps the page usable when the practice script needs fail, and says so in th
 	expect(screen.queryByText("We could not load AI models")).toBeNull();
 	expect(saveButton("Practice reviews").disabled).toBe(false);
 	expect(
-		within(screen.getByRole("button", { name: "Decision model" })).queryByText(/practice/u),
+		within(screen.getByRole("button", { name: /Decision model/u })).queryByText(/practice/u),
 	).toBeNull();
 });
 
@@ -951,7 +954,11 @@ it("asks again which practices miss a model once a binding is saved", async () =
 		}),
 	);
 	renderRouteAt("/w/acme/admin/models");
-	const decision = await screen.findByRole("button", { name: "Decision model" }, ROUTE_RENDER_WAIT);
+	const decision = await screen.findByRole(
+		"button",
+		{ name: /Decision model/u },
+		ROUTE_RENDER_WAIT,
+	);
 	await waitFor(() => expect(decision.getAttribute("aria-expanded")).toBe("true"));
 	within(screen.getByRole("region", { name: "Decision model" })).getByRole("note");
 

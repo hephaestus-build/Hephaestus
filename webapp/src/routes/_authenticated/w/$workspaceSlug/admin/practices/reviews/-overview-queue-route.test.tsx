@@ -163,10 +163,10 @@ function serveQueueAndList() {
 
 describe("the queue's figures", () => {
 	it.each([
-		["4 reviews waiting", 4, "4 reviews match your filters.", "Waiting"],
-		["2 reviews running", 2, "2 reviews match your filters.", "Running"],
+		["4 waiting", 4, "4 reviews match your filters.", "Waiting"],
+		["2 running", 2, "2 reviews match your filters.", "Running"],
 		[
-			"1 review on hold for budget, needs a look",
+			"Needs a look: 1 on hold for budget",
 			1,
 			"1 review matches your filters.",
 			"On hold for budget",

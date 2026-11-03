@@ -46,6 +46,7 @@ export function DateRangeFacet({ title, value, onChange }: DateRangeFacetProps) 
 						{title}
 						{hasText(applied) && (
 							<>
+								{" "}
 								<Separator
 									orientation="vertical"
 									className="mx-0.5 data-[orientation=vertical]:h-4"

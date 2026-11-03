@@ -170,12 +170,8 @@ export const FinishedInTheRange: Story = {
 			),
 		).toEqual(["34 finished"]);
 		// The whole figure is the link, number and word, as the outcome counts are.
-		await expect(canvas.getByRole("link", { name: "34 reviews finished" }).textContent).toBe(
-			"34 finished",
-		);
-		const link = new URL(
-			canvas.getByRole<HTMLAnchorElement>("link", { name: "34 reviews finished" }).href,
-		);
+		await expect(canvas.getByRole("link", { name: "34 finished" }).textContent).toBe("34 finished");
+		const link = new URL(canvas.getByRole<HTMLAnchorElement>("link", { name: "34 finished" }).href);
 		await expect(link.pathname).toBe("/w/demo/admin/practices/reviews");
 		await expect(link.searchParams.getAll("status")).toStrictEqual([
 			"COMPLETE",
@@ -314,7 +310,7 @@ export const FinishedWithoutMeasuredTime: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("No measured review time in the last 30 days.");
 		await expect(canvas.queryByText(/No review finished/u)).toBeNull();
-		await expect(canvas.getByRole("link", { name: "3 reviews finished" })).toHaveTextContent("3");
+		await expect(canvas.getByRole("link", { name: "3 finished" })).toHaveTextContent("3");
 		await expect(canvas.queryByRole("list", { name: "Where the time went" })).toBeNull();
 	},
 };

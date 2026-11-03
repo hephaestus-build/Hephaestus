@@ -1136,7 +1136,7 @@ describe("instance administrator workspace settings", () => {
 			]);
 		});
 		await screen.findByText("You do not have access to workspace settings");
-		screen.getByRole("link", { name: "Back to instance workspaces" });
+		screen.getByRole("link", { name: /: back to instance workspaces$/u });
 		expect(screen.queryByRole("heading", { name: "Capabilities" })).toBeNull();
 		expect(screen.queryByRole("link", { name: /Review settings/u })).toBeNull();
 		expect(screen.queryByRole("link", { name: "Ask Hephaestus" })).toBeNull();

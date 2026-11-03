@@ -192,7 +192,7 @@ describe("scans list filters", () => {
 		await userEvent.click(
 			await screen.findByRole(
 				"link",
-				{ name: "Show only scans of ls1intum/artemis" },
+				{ name: "Only this repository: ls1intum/artemis" },
 				ROUTE_RENDER_WAIT,
 			),
 		);

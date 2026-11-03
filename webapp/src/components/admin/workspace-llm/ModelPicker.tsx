@@ -95,9 +95,10 @@ export function listedModels<TModel extends Pick<AvailableLlmModel, "dataHandlin
 	return tier === undefined ? models : models.filter((model) => model.dataHandlingTier === tier);
 }
 
+/** The option's words in the order it shows them (WCAG 2.5.3). */
 function optionLabel(model: AvailableLlmModel): string {
 	const tier = DATA_HANDLING_DEFS[model.dataHandlingTier].label;
-	return `${model.displayName}, ${model.connectionDisplayName}, ${tier}, ${priceLabel(model, "workspace")}`;
+	return `${model.displayName} ${priceLabel(model, "workspace")} ${model.connectionDisplayName} ${tier}`;
 }
 
 const REASONING_HINT =
@@ -170,13 +171,13 @@ function ModelOptions({ models }: { models: AvailableLlmModel[] }) {
 					{/* The price follows the name: an option is as wide as its words, so a column for
 					    prices at its far edge would not line up from one option to the next. */}
 					<span className="flex min-w-0 items-baseline gap-3">
-						<span className="min-w-0 truncate">{model.displayName}</span>
+						<span className="min-w-0 truncate">{model.displayName}</span>{" "}
 						<span className="shrink-0 text-xs text-muted-foreground">
 							{priceLabel(model, "workspace")}
 						</span>
-					</span>
+					</span>{" "}
 					<span className="flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
-						<span className="min-w-0 truncate">{model.connectionDisplayName}</span>
+						<span className="min-w-0 truncate">{model.connectionDisplayName}</span>{" "}
 						<DataHandlingMark tier={model.dataHandlingTier} label="visible" />
 					</span>
 				</span>

@@ -72,8 +72,10 @@ type Scope = ReturnType<typeof within<typeof queries>>;
 
 const UNCHOSEN_ROW = "Members who have not chosen";
 
+const rowName = (title: string) => new RegExp(`^${title}`, "u");
+
 function purposeRegion(purpose: string): Scope {
-	const trigger = screen.getByRole("button", { name: purpose });
+	const trigger = screen.getByRole("button", { name: rowName(purpose) });
 	if (trigger.getAttribute("aria-expanded") !== "true") {
 		fireEvent.click(trigger);
 	}
@@ -242,7 +244,7 @@ describe("AgentBindingsPage", () => {
 });
 
 const expanded = (name: string) =>
-	screen.getByRole("button", { name }).getAttribute("aria-expanded");
+	screen.getByRole("button", { name: rowName(name) }).getAttribute("aria-expanded");
 
 describe("AgentBindingsPage rows", () => {
 	const decisionModel: AvailableLlmModel = {
@@ -284,10 +286,7 @@ describe("AgentBindingsPage rows", () => {
 		expect(screen.getByRole("note").textContent).toBe(
 			"1 practice needs a decision model for In-house and Cloud members and members who have not chosen. Until you assign one, reviews of their work record no observation for this practice.",
 		);
-		expect(
-			screen.getByRole("button", { name: "Decision model" }).getAttribute("aria-describedby"),
-		).not.toBeNull();
-		screen.getByText("Needs attention", { ignore: ".sr-only" });
+		screen.getByRole("button", { name: /Decision model.*Needs attention/u });
 	});
 
 	function NeedsArriveLater() {
@@ -315,7 +314,7 @@ describe("AgentBindingsPage rows", () => {
 		expect(expanded("Decision model")).toBe("false");
 		fireEvent.click(screen.getByRole("button", { name: "Needs arrive" }));
 		expect(expanded("Decision model")).toBe("true");
-		fireEvent.click(screen.getByRole("button", { name: "Decision model" }));
+		fireEvent.click(screen.getByRole("button", { name: /Decision model/u }));
 		fireEvent.click(screen.getByRole("button", { name: "Needs arrive" }));
 		expect(expanded("Decision model")).toBe("false");
 	});

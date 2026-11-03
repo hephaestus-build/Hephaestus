@@ -77,7 +77,8 @@ export function PracticeReviewsLayout({
 								return (
 									<PracticeTabsLink
 										key={to}
-										// "Reviews, 1,688": the comma keeps a screen reader from reading one number.
+										// "Reviews, 1,688": the comma keeps a screen reader from reading one number. The space
+										// after the label keeps the visible words apart in the page's text (WCAG 2.5.3).
 										aria-label={shown === undefined ? undefined : `${label}, ${shown}`}
 										render={
 											<Link
@@ -92,9 +93,15 @@ export function PracticeReviewsLayout({
 									>
 										{label}
 										{shown !== undefined && (
-											<span aria-hidden className="font-normal text-muted-foreground tabular-nums">
-												{shown}
-											</span>
+											<>
+												{" "}
+												<span
+													aria-hidden
+													className="font-normal text-muted-foreground tabular-nums"
+												>
+													{shown}
+												</span>
+											</>
 										)}
 									</PracticeTabsLink>
 								);
