@@ -11,7 +11,9 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import org.springframework.core.Ordered;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -34,11 +36,21 @@ public class SqlRequestTrace extends OncePerRequestFilter implements Ordered {
     /** Runs one exchange through a client that tags its request, then returns the SQL that the request prepared. */
     public <T> SqlStatementCounter.Measurement<T> measure(WebTestClient http, Function<WebTestClient, T> exchange) {
         String id = UUID.randomUUID().toString();
-        T value = exchange.apply(http.mutate().defaultHeader(HEADER, id).build());
-        // The client can read a complete body before the server thread leaves this filter.
-        List<String> sql = request(id).orTimeout(30, TimeUnit.SECONDS).join();
-        requests.remove(id);
-        return new SqlStatementCounter.Measurement<>(value, sql);
+        try {
+            T value = exchange.apply(http.mutate().defaultHeader(HEADER, id).build());
+            // The client can read a complete body before the server thread leaves this filter.
+            List<String> sql = request(id).get(30, TimeUnit.SECONDS);
+            return new SqlStatementCounter.Measurement<>(value, sql);
+        } catch (ExecutionException failure) {
+            throw new IllegalStateException("The measured request failed", failure.getCause());
+        } catch (TimeoutException failure) {
+            throw new IllegalStateException("The measured request did not leave the server filter", failure);
+        } catch (InterruptedException failure) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while the measured request ran", failure);
+        } finally {
+            requests.remove(id);
+        }
     }
 
     @Override
@@ -64,7 +76,7 @@ public class SqlRequestTrace extends OncePerRequestFilter implements Ordered {
             request(id).completeExceptionally(cause);
             if (cause instanceof IOException io) throw io;
             throw (ServletException) cause;
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | Error failure) {
             request(id).completeExceptionally(failure);
             throw failure;
         }

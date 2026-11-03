@@ -180,7 +180,7 @@ Never write cleanup that another test depends on having run.
 ## Database reads and writes
 
 A read returns a record from a JPQL `select new` or a native query, and an entity is for a write.
-Every association is lazy.
+Declare every association lazy.
 `docs/contributor/read-and-write-the-database.mdx` owns the rules and the cost tests (ADR 0076).
 
 ## Schema changes

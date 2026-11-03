@@ -41,7 +41,8 @@ public class QueryPlans {
 
     /**
      * Plans each distinct statement and returns the filtered sequential scans that no index could replace. A statement
-     * with a parameter whose type PostgreSQL cannot infer without a value is skipped. Any other planning error fails.
+     * with a parameter whose type PostgreSQL cannot infer without a value is skipped. Any other planning error fails, and
+     * so does a list in which no statement could be planned.
      */
     public List<FullScan> fullScans(Collection<String> statements) {
         List<FullScan> scans = new ArrayList<>();
@@ -54,15 +55,32 @@ public class QueryPlans {
         try (Connection connection = DriverManager.getConnection(
                         environment.getRequiredProperty("spring.datasource.url"), settings);
                 Statement statement = connection.createStatement()) {
+            requirePostgres18(statement);
             statement.execute("SET enable_seqscan = off");
+            int planned = 0;
             for (String sql : new LinkedHashSet<>(statements)) {
                 JsonNode plan = plan(statement, sql);
-                if (plan != null) collect(plan, sql, scans);
+                if (plan == null) continue;
+                planned++;
+                collect(plan, sql, scans);
+            }
+            if (planned == 0 && !statements.isEmpty()) {
+                throw new IllegalStateException("No statement could be planned, so none was checked: " + statements);
             }
         } catch (SQLException failure) {
             throw new IllegalStateException("Could not open a connection to plan statements", failure);
         }
         return scans;
+    }
+
+    /** Before PostgreSQL 18, a plan does not mark a scan that the planner was forced to use, so every check passes. */
+    private static void requirePostgres18(Statement statement) throws SQLException {
+        try (ResultSet version = statement.executeQuery("SHOW server_version_num")) {
+            version.next();
+            if (Integer.parseInt(version.getString(1)) < 180000) {
+                throw new IllegalStateException("Plan checks need PostgreSQL 18 or later");
+            }
+        }
     }
 
     private static @Nullable JsonNode plan(Statement statement, String sql) {

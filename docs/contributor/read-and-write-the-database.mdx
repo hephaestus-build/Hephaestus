@@ -83,7 +83,7 @@ assertThat(plans.fullScans(request.sql())).isEmpty();
 
 - Give the budget that you measured. Lower it when a change makes the request cheaper.
 - Measure the request with few rows and with many rows. The statement count must not change. If it grows, a statement runs per row.
-- `repeated()` lists each statement that the request prepared more than once.
+- Look at `sql()` when the count is higher than you expect. The same statement several times is a lookup that repeats.
 - `fullScans` lists each filtered sequential scan that no index can replace.
   The test database is almost empty, so its normal plans always scan.
   With sequential scans off, PostgreSQL 18 uses a scan only when no index serves the filter, and marks it `"Disabled": true`.

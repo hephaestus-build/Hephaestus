@@ -78,7 +78,8 @@ A statement budget alone does not find that.
    It gives `EXPLAIN (ANALYZE, BUFFERS)` for each changed statement on staging, or the generic plan where ANALYZE cannot run.
 5. **Tests guard the cost.**
    - An endpoint that a main screen calls has an integration test that measures its request through `SqlRequestTrace`.
-     The test asserts a statement budget and asserts that no statement repeats. It runs with few rows and with many rows, and the count must not change.
+     The test asserts the statement budget that was measured.
+     It runs with few rows and with many rows, and the count must not change.
    - The same test passes the request's statements to `QueryPlans`.
      It plans each one with `EXPLAIN (GENERIC_PLAN)` and sequential scans off, and fails on a filtered sequential scan that no index can replace.
      On PostgreSQL 18 such a scan shows `"Disabled": true` at any table size (measured on staging, PostgreSQL 18.6). This finds a query that leaves out the predicate of a partial index.
@@ -86,6 +87,7 @@ A statement budget alone does not find that.
 
 ## Consequences
 
+- On 2026-11-03, three associations are eager: `Connection.workspace`, `ConnectionAudit.connection` and `Workspace.repositoriesToMonitor`. They become lazy in the change that adds the architecture rule.
 - About 440 entity reads and 125 interface projections do not follow the pattern. A read converts when a change touches it or when it is measured hot. The main screens convert first.
 - A native read can break at run time when a column moves. Its integration test is the only check.
 - A record per screen adds types. Each one sits next to its query and replaces a DTO factory and its lazy reads.
