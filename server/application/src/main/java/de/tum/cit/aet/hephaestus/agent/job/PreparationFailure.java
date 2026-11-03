@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -18,8 +19,17 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
 
-/** A preparation operation and a cause classified by type, without sensitive exception text. */
-record PreparationFailure(Stage stage, Kind kind, JobPreparationException.Reason reason, List<String> exceptionTypes) {
+/**
+ * A preparation operation and a cause classified by type, without sensitive exception text. A capture failure keeps its
+ * code and the code location that threw it: the message can hold a private path, so it never leaves the exception.
+ */
+record PreparationFailure(
+        Stage stage,
+        Kind kind,
+        JobPreparationException.Reason reason,
+        List<String> exceptionTypes,
+        @Nullable ItemCaptureCode captureCode,
+        @Nullable String capturedAt) {
 
     /** The owned operations before execution, in the order the executor runs them. */
     enum Stage {
@@ -106,7 +116,31 @@ record PreparationFailure(Stage stage, Kind kind, JobPreparationException.Reason
             if (cause == null) break;
             current = cause;
         }
-        return new PreparationFailure(stage, kind, reason, exceptionTypes(failure));
+        ItemCaptureException capture = captureOf(failure);
+        return new PreparationFailure(
+                stage,
+                kind,
+                reason,
+                exceptionTypes(failure),
+                capture != null ? capture.code() : null,
+                capture != null ? thrownAt(capture) : null);
+    }
+
+    /** The first capture failure in the chain, which says whether another attempt can capture the source. */
+    static @Nullable ItemCaptureException captureOf(Throwable failure) {
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (@Nullable Throwable current = failure;
+                current != null && visited.add(current);
+                current = current.getCause()) if (current instanceof ItemCaptureException capture) return capture;
+        return null;
+    }
+
+    private static @Nullable String thrownAt(Throwable failure) {
+        StackTraceElement[] frames = failure.getStackTrace();
+        if (frames.length == 0) return null;
+        String type = frames[0].getClassName();
+        return type.substring(type.lastIndexOf('.') + 1) + "." + frames[0].getMethodName() + ":"
+                + frames[0].getLineNumber();
     }
 
     private static List<String> exceptionTypes(Throwable failure) {

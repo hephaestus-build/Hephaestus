@@ -139,10 +139,14 @@ public class ReviewJobRecovery {
             return false;
         ReviewJobLlmUsage counts = bill ? counts(locked) : null;
         if (bill) hold(locked, counts);
+        // As for a lost worker: retained practices get one more attempt, whose claim only seals and withholds them.
+        int allowance = continuation.map(value -> value.hasStaged(locked)).orElse(false)
+                ? properties.maxRetries() + 1
+                : properties.maxRetries();
         int changed = jobs.requeueOrphan(
                 job.getId(),
                 leaseId,
-                properties.maxRetries(),
+                allowance,
                 Instant.now().plus(ReviewJobBackoff.compute(locked.spentAttempts() + 1)));
         if (changed > 0 && bill) bill(locked, counts);
         return changed > 0;
