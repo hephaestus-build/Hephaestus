@@ -14,11 +14,9 @@ import org.junit.jupiter.api.Test;
 
 class PersonSourceNamespaceTest extends BaseUnitTest {
     @Test
-    void shouldUseOnlyKnownProviderDefaultsAndPreserveExplicitSourceSpelling() {
-        assertThat(PersonSourceNamespace.from("GITHUB", null).orElseThrow().serverUrl())
-                .isEqualTo("https://github.com");
-        assertThat(PersonSourceNamespace.from("GITLAB", null).orElseThrow().serverUrl())
-                .isEqualTo("https://gitlab.com");
+    void shouldNameNoInstanceForASourceThatStoresNoUrlAndPreserveExplicitSourceSpelling() {
+        assertThat(PersonSourceNamespace.from("GITHUB", null)).isEmpty();
+        assertThat(PersonSourceNamespace.from("GITLAB", null)).isEmpty();
         assertThat(PersonSourceNamespace.from("SLACK", null).orElseThrow().serverUrl())
                 .isEqualTo("https://slack.com");
         assertThat(PersonSourceNamespace.from("OUTLINE", null)).isEmpty();

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -40,17 +41,25 @@ public sealed interface ConnectionConfig
     record GitHubAppConfig(
             @Nullable Long installationId,
             @Nullable String orgLogin,
-            @Nullable String serverUrl, // null for github.com, set for GHES
+            @Nullable String serverUrl,
             Set<String> enabledStreams)
-            implements ConnectionConfig {}
+            implements ConnectionConfig {
+        public GitHubAppConfig {
+            serverUrl = Objects.requireNonNullElse(serverUrl, PersonSourceNamespace.GITHUB_DEFAULT_URL);
+        }
+    }
 
     record GitHubPatConfig(
             @Nullable String orgLogin, @Nullable String serverUrl, Set<String> enabledStreams)
-            implements ConnectionConfig {}
+            implements ConnectionConfig {
+        public GitHubPatConfig {
+            serverUrl = Objects.requireNonNullElse(serverUrl, PersonSourceNamespace.GITHUB_DEFAULT_URL);
+        }
+    }
 
     /** GitLab. */
     record GitLabConfig(
-            @Nullable String serverUrl,
+            String serverUrl,
             @Nullable Long gitlabGroupId,
             @Nullable Long gitlabWebhookId,
             Set<String> enabledStreams,
@@ -58,11 +67,13 @@ public sealed interface ConnectionConfig
             GitLabProjectExclusions projectExclusions)
             implements ConnectionConfig {
         public GitLabConfig {
+            Objects.requireNonNull(serverUrl, "A GitLab connection names its server");
+            if (serverUrl.isBlank()) throw new IllegalArgumentException("A GitLab connection names its server");
             projectExclusions = Objects.requireNonNullElseGet(projectExclusions, GitLabProjectExclusions::empty);
         }
 
         public GitLabConfig(
-                @Nullable String serverUrl,
+                String serverUrl,
                 @Nullable Long gitlabGroupId,
                 @Nullable Long gitlabWebhookId,
                 Set<String> enabledStreams,

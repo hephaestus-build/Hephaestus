@@ -243,7 +243,11 @@ public class WorkspaceService {
                     IntegrationKind.GITLAB,
                     serverUrl,
                     new ConnectionConfig.GitLabConfig(
-                            serverUrl, /* gitlabGroupId */ null, /* gitlabWebhookId */ null, Set.of(), null),
+                            Objects.requireNonNull(serverUrl), /* gitlabGroupId */
+                            null, /* gitlabWebhookId */
+                            null,
+                            Set.of(),
+                            null),
                     personalAccessToken,
                     "create-workspace-" + workspace.getId());
         } else {

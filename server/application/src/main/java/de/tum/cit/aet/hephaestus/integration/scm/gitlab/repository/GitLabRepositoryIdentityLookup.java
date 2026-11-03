@@ -2,11 +2,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.extractNumericId;
 
-import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
-import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
@@ -46,9 +44,6 @@ public class GitLabRepositoryIdentityLookup implements RepositoryIdentityLookup 
             return Optional.empty();
         }
         String serverUrl = tokens.serverUrlOf(config.serverUrl());
-        if (!recordedUnder(config, serverUrl)) {
-            throw RepositoryOriginNotSupportedException.forUnstatedGitLabServer();
-        }
         if (!(credentials.credentialsOf(connection).orElse(null) instanceof BearerToken bearer)
                 || bearer.token().isBlank()) {
             return Optional.empty();
@@ -59,15 +54,5 @@ public class GitLabRepositoryIdentityLookup implements RepositoryIdentityLookup 
                     if (reportedPath == null) return Optional.empty();
                     return Optional.of(new RepositoryIdentity(extractNumericId(project.id()), reportedPath));
                 });
-    }
-
-    /**
-     * Whether {@code serverUrl} has the origin of the source namespace the connection's mirrors are recorded under. A
-     * connection without a URL is recorded under gitlab.com, but its token goes to the deployment's default server.
-     */
-    private static boolean recordedUnder(ConnectionConfig.GitLabConfig config, String serverUrl) {
-        if (config.serverUrl() != null && ScmOrigin.of(config.serverUrl()).isEmpty()) return false;
-        Optional<String> recorded = SourceProviderNamespaces.originOf(IntegrationKind.GITLAB, config);
-        return recorded.isPresent() && recorded.equals(ScmOrigin.of(serverUrl));
     }
 }

@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.privacy;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataSelection;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -21,12 +20,11 @@ final class InstallationAccountPersonDataStore extends JdbcPersonDataStore {
                 "connection",
                 """
                 t.kind IN ('GITHUB','GITLAB') AND EXISTS (SELECT 1 FROM workspace w
-                    JOIN identity_provider p ON p.type=t.kind AND p.server_url=COALESCE(t.config->>'serverUrl',
-                        CASE t.kind WHEN 'GITHUB' THEN '%s' WHEN 'GITLAB' THEN '%s' END)
+                    JOIN identity_provider p ON p.type=t.kind AND p.server_url=t.config->>'serverUrl'
                     JOIN "user" u ON u.provider_id=p.id
                     WHERE w.id=t.workspace_id AND w.account_type='USER' AND u.id=ANY(:users)
                       AND lower(u.login)=lower(w.account_login))
-                """.formatted(PersonSourceNamespace.GITHUB_DEFAULT_URL, PersonSourceNamespace.GITLAB_DEFAULT_URL),
+                """,
                 "id,workspace_id,kind,display_name",
                 "id",
                 "",

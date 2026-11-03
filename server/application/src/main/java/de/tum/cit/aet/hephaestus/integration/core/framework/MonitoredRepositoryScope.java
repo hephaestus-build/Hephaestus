@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.core.framework;
 
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import org.hibernate.boot.model.FunctionContributions;
 import org.hibernate.boot.model.FunctionContributor;
 import org.hibernate.type.StandardBasicTypes;
@@ -31,11 +30,7 @@ public final class MonitoredRepositoryScope implements FunctionContributor {
     public static final String FUNCTION = "monitor_covers_repository";
 
     private static final String SOURCE_PROVIDER =
-            " FROM connection monitor_connection JOIN identity_provider monitor_provider ON monitor_provider.type = monitor_connection.kind AND monitor_provider.server_url = COALESCE(monitor_connection.config ->> 'serverUrl', CASE monitor_connection.kind WHEN 'GITHUB' THEN '"
-                    + PersonSourceNamespace.GITHUB_DEFAULT_URL
-                    + "' WHEN 'GITLAB' THEN '"
-                    + PersonSourceNamespace.GITLAB_DEFAULT_URL
-                    + "' END) WHERE monitor_connection.kind IN ('GITHUB', 'GITLAB') AND monitor_connection.state IN ('ACTIVE', 'SUSPENDED')";
+            " FROM connection monitor_connection JOIN identity_provider monitor_provider ON monitor_provider.type = monitor_connection.kind AND monitor_provider.server_url = monitor_connection.config ->> 'serverUrl' WHERE monitor_connection.kind IN ('GITHUB', 'GITLAB') AND monitor_connection.state IN ('ACTIVE', 'SUSPENDED')";
 
     /**
      * The predicate over {@code ?1} monitor workspace id, {@code ?2} monitor native id, {@code ?3}

@@ -26749,8 +26749,8 @@ components:
           description: Whether this workspace has enabled its public activity page
         serverUrl:
           type: string
-          description: Custom server URL for self-hosted instances (null for cloud
-            defaults)
+          description: Server URL of the workspace's SCM connection (null if none
+            bound)
         slackConnectionId:
           type: integer
           format: int64

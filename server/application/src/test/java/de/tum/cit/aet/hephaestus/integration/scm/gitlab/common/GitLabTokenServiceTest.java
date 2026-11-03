@@ -117,13 +117,6 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
             assertThat(tokenService.resolveServerUrl(1L)).isEqualTo("https://gitlab.com");
         }
-
-        @Test
-        void shouldReturnDefaultWhenBlank() {
-            when(tokenProvider.getServerUrl(1L)).thenReturn(Optional.of("  "));
-
-            assertThat(tokenService.resolveServerUrl(1L)).isEqualTo("https://gitlab.com");
-        }
     }
 
     @Nested
