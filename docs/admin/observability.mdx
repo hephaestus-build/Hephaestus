@@ -637,6 +637,32 @@ For export generation, `success` and the affected count are published only after
 A failed attempt reports `failure` even if the database is unavailable and cannot save the failed
 status. Consult the server log when an export remains queued or processing after a reported failure.
 
+## Transaction metrics
+
+The server and worker roles time each database transaction from its begin to its commit or rollback.
+A transaction holds one pooled connection for that time, so a long transaction can make other requests wait for a connection.
+
+| Prometheus name                                | Type      | Labels                | Meaning                                                    |
+| ---------------------------------------------- | --------- | --------------------- | ---------------------------------------------------------- |
+| `database_transaction_duration_seconds`        | Histogram | `boundary`, `outcome` | Time from transaction begin to commit or rollback          |
+| `database_transaction_duration_seconds_max`    | Gauge     | `boundary`, `outcome` | The longest such time in the current step                  |
+
+`boundary` is the class and method that open the transaction, for example `SyncJobService.completeJob`.
+A programmatic transaction without a name reports `programmatic`.
+`outcome` is `commit` or `rollback`.
+The buckets are at 1 s, 5 s and 30 s.
+Arguments, identifiers and workspaces are not labels.
+Every transaction is timed in the same way, so the count is the transaction rate of each boundary.
+
+The 95th percentile of each boundary over 1 hour:
+
+```promql
+histogram_quantile(0.95, sum by (boundary, le) (rate(database_transaction_duration_seconds_bucket[1h])))
+```
+
+The bucket edges limit its resolution. Use the `_max` series for the longest transaction.
+Compare a slow boundary with `hikaricp_connections_pending` and `hikaricp_connections_acquire_seconds_max`.
+
 ## WAL archive metrics
 
 The server role reads `pg_stat_archiver` and `archive_mode` from the database every 30 seconds.
