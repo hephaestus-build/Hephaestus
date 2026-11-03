@@ -7,7 +7,7 @@ const meta = {
 	component: ExternalLink,
 	tags: ["autodocs"],
 	args: {
-		href: "https://hephaestus.example.test/w/team/feedback/scm.issue/7",
+		href: "https://hephaestus.example.test/w/team/feedback/4009",
 		allowedOrigin: "https://hephaestus.example.test",
 		children: "Open in Hephaestus",
 	},

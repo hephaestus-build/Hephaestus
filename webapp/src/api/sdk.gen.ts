@@ -293,7 +293,6 @@ export { resetCatalogOrder } from './sdk/resetCatalogOrder.gen.js';
 export { resetCatalogPractice } from './sdk/resetCatalogPractice.gen.js';
 export { resetGroupToCatalog } from './sdk/resetGroupToCatalog.gen.js';
 export { resetPracticeToCatalog } from './sdk/resetPracticeToCatalog.gen.js';
-export { resolveLegacyFeedbackItem } from './sdk/resolveLegacyFeedbackItem.gen.js';
 export { resolveReviewContext } from './sdk/resolveReviewContext.gen.js';
 export { retryFeedback } from './sdk/retryFeedback.gen.js';
 export { retryProductFeedbackFiling } from './sdk/retryProductFeedbackFiling.gen.js';

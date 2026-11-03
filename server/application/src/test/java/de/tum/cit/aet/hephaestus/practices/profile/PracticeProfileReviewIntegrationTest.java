@@ -609,42 +609,4 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.totalElements")
                 .isEqualTo(1);
     }
-
-    @Test
-    void shouldResolveRetainedFeedbackWorkForAMemberWithoutProviderCapture() {
-        long workspace = scenario.workspace().getId();
-        long source = 9_007_199_254_740_993L;
-        var item = index.upsert(new ItemRegistration(workspace, new ItemKind("scm.pull_request"), source, null, null));
-        index.remove(workspace, item.itemId(), Instant.now());
-        String root = "/workspaces/" + scenario.workspace().getWorkspaceSlug() + "/practices/items/legacy-feedback/";
-        http.get()
-                .uri(root + "scm.pull_request/" + source)
-                .headers(h -> h.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.itemId")
-                .isEqualTo(Long.toString(item.itemId()));
-        http.get()
-                .uri(root + "scm.issue/" + source)
-                .headers(h -> h.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
-        http.get()
-                .uri(root + "scm.repository/" + source)
-                .headers(h -> h.setBearerAuth(ReviewIntegrationData.memberToken(scenario)))
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
-        http.get()
-                .uri(root + "scm.pull_request/" + source)
-                .exchange()
-                .expectStatus()
-                .isUnauthorized()
-                .expectBody(Void.class);
-    }
 }

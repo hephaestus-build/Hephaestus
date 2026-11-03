@@ -482,7 +482,6 @@ The 1.0 upgrade stops the old version, then starts 1.0. It has no window with mi
 - **What stays, by decision of [ADR 0070](0070-1-0-is-a-cutover-release.md):**
   - The `LEGACY_*` stop and request reasons of migrated history. A rewrite to a current reason would be a false claim.
   - Results of evidence version 0, as a read-only earlier review.
-  - The resolver of earlier feedback links.
 
 ### Quality gates
 
