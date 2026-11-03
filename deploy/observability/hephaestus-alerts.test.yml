@@ -1330,3 +1330,57 @@ tests:
               kind: uncaught_error
             exp_annotations:
               summary: Readers' browsers reported at least twenty failures of one kind in one hour
+
+  - name: item reviews that end incomplete in more than a quarter of six hours fire
+    interval: 1m
+    input_series:
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server-a:9090",kind="item",status="complete",reason="none"}'
+        values: "0 1 2 3x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server-a:9090",kind="item",status="partial",reason="execution_incomplete"}'
+        values: "0 0 0 0 1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server-b:9090",kind="item",status="cancelled",reason="no_sandbox_room"}'
+        values: "0 0 0 0 0 1x60"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusReviewsIncomplete
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: HephaestusReviewsIncomplete
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusReviewsIncomplete
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: More than a quarter of the item reviews of the last six hours did not end complete
+
+  - name: policy stops, cancellations, scans and too few reviews do not fire
+    interval: 1m
+    input_series:
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="complete",reason="none"}'
+        values: "0 1 2 3 4 5 6x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="readiness_refused"}'
+        values: "0+1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="budget"}'
+        values: "0+1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="cancelled",reason="cancelled"}'
+        values: "0+1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="scan",status="partial",reason="enumeration_limit"}'
+        values: "0+1x60"
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="failed",reason="execution_failed"}'
+        values: "0 0 0 0 0 0 0 1x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusReviewsIncomplete
+        exp_alerts: []
+
+  - name: three reviews that all end partial stay below the floor of four
+    interval: 1m
+    input_series:
+      - series: 'practice_review_ended_total{job="hephaestus",instance="server:9090",kind="item",status="partial",reason="execution_incomplete"}'
+        values: "0 1 2 3x60"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusReviewsIncomplete
+        exp_alerts: []

@@ -1,19 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.metrics;
 
 public final class AgentMetrics {
-    public static final String AGENT_CONTEXT_BUILD_DURATION = "agent.context.build.duration";
-    public static final String AGENT_CONTEXT_PROVIDER_REQUIRED_FAILURE = "agent.context.provider.required.failure";
-    public static final String AGENT_IMAGE_CONTRACT = "agent.image.contract";
-    public static final String AGENT_IMAGE_PULL_DURATION = "agent.image.pull.duration";
-    public static final String AGENT_IMAGE_PULL_FAILURE = "agent.image.pull.failure";
-    public static final String AGENT_IMAGE_PULL_SKIPPED = "agent.image.pull.skipped";
     public static final String AGENT_JOB_BUDGET_HELD = "agent.job.budget.held";
     public static final String AGENT_JOB_BUDGET_REFUSED = "agent.job.budget.refused";
     public static final String AGENT_JOB_CLAIM_LATENCY = "agent.job.claim.latency";
     public static final String AGENT_JOB_COMPOSITION_STOPPED = "agent.job.composition.stopped";
     public static final String AGENT_JOB_CONCURRENCY_REJECTED = "agent.job.concurrency.rejected";
-    public static final String AGENT_JOB_DELIVERY_FAILURE = "agent.job.delivery.failure";
-    public static final String AGENT_JOB_DELIVERY_RECOVERED = "agent.job.delivery.recovered";
     public static final String AGENT_JOB_DURATION = "agent.job.duration";
     public static final String AGENT_JOB_EXECUTION_DURATION = "agent.job.execution.duration";
     public static final String AGENT_JOB_INFRA_RETRY_REQUEUED = "agent.job.infra.retry.requeued";
@@ -38,8 +30,6 @@ public final class AgentMetrics {
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_RATIO = "agent.review.practice.coverage.ratio";
     public static final String AGENT_REVIEW_PRACTICE_SCRIPTS = "agent.review.practice_scripts";
     public static final String ATTEMPT_TOKEN_VERIFY = "attempt.token.verify";
-    public static final String FEEDBACK_LANE_SWEEP_FAILURE = "feedback.lane.sweep.failure";
-    public static final String FEEDBACK_LANE_SWEEP_RECOVERED = "feedback.lane.sweep.recovered";
     public static final String LLM_BUDGET_ALERT_FAILURE = "llm.budget.alert.failure";
     public static final String LLM_BUDGET_BLOCKED = "llm.budget.blocked";
     public static final String LLM_BUDGET_EXHAUSTED = "llm.budget.exhausted";
@@ -82,7 +72,6 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_LEASE_REAPER_FAILURE = "mentor.turn.lease_reaper.failure";
     public static final String MENTOR_TURN_CLAIM_FAILURE = "mentor.turn.claim.failure";
     public static final String MENTOR_LIVE_STREAMS = "mentor.live.streams";
-    public static final String PRACTICE_FEEDBACK_DISPATCH = "practice.feedback.dispatch";
     public static final String SANDBOX_CLEANUP_FAILURES = "sandbox.cleanup.failures";
     public static final String SANDBOX_CONTAINERS_ACTIVE = "sandbox.containers.active";
     public static final String SANDBOX_EXECUTIONS = "sandbox.executions";
@@ -94,9 +83,6 @@ public final class AgentMetrics {
     public static final String SANDBOX_GATEWAY_REQUESTS = "sandbox.gateway.requests";
     public static final String SANDBOX_GATEWAY_REQUEST_SIZE = "sandbox.gateway.request.size";
     public static final String SANDBOX_GATEWAY_THROTTLED = "sandbox.gateway.throttled";
-    public static final String SANDBOX_IMAGE_PULL_DURATION = "sandbox.image.pull.duration";
-    public static final String SANDBOX_IMAGE_PULL_FAILURE = "sandbox.image.pull.failure";
-    public static final String SANDBOX_IMAGE_PULL_SKIPPED = "sandbox.image.pull.skipped";
     /** Sandbox Pods removed, tagged by {@code kind} (what they ran) and {@code reason} (why they ended). */
     public static final String SANDBOX_EXITS = "sandbox.exits";
 
@@ -110,7 +96,6 @@ public final class AgentMetrics {
     public static final String WORKER_CAPACITY_SPARE = "worker.capacity.spare";
     public static final String WORKER_CAPACITY_TOTAL = "worker.capacity.total";
     public static final String WORKER_DRAIN_ACTIVE = "worker.drain.active";
-    public static final String WORKER_GIT_OPERATIONS_FAILED = "worker.git.operations.failed";
     public static final String WORKER_LIVENESS_HEARTBEAT_FAILURES = "worker.liveness.heartbeat.failures";
 
     private AgentMetrics() {}

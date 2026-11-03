@@ -100,6 +100,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final PracticeItemOptions itemOptions;
     private final ResultRepository results;
     private final ItemEventService itemEvents;
+    private final ReviewOutcomeMeters outcomes;
 
     @Override
     @Transactional(noRollbackFor = ReviewRequestRejected.class)
@@ -322,6 +323,7 @@ public class ReviewServiceImpl implements ReviewService {
             review.setStatus(ReviewStatus.PARTIAL);
             review.setStopReason(ReviewStopReason.READINESS_REFUSED);
             review.setCompletedAt(now);
+            outcomes.ended(review);
         } else events.publishEvent(new ReviewRequested(review.getId(), request.workspaceId()));
         return review.getId();
     }
@@ -533,6 +535,7 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
         if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
+        outcomes.ended(review);
         if ((status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL)
                 && memberships.existsByWorkspaceIdAndReviewIdAndStateInAndResultIdIsNotNull(
                         workspaceId, reviewId, List.of(ReviewItemState.JUDGED, ReviewItemState.REUSED)))
@@ -556,6 +559,7 @@ public class ReviewServiceImpl implements ReviewService {
             review.setStopReason(ReviewStopReason.CANCELLED);
             review.setCompletedAt(clock.instant());
             if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
+            outcomes.ended(review);
         }
         return true;
     }

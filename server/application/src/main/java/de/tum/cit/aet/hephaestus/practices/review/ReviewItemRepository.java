@@ -16,6 +16,22 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewItem.Id> {
+    /** The items of one review by state and recorded reason, which only a withheld item has. */
+    @Query(value = """
+        SELECT state,reason,COUNT(*) AS items FROM review_item WHERE workspace_id=:ws AND review_id=:id
+        GROUP BY state,reason
+        """, nativeQuery = true)
+    List<ItemEndState> endStates(long ws, UUID id);
+
+    interface ItemEndState {
+        String getState();
+
+        @Nullable
+        String getReason();
+
+        long getItems();
+    }
+
     /** The item counts of each review on the page, per practice, in one read. */
     @Query(value = """
         SELECT review_id AS reviewId,practice_id AS practiceId,COUNT(*) AS listed,

@@ -10,6 +10,62 @@ Spring Boot writes the records in its built-in [Elastic Common Schema (ECS) form
 The application exports no logs.
 The container runtime keeps them on the host until an operator collects them ([Collecting logs](#collecting-logs)).
 
+## Questions that the signals answer
+
+Each row is a question that an operator asks to run an instance or to make it better.
+The signal answers the question.
+The alert or the objective tells the operator when the answer needs work.
+
+| Question | Signal | Alert or objective |
+| --- | --- | --- |
+| Do item reviews end complete? | `practice_review_ended_total` | `HephaestusReviewsIncomplete` |
+| Which items got no result, and why? | `practice_review_items_ended_total`, by `state` and `reason` | `HephaestusReviewsIncomplete` |
+| Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_job_orphan_failed_total` | `HephaestusAgentJobsFailing` and the other review alerts |
+| Does work wait for a worker? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
+| Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | None |
+| Does the API answer without errors, and fast enough? | `http_server_requests_seconds` | The API objectives |
+| Do pages show their content fast enough? | `web_vital_duration_seconds` | `HephaestusPageExperiencePoor` |
+| Does a conversation answer, and how fast does it start? | `mentor_turn_completed_total`, `mentor_turn_first_token_seconds` | None |
+| Do provider events arrive and get processed? | `webhook_publish_total`, `webhook_stream_*`, `integration_consumer_*` | The webhook and stream alerts |
+| Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
+| Which release runs in each Pod? | `application_build_info` | None |
+
+### Questions without a signal
+
+These questions have no signal yet. The most important is first.
+
+1. How long after a request or a push does the developer get feedback?
+   The delivery state of each destination and the reason of withheld feedback are only in the `feedback` and `feedback_copy` tables.
+2. How long does each API route take at the 95th percentile?
+   The server publishes only the 2-second bucket.
+3. How long does each stage of a review take: capture, the practice sessions, admission and composition?
+   Only the durations of the whole job and of the sandbox exist.
+4. How long does a model call of each pool take, and how soon does its first token come?
+   How many tokens go in and out, and how often does a model refuse?
+   `llm_proxy_duration_seconds` has no pool label and no buckets. Token counts are only in spans and in the database.
+5. Does the database pool make requests wait, and which statements are slow?
+   `hikaricp_*` has no alert. No exporter reads `pg_stat_statements`, lock waits, autovacuum or table growth.
+6. How often does a consumer get an event again, and how many events went to the dead letters?
+   No counter exists.
+7. What does a reader wait for on a page?
+   When does the browser show the first word of an answer?
+   No signal exists.
+8. Does feedback earn trust: the outcomes of each practice, corrections, disagreement and readback?
+   These are only in the database.
+   A practice is not a metric label, because each workspace can add practices.
+
+### Objectives for 1.0
+
+Each objective has a measured baseline from the project's test instance on 2026-11-03.
+The samples are small.
+
+| Objective | Baseline | Signal |
+| --- | --- | --- |
+| 95 % of item reviews end complete | 4 of 15 reviews in seven days | `HephaestusReviewsIncomplete` |
+| 90 % of requested reviews deliver their first feedback within 30 minutes | Median 22 minutes, 95th percentile 2.9 hours, 15 reviews | None yet |
+| 95 % of Activity reads finish within 1 second | Cannot be measured: one bucket only | None yet |
+| 95 % of conversation turns get their first token within 10 seconds | 95th percentile 6.7 seconds, 7 turns | `mentor_turn_first_token_seconds`, no alert yet |
+
 ## Scrape metrics
 
 Each runtime role serves `GET /actuator/prometheus` without a user token on a separate management
@@ -177,18 +233,21 @@ For a release name longer than 34 characters, change the name patterns of these 
 
 #### Service level objectives
 
-The group `hephaestus-slos` holds three objectives.
+The group `hephaestus-slos` holds four objectives.
 The two API objectives each have an error budget for 30 days, and burn-rate alerts on that budget.
 A fast burn spends 2 % of that budget in one hour, and a slow burn spends 5 % in six hours.
 Each of these alerts checks a long window and a short window, so it ends soon after the cause ends ([Google SRE workbook](https://sre.google/workbook/alerting-on-slos/)).
-The page load objective has one threshold over six hours, not a budget.
-Each alert needs a minimum number of requests or page loads in its long window, so one failure on an idle instance does not page.
+
+The page load and review objectives each have one threshold over six hours, not a budget.
+Each alert needs a minimum number of requests, page loads or reviews in its long window.
+Thus, one failure on an idle instance does not page.
 
 | Objective | Signal | Why this objective |
 | --- | --- | --- |
 | 99.5 % of API requests get no server error (`HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`) | `http_server_requests_seconds_count` of the server role, without the `/internal/` routes | A reader sees every server error. The `/internal/` routes serve review sandboxes and the model proxy, which have their own alerts |
 | 99.5 % of API reads finish within 2 seconds (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`) | `http_server_requests_seconds_bucket` with `le="2.0"` against `le="+Inf"`, for `GET` without server errors, event streams, downloads and exports | A page waits for its reads. An event stream stays open on purpose, and a download or an export takes as long as its size. The server publishes one bucket at 2 seconds, not a full histogram. A server from before this bucket counts on neither side |
 | 75 % of page loads show their main content within 2.5 seconds (`HephaestusPageExperiencePoor`) | `web_vital_duration_seconds_bucket` for `lcp` with `le="2.5"`, over six hours | The Core Web Vitals threshold for a good Largest Contentful Paint ([web.dev](https://web.dev/articles/lcp)). It needs [page experience metrics](#page-experience-metrics) on, and 50 loads in six hours |
+| 95 % of item reviews end complete (`HephaestusReviewsIncomplete`) | `practice_review_ended_total` with `kind="item"`, over six hours | A review that is not complete gives a developer no feedback on part of its practices. The alert fires when more than 25 % end incomplete, which spends the 5 % budget five times as fast. Readiness waits and budget stops are policy decisions with their own signals, so they count on neither side. A cancellation counts only when no sandbox room was left. The alert needs four reviews in six hours |
 
 The WAL archive rule reads the server's [WAL archive metrics](#wal-archive-metrics).
 It also applies to an external PostgreSQL that archives its WAL.
@@ -392,6 +451,42 @@ It has no phase, outcome or duration.
 `execution`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
+
+## Practice review outcome metrics
+
+The server role counts each review once, when its end commits.
+A server that stops between the commit and the count loses that count.
+
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `practice_review_ended_total` | Counter | `kind`, `status`, `reason` | Reviews that ended |
+| `practice_review_items_ended_total` | Counter | `kind`, `state`, `reason` | The items of the reviews that ended, by their last state |
+
+`kind` is `item` or `scan`.
+`status` is `complete`, `partial`, `failed` or `cancelled`.
+The `reason` of a review is its stop reason in lowercase, or `none` for a complete review.
+
+The `state` of an item is `judged`, `reused`, `withheld`, `listed` or `staged`.
+An item that is still `listed` when its review ends is an item that no attempt reached.
+The `reason` of a withheld item is its recorded reason in lowercase, for example `execution_failed` or `consulted_source_unread`.
+A reason that is not a constant name counts as `other`.
+Other items have the reason `none`.
+The `review.stop_reason` and `review_item.reason` columns keep the same reasons for each review.
+
+The server registers each status and stop reason of `practice_review_ended_total` at zero when it starts.
+Thus, `increase()` also counts the first end after a start.
+An item series starts with its first count, so `increase()` does not count the first items of a new state and reason after a start.
+
+## Release metric
+
+Each runtime role exports `application_build_info` with the value `1`.
+Its labels are `version` and `channel`, the same values as `release` in `/actuator/info`.
+`channel` is `release`, `commit` or `development`.
+This query gives the releases that run in each role:
+
+```promql
+count by (runtime_role, version) (application_build_info{job="hephaestus"})
+```
 
 ## Conversation turn metrics
 

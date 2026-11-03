@@ -6,7 +6,9 @@ import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.IMAGE;
 import static de.tum.cit.aet.hephaestus.core.release.ReleaseFixtures.running;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.info.Info;
@@ -49,5 +51,18 @@ class RunningReleaseTest {
         var info = new Info.Builder();
         running.contribute(info);
         assertThat(info.build().getDetails()).containsEntry("release", running.get());
+    }
+
+    @Test
+    void shouldExportTheRunningReleaseAsOneBuildInfoSeries() {
+        var registry = new SimpleMeterRegistry();
+        running("1.2.3").bindTo(registry);
+        assertThat(registry.get(CoreMetrics.APPLICATION_BUILD_INFO)
+                        .tag("version", "1.2.3")
+                        .tag("channel", "release")
+                        .gauge()
+                        .value())
+                .isEqualTo(1);
+        assertThat(registry.find(CoreMetrics.APPLICATION_BUILD_INFO).gauges()).hasSize(1);
     }
 }
