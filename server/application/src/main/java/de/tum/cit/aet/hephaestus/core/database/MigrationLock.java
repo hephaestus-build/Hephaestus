@@ -27,7 +27,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>A Liquibase lock that is held while the run mode holds this lock was therefore left by a run that died, and the
  * run mode releases it. A previous release takes no advisory lock: its processes must not migrate the same database
- * at the same time as this one.
+ * at the same time as this one. The run mode also moves a database on 1.0.0-rc.1 to the 1.0 baseline under this lock
+ * ({@link BaselineSynchronization}).
  */
 @Component
 @ConditionalOnBooleanProperty(name = "spring.liquibase.enabled", matchIfMissing = true)
@@ -51,13 +52,13 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
     private static final Pattern TABLE = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     private final Duration timeout;
-    private final boolean releasesLeftLiquibaseLock;
+    private final boolean migrateRunMode;
     private final Map<String, Connection> held = new ConcurrentHashMap<>();
 
     /** Reads the environment rather than {@code @Value}: the run mode's context has no placeholder configurer. */
     public MigrationLock(Environment environment) {
         this.timeout = environment.getRequiredProperty("hephaestus.database.migration-wait", Duration.class);
-        this.releasesLeftLiquibaseLock = environment.acceptsProfiles(Profiles.of(DatabaseMigration.PROFILE));
+        this.migrateRunMode = environment.acceptsProfiles(Profiles.of(DatabaseMigration.PROFILE));
     }
 
     @Override
@@ -67,6 +68,9 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
                 held.put(beanName, take(liquibase));
             } catch (SQLException e) {
                 throw new IllegalStateException("Could not take the database migration lock", e);
+            }
+            if (migrateRunMode) {
+                BaselineSynchronization.run(liquibase);
             }
         }
         return bean;
@@ -125,7 +129,7 @@ public class MigrationLock implements BeanPostProcessor, DisposableBean {
                 Thread.sleep(RETRY);
             }
             locked = true;
-            if (releasesLeftLiquibaseLock
+            if (migrateRunMode
                     && Boolean.TRUE.equals(
                             jdbc.queryForObject("SELECT to_regclass(?) IS NOT NULL", Boolean.class, table))) {
                 jdbc.query("SELECT lockedby, lockgranted FROM " + table + " WHERE locked", rs -> {

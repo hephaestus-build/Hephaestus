@@ -400,3 +400,20 @@ void test("reads pending changesets from the exact commit through native git", a
 	}
 	await assert.rejects(hasPendingChangesets("missing-revision", repo));
 });
+
+void test("a 1.0 candidate upgrades from the release of the baseline, not from 0.x", () => {
+	const rc1 = { ...published("v1.0.0-rc.1"), isPrerelease: true };
+	const plan = planRelease(SHA, "1.0.0-rc.2", [published("v0.95.1"), rc1], false);
+	assert.equal(plan.kind, "cut");
+	assert.equal(plan.previousVersion, "1.0.0-rc.1");
+	// Before the baseline's release exists, and after 1.0.0, the previous stable release is right.
+	const first = planRelease(SHA, "1.0.0-rc.1", [published("v0.95.1")], false);
+	assert.equal(first.kind, "cut");
+	assert.equal(first.previousVersion, "0.95.1");
+	const patch = planRelease(SHA, "0.95.2", [published("v0.95.1"), rc1], false);
+	assert.equal(patch.kind, "cut");
+	assert.equal(patch.previousVersion, "0.95.1");
+	const later = planRelease(SHA, "1.0.1", [published("v0.95.1"), rc1, published("v1.0.0")], false);
+	assert.equal(later.kind, "cut");
+	assert.equal(later.previousVersion, "1.0.0");
+});

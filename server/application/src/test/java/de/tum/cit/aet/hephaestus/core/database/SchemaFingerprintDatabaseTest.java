@@ -6,13 +6,11 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.stream.IntStream;
+import java.util.Objects;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
@@ -25,21 +23,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * The schema fingerprint ({@code db/schema-fingerprint.sql}) and the schema that the 1.0.0-rc.1 chain builds. The 1.0
- * baseline must reproduce that schema exactly, so its fingerprint is pinned here while the chain still exists.
+ * The schema fingerprint ({@code db/schema-fingerprint.sql}) and the schema of the 1.0 baseline. The pins came from
+ * databases that the published 1.0.0-rc.1 image built, so the baseline equals that release for as long as they match.
  */
 @Tag("database")
 class SchemaFingerprintDatabaseTest {
 
-    /** The last change set of 1.0.0-rc.1. */
-    private static final String RC1_HEAD_FILE = "next/20261101103000-erasure-history-redaction.xml";
-
-    private static final String RC1_HEAD_ID = "1793504565891-1";
-
     @ParameterizedTest
     @ValueSource(strings = {"prod", "dev"})
-    void shouldPinTheSchemaThatTheReleaseCandidateChainBuilds(String context) throws Exception {
-        var database = PostgreSQLTestContainer.createDatabase("fingerprint_rc1_" + context);
+    void shouldPinTheSchemaThatTheBaselineBuilds(String context) throws Exception {
+        var database = PostgreSQLTestContainer.createDatabase("fingerprint_baseline_" + context);
         try (Connection connection =
                         DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
                 var liquibase = new Liquibase(
@@ -47,30 +40,12 @@ class SchemaFingerprintDatabaseTest {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
-            var contexts = new Contexts(context);
-            var labels = new LabelExpression();
-            var pending = liquibase.listUnrunChangeSets(contexts, labels);
-            int through = IntStream.range(0, pending.size())
-                            .filter(index -> pending.get(index).getFilePath().endsWith(RC1_HEAD_FILE)
-                                    && pending.get(index).getId().equals(RC1_HEAD_ID))
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalStateException(RC1_HEAD_FILE + " is not in the chain"))
-                    + 1;
-            liquibase.update(through, contexts, labels);
+            liquibase.update("1.0.0-baseline", new Contexts(context), new LabelExpression());
 
             List<String> actual = SchemaFingerprint.of(connection);
-            String file = "rc1-" + context + ".txt";
-            List<String> pinned = pinned(file);
-            if (!actual.equals(pinned)) {
-                // Written for review: a change that is meant to alter the rc.1 schema does not exist.
-                Path written = Path.of("build", "fingerprint", file);
-                Files.createDirectories(written.getParent());
-                Files.write(written, actual, StandardCharsets.UTF_8);
-            }
+            List<String> pinned = pinned("baseline-" + context + ".txt");
             assertThat(actual)
-                    .as(
-                            "the rc.1 schema (%s); this run's fingerprint is in build/fingerprint/%s:%n%s",
-                            context, file, SchemaFingerprint.difference(pinned, actual))
+                    .as("the baseline's schema (%s):%n%s", context, SchemaFingerprint.difference(pinned, actual))
                     .isEqualTo(pinned);
         }
     }
@@ -183,12 +158,9 @@ class SchemaFingerprintDatabaseTest {
     }
 
     private static List<String> pinned(String file) throws IOException {
-        try (InputStream in = SchemaFingerprintDatabaseTest.class.getResourceAsStream("/db/fingerprint/" + file)) {
-            return in == null
-                    ? List.of()
-                    : new String(in.readAllBytes(), StandardCharsets.UTF_8)
-                            .lines()
-                            .toList();
+        try (InputStream in = Objects.requireNonNull(
+                SchemaFingerprintDatabaseTest.class.getResourceAsStream("/db/fingerprint/" + file))) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8).lines().toList();
         }
     }
 

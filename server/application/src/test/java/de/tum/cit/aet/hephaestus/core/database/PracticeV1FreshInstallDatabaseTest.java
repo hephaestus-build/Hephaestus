@@ -19,12 +19,9 @@ class PracticeV1FreshInstallDatabaseTest {
                 "practice_v1_fresh_" + UUID.randomUUID().toString().replace("-", ""));
         PostgreSQLTestContainer.migrateDatabase(database, context);
         try (var input =
-                Objects.requireNonNull(getClass().getResourceAsStream("/db/practice-cutover/assert-migrated.sql"))) {
+                Objects.requireNonNull(getClass().getResourceAsStream("/db/practice-native/assert-migrated.sql"))) {
             PracticeMigrationFixture.execute(database, new String(input.readAllBytes(), StandardCharsets.UTF_8));
         }
-        assertThat(PracticeMigrationFixture.column(
-                        database, "SELECT count(*)::text FROM databasechangelog WHERE id='1791486276211-v1-cutover'"))
-                .containsExactly("1");
         assertThat(
                         PracticeMigrationFixture.column(
                                 database,

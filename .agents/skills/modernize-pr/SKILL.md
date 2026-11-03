@@ -86,7 +86,7 @@ Effort already spent is not a reason to keep a pull request.
    If a conflict shows a product or architecture disagreement, stop and choose the disposition again.
 3. Do not hand-merge a generated file.
    During a manual rebase, take the updated base's version, then run its generator again after the rebase.
-4. `db/changelog/**` that reached `main` never changes. Keep the released include prefix fixed and follow the migration guide for new timestamped files.
+4. `db/changelog/**` that reached `main` never changes. Keep `master.xml` fixed and follow the migration guide for new timestamped files.
    Keep the branch's one changelog last.
    If it conflicts, run `vp run db:draft-changelog` again, which also refreshes the ERD.
 5. Keep the pull request's `.changeset/*.md` and `.migration/*.md` files.

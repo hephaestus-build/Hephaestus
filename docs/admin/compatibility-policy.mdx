@@ -100,10 +100,7 @@ target release's Helm chart. Follow the [database migration instructions](#datab
 Only the previous release can run beside a new schema.
 Thus, an upgrade that skips a release stops every role before the migration.
 
-**Before 1.0, do not assume an arbitrary older release can upgrade directly.** Read the target release's
-migration instructions first: they may require an intermediate release or manual preparation.
-Existing databases must have completed the v0.95.0 migrations before the target release starts.
-The target release refuses an older migration history.
+**A release before 1.0.0-rc.1 cannot upgrade directly.** Hephaestus 1.x starts from 1.0.0-rc.1.
 Fresh databases initialize automatically.
 
 <a id="upgrade-paths-to-10"></a>
@@ -112,12 +109,15 @@ Fresh databases initialize automatically.
 
 | Installed release | Required path to the target release |
 | --- | --- |
-| Older than v0.95.0 | Upgrade to v0.95.0 with its [versioned instructions](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/upgrade.mdx), then upgrade to the target release |
-| v0.95.0 or later | Follow the target release migration procedure |
+| Older than 1.0.0-rc.1 | Install 1.0.0-rc.1 with its [versioned upgrade instructions](https://github.com/hephaestus-build/Hephaestus/blob/v1.0.0-rc.1/docs/admin/upgrade-to-1-0.mdx), then upgrade to the target release. |
+| 1.0.0-rc.1 or later | Follow the target release migration procedure. |
 
-The database history determines whether it has reached the cut-point.
-The guard checks the final v0.95.0 migration's id, author and filename before update or synchronization.
-Do not use synchronization to skip missing migrations.
+The database history determines whether a database has reached 1.0.0-rc.1.
+The migration refuses an older history before it writes anything, and tells you which release to install.
+
+On a database at 1.0.0-rc.1, the first migration also checks the schema against a new install of that release.
+If they differ, it stops without a change and lists each difference. The current release can keep running. Contact the maintainers with the list.
+If a build later than 1.0.0-rc.1 ran on the database, the migration also stops without a change. Restore the backup from 1.0.0-rc.1, then upgrade from there.
 
 Released migrations remain immutable. CI checks fresh initialization and selected upgrade fixtures.
 It does not prove that every migration is safe for every existing production dataset. Data-affecting

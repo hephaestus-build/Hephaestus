@@ -103,25 +103,13 @@ mock.module("node:child_process", { exports: {
 	}
 }
 
-// Seed cases stop when the candidate starts. Protocol cases continue through both receivers, with and
-// without a stopped-upgrade waiver. These stubs prove orchestration; CI runs the PostgreSQL and NATS operations.
-for (const [scenario, args, previousKeepsChat, expectedError, seeded] of [
-	["required-admitted", ["--require-seed=heph-chat"], true, "candidate start stubbed", true],
-	[
-		"required-missing",
-		["--require-seed=heph-chat"],
-		false,
-		"The required heph-chat seed was not admitted",
-		false,
-	],
-	["optional-admitted", [], true, "candidate start stubbed", true],
-	["optional-missing", [], false, "candidate start stubbed", false],
-	["unknown-seed", ["--require-seed=chat"], true, "Unknown option: --require-seed=chat", false],
-	["rolling-protocol-pass", [], false, "", false],
-	["stopped-protocol-pass", [], false, "", false],
-	["stopped-protocol-refused", [], false, "the body changed", false],
+// Protocol cases go through both receivers, with and without a stopped-upgrade waiver. These stubs prove orchestration;
+// CI runs the PostgreSQL and NATS operations.
+for (const [scenario, expectedError] of [
+	["rolling-protocol-pass", ""],
+	["stopped-protocol-pass", ""],
+	["stopped-protocol-refused", "the body changed"],
 ] as const) {
-	const protocol = scenario.endsWith("-protocol-pass") || scenario.endsWith("-protocol-refused");
 	const stopped = scenario.startsWith("stopped-");
 	await test(`upgrade qualification: ${scenario}`, () => {
 		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-seed-"));
@@ -137,18 +125,16 @@ import { mock } from "node:test";
 import * as childProcess from "node:child_process";
 const commands = ${JSON.stringify(commands)};
 const fixtures = ${JSON.stringify(fixtures)};
-const previousKeepsChat = ${JSON.stringify(previousKeepsChat)};
-const protocol = ${JSON.stringify(protocol)};
 const stopped = ${JSON.stringify(stopped)};
 const mismatch = ${JSON.stringify(scenario === "stopped-protocol-refused")};
 const deliveries = new Map();
-if (protocol && !stopped) {
+if (!stopped) {
   // The previous release's worker mounts the host's Docker socket, which a Windows runner lacks.
   const statSync = fs.statSync;
   fs.statSync = (file, ...rest) => (file === "/var/run/docker.sock" ? { gid: 0 } : statSync(file, ...rest));
   syncBuiltinESMExports();
 }
-if (protocol) {
+{
   mock.module(${JSON.stringify(new URL("lib/migration-guide.ts", import.meta.url).href)}, {
     exports: { stopEveryRoleEntries: () => (stopped ? ["#### 🔴 Stop every role for the upgrade"] : []) }
   });
@@ -175,18 +161,18 @@ globalThis.fetch = async (input, init) => {
   if (url.endsWith("/workspaces")) return Response.json([{ workspaceSlug: "upgrade-fixture" }]);
   if (url.endsWith("/user")) return Response.json({ displayName: "Upgrade alice" });
   if (url.endsWith("/readyz")) return Response.json({ status: "UP" });
-  if (protocol && url.includes("/webhooks/")) {
+  if (url.includes("/webhooks/")) {
     const stream = url.split("/").at(-1);
     deliveries.set(stream, [...(deliveries.get(stream) ?? []), init]);
     appendFileSync(commands, JSON.stringify(["delivery", stream]) + "\\n");
     return Response.json({ status: "ok" }, { status: 202 });
   }
-  if (protocol && url.endsWith("/admin/practice-catalog")) {
+  if (url.endsWith("/admin/practice-catalog")) {
     return Response.json({ practices: [{ slug: "fixture", offered: true }] });
   }
-  if (protocol && url.endsWith("/practices")) return Response.json([{ slug: "fixture" }]);
+  if (url.endsWith("/practices")) return Response.json([{ slug: "fixture" }]);
   // A rolling upgrade first runs the previous release on the candidate's schema and binds a review model there.
-  if (protocol && (url.includes("/admin/llm/") || url.endsWith("/agents/PRACTICE_REVIEW"))) {
+  if ((url.includes("/admin/llm/") || url.endsWith("/agents/PRACTICE_REVIEW"))) {
     return Response.json({ id: 1 });
   }
   throw new Error("Unexpected HTTP request: " + url);
@@ -198,18 +184,16 @@ mock.module("node:child_process", { exports: {
     appendFileSync(commands, JSON.stringify(args) + "\\n");
     if (args.includes("--file=-")) appendFileSync(fixtures, options.input + "\\n");
     let stdout = "", stderr = "", status = 0;
-    if (!protocol && args[0] === "run" && args.includes("target-image")) { status = 1; stderr = "candidate start stubbed"; }
-    else if (args[0] === "port") stdout = "127.0.0.1:18080";
+    if (args[0] === "port") stdout = "127.0.0.1:18080";
     else if (args[0] === "inspect") stdout = "running";
     else if (args.includes("--command")) {
       const sql = args.at(-1);
-      if (sql.includes("chat_message_id")) stdout = previousKeepsChat ? "1" : "0";
-      else if (sql.includes("INSERT INTO")) stdout = "7";
+      if (sql.includes("INSERT INTO")) stdout = "7";
       else if (sql.includes("SELECT kind ||")) {
         stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
       }
-      else if (protocol && sql.includes("LEFT JOIN practice_version")) stdout = "0";
-      else if (protocol && sql.includes("FROM review_job WHERE id=")) stdout = "1|true|RUNNING|status=RUNNING";
+      else if (sql.includes("LEFT JOIN practice_version")) stdout = "0";
+      else if (sql.includes("FROM review_job WHERE id=")) stdout = "1|true|RUNNING|status=RUNNING";
       else if (sql.includes("count(*)")) stdout = "1";
     }
     return { status, stdout, stderr };
@@ -227,36 +211,24 @@ mock.module("node:child_process", { exports: {
 					"old-image",
 					"target-image",
 					"postgres-image",
-					...args,
 				],
 				{
 					encoding: "utf8",
 					timeout: 15_000,
 					env: {
 						...process.env,
-						PREVIOUS_VERSION: protocol ? "0.95.1" : "0.94.7",
+						PREVIOUS_VERSION: "0.95.1",
 						PREVIOUS_AGENT_IMAGE: "agent-image",
 					},
 				},
 			);
-			assert.equal(
-				result.status,
-				protocol && expectedError === "" ? 0 : 1,
-				result.stdout + result.stderr,
-			);
+			assert.equal(result.status, expectedError === "" ? 0 : 1, result.stdout + result.stderr);
 			if (expectedError !== "") {
 				assert.ok(result.stderr.includes(expectedError), result.stderr);
 			}
-			const executed = existsSync(fixtures) ? readFileSync(fixtures, "utf8") : "";
-			assert.equal(executed.includes("INSERT INTO mentor_slack_thread"), seeded, executed);
 			const invocations = existsSync(commands) ? readFileSync(commands, "utf8") : "";
-			// A refused requirement stops the run before the candidate starts.
-			assert.equal(
-				invocations.includes('"target-image"'),
-				protocol || expectedError === "candidate start stubbed",
-				invocations,
-			);
-			if (protocol) {
+			assert.ok(invocations.includes('"target-image"'), invocations);
+			{
 				assert.equal(
 					/Previous application\/schema boot coverage is off/u.test(result.stdout),
 					stopped,

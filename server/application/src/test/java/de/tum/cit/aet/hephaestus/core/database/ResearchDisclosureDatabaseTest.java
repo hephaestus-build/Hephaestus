@@ -3,29 +3,15 @@ package de.tum.cit.aet.hephaestus.core.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
-import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.IntStream;
-import liquibase.Contexts;
-import liquibase.LabelExpression;
-import liquibase.Liquibase;
-import liquibase.database.DatabaseFactory;
-import liquibase.database.jvm.JdbcConnection;
-import liquibase.resource.ClassLoaderResourceAccessor;
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("database")
 class ResearchDisclosureDatabaseTest {
-    private static final String MIGRATION = "1792533036123_changelog.xml";
     private static final String DISCLOSURE = "00000000-0000-0000-0000-000000978081";
     private static final String SUBJECT = "00000000-0000-0000-0000-000000978082";
 
@@ -139,141 +125,6 @@ class ResearchDisclosureDatabaseTest {
                 .containsExactly("true");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"prod", "dev"})
-    void shouldPreserveExistingAuditRowsAndAcceptResearchEventsOnCurrentAndFuturePartitions(String context)
-            throws Exception {
-        var database = beforeResearch(context);
-        // Rows of every type the schema before the research migration admits; later migrations add other types.
-        String admitted = String.valueOf(auditConstraint(database));
-        int id = 978100;
-        for (AuthEvent.EventType type : AuthEvent.EventType.values()) {
-            if (!admitted.contains("'" + type.name() + "'")) continue;
-            PracticeMigrationFixture.execute(database, audit(id++, type.name(), "now()"));
-        }
-        assertThat(admitted).doesNotContain("'RESEARCH_DATASET_RELEASED'", "'RESEARCH_REMOVAL_RECORDED'");
-        var before = PracticeMigrationFixture.column(
-                database, "SELECT to_jsonb(e)::text FROM auth_event e WHERE id>=978100 AND id<978200 ORDER BY id");
-        var history = PracticeMigrationFixture.column(
-                database,
-                "SELECT id || ':' || author || ':' || filename || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        try (Liquibase liquibase = liquibase(database)) {
-            liquibase.update(new Contexts(context), new LabelExpression());
-        }
-        assertThat(PracticeMigrationFixture.column(
-                        database,
-                        "SELECT to_jsonb(e)::text FROM auth_event e WHERE id>=978100 AND id<978200 ORDER BY id"))
-                .isEqualTo(before);
-        var migratedHistory = PracticeMigrationFixture.column(
-                database,
-                "SELECT id || ':' || author || ':' || filename || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        assertThat(migratedHistory.subList(0, history.size())).isEqualTo(history);
-        PracticeMigrationFixture.execute(database, audit(978201, "RESEARCH_DATASET_RELEASED", "now()"));
-        PracticeMigrationFixture.execute(database, audit(978202, "RESEARCH_REMOVAL_RECORDED", "now()"));
-        assertViolation(database, audit(978203, "NOT_AN_EVENT", "now()"), "23514");
-        PracticeMigrationFixture.execute(
-                database,
-                "SELECT partman.create_partition_time('public.auth_event', ARRAY['2101-01-01'::timestamptz])");
-        PracticeMigrationFixture.execute(
-                database, audit(978204, "RESEARCH_DATASET_RELEASED", "'2101-01-02'::timestamptz"));
-        assertThat(
-                        PracticeMigrationFixture.column(
-                                database,
-                                "SELECT (tableoid <> 'public.auth_event_default'::regclass)::text FROM auth_event WHERE id=978204"))
-                .containsExactly("true");
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "prod, RESEARCH_DATASET_RELEASED",
-        "prod, RESEARCH_REMOVAL_RECORDED",
-        "dev, RESEARCH_DATASET_RELEASED",
-        "dev, RESEARCH_REMOVAL_RECORDED"
-    })
-    void shouldRestoreTheParentAuditConstraintOnlyWhenNoResearchEventsRemain(String context, String researchEvent)
-            throws Exception {
-        var database = beforeResearch(context);
-        PracticeMigrationFixture.execute(database, audit(978100, "LOGIN", "now()"));
-        PracticeMigrationFixture.execute(database, audit(978101, "PASSKEY_CHANGED", "now()"));
-        PracticeMigrationFixture.execute(database, audit(978102, "PASSKEY_VERIFIED", "now()"));
-        var oldRows = auditRows(database);
-        var parentConstraint = auditConstraint(database);
-        assertThat(parentConstraint).singleElement().asString().contains("PASSKEY_CHANGED", "PASSKEY_VERIFIED");
-        try (var liquibase = liquibase(database)) {
-            liquibase.update(throughResearch(liquibase, context), new Contexts(context), new LabelExpression());
-        }
-        assertThat(PracticeMigrationFixture.column(
-                        database, "SELECT filename FROM databasechangelog ORDER BY orderexecuted DESC LIMIT 1"))
-                .singleElement()
-                .asString()
-                .endsWith(MIGRATION);
-        var migratedHistory = migrationHistory(database);
-        assertThat(auditRows(database)).isEqualTo(oldRows);
-        assertViolation(database, audit(978103, "NOT_AN_EVENT", "now()"), "23514");
-
-        // Only the final audit change rolls back; the disclosure schema remains applied.
-        try (var liquibase = liquibase(database)) {
-            liquibase.rollback(1, new Contexts(context), new LabelExpression());
-        }
-        assertThat(auditConstraint(database)).isEqualTo(parentConstraint);
-        assertThat(auditRows(database)).isEqualTo(oldRows);
-        assertThat(migrationHistory(database)).isEqualTo(migratedHistory.subList(0, migratedHistory.size() - 1));
-        PracticeMigrationFixture.execute(database, audit(978104, "PASSKEY_CHANGED", "now()"));
-        PracticeMigrationFixture.execute(database, audit(978105, "PASSKEY_VERIFIED", "now()"));
-        assertViolation(database, audit(978106, "RESEARCH_DATASET_RELEASED", "now()"), "23514");
-        assertViolation(database, audit(978107, "RESEARCH_REMOVAL_RECORDED", "now()"), "23514");
-        assertViolation(database, audit(978108, "NOT_AN_EVENT", "now()"), "23514");
-
-        try (var liquibase = liquibase(database)) {
-            liquibase.update(throughResearch(liquibase, context), new Contexts(context), new LabelExpression());
-        }
-        assertThat(migrationHistory(database)).isEqualTo(migratedHistory);
-        PracticeMigrationFixture.execute(database, audit(978109, researchEvent, "now()"));
-        var retainedRows = auditRows(database);
-        var widenedConstraint = auditConstraint(database);
-        try (var liquibase = liquibase(database)) {
-            assertThatThrownBy(() -> liquibase.rollback(1, new Contexts(context), new LabelExpression()))
-                    .rootCause()
-                    .isInstanceOfSatisfying(SQLException.class, failure -> {
-                        assertThat(failure.getSQLState()).isEqualTo("P0001");
-                        assertThat(failure.getMessage())
-                                .startsWith("ERROR: Research audit rows exist; retain the widened audit constraint");
-                    });
-        }
-        assertThat(auditRows(database)).isEqualTo(retainedRows);
-        assertThat(auditConstraint(database)).isEqualTo(widenedConstraint);
-        assertThat(migrationHistory(database)).isEqualTo(migratedHistory);
-        assertViolation(database, audit(978110, "NOT_AN_EVENT", "now()"), "23514");
-    }
-
-    /** Counts pending changes through the research file, leaving later migrations unapplied. */
-    private static int throughResearch(Liquibase liquibase, String context) throws Exception {
-        var pending = liquibase.listUnrunChangeSets(new Contexts(context), new LabelExpression());
-        return IntStream.range(0, pending.size())
-                        .filter(i -> pending.get(i).getFilePath().endsWith(MIGRATION))
-                        .max()
-                        .orElseThrow()
-                + 1;
-    }
-
-    private static List<@Nullable String> auditRows(TestDatabase database) {
-        return PracticeMigrationFixture.column(
-                database, "SELECT to_jsonb(e)::text FROM auth_event e WHERE id>=978100 AND id<978200 ORDER BY id");
-    }
-
-    private static List<@Nullable String> auditConstraint(TestDatabase database) {
-        return PracticeMigrationFixture.column(database, """
-                SELECT convalidated::text || ':' || pg_get_constraintdef(oid) FROM pg_constraint
-                WHERE conrelid='public.auth_event'::regclass AND conname='ck_auth_event_event_type' AND contype='c'
-                """);
-    }
-
-    private static List<@Nullable String> migrationHistory(TestDatabase database) {
-        return PracticeMigrationFixture.column(
-                database,
-                "SELECT id || ':' || author || ':' || filename || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-    }
-
     private static String disclosure(long workspaceId) {
         return """
                 INSERT INTO research_disclosure(id,workspace_id,purpose,schema_name,schema_version,
@@ -290,41 +141,6 @@ class ResearchDisclosureDatabaseTest {
         return "INSERT INTO research_disclosure_subject(id,disclosure_id,workspace_id,account_id,participant_key,grant_decision_id)"
                 + " VALUES ('" + SUBJECT + "','" + DISCLOSURE + "'," + workspaceId
                 + ",978003,'p_aaaaaaaaaaaaaaaaaaaaaaaaaa',978007)";
-    }
-
-    private static String audit(int id, String event, String at) {
-        return "INSERT INTO auth_event(id,occurred_at,event_type,result,details) VALUES (" + id + "," + at + ",'"
-                + event + "','SUCCESS','native research migration witness')";
-    }
-
-    private static TestDatabase beforeResearch(String context) throws Exception {
-        var database = PostgreSQLTestContainer.createDatabase(
-                "research_upgrade_" + UUID.randomUUID().toString().replace("-", ""));
-        try (Liquibase liquibase = liquibase(database)) {
-            var pending = liquibase.listUnrunChangeSets(new Contexts(context), new LabelExpression());
-            int index = IntStream.range(0, pending.size())
-                    .filter(i -> pending.get(i).getFilePath().endsWith(MIGRATION))
-                    .findFirst()
-                    .orElseThrow();
-            liquibase.update(index, new Contexts(context), new LabelExpression());
-        }
-        return database;
-    }
-
-    private static Liquibase liquibase(TestDatabase database) throws Exception {
-        var liquibase = new Liquibase(
-                "db/master.xml",
-                new ClassLoaderResourceAccessor(),
-                DatabaseFactory.getInstance()
-                        .findCorrectDatabaseImplementation(new JdbcConnection(DriverManager.getConnection(
-                                database.jdbcUrl(), database.username(), database.password()))));
-        // This fixture resumes a deliberately partial history before the production entry boundary.
-        liquibase
-                .getDatabaseChangeLog()
-                .getPreconditions()
-                .getNestedPreconditions()
-                .clear();
-        return liquibase;
     }
 
     private static void assertForeignKey(TestDatabase database, String table, String name, String definition) {
