@@ -72,7 +72,7 @@ import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { toast } from "@/lib/toast";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/review")({
@@ -308,7 +308,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 		path: { workspaceSlug },
 		query: { itemKind: ITEM_KIND.repository, size: PICKER_PAGE_SIZE },
 	});
-	const repositoriesQuery = useInfiniteQuery({ ...repositoriesOptions, ...springPageParams });
+	const repositoriesQuery = useInfiniteQuery({ ...repositoriesOptions, ...offsetPageParams });
 	useQueryReadRefusal(
 		repositoriesOptions.queryKey,
 		repositoriesQuery.isError,

@@ -143,7 +143,15 @@ export const handlers = [
 		return HttpResponse.json(count <= 1 ? exportPending : exportReady);
 	}),
 
-	http.get("*/admin/users", () => HttpResponse.json(adminUsers)),
+	http.get("*/admin/users", () =>
+		HttpResponse.json({
+			content: adminUsers,
+			page: 0,
+			size: 25,
+			totalElements: adminUsers.length,
+			totalPages: 1,
+		}),
+	),
 	http.patch<PathParams, AdminUserPatch>("*/admin/users/:id", async ({ request, params }) => {
 		const body = await request.json().catch((): AdminUserPatch => ({}));
 		// Any id echoes a user back, so a story can PATCH a row the fixture list does not carry.

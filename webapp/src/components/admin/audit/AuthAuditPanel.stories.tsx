@@ -47,18 +47,11 @@ const events: AuthEventView[] = [
 ];
 
 function page(content: AuthEventView[]) {
-	return {
-		content,
-		number: 0,
-		size: 50,
-		totalElements: content.length,
-		totalPages: 1,
-		last: true,
-		first: true,
-	};
+	return { content };
 }
 
 const handlers = (content: AuthEventView[] = events) => [
+	http.get("*/admin/audit/count", () => HttpResponse.json({ total: content.length })),
 	http.get("*/admin/audit", () => HttpResponse.json(page(content))),
 ];
 

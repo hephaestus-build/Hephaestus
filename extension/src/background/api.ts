@@ -21,7 +21,7 @@ import type {
 	DeliveredWorkFeedback,
 	IdentityProviderView,
 	OwnItemTrace,
-	PageResponseDtoResultList,
+	OffsetPageDtoResultList,
 	ReviewRequestOutcome,
 	ReviewContext as ReviewContextDTO,
 	Workspace,
@@ -275,7 +275,7 @@ export class AuthenticatedApi {
 		workspaceSlug: string,
 		itemId: string,
 		size: number,
-	): Promise<PageResponseDtoResultList> {
+	): Promise<OffsetPageDtoResultList> {
 		return body(
 			await this.#call(async (client) =>
 				listOwnResults({

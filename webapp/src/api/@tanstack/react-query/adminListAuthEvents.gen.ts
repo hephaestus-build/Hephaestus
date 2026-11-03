@@ -10,7 +10,7 @@ import type { AdminListAuthEventsData, AdminListAuthEventsResponse } from '../..
 export const adminListAuthEventsQueryKey = (options?: Options<AdminListAuthEventsData>) => createQueryKey('adminListAuthEvents', options, false, ['Admin']);
 
 /**
- * List auth audit events (paged, newest first)
+ * List auth audit events (newest first)
  */
 export const adminListAuthEventsOptions = (options?: Options<AdminListAuthEventsData>) => queryOptions<AdminListAuthEventsResponse, DefaultError, AdminListAuthEventsResponse, ReturnType<typeof adminListAuthEventsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -28,17 +28,17 @@ export const adminListAuthEventsOptions = (options?: Options<AdminListAuthEvents
 export const adminListAuthEventsInfiniteQueryKey = (options?: Options<AdminListAuthEventsData>): QueryKey<Options<AdminListAuthEventsData>> => createQueryKey('adminListAuthEvents', options, true);
 
 /**
- * List auth audit events (paged, newest first)
+ * List auth audit events (newest first)
  */
 export const adminListAuthEventsInfiniteOptions = (options?: Options<AdminListAuthEventsData>) => {
-    const opts = infiniteQueryOptions<AdminListAuthEventsResponse, DefaultError, InfiniteData<AdminListAuthEventsResponse>, QueryKey<Options<AdminListAuthEventsData>>, number | Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    const opts = infiniteQueryOptions<AdminListAuthEventsResponse, DefaultError, InfiniteData<AdminListAuthEventsResponse>, QueryKey<Options<AdminListAuthEventsData>>, string | Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
     // @ts-ignore
     {
         queryFn: async ({ pageParam, queryKey, signal }) => {
             // @ts-ignore
             const page: Pick<QueryKey<Options<AdminListAuthEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
                 query: {
-                    page: pageParam
+                    cursor: pageParam
                 }
             };
             const params = createInfiniteParams(queryKey, page);

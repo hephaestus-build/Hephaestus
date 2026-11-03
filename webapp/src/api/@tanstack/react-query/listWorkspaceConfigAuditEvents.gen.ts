@@ -10,7 +10,7 @@ import type { ListWorkspaceConfigAuditEventsData, ListWorkspaceConfigAuditEvents
 export const listWorkspaceConfigAuditEventsQueryKey = (options: Options<ListWorkspaceConfigAuditEventsData>) => createQueryKey('listWorkspaceConfigAuditEvents', options, false, ['Config Audit']);
 
 /**
- * List this workspace's admin configuration changes (paged, newest first)
+ * List this workspace's admin configuration changes (newest first)
  */
 export const listWorkspaceConfigAuditEventsOptions = (options: Options<ListWorkspaceConfigAuditEventsData>) => queryOptions<ListWorkspaceConfigAuditEventsResponse, DefaultError, ListWorkspaceConfigAuditEventsResponse, ReturnType<typeof listWorkspaceConfigAuditEventsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -28,17 +28,17 @@ export const listWorkspaceConfigAuditEventsOptions = (options: Options<ListWorks
 export const listWorkspaceConfigAuditEventsInfiniteQueryKey = (options: Options<ListWorkspaceConfigAuditEventsData>): QueryKey<Options<ListWorkspaceConfigAuditEventsData>> => createQueryKey('listWorkspaceConfigAuditEvents', options, true);
 
 /**
- * List this workspace's admin configuration changes (paged, newest first)
+ * List this workspace's admin configuration changes (newest first)
  */
 export const listWorkspaceConfigAuditEventsInfiniteOptions = (options: Options<ListWorkspaceConfigAuditEventsData>) => {
-    const opts = infiniteQueryOptions<ListWorkspaceConfigAuditEventsResponse, DefaultError, InfiniteData<ListWorkspaceConfigAuditEventsResponse>, QueryKey<Options<ListWorkspaceConfigAuditEventsData>>, number | Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    const opts = infiniteQueryOptions<ListWorkspaceConfigAuditEventsResponse, DefaultError, InfiniteData<ListWorkspaceConfigAuditEventsResponse>, QueryKey<Options<ListWorkspaceConfigAuditEventsData>>, string | Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
     // @ts-ignore
     {
         queryFn: async ({ pageParam, queryKey, signal }) => {
             // @ts-ignore
             const page: Pick<QueryKey<Options<ListWorkspaceConfigAuditEventsData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
                 query: {
-                    page: pageParam
+                    cursor: pageParam
                 }
             };
             const params = createInfiniteParams(queryKey, page);

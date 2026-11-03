@@ -41,8 +41,10 @@ Reconciliation can restart it.
 
 Use an authenticated API client with a workspace administrator's access token.
 Request `GET /workspaces/{workspaceSlug}/integrations/dead-letters`.
-The response contains up to 100 records in ID order.
-Pass `?after={lastId}` for the next page.
+
+The response is a cursor page: `content` holds up to 100 records in ID order.
+Pass its `nextCursor` as `cursor` to read the next page. The last page has no `nextCursor`.
+
 Each record contains its ID, stream sequence, error class, arrival time, failure time, replay time and requesting account ID.
 The API does not return payloads or routing credentials.
 

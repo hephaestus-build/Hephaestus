@@ -137,7 +137,7 @@ function ask(parentEntryId) {
 		parentEntryId === null
 			? mentorUrl(mentorPaths.entries)
 			: mentorUrl(mentorPaths.thread, parentEntryId)
-	}?limit=100`;
+	}?size=100`;
 	const startedAt = Date.now();
 	const deadline = startedAt + mentorTimeoutSeconds * 1000;
 	// A full queue answers 409 and is waited out below, so it is not a failed request.
@@ -167,7 +167,12 @@ function ask(parentEntryId) {
 		sleep(2);
 		const listed = http.get(page, { headers, tags: { operation: "mentor_status" } });
 		const status =
-			listed.status === 200 ? jsonField(listed, `entries.#(id=="${questionId}").turnStatus`) : null;
+			listed.status === 200
+				? jsonField(
+						listed,
+						`${parentEntryId === null ? "content" : "replies.content"}.#(id=="${questionId}").turnStatus`,
+					)
+				: null;
 		if (typeof status === "string" && terminalTurnStatuses.has(status)) {
 			mentorTurnDuration.add(Date.now() - startedAt);
 			const done = status === "DONE";

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { type InfiniteQueryLike, pagedListState } from "./infinite-list";
-import type { SpringPage } from "./spring-page";
+import type { OffsetPage } from "./list-pages";
 
 interface Row {
 	id: string;
@@ -9,8 +9,8 @@ interface Row {
 }
 
 function query(
-	overrides: Partial<InfiniteQueryLike<SpringPage<Row>>>,
-): InfiniteQueryLike<SpringPage<Row>> {
+	overrides: Partial<InfiniteQueryLike<OffsetPage<Row>>>,
+): InfiniteQueryLike<OffsetPage<Row>> {
 	return {
 		isPending: false,
 		isError: false,
@@ -20,7 +20,7 @@ function query(
 		error: null,
 		data: {
 			pages: [
-				{ content: [{ id: "a", status: "QUEUED" }], number: 0, last: false, totalElements: 2 },
+				{ content: [{ id: "a", status: "QUEUED" }], page: 0, totalElements: 2, totalPages: 2 },
 			],
 			pageParams: [0],
 		},
@@ -57,15 +57,15 @@ describe("pagedListState", () => {
 			query({
 				data: {
 					pages: [
-						{ content: [{ id: "a", status: "QUEUED" }], number: 0, last: false, totalElements: 2 },
+						{ content: [{ id: "a", status: "QUEUED" }], page: 0, totalElements: 2, totalPages: 2 },
 						{
 							content: [
 								{ id: "a", status: "RUNNING" },
 								{ id: "b", status: "COMPLETED" },
 							],
-							number: 1,
-							last: true,
+							page: 1,
 							totalElements: 2,
+							totalPages: 2,
 						},
 					],
 					pageParams: [0, 1],

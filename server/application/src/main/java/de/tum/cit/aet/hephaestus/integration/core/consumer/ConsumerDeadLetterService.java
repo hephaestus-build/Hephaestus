@@ -2,18 +2,23 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import io.nats.client.Message;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @ConditionalOnServerRole
 public class ConsumerDeadLetterService {
+    private static final int MAX_PAGE = 100;
+
     private final ConsumerDeadLetterRepository repository;
 
     public ConsumerDeadLetterService(ConsumerDeadLetterRepository repository) {
@@ -38,17 +43,34 @@ public class ConsumerDeadLetterService {
     }
 
     @Transactional(readOnly = true)
-    public List<ConsumerDeadLetterDTO> listWorkspace(Long workspaceId, long after) {
-        return repository.listWorkspace(workspaceId, after, PageRequest.of(0, 100)).stream()
-                .map(ConsumerDeadLetterDTO::from)
-                .toList();
+    public CursorPageDTO<ConsumerDeadLetterDTO> listWorkspace(Long workspaceId, @Nullable String cursor, int size) {
+        int capped = Math.clamp(size, 1, MAX_PAGE);
+        return page(repository.listWorkspace(workspaceId, idAfter(cursor), PageRequest.of(0, capped + 1)), capped);
     }
 
     @Transactional(readOnly = true)
     @WorkspaceAgnostic("Instance administrators can read only unassigned installation rows (workspace IS NULL)")
-    public List<ConsumerDeadLetterDTO> listInstallation(long after) {
-        return repository.listInstallation(after, PageRequest.of(0, 100)).stream()
-                .map(ConsumerDeadLetterDTO::from)
-                .toList();
+    public CursorPageDTO<ConsumerDeadLetterDTO> listInstallation(@Nullable String cursor, int size) {
+        int capped = Math.clamp(size, 1, MAX_PAGE);
+        return page(repository.listInstallation(idAfter(cursor), PageRequest.of(0, capped + 1)), capped);
+    }
+
+    private static CursorPageDTO<ConsumerDeadLetterDTO> page(List<ConsumerDeadLetter> rows, int size) {
+        boolean more = rows.size() > size;
+        var page = rows.subList(0, Math.min(size, rows.size()));
+        return new CursorPageDTO<>(
+                page.stream().map(ConsumerDeadLetterDTO::from).toList(),
+                more ? String.valueOf(page.getLast().getId()) : null);
+    }
+
+    private static long idAfter(@Nullable String cursor) {
+        if (cursor == null) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(cursor);
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The cursor is not valid.", e);
+        }
     }
 }

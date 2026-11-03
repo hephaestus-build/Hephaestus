@@ -43,22 +43,18 @@ function isListPage(url: URL): boolean {
 	return url.searchParams.get("size") === String(PAGE_SIZE);
 }
 
-function springPage<T>(content: T[], number = 0, totalPages = 1, totalElements = content.length) {
+function offsetPage<T>(content: T[], number = 0, totalPages = 1, totalElements = content.length) {
 	return {
 		content,
-		number,
+		page: number,
 		size: PAGE_SIZE,
 		totalElements,
 		totalPages,
-		numberOfElements: content.length,
-		first: number === 0,
-		last: number >= totalPages - 1,
-		empty: content.length === 0,
 	};
 }
 
 function pageOf<T>(rows: T[]) {
-	return springPage(rows);
+	return offsetPage(rows);
 }
 
 const emptyPage = pageOf([]);
@@ -140,7 +136,7 @@ function serveReviewPages(reviewUrls: URL[]) {
 			}
 			const number = Number(url.searchParams.get("page"));
 			return HttpResponse.json(
-				springPage(number === 0 ? [FIRST_PAGE] : [FIRST_PAGE, SECOND_PAGE], number, 2, 3),
+				offsetPage(number === 0 ? [FIRST_PAGE] : [FIRST_PAGE, SECOND_PAGE], number, 2, 3),
 			);
 		}),
 	);
@@ -161,7 +157,7 @@ function serveTwoFlatPages(tab: string, [first, second, third]: readonly unknown
 			if (isListPage(url)) {
 				pageReads.push(String(number));
 			}
-			return HttpResponse.json(springPage(pages[number] ?? [], number, 2, 3));
+			return HttpResponse.json(offsetPage(pages[number] ?? [], number, 2, 3));
 		}),
 	);
 	return pageReads;

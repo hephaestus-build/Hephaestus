@@ -3,17 +3,20 @@ package de.tum.cit.aet.hephaestus.core.audit;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditActorRefDTO;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntryViewDTO;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilter;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditFilterParams;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditQuery;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
+import de.tum.cit.aet.hephaestus.core.web.TimeIdCursor;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,21 +30,64 @@ class ConfigAuditService implements ConfigAuditQuery {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ConfigAuditEntryViewDTO> listForWorkspace(
-            Long workspaceId, ConfigAuditFilter filter, Pageable pageable) {
-        return withIdentities(repository.findForWorkspace(workspaceId, filter, pageable));
+    public CursorPageDTO<ConfigAuditEntryViewDTO> listForWorkspace(
+            Long workspaceId, ConfigAuditFilter filter, @Nullable String cursor, int size) {
+        int capped = ConfigAuditFilterParams.pageSize(size);
+        TimeIdCursor after = TimeIdCursor.decode(cursor);
+        return page(
+                repository.findForWorkspace(
+                        workspaceId,
+                        filter,
+                        after == null ? null : after.at(),
+                        after == null ? null : after.id(),
+                        PageRequest.ofSize(capped + 1)),
+                capped);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ConfigAuditEntryViewDTO> listForAdmin(
-            @Nullable Long workspaceId, ConfigAuditFilter filter, Pageable pageable) {
-        return withIdentities(repository.findForAdmin(workspaceId, filter, pageable));
+    public long countForWorkspace(Long workspaceId, ConfigAuditFilter filter) {
+        return repository.countForWorkspace(workspaceId, filter);
     }
 
-    private Page<ConfigAuditEntryViewDTO> withIdentities(Page<ConfigAuditEvent> events) {
+    @Override
+    @Transactional(readOnly = true)
+    public CursorPageDTO<ConfigAuditEntryViewDTO> listForAdmin(
+            @Nullable Long workspaceId, ConfigAuditFilter filter, @Nullable String cursor, int size) {
+        int capped = ConfigAuditFilterParams.pageSize(size);
+        TimeIdCursor after = TimeIdCursor.decode(cursor);
+        return page(
+                repository.findForAdmin(
+                        workspaceId,
+                        filter,
+                        after == null ? null : after.at(),
+                        after == null ? null : after.id(),
+                        PageRequest.ofSize(capped + 1)),
+                capped);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countForAdmin(@Nullable Long workspaceId, ConfigAuditFilter filter) {
+        return repository.countForAdmin(workspaceId, filter);
+    }
+
+    private CursorPageDTO<ConfigAuditEntryViewDTO> page(List<ConfigAuditEvent> read, int size) {
+        boolean more = read.size() > size;
+        List<ConfigAuditEvent> events = read.subList(0, Math.min(size, read.size()));
+        return new CursorPageDTO<>(
+                withIdentities(events),
+                more
+                        ? new TimeIdCursor(
+                                        events.getLast().getOccurredAt(),
+                                        Objects.requireNonNull(events.getLast().getId()))
+                                .encode()
+                        : null);
+    }
+
+    private List<ConfigAuditEntryViewDTO> withIdentities(List<ConfigAuditEvent> events) {
         Set<Long> ids = new HashSet<>();
-        for (ConfigAuditEvent e : events.getContent()) {
+        for (ConfigAuditEvent e : events) {
             if (e.getActorAccountId() != null) {
                 ids.add(e.getActorAccountId());
             }
@@ -57,7 +103,7 @@ class ConfigAuditService implements ConfigAuditQuery {
                                 a -> new ConfigAuditActorRefDTO(
                                         Objects.requireNonNull(a.getId()), a.getDisplayName(), a.getPrimaryEmail()),
                                 (a, b) -> a));
-        return events.map(e -> toView(e, identities));
+        return events.stream().map(e -> toView(e, identities)).toList();
     }
 
     private static ConfigAuditEntryViewDTO toView(ConfigAuditEvent e, Map<Long, ConfigAuditActorRefDTO> identities) {

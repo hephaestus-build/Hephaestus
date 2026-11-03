@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -25,8 +25,8 @@ public class PracticeProfileReviewController {
 
     @GetMapping
     @Operation(operationId = "listOwnReviews", summary = "List reviews with results about you")
-    public PageResponseDTO<ProfileReviewDTO> list(WorkspaceContext ws, @ParameterObject OwnReviewListParams query) {
-        return PageResponseDTO.from(reviews.list(ws, query.filter(), query.pageable()));
+    public OffsetPageDTO<ProfileReviewDTO> list(WorkspaceContext ws, @ParameterObject OwnReviewListParams query) {
+        return OffsetPageDTO.from(reviews.list(ws, query.filter(), query.pageable()));
     }
 
     @GetMapping("/{reviewId}")

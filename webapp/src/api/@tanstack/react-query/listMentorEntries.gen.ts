@@ -10,7 +10,7 @@ import type { ListMentorEntriesData, ListMentorEntriesResponse } from '../../typ
 export const listMentorEntriesQueryKey = (options: Options<ListMentorEntriesData>) => createQueryKey('listMentorEntries', options, false, ['Mentor']);
 
 /**
- * A page of top-level messages, oldest first; pass before=<seq> for older ones
+ * A page of top-level messages, oldest first; pass nextCursor as cursor for older ones
  */
 export const listMentorEntriesOptions = (options: Options<ListMentorEntriesData>) => queryOptions<ListMentorEntriesResponse, DefaultError, ListMentorEntriesResponse, ReturnType<typeof listMentorEntriesQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -28,17 +28,17 @@ export const listMentorEntriesOptions = (options: Options<ListMentorEntriesData>
 export const listMentorEntriesInfiniteQueryKey = (options: Options<ListMentorEntriesData>): QueryKey<Options<ListMentorEntriesData>> => createQueryKey('listMentorEntries', options, true);
 
 /**
- * A page of top-level messages, oldest first; pass before=<seq> for older ones
+ * A page of top-level messages, oldest first; pass nextCursor as cursor for older ones
  */
 export const listMentorEntriesInfiniteOptions = (options: Options<ListMentorEntriesData>) => {
-    const opts = infiniteQueryOptions<ListMentorEntriesResponse, DefaultError, InfiniteData<ListMentorEntriesResponse>, QueryKey<Options<ListMentorEntriesData>>, number | Pick<QueryKey<Options<ListMentorEntriesData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
+    const opts = infiniteQueryOptions<ListMentorEntriesResponse, DefaultError, InfiniteData<ListMentorEntriesResponse>, QueryKey<Options<ListMentorEntriesData>>, string | Pick<QueryKey<Options<ListMentorEntriesData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
     // @ts-ignore
     {
         queryFn: async ({ pageParam, queryKey, signal }) => {
             // @ts-ignore
             const page: Pick<QueryKey<Options<ListMentorEntriesData>>[0], 'body' | 'headers' | 'path' | 'query'> = typeof pageParam === 'object' ? pageParam : {
                 query: {
-                    before: pageParam
+                    cursor: pageParam
                 }
             };
             const params = createInfiniteParams(queryKey, page);

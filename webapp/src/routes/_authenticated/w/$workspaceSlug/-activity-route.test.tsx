@@ -12,7 +12,7 @@ import {
 import type {
 	ActivityPeople,
 	ActivityWork,
-	ActivityWorkPage,
+	CursorPageDtoActivityWork,
 	OpenWork,
 	ReviewContext,
 	ReviewRequestOutcome,
@@ -133,7 +133,7 @@ const openWork = {
 	pullRequests: nothing,
 	issues: nothing,
 } satisfies OpenWork;
-const workPage = { content: [] } satisfies ActivityWorkPage;
+const workPage = { content: [] } satisfies CursorPageDtoActivityWork;
 
 function workItem(id: number): Wire<ActivityWork> {
 	return {
@@ -155,7 +155,7 @@ function workItem(id: number): Wire<ActivityWork> {
 
 /** Four pieces of work over three pages: one on the first, two on the next, one on the last. */
 function pagedWork(record: (request: Request) => void) {
-	const pages: Record<string, Wire<ActivityWorkPage>> = {
+	const pages: Record<string, Wire<CursorPageDtoActivityWork>> = {
 		first: { content: [workItem(1)], nextCursor: "page-2" },
 		"page-2": { content: [workItem(2), workItem(3)], nextCursor: "page-3" },
 		"page-3": { content: [workItem(4)] },
@@ -267,7 +267,7 @@ describe("Activity", () => {
 
 	it("says a sync is running when your timeline is empty, and only then", async () => {
 		const progress: string[] = [];
-		const work = { content: [] as Wire<ActivityWork>[], nextCursor: null };
+		const work = { content: [] as Wire<ActivityWork>[] };
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/activity/me/work", () => HttpResponse.json(work)),
 			http.get("*/workspaces/:workspaceSlug/sync/progress", ({ request }) => {
@@ -286,7 +286,7 @@ describe("Activity", () => {
 		const progress: string[] = [];
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/activity/me/work", () =>
-				HttpResponse.json({ content: [workItem(1)], nextCursor: null }),
+				HttpResponse.json({ content: [workItem(1)] }),
 			),
 			http.get("*/workspaces/:workspaceSlug/sync/progress", ({ request }) => {
 				progress.push(request.url);
@@ -966,7 +966,7 @@ function unknownRepository(request: Request) {
 		: HttpResponse.json(people);
 }
 
-type WorkAnswer = { status: 200; page: Wire<ActivityWorkPage> } | { status: 403 | 503 };
+type WorkAnswer = { status: 200; page: Wire<CursorPageDtoActivityWork> } | { status: 403 | 503 };
 
 const earlierWork: WorkAnswer = { status: 200, page: { content: [workItem(101)] } };
 const laterWork: WorkAnswer = { status: 200, page: { content: [workItem(202)] } };

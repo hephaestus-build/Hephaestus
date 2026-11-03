@@ -12,7 +12,7 @@ import {
 import type {
 	PublicActivity,
 	PublicActivityPersonDetail,
-	PublicActivityWorkPage,
+	CursorPageDtoPublicActivityWork,
 	PublicActivityOnboardingRequest,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -107,7 +107,7 @@ function personDetail(
 	};
 }
 
-function publicWork(title = "Public work", cursor?: string): Wire<PublicActivityWorkPage> {
+function publicWork(title = "Public work", cursor?: string): Wire<CursorPageDtoPublicActivityWork> {
 	return {
 		content: [
 			{

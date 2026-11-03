@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.audit;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.TimeIdCursor;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -11,8 +12,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,21 +65,23 @@ public class AuthAuditService {
             long id, @Nullable String displayName, @Nullable String email) {}
 
     /** A page of audit events plus the resolved identities for the accounts referenced on that page. */
-    public record AuditPage(Page<AuthEvent> events, Map<Long, AccountRef> identities) {}
+    public record AuditPage(List<AuthEvent> events, Map<Long, AccountRef> identities) {}
 
-    /** Auth events newest-first for the given filter, with the page's account identities resolved. */
+    /** Up to {@code limit} auth events newest-first after {@code after}, with their account identities resolved. */
     @Transactional(readOnly = true)
-    public AuditPage list(Filter filter, Pageable pageable) {
-        Page<AuthEvent> events = authEventRepository.findForAdmin(
+    public AuditPage list(Filter filter, @Nullable TimeIdCursor after, int limit) {
+        List<AuthEvent> events = authEventRepository.findForAdmin(
                 filter.accountId(),
                 filter.actingAccountId(),
                 filter.eventTypes(),
                 filter.results(),
                 filter.from(),
                 filter.to(),
-                pageable);
+                after == null ? null : after.at(),
+                after == null ? null : after.id(),
+                PageRequest.ofSize(limit));
         Set<Long> ids = new HashSet<>();
-        for (AuthEvent e : events.getContent()) {
+        for (AuthEvent e : events) {
             if (e.getAccountId() != null) {
                 ids.add(e.getAccountId());
             }
@@ -96,6 +98,18 @@ public class AuthAuditService {
                                         Objects.requireNonNull(a.getId()), a.getDisplayName(), a.getPrimaryEmail()),
                                 (a, b) -> a));
         return new AuditPage(events, identities);
+    }
+
+    /** How many auth events the filter matches. */
+    @Transactional(readOnly = true)
+    public long count(Filter filter) {
+        return authEventRepository.countForAdmin(
+                filter.accountId(),
+                filter.actingAccountId(),
+                filter.eventTypes(),
+                filter.results(),
+                filter.from(),
+                filter.to());
     }
 
     /** Resolve an id (subject or actor) to its identity; null id or unknown account → null. */

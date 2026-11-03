@@ -40,11 +40,10 @@ beforeEach(() => {
 			reads.push({ workspaceSlug: String(params.workspaceSlug), itemId: String(params.itemId) });
 			return HttpResponse.json({
 				content: [ratedReview],
-				number: 0,
+				page: 0,
 				size: 10,
 				totalElements: 1,
 				totalPages: 1,
-				last: true,
 			});
 		}),
 	);
@@ -64,11 +63,10 @@ function serveTwoReviewPages(): string[] {
 			pages.push(String(number));
 			return HttpResponse.json({
 				content: reviews.slice(number, number + 1),
-				number,
+				page: number,
 				size: 1,
 				totalElements: 2,
 				totalPages: 2,
-				last: number >= 1,
 			});
 		}),
 	);

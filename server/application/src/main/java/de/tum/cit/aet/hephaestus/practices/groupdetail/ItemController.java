@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.groupdetail;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
@@ -41,12 +41,12 @@ public class ItemController {
     @GetMapping
     @RequireAtLeastWorkspaceAdmin
     @Operation(operationId = "listReviewItems", summary = "List items in the workspace")
-    public PageResponseDTO<ItemRefDTO> list(
+    public OffsetPageDTO<ItemRefDTO> list(
             WorkspaceContext ws,
             @RequestParam(required = false) @Nullable String itemKind,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
-        return PageResponseDTO.from(directory.list(ws.id(), itemKind, PageRequest.of(page, size)));
+        return OffsetPageDTO.from(directory.list(ws.id(), itemKind, PageRequest.of(page, size)));
     }
 
     @GetMapping("/{itemId}/facts")
@@ -75,12 +75,12 @@ public class ItemController {
     @GetMapping("/{itemId}/reviews")
     @PreAuthorize("@workspaceSecure.isMember()")
     @Operation(operationId = "listOwnItemReviews", summary = "List your reviews of an item")
-    public PageResponseDTO<ProfileReviewDTO> reviews(
+    public OffsetPageDTO<ProfileReviewDTO> reviews(
             WorkspaceContext ws,
             @PathVariable long itemId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponseDTO.from(reviews.list(
+        return OffsetPageDTO.from(reviews.list(
                 ws, new OwnReviewFilter(null, itemId, null, null, null, false), PageRequest.of(page, size)));
     }
 }

@@ -25,8 +25,8 @@ import {
 import { useInvalidateOnSettle } from "@/hooks/use-invalidate-on-settle";
 import { PRACTICE_PROFILE_POLL_MS } from "@/hooks/use-practice-profile-overview";
 import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
+import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
 
 interface ProfileReviewsRequest {
 	workspaceSlug: string;
@@ -74,7 +74,7 @@ export function usePracticeProfileReviews({
 	});
 	const reviewsQuery = useInfiniteQuery({
 		...listOptions,
-		...springPageParams,
+		...offsetPageParams,
 		enabled: listOpen,
 		refetchInterval: PRACTICE_PROFILE_POLL_MS,
 	});

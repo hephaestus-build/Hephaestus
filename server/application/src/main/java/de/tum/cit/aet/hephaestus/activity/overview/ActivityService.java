@@ -2,9 +2,10 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.ActivityEventType;
 import de.tum.cit.aet.hephaestus.activity.overview.ActivityQueryRepository.WorkGroup;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkPageDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.ActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import java.time.Clock;
 import java.util.List;
 import java.util.Set;
@@ -27,7 +28,7 @@ public class ActivityService {
     private final Clock clock;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public ActivityWorkPageDTO personWork(
+    public CursorPageDTO<ActivityWorkDTO> personWork(
             long workspace,
             long userId,
             ActivityPeopleRangeParams params,
@@ -49,7 +50,7 @@ public class ActivityService {
      * page's cursor.
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public ActivityWorkPageDTO work(
+    public CursorPageDTO<ActivityWorkDTO> work(
             long workspaceId,
             @Nullable String login,
             @Nullable String team,
@@ -79,10 +80,10 @@ public class ActivityService {
                 page);
     }
 
-    private ActivityWorkPageDTO work(ActivityScope scope, TimeRange range, ActivityWorkFilterParams page) {
+    private CursorPageDTO<ActivityWorkDTO> work(ActivityScope scope, TimeRange range, ActivityWorkFilterParams page) {
         ActivityWorkCursor after = page.position(range);
         if (scope.actorIds().isEmpty() || scope.repositoryIds().isEmpty()) {
-            return new ActivityWorkPageDTO(List.of(), null);
+            return CursorPageDTO.empty();
         }
         Set<ActivityEventType> eventTypes = page.eventTypes();
         List<WorkGroup> groups = scope.inTeams()
@@ -90,7 +91,7 @@ public class ActivityService {
                 : queries.findWork(scope, eventTypes, range, after, page.lookahead());
         boolean hasNext = groups.size() > page.pageSize();
         List<WorkGroup> content = hasNext ? groups.subList(0, page.pageSize()) : groups;
-        return new ActivityWorkPageDTO(
+        return new CursorPageDTO<>(
                 workAssembler.assemble(content),
                 hasNext ? ActivityWorkCursor.after(range, content.getLast()).encode() : null);
     }

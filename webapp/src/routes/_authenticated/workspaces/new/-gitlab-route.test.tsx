@@ -8,7 +8,7 @@ import type {
 	GitLabPreflightRequest,
 	GitLabPreflightResponse,
 	GitLabProject,
-	GitLabProjectPage,
+	CursorPageDtoGitLabProject,
 } from "@/api/types.gen";
 import { identityProviders } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
@@ -122,16 +122,16 @@ function serveGitLab({
 				if (requests.projects.length === 1) {
 					await firstProjectsHeld;
 				}
-				const page = Number(url.searchParams.get("page") ?? "1");
+				const page = Number(url.searchParams.get("cursor") ?? "1");
 				const search = (url.searchParams.get("search") ?? "").toLowerCase();
 				const matching = (PROJECTS[body.groupFullPath ?? ""] ?? []).filter((candidate) =>
 					candidate.name.toLowerCase().includes(search),
 				);
 				const end = page * PROJECT_PAGE_SIZE;
 				return HttpResponse.json({
-					projects: matching.slice(end - PROJECT_PAGE_SIZE, end),
-					...(matching.length > end ? { nextPage: page + 1 } : {}),
-				} satisfies GitLabProjectPage);
+					content: matching.slice(end - PROJECT_PAGE_SIZE, end),
+					...(matching.length > end ? { nextCursor: String(page + 1) } : {}),
+				} satisfies CursorPageDtoGitLabProject);
 			},
 		),
 		http.post<PathParams, CreateWorkspaceRequest>("*/workspaces", async ({ request }) => {
@@ -156,15 +156,15 @@ function serveNoncontiguousProjectPages() {
 	const pages: (string | null)[] = [];
 	server.use(
 		http.post("*/workspaces/gitlab/projects", ({ request }) => {
-			const page = new URL(request.url).searchParams.get("page");
+			const page = new URL(request.url).searchParams.get("cursor");
 			pages.push(page);
 			return HttpResponse.json(
-				page === "1"
+				page === null
 					? {
-							projects: [project(11, "API", "ls1intum/hephaestus")],
-							nextPage: 3,
+							content: [project(11, "API", "ls1intum/hephaestus")],
+							nextCursor: "3",
 						}
-					: { projects: [project(13, "Web", "ls1intum/hephaestus")] },
+					: { content: [project(13, "Web", "ls1intum/hephaestus")] },
 			);
 		}),
 	);
@@ -465,13 +465,13 @@ describe("GitLab workspace wizard: projects to monitor", () => {
 			requests.projects.map(({ body, url }) => ({
 				token: body.personalAccessToken,
 				group: body.groupFullPath,
-				page: url.searchParams.get("page"),
+				cursor: url.searchParams.get("cursor"),
 				search: url.searchParams.get("search"),
 			})),
 		).toStrictEqual([
-			{ token: "glpat-secret", group: "ls1intum/hephaestus", page: "1", search: null },
-			{ token: "glpat-secret", group: "ls1intum/hephaestus", page: "2", search: null },
-			{ token: "glpat-secret", group: "ls1intum/hephaestus", page: "1", search: "api" },
+			{ token: "glpat-secret", group: "ls1intum/hephaestus", cursor: null, search: null },
+			{ token: "glpat-secret", group: "ls1intum/hephaestus", cursor: "2", search: null },
+			{ token: "glpat-secret", group: "ls1intum/hephaestus", cursor: null, search: "api" },
 		]);
 		expect(requests.projects.some(({ url }) => url.href.includes("glpat"))).toBe(false);
 	});
@@ -488,11 +488,17 @@ describe("GitLab workspace wizard: projects to monitor", () => {
 		await user.click(screen.getByRole("button", { name: "Next page" }));
 
 		await screen.findByRole("checkbox", { name: "Web" });
-		expect(pages).toStrictEqual(["1", "3"]);
+		expect(pages).toStrictEqual([null, "3"]);
 		// The server named no page after this one.
 		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Next page" }).disabled).toBe(
 			true,
 		);
+
+		// Back is the page it came from, not the number before this one.
+		await user.click(screen.getByRole("button", { name: "Previous page" }));
+		await screen.findByRole("checkbox", { name: "API" });
+		expect(pages).toStrictEqual([null, "3", null]);
+		screen.getByText("Page 1");
 	});
 
 	it("waits for a chosen project before it creates, and sends none once all projects is chosen again", async () => {

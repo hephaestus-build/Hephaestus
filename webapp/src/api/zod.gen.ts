@@ -976,6 +976,30 @@ export const zCsrfToken = z.object({
     token: z.string()
 });
 
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export const zCursorPageDtoAuthEventView = z.object({
+    content: z.array(zAuthEventView),
+    nextCursor: z.string().optional()
+});
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export const zCursorPageDtoConfigAuditEntryView = z.object({
+    content: z.array(zConfigAuditEntryView),
+    nextCursor: z.string().optional()
+});
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export const zCursorPageDtoConsumerDeadLetter = z.object({
+    content: z.array(zConsumerDeadLetter),
+    nextCursor: z.string().optional()
+});
+
 export const zDeliveredFeedbackPractice = z.object({
     name: z.string(),
     slug: z.string()
@@ -1557,11 +1581,11 @@ export const zGitLabProject = z.object({
 });
 
 /**
- * One page of the projects of a GitLab group that the provided PAT can read
+ * One page of a list that a client reads forward with a cursor
  */
-export const zGitLabProjectPage = z.object({
-    nextPage: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    projects: z.array(zGitLabProject)
+export const zCursorPageDtoGitLabProject = z.object({
+    content: z.array(zGitLabProject),
+    nextCursor: z.string().optional()
 });
 
 /**
@@ -2377,6 +2401,39 @@ export const zNotificationPreferences = z.object({
     workspaceAlerts: z.boolean()
 });
 
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoAdminAccountView = z.object({
+    content: z.array(zAdminAccountView),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoFeedbackItem = z.object({
+    content: z.array(zFeedbackItem),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoItemRef = z.object({
+    content: z.array(zItemRef),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
 export const zOpenQuestion = z.object({
     citation: zEvidenceCitation.nullable(),
     openQuestion: z.string(),
@@ -2478,18 +2535,6 @@ export const zOwnItemEvent = z.object({
     displayName: z.string(),
     name: z.string(),
     occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
-});
-
-export const zPageMetadata = z.object({
-    number: z.int(),
-    size: z.int(),
-    totalElements: z.int(),
-    totalPages: z.int()
-});
-
-export const zPagedModelFeedbackItem = z.object({
-    content: z.array(zFeedbackItem).optional(),
-    page: zPageMetadata.optional()
 });
 
 export const zPasskeyCredential = z.object({
@@ -3122,6 +3167,9 @@ export const zPublicActivityWorkSummary = z.object({
     type: z.enum(['PULL_REQUEST', 'ISSUE'])
 });
 
+/**
+ * One piece of the selected person's published work; no account, author or other participant data.
+ */
 export const zPublicActivityWork = z.object({
     actions: z.array(zActivityAction),
     id: z.string(),
@@ -3130,9 +3178,9 @@ export const zPublicActivityWork = z.object({
 });
 
 /**
- * One page of the selected person's published work; no account, author or other participant data.
+ * One page of a list that a client reads forward with a cursor
  */
-export const zPublicActivityWorkPage = z.object({
+export const zCursorPageDtoPublicActivityWork = z.object({
     content: z.array(zPublicActivityWork),
     nextCursor: z.string().optional()
 });
@@ -3384,6 +3432,17 @@ export const zNotReviewedScanReportItem = z.object({
     status: z.enum(['NOT_REVIEWED'])
 });
 
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoResultList = z.object({
+    content: z.array(zResultList),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
 export const zResultMark = z.object({
     createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
     createdBy: zAccountRef.nullable(),
@@ -3461,6 +3520,17 @@ export const zReviewBatch = z.object({
     targetItemIds: z.string().regex(/^[1-9][0-9]*$/),
     to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
     version: z.string()
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewBatch = z.object({
+    content: z.array(zReviewBatch),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zReviewBoundFeedback = z.object({
@@ -3622,6 +3692,17 @@ export const zReviewFeedback = z.object({
     textHidden: z.boolean(),
     unverifiedHistory: z.boolean(),
     withdrawn: z.boolean()
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewFeedback = z.object({
+    content: z.array(zReviewFeedback),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zReviewFeedbackCounts = z.object({
@@ -3819,6 +3900,17 @@ export const zReviewProblem = z.object({
 });
 
 /**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewProblem = z.object({
+    content: z.array(zReviewProblem),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
+/**
  * How far an active item review got; absent for a scan, which lists its items in pages
  */
 export const zReviewProgress = z.object({
@@ -3918,6 +4010,17 @@ export const zProfileReview = z.object({
     results: z.array(zResultList),
     review: zReviewRef,
     totalOnWork: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoProfileReview = z.object({
+    content: z.array(zProfileReview),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zProfileReviewDetail = z.object({
@@ -4024,6 +4127,17 @@ export const zReviewResult = z.object({
         'TRIVIAL'
     ]).nullable(),
     summary: z.string().nullable()
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewResult = z.object({
+    content: z.array(zReviewResult),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zReviewResultCounts = z.object({
@@ -4273,6 +4387,17 @@ export const zReviewSummary = z.object({
         'CONTRACT_CHANGED',
         'NO_SANDBOX_ROOM'
     ]).nullable()
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewSummary = z.object({
+    content: z.array(zReviewSummary),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zReviewTimeShares = z.object({
@@ -4885,6 +5010,17 @@ export const zScanSummary = z.object({
     ]).nullable()
 });
 
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoScanSummary = z.object({
+    content: z.array(zScanSummary),
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    totalElements: z.int(),
+    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+});
+
 export const zScanReport = z.object({
     availability: zScanAvailability,
     baselineScanId: z.uuid().nullable(),
@@ -5033,230 +5169,6 @@ export const zSlackUserPreferences = z.object({
     workspaces: z.array(zSlackUserWorkspacePreferences)
 });
 
-export const zSort = z.object({
-    empty: z.boolean(),
-    sorted: z.boolean(),
-    unsorted: z.boolean()
-});
-
-export const zPageable = z.object({
-    offset: z.int(),
-    pageNumber: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageSize: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    paged: z.boolean(),
-    sort: zSort,
-    unpaged: z.boolean()
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoAuthEventView = z.object({
-    content: z.array(zAuthEventView),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoConfigAuditEntryView = z.object({
-    content: z.array(zConfigAuditEntryView),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoItemRef = z.object({
-    content: z.array(zItemRef),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoProfileReview = z.object({
-    content: z.array(zProfileReview),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoResultList = z.object({
-    content: z.array(zResultList),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoReviewBatch = z.object({
-    content: z.array(zReviewBatch),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoReviewFeedback = z.object({
-    content: z.array(zReviewFeedback),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoReviewProblem = z.object({
-    content: z.array(zReviewProblem),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoReviewResult = z.object({
-    content: z.array(zReviewResult),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoReviewSummary = z.object({
-    content: z.array(zReviewSummary),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export const zPageResponseDtoScanSummary = z.object({
-    content: z.array(zScanSummary),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
 export const zStartScanRequest = z.object({
     budgetUsd: z.string(),
     expectedVersion: z.string().min(1).max(1024).nullable(),
@@ -5344,20 +5256,12 @@ export const zConnectionSyncStatus = z.object({
 });
 
 /**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ * One numbered page of a list
  */
-export const zPageResponseDtoSyncJob = z.object({
+export const zOffsetPageDtoSyncJob = z.object({
     content: z.array(zSyncJob),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
     totalElements: z.int(),
     totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
@@ -5423,6 +5327,13 @@ export const zTeamSummary = z.object({
     organization: z.string().optional(),
     parentId: z.int().optional(),
     privacy: z.enum(['SECRET', 'VISIBLE']).optional()
+});
+
+/**
+ * How many rows match
+ */
+export const zTotalCount = z.object({
+    total: z.int()
 });
 
 export const zTrendSupport = z.object({
@@ -5943,20 +5854,12 @@ export const zUserViewAccount = z.object({
 });
 
 /**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ * One numbered page of a list
  */
-export const zPageResponseDtoUserViewAccount = z.object({
+export const zOffsetPageDtoUserViewAccount = z.object({
     content: z.array(zUserViewAccount),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
     totalElements: z.int(),
     totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
@@ -6119,11 +6022,11 @@ export const zMentorEntry = z.object({
 });
 
 /**
- * One page of a conversation's messages, oldest first
+ * One page of a list that a client reads forward with a cursor
  */
-export const zMentorEntryPage = z.object({
-    earlierBefore: z.int().optional(),
-    entries: z.array(zMentorEntry)
+export const zCursorPageDtoMentorEntry = z.object({
+    content: z.array(zMentorEntry),
+    nextCursor: z.string().optional()
 });
 
 /**
@@ -6139,9 +6042,8 @@ export const zMentorSubmission = z.object({
  */
 export const zMentorThread = z.object({
     conversationId: z.uuid().optional(),
-    earlierBefore: z.int().optional(),
-    entries: z.array(zMentorEntry),
-    parent: zMentorEntry
+    parent: zMentorEntry,
+    replies: zCursorPageDtoMentorEntry
 });
 
 export const zWithheldScanReportItem = z.object({
@@ -6163,10 +6065,12 @@ export const zScanReportItem = z.intersection(z.union([
     status: z.string()
 }));
 
-export const zScanReportItemsPage = z.object({
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export const zCursorPageDtoScanReportItem = z.object({
     content: z.array(zScanReportItem),
-    hasNext: z.boolean(),
-    nextCursor: z.string().nullable()
+    nextCursor: z.string().optional()
 });
 
 /**
@@ -6451,20 +6355,12 @@ export const zWorkspaceMembership = z.object({
 });
 
 /**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
+ * One numbered page of a list
  */
-export const zPageResponseDtoWorkspaceMembership = z.object({
+export const zOffsetPageDtoWorkspaceMembership = z.object({
     content: z.array(zWorkspaceMembership),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
+    page: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
     totalElements: z.int(),
     totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
@@ -6898,10 +6794,12 @@ export const zScanReportProblem = z.object({
     resultId: z.uuid()
 });
 
-export const zScanReportProblemsPage = z.object({
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export const zCursorPageDtoScanReportProblem = z.object({
     content: z.array(zScanReportProblem),
-    hasNext: z.boolean(),
-    nextCursor: z.string().nullable()
+    nextCursor: z.string().optional()
 });
 
 /**
@@ -6916,9 +6814,9 @@ export const zActivityWork = z.object({
 });
 
 /**
- * One page of activity grouped by the pull request or issue it happened on, latest first
+ * One page of a list that a client reads forward with a cursor
  */
-export const zActivityWorkPage = z.object({
+export const zCursorPageDtoActivityWork = z.object({
     content: z.array(zActivityWork),
     nextCursor: z.string().optional()
 });

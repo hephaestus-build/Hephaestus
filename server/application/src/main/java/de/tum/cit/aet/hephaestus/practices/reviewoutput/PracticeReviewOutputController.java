@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.CreateResultMarkRequestDTO;
@@ -52,13 +52,13 @@ public class PracticeReviewOutputController {
 
     @GetMapping("/results")
     @Operation(operationId = "listReviewResults", summary = "List review results")
-    public PageResponseDTO<ReviewResultDTO> list(
+    public OffsetPageDTO<ReviewResultDTO> list(
             WorkspaceContext ws,
             @Valid @ParameterObject ReviewResultFilterParams filter,
             @RequestParam(defaultValue = "NEWEST") ResultSort sort,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        return PageResponseDTO.from(query.list(ws.id(), filter.toFilter(), sort, PageRequest.of(page, size)));
+        return OffsetPageDTO.from(query.list(ws.id(), filter.toFilter(), sort, PageRequest.of(page, size)));
     }
 
     @GetMapping("/results/{resultId}")
@@ -72,12 +72,12 @@ public class PracticeReviewOutputController {
             operationId = "listReviewProblems",
             summary = "List review problems",
             description = "Problems are ordered by when their result was recorded, newest first unless sort is OLDEST.")
-    public PageResponseDTO<ReviewProblemDTO> problems(
+    public OffsetPageDTO<ReviewProblemDTO> problems(
             WorkspaceContext ws,
             @Valid @ParameterObject ReviewProblemFilterParams filter,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        return PageResponseDTO.from(query.listProblems(
+        return OffsetPageDTO.from(query.listProblems(
                 ws.id(), filter.toResultFilter(), filter.toProblemFilter(), PageRequest.of(page, size)));
     }
 

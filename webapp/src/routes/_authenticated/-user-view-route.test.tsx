@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { client } from "@/api/client.gen";
-import type { PageResponseDtoUserViewAccount, UserViewAccount } from "@/api/types.gen";
+import type { OffsetPageDtoUserViewAccount, UserViewAccount } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
@@ -39,18 +39,11 @@ const sam: Wire<UserViewAccount> = {
 		],
 	},
 };
-function usersPage(content: Wire<UserViewAccount>[]): Wire<PageResponseDtoUserViewAccount> {
-	const sort = { empty: true, sorted: false, unsorted: true };
+function usersPage(content: Wire<UserViewAccount>[]): Wire<OffsetPageDtoUserViewAccount> {
 	return {
 		content,
-		empty: content.length === 0,
-		first: true,
-		last: true,
-		number: 0,
-		numberOfElements: content.length,
-		pageable: { offset: 0, pageNumber: 0, pageSize: 20, paged: true, unpaged: false, sort },
+		page: 0,
 		size: 20,
-		sort,
 		totalElements: content.length,
 		totalPages: 1,
 	};

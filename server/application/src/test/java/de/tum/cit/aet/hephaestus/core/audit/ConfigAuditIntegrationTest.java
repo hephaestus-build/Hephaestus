@@ -39,6 +39,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,6 +51,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriBuilder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * End-to-end coverage of the config audit trail: that producers actually write rows, that the rows
@@ -505,6 +508,60 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         .getResultList())
                 .isInstanceOf(TenancyViolationException.class)
                 .hasMessageContaining("config_audit_event");
+    }
+
+    @Test
+    @WithAdminUser
+    void bothConsolesWalkTheTrailOnceAndCountOnlyTheirScope() {
+        Workspace mine = setupWorkspace("audit-pages-mine");
+        Workspace theirs = setupWorkspace("audit-pages-theirs");
+        patchPracticeReview(mine, Map.of("cooldownMinutes", 45));
+        patchPracticeReview(mine, Map.of("cooldownMinutes", 50));
+        patchPracticeReview(mine, Map.of("cooldownMinutes", 55));
+        patchPracticeReview(theirs, Map.of("cooldownMinutes", 15));
+
+        String path = "/workspaces/" + mine.getWorkspaceSlug() + "/config-audit";
+        var first = auditPage(path, null);
+        assertThat(first.get("content").size()).isEqualTo(2);
+        var second = auditPage(path, first.get("nextCursor").asString());
+        assertThat(second.get("content").size()).isEqualTo(1);
+        assertThat(second.has("nextCursor")).isFalse();
+        assertThat(Stream.of(first, second)
+                        .flatMap(page -> page.get("content").valueStream())
+                        .map(entry -> entry.get("id").asLong()))
+                .doesNotHaveDuplicates()
+                .hasSize(3);
+
+        assertCount(path + "/count", 3);
+        assertCount("/admin/config-audit/count", 4);
+        assertCount("/admin/config-audit/count?workspaceId=" + theirs.getId(), 1);
+    }
+
+    private JsonNode auditPage(String path, @Nullable String cursor) {
+        String body = webTestClient
+                .get()
+                .uri(path + "?size=2" + (cursor == null ? "" : "&cursor=" + cursor))
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+        return new JsonMapper().readTree(body);
+    }
+
+    private void assertCount(String path, int expected) {
+        webTestClient
+                .get()
+                .uri(path)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.total")
+                .isEqualTo(expected);
     }
 
     private void assertFilterYields(Workspace workspace, UnaryOperator<UriBuilder> query, int expected) {

@@ -46,6 +46,7 @@ import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
+import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 const PAGE_SIZE = 25;
@@ -80,12 +81,12 @@ function AdminUsersPage() {
 	const listOptions = adminListUsersInfiniteOptions({ query: { size: PAGE_SIZE } });
 	const listQuery = useInfiniteQuery({
 		...listOptions,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage: AdminAccountView[], allPages: AdminAccountView[][]) =>
-			lastPage.length === PAGE_SIZE ? allPages.length : undefined,
+		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, listQuery.isError, listQuery.error);
-	const list = infiniteListState(listQuery, (pages) => ({ users: pages.flat() }));
+	const list = infiniteListState(listQuery, (pages) => ({
+		users: pages.flatMap((page) => page.content),
+	}));
 	const loaded = list.status === "ready" ? list : undefined;
 	const allUsers = loaded?.users ?? [];
 

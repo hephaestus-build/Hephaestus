@@ -22,6 +22,8 @@
             // GitLabWebhookService uses WebhookProperties; GitLabPreflightService validates URLs.
             "core::webhook",
             "core::security",
+            // The project list for workspace creation is a CursorPageDTO.
+            "core::web",
             "workspace",
             // GitLab workspace flows depend on the workspace named sub-surfaces.
             "workspace::context",

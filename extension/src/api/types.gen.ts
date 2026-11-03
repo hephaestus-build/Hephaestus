@@ -180,20 +180,6 @@ export type ActivityWork = {
     work?: WorkItem;
 };
 
-/**
- * One page of activity grouped by the pull request or issue it happened on, latest first
- */
-export type ActivityWorkPage = {
-    /**
-     * The work on this page, by its latest activity, newest first
-     */
-    content: Array<ActivityWork>;
-    /**
-     * Opaque cursor that fetches the next page when passed back as cursor; absent on the last page
-     */
-    nextCursor?: string;
-};
-
 export type AdminAccountView = {
     appRole: 'USER' | 'APP_ADMIN';
     displayName?: string;
@@ -1266,6 +1252,105 @@ export type CurrentUserView = {
     username?: string;
 };
 
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoActivityWork = {
+    content: Array<ActivityWork>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoAuthEventView = {
+    content: Array<AuthEventView>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoConfigAuditEntryView = {
+    content: Array<ConfigAuditEntryView>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoConsumerDeadLetter = {
+    content: Array<ConsumerDeadLetter>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoGitLabProject = {
+    content: Array<GitLabProject>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoMentorEntry = {
+    content: Array<MentorEntry>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoPublicActivityWork = {
+    content: Array<PublicActivityWork>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoScanReportItem = {
+    content: Array<ScanReportItem>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export type CursorPageDtoScanReportProblem = {
+    content: Array<ScanReportProblem>;
+    /**
+     * Pass as cursor to read the next page; absent on the last page
+     */
+    nextCursor?: string;
+};
+
 export type DeliveredFeedbackPractice = {
     name: string;
     slug: string;
@@ -1744,20 +1829,6 @@ export type GitLabProject = {
      * Project web URL
      */
     webUrl?: string;
-};
-
-/**
- * One page of the projects of a GitLab group that the provided PAT can read
- */
-export type GitLabProjectPage = {
-    /**
-     * The page that follows this one; absent on the last page
-     */
-    nextPage?: number;
-    /**
-     * Projects on this page, ordered by path
-     */
-    projects: Array<GitLabProject>;
 };
 
 /**
@@ -2632,17 +2703,6 @@ export type MentorEntry = {
 };
 
 /**
- * One page of a conversation's messages, oldest first
- */
-export type MentorEntryPage = {
-    /**
-     * Pass as before to read the older messages; absent when there are none
-     */
-    earlierBefore?: number;
-    entries: Array<MentorEntry>;
-};
-
-/**
  * A practice result, problem or prepared feedback Hephaestus showed in a message
  */
 export type MentorLink = {
@@ -2701,12 +2761,8 @@ export type MentorThread = {
      * The thread's conversation; absent until the first reply opens it
      */
     conversationId?: string;
-    /**
-     * Pass as before to read the older replies; absent when there are none
-     */
-    earlierBefore?: number;
-    entries: Array<MentorEntry>;
     parent: MentorEntry;
+    replies: CursorPageDtoMentorEntry;
 };
 
 /**
@@ -2907,6 +2963,328 @@ export type NotificationPreferences = {
     workspaceAlerts: boolean;
 };
 
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoAdminAccountView = {
+    content: Array<AdminAccountView>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoFeedbackItem = {
+    content: Array<FeedbackItem>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoItemRef = {
+    content: Array<ItemRef>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoProfileReview = {
+    content: Array<ProfileReview>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoResultList = {
+    content: Array<ResultList>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoReviewBatch = {
+    content: Array<ReviewBatch>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoReviewFeedback = {
+    content: Array<ReviewFeedback>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoReviewProblem = {
+    content: Array<ReviewProblem>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoReviewResult = {
+    content: Array<ReviewResult>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoReviewSummary = {
+    content: Array<ReviewSummary>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoScanSummary = {
+    content: Array<ScanSummary>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoSyncJob = {
+    content: Array<SyncJob>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoUserViewAccount = {
+    content: Array<UserViewAccount>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
+export type OffsetPageDtoWorkspaceMembership = {
+    content: Array<WorkspaceMembership>;
+    /**
+     * This page's number, from 0
+     */
+    page: number;
+    /**
+     * The most rows a page holds
+     */
+    size: number;
+    /**
+     * Rows in the whole list
+     */
+    totalElements: number;
+    /**
+     * Pages in the whole list
+     */
+    totalPages: number;
+};
+
 export type OpenQuestion = {
     citation: EvidenceCitation | null;
     openQuestion: string;
@@ -3100,293 +3478,6 @@ export type OwnItemTrace = {
     item: ItemRef;
     results: Array<ResultList>;
     review: ReviewRef;
-};
-
-export type PageMetadata = {
-    number: number;
-    size: number;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoAuthEventView = {
-    content: Array<AuthEventView>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoConfigAuditEntryView = {
-    content: Array<ConfigAuditEntryView>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoItemRef = {
-    content: Array<ItemRef>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoProfileReview = {
-    content: Array<ProfileReview>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoResultList = {
-    content: Array<ResultList>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoReviewBatch = {
-    content: Array<ReviewBatch>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoReviewFeedback = {
-    content: Array<ReviewFeedback>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoReviewProblem = {
-    content: Array<ReviewProblem>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoReviewResult = {
-    content: Array<ReviewResult>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoReviewSummary = {
-    content: Array<ReviewSummary>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoScanSummary = {
-    content: Array<ScanSummary>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoSyncJob = {
-    content: Array<SyncJob>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoUserViewAccount = {
-    content: Array<UserViewAccount>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoWorkspaceMembership = {
-    content: Array<WorkspaceMembership>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-export type Pageable = {
-    offset: number;
-    pageNumber: number;
-    pageSize: number;
-    paged: boolean;
-    sort: Sort;
-    unpaged: boolean;
-};
-
-export type PagedModelFeedbackItem = {
-    content?: Array<FeedbackItem>;
-    page?: PageMetadata;
 };
 
 export type PasskeyCredential = {
@@ -4216,19 +4307,14 @@ export type PublicActivityReviewBreakdown = {
     commentReviews: number;
 };
 
+/**
+ * One piece of the selected person's published work; no account, author or other participant data.
+ */
 export type PublicActivityWork = {
     actions: Array<ActivityAction>;
     id: string;
     lastOccurredAt: string;
     work: PublicActivityWorkSummary;
-};
-
-/**
- * One page of the selected person's published work; no account, author or other participant data.
- */
-export type PublicActivityWorkPage = {
-    content: Array<PublicActivityWork>;
-    nextCursor?: string;
 };
 
 export type PublicActivityWorkSummary = {
@@ -5376,12 +5462,6 @@ export type ScanReportItem = (JudgedScanReportItem | ReusedScanReportItem | With
     status: string;
 };
 
-export type ScanReportItemsPage = {
-    content: Array<ScanReportItem>;
-    hasNext: boolean;
-    nextCursor: string | null;
-};
-
 export type ScanReportProblem = {
     absentReason: 'REPAIRED' | null;
     baselineState: 'NEW' | 'UNCHANGED' | 'UPDATED' | 'ABSENT' | null;
@@ -5391,12 +5471,6 @@ export type ScanReportProblem = {
     previousProblemId: string | null;
     problem: Problem;
     resultId: string;
-};
-
-export type ScanReportProblemsPage = {
-    content: Array<ScanReportProblem>;
-    hasNext: boolean;
-    nextCursor: string | null;
 };
 
 export type ScanSummary = {
@@ -5579,12 +5653,6 @@ export type SlackUserWorkspacePreferences = {
     slackUserId: string;
     workspaceName: string;
     workspaceSlug: string;
-};
-
-export type Sort = {
-    empty: boolean;
-    sorted: boolean;
-    unsorted: boolean;
 };
 
 export type StartScanRequest = {
@@ -5855,6 +5923,13 @@ export type TeamSummary = {
      * Privacy level of the team (SECRET or VISIBLE)
      */
     privacy?: 'SECRET' | 'VISIBLE';
+};
+
+/**
+ * How many rows match
+ */
+export type TotalCount = {
+    total: number;
 };
 
 export type TrendSupport = {
@@ -7274,7 +7349,7 @@ export type AdminListAuthEventsData = {
     body?: never;
     path?: never;
     query?: {
-        page?: number;
+        cursor?: string;
         size?: number;
         accountId?: number;
         actingAccountId?: number;
@@ -7290,10 +7365,33 @@ export type AdminListAuthEventsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoAuthEventView;
+    200: CursorPageDtoAuthEventView;
 };
 
 export type AdminListAuthEventsResponse = AdminListAuthEventsResponses[keyof AdminListAuthEventsResponses];
+
+export type AdminCountAuthEventsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        accountId?: number;
+        actingAccountId?: number;
+        eventType?: Array<'USER_VIEW' | 'LOGIN' | 'PASSKEY_CHANGED' | 'PASSKEY_VERIFIED' | 'LOGIN_FAILED' | 'LOGOUT' | 'TOKEN_REFRESH' | 'JWT_REVOKED' | 'IDENTITY_LINKED' | 'IDENTITY_UNLINKED' | 'IMPERSONATION_BEGIN' | 'IMPERSONATION_END' | 'ACCOUNT_DELETED' | 'EXPORT_REQUESTED' | 'PERSON_DATA_PREVIEWED' | 'PERSON_DATA_EXPORTED' | 'PERSON_DATA_ERASURE_REQUESTED' | 'APP_ROLE_CHANGED' | 'RESEARCH_CONSENT_REVOKED' | 'WORKSPACE_ELEVATION' | 'INSTALLATION_EVENT_REPLAYED' | 'LLM_CONNECTION_CREATED' | 'LLM_CONNECTION_UPDATED' | 'LLM_CONNECTION_DELETED' | 'LLM_MODEL_CREATED' | 'LLM_MODEL_UPDATED' | 'LLM_MODEL_DELETED' | 'LLM_MODEL_PRICE_CHANGED' | 'LLM_MODEL_SHARING_CHANGED' | 'LLM_SETTINGS_CHANGED' | 'LOGIN_PROVIDER_CREATED' | 'LOGIN_PROVIDER_UPDATED' | 'LOGIN_PROVIDER_DELETED' | 'SILENT_MODE_CHANGED' | 'PUBLIC_ACTIVITY_CHANGED' | 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED' | 'RESEARCH_DATASET_RELEASED' | 'RESEARCH_REMOVAL_RECORDED'>;
+        result?: Array<'SUCCESS' | 'FAILURE'>;
+        from?: string;
+        to?: string;
+    };
+    url: '/admin/audit/count';
+};
+
+export type AdminCountAuthEventsResponses = {
+    /**
+     * OK
+     */
+    200: TotalCount;
+};
+
+export type AdminCountAuthEventsResponse = AdminCountAuthEventsResponses[keyof AdminCountAuthEventsResponses];
 
 export type AdminExportAuthEventsData = {
     body?: never;
@@ -7323,7 +7421,7 @@ export type AdminListConfigAuditEventsData = {
     path?: never;
     query?: {
         workspaceId?: number;
-        page?: number;
+        cursor?: string;
         size?: number;
         entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CATALOG_PRACTICE' | 'CATALOG_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BATCH' | 'REVIEW_SCHEDULE' | 'FEEDBACK_DELIVERY_RECHECK' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
         entityId?: string;
@@ -7340,10 +7438,35 @@ export type AdminListConfigAuditEventsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoConfigAuditEntryView;
+    200: CursorPageDtoConfigAuditEntryView;
 };
 
 export type AdminListConfigAuditEventsResponse = AdminListConfigAuditEventsResponses[keyof AdminListConfigAuditEventsResponses];
+
+export type AdminCountConfigAuditEventsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        workspaceId?: number;
+        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CATALOG_PRACTICE' | 'CATALOG_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BATCH' | 'REVIEW_SCHEDULE' | 'FEEDBACK_DELIVERY_RECHECK' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+        entityId?: string;
+        changedKey?: string;
+        action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
+        actorId?: number;
+        from?: string;
+        to?: string;
+    };
+    url: '/admin/config-audit/count';
+};
+
+export type AdminCountConfigAuditEventsResponses = {
+    /**
+     * OK
+     */
+    200: TotalCount;
+};
+
+export type AdminCountConfigAuditEventsResponse = AdminCountConfigAuditEventsResponses[keyof AdminCountConfigAuditEventsResponses];
 
 export type AdminGetConfigurationReadinessData = {
     body?: never;
@@ -7390,7 +7513,8 @@ export type ListInstallationDeadLettersData = {
     body?: never;
     path?: never;
     query?: {
-        after?: number;
+        cursor?: string;
+        size?: number;
     };
     url: '/admin/integration/dead-letters';
 };
@@ -7399,7 +7523,7 @@ export type ListInstallationDeadLettersResponses = {
     /**
      * OK
      */
-    200: Array<ConsumerDeadLetter>;
+    200: CursorPageDtoConsumerDeadLetter;
 };
 
 export type ListInstallationDeadLettersResponse = ListInstallationDeadLettersResponses[keyof ListInstallationDeadLettersResponses];
@@ -8459,7 +8583,7 @@ export type AdminListProductFeedbackResponses = {
     /**
      * OK
      */
-    200: PagedModelFeedbackItem;
+    200: OffsetPageDtoFeedbackItem;
 };
 
 export type AdminListProductFeedbackResponse = AdminListProductFeedbackResponses[keyof AdminListProductFeedbackResponses];
@@ -8741,7 +8865,7 @@ export type AdminListUsersResponses = {
     /**
      * OK
      */
-    200: Array<AdminAccountView>;
+    200: OffsetPageDtoAdminAccountView;
 };
 
 export type AdminListUsersResponse = AdminListUsersResponses[keyof AdminListUsersResponses];
@@ -9385,7 +9509,7 @@ export type GetPublicActivityPersonWorkResponses = {
     /**
      * Public work listed
      */
-    200: PublicActivityWorkPage;
+    200: CursorPageDtoPublicActivityWork;
 };
 
 export type GetPublicActivityPersonWorkResponse = GetPublicActivityPersonWorkResponses[keyof GetPublicActivityPersonWorkResponses];
@@ -10072,7 +10196,7 @@ export type ListGitLabProjectsData = {
     body: GitLabPreflightRequest;
     path?: never;
     query?: {
-        page?: number;
+        cursor?: string;
         search?: string;
     };
     url: '/workspaces/gitlab/projects';
@@ -10080,9 +10204,9 @@ export type ListGitLabProjectsData = {
 
 export type ListGitLabProjectsResponses = {
     /**
-     * One page of projects; nextPage is absent on the last page
+     * One page of projects, ordered by path; nextCursor is absent on the last page
      */
-    200: GitLabProjectPage;
+    200: CursorPageDtoGitLabProject;
 };
 
 export type ListGitLabProjectsResponse = ListGitLabProjectsResponses[keyof ListGitLabProjectsResponses];
@@ -10322,7 +10446,7 @@ export type GetOwnActivityWorkResponses = {
     /**
      * Your work listed
      */
-    200: ActivityWorkPage;
+    200: CursorPageDtoActivityWork;
 };
 
 export type GetOwnActivityWorkResponse = GetOwnActivityWorkResponses[keyof GetOwnActivityWorkResponses];
@@ -10601,7 +10725,7 @@ export type GetActivityPersonWorkResponses = {
     /**
      * One page of contributor work
      */
-    200: ActivityWorkPage;
+    200: CursorPageDtoActivityWork;
 };
 
 export type GetActivityPersonWorkResponse = GetActivityPersonWorkResponses[keyof GetActivityPersonWorkResponses];
@@ -10699,7 +10823,7 @@ export type GetActivityWorkResponses = {
     /**
      * One page of work
      */
-    200: ActivityWorkPage;
+    200: CursorPageDtoActivityWork;
 };
 
 export type GetActivityWorkResponse = GetActivityWorkResponses[keyof GetActivityWorkResponses];
@@ -10793,7 +10917,7 @@ export type ListWorkspaceConfigAuditEventsData = {
         workspaceSlug: string;
     };
     query?: {
-        page?: number;
+        cursor?: string;
         size?: number;
         entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CATALOG_PRACTICE' | 'CATALOG_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BATCH' | 'REVIEW_SCHEDULE' | 'FEEDBACK_DELIVERY_RECHECK' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
         entityId?: string;
@@ -10810,10 +10934,39 @@ export type ListWorkspaceConfigAuditEventsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoConfigAuditEntryView;
+    200: CursorPageDtoConfigAuditEntryView;
 };
 
 export type ListWorkspaceConfigAuditEventsResponse = ListWorkspaceConfigAuditEventsResponses[keyof ListWorkspaceConfigAuditEventsResponses];
+
+export type CountWorkspaceConfigAuditEventsData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+    };
+    query?: {
+        entityType?: Array<'PRACTICE_REVIEW_SETTINGS' | 'AGENT_BINDING' | 'AGENT_CONFIG' | 'AI_CONFIG_BINDING' | 'WORKSPACE_ROLE' | 'ACTIVITY_AUTOMATION' | 'WORKSPACE_FEATURES' | 'WORKSPACE_STATUS' | 'WORKSPACE_TOKEN' | 'WORKSPACE_VISIBILITY' | 'PRACTICE_ACTIVE' | 'PRACTICE_USAGE' | 'PRACTICE_DEFINITION' | 'PRACTICE_GROUP' | 'CATALOG_PRACTICE' | 'CATALOG_GROUP' | 'WORKSPACE_INSTANCE_LLM_BUDGET' | 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET' | 'WORKSPACE_LLM_BUDGET' | 'WORKSPACE_BYO_LLM_BUDGET' | 'REVIEW_BATCH' | 'REVIEW_SCHEDULE' | 'FEEDBACK_DELIVERY_RECHECK' | 'WORKSPACE_LLM_CONNECTION' | 'WORKSPACE_LLM_MODEL'>;
+        entityId?: string;
+        changedKey?: string;
+        action?: Array<'CREATED' | 'UPDATED' | 'DELETED'>;
+        actorId?: number;
+        from?: string;
+        to?: string;
+    };
+    url: '/workspaces/{workspaceSlug}/config-audit/count';
+};
+
+export type CountWorkspaceConfigAuditEventsResponses = {
+    /**
+     * OK
+     */
+    200: TotalCount;
+};
+
+export type CountWorkspaceConfigAuditEventsResponse = CountWorkspaceConfigAuditEventsResponses[keyof CountWorkspaceConfigAuditEventsResponses];
 
 export type ListData = {
     body?: never;
@@ -10948,7 +11101,7 @@ export type ListConnectionSyncJobsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoSyncJob;
+    200: OffsetPageDtoSyncJob;
 };
 
 export type ListConnectionSyncJobsResponse = ListConnectionSyncJobsResponses[keyof ListConnectionSyncJobsResponses];
@@ -11158,7 +11311,8 @@ export type ListConsumerDeadLettersData = {
         workspaceSlug: string;
     };
     query?: {
-        after?: number;
+        cursor?: string;
+        size?: number;
     };
     url: '/workspaces/{workspaceSlug}/integrations/dead-letters';
 };
@@ -11167,7 +11321,7 @@ export type ListConsumerDeadLettersResponses = {
     /**
      * OK
      */
-    200: Array<ConsumerDeadLetter>;
+    200: CursorPageDtoConsumerDeadLetter;
 };
 
 export type ListConsumerDeadLettersResponse = ListConsumerDeadLettersResponses[keyof ListConsumerDeadLettersResponses];
@@ -11586,7 +11740,7 @@ export type ListMembershipsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoWorkspaceMembership;
+    200: OffsetPageDtoWorkspaceMembership;
 };
 
 export type ListMembershipsResponse = ListMembershipsResponses[keyof ListMembershipsResponses];
@@ -11728,8 +11882,8 @@ export type ListMentorEntriesData = {
         workspaceSlug: string;
     };
     query?: {
-        before?: number;
-        limit?: number;
+        cursor?: string;
+        size?: number;
     };
     url: '/workspaces/{workspaceSlug}/mentor/entries';
 };
@@ -11738,7 +11892,7 @@ export type ListMentorEntriesResponses = {
     /**
      * OK
      */
-    200: MentorEntryPage;
+    200: CursorPageDtoMentorEntry;
 };
 
 export type ListMentorEntriesResponse = ListMentorEntriesResponses[keyof ListMentorEntriesResponses];
@@ -11784,8 +11938,8 @@ export type GetMentorThreadData = {
         entryId: string;
     };
     query?: {
-        before?: number;
-        limit?: number;
+        cursor?: string;
+        size?: number;
     };
     url: '/workspaces/{workspaceSlug}/mentor/entries/{entryId}/thread';
 };
@@ -12622,7 +12776,7 @@ export type ListOwnGroupReviewsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoProfileReview;
+    200: OffsetPageDtoProfileReview;
 };
 
 export type ListOwnGroupReviewsResponse = ListOwnGroupReviewsResponses[keyof ListOwnGroupReviewsResponses];
@@ -12684,7 +12838,7 @@ export type ListOwnReviewsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoProfileReview;
+    200: OffsetPageDtoProfileReview;
 };
 
 export type ListOwnReviewsResponse = ListOwnReviewsResponses[keyof ListOwnReviewsResponses];
@@ -12977,7 +13131,7 @@ export type ListReviewItemsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoItemRef;
+    200: OffsetPageDtoItemRef;
 };
 
 export type ListReviewItemsResponse = ListReviewItemsResponses[keyof ListReviewItemsResponses];
@@ -13048,7 +13202,7 @@ export type ListOwnItemReviewsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoProfileReview;
+    200: OffsetPageDtoProfileReview;
 };
 
 export type ListOwnItemReviewsResponse = ListOwnItemReviewsResponses[keyof ListOwnItemReviewsResponses];
@@ -13216,7 +13370,7 @@ export type ListOwnResultsResponses = {
     /**
      * Paginated results returned
      */
-    200: PageResponseDtoResultList;
+    200: OffsetPageDtoResultList;
 };
 
 export type ListOwnResultsResponse = ListOwnResultsResponses[keyof ListOwnResultsResponses];
@@ -13269,7 +13423,7 @@ export type ListReviewBatchesResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoReviewBatch;
+    200: OffsetPageDtoReviewBatch;
 };
 
 export type ListReviewBatchesResponse = ListReviewBatchesResponses[keyof ListReviewBatchesResponses];
@@ -13627,7 +13781,7 @@ export type ListReviewsResponses = {
     /**
      * Paginated review summaries returned
      */
-    200: PageResponseDtoReviewSummary;
+    200: OffsetPageDtoReviewSummary;
 };
 
 export type ListReviewsResponse = ListReviewsResponses[keyof ListReviewsResponses];
@@ -13667,7 +13821,7 @@ export type ListReviewFeedbackResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoReviewFeedback;
+    200: OffsetPageDtoReviewFeedback;
 };
 
 export type ListReviewFeedbackResponse = ListReviewFeedbackResponses[keyof ListReviewFeedbackResponses];
@@ -13970,7 +14124,7 @@ export type ListReviewProblemsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoReviewProblem;
+    200: OffsetPageDtoReviewProblem;
 };
 
 export type ListReviewProblemsResponse = ListReviewProblemsResponses[keyof ListReviewProblemsResponses];
@@ -14052,7 +14206,7 @@ export type ListReviewResultsResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoReviewResult;
+    200: OffsetPageDtoReviewResult;
 };
 
 export type ListReviewResultsResponse = ListReviewResultsResponses[keyof ListReviewResultsResponses];
@@ -14280,7 +14434,7 @@ export type ListScansResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoScanSummary;
+    200: OffsetPageDtoScanSummary;
 };
 
 export type ListScansResponse = ListScansResponses[keyof ListScansResponses];
@@ -14378,7 +14532,7 @@ export type ListScanReportItemsResponses = {
     /**
      * OK
      */
-    200: ScanReportItemsPage;
+    200: CursorPageDtoScanReportItem;
 };
 
 export type ListScanReportItemsResponse = ListScanReportItemsResponses[keyof ListScanReportItemsResponses];
@@ -14408,7 +14562,7 @@ export type ListScanReportProblemsResponses = {
     /**
      * OK
      */
-    200: ScanReportProblemsPage;
+    200: CursorPageDtoScanReportProblem;
 };
 
 export type ListScanReportProblemsResponse = ListScanReportProblemsResponses[keyof ListScanReportProblemsResponses];
@@ -15287,7 +15441,7 @@ export type ListUserViewUsersResponses = {
     /**
      * OK
      */
-    200: PageResponseDtoUserViewAccount;
+    200: OffsetPageDtoUserViewAccount;
 };
 
 export type ListUserViewUsersResponse = ListUserViewUsersResponses[keyof ListUserViewUsersResponses];

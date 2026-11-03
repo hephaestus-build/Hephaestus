@@ -2,10 +2,11 @@ package de.tum.cit.aet.hephaestus.activity.overview;
 
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
-import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkPageDTO;
+import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -62,7 +63,7 @@ public class PublicActivityController {
     @SecurityRequirements
     @Operation(operationId = "getPublicActivityPersonWork", summary = "Read a person's published work timeline")
     @ApiResponse(responseCode = "200", description = "Public work listed")
-    public ResponseEntity<PublicActivityWorkPageDTO> getPublicActivityPersonWork(
+    public ResponseEntity<CursorPageDTO<PublicActivityWorkDTO>> getPublicActivityPersonWork(
             @PathVariable String slug,
             @PathVariable String login,
             @ParameterObject ActivityPeopleRangeParams range,

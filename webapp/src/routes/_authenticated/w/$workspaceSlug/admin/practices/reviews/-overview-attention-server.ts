@@ -69,10 +69,9 @@ export function serveAttention(week?: ReviewOverview) {
 			HttpResponse.json({
 				content: [],
 				size: 1,
-				number: 0,
+				page: 0,
 				totalElements: 0,
 				totalPages: 1,
-				last: true,
 			}),
 		),
 		...reviewHandlers(),

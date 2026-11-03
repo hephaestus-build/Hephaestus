@@ -3,7 +3,7 @@ import { HttpResponse, http, type PathParams } from "msw";
 import type {
 	MentorConversation,
 	MentorEntry,
-	MentorEntryPage,
+	CursorPageDtoMentorEntry,
 	MentorSubmission,
 	MentorThread,
 	MentorTurn,
@@ -21,7 +21,7 @@ const BASE_TIME = Date.parse("2026-10-09T09:00:00Z");
 const MAIN_CONVERSATION_ID = "c0000000-0000-4000-8000-000000000000";
 
 function beforeOf(request: Request): number | undefined {
-	const value = new URL(request.url).searchParams.get("before");
+	const value = new URL(request.url).searchParams.get("cursor");
 	return value === null ? undefined : Number(value);
 }
 
@@ -129,11 +129,11 @@ export class ConversationFake {
 		};
 	}
 
-	private page(scope: WireEntry[], before: number | undefined): Wire<MentorEntryPage> {
+	private page(scope: WireEntry[], before: number | undefined): Wire<CursorPageDtoMentorEntry> {
 		const older = before === undefined ? scope : scope.filter(({ seq }) => seq < before);
-		const entries = older.slice(-this.pageSize);
-		const earlierBefore = older.length > entries.length ? entries[0]?.seq : undefined;
-		return { entries, ...(earlierBefore === undefined ? {} : { earlierBefore }) };
+		const content = older.slice(-this.pageSize);
+		const nextCursor = older.length > content.length ? content[0]?.seq : undefined;
+		return { content, ...(nextCursor === undefined ? {} : { nextCursor: String(nextCursor) }) };
 	}
 
 	handlers() {
@@ -159,7 +159,7 @@ export class ConversationFake {
 				return HttpResponse.json({
 					parent,
 					...(parent.thread ? { conversationId: parent.thread.conversationId } : {}),
-					...this.page(this.scope(parent.id), beforeOf(request)),
+					replies: this.page(this.scope(parent.id), beforeOf(request)),
 				} satisfies Wire<MentorThread>);
 			}),
 			http.post<PathParams, MentorTurnRequest>(`${base}/turns`, async ({ request }) => {

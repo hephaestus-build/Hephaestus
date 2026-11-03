@@ -15,7 +15,6 @@ describe("generated SDK response transformers", () => {
 			http.get("*/admin/audit", () =>
 				HttpResponse.json({
 					content: [{ id: 1, eventType: "LOGIN", result: "SUCCESS", occurredAt: ISO }],
-					page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
 				}),
 			),
 		);
@@ -86,6 +85,9 @@ function batchesResponse(status = "COMPLETED") {
 				finishedAt: status === "COMPLETED" ? ISO : null,
 			},
 		],
-		page: { number: 0, size: 20, totalElements: 1, totalPages: 1 },
+		page: 0,
+		size: 20,
+		totalElements: 1,
+		totalPages: 1,
 	});
 }

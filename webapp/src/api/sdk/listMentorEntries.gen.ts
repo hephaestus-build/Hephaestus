@@ -7,7 +7,7 @@ import { listMentorEntriesResponseTransformer } from '../transformers.gen.js';
 import type { ListMentorEntriesData, ListMentorEntriesResponses } from '../types.gen.js';
 
 /**
- * A page of top-level messages, oldest first; pass before=<seq> for older ones
+ * A page of top-level messages, oldest first; pass nextCursor as cursor for older ones
  */
 export const listMentorEntries = <ThrowOnError extends boolean = false>(options: Options<ListMentorEntriesData, ThrowOnError>): RequestResult<ListMentorEntriesResponses, unknown, ThrowOnError> => (options.client ?? client).get<ListMentorEntriesResponses, unknown, ThrowOnError>({
     responseTransformer: listMentorEntriesResponseTransformer,

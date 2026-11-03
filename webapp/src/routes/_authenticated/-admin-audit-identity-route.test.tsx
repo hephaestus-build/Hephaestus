@@ -14,7 +14,7 @@ import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harnes
 vi.setConfig({ testTimeout: 40_000 });
 
 function auditPage<T>(content: T[]) {
-	return { content, number: 0, size: 50, totalElements: content.length, last: true };
+	return { content };
 }
 
 function settingsChange(workspaceId: number, operator: string, newStatus: string) {

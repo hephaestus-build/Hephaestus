@@ -25,7 +25,7 @@ import { browserTimeZone } from "@/lib/dates";
 import { useSearchState } from "@/lib/search-params";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute(
@@ -50,7 +50,7 @@ function ResultsListRoute() {
 	});
 	const resultsQueryResult = useInfiniteQuery({
 		...listOptions,
-		...springPageParams,
+		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, resultsQueryResult.isError, resultsQueryResult.error);
 	const { groups, practices, people } = useReviewScopeSources(workspaceSlug);

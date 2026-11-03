@@ -43,7 +43,7 @@ import { copyRichText } from "@/lib/clipboard";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
-import { loadedPages } from "@/runtime/tanstack-query/spring-page";
+import { loadedPages } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 /** What activity counts: the period, and — on Workspace activity — a team and repositories. */
@@ -354,7 +354,7 @@ export function useActivityWork({
 			: skipToken,
 		enabled,
 		initialPageParam: firstCursor,
-		getNextPageParam: (last) => last.nextCursor ?? undefined,
+		getNextPageParam: (last) => last.nextCursor,
 		placeholderData: keepSameSubject({
 			workspaceSlug,
 			userId,

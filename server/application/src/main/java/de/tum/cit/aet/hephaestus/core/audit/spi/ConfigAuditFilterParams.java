@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,8 +39,7 @@ public record ConfigAuditFilterParams(
     }
 
     /** Clamps rather than rejects an oversized page, matching {@code AuthAuditController}. */
-    public static Pageable pageable(int page, int size) {
-        // The queries carry their own ORDER BY occurred_at DESC, id DESC; keep the Pageable sort empty.
-        return PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
+    public static int pageSize(int size) {
+        return Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
     }
 }

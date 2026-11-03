@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -36,10 +35,8 @@ public interface AuthEventRepository extends JpaRepository<AuthEvent, AuthEvent.
      * Admin audit viewer: auth events newest-first, optionally narrowed by subject account and/or
      * event type (both null = unfiltered). Backs the read-only {@code GET /admin/audit} viewer.
      *
-     * <p>Ordered by {@code occurred_at DESC}, backed by the {@code ix_auth_event_occurred} index;
-     * the monthly RANGE partitioning on {@code occurred_at} additionally lets the newest pages prune
-     * to the most recent partition(s). Switch to keyset pagination if deep paging over the full
-     * 12-month window ever becomes hot.
+     * <p>Reads by keyset on {@code occurred_at DESC, id DESC}, backed by the {@code ix_auth_event_occurred}
+     * index, so a deep page costs the same as the first. A null {@code cursorAt} reads the first page.
      */
     @Query("""
             SELECT e FROM AuthEvent e
@@ -49,14 +46,36 @@ public interface AuthEventRepository extends JpaRepository<AuthEvent, AuthEvent.
               AND (:results IS NULL OR e.result IN :results)
               AND (CAST(:from AS Instant) IS NULL OR e.id.occurredAt >= :from)
               AND (CAST(:to AS Instant) IS NULL OR e.id.occurredAt < :to)
+              AND (CAST(:cursorAt AS Instant) IS NULL OR e.id.occurredAt < :cursorAt
+                   OR (e.id.occurredAt = :cursorAt AND e.id.id < :cursorId))
             ORDER BY e.id.occurredAt DESC, e.id.id DESC
         """)
-    Page<AuthEvent> findForAdmin(
+    List<AuthEvent> findForAdmin(
             @Param("accountId") @Nullable Long accountId,
             @Param("actingAccountId") @Nullable Long actingAccountId,
             @Param("eventTypes") @Nullable List<AuthEvent.EventType> eventTypes,
             @Param("results") @Nullable List<AuthEvent.Result> results,
             @Param("from") @Nullable Instant from,
             @Param("to") @Nullable Instant to,
+            @Param("cursorAt") @Nullable Instant cursorAt,
+            @Param("cursorId") @Nullable Long cursorId,
             Pageable pageable);
+
+    /** How many auth events the admin audit viewer's filter matches. */
+    @Query("""
+            SELECT count(e) FROM AuthEvent e
+            WHERE (:accountId IS NULL OR e.accountId = :accountId)
+              AND (:actingAccountId IS NULL OR e.actingAccountId = :actingAccountId)
+              AND (:eventTypes IS NULL OR e.eventType IN :eventTypes)
+              AND (:results IS NULL OR e.result IN :results)
+              AND (CAST(:from AS Instant) IS NULL OR e.id.occurredAt >= :from)
+              AND (CAST(:to AS Instant) IS NULL OR e.id.occurredAt < :to)
+        """)
+    long countForAdmin(
+            @Param("accountId") @Nullable Long accountId,
+            @Param("actingAccountId") @Nullable Long actingAccountId,
+            @Param("eventTypes") @Nullable List<AuthEvent.EventType> eventTypes,
+            @Param("results") @Nullable List<AuthEvent.Result> results,
+            @Param("from") @Nullable Instant from,
+            @Param("to") @Nullable Instant to);
 }

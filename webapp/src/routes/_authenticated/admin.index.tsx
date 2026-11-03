@@ -73,7 +73,7 @@ function AdminOverviewPage() {
 	useQueryReadRefusal(readinessOptions.queryKey, readinessQuery.isError, readinessQuery.error);
 	const settingsQuery = useQuery(adminGetInstanceSettingsOptions());
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());
-	const eventsQuery = useQuery(adminListAuthEventsOptions({ query: { page: 0, size: 8 } }));
+	const eventsQuery = useQuery(adminListAuthEventsOptions({ query: { size: 8 } }));
 
 	const workspaces = workspacesQuery.data ?? [];
 	const activeWorkspaces = workspaces.filter((ws) => ws.status === "ACTIVE").length;

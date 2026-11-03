@@ -7,7 +7,7 @@ import { adminListAuthEventsResponseTransformer } from '../transformers.gen.js';
 import type { AdminListAuthEventsData, AdminListAuthEventsResponses } from '../types.gen.js';
 
 /**
- * List auth audit events (paged, newest first)
+ * List auth audit events (newest first)
  */
 export const adminListAuthEvents = <ThrowOnError extends boolean = false>(options?: Options<AdminListAuthEventsData, ThrowOnError>): RequestResult<AdminListAuthEventsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<AdminListAuthEventsResponses, unknown, ThrowOnError>({
     responseTransformer: adminListAuthEventsResponseTransformer,

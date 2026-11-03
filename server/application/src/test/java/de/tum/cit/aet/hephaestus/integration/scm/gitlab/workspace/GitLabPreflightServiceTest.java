@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
@@ -24,7 +25,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabGroupDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabPreflightResponseDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.GitLabProjectDTO;
-import de.tum.cit.aet.hephaestus.workspace.dto.GitLabProjectPageDTO;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -402,13 +402,13 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
                     project(2L, "my-group/sub/nested"),
                     project(3L, "other-group/shared-in")));
 
-            GitLabProjectPageDTO result =
-                    preflightService.listGroupProjects("glpat-test", null, " my-group ", 2, "nest");
+            CursorPageDTO<GitLabProjectDTO> result =
+                    preflightService.listGroupProjects("glpat-test", null, " my-group ", "2", "nest");
 
-            assertThat(result.projects())
+            assertThat(result.content())
                     .extracting(GitLabProjectDTO::id, GitLabProjectDTO::fullPath)
                     .containsExactly(tuple(1L, "my-group/direct"), tuple(2L, "my-group/sub/nested"));
-            assertThat(result.nextPage()).isEqualTo(3);
+            assertThat(result.nextCursor()).isEqualTo("3");
             ArgumentCaptor<String> template = ArgumentCaptor.captor();
             ArgumentCaptor<Map<String, Object>> variables = ArgumentCaptor.captor();
             verify(uriSpec).uri(template.capture(), variables.capture());
@@ -428,10 +428,11 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         void shouldReportTheLastPageWhenGitLabNamesNoNextPage() {
             mockPage(page("", project(1L, "my-group/last")));
 
-            GitLabProjectPageDTO result = preflightService.listGroupProjects("glpat-test", null, "my-group", 4, null);
+            CursorPageDTO<GitLabProjectDTO> result =
+                    preflightService.listGroupProjects("glpat-test", null, "my-group", "4", null);
 
-            assertThat(result.nextPage()).isNull();
-            assertThat(result.projects()).extracting(GitLabProjectDTO::fullPath).containsExactly("my-group/last");
+            assertThat(result.nextCursor()).isNull();
+            assertThat(result.content()).extracting(GitLabProjectDTO::fullPath).containsExactly("my-group/last");
         }
 
         @Test
@@ -449,7 +450,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
 
                 assertStatus(
                         catchThrowable(
-                                () -> preflightService.listGroupProjects("glpat-test", null, "my-group", 1, null)),
+                                () -> preflightService.listGroupProjects("glpat-test", null, "my-group", null, null)),
                         HttpStatus.BAD_GATEWAY);
             }
         }
@@ -461,7 +462,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
 
                 assertStatus(
                         catchThrowable(
-                                () -> preflightService.listGroupProjects("glpat-test", null, "my-group", 1, null)),
+                                () -> preflightService.listGroupProjects("glpat-test", null, "my-group", null, null)),
                         HttpStatus.UNPROCESSABLE_CONTENT);
             }
         }
@@ -469,11 +470,18 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         @Test
         void shouldRefuseWithoutAGroupOrOnAnotherInstanceBeforeAnyRequest() {
             assertStatus(
-                    catchThrowable(() -> preflightService.listGroupProjects("glpat-test", null, " ", 1, null)),
+                    catchThrowable(() -> preflightService.listGroupProjects("glpat-test", null, " ", null, null)),
+                    HttpStatus.BAD_REQUEST);
+            assertStatus(
+                    catchThrowable(
+                            () -> preflightService.listGroupProjects("glpat-test", null, "my-group", "soon", null)),
+                    HttpStatus.BAD_REQUEST);
+            assertStatus(
+                    catchThrowable(() -> preflightService.listGroupProjects("glpat-test", null, "my-group", "0", null)),
                     HttpStatus.BAD_REQUEST);
             assertStatus(
                     catchThrowable(() -> preflightService.listGroupProjects(
-                            "glpat-test", "https://gitlab.example.com", "my-group", 1, null)),
+                            "glpat-test", "https://gitlab.example.com", "my-group", null, null)),
                     HttpStatus.UNPROCESSABLE_CONTENT);
             verify(endpoints, never()).clientFor(anyString());
         }

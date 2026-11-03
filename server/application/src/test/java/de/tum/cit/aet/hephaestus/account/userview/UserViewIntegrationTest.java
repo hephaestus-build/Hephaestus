@@ -215,7 +215,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.entries[*].id")
+                .jsonPath("$.content[*].id")
                 .value(ids -> assertThat(ids)
                         .asInstanceOf(InstanceOfAssertFactories.LIST)
                         .containsExactly(own.question().getId().toString())

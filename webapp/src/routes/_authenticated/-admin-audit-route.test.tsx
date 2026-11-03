@@ -50,12 +50,13 @@ const configEntry = {
 } satisfies Wire<ConfigAuditEntryView>;
 
 function auditPage<T>(content: T[]) {
-	return { content, number: 0, size: 50, totalElements: content.length, last: true };
+	return { content };
 }
 
 function serveAuthEvents(answers: readonly (Wire<AuthEventView>[] | { status: number })[]) {
 	const served: { path: string; accountId: string | null; status: number }[] = [];
 	server.use(
+		http.get("*/admin/audit/count", () => HttpResponse.json({ total: 1 })),
 		http.get("*/admin/audit", ({ request }) => {
 			const answer = answers[served.length];
 			assert(answer, "Auth audit read exceeded the prepared responses");

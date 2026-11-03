@@ -159,7 +159,7 @@ function AdminFeedbackInboxPage() {
 	const onPageChange = (next: number) => {
 		void setSearch((previous) => ({ ...previous, page: pageParam(next) }));
 	};
-	useClampedPage(page, feedbackQuery.data?.page?.totalPages, onPageChange);
+	useClampedPage(page, feedbackQuery.data?.totalPages, onPageChange);
 
 	let state: AdminFeedbackListState;
 	if (feedbackQuery.isPending) {
@@ -175,10 +175,10 @@ function AdminFeedbackInboxPage() {
 	} else {
 		state = {
 			status: "ready",
-			items: feedbackQuery.data.content ?? [],
+			items: feedbackQuery.data.content,
 			filter: status,
 			page,
-			totalPages: feedbackQuery.data.page?.totalPages ?? 0,
+			totalPages: feedbackQuery.data.totalPages,
 			onPageChange,
 		};
 	}
@@ -222,7 +222,7 @@ function AdminFeedbackInboxPage() {
 						}}
 					/>
 					<ResultCount
-						total={feedbackQuery.data?.page?.totalElements}
+						total={feedbackQuery.data?.totalElements}
 						noun={["piece of feedback", "pieces of feedback"]}
 						hasFilter={status !== "ALL"}
 					/>

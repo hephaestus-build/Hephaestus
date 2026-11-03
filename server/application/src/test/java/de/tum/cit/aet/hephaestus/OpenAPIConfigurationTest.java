@@ -68,17 +68,9 @@ class OpenAPIConfigurationTest {
                 .in("query")
                 .required(false)
                 .schema(new Schema<>().type("integer").format("int64")));
-        OpenAPI api = api(
-                new Components()
-                        .addSchemas("PageDTO", objectWithFields("content"))
-                        .addSchemas("SortObject", objectWithFields("sorted")),
-                operation);
+        OpenAPI api = api(new Components().addSchemas("PageDTO", objectWithFields("content")), operation);
 
         new OpenAPIConfiguration().schemaCustomizer("test").customise(api);
-
-        Schema<?> requestSort =
-                Objects.requireNonNull(api.getComponents().getSchemas().get("SortObject"));
-        assertThat(requestSort.getRequired()).isNull();
         assertThat(Objects.requireNonNull(operation.getParameters()).getFirst().getRequired())
                 .isFalse();
         assertThat(operation.getParameters().get(1).getSchema().getType()).isEqualTo("string");

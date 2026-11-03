@@ -15,8 +15,7 @@ import {
 import type {
 	MentorConversation,
 	MentorEntry,
-	MentorEntryPage,
-	MentorThread,
+	CursorPageDtoMentorEntry,
 	MentorTurn,
 } from "@/api/types.gen";
 import { server } from "@/mocks/server";
@@ -31,6 +30,7 @@ import {
 	entriesOf,
 	conversationEntriesOptions,
 	conversationThreadOptions,
+	type ConversationThreadPage,
 	inOrder,
 	patchShownEntry,
 } from "./conversation-cache";
@@ -91,12 +91,12 @@ let queryClient: QueryClient;
 
 function mainEntries(): MentorEntry[] {
 	return entriesOf(
-		queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages ?? [],
+		queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages ?? [],
 	);
 }
 
 function threadSeqs(): number[] {
-	const thread = queryClient.getQueryData<InfiniteData<MentorThread>>(threadKey);
+	const thread = queryClient.getQueryData<InfiniteData<ConversationThreadPage>>(threadKey);
 	return entriesOf(thread?.pages ?? []).map(({ seq }) => seq);
 }
 
@@ -123,7 +123,10 @@ beforeEach(() => {
 
 describe("applyEntry", () => {
 	it("puts a message that arrives out of order where its seq belongs", () => {
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [entry(1), entry(3)] }));
+		queryClient.setQueryData(
+			entriesKey,
+			pages<CursorPageDtoMentorEntry>({ content: [entry(1), entry(3)] }),
+		);
 
 		applyEntry(queryClient, SLUG, entry(2));
 
@@ -131,7 +134,10 @@ describe("applyEntry", () => {
 	});
 
 	it("replaces a message it already holds instead of adding it twice", () => {
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [entry(1), entry(2)] }));
+		queryClient.setQueryData(
+			entriesKey,
+			pages<CursorPageDtoMentorEntry>({ content: [entry(1), entry(2)] }),
+		);
 
 		applyEntry(queryClient, SLUG, entry(2, { text: "Edited in Slack" }));
 
@@ -141,7 +147,7 @@ describe("applyEntry", () => {
 	it("leaves a message older than every loaded page for the read that reaches it", () => {
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>({ entries: [entry(5), entry(6)], earlierBefore: 5 }),
+			pages<CursorPageDtoMentorEntry>({ content: [entry(5), entry(6)], nextCursor: "5" }),
 		);
 
 		applyEntry(queryClient, SLUG, entry(2));
@@ -152,17 +158,18 @@ describe("applyEntry", () => {
 	it("adds a new message to the newest page when older pages are loaded", () => {
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>(
-				{ entries: [entry(3), entry(4)], earlierBefore: 3 },
-				{ entries: [entry(1), entry(2)] },
+			pages<CursorPageDtoMentorEntry>(
+				{ content: [entry(3), entry(4)], nextCursor: "3" },
+				{ content: [entry(1), entry(2)] },
 			),
 		);
 
 		applyEntry(queryClient, SLUG, entry(5));
 		applyEntry(queryClient, SLUG, entry(2, { text: "Edited in Slack" }));
 
-		const loaded = queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages;
-		expect(loaded?.map(({ entries }) => entries.map(({ seq }) => seq))).toStrictEqual([
+		const loaded =
+			queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages;
+		expect(loaded?.map(({ content }) => content.map(({ seq }) => seq))).toStrictEqual([
 			[3, 4, 5],
 			[1, 2],
 		]);
@@ -178,16 +185,17 @@ describe("applyEntry", () => {
 	it("puts a late message into the older page whose range holds it", () => {
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>(
-				{ entries: [entry(5), entry(6)], earlierBefore: 5 },
-				{ entries: [entry(1), entry(3)] },
+			pages<CursorPageDtoMentorEntry>(
+				{ content: [entry(5), entry(6)], nextCursor: "5" },
+				{ content: [entry(1), entry(3)] },
 			),
 		);
 
 		applyEntry(queryClient, SLUG, entry(4));
 
-		const loaded = queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages;
-		expect(loaded?.map(({ entries }) => entries.map(({ seq }) => seq))).toStrictEqual([
+		const loaded =
+			queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages;
+		expect(loaded?.map(({ content }) => content.map(({ seq }) => seq))).toStrictEqual([
 			[5, 6],
 			[1, 3, 4],
 		]);
@@ -196,32 +204,33 @@ describe("applyEntry", () => {
 	it("removes Hephaestus's deleted message and keeps the developer's as a placeholder", () => {
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>({ entries: [entry(1, { kind: "USER" }), entry(2)] }),
+			pages<CursorPageDtoMentorEntry>({ content: [entry(1, { kind: "USER" }), entry(2)] }),
 		);
 
 		applyEntry(queryClient, SLUG, entry(2, { deleted: true, text: "" }));
 		applyEntry(queryClient, SLUG, entry(1, { kind: "USER", deleted: true, text: "" }));
 
-		const shown = queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages[0];
-		expect(shown?.entries.map(({ seq, deleted }) => ({ seq, deleted }))).toStrictEqual([
+		const shown =
+			queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages[0];
+		expect(shown?.content.map(({ seq, deleted }) => ({ seq, deleted }))).toStrictEqual([
 			{ seq: 1, deleted: true },
 		]);
 	});
 
 	it("counts a reply once when the send's answer and the live event both bring it", () => {
 		const parent = entry(1, { id: PARENT });
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [parent] }));
-		queryClient.setQueryData(threadKey, pages<MentorThread>({ parent, entries: [] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [parent] }));
+		queryClient.setQueryData(threadKey, pages<ConversationThreadPage>({ parent, content: [] }));
 
 		applyEntry(queryClient, SLUG, reply(1));
 		applyEntry(queryClient, SLUG, reply(1));
 
 		const summary =
-			queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages[0]?.entries[0]
-				?.thread;
+			queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages[0]
+				?.content[0]?.thread;
 		expect(summary).toMatchObject({ replyCount: 1, latestSeq: 1 });
 		expect(
-			queryClient.getQueryData<InfiniteData<MentorThread>>(threadKey)?.pages[0]?.entries,
+			queryClient.getQueryData<InfiniteData<ConversationThreadPage>>(threadKey)?.pages[0]?.content,
 		).toHaveLength(1);
 	});
 });
@@ -229,14 +238,18 @@ describe("applyEntry", () => {
 describe("patchShownEntry", () => {
 	it("patches a top-level message in the main pages and above its open thread", () => {
 		const parent = entry(1, { id: PARENT });
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [parent] }));
-		queryClient.setQueryData(threadKey, pages<MentorThread>({ parent, entries: [reply(1)] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [parent] }));
+		queryClient.setQueryData(
+			threadKey,
+			pages<ConversationThreadPage>({ parent, content: [reply(1)] }),
+		);
 
 		patchShownEntry(queryClient, SLUG, parent, (shown) => ({ ...shown, vote: "HELPFUL" }));
 
 		expect(mainEntries()[0]?.vote).toBe("HELPFUL");
 		expect(
-			queryClient.getQueryData<InfiniteData<MentorThread>>(threadKey)?.pages[0]?.parent.vote,
+			queryClient.getQueryData<InfiniteData<ConversationThreadPage>>(threadKey)?.pages[0]?.parent
+				.vote,
 		).toBe("HELPFUL");
 	});
 });
@@ -244,8 +257,14 @@ describe("patchShownEntry", () => {
 describe("applySnapshot", () => {
 	it("reads every loaded page again, though an edit while the stream was down moved no seq", async () => {
 		const parent = entry(1, { id: PARENT });
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [parent, entry(2)] }));
-		queryClient.setQueryData(threadKey, pages<MentorThread>({ parent, entries: [reply(1)] }));
+		queryClient.setQueryData(
+			entriesKey,
+			pages<CursorPageDtoMentorEntry>({ content: [parent, entry(2)] }),
+		);
+		queryClient.setQueryData(
+			threadKey,
+			pages<ConversationThreadPage>({ parent, content: [reply(1)] }),
+		);
 		conversation({ latestSeq: 2 });
 
 		await applySnapshot(queryClient, SLUG, {
@@ -261,8 +280,11 @@ describe("applySnapshot", () => {
 
 	it("reads an open thread again and shows the snapshot's reply count at once", async () => {
 		const parent = entry(1, { id: PARENT });
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [parent] }));
-		queryClient.setQueryData(threadKey, pages<MentorThread>({ parent, entries: [reply(1)] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [parent] }));
+		queryClient.setQueryData(
+			threadKey,
+			pages<ConversationThreadPage>({ parent, content: [reply(1)] }),
+		);
 		const summary = {
 			conversationId: "c0000000-0000-4000-8000-000000000001",
 			parentEntryId: PARENT,
@@ -279,11 +301,12 @@ describe("applySnapshot", () => {
 
 		expect(invalidated(threadKey)).toBe(true);
 		expect(
-			queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages[0]?.entries[0]
-				?.thread,
+			queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages[0]
+				?.content[0]?.thread,
 		).toStrictEqual(summary);
 		expect(
-			queryClient.getQueryData<InfiniteData<MentorThread>>(threadKey)?.pages[0]?.parent.thread,
+			queryClient.getQueryData<InfiniteData<ConversationThreadPage>>(threadKey)?.pages[0]?.parent
+				.thread,
 		).toStrictEqual(summary);
 	});
 });
@@ -292,8 +315,8 @@ describe("applyTurn", () => {
 	beforeEach(() => {
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>({
-				entries: [entry(1, { kind: "USER", turnId: "a0000000-0000-4000-8000-000000000001" })],
+			pages<CursorPageDtoMentorEntry>({
+				content: [entry(1, { kind: "USER", turnId: "a0000000-0000-4000-8000-000000000001" })],
 			}),
 		);
 	});
@@ -307,7 +330,8 @@ describe("applyTurn", () => {
 			queryClient.getQueryData<MentorConversation>(conversationKey)?.activeTurns,
 		).toStrictEqual([]);
 		const question =
-			queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages[0]?.entries[0];
+			queryClient.getQueryData<InfiniteData<CursorPageDtoMentorEntry>>(entriesKey)?.pages[0]
+				?.content[0];
 		expect(question).toMatchObject({
 			turnStatus: "FAILED",
 			turnError: "Hephaestus took too long to answer.",
@@ -374,7 +398,7 @@ describe("applyTurn", () => {
 
 	it("drops a send's answer that arrives after a snapshot showed the turn running", async () => {
 		const turnId = turn("QUEUED").id;
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [] }));
 		conversation({ activeTurns: [] });
 		await applySnapshot(queryClient, SLUG, {
 			id: MAIN,
@@ -400,7 +424,7 @@ describe("applyTurn", () => {
 
 	it("applies a send's answer that is current: the question and its queued turn", () => {
 		const turnId = turn("QUEUED").id;
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [] }));
 		conversation({ activeTurns: [] });
 
 		applySubmission(queryClient, SLUG, {
@@ -420,8 +444,8 @@ describe("applyTurn", () => {
 		const turnId = turn("QUEUED").id;
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>({
-				entries: [entry(1, { kind: "USER", turnId, turnStatus: "STOPPED" })],
+			pages<CursorPageDtoMentorEntry>({
+				content: [entry(1, { kind: "USER", turnId, turnStatus: "STOPPED" })],
 			}),
 		);
 		conversation({ activeTurns: [] });
@@ -467,7 +491,7 @@ describe("a late answer to the developer's own write", () => {
 	const sent = entry(1, { kind: "USER", turnId, text: "Secret I deleted" });
 
 	it("keeps a question deleted when the send's answer arrives after the deletion", () => {
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [deleted] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [deleted] }));
 		conversation({ activeTurns: [] });
 
 		applySubmission(queryClient, SLUG, { question: sent, turn: turn("QUEUED") });
@@ -477,18 +501,21 @@ describe("a late answer to the developer's own write", () => {
 
 	it("keeps a deleted question above its open thread when the send's answer arrives late", () => {
 		const parent = { ...deleted, id: PARENT };
-		queryClient.setQueryData(threadKey, pages<MentorThread>({ parent, entries: [reply(1)] }));
+		queryClient.setQueryData(
+			threadKey,
+			pages<ConversationThreadPage>({ parent, content: [reply(1)] }),
+		);
 
 		applyEntry(queryClient, SLUG, { ...sent, id: PARENT });
 
-		const thread = queryClient.getQueryData<InfiniteData<MentorThread>>(threadKey);
+		const thread = queryClient.getQueryData<InfiniteData<ConversationThreadPage>>(threadKey);
 		expect(thread?.pages[0]?.parent).toMatchObject({ deleted: true, text: "" });
 	});
 
 	it("takes only the vote from a vote's answer, so words edited since stay", () => {
 		queryClient.setQueryData(
 			entriesKey,
-			pages<MentorEntryPage>({ entries: [entry(1, { text: "Edited in Slack since" })] }),
+			pages<CursorPageDtoMentorEntry>({ content: [entry(1, { text: "Edited in Slack since" })] }),
 		);
 
 		applyVote(queryClient, SLUG, entry(1, { text: "Written before the edit", vote: "HELPFUL" }));
@@ -497,7 +524,7 @@ describe("a late answer to the developer's own write", () => {
 	});
 
 	it("never shows again an answer of Hephaestus's that was deleted before the vote's answer arrived", () => {
-		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [entry(1)] }));
+		queryClient.setQueryData(entriesKey, pages<CursorPageDtoMentorEntry>({ content: [entry(1)] }));
 
 		applyVote(queryClient, SLUG, entry(2, { vote: "NOT_HELPFUL" }));
 
@@ -506,7 +533,7 @@ describe("a late answer to the developer's own write", () => {
 });
 
 const readThreadWithReply = () =>
-	HttpResponse.json({ parent: entry(1, { id: PARENT }), entries: [reply(1)] });
+	HttpResponse.json({ parent: entry(1, { id: PARENT }), replies: { content: [reply(1)] } });
 
 describe("a read in flight", () => {
 	const turnId = turn("RUNNING").id;
@@ -515,7 +542,7 @@ describe("a read in flight", () => {
 		const question = entry(1, { kind: "USER", turnId, turnStatus: "RUNNING" });
 		const response = deferred();
 		// Both reads are from before Hephaestus answered: the question still runs, and no answer is stored.
-		const read = () => HttpResponse.json({ entries: [question] });
+		const read = () => HttpResponse.json({ content: [question] });
 		server.use(
 			http.get("*/workspaces/acme/mentor/entries", async () => {
 				await response.promise;

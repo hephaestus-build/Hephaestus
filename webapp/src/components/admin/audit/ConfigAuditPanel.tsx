@@ -1,7 +1,9 @@
-import { hashKey, useInfiniteQuery } from "@tanstack/react-query";
+import { hashKey, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import {
+	adminCountConfigAuditEventsOptions,
 	adminListConfigAuditEventsInfiniteOptions,
+	countWorkspaceConfigAuditEventsOptions,
 	listWorkspaceConfigAuditEventsInfiniteOptions,
 } from "@/api/@tanstack/react-query.gen";
 import type { ConfigAuditEntryView } from "@/api/types.gen";
@@ -23,7 +25,7 @@ import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { narrowToEnum, nonEmpty } from "@/lib/search-params";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { nextCursorOf } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 const PAGE_SIZE = 50;
@@ -33,16 +35,19 @@ const ACTION_OPTIONS = toFacetOptions(ACTION_LABELS);
 const ENTITY_TYPES = ENTITY_TYPE_OPTIONS.map((option) => option.value);
 const ACTIONS = ACTION_OPTIONS.map((option) => option.value);
 
-function toQuery(search: ConfigAuditSearch) {
+function toFilters(search: ConfigAuditSearch) {
 	const dateRange = toDateRange(search);
 	return {
-		size: PAGE_SIZE,
 		entityType: narrowToEnum(search.entityType, ENTITY_TYPES),
 		action: narrowToEnum(search.action, ACTIONS),
 		actorId: search.actorId,
 		from: dateRange?.from ? dayStartInstant(dateRange.from) : undefined,
 		to: dateRange?.to ? dayAfterInstant(dateRange.to) : undefined,
 	};
+}
+
+function toQuery(search: ConfigAuditSearch) {
+	return { size: PAGE_SIZE, ...toFilters(search) };
 }
 
 export interface ConfigAuditPanelProps {
@@ -57,15 +62,23 @@ export function AdminConfigAuditPanel({
 	resolveWorkspaceName,
 }: ConfigAuditPanelProps) {
 	const listOptions = adminListConfigAuditEventsInfiniteOptions({ query: toQuery(search) });
-	const listQuery = useInfiniteQuery({ ...listOptions, ...springPageParams });
+	const listQuery = useInfiniteQuery({
+		...listOptions,
+		initialPageParam: { query: { cursor: undefined } },
+		getNextPageParam: nextCursorOf,
+	});
 	useQueryReadRefusal(listOptions.queryKey, listQuery.isError, listQuery.error);
 	const list = infiniteListState(listQuery, auditRows);
+	const countOptions = adminCountConfigAuditEventsOptions({ query: toFilters(search) });
+	const countQuery = useQuery(countOptions);
+	useQueryReadRefusal(countOptions.queryKey, countQuery.isError, countQuery.error);
 
 	return (
 		<ConfigAuditView
 			search={search}
 			onSearchChange={onSearchChange}
 			list={list}
+			total={countQuery.data?.total}
 			read={hashKey(listOptions.queryKey)}
 			showWorkspace
 			resolveWorkspaceName={resolveWorkspaceName}
@@ -82,15 +95,26 @@ export function WorkspaceConfigAuditPanel({
 		path: { workspaceSlug },
 		query: toQuery(search),
 	});
-	const listQuery = useInfiniteQuery({ ...listOptions, ...springPageParams });
+	const listQuery = useInfiniteQuery({
+		...listOptions,
+		initialPageParam: { path: { workspaceSlug }, query: { cursor: undefined } },
+		getNextPageParam: nextCursorOf,
+	});
 	useQueryReadRefusal(listOptions.queryKey, listQuery.isError, listQuery.error);
 	const list = infiniteListState(listQuery, auditRows);
+	const countOptions = countWorkspaceConfigAuditEventsOptions({
+		path: { workspaceSlug },
+		query: toFilters(search),
+	});
+	const countQuery = useQuery(countOptions);
+	useQueryReadRefusal(countOptions.queryKey, countQuery.isError, countQuery.error);
 
 	return (
 		<ConfigAuditView
 			search={search}
 			onSearchChange={onSearchChange}
 			list={list}
+			total={countQuery.data?.total}
 			read={hashKey(listOptions.queryKey)}
 		/>
 	);
@@ -100,11 +124,14 @@ function ConfigAuditView({
 	search,
 	onSearchChange,
 	list,
+	total: count,
 	read,
 	showWorkspace = false,
 	resolveWorkspaceName,
 }: ConfigAuditPanelProps & {
 	list: AuditListState<ConfigAuditEntryView>;
+	/** How many changes the filters match, once that read has answered. */
+	total: number | undefined;
 	/** The read's query key, hashed: the workspace and filters the list was read for. */
 	read: string;
 	showWorkspace?: boolean;
@@ -112,7 +139,7 @@ function ConfigAuditView({
 	const dateRange = toDateRange(search);
 	// Names and the count come only from a read that stands, never from one refused.
 	const entries = list.status === "ready" ? list.rows : [];
-	const total = list.status === "ready" ? list.total : undefined;
+	const total = list.status === "ready" ? count : undefined;
 	const query = toQuery(search);
 	const hasAppliedFilter =
 		(query.entityType?.length ?? 0) > 0 ||

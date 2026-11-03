@@ -118,7 +118,7 @@ function serveAdministrationReads(accepted: { verifications: number }) {
 		http.get("*/workspaces/acme/practices/reviews/feedback", () =>
 			accepted.verifications === 0
 				? HttpResponse.json({ status: 403, type: problemType("passkey-required") }, { status: 403 })
-				: HttpResponse.json({ content: [], number: 0, size: 5, totalElements: 0, totalPages: 0 }),
+				: HttpResponse.json({ content: [], page: 0, size: 5, totalElements: 0, totalPages: 0 }),
 		),
 	);
 	return catalog;

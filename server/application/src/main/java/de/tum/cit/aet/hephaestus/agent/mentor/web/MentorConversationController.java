@@ -4,12 +4,12 @@ import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentProperties;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryDTO;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryPageDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorReadDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorThreadDTO;
@@ -81,12 +81,12 @@ public class MentorConversationController {
     }
 
     @GetMapping("/entries")
-    @Operation(summary = "A page of top-level messages, oldest first; pass before=<seq> for older ones")
-    public MentorEntryPageDTO listMentorEntries(
+    @Operation(summary = "A page of top-level messages, oldest first; pass nextCursor as cursor for older ones")
+    public CursorPageDTO<MentorEntryDTO> listMentorEntries(
             WorkspaceContext workspace,
-            @RequestParam(required = false) @Nullable Long before,
-            @RequestParam(defaultValue = "" + MentorTimeline.DEFAULT_PAGE) int limit) {
-        return timeline.entries(workspace.id(), account(), before, limit);
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(defaultValue = "" + MentorTimeline.DEFAULT_PAGE) int size) {
+        return timeline.entries(workspace.id(), account(), cursor, size);
     }
 
     @GetMapping("/entries/{entryId}/thread")
@@ -102,9 +102,9 @@ public class MentorConversationController {
     public MentorThreadDTO getMentorThread(
             WorkspaceContext workspace,
             @PathVariable UUID entryId,
-            @RequestParam(required = false) @Nullable Long before,
-            @RequestParam(defaultValue = "" + MentorTimeline.DEFAULT_PAGE) int limit) {
-        return timeline.thread(workspace.id(), account(), entryId, before, limit);
+            @RequestParam(required = false) @Nullable String cursor,
+            @RequestParam(defaultValue = "" + MentorTimeline.DEFAULT_PAGE) int size) {
+        return timeline.thread(workspace.id(), account(), entryId, cursor, size);
     }
 
     @PostMapping("/turns")

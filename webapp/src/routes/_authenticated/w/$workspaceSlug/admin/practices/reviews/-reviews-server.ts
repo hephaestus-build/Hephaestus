@@ -111,22 +111,15 @@ function pageOf<T>(rows: readonly T[], url: URL) {
 	const size = Number(single(url, "size") ?? PAGE_SIZE);
 	return {
 		content: rows.slice(number * size, number * size + size),
-		number,
+		page: number,
 		size,
 		totalElements: rows.length,
 		totalPages: Math.max(1, Math.ceil(rows.length / size)),
 	};
 }
 
-function springPage(rows: readonly unknown[], url: URL) {
-	const page = pageOf(rows, url);
-	return HttpResponse.json({
-		...page,
-		numberOfElements: page.content.length,
-		first: page.number === 0,
-		last: page.number >= page.totalPages - 1,
-		empty: page.content.length === 0,
-	});
+function offsetPage(rows: readonly unknown[], url: URL) {
+	return HttpResponse.json(pageOf(rows, url));
 }
 
 function inPracticeScope(url: URL, practiceSlugs: readonly string[]) {
@@ -338,7 +331,7 @@ export function reviewHandlers({
 		),
 		...resultHandlers(resultRows, requireResultSort),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/problems", ({ request }) =>
-			springPage(
+			offsetPage(
 				byTime(filterProblems(reviewProblems, new URL(request.url)), new URL(request.url)),
 				new URL(request.url),
 			),
@@ -369,7 +362,7 @@ export function reviewHandlers({
 			HttpResponse.json(ownMembership(role)),
 		),
 		http.get("*/workspaces/:workspaceSlug/members", ({ request }) =>
-			HttpResponse.json(springPage(workspaceMembers, new URL(request.url))),
+			HttpResponse.json(offsetPage(workspaceMembers, new URL(request.url))),
 		),
 	];
 }
@@ -381,7 +374,7 @@ function resultHandlers(rows: readonly ReviewResult[], requireResultSort: string
 			if (hasText(requireResultSort) && single(url, "sort") !== requireResultSort) {
 				return HttpResponse.json({ detail: `Expected sort=${requireResultSort}` }, { status: 400 });
 			}
-			return springPage(sortResults(filterResults(rows, url), url), url);
+			return offsetPage(sortResults(filterResults(rows, url), url), url);
 		}),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/results/:resultId", ({ params }) =>
 			HttpResponse.json(resultDetail(String(params.resultId))),
@@ -446,7 +439,7 @@ export function feedbackHandlers(rows: readonly ReviewFeedback[] = reviewFeedbac
 			const url = new URL(request.url);
 			const filtered = filterFeedback(rows, url);
 			// The fixture is newest first, as the endpoint's default order is.
-			return springPage(byTime(filtered, url), url);
+			return offsetPage(byTime(filtered, url), url);
 		}),
 		...feedbackCountHandlers(rows),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback/:feedbackId", ({ params }) =>
@@ -505,7 +498,7 @@ function reviewDetailHandlers() {
 	return [
 		http.get("*/workspaces/:workspaceSlug/practices/reviews", ({ request }) => {
 			const url = new URL(request.url);
-			return springPage(byTime(filterReviews(reviews, url), url), url);
+			return offsetPage(byTime(filterReviews(reviews, url), url), url);
 		}),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/:reviewId", ({ params }) =>
 			HttpResponse.json(reviewDetail(String(params.reviewId))),
@@ -536,7 +529,7 @@ function itemHandlers() {
 		http.get("*/workspaces/:workspaceSlug/practices/items", ({ request }) => {
 			const url = new URL(request.url);
 			const kind = single(url, "itemKind");
-			return springPage(
+			return offsetPage(
 				reviewedItems().filter((item) => !hasText(kind) || item.kind === kind),
 				url,
 			);

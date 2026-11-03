@@ -676,7 +676,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectBody(Void.class);
         webTestClient
                 .post()
-                .uri("/workspaces/gitlab/projects?page=0")
+                .uri("/workspaces/gitlab/projects?cursor=0")
                 .headers(caller)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new GitLabPreflightRequestDTO("glpat-test", null, "my-group"))

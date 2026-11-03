@@ -3,7 +3,7 @@ import type { InfiniteData } from "@tanstack/react-query";
 import { type LoadState, type PanelState, queryLoadState } from "@/components/common/panel-state";
 import { problemIsRetryable } from "@/lib/problem-detail";
 
-import { loadedPages, type SpringPage } from "./spring-page";
+import { loadedPages, type OffsetPage } from "./list-pages";
 
 /** A loaded list could not refresh; its retained rows may be out of date. */
 export interface RefreshFailure {
@@ -97,12 +97,12 @@ export function infiniteListState<TPage, TReady extends object>(
 export type PagedListState<TRow> = PanelState<{ rows: TRow[]; total?: number } & MorePages>;
 
 /**
- * One infinite query over flat Spring pages as a list's state. The pages are offsets, so a row added
+ * One infinite query over numbered pages as a list's state. The pages are offsets, so a row added
  * above a loaded page pushes that page's last row onto the next page. `keyOf` names a row, and a row
  * that two pages hold stays in its first place with its newest data.
  */
 export function pagedListState<TRow>(
-	query: InfiniteQueryLike<SpringPage<TRow>>,
+	query: InfiniteQueryLike<OffsetPage<TRow>>,
 	keyOf: (row: TRow) => string,
 ): PagedListState<TRow> {
 	return infiniteListState(query, (pages) => ({

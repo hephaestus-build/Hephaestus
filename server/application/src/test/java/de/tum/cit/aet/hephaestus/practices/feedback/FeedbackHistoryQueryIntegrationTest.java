@@ -477,7 +477,7 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                         null,
                         null));
 
-        List<MentorLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).entries().stream()
+        List<MentorLinkDTO> links = timeline.entries(workspace.getId(), developerId, null, 10).content().stream()
                 .flatMap(entry -> entry.links().stream())
                 .toList();
 

@@ -18,7 +18,7 @@ import { useReviewScopeSources } from "@/hooks/use-review-scope-sources";
 import { useScopeRecordFilter } from "@/hooks/use-scope-record-filter";
 import { useSearchState } from "@/lib/search-params";
 import { pagedListState } from "@/runtime/tanstack-query/infinite-list";
-import { springPageParams } from "@/runtime/tanstack-query/spring-page";
+import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute(
@@ -43,7 +43,7 @@ function FeedbackListRoute() {
 	});
 	const feedbackQueryResult = useInfiniteQuery({
 		...listOptions,
-		...springPageParams,
+		...offsetPageParams,
 	});
 	useQueryReadRefusal(listOptions.queryKey, feedbackQueryResult.isError, feedbackQueryResult.error);
 	const { groups, practices, people } = useReviewScopeSources(workspaceSlug);

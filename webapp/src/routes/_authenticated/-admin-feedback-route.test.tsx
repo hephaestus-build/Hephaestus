@@ -54,7 +54,10 @@ function mockInbox() {
 			const content = INBOX_BY_STATUS[status ?? ""] ?? [bugReport];
 			return HttpResponse.json({
 				content,
-				page: { totalPages: 1, totalElements: content.length },
+				page: 0,
+				size: 50,
+				totalElements: content.length,
+				totalPages: 1,
 			});
 		}),
 	);

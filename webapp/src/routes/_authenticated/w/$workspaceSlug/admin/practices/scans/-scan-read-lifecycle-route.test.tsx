@@ -74,7 +74,7 @@ function serve() {
 			respond("items", ITEMS_PAGE),
 		),
 		http.get("*/workspaces/:workspaceSlug/practices/scans/:scanId/report/problems", () =>
-			respond("problems", { content: PROBLEMS, nextCursor: null, hasNext: false }),
+			respond("problems", { content: PROBLEMS }),
 		),
 	);
 	return { status, reads };

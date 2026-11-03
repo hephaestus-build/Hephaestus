@@ -94,7 +94,6 @@ function loaded(rows: ConfigAuditEntryView[]) {
 	return {
 		status: "ready",
 		rows,
-		total: rows.length,
 		hasMore: false,
 		isLoadingMore: false,
 		onLoadMore: fn(),

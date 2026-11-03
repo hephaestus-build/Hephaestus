@@ -24,6 +24,8 @@ export { acknowledgeCatalogPractice } from './sdk/acknowledgeCatalogPractice.gen
 export { addLabelToTeam } from './sdk/addLabelToTeam.gen.js';
 export { addRepositoryToMonitor } from './sdk/addRepositoryToMonitor.gen.js';
 export { adminCheckRelease } from './sdk/adminCheckRelease.gen.js';
+export { adminCountAuthEvents } from './sdk/adminCountAuthEvents.gen.js';
+export { adminCountConfigAuditEvents } from './sdk/adminCountConfigAuditEvents.gen.js';
 export { adminCreateLlmCallPool } from './sdk/adminCreateLlmCallPool.gen.js';
 export { adminCreateLlmConnection } from './sdk/adminCreateLlmConnection.gen.js';
 export { adminCreateLlmModel } from './sdk/adminCreateLlmModel.gen.js';
@@ -88,6 +90,7 @@ export { completeFirstLoginConsent } from './sdk/completeFirstLoginConsent.gen.j
 export { configureAgent } from './sdk/configureAgent.gen.js';
 export { countReviewFeedbackByLocation } from './sdk/countReviewFeedbackByLocation.gen.js';
 export { countReviewFeedbackByReason } from './sdk/countReviewFeedbackByReason.gen.js';
+export { countWorkspaceConfigAuditEvents } from './sdk/countWorkspaceConfigAuditEvents.gen.js';
 export { createCatalogGroup } from './sdk/createCatalogGroup.gen.js';
 export { createCatalogPractice } from './sdk/createCatalogPractice.gen.js';
 export { createFeedbackDecision } from './sdk/createFeedbackDecision.gen.js';

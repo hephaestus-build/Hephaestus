@@ -70,14 +70,10 @@ function membershipPage(
 ) {
 	return {
 		content,
-		number,
+		page: number,
 		size,
 		totalElements,
 		totalPages: Math.ceil(totalElements / size),
-		first: number === 0,
-		last: (number + 1) * size >= totalElements,
-		numberOfElements: content.length,
-		empty: content.length === 0,
 	};
 }
 

@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.CreateFeedbackDecisionRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.dto.FeedbackDecisionDTO;
@@ -54,12 +54,12 @@ public class FeedbackReviewController {
 
     @GetMapping("/feedback")
     @Operation(operationId = "listReviewFeedback")
-    public PageResponseDTO<ReviewFeedbackDTO> list(
+    public OffsetPageDTO<ReviewFeedbackDTO> list(
             WorkspaceContext workspace,
             @Valid @ParameterObject @ModelAttribute FeedbackQueryFilter filter,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
-        return PageResponseDTO.from(reader.list(workspace.id(), filter, PageRequest.of(page, size)));
+        return OffsetPageDTO.from(reader.list(workspace.id(), filter, PageRequest.of(page, size)));
     }
 
     @GetMapping("/feedback/locations")

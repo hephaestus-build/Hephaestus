@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.auth.validation.AccountId;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,13 +33,13 @@ public class UserViewUsersController {
 
     @GetMapping
     @Operation(summary = "List workspace users and their linked account status", operationId = "listUserViewUsers")
-    public ResponseEntity<PageResponseDTO<UserViewAccountDTO>> list(
+    public ResponseEntity<OffsetPageDTO<UserViewAccountDTO>> list(
             WorkspaceContext workspace,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(PageResponseDTO.from(users.list(workspace.id(), PageRequest.of(page, size))));
+                .body(OffsetPageDTO.from(users.list(workspace.id(), PageRequest.of(page, size))));
     }
 
     @GetMapping("/{accountId}")

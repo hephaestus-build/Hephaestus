@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.time.TimeBucketParams;
 import de.tum.cit.aet.hephaestus.core.time.TimeBuckets;
 import de.tum.cit.aet.hephaestus.core.time.TimeRange;
 import de.tum.cit.aet.hephaestus.core.time.TimeRangeFilterParams;
-import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewOverviewDTO;
@@ -92,7 +92,7 @@ public class ReviewSummaryController {
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                             schema = @Schema(implementation = ProblemDetail.class)))
-    public ResponseEntity<PageResponseDTO<ReviewSummaryDTO>> listReviews(
+    public ResponseEntity<OffsetPageDTO<ReviewSummaryDTO>> listReviews(
             WorkspaceContext workspaceContext,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "25") @Min(1) @Max(100) int size,
@@ -101,7 +101,7 @@ public class ReviewSummaryController {
         Sort.Direction direction = filter.sort() == ReviewListSort.OLDEST ? Sort.Direction.ASC : Sort.Direction.DESC;
         PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt", "id"));
         return ResponseEntity.ok(
-                PageResponseDTO.from(queryService.list(workspaceContext.id(), filter.validated(), pageable)));
+                OffsetPageDTO.from(queryService.list(workspaceContext.id(), filter.validated(), pageable)));
     }
 
     @GetMapping("/overview")

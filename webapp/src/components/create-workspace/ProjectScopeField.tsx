@@ -31,8 +31,7 @@ export type ProjectChoices =
 			projects: GitLabProject[];
 			/** The page shown, from 1. */
 			page: number;
-			/** The page the server says follows this one, as it numbers it; absent on the last page. */
-			nextPage: number | undefined;
+			hasNextPage: boolean;
 			/** The search this page answers; empty for the whole group. */
 			search: string;
 	  };
@@ -46,7 +45,8 @@ export interface ProjectScopeFieldProps {
 	/** The projects to choose from. Shown only while the scope is selected projects. */
 	choices: ProjectChoices;
 	onSearch: (search: string) => void;
-	onPageChange: (page: number) => void;
+	onPreviousPage: () => void;
+	onNextPage: () => void;
 }
 
 /**
@@ -61,7 +61,8 @@ export function ProjectScopeField({
 	onSelectedChange,
 	choices,
 	onSearch,
-	onPageChange,
+	onPreviousPage,
+	onNextPage,
 }: ProjectScopeFieldProps) {
 	const id = useId();
 	return (
@@ -101,7 +102,8 @@ export function ProjectScopeField({
 					onSelectedChange={onSelectedChange}
 					choices={choices}
 					onSearch={onSearch}
-					onPageChange={onPageChange}
+					onPreviousPage={onPreviousPage}
+					onNextPage={onNextPage}
 				/>
 			)}
 		</FieldSet>
@@ -113,7 +115,8 @@ function ProjectChoiceList({
 	onSelectedChange,
 	choices,
 	onSearch,
-	onPageChange,
+	onPreviousPage,
+	onNextPage,
 }: Omit<ProjectScopeFieldProps, "scope" | "onScopeChange">) {
 	const id = useId();
 	// The search being typed; the list shows the last one sent. It starts from the search the shown
@@ -204,28 +207,13 @@ function ProjectChoiceList({
 				</FieldGroup>
 			)}
 
-			{choices.status === "ready" && (choices.page > 1 || choices.nextPage !== undefined) && (
+			{choices.status === "ready" && (choices.page > 1 || choices.hasNextPage) && (
 				<nav aria-label="Project pages" className="flex items-center justify-between gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={choices.page <= 1}
-						onClick={() => onPageChange(choices.page - 1)}
-					>
+					<Button variant="outline" size="sm" disabled={choices.page <= 1} onClick={onPreviousPage}>
 						Previous page
 					</Button>
 					<span className="text-sm text-muted-foreground">Page {choices.page}</span>
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={choices.nextPage === undefined}
-						onClick={() => {
-							// The page the server named, which need not be the one after this.
-							if (choices.nextPage !== undefined) {
-								onPageChange(choices.nextPage);
-							}
-						}}
-					>
+					<Button variant="outline" size="sm" disabled={!choices.hasNextPage} onClick={onNextPage}>
 						Next page
 					</Button>
 				</nav>
