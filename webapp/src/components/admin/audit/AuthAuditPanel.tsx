@@ -56,8 +56,8 @@ async function downloadAuditLog(query: AdminExportAuthEventsData["query"]): Prom
 	saveTextFile(data, `audit-log-${day}.csv`, "text/csv;charset=utf-8;");
 	const leftOut = Number(response?.headers.get("X-Left-Out-Count"));
 	if (leftOut > 0) {
-		toast.warning("The file holds only the newest events", {
-			description: `It leaves out ${leftOut.toLocaleString()} older ${leftOut === 1 ? "event that matches" : "events that match"}. Narrow the filters to export them.`,
+		toast.warning("The file does not hold every matching event", {
+			description: `It leaves out ${leftOut.toLocaleString()} matching ${leftOut === 1 ? "event" : "events"}. Narrow the filters to export them.`,
 		});
 	}
 }

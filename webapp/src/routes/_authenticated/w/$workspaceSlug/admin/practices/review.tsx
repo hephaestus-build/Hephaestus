@@ -540,19 +540,22 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 
 const ACTIVE_BATCH_POLL_MS = 15_000;
 
-/** A count of the chosen people needs all of a workspace's members, so this list reads to the end by itself. */
+/**
+ * A count of the chosen people needs all of a workspace's members, so this list reads to the end by itself.
+ * It waits for any fetch, not only a next page: a next-page fetch during a refetch cancels the refetch.
+ */
 function useEveryPage(query: {
 	hasNextPage: boolean;
-	isFetchingNextPage: boolean;
+	isFetching: boolean;
 	isError: boolean;
 	fetchNextPage: () => unknown;
 }) {
-	const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = query;
+	const { hasNextPage, isFetching, isError, fetchNextPage } = query;
 	useEffect(() => {
-		if (hasNextPage && !isFetchingNextPage && !isError) {
+		if (hasNextPage && !isFetching && !isError) {
 			void fetchNextPage();
 		}
-	}, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
+	}, [hasNextPage, isFetching, isError, fetchNextPage]);
 }
 
 function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
