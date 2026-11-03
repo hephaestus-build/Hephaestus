@@ -11,11 +11,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -28,6 +30,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -69,7 +72,8 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 new NatsConnectionProperties(true, "nats://localhost:4222", null, null),
                 natsConsumerService,
                 mock(ReviewScopeRepositoryRepository.class),
-                mock(ApplicationEventPublisher.class));
+                mock(ApplicationEventPublisher.class),
+                new SimpleMeterRegistry());
         lenient()
                 .when(workspaceScopeFilter.isRepositoryAllowed(any(RepositoryToMonitor.class)))
                 .thenReturn(true);
@@ -149,6 +153,28 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 .containsExactly(
                         tuple(90L, 9L, "ghp-nine", AuthMode.PERSONAL_ACCESS_TOKEN, null),
                         tuple(120L, 12L, null, AuthMode.INSTALLATION_APP, 4242L));
+    }
+
+    @Test
+    void shouldPauseAGitHubScopeWhoseCredentialWasRefused() {
+        when(workspaceRepository.findAll()).thenReturn(List.of(workspace(5), workspace(9)));
+        when(workspaceRepository.findById(5L)).thenReturn(Optional.of(workspace(5)));
+        when(workspaceScopeFilter.isWorkspaceAllowed(any(Workspace.class))).thenReturn(true);
+        when(connectionService.findActiveProviderKind(anyLong())).thenReturn(Optional.of(IntegrationKind.GITHUB));
+        when(connectionService.findActiveGitHubAppConfig(anyLong())).thenReturn(Optional.empty());
+        when(connectionService.findActiveGitHubPatConfig(anyLong()))
+                .thenReturn(Optional.of(new ConnectionConfig.GitHubPatConfig(null, null, Set.of())));
+        when(connectionService.findActiveBearerToken(9, IntegrationKind.GITHUB))
+                .thenReturn(Optional.of(new BearerToken("ghp-nine", null)));
+        Connection refused = mock(Connection.class);
+        when(refused.getAttentionProblem()).thenReturn(Problem.CREDENTIAL_REVOKED);
+        when(connectionService.findActive(5L, IntegrationKind.GITHUB)).thenReturn(Optional.of(refused));
+
+        assertThat(provider.getSyncSessions(IntegrationKind.GITHUB))
+                .extracting(SyncSession::scopeId)
+                .containsExactly(9L);
+        assertThat(provider.getSyncSession(5L, IntegrationKind.GITHUB)).isEmpty();
+        assertThat(provider.isScopeActiveForSync(5L)).isFalse();
     }
 
     @Test

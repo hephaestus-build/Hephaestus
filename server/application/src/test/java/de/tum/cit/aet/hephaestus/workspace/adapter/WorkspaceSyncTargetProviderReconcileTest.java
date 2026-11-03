@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -78,7 +79,8 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
                 new NatsConnectionProperties(true, "nats://localhost:4222", null, null),
                 natsConsumerService,
                 mock(ReviewScopeRepositoryRepository.class),
-                mock(ApplicationEventPublisher.class));
+                mock(ApplicationEventPublisher.class),
+                new SimpleMeterRegistry());
     }
 
     private RepositoryToMonitor monitor(@Nullable Long nativeId, String nameWithOwner) {

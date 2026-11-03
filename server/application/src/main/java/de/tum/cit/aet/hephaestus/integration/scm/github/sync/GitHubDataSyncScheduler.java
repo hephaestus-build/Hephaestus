@@ -228,8 +228,9 @@ public class GitHubDataSyncScheduler {
     public void syncWorkspaceNow(long workspaceId, SyncExecutionHandle handle, SyncJobType type) {
         SyncSession session = syncTargetProvider
                 .getSyncSession(workspaceId, IntegrationKind.GITHUB)
-                .orElseThrow(
-                        () -> new IllegalStateException("No active GitHub sync scope for workspace " + workspaceId));
+                .orElseThrow(() -> new IllegalStateException("No GitHub sync scope for workspace "
+                        + workspaceId
+                        + ": it is not active, or its provider refused its credential"));
         runScopeSyncBody(session, handle, type);
     }
 

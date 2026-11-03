@@ -15,6 +15,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
@@ -165,6 +166,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         // syncScope's first real step: no GitLabSyncServiceHolder available -> it logs and returns
         // immediately. This isolates the job-recording wrapper from the sync pipeline itself.
         lenient().when(syncServiceHolderProvider.getIfAvailable()).thenReturn(null);
+        lenient().when(syncTargetProvider.isScopeActiveForSync(anyLong())).thenReturn(true);
 
         session = new SyncSession(
                 WORKSPACE_ID,
@@ -380,6 +382,23 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
 
         verify(projection, never()).project(anyLong());
+    }
+
+    @Test
+    void shouldCallNoProjectServiceOnceTheProviderRefusedTheCredential() {
+        var holder = mockHolder();
+        var issueSync = mock(GitLabIssueSyncService.class);
+        var subIssueSync = mock(GitLabSubIssueSyncService.class);
+        lenient().when(holder.getIssueSyncService()).thenReturn(issueSync);
+        lenient().when(holder.getSubIssueSyncService()).thenReturn(subIssueSync);
+        prepareProject(holder);
+        // The first refused call of this run closed the gate before the repository phase.
+        when(syncTargetProvider.isScopeActiveForSync(WORKSPACE_ID)).thenReturn(false);
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
+
+        verifyNoInteractions(issueSync, subIssueSync, deletionSweepService);
+        verify(syncJobHandle).reportWarnings();
     }
 
     @Test

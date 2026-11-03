@@ -27,6 +27,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do pages show their content fast enough? | `web_vital_duration_seconds` | `HephaestusPageExperiencePoor` |
 | Does a conversation answer, and how fast does it start? | `mentor_turn_completed_total`, `mentor_turn_first_token_seconds` | None |
 | Do provider events arrive and get processed? | `webhook_publish_total`, `webhook_stream_*`, `integration_consumer_*` | The webhook and stream alerts |
+| Does a workspace sync wait for a new credential? | `workspace_sync_paused_total`, by `kind` and `reason` | None. Workspace admins receive the connection alert |
 | Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
 | Which release runs in each Pod? | `application_build_info` | None |
 

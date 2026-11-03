@@ -48,6 +48,15 @@ GitLab merge request sync treats an absent or failed count or lock field as unkn
 checked at its own GraphQL error path, so an error in one field does not discard valid sibling
 values. An unknown note count cannot skip discussion sync.
 
+### A refused credential pauses the sync
+
+A connection whose provider refused its credential (`CREDENTIAL_REVOKED`) is not eligible for sync.
+`WorkspaceSyncTargetProvider` applies this rule to the session list, to a single session, and to `isScopeActiveForSync`.
+Thus, the scheduled sync, a manual sync, the backfills and the push fetches stop for that workspace.
+A GitLab run that sees the refusal stops before its next repository.
+`IntegrationAttentionService` logs the change once, and `workspace.sync.paused` counts each paused sync.
+A replaced credential, or a later accepted call such as the daily token check, clears the problem, and the next sync runs.
+
 ### Fail-closed: an incomplete listing deletes nothing
 
 A sweep may tombstone only what a **provably complete** upstream listing omits.

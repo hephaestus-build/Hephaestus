@@ -205,8 +205,9 @@ public class GitLabDataSyncScheduler {
     public void syncWorkspaceNow(long workspaceId, SyncExecutionHandle handle, SyncJobType type) {
         SyncSession session = syncTargetProvider
                 .getSyncSession(workspaceId, IntegrationKind.GITLAB)
-                .orElseThrow(
-                        () -> new IllegalStateException("No active GitLab sync scope for workspace " + workspaceId));
+                .orElseThrow(() -> new IllegalStateException("No GitLab sync scope for workspace "
+                        + workspaceId
+                        + ": it is not active, or its provider refused its credential"));
         syncScope(session, handle, type);
     }
 
@@ -305,6 +306,11 @@ public class GitLabDataSyncScheduler {
             Map<Long, String> resourceErrors = new HashMap<>();
             Map<Long, GitLabProjectAdmission.ProjectRead> reads = new HashMap<>();
             List<Repository> availableRepos = syncRepositories(services, session, handle, resourceErrors, reads);
+            if (!syncTargetProvider.isScopeActiveForSync(scopeId)) {
+                log.info("Stopped GitLab workspace sync: reason=scopeNotEligible, scopeId={}", scopeId);
+                reportWarning(handle);
+                return;
+            }
 
             // A cancel observed during the repo phase skips the remaining phases (cooperative best-effort).
             if (handle == null || !handle.isCancellationRequested()) {
@@ -578,6 +584,16 @@ public class GitLabDataSyncScheduler {
             if (handle != null && handle.isCancellationRequested()) {
                 log.info(
                         "GitLab scheduled sync cancelled between repositories: scopeId={}, reposProcessed={}, reposRemaining={}",
+                        session.scopeId(),
+                        reposProcessed,
+                        totalRepos - reposProcessed);
+                break;
+            }
+            // A credential refused during this run ends it: every remaining repository would repeat the refusal.
+            if (!syncTargetProvider.isScopeActiveForSync(session.scopeId())) {
+                log.info(
+                        "GitLab sync stopped between repositories: reason=scopeNotEligible, scopeId={}, reposProcessed={},"
+                                + " reposRemaining={}",
                         session.scopeId(),
                         reposProcessed,
                         totalRepos - reposProcessed);
@@ -913,7 +929,9 @@ public class GitLabDataSyncScheduler {
         // Second pass: link commits to MRs. Must run after every repo has finished syncing so
         // a commit whose SHA appears on an MR in a sibling repo can still be linked (the target MR
         // repo may not have synced its MRs when this repo's commits were fetched).
-        if (commitMrLinker != null && (handle == null || !handle.isCancellationRequested())) {
+        if (commitMrLinker != null
+                && (handle == null || !handle.isCancellationRequested())
+                && syncTargetProvider.isScopeActiveForSync(session.scopeId())) {
             for (Repository repo : availableRepos) {
                 var read = reads.get(repo.getId());
                 if (read == null || !admission.current(read)) continue;

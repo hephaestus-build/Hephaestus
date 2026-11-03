@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEven
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import java.time.Clock;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @WorkspaceAgnostic("Each connection lookup includes its owning workspace")
 public class IntegrationAttentionService {
     private final ConnectionRepository connections;
@@ -34,6 +36,22 @@ public class IntegrationAttentionService {
                 return;
             }
             connection.changeAttention(recovered ? null : problem);
+            if (problem == IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED) {
+                if (recovered) {
+                    log.info(
+                            "Integration credential accepted again: workspaceId={}, connectionId={}, kind={}",
+                            workspaceId,
+                            connectionId,
+                            connection.getKind());
+                } else {
+                    log.warn(
+                            "Integration credential refused, its sync waits for a reconnect: workspaceId={},"
+                                    + " connectionId={}, kind={}",
+                            workspaceId,
+                            connectionId,
+                            connection.getKind());
+                }
+            }
             events.publishEvent(new IntegrationAttentionChangedEvent(
                     connectionId,
                     workspaceId,
