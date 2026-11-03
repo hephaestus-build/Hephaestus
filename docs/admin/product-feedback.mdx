@@ -92,6 +92,8 @@ The app does not comment on or close another issue automatically.
 
 Reports filed on GitHub are handled there.
 **Needs action** lists stopped reports with their reasons and **Retry**.
+It also lists erased reports whose GitHub issues need a manual step. See [Handle erasure](#handle-erasure).
+
 The console also retains reports that are not on GitHub, including instances without a destination.
 Instance admins can read their text and resolve or reopen them.
 Resolution in that list does not reply to the reporter.
@@ -106,6 +108,7 @@ An uncertain GitHub response requires reconciliation before another write.
 Do not create another report or clear its state to bypass that check.
 
 Admin email covers every report that is not on GitHub: no destination, or filing stopped.
+It also announces each erasure step that needs a maintainer.
 It carries the kind and a link, never the report text or attached context.
 Active instance admins need a verified address and the relevant email subscription to receive it.
 Without email delivery, the saved report remains available in the console.
@@ -142,19 +145,24 @@ Copies made while an issue was public can remain.
 Account erasure and workspace purge remove the applicable reports and start external cleanup.
 Cleanup moves public issues to private, replaces their title and body with “Erased at the reporter’s request”, and closes them.
 It first reconciles any uncertain create, including a create with no known issue number.
-If no private repository is available, cleanup scrubs and closes the public issue and retries the move until one is.
+If no private repository is available, cleanup scrubs and closes the public issue where it is.
 The [personal-data map](./dsms/personal-data-map.md) owns the store and export inventory.
 
 The app cannot delete an issue or its edit history.
-If cleanup needs manual action, use the issue locator in **Needs action**:
+So each issue that cleanup scrubs becomes a manual step: its edit history still shows the erased text.
+Cleanup that has not finished after 30 days also becomes a manual step, and the app stops its own attempts.
+For each manual step, Hephaestus sends the admin email and lists the step in **Needs action** with the issue link.
+
+If the app never learned the issue number, the step shows a marker instead.
+Search the repository for an issue whose body contains that marker.
 
 1. Open the issue with the repository access needed for removal.
-2. Remove revision content that still carries erased text.
-3. If required, ask a repository admin to delete the issue.
-4. Confirm the manual step in **Needs action** after it is complete.
+2. Delete the issue, or delete each earlier revision that still shows erased text.
+3. If cleanup did not finish, also make the issue private, replace its text, and close it.
+4. In **Needs action**, select **Confirm done** for the step, and confirm.
 
-Unfinished cleanup becomes a manual action after 30 days and sends an admin email.
-Its locator remains until an admin confirms the manual step.
+Hephaestus keeps the issue locator until you confirm the step. After that, it no longer knows where the issue is.
+The audit log records each confirmation.
 Do not remove app access or destinations before cleanup finishes.
 
 Product improvement does not authorize research reuse of identifiable reports or quotations.

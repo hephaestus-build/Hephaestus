@@ -175,5 +175,31 @@ final class FilingDTOs {
             @NonNull ReportRoute route,
             @Nullable String repository) {}
 
-    record ProductFeedbackNeedsActionListDTO(@NonNull List<ProductFeedbackNeedsActionDTO> items) {}
+    /**
+     * An erased report's GitHub issue that only a maintainer can finish removing.
+     *
+     * @param issueNumber null when the app never learned it; then {@code marker} finds the issue
+     * @param marker the text that the issue body carries
+     * @param erasedAt when the report was erased
+     * @param since when the step started to wait for a maintainer
+     */
+    record ProductFeedbackCleanupActionDTO(
+            @NonNull UUID id,
+            ProductFeedbackCleanup.@NonNull ManualStep step,
+            @NonNull String repository,
+            @Nullable Long issueNumber,
+            @Nullable String issueUrl,
+            @NonNull String marker,
+            @NonNull Instant erasedAt,
+            @NonNull Instant since) {}
+
+    /**
+     * What waits for an admin.
+     *
+     * @param items reports that failed to file
+     * @param cleanups erased reports whose GitHub issues need a manual step
+     */
+    record ProductFeedbackNeedsActionListDTO(
+            @NonNull List<ProductFeedbackNeedsActionDTO> items,
+            @NonNull List<ProductFeedbackCleanupActionDTO> cleanups) {}
 }

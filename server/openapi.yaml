@@ -223,6 +223,7 @@ paths:
             - SILENT_MODE_CHANGED
             - PUBLIC_ACTIVITY_CHANGED
             - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
+            - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -317,6 +318,7 @@ paths:
             - SILENT_MODE_CHANGED
             - PUBLIC_ACTIVITY_CHANGED
             - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
+            - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -411,6 +413,7 @@ paths:
             - SILENT_MODE_CHANGED
             - PUBLIC_ACTIVITY_CHANGED
             - PRODUCT_FEEDBACK_DESTINATIONS_CHANGED
+            - PRODUCT_FEEDBACK_CLEANUP_CONFIRMED
             - RESEARCH_DATASET_RELEASED
             - RESEARCH_REMOVAL_RECORDED
       - in: query
@@ -1858,6 +1861,23 @@ paths:
       summary: "List product feedback, newest first"
       tags:
       - feedback-admin
+  /admin/product-feedback/cleanups/{cleanupId}/confirm:
+    post:
+      operationId: confirmProductFeedbackCleanup
+      parameters:
+      - in: path
+        name: cleanupId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: The step is confirmed and its issue locator is deleted
+      summary: Confirm that a maintainer finished an erased report's manual step on
+        GitHub
+      tags:
+      - product-feedback-destinations
   /admin/product-feedback/destinations:
     get:
       operationId: getProductFeedbackDestinations
@@ -1899,7 +1919,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductFeedbackNeedsActionList"
           description: OK
-      summary: List reports that failed to file
+      summary: List reports that failed to file and erased reports whose issues need
+        a manual step
       tags:
       - product-feedback-destinations
   /admin/product-feedback/{feedbackId}:
@@ -20169,6 +20190,46 @@ components:
       - id
       - severity
       - summary
+    ProductFeedbackCleanupAction:
+      type: object
+      description: An erased report's GitHub issue that only a maintainer can finish
+        removing.
+      properties:
+        erasedAt:
+          type: string
+          format: date-time
+          description: when the report was erased
+        id:
+          type: string
+          format: uuid
+        issueNumber:
+          type: integer
+          format: int64
+          description: null when the app never learned it; then <code>marker</code>
+            finds the issue
+        issueUrl:
+          type: string
+        marker:
+          type: string
+          description: the text that the issue body carries
+        repository:
+          type: string
+        since:
+          type: string
+          format: date-time
+          description: when the step started to wait for a maintainer
+        step:
+          type: string
+          enum:
+          - EDIT_HISTORY
+          - UNFINISHED
+      required:
+      - erasedAt
+      - id
+      - marker
+      - repository
+      - since
+      - step
     ProductFeedbackDestinations:
       type: object
       description: The instance's product feedback destinations and their health.
@@ -20271,12 +20332,20 @@ components:
       - stoppedAt
     ProductFeedbackNeedsActionList:
       type: object
+      description: What waits for an admin.
       properties:
+        cleanups:
+          type: array
+          description: erased reports whose GitHub issues need a manual step
+          items:
+            $ref: "#/components/schemas/ProductFeedbackCleanupAction"
         items:
           type: array
+          description: reports that failed to file
           items:
             $ref: "#/components/schemas/ProductFeedbackNeedsAction"
       required:
+      - cleanups
       - items
     ProductFeedbackSharing:
       type: object

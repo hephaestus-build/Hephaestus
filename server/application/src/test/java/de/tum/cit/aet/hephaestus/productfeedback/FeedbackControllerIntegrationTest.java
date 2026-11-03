@@ -12,14 +12,18 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 @Tag("integration")
@@ -159,12 +163,112 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .expectBody(Void.class);
     }
 
+    @Test
+    void shouldStoreAnInstanceReportWithoutAWorkspaceWhenItIsSentOutsideOne() {
+        Member member = member("feedback-instance");
+        webTestClient
+                .post()
+                .uri("/product-feedback")
+                .headers(member.headers())
+                .bodyValue(Map.of("kind", "IDEA", "message", "An idea from the account menu"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        ProductFeedback stored = feedback.findAllByAccountId(member.accountId()).getFirst();
+        assertThat(stored.getWorkspaceId()).isNull();
+    }
+
+    @Test
+    void shouldRefuseASecondReportWhenTheAccountSentOneThisMinute() throws InterruptedException {
+        Member member = member("feedback-rate");
+        // The limit counts calendar minutes, so both sends must fall into the same one.
+        while (LocalTime.now(ZoneOffset.UTC).getSecond() >= 58) Thread.sleep(250);
+        send(member, "First").expectStatus().isOk().expectBody(Void.class);
+        send(member, "Second")
+                .expectStatus()
+                .isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+                .expectBody()
+                .jsonPath("$.detail")
+                .isEqualTo("You can send feedback only once per minute.");
+        assertThat(feedback.findAllByAccountId(member.accountId()))
+                .extracting(ProductFeedback::getMessage)
+                .containsExactly("First");
+    }
+
+    @Test
+    void shouldRefuseAWorkspaceReportWhenTheSenderIsNotAMember() {
+        Member owner = member("feedback-owner");
+        Member outsider = user("feedback-outsider");
+        webTestClient
+                .post()
+                .uri(owner.path(""))
+                .headers(outsider.headers())
+                .bodyValue(Map.of("kind", "BUG", "message", "Sent into a foreign workspace"))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        assertThat(feedback.findAllByAccountId(outsider.accountId())).isEmpty();
+    }
+
+    @Test
+    void shouldHideAReportWhenAnotherAccountAsksForIt() {
+        Member author = member("feedback-author");
+        Member other = user("feedback-other");
+        send(author, "Only mine").expectStatus().isOk().expectBody(Void.class);
+        UUID id = feedback.findAllByAccountId(author.accountId()).getFirst().getId();
+        webTestClient
+                .get()
+                .uri("/product-feedback/" + id)
+                .headers(other.headers())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        webTestClient
+                .post()
+                .uri("/product-feedback/" + id + "/keep-private")
+                .headers(other.headers())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        webTestClient
+                .get()
+                .uri("/product-feedback/" + id)
+                .headers(author.headers())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.id")
+                .isEqualTo(id.toString());
+    }
+
+    private WebTestClient.ResponseSpec send(Member member, String message) {
+        return webTestClient
+                .post()
+                .uri(member.path(""))
+                .headers(member.headers())
+                .bodyValue(Map.of("kind", "IDEA", "message", message))
+                .exchange();
+    }
+
     /** One workspace whose admin member is a real account, so the same token can author and answer. */
     private Member member(String slug) {
         User actor = persistUser(slug + "-member");
         Workspace workspace = createWorkspace(slug, "Workspace " + slug, slug, AccountType.ORG, actor);
         ensureMembership(workspace, actor, Membership.WorkspaceRole.ADMIN);
         return member(slug, Account.AppRole.APP_ADMIN, workspace, actor);
+    }
+
+    /** A plain account that is a member of its own workspace only, so no instance-admin elevation applies. */
+    private Member user(String slug) {
+        User actor = persistUser(slug + "-member");
+        Workspace workspace = createWorkspace(slug, "Workspace " + slug, slug, AccountType.ORG, actor);
+        ensureMembership(workspace, actor, Membership.WorkspaceRole.ADMIN);
+        return member(slug, Account.AppRole.USER, workspace, actor);
     }
 
     private Member member(String slug, Account.AppRole role, Workspace workspace, User actor) {

@@ -36,7 +36,10 @@ public class ProductFeedbackEmailListener {
 
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(ProductFeedbackEmailRequested event) {
-        if (!clock.instant().isBefore(event.expiresAt()) || !feedback.exists(event.feedbackId())) {
+        boolean current = event.kind() == ProductFeedbackEmailRequested.Kind.CLEANUP
+                ? feedback.cleanupNeedsAction(event.feedbackId())
+                : feedback.exists(event.feedbackId());
+        if (!clock.instant().isBefore(event.expiresAt()) || !current) {
             metrics.record(EmailKind.PRODUCT_FEEDBACK, Outcome.EXPIRED);
             return;
         }

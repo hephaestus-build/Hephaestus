@@ -106,6 +106,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("practices.scan.ScanReportIntegrationTest", "review-scanreport"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackUpdateEmailIntegrationTest", "email-capture"),
+            assignment("productfeedback.ProductFeedbackCleanupIntegrationTest", "product-feedback-github"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"));
 
@@ -132,6 +133,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "shared configured sender identity and captured SMTP boundary for"
                             + " durable delivery and HTTP authorization"),
             Map.entry("github-live", "explicitly selected live GitHub profile and credentials"),
+            Map.entry(
+                    "product-feedback-github",
+                    "real product feedback rows, erasure, admin HTTP and captured admin email with only the"
+                            + " GitHub issue transport controlled"),
             Map.entry(
                     "gitlab-event-routing",
                     "real JetStream scope consumer with GitLab discovery, webhook and sync"
@@ -283,6 +288,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "practices.review.ScmEventReviewIntegrationTest$QuietWindow",
             "productfeedback.ProductFeedbackEmailIntegrationTest",
             "productfeedback.ProductFeedbackUpdateEmailIntegrationTest",
+            "productfeedback.ProductFeedbackCleanupIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
@@ -313,6 +319,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             TestPropertySource.class);
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "productfeedback.ProductFeedbackCleanupIntegrationTest",
             "agent.job.ReviewJobEventListenerIntegrationTest",
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.runtime.RuntimeRoleContextIntegrationTest$WorkerGraph",

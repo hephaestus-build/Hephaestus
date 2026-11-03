@@ -10,7 +10,7 @@ import type { ListProductFeedbackNeedsActionData, ListProductFeedbackNeedsAction
 export const listProductFeedbackNeedsActionQueryKey = (options?: Options<ListProductFeedbackNeedsActionData>) => createQueryKey('listProductFeedbackNeedsAction', options, false, ['product-feedback-destinations']);
 
 /**
- * List reports that failed to file
+ * List reports that failed to file and erased reports whose issues need a manual step
  */
 export const listProductFeedbackNeedsActionOptions = (options?: Options<ListProductFeedbackNeedsActionData>) => queryOptions<ListProductFeedbackNeedsActionResponse, DefaultError, ListProductFeedbackNeedsActionResponse, ReturnType<typeof listProductFeedbackNeedsActionQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

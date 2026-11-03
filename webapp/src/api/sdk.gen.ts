@@ -88,6 +88,7 @@ export { clearOwnFeedbackResponse } from './sdk/clearOwnFeedbackResponse.gen.js'
 export { closeResearchDisclosure } from './sdk/closeResearchDisclosure.gen.js';
 export { completeFirstLoginConsent } from './sdk/completeFirstLoginConsent.gen.js';
 export { configureAgent } from './sdk/configureAgent.gen.js';
+export { confirmProductFeedbackCleanup } from './sdk/confirmProductFeedbackCleanup.gen.js';
 export { countReviewFeedbackByLocation } from './sdk/countReviewFeedbackByLocation.gen.js';
 export { countReviewFeedbackByReason } from './sdk/countReviewFeedbackByReason.gen.js';
 export { countWorkspaceConfigAuditEvents } from './sdk/countWorkspaceConfigAuditEvents.gen.js';

@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.productfeedback;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -59,6 +61,22 @@ public class ProductFeedbackCleanup {
 
     @Column(nullable = false)
     private int attempts;
+
+    /** Set once the app can do no more: a maintainer finishes on GitHub, then an admin confirms it. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_step", length = 16)
+    private @Nullable ManualStep manualStep;
+
+    @Column(name = "manual_since")
+    private @Nullable Instant manualSince;
+
+    /** What is left for a maintainer, because the app cannot delete an issue or its edit history. */
+    enum ManualStep {
+        /** The issue is scrubbed and closed in the private repository; its edit history still holds the erased text. */
+        EDIT_HISTORY,
+        /** The automatic steps did not finish within {@link CleanupService#MANUAL_AFTER}. */
+        UNFINISHED
+    }
 
     ProductFeedbackCleanup(
             String repository,

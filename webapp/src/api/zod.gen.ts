@@ -2905,6 +2905,20 @@ export const zProblemSummary = z.object({
 });
 
 /**
+ * An erased report's GitHub issue that only a maintainer can finish removing.
+ */
+export const zProductFeedbackCleanupAction = z.object({
+    erasedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    id: z.uuid(),
+    issueNumber: z.int().optional(),
+    issueUrl: z.string().optional(),
+    marker: z.string(),
+    repository: z.string(),
+    since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+    step: z.enum(['EDIT_HISTORY', 'UNFINISHED'])
+});
+
+/**
  * The instance's product feedback destinations and their health.
  */
 export const zProductFeedbackDestinations = z.object({
@@ -2958,7 +2972,11 @@ export const zProductFeedbackNeedsAction = z.object({
     stoppedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
 });
 
+/**
+ * What waits for an admin.
+ */
 export const zProductFeedbackNeedsActionList = z.object({
+    cleanups: z.array(zProductFeedbackCleanupAction),
     items: z.array(zProductFeedbackNeedsAction)
 });
 

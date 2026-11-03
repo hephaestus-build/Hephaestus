@@ -160,7 +160,8 @@ export const FirstTimeChoice: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await userEvent.type(dialog.getByRole("textbox", { name: "Your feedback" }), "Pin a practice.");
-		const share = dialog.getByRole("radio", { name: "Yes, share it publicly." });
+		// The sharing field loads after the dialog opens.
+		const share = await dialog.findByRole("radio", { name: "Yes, share it publicly." });
 		const keep = dialog.getByRole("radio", { name: "No, keep it private." });
 		await expect(share).not.toBeChecked();
 		await expect(keep).not.toBeChecked();
@@ -178,7 +179,8 @@ export const RememberedChoice: Story = {
 	args: { sharing: { status: "remembered", allowPublic: true } },
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("dialog"));
-		const toggle = dialog.getByRole("switch", { name: "Public GitHub issue" });
+		// The sharing field loads after the dialog opens.
+		const toggle = await dialog.findByRole("switch", { name: "Public GitHub issue" });
 		await expect(toggle).toBeChecked();
 		await expect(dialog.getByRole("link", { name: "Change default" })).toHaveAttribute(
 			"href",

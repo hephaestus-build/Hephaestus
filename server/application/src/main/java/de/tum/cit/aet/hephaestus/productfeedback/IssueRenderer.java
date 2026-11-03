@@ -31,6 +31,13 @@ final class IssueRenderer {
     private static final Pattern TITLE_CROSS_REFERENCE = Pattern.compile("([\\w.-]+/[\\w.-]+)#(\\d+)");
     private static final Pattern TITLE_REFERENCE = Pattern.compile("(?<![\\w/])#(\\d+)");
 
+    private static final String MARKER_PREFIX = "hephaestus-product-feedback:";
+
+    /** The marker as the issue body carries it, so a maintainer can search for an issue whose number is unknown. */
+    static String markerText(UUID marker) {
+        return MARKER_PREFIX + marker;
+    }
+
     /** The marker of the public issue a promotion creates, derived so that every attempt and cleanup can find it. */
     static UUID promotionMarker(UUID feedbackId) {
         return UUID.nameUUIDFromBytes((feedbackId + "-public").getBytes(StandardCharsets.UTF_8));
@@ -81,7 +88,7 @@ final class IssueRenderer {
                 .append(".");
         if (mention != null) body.append(" Reported by @").append(mention).append('.');
         if (reportId != null) body.append("\nReport ").append(code(reportId)).append(" in the instance admin console.");
-        body.append("\n\n<!-- hephaestus-product-feedback:").append(marker).append(" -->\n");
+        body.append("\n\n<!-- ").append(MARKER_PREFIX).append(marker).append(" -->\n");
         return new Rendered(title(draft.title()), body.toString());
     }
 
