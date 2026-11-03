@@ -5,10 +5,10 @@
 | `webhook.replicas` | integer | `1` | yes | `minimum: 0. maximum: 3` |
 | `webhook.resources.limits.cpu` | string | `"2"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `webhook.resources.limits.ephemeral-storage` | string | `"1Gi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.limits.memory` | string | `"1280Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.limits.memory` | string | `"640Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `webhook.resources.requests.cpu` | string | `"250m"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `webhook.resources.requests.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
-| `webhook.resources.requests.memory` | string | `"1280Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
+| `webhook.resources.requests.memory` | string | `"640Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `webhook.stream.allowDestructiveLimitUpdates` | boolean | `false` | yes | — |
 | `webhook.stream.limitUpdateTimeout` | string | `"5m"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |
 | `webhook.stream.maxAge` | string | `"7d"` | yes | `pattern: "^[0-9]+(?:ms\|s\|m\|h\|d)$"` |

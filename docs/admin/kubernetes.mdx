@@ -679,10 +679,10 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
-| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.8 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.8 GiB | 0.75 | The new Pods' caches |
+| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 9.2 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
+| An upgrade: the new webhook and webapp Pods, the migration Job, the stanza Job and one backup | 3.2 GiB | 0.75 | The new Pods' caches |
 | The sandbox quotas: one review, one isolation probe, one conversation host and ten tools Pods, including up to two warm Pods | 3.0 GiB | 0.50 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less platform reservations and the hard eviction floor | 16.6 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
+| Total, against the node less platform reservations and the hard eviction floor | 15.4 GiB of 30.25 GiB | 2.50 of 3.5 | 65 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker uses `Recreate` in both single-node profiles.
 The old worker drains before its replacement starts, so reviews and conversations pause during each upgrade.
@@ -713,7 +713,7 @@ NATS requests less than its limit, because JetStream's caches grow above the req
 | --- | --- | --- | --- |
 | Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
 | Worker | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
-| Webhook role | 1.0 GiB | 1.25 GiB | 1.25 GiB |
+| Webhook role | 0.6 GiB | 640 MiB | 640 MiB |
 | PostgreSQL, at rest in the earlier staging capture | 0.7 GiB | 2 GiB | 2 GiB |
 | pgBackRest | Not measured | 512 MiB | 512 MiB |
 | NATS, with JetStream's memory and file caches | 1.3 to 2.7 GiB | 1.5 GiB | 3 GiB |
@@ -743,9 +743,9 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 11.6 GiB of 13.9 GiB | 1.70 of 3.5 |
-| The same, with the isolation probe | 12.3 GiB | — |
-| An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.2 GiB of 13.9 GiB | 2.40 of 3.5 |
+| Steady: every role, one backup, one review, the conversation host, two pooled turn sandboxes and 8 running turns | 10.9 GiB of 13.9 GiB | 1.70 of 3.5 |
+| The same, with the isolation probe | 11.5 GiB | — |
+| An upgrade. The old worker is gone. The webhook and webapp surge, with the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 11.8 GiB of 13.9 GiB | 2.40 of 3.5 |
 
 The table counts requests.
 Its node budget uses the recorded Node capacity of 16 372 036 KiB, less the current platform reservations and hard eviction floor.

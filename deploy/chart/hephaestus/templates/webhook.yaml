@@ -66,6 +66,14 @@ spec:
             {{- include "hephaestus.env.ingestion" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod,webhook
+            # The buildpack reserves for what the whole JAR can load. This role loads a third of it, so these
+            # leave the heap the room that large deliveries need.
+            - name: BPL_JVM_THREAD_COUNT
+              value: "80"
+            - name: BPL_JVM_LOADED_CLASS_COUNT
+              value: "18000"
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:ReservedCodeCacheSize=64M
             - name: HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED
               value: "true"
             - name: HEPHAESTUS_RUNTIME_SERVER_ENABLED

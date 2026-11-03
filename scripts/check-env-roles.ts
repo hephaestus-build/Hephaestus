@@ -125,6 +125,15 @@ const PER_CONTAINER = new Map<string, string>([
 		"each process reserves its own idle database connections",
 	],
 	["THC_PATH", "the receiver reports NATS through readiness; the others answer liveness"],
+	["BPL_JVM_THREAD_COUNT", "the buildpack sizes each role's heap from the threads that role runs"],
+	[
+		"BPL_JVM_LOADED_CLASS_COUNT",
+		"the buildpack sizes each role's metaspace from the classes that role loads",
+	],
+	[
+		"JAVA_TOOL_OPTIONS",
+		"each role sizes its own JVM memory regions, such as direct memory and code cache, for its own limit",
+	],
 ]);
 
 /**
