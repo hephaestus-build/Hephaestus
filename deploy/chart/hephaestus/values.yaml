@@ -202,7 +202,7 @@ webhook:
   replicas: 1
   stream:
     # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
-    # times the daily GitHub volume below half of maxBytesGithub (webhook ingestion operations).
+    # times the daily GitHub volume within maxBytesGithub (webhook ingestion operations).
     maxAge: 7d
     # Empty keeps application defaults, including the shorter Slack and Outline retention.
     maxAgeByStream: {}

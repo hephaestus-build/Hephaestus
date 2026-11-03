@@ -107,6 +107,14 @@ class WebhookStreamMonitor {
                     .tags(tags)
                     .baseUnit("seconds")
                     .register(meterRegistry);
+            // What the deployment promises, beside what it gets, so that an alert compares the two for each stream.
+            Gauge.builder(
+                            IntegrationCoreMetrics.WEBHOOK_STREAM_AGE_BOUND,
+                            properties,
+                            configured -> configured.stream().maxAgeFor(name).toSeconds())
+                    .tags(tags)
+                    .baseUnit("seconds")
+                    .register(meterRegistry);
             // A durable nobody deletes shows up here as a count that only ever climbs.
             gauge(meterRegistry, IntegrationCoreMetrics.WEBHOOK_STREAM_CONSUMERS, tags, name, Usage::consumers);
             gauge(meterRegistry, IntegrationCoreMetrics.WEBHOOK_STREAM_CONSUMER_PENDING, tags, name, Usage::pending);

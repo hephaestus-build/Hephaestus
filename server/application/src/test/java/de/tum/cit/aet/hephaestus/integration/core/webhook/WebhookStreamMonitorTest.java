@@ -148,6 +148,14 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     }
 
     @Test
+    void publishesEachStreamsAgeBoundBesideItsEffectiveRetention() {
+        monitor();
+
+        assertThat(gauge("webhook.stream.age.bound"))
+                .isEqualTo((double) properties.stream().maxAgeFor(STREAM).toSeconds());
+    }
+
+    @Test
     void publishesTheAgeOfTheOldestStoredMessageAsEffectiveRetention() throws Exception {
         WebhookStreamMonitor monitor = monitor();
         give(1_000, ZonedDateTime.now(ZoneOffset.UTC).minusDays(9), caughtUp(CONSUMER, 999));
