@@ -7,7 +7,7 @@ import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
 import { PUSH_CHECK_ENV, pushStaticTasks } from "./lib/push-gates.ts";
-import { orderProblem } from "./reorder-migrations.ts";
+import { orderProblem, readQueue } from "./reorder-migrations.ts";
 
 const allScopes = Object.keys(pushStaticTasks).filter(
 	(scope): scope is keyof typeof pushStaticTasks => Object.hasOwn(pushStaticTasks, scope),
@@ -149,44 +149,59 @@ export function colocatedTests(files: readonly string[], cwd = process.cwd()): s
  * through the router, which took minutes on one worker; CI runs the complete unit project.
  * Resources, deleted files, test helpers and shared inputs need the whole unit project here too.
  */
+/** Whether only source files of `tree` changed, so its changed and colocated tests suffice here. */
+function sourceOnly(tree: "webapp" | "extension", paths: string[], cwd: string): boolean {
+	const files = paths.filter((file) => file.startsWith(`${tree}/`));
+	return (
+		files.length > 0 &&
+		files.every(
+			(file) =>
+				file.startsWith(`${tree}/src/`) &&
+				// Test helpers and the shared network mocks reach many tests, as a resource does.
+				!/^[^/]+\/src\/(?:test|mocks)\//u.test(file) &&
+				/\.[jt]sx?$/u.test(file) &&
+				existsSync(path.join(cwd, file)),
+		) &&
+		paths.every(
+			(file) =>
+				!scopesFor([file]).includes("full") &&
+				(file.startsWith(`${tree}/`) || !scopesFor([file]).includes(tree)),
+		)
+	);
+}
+
+const frontendTrees = (paths: string[] | undefined) =>
+	(["webapp", "extension"] as const).filter((tree) => pushScopes(paths).includes(tree));
+
+/** Whether some tests that reach a changed frontend file only through its imports did not run. */
+export function skipsImportedTests(paths: string[] | undefined, cwd = process.cwd()): boolean {
+	return paths !== undefined && frontendTrees(paths).some((tree) => sourceOnly(tree, paths, cwd));
+}
+
 export function frontendCommands(paths: string[] | undefined, cwd = process.cwd()): string[][] {
-	const scopes = pushScopes(paths);
-	return (["webapp", "extension"] as const)
-		.filter((tree) => scopes.includes(tree))
-		.flatMap((tree) => {
-			const files = (paths ?? []).filter((file) => file.startsWith(`${tree}/`));
-			const sourceOnly =
-				files.length > 0 &&
-				files.every(
-					(file) =>
-						file.startsWith(`${tree}/src/`) &&
-						// Test helpers and the shared network mocks reach many tests, as a resource does.
-						!/^[^/]+\/src\/(?:test|mocks)\//u.test(file) &&
-						/\.[jt]sx?$/u.test(file) &&
-						existsSync(path.join(cwd, file)),
-				) &&
-				paths !== undefined &&
-				paths.every(
-					(file) =>
-						!scopesFor([file]).includes("full") &&
-						(file.startsWith(`${tree}/`) || !scopesFor([file]).includes(tree)),
-				);
-			const tests = sourceOnly ? colocatedTests(files, cwd) : [];
-			if (sourceOnly && tests.length === 0) {
-				return [];
-			}
-			return [
-				[
-					"-C",
-					tree,
-					"test",
-					"--run",
-					"--maxWorkers=1",
-					...(tree === "extension" ? ["--project", "unit"] : []),
-					...tests.map((file) => file.slice(tree.length + 1)),
-				],
-			];
-		});
+	return frontendTrees(paths).flatMap((tree) => {
+		const selective = paths !== undefined && sourceOnly(tree, paths, cwd);
+		const tests = selective
+			? colocatedTests(
+					paths.filter((file) => file.startsWith(`${tree}/`)),
+					cwd,
+				)
+			: [];
+		if (selective && tests.length === 0) {
+			return [];
+		}
+		return [
+			[
+				"-C",
+				tree,
+				"test",
+				"--run",
+				"--maxWorkers=1",
+				...(tree === "extension" ? ["--project", "unit"] : []),
+				...tests.map((file) => file.slice(tree.length + 1)),
+			],
+		];
+	});
 }
 
 function run(program: string, args: string[]): void {
@@ -218,7 +233,15 @@ function main(): void {
 	}
 	// First, because it takes milliseconds and otherwise fails only in the merge queue.
 	if (paths?.some((file) => file.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)) === true) {
-		const problem = orderProblem(base);
+		let queued: string[] = [];
+		try {
+			queued = readQueue(process.cwd());
+		} catch (error) {
+			console.log(
+				`The merge queue was not read, so the migration order was checked against ${base} only: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
+		const problem = orderProblem(base, process.cwd(), queued);
 		if (problem !== undefined) {
 			console.error(problem);
 			process.exit(1);
@@ -242,6 +265,11 @@ function main(): void {
 	for (const command of frontendCommands(paths)) {
 		console.log(`Frontend unit selection: ${command.join(" ")}`);
 		run(process.execPath, [cli, ...command]);
+	}
+	if (skipsImportedTests(paths)) {
+		console.log(
+			"Tests that reach the changed frontend files only through their imports did not run here; CI runs the complete unit project.",
+		);
 	}
 	console.log(
 		"Push checks passed. Complete Node suites, Java unit and integration tests, browser suites and builds did not run; CI runs them.",

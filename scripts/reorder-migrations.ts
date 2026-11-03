@@ -5,8 +5,8 @@
  *   vp run db:reorder --check [--base <revision>]  exit 1 and name the files, change nothing
  *
  * The rename also sorts after every `next/` file that a pull request in the merge queue adds: that
- * pull request merges first, and its file would otherwise sort after this branch's on `main`. The
- * check reads only the base, because the pre-push hook does not use the network.
+ * pull request merges first, and the merge group applies its file before this branch's. The check
+ * reads the queue too; the pre-push hook reports when it cannot.
  *
  * Liquibase reads `next/` in filename order, and a released file never moves
  * (`docs/contributor/database-migration.mdx` § Changelog immutability policy). So a branch file that
@@ -204,15 +204,27 @@ export function reorderMigrations(
 }
 
 /** The message for a branch whose migrations sort too early, or undefined when they are in order. */
-export function orderProblem(base: string, cwd = process.cwd()): string | undefined {
+export function orderProblem(
+	base: string,
+	cwd = process.cwd(),
+	queued: readonly string[] = [],
+): string | undefined {
 	const found = migrations(base, cwd);
-	const renames = reorder(found.base, found.branch, Date.now());
+	const renames = reorder(found.base, found.branch, Date.now(), queued);
 	if (renames.length === 0) {
 		return undefined;
 	}
-	const newest = found.base.toSorted().at(-1) ?? "";
+	const own = new Set(found.branch);
+	const ahead = queued.filter((file) => !own.has(file));
+	const newest =
+		[...found.base, ...ahead]
+			.toSorted((a, b) => path.posix.basename(a).localeCompare(path.posix.basename(b)))
+			.at(-1) ?? "";
+	const where = ahead.includes(newest)
+		? "the newest that the merge queue adds"
+		: `the newest on ${base}`;
 	return [
-		`These migrations sort at or before ${path.posix.basename(newest)}, the newest on ${base}:`,
+		`These migrations sort at or before ${path.posix.basename(newest)}, ${where}:`,
 		...renames.map(({ from }) => `  ${path.posix.basename(from)}`),
 		"The merge queue rejects them. Run `vp run db:reorder`, commit the rename, and push.",
 	].join("\n");
@@ -255,13 +267,13 @@ function main(): void {
 	const { base } = values;
 	const cwd = git(process.cwd(), "rev-parse", "--show-toplevel")[0] ?? process.cwd();
 	if (values.check === true) {
-		const problem = orderProblem(base, cwd);
+		const problem = orderProblem(base, cwd, readQueue(cwd));
 		if (problem !== undefined) {
 			console.error(problem);
 			process.exitCode = 1;
 			return;
 		}
-		console.log(`This branch's migrations sort after ${base}.`);
+		console.log(`This branch's migrations sort after ${base} and the merge queue.`);
 		return;
 	}
 	refuseFork(cwd);

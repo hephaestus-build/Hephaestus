@@ -11,6 +11,7 @@ import {
 	frontendCommands,
 	pushScopes,
 	pushTasks,
+	skipsImportedTests,
 	toolingScopes,
 } from "./check-push.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -102,8 +103,11 @@ void test("a source change runs its changed and colocated tests, and resources r
 			"src/components/product-feedback/ProductFeedbackDialog.test.tsx",
 		],
 	]);
-	// A source without a colocated test leaves its tests to CI.
+	// A source without a colocated test leaves its tests to CI, and the hook says so.
 	assert.deepEqual(frontendCommands(["webapp/src/components/ui/button.tsx"]), []);
+	assert.equal(skipsImportedTests(["webapp/src/components/ui/button.tsx"]), true);
+	assert.equal(skipsImportedTests(["webapp/package.json"]), false);
+	assert.equal(skipsImportedTests(["scripts/reorder-migrations.ts"]), false);
 	for (const files of [
 		["webapp/public/a.svg"],
 		["webapp/src/deleted.ts"],

@@ -132,6 +132,7 @@ if history never changes underneath an instance that already ran part of it.
    It uses `git mv` and keeps their content.
    It refuses to rename a file that `origin/main` or a release tag has.
    The pre-push hook and `vp run db:reorder --check` find an out-of-order file before the merge queue does.
+   Both also compare with the migrations that pull requests already in the merge queue add.
    Reset a local database that applied the moved file with `vp run dev:reset`.
    Do not add explicit includes or nested directories. The immutability guard rejects invalid filenames and insertion before existing history.
    The changelog-level cut-point precondition protects startup and synchronization without changing released changesets.

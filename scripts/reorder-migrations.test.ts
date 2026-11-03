@@ -8,7 +8,14 @@ import { test } from "node:test";
 import { violations } from "./check-changelog-immutability.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { githubRepository, queuedMigrations, refusals, reorder } from "./reorder-migrations.ts";
+import {
+	githubRepository,
+	orderProblem,
+	queuedMigrations,
+	refusals,
+	reorder,
+	reorderMigrations,
+} from "./reorder-migrations.ts";
 
 const next = (name: string): string => `${NEXT_CHANGELOG_DIRECTORY}/${name}`;
 const at = (iso: string): number => Date.parse(iso);
@@ -237,4 +244,44 @@ void test("only a GitHub remote is checked for being a fork", () => {
 	assert.equal(githubRepository("https://github.com/owner/name.git"), "owner/name");
 	assert.equal(githubRepository("git@github.com:owner/name"), "owner/name");
 	assert.equal(githubRepository("/tmp/origin.git"), undefined);
+});
+
+void test("with two migration pull requests in the queue, the branch moves after both, and the merge group accepts it", async (t) => {
+	const { cwd, git } = await fixture();
+	t.after(async () => {
+		await rm(path.dirname(cwd), { recursive: true, force: true });
+	});
+	git("fetch", "--quiet", "origin");
+	git("rebase", "--quiet", "origin/main");
+	// In order against main: the pull request passes its own checks.
+	git("mv", next("20261102000000-mine.xml"), next("20261103050000-mine.xml"));
+	git("commit", "--quiet", "--message", "in order against main");
+	assert.equal(orderProblem("origin/main", cwd), undefined);
+
+	// Two pull requests ahead in the queue add migrations; the merge group applies both first.
+	const queued = [next("20261103040000-first-ahead.xml"), next("20261103060000-second-ahead.xml")];
+	const group = snapshot(git, "origin/main");
+	for (const file of queued) {
+		group.blobs.set(file, `blob of ${file}`);
+	}
+	const withBranch = (file: string) => ({
+		...group,
+		blobs: new Map([...group.blobs, [file, "blob of mine"]]),
+	});
+	assert.match(
+		violations(group, withBranch(next("20261103050000-mine.xml"))).join("\n"),
+		/sorts before existing history/u,
+	);
+
+	const problem = orderProblem("origin/main", cwd, queued);
+	assert.match(
+		problem ?? "",
+		/20261103060000-second-ahead\.xml, the newest that the merge queue adds/u,
+	);
+	const [rename] = reorderMigrations("origin/main", cwd, queued);
+	assert.ok(rename !== undefined);
+	assert.ok(path.basename(rename.to) > "20261103060000-second-ahead.xml", rename.to);
+	assert.deepEqual(violations(group, withBranch(rename.to)), []);
+	git("commit", "--quiet", "--message", "reorder");
+	assert.equal(orderProblem("origin/main", cwd, queued), undefined);
 });
