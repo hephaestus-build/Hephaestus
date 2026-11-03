@@ -5,7 +5,7 @@ page_type: reference
 ---
 
 These rules apply to the server.
-[ADR 0075](../decisions/0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) records why we chose them.
+[ADR 0075](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) records why we chose them.
 Architecture tests enforce the rules that a test can see.
 The other rules are for code review.
 Some code that is older than ADR 0075 does not obey all the rules yet.
