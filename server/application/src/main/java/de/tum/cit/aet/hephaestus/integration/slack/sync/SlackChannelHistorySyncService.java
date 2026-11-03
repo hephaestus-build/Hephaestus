@@ -4,6 +4,7 @@ import com.slack.api.model.Message;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackLiveMessage;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
@@ -19,7 +20,11 @@ import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackChannelMessageHa
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
@@ -45,9 +50,9 @@ import org.springframework.stereotype.Component;
  *       immediately.</li>
  *   <li>Paused gaps are never backfilled: resuming a channel stamps the watermark to the resume instant
  *       (see {@code SlackChannelConsentService}), and PAUSED/PENDING/REVOKED channels are not in the sync set.</li>
- *   <li>The sync NEVER tombstones: a message absent from a page usually means pagination truncation, a filtered
- *       subtype, or a thread reply (never present in history) — inferring deletion from absence would mass-delete.
- *       Slack-side deletions are handled by the {@code message_deleted} event in every consent state.</li>
+ *   <li>A message that Slack no longer holds is removed only through {@link SlackHistoryReconciler}, which owns what
+ *       proves an absence. Paused and revoked channels are not read, so only the {@code message_deleted} event covers
+ *       them while they stay that way.</li>
  * </ul>
  *
  * <p>The watermark advances only when a channel's window completed cleanly (cursor exhausted, no errors); a partial
@@ -65,6 +70,7 @@ public class SlackChannelHistorySyncService {
     private final SlackMessageService slackMessageService;
     private final SlackIngestService ingestService;
     private final ConnectionService connectionService;
+    private final SlackHistoryReconciler reconciler;
     private final SlackSyncProperties properties;
     private final Clock clock;
 
@@ -74,6 +80,7 @@ public class SlackChannelHistorySyncService {
             SlackMessageService slackMessageService,
             SlackIngestService ingestService,
             ConnectionService connectionService,
+            SlackHistoryReconciler reconciler,
             SlackSyncProperties properties,
             Clock clock) {
         this.monitoredChannelRepository = monitoredChannelRepository;
@@ -81,6 +88,7 @@ public class SlackChannelHistorySyncService {
         this.slackMessageService = slackMessageService;
         this.ingestService = ingestService;
         this.connectionService = connectionService;
+        this.reconciler = reconciler;
         this.properties = properties;
         this.clock = clock;
     }
@@ -128,6 +136,7 @@ public class SlackChannelHistorySyncService {
         long ingested = 0;
         int failed = 0;
         AtomicBoolean repliesBudgetExhausted = new AtomicBoolean();
+        Set<String> failedChannels = new HashSet<>();
         for (SlackMonitoredChannel channel : channels) {
             if (cancelled.getAsBoolean() || !historyBudget.available()) {
                 skipped += channels.size() - synced - skipped;
@@ -154,10 +163,8 @@ public class SlackChannelHistorySyncService {
                 // coarse "not synced this pass" figure that also covers benign nothing-to-sync channels.
                 skipped++;
                 failed++;
-                String reason = e instanceof SlackSendException slack
-                                && slack.slackError().matches("[a-z_]{1,64}")
-                        ? slack.slackError()
-                        : e.getClass().getSimpleName();
+                failedChannels.add(channel.getSlackChannelId());
+                String reason = reasonOf(e);
                 monitoredChannelRepository.recordHistorySyncError(
                         workspaceId, channel.getSlackChannelId(), "History sync failed (" + reason + ")");
                 log.warn(
@@ -167,6 +174,17 @@ public class SlackChannelHistorySyncService {
                         reason);
             }
         }
+        // The pass over older messages runs last and only at night: a consent kick stays bounded to its channel's
+        // window.
+        if (onlySlackChannelId == null && !cancelled.getAsBoolean()) {
+            failed += reconciler.reconcileOlder(
+                    workspaceId,
+                    channels.stream()
+                            .filter(c -> !failedChannels.contains(c.getSlackChannelId()))
+                            .toList(),
+                    retentionFloor,
+                    cancelled);
+        }
         return new WorkspaceSyncSummary(
                 channels.size(),
                 synced,
@@ -175,6 +193,13 @@ public class SlackChannelHistorySyncService {
                 historyBudget.used() + repliesBudget.used(),
                 !historyBudget.available() || repliesBudgetExhausted.get(),
                 failed);
+    }
+
+    /** A Slack error code, or the exception's type: never Slack's free text. */
+    static String reasonOf(RuntimeException e) {
+        return e instanceof SlackSendException slack && slack.slackError().matches("[a-z_]{1,64}")
+                ? slack.slackError()
+                : e.getClass().getSimpleName();
     }
 
     /**
@@ -203,6 +228,8 @@ public class SlackChannelHistorySyncService {
             return null;
         }
 
+        List<SlackLiveMessage> stored = reconciler.stored(workspaceId, channelId, floor, latest);
+        Map<String, Message> returned = new HashMap<>();
         long ingested = 0;
         String cursor = null;
         do {
@@ -220,6 +247,7 @@ public class SlackChannelHistorySyncService {
             HistoryPage page = slackMessageService.fetchHistoryPage(
                     workspaceId, channelId, floor, latest, cursor, properties.historyPageLimit());
             for (Message message : page.messages()) {
+                returned.put(message.getTs(), message);
                 ingested += routeThroughIngest(channel, message) ? 1 : 0;
                 if (properties.repliesEnabled() && hasReplyGap(workspaceId, channelId, message)) {
                     ReplySync replySync = syncReplies(
@@ -233,6 +261,8 @@ public class SlackChannelHistorySyncService {
             cursor = page.nextCursor();
         } while (cursor != null);
 
+        // A reply the budget leaves unread here is compared later, by the pass over older messages.
+        reconciler.removeAbsent(workspaceId, channel, stored, returned, repliesBudget, cancelled);
         return monitoredChannelRepository.advanceHistoryWatermark(workspaceId, channelId, latest, clock.instant()) == 1
                 ? ingested
                 : null;
@@ -344,7 +374,7 @@ public class SlackChannelHistorySyncService {
 
     /**
      * One workspace's sync outcome, for the scheduler's summary log. {@code failed} counts channels whose
-     * history sync threw (a genuine partial failure, a subset of {@code skipped}); {@code failed > 0} is the
+     * history sync or deletion check threw (a genuine partial failure); {@code failed > 0} is the
      * signal {@code SlackIntegrationSyncRunner} maps to {@code SUCCEEDED_WITH_WARNINGS}.
      */
     public record WorkspaceSyncSummary(

@@ -86,6 +86,20 @@ public class SlackMonitoredChannel {
     @Column(name = "history_synced_at")
     private @Nullable Instant historySyncedAt;
 
+    /**
+     * Where the check of older stored messages for deletions stopped in its current pass: the start of the last UTC
+     * day it compared. Null when the next pass starts again at the watermark.
+     */
+    @Column(name = "history_check_cursor_ts", length = 32)
+    private @Nullable String historyCheckCursorTs;
+
+    /**
+     * When the check of older stored messages last finished a full pass, or gave way after a failure; orders channels
+     * stalest first.
+     */
+    @Column(name = "history_checked_at")
+    private @Nullable Instant historyCheckedAt;
+
     @Column(name = "last_sync_error", length = 2048)
     private @Nullable String lastSyncError;
 

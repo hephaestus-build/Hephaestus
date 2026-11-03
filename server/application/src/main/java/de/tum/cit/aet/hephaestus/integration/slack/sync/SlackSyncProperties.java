@@ -13,8 +13,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * {@code conversations.replies}. At that ceiling a nightly window is a scarce resource — the sync self-paces
  * ({@code historyRequestInterval}) instead of provoking 429s, spends at most {@code historyRequestBudget} history
  * requests per workspace per run, and orders channels stalest-first so a large workspace converges across nights
- * rather than starving its tail. Marketplace-approved and internal apps keep the old tiers — raise the budgets and
- * shrink the interval for those installs.
+ * rather than starving its tail. {@code reconcileRequestBudget} bounds the separate check of older stored messages
+ * for deletions, which would otherwise take the whole budget every night. Marketplace-approved and internal apps keep
+ * the old tiers — raise the budgets and shrink the interval for those installs.
  */
 @ConfigurationProperties(prefix = "hephaestus.sync.slack")
 public record SlackSyncProperties(
@@ -24,7 +25,8 @@ public record SlackSyncProperties(
         @DefaultValue("60s") Duration historyRequestInterval,
         @DefaultValue("true") boolean repliesEnabled,
         @DefaultValue("30") int repliesRequestBudget,
-        @DefaultValue("true") boolean metadataEnabled) {
+        @DefaultValue("true") boolean metadataEnabled,
+        @DefaultValue("30") int reconcileRequestBudget) {
     public SlackSyncProperties {
         if (historyRequestBudget < 1) {
             throw new IllegalArgumentException("sync.slack.historyRequestBudget must be >= 1");
@@ -37,6 +39,9 @@ public record SlackSyncProperties(
         }
         if (repliesRequestBudget < 0) {
             throw new IllegalArgumentException("sync.slack.repliesRequestBudget must be >= 0");
+        }
+        if (reconcileRequestBudget < 0) {
+            throw new IllegalArgumentException("sync.slack.reconcileRequestBudget must be >= 0");
         }
     }
 }

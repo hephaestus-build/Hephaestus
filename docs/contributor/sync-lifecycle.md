@@ -85,8 +85,8 @@ This holds **uniformly across every integration that infers deletion from absenc
 pair. Each runner forwards its `SyncJobType` rather than dropping it, and the inference sits behind a
 `type == RECONCILIATION` gate: `GitHubDataSyncScheduler` / `GitLabDataSyncScheduler` before the
 deletion sweep, and `OutlineDocumentSyncService#syncOneCollection` before `tombstoneVanished`. Slack
-needs no gate — it never infers deletion from absence at all (deletions arrive as `message_deleted` /
-`channel_deleted` events), so its runner genuinely does not use `type`.
+needs no `type` gate, and its runner does not use `type`. It compares only rows that it already stores
+with a complete read of their range. A mirror that is still filling cannot read as a deletion.
 
 The two guards are independent and both must hold before anything is tombstoned: the enumeration must
 be provably **complete**, *and* the job must be a **`RECONCILIATION`**. A budget-exhausted or
@@ -467,11 +467,15 @@ A practice that must review every push also selects **Opened**, **Ready** or **S
 
 ## Documented asymmetries and residuals
 
-- **Slack has no deletion *sweep* at all.** Its content model is append-plus-watermark.
-  A message absent from `conversations.history` usually indicates truncated pagination, a filtered subtype, or a thread reply.
-  Deletion inferred from absence would cause mass deletion. Deletions arrive as events
-  instead. Outline *does* infer deletion from absence, but not in a separate sweep phase.
-  It tombstones inline after each collection's clean enumeration, under the same reconciliation-only rule as SCM sweeps.
+- **Slack infers a deletion only from a complete read of a stored range.** `SlackHistoryReconciler` reads the
+  stored rows first. Then it reads every page of their range and tombstones a row that the read did not return.
+  It compares a thread reply only with a complete `conversations.replies` read of its thread.
+  An error, an exhausted budget, a consent change or a page with more but no cursor removes nothing.
+  Messages below the watermark are read only to compare, and that pass never ingests.
+  Thus it never stores a paused gap or an opted-out author again.
+  That pass keeps a cursor for each channel and compares only the last 89 days.
+  Outline infers deletion from absence too, inline after the clean enumeration of each collection.
+  It follows the same reconciliation-only rule as SCM sweeps.
 - **Cross-owner GitHub transfer heals only on reconcile.** The event derives the *new* owner's
   subject and so reaches no filter of the old workspace. The next reconcile resolves the monitor by
   `native_id`. GitLab has the identical residual across root groups.

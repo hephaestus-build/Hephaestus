@@ -72,7 +72,7 @@ class SlackDataSyncSchedulerTest extends BaseUnitTest {
                 historySyncService,
                 connectionService,
                 syncJobService,
-                new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true),
+                new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true, 10),
                 inlineExecutor());
     }
 

@@ -665,6 +665,7 @@ public class SlackMessageService {
                             .conversationsHistory(req -> req.channel(channelId)
                                     .oldest(oldest)
                                     .latest(latest)
+                                    .inclusive(true)
                                     .cursor(cursor == null || cursor.isBlank() ? null : cursor)
                                     .includeAllMetadata(true)
                                     .limit(limit)));
@@ -672,11 +673,12 @@ public class SlackMessageService {
                 throw new SlackSendException(
                         workspaceId, channelId, response.getError() == null ? "unknown" : response.getError());
             }
-            List<Message> messages = response.getMessages() == null ? List.of() : response.getMessages();
-            String nextCursor = response.getResponseMetadata() == null
-                    ? null
-                    : response.getResponseMetadata().getNextCursor();
-            return new HistoryPage(messages, nextCursor == null || nextCursor.isBlank() ? null : nextCursor);
+            return HistoryPage.of(
+                    workspaceId,
+                    channelId,
+                    response.getMessages(),
+                    response.isHasMore(),
+                    response.getResponseMetadata());
         } catch (SlackApiException | IOException e) {
             throw new SlackSendException(workspaceId, channelId, "transport_failure", e);
         }
@@ -703,11 +705,12 @@ public class SlackMessageService {
                 throw new SlackSendException(
                         workspaceId, channelId, response.getError() == null ? "unknown" : response.getError());
             }
-            List<Message> messages = response.getMessages() == null ? List.of() : response.getMessages();
-            String nextCursor = response.getResponseMetadata() == null
-                    ? null
-                    : response.getResponseMetadata().getNextCursor();
-            return new HistoryPage(messages, nextCursor == null || nextCursor.isBlank() ? null : nextCursor);
+            return HistoryPage.of(
+                    workspaceId,
+                    channelId,
+                    response.getMessages(),
+                    response.isHasMore(),
+                    response.getResponseMetadata());
         } catch (SlackApiException | IOException e) {
             throw new SlackSendException(workspaceId, channelId, "transport_failure", e);
         }
@@ -715,7 +718,26 @@ public class SlackMessageService {
 
     /** One page of channel history/replies: the raw SDK messages plus the pagination cursor (null when exhausted). */
     public record HistoryPage(
-            List<Message> messages, @Nullable String nextCursor) {}
+            List<Message> messages, @Nullable String nextCursor) {
+
+        /** A page as Slack answered it. More to read without a cursor is a truncated read, never the end. */
+        static HistoryPage of(
+                long workspaceId,
+                String channelId,
+                @Nullable List<Message> messages,
+                boolean hasMore,
+                @Nullable ResponseMetadata metadata) {
+            List<Message> read = messages == null ? List.of() : messages;
+            String cursor = metadata == null ? null : metadata.getNextCursor();
+            if (cursor != null && !cursor.isBlank()) {
+                return new HistoryPage(read, cursor);
+            }
+            if (hasMore) {
+                throw new SlackSendException(workspaceId, channelId, "history_truncated");
+            }
+            return new HistoryPage(read, null);
+        }
+    }
 
     public void joinPublicChannel(long workspaceId, String channelId) {
         try {

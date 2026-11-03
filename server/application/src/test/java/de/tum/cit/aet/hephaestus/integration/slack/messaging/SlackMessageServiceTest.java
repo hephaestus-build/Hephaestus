@@ -282,6 +282,29 @@ class SlackMessageServiceTest extends BaseUnitTest {
      * A gateway whose own Slack client calls {@code slackApi} with a deadline of {@code callTimeoutMs}. The test closes
      * it.
      */
+    @Test
+    void shouldRefuseAHistoryPageThatHasMoreButNoCursor() throws Exception {
+        try (MockWebServer slackApi = new MockWebServer()) {
+            slackApi.start();
+            slackApi.enqueue(json("{\"ok\":true,\"team_id\":\"T1\"}"));
+            slackApi.enqueue(json("{\"ok\":true,\"messages\":[],\"has_more\":true}"));
+            SlackMessageService local = localService(slackApi, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.fetchHistoryPage(7L, "C1", "100.000001", "200.000001", null, 15))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                refused -> assertThat(refused.slackError()).isEqualTo("history_truncated"));
+            } finally {
+                local.close();
+            }
+
+            assertThat(slackApi.takeRequest().getUrl().encodedPath()).isEqualTo("/api/auth.test");
+            assertThat(bodyOf(slackApi.takeRequest()))
+                    .as("both ends of the range are read, so a stored message on an end is never missed")
+                    .contains("inclusive=1");
+        }
+    }
+
     private SlackMessageService localService(MockWebServer slackApi, int callTimeoutMs) {
         SlackConfig config = new SlackConfig();
         config.setHttpClientCallTimeoutMillis(callTimeoutMs);
