@@ -172,6 +172,16 @@
 																				"maxLength": 4096
 																			}
 																		}
+																	},
+																	{
+																		"type": "object",
+																		"additionalProperties": false,
+																		"required": ["merged"],
+																		"properties": {
+																			"merged": {
+																				"const": true
+																			}
+																		}
 																	}
 																]
 															},

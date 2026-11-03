@@ -129,7 +129,7 @@ public class PullRequestItemDescriptor implements ItemDescriptor {
                                         new ReviewStateValue("CLOSED", "Closed"),
                                         new ReviewStateValue("MERGED", "Merged")),
                                 Set.of("OPEN", "CLOSED", "MERGED"))),
-                Set.of("CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS"),
+                Set.of("CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS", "MERGED"),
                 Set.of("scm.review-threads", "scm.inline-review-comments", "scm.general-review-comments"),
                 Set.of(ScmItemEvents.FILE));
     }

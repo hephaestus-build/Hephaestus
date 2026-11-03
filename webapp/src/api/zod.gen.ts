@@ -243,7 +243,8 @@ export const zAllowPublic = z.object({
 export const zAppliesWhenClause = z.object({
     changedPath: z.array(z.string()).optional(),
     diffContains: z.array(z.string()).optional(),
-    hasItems: z.string().optional()
+    hasItems: z.string().optional(),
+    merged: z.boolean().optional()
 });
 
 export const zAppliesWhen = z.object({
@@ -5885,7 +5886,8 @@ export const zPracticeItemTypeOption = z.object({
     applicabilityClauses: z.array(z.enum([
         'CHANGED_PATH',
         'DIFF_CONTAINS',
-        'HAS_ITEMS'
+        'HAS_ITEMS',
+        'MERGED'
     ])),
     applicabilitySources: z.array(zReadSourceOption),
     events: z.array(zItemEventOption),

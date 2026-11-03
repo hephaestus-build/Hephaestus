@@ -37,6 +37,12 @@ describe("parseAppliesWhen", () => {
 		},
 	);
 
+	it("keeps a merged condition, which takes no value", () => {
+		expect(
+			parseAppliesWhen(draft([{ merged: true }], "it has not merged"), mockPullRequestItemType),
+		).toStrictEqual({ value: { anyOf: [{ merged: true }], otherwise: "it has not merged" } });
+	});
+
 	it("requires choosing a source for a source condition", () => {
 		expect(parseAppliesWhen(draft([{ hasItems: "" }]), mockPullRequestItemType).clausesError).toBe(
 			"Choose a source.",

@@ -88,6 +88,8 @@ They include these checks:
 
 - The catalog loader and the definition validator accept every bundled definition.
 - `ScmCapturedApplicabilityTest` has fixtures for each bundled Applies when gate. Its fixtures cover when the gate applies, does not apply, and cannot decide.
+- The database checks each current definition in `practice_definition_complete`. A new kind of Applies when condition changes that function in a new migration. Otherwise, installing the catalog refuses the definition, and creating a workspace fails.
+- A bundled gate that matches changed paths lists every path that could hold its subject. A gate that runs a practice too often costs one session. A gate that misses a path records a wrong Does not apply.
 - Each script with a table for each language has a fixture for each language in the table. Add a matching fixture when you add or change a language row. A file in another language does not show that the practice does not apply.
 - Each automated practice about an issue or a pull request has a case in `criteria-cases.json`. `PracticeCriteriaCaseStagingIntegrationTest` stages each case through the export path.
 - Each bundled practice about a reviewer captures their identity and inline comments from its declared sources. It also captures their review decision with its body.

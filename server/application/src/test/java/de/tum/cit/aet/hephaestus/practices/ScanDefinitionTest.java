@@ -55,9 +55,9 @@ class ScanDefinitionTest extends BaseUnitTest {
 
     @Test
     void shouldUseSafeGlobsForChangedPathsAndLiteralDiffText() {
-        assertThatThrownBy(() -> new AppliesWhenClause(List.of("../secret"), null, null))
+        assertThatThrownBy(() -> new AppliesWhenClause(List.of("../secret"), null, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(new AppliesWhenClause(null, List.of(".*(password|token).*"), null).diffContains())
+        assertThat(new AppliesWhenClause(null, List.of(".*(password|token).*"), null, null).diffContains())
                 .containsExactly(".*(password|token).*");
     }
 

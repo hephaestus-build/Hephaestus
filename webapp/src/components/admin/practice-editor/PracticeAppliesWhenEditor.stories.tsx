@@ -65,6 +65,19 @@ export const DifferentCondition: Story = {
 	},
 };
 
+export const MergedCondition: Story = {
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("combobox", { name: "Condition 1" }));
+		const options = within(await screen.findByRole("listbox", { name: "Condition 1" }));
+		await userEvent.click(options.getByRole("option", { name: "The work has merged" }));
+		await expect(canvas.getByRole("combobox", { name: "Condition 1" })).toHaveTextContent(
+			"The work has merged",
+		);
+		await expect(canvas.queryByRole("textbox", { name: "File paths 1" })).toBeNull();
+		await expectNoOverflowingElement(canvas.getByRole("group", { name: "Applies when" }));
+	},
+};
+
 export const SourceChoices: Story = {
 	args: { value: { clauses: [{ hasItems: "" }], otherwise: "There are no comments to check." } },
 	play: async ({ canvas, userEvent }) => {

@@ -75,7 +75,7 @@ export const mockPullRequestItemType = {
 			],
 		},
 	],
-	applicabilityClauses: ["CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS"],
+	applicabilityClauses: ["CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS", "MERGED"],
 	applicabilitySources,
 	scanSupported: true,
 	scanItemKinds: ["scm.file"],

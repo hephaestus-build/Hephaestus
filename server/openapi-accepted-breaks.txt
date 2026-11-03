@@ -291,3 +291,7 @@ in API GET /workspaces/{workspaceSlug}/user-view/users removed the required prop
 in API GET /workspaces/{workspaceSlug}/user-view/users removed the required property `pageable` from the response with the `200` status
 in API GET /workspaces/{workspaceSlug}/user-view/users removed the required property `sort` from the response with the `200` status
 in API POST /workspaces/gitlab/projects removed the required property `projects` from the response with the `200` status
+
+# #3671: Applies when can check that the work has merged, so the definition options can offer that condition.
+in API GET /admin/practice-catalog/definition-options added the new `MERGED` enum value to the `itemTypes/items/applicabilityClauses/items/` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/definition-options added the new `MERGED` enum value to the `itemTypes/items/applicabilityClauses/items/` response property for the response status `200`

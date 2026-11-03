@@ -9,10 +9,19 @@ import org.jspecify.annotations.Nullable;
 public record AppliesWhenClause(
         @Nullable List<String> changedPath,
         @Nullable List<String> diffContains,
-        @Nullable String hasItems) implements ClosedPracticeInput {
+        @Nullable String hasItems,
+        @Nullable Boolean merged)
+        implements ClosedPracticeInput {
     public AppliesWhenClause {
-        if ((changedPath == null ? 0 : 1) + (diffContains == null ? 0 : 1) + (hasItems == null ? 0 : 1) != 1) {
+        if ((changedPath == null ? 0 : 1)
+                        + (diffContains == null ? 0 : 1)
+                        + (hasItems == null ? 0 : 1)
+                        + (merged == null ? 0 : 1)
+                != 1) {
             throw new IllegalArgumentException("Choose one kind of condition.");
+        }
+        if (Boolean.FALSE.equals(merged)) {
+            throw new IllegalArgumentException("A merged condition can only require that the work merged.");
         }
         if (changedPath != null) {
             changedPath = canonical(changedPath);

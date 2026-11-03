@@ -66,6 +66,7 @@ public class ScmCapturedApplicability implements CapturedApplicability {
         if (available.completeness() != SourceCompleteness.COMPLETE) {
             return AppliesWhenCheck.Result.UNDECIDABLE;
         }
+        if (clause.merged()) return merged(capture, staged);
         if (available.content() == SourceContentState.EMPTY) {
             return AppliesWhenCheck.Result.NOT_FOUND;
         }
@@ -124,13 +125,39 @@ public class ScmCapturedApplicability implements CapturedApplicability {
         return items.isEmpty() ? AppliesWhenCheck.Result.NOT_FOUND : AppliesWhenCheck.Result.FOUND;
     }
 
+    /**
+     * Only a record that says open proves no merge. A webhook can store a merged pull request as closed, or with a merge
+     * time and {@code is_merged} false, so any other record that does not state the merge stays undecidable.
+     */
+    private AppliesWhenCheck.Result merged(SourceCapture capture, Map<String, byte[]> staged) {
+        CapturedSource artifact = capture.files().stream()
+                .filter(candidate -> candidate.path().endsWith("metadata.json"))
+                .findFirst()
+                .orElse(null);
+        byte @Nullable [] bytes = artifact == null ? null : staged.get(artifact.path());
+        if (bytes == null || bytes.length == 0) return AppliesWhenCheck.Result.UNDECIDABLE;
+        JsonNode record;
+        try {
+            record = objectMapper.readTree(bytes);
+        } catch (RuntimeException unparseable) {
+            return AppliesWhenCheck.Result.UNDECIDABLE;
+        }
+        JsonNode merged = record.path("is_merged");
+        if (merged.asBoolean(false) || record.path("merged_at").isString()) return AppliesWhenCheck.Result.FOUND;
+        return merged.isBoolean() && "OPEN".equals(record.path("state").asString(""))
+                ? AppliesWhenCheck.Result.NOT_FOUND
+                : AppliesWhenCheck.Result.UNDECIDABLE;
+    }
+
     private static SourceKind sourceOf(Condition clause) {
+        if (clause.merged()) return PullRequestContentSource.CORE;
         return clause.hasItems() == null
                 ? PullRequestContentSource.DIFF
                 : EvidenceCollection.of(clause.hasItems()).sourceKind();
     }
 
     private static String aspectOf(Condition clause) {
+        if (clause.merged()) return "MERGED";
         return clause.changedPath() != null
                 ? "CHANGED_PATH"
                 : clause.diffContains() != null ? "DIFF_CONTAINS" : "HAS_ITEMS";

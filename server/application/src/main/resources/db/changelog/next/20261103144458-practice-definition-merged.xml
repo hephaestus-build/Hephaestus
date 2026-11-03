@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793717098000-1" author="hephaestus">
+        <comment>An Applies when condition can require that the work has merged. A current practice definition may now carry that condition.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION practice_definition_complete(d jsonb) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE STRICT AS $$
+DECLARE
+  e jsonb;
+  read_policy jsonb;
+  k text;
+  seen text[];
+  clause_count integer;
+  policy text;
+BEGIN
+  IF jsonb_typeof(d)<>'object' OR NOT d ?& ARRAY[
+    'name','reviewOn','appliesWhen','about','reads','reviewedBy','criteria',
+    'script','scan','lineNotes','guidance'] THEN RETURN false; END IF;
+  IF d - ARRAY['name','reviewOn','appliesWhen','about','reads','reviewedBy','criteria',
+    'script','scan','lineNotes','guidance'] <> '{}'::jsonb THEN RETURN false; END IF;
+  IF jsonb_typeof(d->'name')<>'string' OR nullif(btrim(d->>'name'),'') IS NULL
+    OR length(d->>'name')>128 OR jsonb_typeof(d->'criteria')<>'string'
+    OR nullif(btrim(d->>'criteria'),'') IS NULL THEN RETURN false; END IF;
+  IF d->'about'<>'null'::jsonb AND
+    (jsonb_typeof(d->'about')<>'string' OR d->>'about' NOT IN ('AUTHOR','REVIEWER','ASSIGNEE','MERGER'))
+    THEN RETURN false; END IF;
+  IF jsonb_typeof(d->'reviewOn')<>'object'
+    OR NOT (d->'reviewOn') ?& ARRAY['events','state']
+    OR (d->'reviewOn')-ARRAY['events','state']<>'{}'::jsonb
+    OR jsonb_typeof(d->'reviewOn'->'events')<>'array'
+    OR jsonb_typeof(d->'reviewOn'->'state')<>'object' THEN RETURN false; END IF;
+  FOR e IN SELECT value FROM jsonb_array_elements(d->'reviewOn'->'events') LOOP
+    IF jsonb_typeof(e)<>'string' OR nullif(btrim(e#>>'{}'),'') IS NULL THEN RETURN false; END IF;
+  END LOOP;
+  FOR k,e IN SELECT key,value FROM jsonb_each(d->'reviewOn'->'state') LOOP
+    IF nullif(btrim(k),'') IS NULL OR jsonb_typeof(e)<>'array' THEN RETURN false; END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(e) x WHERE jsonb_typeof(x.value)<>'string')
+      THEN RETURN false; END IF;
+  END LOOP;
+  IF d->'appliesWhen'<>'null'::jsonb THEN
+    IF jsonb_typeof(d->'appliesWhen')<>'object'
+      OR NOT (d->'appliesWhen') ?& ARRAY['anyOf','otherwise']
+      OR (d->'appliesWhen')-ARRAY['anyOf','otherwise']<>'{}'::jsonb
+      OR jsonb_typeof(d->'appliesWhen'->'anyOf')<>'array'
+      OR jsonb_array_length(d->'appliesWhen'->'anyOf')=0
+      OR jsonb_typeof(d->'appliesWhen'->'otherwise')<>'string' THEN RETURN false; END IF;
+    FOR e IN SELECT value FROM jsonb_array_elements(d->'appliesWhen'->'anyOf') LOOP
+      IF jsonb_typeof(e)<>'object' OR e-ARRAY['changedPath','diffContains','hasItems','merged']<>'{}'::jsonb
+        THEN RETURN false; END IF;
+      SELECT count(*) INTO clause_count FROM jsonb_object_keys(e);
+      IF clause_count<>1 THEN RETURN false; END IF;
+      IF e ? 'merged' THEN
+        IF e->'merged'<>'true'::jsonb THEN RETURN false; END IF;
+      ELSIF e ? 'hasItems' THEN
+        IF jsonb_typeof(e->'hasItems')<>'string' THEN RETURN false; END IF;
+      ELSE
+        FOR k IN SELECT jsonb_object_keys(e) LOOP
+          IF jsonb_typeof(e->k)<>'array' OR jsonb_array_length(e->k)=0
+            OR EXISTS (SELECT 1 FROM jsonb_array_elements(e->k) x
+              WHERE jsonb_typeof(x.value)<>'string' OR nullif(btrim(x.value#>>'{}'),'') IS NULL)
+            THEN RETURN false; END IF;
+        END LOOP;
+      END IF;
+    END LOOP;
+  END IF;
+  FOR read_policy IN
+    SELECT d->'reads' UNION ALL SELECT d->'scan'->'reads' WHERE d->'scan'<>'null'::jsonb
+  LOOP
+  IF jsonb_typeof(read_policy)<>'object' OR NOT (read_policy) ?& ARRAY['contract','sources']
+    OR (read_policy)-ARRAY['contract','sources']<>'{}'::jsonb
+    OR jsonb_typeof(read_policy->'contract')<>'string'
+    OR jsonb_typeof(read_policy->'sources')<>'array' THEN RETURN false; END IF;
+  seen:=ARRAY[]::text[];
+  FOR e IN SELECT value FROM jsonb_array_elements(read_policy->'sources') LOOP
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['source','need']
+      OR e-ARRAY['source','need']<>'{}'::jsonb OR jsonb_typeof(e->'source')<>'string'
+      OR jsonb_typeof(e->'need')<>'string' OR e->>'need' NOT IN ('REQUIRED','COMPLETE','OPTIONAL')
+      OR nullif(btrim(e->>'source'),'') IS NULL OR e->>'source'=ANY(seen)
+      THEN RETURN false; END IF;
+    seen:=array_append(seen,e->>'source');
+  END LOOP;
+  END LOOP;
+  IF jsonb_typeof(d->'reviewedBy')<>'object'
+    OR NOT (d->'reviewedBy') ?& ARRAY['by','humanReason','limits']
+    OR (d->'reviewedBy')-ARRAY['by','humanReason','limits']<>'{}'::jsonb
+    OR jsonb_typeof(d->'reviewedBy'->'by')<>'string'
+    OR jsonb_typeof(d->'reviewedBy'->'limits')<>'array' THEN RETURN false; END IF;
+  policy:=d->'reviewedBy'->>'by';
+  IF policy NOT IN ('HEPHAESTUS','PEOPLE','NOBODY') THEN RETURN false; END IF;
+  IF (policy='PEOPLE') <> (d->'reviewedBy'->'humanReason'<>'null'::jsonb) THEN RETURN false; END IF;
+  seen:=ARRAY[]::text[];
+  FOR e IN SELECT value FROM jsonb_array_elements(d->'reviewedBy'->'limits') LOOP
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['code','description']
+      OR e-ARRAY['code','description']<>'{}'::jsonb
+      OR jsonb_typeof(e->'code')<>'string' OR jsonb_typeof(e->'description')<>'string'
+      OR nullif(btrim(e->>'code'),'') IS NULL OR e->>'code'=ANY(seen) THEN RETURN false; END IF;
+    seen:=array_append(seen,e->>'code');
+  END LOOP;
+  IF policy='PEOPLE' THEN
+    e:=d->'reviewedBy'->'humanReason';
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['code','description']
+      OR e-ARRAY['code','description']<>'{}'::jsonb
+      OR jsonb_typeof(e->'code')<>'string' OR jsonb_typeof(e->'description')<>'string' THEN RETURN false; END IF;
+  END IF;
+  IF policy='HEPHAESTUS' AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(d->'reads'->'sources') x
+      WHERE x.value->>'need' IN ('REQUIRED','COMPLETE')) THEN RETURN false; END IF;
+  IF d->'script'<>'null'::jsonb AND (jsonb_typeof(d->'script')<>'string'
+    OR length(d->>'script')>100000 OR nullif(btrim(d->>'script'),'') IS NULL) THEN RETURN false; END IF;
+  IF jsonb_typeof(d->'lineNotes')<>'boolean' THEN RETURN false; END IF;
+  IF d->'scan'<>'null'::jsonb THEN
+    IF policy<>'HEPHAESTUS' OR jsonb_typeof(d->'scan')<>'object'
+      OR NOT (d->'scan') ?& ARRAY['itemKind','include','exclude','context','reads']
+      OR (d->'scan')-ARRAY['itemKind','include','exclude','context','reads']<>'{}'::jsonb
+      OR jsonb_typeof(d->'scan'->'itemKind')<>'string' OR d->'scan'->>'itemKind' !~ '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$' THEN RETURN false; END IF;
+    FOREACH k IN ARRAY ARRAY['include','exclude','context'] LOOP
+      IF jsonb_typeof(d->'scan'->k)<>'array' OR jsonb_array_length(d->'scan'->k)>64
+        THEN RETURN false; END IF;
+      FOR e IN SELECT value FROM jsonb_array_elements(d->'scan'->k) LOOP
+        IF jsonb_typeof(e)<>'string' OR nullif(btrim(e#>>'{}'),'') IS NULL
+          OR length(e#>>'{}')>4096 THEN RETURN false; END IF;
+      END LOOP;
+    END LOOP;
+    IF jsonb_array_length(d->'scan'->'include')=0 THEN RETURN false; END IF;
+  END IF;
+  IF jsonb_typeof(d->'guidance')<>'object'
+    OR NOT (d->'guidance') ?& ARRAY['whyItMatters','whatGoodLooksLike','goingWell','visual','guide']
+    OR (d->'guidance')-ARRAY['whyItMatters','whatGoodLooksLike','goingWell','visual','guide']<>'{}'::jsonb
+    THEN RETURN false; END IF;
+  FOREACH k IN ARRAY ARRAY['whyItMatters','whatGoodLooksLike','goingWell'] LOOP
+    IF d->'guidance'->k<>'null'::jsonb AND jsonb_typeof(d->'guidance'->k)<>'string' THEN RETURN false; END IF;
+  END LOOP;
+  e:=d->'guidance'->'visual';
+  IF e<>'null'::jsonb AND (jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['svg','alt']
+    OR e-ARRAY['svg','alt']<>'{}'::jsonb OR jsonb_typeof(e->'svg')<>'string'
+    OR jsonb_typeof(e->'alt')<>'string') THEN RETURN false; END IF;
+  e:=d->'guidance'->'guide';
+  IF e<>'null'::jsonb THEN
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['markdown','figures']
+      OR e-ARRAY['markdown','figures']<>'{}'::jsonb OR jsonb_typeof(e->'markdown')<>'string'
+      OR jsonb_typeof(e->'figures')<>'object' THEN RETURN false; END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_each(e->'figures') x WHERE jsonb_typeof(x.value)<>'string')
+      THEN RETURN false; END IF;
+  END IF;
+  RETURN true;
+EXCEPTION WHEN invalid_parameter_value OR invalid_text_representation OR numeric_value_out_of_range
+  THEN RETURN false;
+END
+$$;
+]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION practice_definition_complete(d jsonb) RETURNS boolean
+LANGUAGE plpgsql IMMUTABLE STRICT AS $$
+DECLARE
+  e jsonb;
+  read_policy jsonb;
+  k text;
+  seen text[];
+  clause_count integer;
+  policy text;
+BEGIN
+  IF jsonb_typeof(d)<>'object' OR NOT d ?& ARRAY[
+    'name','reviewOn','appliesWhen','about','reads','reviewedBy','criteria',
+    'script','scan','lineNotes','guidance'] THEN RETURN false; END IF;
+  IF d - ARRAY['name','reviewOn','appliesWhen','about','reads','reviewedBy','criteria',
+    'script','scan','lineNotes','guidance'] <> '{}'::jsonb THEN RETURN false; END IF;
+  IF jsonb_typeof(d->'name')<>'string' OR nullif(btrim(d->>'name'),'') IS NULL
+    OR length(d->>'name')>128 OR jsonb_typeof(d->'criteria')<>'string'
+    OR nullif(btrim(d->>'criteria'),'') IS NULL THEN RETURN false; END IF;
+  IF d->'about'<>'null'::jsonb AND
+    (jsonb_typeof(d->'about')<>'string' OR d->>'about' NOT IN ('AUTHOR','REVIEWER','ASSIGNEE','MERGER'))
+    THEN RETURN false; END IF;
+  IF jsonb_typeof(d->'reviewOn')<>'object'
+    OR NOT (d->'reviewOn') ?& ARRAY['events','state']
+    OR (d->'reviewOn')-ARRAY['events','state']<>'{}'::jsonb
+    OR jsonb_typeof(d->'reviewOn'->'events')<>'array'
+    OR jsonb_typeof(d->'reviewOn'->'state')<>'object' THEN RETURN false; END IF;
+  FOR e IN SELECT value FROM jsonb_array_elements(d->'reviewOn'->'events') LOOP
+    IF jsonb_typeof(e)<>'string' OR nullif(btrim(e#>>'{}'),'') IS NULL THEN RETURN false; END IF;
+  END LOOP;
+  FOR k,e IN SELECT key,value FROM jsonb_each(d->'reviewOn'->'state') LOOP
+    IF nullif(btrim(k),'') IS NULL OR jsonb_typeof(e)<>'array' THEN RETURN false; END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(e) x WHERE jsonb_typeof(x.value)<>'string')
+      THEN RETURN false; END IF;
+  END LOOP;
+  IF d->'appliesWhen'<>'null'::jsonb THEN
+    IF jsonb_typeof(d->'appliesWhen')<>'object'
+      OR NOT (d->'appliesWhen') ?& ARRAY['anyOf','otherwise']
+      OR (d->'appliesWhen')-ARRAY['anyOf','otherwise']<>'{}'::jsonb
+      OR jsonb_typeof(d->'appliesWhen'->'anyOf')<>'array'
+      OR jsonb_array_length(d->'appliesWhen'->'anyOf')=0
+      OR jsonb_typeof(d->'appliesWhen'->'otherwise')<>'string' THEN RETURN false; END IF;
+    FOR e IN SELECT value FROM jsonb_array_elements(d->'appliesWhen'->'anyOf') LOOP
+      IF jsonb_typeof(e)<>'object' OR e-ARRAY['changedPath','diffContains','hasItems']<>'{}'::jsonb
+        THEN RETURN false; END IF;
+      SELECT count(*) INTO clause_count FROM jsonb_object_keys(e);
+      IF clause_count<>1 THEN RETURN false; END IF;
+      IF e ? 'hasItems' THEN
+        IF jsonb_typeof(e->'hasItems')<>'string' THEN RETURN false; END IF;
+      ELSE
+        FOR k IN SELECT jsonb_object_keys(e) LOOP
+          IF jsonb_typeof(e->k)<>'array' OR jsonb_array_length(e->k)=0
+            OR EXISTS (SELECT 1 FROM jsonb_array_elements(e->k) x
+              WHERE jsonb_typeof(x.value)<>'string' OR nullif(btrim(x.value#>>'{}'),'') IS NULL)
+            THEN RETURN false; END IF;
+        END LOOP;
+      END IF;
+    END LOOP;
+  END IF;
+  FOR read_policy IN
+    SELECT d->'reads' UNION ALL SELECT d->'scan'->'reads' WHERE d->'scan'<>'null'::jsonb
+  LOOP
+  IF jsonb_typeof(read_policy)<>'object' OR NOT (read_policy) ?& ARRAY['contract','sources']
+    OR (read_policy)-ARRAY['contract','sources']<>'{}'::jsonb
+    OR jsonb_typeof(read_policy->'contract')<>'string'
+    OR jsonb_typeof(read_policy->'sources')<>'array' THEN RETURN false; END IF;
+  seen:=ARRAY[]::text[];
+  FOR e IN SELECT value FROM jsonb_array_elements(read_policy->'sources') LOOP
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['source','need']
+      OR e-ARRAY['source','need']<>'{}'::jsonb OR jsonb_typeof(e->'source')<>'string'
+      OR jsonb_typeof(e->'need')<>'string' OR e->>'need' NOT IN ('REQUIRED','COMPLETE','OPTIONAL')
+      OR nullif(btrim(e->>'source'),'') IS NULL OR e->>'source'=ANY(seen)
+      THEN RETURN false; END IF;
+    seen:=array_append(seen,e->>'source');
+  END LOOP;
+  END LOOP;
+  IF jsonb_typeof(d->'reviewedBy')<>'object'
+    OR NOT (d->'reviewedBy') ?& ARRAY['by','humanReason','limits']
+    OR (d->'reviewedBy')-ARRAY['by','humanReason','limits']<>'{}'::jsonb
+    OR jsonb_typeof(d->'reviewedBy'->'by')<>'string'
+    OR jsonb_typeof(d->'reviewedBy'->'limits')<>'array' THEN RETURN false; END IF;
+  policy:=d->'reviewedBy'->>'by';
+  IF policy NOT IN ('HEPHAESTUS','PEOPLE','NOBODY') THEN RETURN false; END IF;
+  IF (policy='PEOPLE') <> (d->'reviewedBy'->'humanReason'<>'null'::jsonb) THEN RETURN false; END IF;
+  seen:=ARRAY[]::text[];
+  FOR e IN SELECT value FROM jsonb_array_elements(d->'reviewedBy'->'limits') LOOP
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['code','description']
+      OR e-ARRAY['code','description']<>'{}'::jsonb
+      OR jsonb_typeof(e->'code')<>'string' OR jsonb_typeof(e->'description')<>'string'
+      OR nullif(btrim(e->>'code'),'') IS NULL OR e->>'code'=ANY(seen) THEN RETURN false; END IF;
+    seen:=array_append(seen,e->>'code');
+  END LOOP;
+  IF policy='PEOPLE' THEN
+    e:=d->'reviewedBy'->'humanReason';
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['code','description']
+      OR e-ARRAY['code','description']<>'{}'::jsonb
+      OR jsonb_typeof(e->'code')<>'string' OR jsonb_typeof(e->'description')<>'string' THEN RETURN false; END IF;
+  END IF;
+  IF policy='HEPHAESTUS' AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(d->'reads'->'sources') x
+      WHERE x.value->>'need' IN ('REQUIRED','COMPLETE')) THEN RETURN false; END IF;
+  IF d->'script'<>'null'::jsonb AND (jsonb_typeof(d->'script')<>'string'
+    OR length(d->>'script')>100000 OR nullif(btrim(d->>'script'),'') IS NULL) THEN RETURN false; END IF;
+  IF jsonb_typeof(d->'lineNotes')<>'boolean' THEN RETURN false; END IF;
+  IF d->'scan'<>'null'::jsonb THEN
+    IF policy<>'HEPHAESTUS' OR jsonb_typeof(d->'scan')<>'object'
+      OR NOT (d->'scan') ?& ARRAY['itemKind','include','exclude','context','reads']
+      OR (d->'scan')-ARRAY['itemKind','include','exclude','context','reads']<>'{}'::jsonb
+      OR jsonb_typeof(d->'scan'->'itemKind')<>'string' OR d->'scan'->>'itemKind' !~ '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$' THEN RETURN false; END IF;
+    FOREACH k IN ARRAY ARRAY['include','exclude','context'] LOOP
+      IF jsonb_typeof(d->'scan'->k)<>'array' OR jsonb_array_length(d->'scan'->k)>64
+        THEN RETURN false; END IF;
+      FOR e IN SELECT value FROM jsonb_array_elements(d->'scan'->k) LOOP
+        IF jsonb_typeof(e)<>'string' OR nullif(btrim(e#>>'{}'),'') IS NULL
+          OR length(e#>>'{}')>4096 THEN RETURN false; END IF;
+      END LOOP;
+    END LOOP;
+    IF jsonb_array_length(d->'scan'->'include')=0 THEN RETURN false; END IF;
+  END IF;
+  IF jsonb_typeof(d->'guidance')<>'object'
+    OR NOT (d->'guidance') ?& ARRAY['whyItMatters','whatGoodLooksLike','goingWell','visual','guide']
+    OR (d->'guidance')-ARRAY['whyItMatters','whatGoodLooksLike','goingWell','visual','guide']<>'{}'::jsonb
+    THEN RETURN false; END IF;
+  FOREACH k IN ARRAY ARRAY['whyItMatters','whatGoodLooksLike','goingWell'] LOOP
+    IF d->'guidance'->k<>'null'::jsonb AND jsonb_typeof(d->'guidance'->k)<>'string' THEN RETURN false; END IF;
+  END LOOP;
+  e:=d->'guidance'->'visual';
+  IF e<>'null'::jsonb AND (jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['svg','alt']
+    OR e-ARRAY['svg','alt']<>'{}'::jsonb OR jsonb_typeof(e->'svg')<>'string'
+    OR jsonb_typeof(e->'alt')<>'string') THEN RETURN false; END IF;
+  e:=d->'guidance'->'guide';
+  IF e<>'null'::jsonb THEN
+    IF jsonb_typeof(e)<>'object' OR NOT e ?& ARRAY['markdown','figures']
+      OR e-ARRAY['markdown','figures']<>'{}'::jsonb OR jsonb_typeof(e->'markdown')<>'string'
+      OR jsonb_typeof(e->'figures')<>'object' THEN RETURN false; END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_each(e->'figures') x WHERE jsonb_typeof(x.value)<>'string')
+      THEN RETURN false; END IF;
+  END IF;
+  RETURN true;
+EXCEPTION WHEN invalid_parameter_value OR invalid_text_representation OR numeric_value_out_of_range
+  THEN RETURN false;
+END
+$$;
+]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

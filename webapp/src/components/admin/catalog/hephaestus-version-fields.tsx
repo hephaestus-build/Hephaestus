@@ -84,6 +84,9 @@ export function practiceVersionFields(
 								if (clause.diffContains !== undefined) {
 									return `Change contains ${clause.diffContains.join(", ")}`;
 								}
+								if (clause.merged === true) {
+									return "The work has merged";
+								}
 								return `Has related ${itemKindNoun(clause.hasItems, 2)}`;
 							}),
 							`Otherwise: ${appliesWhen.otherwise}`,
