@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
@@ -43,9 +42,6 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
 
     @Mock
     private ConnectionService connectionService;
-
-    @Mock
-    private Connection connection;
 
     @Mock
     private GitHubAppTokenService appTokenService;
@@ -225,9 +221,9 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
 
     @Test
     void shouldUninstallTheGitHubAppOnlyWhenTheTeardownRuns() {
-        IntegrationRef ref = givenConnection(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
+        ConnectionConfig config = new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of());
 
-        Runnable teardown = strategy().prepareProviderTeardown(ref).orElseThrow();
+        Runnable teardown = teardown(config).orElseThrow();
         verifyNoInteractions(appTokenService);
         teardown.run();
 
@@ -237,59 +233,52 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
 
     @Test
     void shouldNotUninstallAnInstallationTheConnectionNeverRecorded() {
-        IntegrationRef ref = givenConnection(new ConnectionConfig.GitHubAppConfig(null, null, null, Set.of()));
+        ConnectionConfig config = new ConnectionConfig.GitHubAppConfig(null, null, null, Set.of());
 
-        assertThat(strategy().prepareProviderTeardown(ref)).isEmpty();
+        assertThat(teardown(config)).isEmpty();
         verifyNoInteractions(appTokenService);
     }
 
     @Test
     void shouldNotUninstallAnInstallationOtherThanTheOneTheConnectionHolds() {
-        IntegrationRef ref = givenConnection(new ConnectionConfig.GitHubAppConfig(1111L, null, null, Set.of()));
+        ConnectionConfig config = new ConnectionConfig.GitHubAppConfig(1111L, null, null, Set.of());
 
-        assertThat(strategy().prepareProviderTeardown(ref)).isEmpty();
+        assertThat(teardown(config)).isEmpty();
         verifyNoInteractions(appTokenService);
     }
 
     @Test
     void shouldHaveNoInstallationToDeleteForATokenConnection() {
-        IntegrationRef ref = givenConnection(new ConnectionConfig.GitHubPatConfig("org", null, Set.of()));
+        ConnectionConfig config = new ConnectionConfig.GitHubPatConfig("org", null, Set.of());
 
-        assertThat(strategy().prepareProviderTeardown(ref)).isEmpty();
+        assertThat(teardown(config)).isEmpty();
     }
 
     @Test
     void shouldKeepAnInstallationThatAnotherConnectionStillUses() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242");
-        IntegrationRef resolvedRef = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
-        when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
-        when(connection.getId()).thenReturn(9L);
-        when(connection.getInstanceKey()).thenReturn("4242");
-        when(connectionService.hasOtherInstalledConnection(resolvedRef)).thenReturn(true);
+        when(connectionService.hasOtherInstalledConnection(INSTALLED)).thenReturn(true);
 
-        assertThat(strategy().prepareProviderTeardown(ref)).isEmpty();
+        assertThat(teardown(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of())))
+                .isEmpty();
         verifyNoInteractions(appTokenService, contentEraser);
     }
 
     @Test
     void shouldPropagateAProviderFailureWhenTheTeardownRuns() {
-        IntegrationRef ref = givenConnection(new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of()));
+        ConnectionConfig config = new ConnectionConfig.GitHubAppConfig(4242L, null, null, Set.of());
         doThrow(new RuntimeException("github unavailable"))
                 .when(appTokenService)
                 .deleteInstallation(4242L);
 
-        Runnable teardown = strategy().prepareProviderTeardown(ref).orElseThrow();
+        Runnable teardown = teardown(config).orElseThrow();
 
         assertThatThrownBy(teardown::run).hasMessage("github unavailable");
     }
 
-    private IntegrationRef givenConnection(ConnectionConfig config) {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
-        when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
-        when(connection.getId()).thenReturn(9L);
-        when(connection.getInstanceKey()).thenReturn("4242");
-        when(connection.getConfig()).thenReturn(config);
-        return ref;
+    private static final IntegrationRef INSTALLED = new IntegrationRef(IntegrationKind.GITHUB, 7L, "4242", 9L);
+
+    private Optional<Runnable> teardown(ConnectionConfig config) {
+        return strategy().prepareProviderTeardown(INSTALLED, new ConnectionStrategy.ProviderFootprint(config, null));
     }
 
     private void givenAccessible(UserInstallation installation) {

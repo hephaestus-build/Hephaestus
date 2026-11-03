@@ -78,6 +78,7 @@ function SlackIntegrationPage() {
 				<ConnectionStateNotice
 					connectionState={slack.connectionState}
 					credentialsUnreadableSince={slack.credentialsUnreadableSince}
+					providerCleanupUnconfirmed={slack.providerCleanupUnconfirmed}
 					credentialRecovery="Replace it with Reconnect Slack below"
 					displayName="Slack"
 				/>

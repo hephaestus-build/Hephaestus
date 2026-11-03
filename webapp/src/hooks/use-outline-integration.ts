@@ -220,6 +220,8 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		isConnectionActive,
 		connectionState: outlineConnection?.state,
 		credentialsUnreadableSince: outlineConnection?.credentialsUnreadableSince,
+		providerCleanupUnconfirmed:
+			outlineConnection?.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED",
 		isLoading: connectionsQuery.isLoading,
 		connectionsError: connectionsQuery.error,
 		retryConnections: () => {

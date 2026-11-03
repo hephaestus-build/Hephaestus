@@ -626,7 +626,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         }
 
         @Override
-        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
+        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
             throw new UnsupportedOperationException(
                     "prepareProviderTeardown() not exercised by OAuthCallbackController");
         }

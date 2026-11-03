@@ -15,6 +15,8 @@ public record IntegrationAttentionChangedEvent(
     public enum Problem {
         CREDENTIAL_EXPIRING,
         CREDENTIAL_REVOKED,
-        PROVIDER_SUSPENDED
+        PROVIDER_SUSPENDED,
+        /** A disconnect could not confirm that the provider removed what the connection created there. */
+        PROVIDER_CLEANUP_UNCONFIRMED
     }
 }

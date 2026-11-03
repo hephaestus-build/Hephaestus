@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationFamily;
@@ -27,7 +28,8 @@ public record ConnectionSummaryDTO(
         Instant createdAt,
         Instant updatedAt,
         Set<Capability> capabilities,
-        @Nullable Instant credentialsUnreadableSince) {
+        @Nullable Instant credentialsUnreadableSince,
+        @Nullable Problem attentionProblem) {
     public static ConnectionSummaryDTO from(Connection c, IntegrationManifestRegistry manifests) {
         return new ConnectionSummaryDTO(
                 c.getId(),
@@ -40,6 +42,7 @@ public record ConnectionSummaryDTO(
                 c.getCreatedAt(),
                 c.getUpdatedAt(),
                 manifests.capabilitiesFor(c.getKind()),
-                c.credentialsUnreadableSince());
+                c.credentialsUnreadableSince(),
+                c.getAttentionProblem());
     }
 }

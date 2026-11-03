@@ -78,7 +78,11 @@ public class GitHubAppTokenService {
         this.appId = appId;
         this.credentialsConfigured = isKeyMaterialPresent(appId, privateKeyRes, privateKeyPem);
         this.privateKey = credentialsConfigured ? loadKey(privateKeyRes, privateKeyPem) : generateEphemeralRsaKey();
-        HttpClient httpClient = HttpClient.create().resolver(DefaultAddressResolverGroup.INSTANCE);
+        // An uninstall runs while a disconnect holds the connection's lifecycle lock, so no call may wait without
+        // bound.
+        HttpClient httpClient = HttpClient.create()
+                .resolver(DefaultAddressResolverGroup.INSTANCE)
+                .responseTimeout(Duration.ofSeconds(15));
         this.webClient = webClients
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(GITHUB_API_BASE_URL)

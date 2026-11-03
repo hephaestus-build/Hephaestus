@@ -190,20 +190,13 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
      * verified connect do. A row without one never proved it controls the installation behind its key.
      */
     @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
-        var connectionOpt = connectionService.findReferenced(ref);
-        if (connectionOpt.isEmpty()) {
-            return Optional.empty();
-        }
-        var connection = connectionOpt.get();
-        var resolvedRef =
-                new IntegrationRef(ref.kind(), ref.workspaceId(), connection.getInstanceKey(), connection.getId());
-        if (connectionService.hasOtherInstalledConnection(resolvedRef)
-                || !(connection.getConfig() instanceof ConnectionConfig.GitHubAppConfig config)) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
+        if (connectionService.hasOtherInstalledConnection(ref)
+                || !(footprint.config() instanceof ConnectionConfig.GitHubAppConfig config)) {
             return Optional.empty();
         }
         Long installationId = config.installationId();
-        if (installationId == null || !installationId.toString().equals(connection.getInstanceKey())) {
+        if (installationId == null || !installationId.toString().equals(ref.instanceKey())) {
             return Optional.empty();
         }
         return Optional.of(() -> appTokenService.deleteInstallation(installationId));

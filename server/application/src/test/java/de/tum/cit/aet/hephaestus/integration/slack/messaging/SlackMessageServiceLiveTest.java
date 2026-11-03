@@ -61,7 +61,8 @@ class SlackMessageServiceLiveTest {
         connection.setState(IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken(botToken, null), converter);
         // Prove the round-trip before we ever hit Slack: the stored blob decrypts back to the token.
-        assertThatCode(() -> connection.credentials(converter)).doesNotThrowAnyException();
+        assertThatCode(() -> CredentialReaders.forTests(converter).credentialsOf(connection))
+                .doesNotThrowAnyException();
 
         ConnectionService connectionService = mock(ConnectionService.class);
         when(connectionService.findActive(workspaceId, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));

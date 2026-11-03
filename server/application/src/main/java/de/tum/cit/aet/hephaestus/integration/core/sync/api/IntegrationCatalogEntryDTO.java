@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync.api;
 
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,4 +33,8 @@ public record IntegrationCatalogEntryDTO(
                 description =
                         "When the stored credential was first found unreadable with the server's keys; absent while it reads")
         @Nullable
-        Instant credentialsUnreadableSince) {}
+        Instant credentialsUnreadableSince,
+
+        @Schema(description = "A problem with the connection that an admin should act on; absent while there is none")
+        @Nullable
+        Problem attentionProblem) {}

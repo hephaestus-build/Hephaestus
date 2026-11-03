@@ -753,7 +753,7 @@ export type ConnectionAuditEntry = {
  * object.
  */
 export type ConnectionDetail = {
-    attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED';
+    attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED' | 'PROVIDER_CLEANUP_UNCONFIRMED';
     capabilities?: Array<'WEBHOOK_INGEST' | 'TOKEN_REFRESH' | 'FEEDBACK_DELIVERY' | 'INLINE_FEEDBACK' | 'APPROVAL_WORKFLOW' | 'SCOPE_CHANGES'>;
     config?: {
         [key: string]: unknown;
@@ -779,6 +779,7 @@ export type ConnectionDetail = {
  * response build time so adding/removing a capability needs no DB migration.
  */
 export type ConnectionSummary = {
+    attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED' | 'PROVIDER_CLEANUP_UNCONFIRMED';
     capabilities?: Array<'WEBHOOK_INGEST' | 'TOKEN_REFRESH' | 'FEEDBACK_DELIVERY' | 'INLINE_FEEDBACK' | 'APPROVAL_WORKFLOW' | 'SCOPE_CHANGES'>;
     createdAt?: string;
     credentialsUnreadableSince?: string;
@@ -1985,6 +1986,10 @@ export type InstanceSettings = {
  * Integration kind availability + connection status for this workspace
  */
 export type IntegrationCatalogEntry = {
+    /**
+     * A problem with the connection that an admin should act on; absent while there is none
+     */
+    attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED' | 'PROVIDER_CLEANUP_UNCONFIRMED';
     /**
      * Whether this workspace has a (non-UNINSTALLED) connection for this kind
      */

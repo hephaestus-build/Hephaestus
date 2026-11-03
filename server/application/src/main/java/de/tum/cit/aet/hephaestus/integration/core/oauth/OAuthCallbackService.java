@@ -216,6 +216,18 @@ public class OAuthCallbackService {
         if (exclusive == null) {
             return Optional.empty();
         }
+        // A disconnect elsewhere may still revoke this token or installation; connecting now would receive a dead one.
+        if (connectionRepository.existsByKindAndInstanceKeyAndProviderTeardownRequestedAtNotNullAndWorkspace_IdNot(
+                kind, instanceKey, workspaceId)) {
+            log.warn(
+                    "Rejected {} connect: instanceKey={} is still being disconnected elsewhere, target workspace={}",
+                    kind,
+                    sanitizeForLog(instanceKey),
+                    workspaceId);
+            return Optional.of("Another Hephaestus workspace is still disconnecting this "
+                    + exclusive.noun()
+                    + ". Try again in a few minutes.");
+        }
         return connectionRepository
                 .findAllByKindAndInstanceKeyAndStateIn(kind, instanceKey, exclusive.holdingStates())
                 .stream()

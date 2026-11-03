@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.Gi
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
@@ -376,35 +377,43 @@ public class GitLabWebhookService {
     }
 
     /**
-     * Reads the connection's stored webhook and PAT and returns the GitLab call that deletes the hook,
-     * which touches no database. Empty when no webhook is stored; throws when one is stored but cannot
-     * be deleted with what the connection holds.
+     * Reads a live connection's stored webhook and PAT and returns the GitLab call that deletes the hook. Empty for a
+     * disconnected connection, whose hook the provider teardown removes.
      */
     public Optional<Runnable> prepareWebhookDeregistration(long workspaceId, long connectionId) {
-        Optional<GitLabConfig> configOpt = connectionService
+        Optional<Connection> connection = connectionService
                 .findInWorkspace(workspaceId, connectionId)
-                .map(c -> c.getConfig())
-                .filter(cfg -> cfg instanceof GitLabConfig)
-                .map(cfg -> (GitLabConfig) cfg);
-        if (configOpt.isEmpty()) {
+                .filter(c -> c.getState() != IntegrationState.UNINSTALLED);
+        if (connection.isEmpty() || !(connection.get().getConfig() instanceof GitLabConfig config)) {
             return Optional.empty();
         }
-        GitLabConfig config = configOpt.get();
+        return webhookDeregistration(
+                workspaceId,
+                connectionId,
+                config,
+                connectionService.findBearerToken(workspaceId, connectionId).orElse(null));
+    }
+
+    /**
+     * The GitLab call that deletes the stored hook with the given PAT, which touches no database. Empty when no hook is
+     * stored; throws when one is stored but cannot be deleted with what is given.
+     */
+    public Optional<Runnable> webhookDeregistration(
+            long workspaceId, long connectionId, GitLabConfig config, @Nullable BearerToken bearer) {
         Long groupId = config.gitlabGroupId();
         Long webhookId = config.gitlabWebhookId();
         String serverUrl = config.serverUrl();
         if (webhookId == null || groupId == null) {
             return Optional.empty();
         }
-        Optional<BearerToken> bearer = connectionService.findBearerToken(workspaceId, connectionId);
-        if (serverUrl == null || serverUrl.isBlank() || bearer.isEmpty()) {
+        if (serverUrl == null || serverUrl.isBlank() || bearer == null) {
             throw new IllegalStateException("GitLab webhook credentials are unavailable");
         }
         var client = webhookClientProvider.getIfAvailable();
         if (client == null) {
             throw new IllegalStateException("GitLab webhook client is unavailable");
         }
-        String token = bearer.get().token();
+        String token = bearer.token();
         return Optional.of(() -> {
             client.deregisterGroupWebhookWithCredentials(serverUrl, token, groupId, webhookId);
             log.info(

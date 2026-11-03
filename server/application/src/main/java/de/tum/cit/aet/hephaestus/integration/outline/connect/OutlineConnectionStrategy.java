@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -124,10 +125,14 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     }
 
     @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref) {
+    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
         if (ref.connectionId() == null) {
             throw new IllegalArgumentException("Outline provider teardown requires a connection id");
         }
-        return webhookRegistrar.prepareDeregistration(ref.workspaceId(), ref.connectionId());
+        if (!(footprint.config() instanceof ConnectionConfig.OutlineConfig config)) {
+            return Optional.empty();
+        }
+        return webhookRegistrar.deregistration(
+                ref.connectionId(), config, footprint.credentials() instanceof BearerToken bearer ? bearer : null);
     }
 }

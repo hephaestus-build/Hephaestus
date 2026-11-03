@@ -7,7 +7,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectInitiation;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.InitiateRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -102,11 +104,16 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void prepareProviderTeardown_isTheSubscriptionDeregistration() {
+    void prepareProviderTeardown_deletesTheRetainedSubscriptionWithTheRetainedToken() {
         Runnable deletion = () -> {};
-        when(webhookRegistrar.prepareDeregistration(5L, 7L)).thenReturn(Optional.of(deletion));
+        var config = new ConnectionConfig.OutlineConfig("https://docs.example", "sub-1", "route-1", Set.of());
+        var token = new BearerToken("ol_api_retained", null);
+        when(webhookRegistrar.deregistration(7L, config, token)).thenReturn(Optional.of(deletion));
 
-        assertThat(strategy().prepareProviderTeardown(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L)))
+        assertThat(strategy()
+                        .prepareProviderTeardown(
+                                new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L),
+                                new ConnectionStrategy.ProviderFootprint(config, token)))
                 .containsSame(deletion);
         verifyNoInteractions(outlineDocumentRepository, outlineCollectionRepository);
     }

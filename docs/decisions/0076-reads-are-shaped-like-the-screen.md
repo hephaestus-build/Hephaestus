@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-03
 **Authors:** Felix T.J. Dietrich
-**Relates to:** [Read and write the database](../contributor/read-and-write-the-database.mdx) (the how-to), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies).
+**Relates to:** [Read and write the database](../contributor/read-and-write-the-database.mdx) (the how-to), [ADR 0072](0072-few-dependencies-owned-slivers-kept-foundations.md) (dependencies), [ADR 0075](0075-a-transaction-is-one-use-case-and-talks-to-nothing.md) (transaction boundaries).
 
 ## Context
 

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExemption;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -37,6 +39,8 @@ public class SlackOAuthClient {
 
     private static final String TOKEN_ENDPOINT = "/api/oauth.v2.access";
 
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+
     private final RestClient restClient;
     private final String clientId;
     private final String clientSecret;
@@ -48,7 +52,14 @@ public class SlackOAuthClient {
             RestClient.Builder restClients) {
         this.clientId = clientId == null ? "" : clientId;
         this.clientSecret = clientSecret == null ? "" : clientSecret;
-        this.restClient = restClients.baseUrl(stripTrailingSlash(apiBase)).build();
+        // A revoke runs while a disconnect holds the connection's lifecycle lock, so no call may wait without bound.
+        var requests = new SimpleClientHttpRequestFactory();
+        requests.setConnectTimeout(TIMEOUT);
+        requests.setReadTimeout(TIMEOUT);
+        this.restClient = restClients
+                .requestFactory(requests)
+                .baseUrl(stripTrailingSlash(apiBase))
+                .build();
     }
 
     /**

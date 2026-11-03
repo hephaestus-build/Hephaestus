@@ -408,6 +408,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "AccountPurger", // PersonDataService's registry includes CoreAccountPersonDataCatalog, which
                     // depends on this purger; resolve the erasure coordinator after initialization.
                     "MembershipService", // Reads exist on every role; PeopleRegistryService is server-only.
+                    "ConnectionPurgeContributor", // Exists wherever workspaces are purged; ProviderTeardown is
+                    // server-only.
                     "ExactPersonIdentityResolver",
                     "OutlinePersonSourceIdentityContributor", // Permission reads suppression, whose registry includes
                     // this source.

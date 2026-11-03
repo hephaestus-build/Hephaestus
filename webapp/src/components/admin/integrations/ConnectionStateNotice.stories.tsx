@@ -48,6 +48,19 @@ export const Uninstalled: Story = {
 	},
 };
 
+/**
+ * A disconnect could not confirm the removal at the provider within a day. The admin must remove the
+ * app, token, or webhook there, so this warns on top of the state.
+ */
+export const UninstalledWithCleanupUnconfirmed: Story = {
+	args: { connectionState: "UNINSTALLED", providerCleanupUnconfirmed: true },
+	play: async ({ canvas }) => {
+		canvas.getByText(/the app was removed/iu);
+		canvas.getByText(/check slack for what hephaestus left/iu);
+		canvas.getByText(/remove it in your slack settings/iu);
+	},
+};
+
 /** The same states, worded for a different integration — one component, one vocabulary. */
 export const SuspendedOutline: Story = {
 	args: { connectionState: "SUSPENDED", displayName: "Outline" },

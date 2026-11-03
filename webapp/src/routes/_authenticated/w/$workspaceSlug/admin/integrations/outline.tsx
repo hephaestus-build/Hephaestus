@@ -61,6 +61,7 @@ function OutlineIntegrationPage() {
 						<ConnectionStateNotice
 							connectionState={outline.connectionState}
 							credentialsUnreadableSince={outline.credentialsUnreadableSince}
+							providerCleanupUnconfirmed={outline.providerCleanupUnconfirmed}
 							credentialRecovery="Replace it by disconnecting and connecting again"
 							displayName="Outline"
 						/>

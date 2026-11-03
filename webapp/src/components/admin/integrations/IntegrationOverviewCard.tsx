@@ -186,6 +186,9 @@ function OverviewBody({
 					<PlugZapIcon className="size-4" />
 					Not connected
 				</p>
+				{entry.attentionProblem === "PROVIDER_CLEANUP_UNCONFIRMED" && (
+					<ConnectionStateNotice providerCleanupUnconfirmed displayName={entry.displayName} />
+				)}
 				{isScm ? (
 					<p className="text-sm text-muted-foreground">
 						Source control is selected when the workspace is created.
