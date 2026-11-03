@@ -67,6 +67,12 @@ The times assume a provider that keeps its rate at every width.
 2. **Wider Pods with fewer and cheaper calls.** Chosen.
 3. **One shared loop host (ADR 0068 option Z).** Not built. See [Shared loop host](#shared-loop-host).
 4. **Several practices in one session.** Not built. See [Several practices in one session](#several-practices-in-one-session).
+5. **A model check before the sessions.** Rejected. One call on the shared capture would name the practices that the change cannot concern.
+   A replay on the in-house model covered 182 reviewed versions and 3,726 recorded results.
+   With the changed paths and the diff, it skipped 853 of 1,161 Does not apply results, but it lost 128 of 339 Not met results and 828 of 1,893 Met results.
+   A stricter prompt lost 41 of 280 Not met results. With thinking, a call took 57 seconds at the median.
+   Only `logs-through-the-platform-logger` lost nothing: it skipped 38 of 67, with 0 of 16 Met results lost and no Not met result in the sample.
+   That saved 0.34 sessions in each requested review, which is about 0.3 calls fewer than the check's own call costs.
 
 ## Decision
 
@@ -135,8 +141,9 @@ A review of 200 practices on a limit of 1 ended every practice with a result in 
 
 ### Selection
 
-- **A skip is not a claim.** A rule may record Does not apply only when it proves it from complete captured evidence. A selection by model records its own reason and no result, and it shows nothing about the person's work.
-- **Selection fails open.** Unsure, a parse failure or a provider error means that the practice runs.
+- **A skip is not a claim.** A rule may record Does not apply only when it proves it from complete captured evidence.
+- **Selection fails open.** A condition that the capture cannot decide keeps the practice running.
+- No model selects practices. See option 5.
 - A rule's recall is measured against existing results before it ships. A rule that loses a Not met result does not ship as it is.
 
 ### No repeat work
@@ -200,4 +207,5 @@ This points at the larger gain: fewer calls in each session, not fewer sessions.
 - The bench at 64 reviews shows that Pods or memory are the first limit: reopen the shared loop host.
 - A pool's adaptive limit oscillates in the 429 step of the bench: reconsider a fixed limit for that provider.
 - An eval with verified citations on real pull requests shows that batching keeps outcomes: reconsider several practices in one session.
-- A rule or a selection check loses Not met results beyond the noise floor: withdraw it.
+- A rule loses Not met results beyond the noise floor: withdraw it.
+- A model's measured precision on the selection replay loses no Not met result and saves more calls than it costs: reconsider option 5.
