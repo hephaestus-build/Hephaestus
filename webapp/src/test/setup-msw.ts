@@ -76,6 +76,13 @@ if (typeof Element.prototype.scrollIntoView !== "function") {
 if (typeof Element.prototype.getAnimations !== "function") {
 	Element.prototype.getAnimations = () => [];
 }
+// With `getAnimations` present, Base UI unmounts a closed popup only after an animation frame,
+// and jsdom's frames run late when the machine is busy. Its own switch unmounts the popup when it closes.
+// Base UI declares the switch in a `global.d.ts` that its package does not export, so it is declared here.
+declare global {
+	var BASE_UI_ANIMATIONS_DISABLED: boolean;
+}
+globalThis.BASE_UI_ANIMATIONS_DISABLED = true;
 
 // jsdom has no EventSource; the conversation opens one wherever it shows. A test that drives
 // the stream reads `FakeEventSource.latest()`.
