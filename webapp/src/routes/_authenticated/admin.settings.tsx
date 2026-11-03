@@ -106,8 +106,7 @@ function WorkspaceSettingsPage() {
 				data.allowed
 					? undefined
 					: {
-							description:
-								"Visitors see the change when they load the page again, at most about a minute later.",
+							description: "Visitors see the change when they load the page again.",
 						},
 			);
 			// The saved setting reaches the card only through a fresh read, so a read that is refused

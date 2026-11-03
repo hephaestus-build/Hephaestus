@@ -4,14 +4,12 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityPersonDetailDTO;
 import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
-import java.time.Duration;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -74,12 +72,8 @@ public class PublicActivityController {
     }
 
     private static <T> ResponseEntity<T> response(T body, boolean allowSearchEngines) {
-        var response = ResponseEntity.ok()
-                .varyBy("Cookie", "Authorization")
-                .cacheControl(
-                        CurrentAccount.isAuthenticated()
-                                ? CacheControl.noStore()
-                                : CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic());
+        // No shared cache may hold a page: a person hidden or erased leaves it at once.
+        var response = ResponseEntity.ok().cacheControl(CacheControl.noStore());
         if (!allowSearchEngines) {
             response.header("X-Robots-Tag", "noindex");
         }

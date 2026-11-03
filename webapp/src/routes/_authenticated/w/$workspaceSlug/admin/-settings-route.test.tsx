@@ -807,9 +807,7 @@ describe("workspace settings lifetime", () => {
 			await waitFor(() => expect(queryClient.isMutating()).toBe(0));
 			// Seen on beta, the notification names the workspace whose page it turned off.
 			await screen.findByText("The public activity page is off");
-			screen.getByText(
-				"In workspace acme. Visitors see the change when they load the page again, at most about a minute later.",
-			);
+			screen.getByText("In workspace acme. Visitors see the change when they load the page again.");
 			expect(screen.queryByText(/In workspace beta/u)).toBeNull();
 			expect(router.state.location.pathname).toBe("/w/beta/admin/settings");
 			expect(publishSwitch().getAttribute("aria-checked")).toBe("true");

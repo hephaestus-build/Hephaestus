@@ -229,6 +229,6 @@ function announce(
 		return;
 	}
 	toast.success("The public activity page is off", {
-		description: `${inWorkspace(workspaceSlug)} Visitors see the change when they load the page again, at most about a minute later.`,
+		description: `${inWorkspace(workspaceSlug)} Visitors see the change when they load the page again.`,
 	});
 }
