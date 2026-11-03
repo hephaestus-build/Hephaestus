@@ -30,8 +30,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -85,8 +83,8 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     void shouldPollAnotherEndpointWhenTheCurrentPollExcludesAnUnavailablePool() {
         var blockedWorkspace = activeWorkspace("endpoint-blocked");
         var openWorkspace = activeWorkspace("endpoint-open");
-        binding(blockedWorkspace, 10);
-        binding(openWorkspace, 10);
+        binding(blockedWorkspace);
+        binding(openWorkspace);
         var pools = context.getBean(LlmCallPoolRepository.class);
         var blocked = new LlmCallPool();
         blocked.setSlug("blocked-" + UUID.randomUUID());
@@ -144,113 +142,17 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a saturated (workspace, purpose)'s older QUEUED backlog does not starve a younger, runnable job from"
-            + " another workspace")
-    void youngerRunnableJobFromAnotherWorkspaceIsNotStarved() {
-        Workspace cappedWs = activeWorkspace("capped-ws");
-        Workspace openWs = activeWorkspace("open-ws");
-        binding(cappedWs, 1);
-        binding(openWs, 3);
-
-        runningJob(cappedWs);
-
-        Instant base = Instant.now().minus(1, ChronoUnit.HOURS);
-        for (int i = 0; i < 5; i++) {
-            queuedJob(cappedWs, base.plusSeconds(i));
-        }
-
-        // A younger job on the OPEN workspace — created after all 5 capped candidates, so a naive
-        // oldest-first LIMIT 5 query would never even fetch it.
-        UUID youngerRunnableJobId = queuedJob(openWs, base.plusSeconds(100));
-
-        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(5);
-
-        assertThat(candidates)
-                .as("the open workspace's runnable job must be a poll candidate even though 5 older, unclaimable "
-                        + "jobs exist ahead of it")
-                .contains(youngerRunnableJobId);
-    }
-
-    @Test
-    @DisplayName("a (workspace, purpose) at its concurrency cap contributes no candidates at all")
-    void cappedWorkspaceContributesNoCandidates() {
-        Workspace cappedWs = activeWorkspace("fully-capped-ws");
-        binding(cappedWs, 1);
-        runningJob(cappedWs);
-        UUID queuedOnCapped = queuedJob(cappedWs, Instant.now());
+    @DisplayName("a workspace that already runs reviews still offers its next one: capacity, not a count, paces it")
+    void shouldOfferAReviewWhileItsWorkspaceAlreadyRunsOthers() {
+        Workspace busy = activeWorkspace("busy-ws");
+        binding(busy);
+        runningJob(busy);
+        runningJob(busy);
+        UUID queued = queuedJob(busy, Instant.now());
 
         List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(10);
 
-        assertThat(candidates).doesNotContain(queuedOnCapped);
-    }
-
-    @Test
-    @DisplayName("a job whose (workspace, purpose) binding is gone is treated as uncapped and stays a candidate")
-    void jobWithNoBindingIsAlwaysACandidate() {
-        Workspace ws = activeWorkspace("no-binding-ws");
-        // No binding row for this workspace/purpose — the correlated cap lookup returns NULL, which
-        // COALESCEs to "uncapped", so the job is still fetched (the claim's admission re-check is the
-        // authoritative gate that will reject an unbound job — it must not silently starve siblings here).
-        UUID jobId = queuedJob(ws, Instant.now());
-
-        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).contains(jobId);
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void shouldSelectAQueuedReviewWhenItsWorkspaceBindsOneSlotPerTier(boolean otherSlotEnabled) {
-        Workspace ws = activeWorkspace("tiered-ws");
-        binding(ws, DataHandlingTier.IN_HOUSE, 1, true);
-        binding(ws, DataHandlingTier.UNDECLARED, 1, otherSlotEnabled);
-        UUID jobId = queuedJob(ws, Instant.now(), DataHandlingTier.IN_HOUSE);
-
-        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).contains(jobId);
-    }
-
-    @Test
-    void shouldNotLetASaturatedTierHideAnotherTierOrAnotherWorkspace() {
-        Workspace tiered = activeWorkspace("saturated-tier-ws");
-        Workspace other = activeWorkspace("other-ws");
-        binding(tiered, DataHandlingTier.IN_HOUSE, 1, true);
-        binding(tiered, DataHandlingTier.UNDECLARED, 1, true);
-        binding(other, 1);
-        runningJob(tiered, DataHandlingTier.IN_HOUSE);
-
-        Instant base = Instant.now().minus(1, ChronoUnit.HOURS);
-        List<UUID> saturated = List.of(
-                queuedJob(tiered, base, DataHandlingTier.IN_HOUSE),
-                queuedJob(tiered, base.plusSeconds(1), DataHandlingTier.IN_HOUSE),
-                queuedJob(tiered, base.plusSeconds(2), DataHandlingTier.IN_HOUSE));
-        UUID otherTier = queuedJob(tiered, base.plusSeconds(10), DataHandlingTier.UNDECLARED);
-        UUID otherWorkspace = queuedJob(other, base.plusSeconds(20));
-
-        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(2);
-
-        assertThat(candidates).contains(otherTier, otherWorkspace).doesNotContainAnyElementsOf(saturated);
-    }
-
-    @Test
-    void shouldCountAHistoricalRunningJobAgainstOnlyTheUndeclaredSlot() {
-        Workspace ws = activeWorkspace("historical-ws");
-        binding(ws, DataHandlingTier.IN_HOUSE, 1, true);
-        binding(ws, DataHandlingTier.UNDECLARED, 1, true);
-        runningJob(ws, null);
-        UUID undeclared = queuedJob(ws, Instant.now(), null);
-        UUID inHouse = queuedJob(ws, Instant.now(), DataHandlingTier.IN_HOUSE);
-
-        List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(10);
-
-        assertThat(candidates).contains(inHouse).doesNotContain(undeclared);
-    }
-
-    @Test
-    void shouldKeepAJobWhoseTierHasNoBindingACandidateBesideASaturatedSlot() {
-        Workspace ws = activeWorkspace("unbound-tier-ws");
-        binding(ws, 1);
-        runningJob(ws);
-        UUID unbound = queuedJob(ws, Instant.now(), DataHandlingTier.IN_HOUSE);
-
-        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).contains(unbound);
+        assertThat(candidates).contains(queued);
     }
 
     @Test
@@ -289,8 +191,8 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     void shouldOfferAnIdleWorkspaceBeforeOneWithRunningReviews() {
         var busy = activeWorkspace("busy-priority");
         var idle = activeWorkspace("idle-priority");
-        binding(busy, 10);
-        binding(idle, 10);
+        binding(busy);
+        binding(idle);
         runningJob(busy);
         runningJob(busy);
         queuedJob(busy, Instant.now().minusSeconds(3600));
@@ -303,8 +205,8 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     void shouldGiveAnotherWorkspaceABatchPlaceWhenOneWorkspaceHasAnOlderBacklog() {
         var busy = activeWorkspace("batch-busy");
         var other = activeWorkspace("batch-other");
-        binding(busy, 10);
-        binding(other, 10);
+        binding(busy);
+        binding(other);
         Instant old = Instant.now().minusSeconds(3600);
         UUID first = queuedJob(busy, old);
         UUID second = queuedJob(busy, old.plusSeconds(1));
@@ -317,7 +219,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldOfferARequestedReviewBeforeAnOlderBackfill() {
         var workspace = activeWorkspace("origin-priority");
-        binding(workspace, 10);
+        binding(workspace);
         UUID backfill = queuedJob(workspace, Instant.now().minusSeconds(60));
         UUID requested = queuedJob(workspace, Instant.now().minusSeconds(30));
         origin(backfill, ReviewOrigin.BACKFILL);
@@ -331,7 +233,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldAgeBackfillAheadOfNewRequestsAfterThirtyMinutes() {
         var workspace = activeWorkspace("aged-priority");
-        binding(workspace, 10);
+        binding(workspace);
         UUID backfill = queuedJob(workspace, Instant.now().minusSeconds(3600));
         UUID requested = queuedJob(workspace, Instant.now().minusSeconds(30));
         origin(backfill, ReviewOrigin.BACKFILL);
@@ -346,8 +248,8 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     void shouldNotCountCompositionAgainstWorkspaceReviewOccupancy() {
         var composing = activeWorkspace("composing-priority");
         var idle = activeWorkspace("idle-beside-composition");
-        binding(composing, 10);
-        binding(idle, 10);
+        binding(composing);
+        binding(idle);
         UUID running = runningJob(composing);
         jdbc.update("UPDATE review_job SET admission_attempt=0, admission_digest=repeat('a',64) WHERE id=?", running);
         UUID expected = queuedJob(composing, Instant.now().minusSeconds(3600));
@@ -368,18 +270,17 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         return workspaceRepository.save(TestEntities.activeWorkspace(slug));
     }
 
-    private void binding(Workspace workspace, int maxConcurrentJobs) {
-        binding(workspace, DataHandlingTier.UNDECLARED, maxConcurrentJobs, true);
+    private void binding(Workspace workspace) {
+        binding(workspace, DataHandlingTier.UNDECLARED, true);
     }
 
-    private void binding(Workspace workspace, DataHandlingTier tier, int maxConcurrentJobs, boolean enabled) {
+    private void binding(Workspace workspace, DataHandlingTier tier, boolean enabled) {
         WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
         binding.setWorkspace(workspace);
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         binding.setDataHandlingTier(tier);
         binding.setInstanceModel(instanceModel);
         binding.setEnabled(enabled);
-        binding.setMaxConcurrentJobs(maxConcurrentJobs);
         bindingRepository.saveAndFlush(binding);
     }
 

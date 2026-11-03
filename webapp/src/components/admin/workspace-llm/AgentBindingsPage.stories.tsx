@@ -80,7 +80,6 @@ function binding(
 		enabled: true,
 		ready: true,
 		timeoutSeconds: 600,
-		maxConcurrentJobs: 3,
 		servedTiers: live ? [...SERVED_ALONE[tier]] : [],
 		...overrides,
 	};
@@ -686,7 +685,9 @@ export const AdvancedDisclosure: Story = {
 	play: async ({ canvas }) => {
 		const reviews = row(await openPurpose(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(reviews);
-		await expect(reviews.getByLabelText(/^Max concurrent reviews/u)).toHaveValue(3);
+		// A review's pace follows capacity, so its row offers no count of reviews at once.
+		await expect(reviews.getByLabelText(/^Timeout \(seconds\)/u)).toBeVisible();
+		await expect(reviews.queryByLabelText(/^Max concurrent reviews/u)).toBeNull();
 		const conversations = row(await openPurpose(canvas, "Conversations"), "In-house");
 		await openAdvanced(conversations);
 		await expect(conversations.queryByLabelText(/^Max concurrent reviews/u)).toBeNull();

@@ -37,7 +37,6 @@ const UNCHOSEN_ROW_TITLE = capitalise(UNCHOSEN_MEMBERS);
 
 const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
-const MIN_CONCURRENT_JOBS = 1;
 
 const CONVERSATION_TURN_SECONDS = 900;
 
@@ -83,13 +82,6 @@ const runLimitsSchema = (ceiling: ReturnType<typeof timeoutCeiling>) =>
 				.int({ error: "Enter a whole number of seconds, 30 or more." })
 				.min(MIN_TIMEOUT_SECONDS, { error: "Enter a whole number of seconds, 30 or more." })
 				.max(ceiling.max, { error: ceiling.error }),
-		),
-		maxConcurrentJobs: z.preprocess(
-			numberInput,
-			z.coerce
-				.number({ error: "Enter a number of reviews." })
-				.int({ error: "Enter a whole number of reviews, 1 or more." })
-				.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of reviews, 1 or more." }),
 		),
 	});
 
@@ -172,17 +164,13 @@ export function AgentBindingEditor({
 	const [timeoutSeconds, setTimeoutSeconds] = useState(() =>
 		String(binding?.timeoutSeconds ?? ceiling.max),
 	);
-	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
-		String(binding?.maxConcurrentJobs ?? 3),
-	);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const hasRunLimits = purpose === "PRACTICE_REVIEW" || purpose === "MENTOR";
 	const [showErrors, setShowErrors] = useState(false);
-	const limits = runLimitsSchema(ceiling).safeParse({ timeoutSeconds, maxConcurrentJobs });
+	const limits = runLimitsSchema(ceiling).safeParse({ timeoutSeconds });
 	const fieldErrors = limitErrors(limits);
 	const modelError = showErrors && !selection ? "Choose the model this runs on." : null;
 	const timeoutError = showErrors ? fieldErrors?.timeoutSeconds?.[0] : undefined;
-	const concurrencyError = showErrors ? fieldErrors?.maxConcurrentJobs?.[0] : undefined;
 
 	const modelId = `${rowId}-model`;
 	const modelLabelId = `${rowId}-model-label`;
@@ -191,7 +179,6 @@ export function AgentBindingEditor({
 	const noteId = `${rowId}-note`;
 	const saveErrorId = `${rowId}-save-error`;
 	const timeoutErrorId = `${rowId}-timeout-error`;
-	const concurrencyErrorId = `${rowId}-concurrency-error`;
 	const modelDescribedBy = Object.entries({
 		[noteId]: unusedForCloudMembers,
 		[modelHintId]: hintShown,
@@ -219,7 +206,6 @@ export function AgentBindingEditor({
 			instanceModelId: selection.scope === "SHARED" ? selection.id : undefined,
 			workspaceModelId: selection.scope === "WORKSPACE" ? selection.id : undefined,
 			timeoutSeconds: limits.data.timeoutSeconds,
-			maxConcurrentJobs: limits.data.maxConcurrentJobs,
 			enabled,
 		});
 	};
@@ -330,29 +316,6 @@ export function AgentBindingEditor({
 											<FieldError id={timeoutErrorId}>{timeoutError}</FieldError>
 										)}
 									</Field>
-									{purpose === "PRACTICE_REVIEW" && (
-										<Field data-invalid={Boolean(concurrencyError)}>
-											<FieldLabel htmlFor={`${rowId}-concurrency`}>
-												Max concurrent reviews{forRow}
-											</FieldLabel>
-											<Input
-												id={`${rowId}-concurrency`}
-												type="number"
-												inputMode="numeric"
-												min={MIN_CONCURRENT_JOBS}
-												value={maxConcurrentJobs}
-												aria-invalid={Boolean(concurrencyError)}
-												aria-describedby={
-													hasText(concurrencyError) ? concurrencyErrorId : undefined
-												}
-												onChange={(e) => setMaxConcurrentJobs(e.target.value)}
-												disabled={pending}
-											/>
-											{hasText(concurrencyError) && (
-												<FieldError id={concurrencyErrorId}>{concurrencyError}</FieldError>
-											)}
-										</Field>
-									)}
 								</FieldGroup>
 							</FieldSet>
 						</CollapsibleContent>

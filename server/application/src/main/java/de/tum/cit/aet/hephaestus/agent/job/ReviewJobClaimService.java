@@ -90,7 +90,6 @@ public class ReviewJobClaimService {
 
     enum ClaimOutcome implements ClaimAttempt {
         ALREADY_CLAIMED,
-        CONCURRENCY_FULL,
         QUOTA_FULL,
         BUDGET_HELD,
     }
@@ -239,21 +238,6 @@ public class ReviewJobClaimService {
                     ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE)
                     : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
-        // Admission holds this slot's binding row lock until the RUNNING transition commits.
-        long runningCount = jobRepository.countRunningByWorkspaceIdAndDataHandlingTier(
-                job.getWorkspaceId(), binding.getDataHandlingTier());
-        if (runningCount >= binding.getMaxConcurrentJobs()) {
-            jobTelemetry.claimRejected();
-            log.info(
-                    "Concurrency limit reached: jobId={}, workspaceId={}, purpose={}, running={}, max={}",
-                    job.getId(),
-                    job.getWorkspaceId(),
-                    AgentPurpose.PRACTICE_REVIEW,
-                    runningCount,
-                    binding.getMaxConcurrentJobs());
-            return ClaimOutcome.CONCURRENCY_FULL;
-        }
-
         if (!composing) {
             if (!reviewRoom.getAsBoolean()) return ClaimOutcome.QUOTA_FULL;
             long poolId = callPermits.poolFor(snapshot.model().connectionRef());

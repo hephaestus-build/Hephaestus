@@ -34,7 +34,6 @@ const inHouseBinding: AgentBinding = {
 	enabled: true,
 	ready: true,
 	timeoutSeconds: 600,
-	maxConcurrentJobs: 1,
 	servedTiers: ["IN_HOUSE", "CLOUD"],
 };
 

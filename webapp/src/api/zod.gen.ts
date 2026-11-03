@@ -199,7 +199,6 @@ export const zAgentBinding = z.object({
     ]),
     enabled: z.boolean(),
     instanceModelId: z.int().optional(),
-    maxConcurrentJobs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     purpose: z.enum([
         'PRACTICE_REVIEW',
         'MENTOR',
@@ -223,7 +222,6 @@ export const zAgentBinding = z.object({
 export const zAgentBindingRequest = z.object({
     enabled: z.boolean().optional(),
     instanceModelId: z.int().optional(),
-    maxConcurrentJobs: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     timeoutSeconds: z.int().gte(30).lte(10800).optional(),
     workspaceModelId: z.int().optional()
 });

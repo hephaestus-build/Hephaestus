@@ -85,9 +85,6 @@ public class AgentBindingService {
                         .formatted(AgentBindingLimits.MAX_HEPH_TURN_SECONDS, AgentBindingLimits.MAX_HEPH_TURN_SECONDS));
             binding.setTimeoutSeconds(request.timeoutSeconds());
         }
-        if (request.maxConcurrentJobs() != null) {
-            binding.setMaxConcurrentJobs(request.maxConcurrentJobs());
-        }
         if (request.enabled() != null) {
             binding.setEnabled(request.enabled());
         }

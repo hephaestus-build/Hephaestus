@@ -17,7 +17,6 @@ public record AgentBindingDTO(
         @Nullable Long instanceModelId,
         @Nullable Long workspaceModelId,
         int timeoutSeconds,
-        int maxConcurrentJobs,
         @NonNull Boolean enabled,
 
         @NonNull @Schema(description = "True when the bound model is available to run right now")
@@ -45,7 +44,6 @@ public record AgentBindingDTO(
                 binding.getPurpose() == AgentPurpose.MENTOR
                         ? Math.min(binding.getTimeoutSeconds(), AgentBindingLimits.MAX_HEPH_TURN_SECONDS)
                         : binding.getTimeoutSeconds(),
-                binding.getMaxConcurrentJobs(),
                 binding.isEnabled(),
                 ready,
                 List.copyOf(servedTiers));

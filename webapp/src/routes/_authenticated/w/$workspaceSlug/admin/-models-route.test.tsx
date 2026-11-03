@@ -90,7 +90,6 @@ function binding(
 		enabled: true,
 		ready: true,
 		timeoutSeconds: 600,
-		maxConcurrentJobs: 3,
 		servedTiers: [...SERVED_ALONE[dataHandlingTier]],
 	};
 }

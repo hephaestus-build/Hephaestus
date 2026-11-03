@@ -12390,9 +12390,6 @@ components:
         instanceModelId:
           type: integer
           format: int64
-        maxConcurrentJobs:
-          type: integer
-          format: int32
         purpose:
           type: string
           enum:
@@ -12440,11 +12437,6 @@ components:
           type: integer
           format: int64
           description: Shared (instance-catalog) model id to run this purpose on
-        maxConcurrentJobs:
-          type: integer
-          format: int32
-          description: Maximum concurrent runs for this purpose
-          minimum: 1
         timeoutSeconds:
           type: integer
           format: int32
