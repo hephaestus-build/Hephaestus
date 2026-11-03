@@ -34,6 +34,16 @@ public interface OrganizationRepository extends JpaRepository<Organization, Long
      */
     Optional<Organization> findByLoginIgnoreCaseAndProvider_Type(String login, IdentityProviderType type);
 
+    /** Inserts the organization unless a concurrent writer already did; the caller then reads it. */
+    @Modifying
+    @Query(value = """
+        INSERT INTO organization (native_id, provider_id, login)
+        VALUES (:nativeId, :providerId, :login)
+        ON CONFLICT (provider_id, native_id) DO NOTHING
+        """, nativeQuery = true)
+    void insertIfAbsent(
+            @Param("nativeId") Long nativeId, @Param("providerId") Long providerId, @Param("login") String login);
+
     /**
      * Upsert an organization using PostgreSQL ON CONFLICT.
      * <p>
