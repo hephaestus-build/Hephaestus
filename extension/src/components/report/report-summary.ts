@@ -98,6 +98,9 @@ export function summarizeReport({
 		case "not-configured": {
 			return { text: "Connect the extension to Hephaestus", tone: "neutral", action: "set-up" };
 		}
+		case "server-too-old": {
+			return { text: "This server is too old for this extension", tone: "error" };
+		}
 		case "signed-out": {
 			return {
 				text: `Sign in to ${state.instanceHost} to see it`,

@@ -1,0 +1,1741 @@
+{
+	"source": "v1.0.0-rc.1",
+	"paths": {
+		"/auth/client/configuration": {
+			"get": {
+				"description": "Public. A client that finds no such endpoint is talking to a server without installed-client sign-in.",
+				"operationId": "getClientSignInConfiguration",
+				"parameters": [
+					{
+						"in": "query",
+						"name": "clientId",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-p]{32}$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ClientSignInConfiguration"
+								}
+							}
+						},
+						"description": "Whether the client is registered"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "The client id is not a Chrome extension id"
+					}
+				},
+				"summary": "Whether this instance lets the given installed client sign in",
+				"tags": ["Client session"]
+			}
+		},
+		"/auth/client/logout": {
+			"post": {
+				"operationId": "logoutClientSession",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ClientRefreshRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"204": {
+						"description": "Signed out, or the secret was already unknown"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "The body is malformed, or a request with a valid CSRF token also carries the browser session cookie"
+					},
+					"403": {
+						"content": {
+							"application/json": {}
+						},
+						"description": "The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs."
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again."
+					}
+				},
+				"summary": "End the session its refresh secret belongs to",
+				"tags": ["Client session"]
+			}
+		},
+		"/auth/client/refresh": {
+			"post": {
+				"operationId": "refreshClientSession",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ClientRefreshRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ClientSessionTokens"
+								}
+							}
+						},
+						"description": "Rotated"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "The body is malformed, or a request with a valid CSRF token also carries the browser session cookie"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "The session has ended. Sign in again."
+					},
+					"403": {
+						"content": {
+							"application/json": {}
+						},
+						"description": "The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs."
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again."
+					}
+				},
+				"summary": "Rotate the session's access token and refresh secret",
+				"tags": ["Client session"]
+			}
+		},
+		"/identity-providers": {
+			"get": {
+				"operationId": "listIdentityProviders",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/IdentityProviderView"
+									}
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "List available identity providers",
+				"tags": ["Auth discovery"]
+			}
+		},
+		"/user": {
+			"get": {
+				"operationId": "getCurrentUser",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CurrentUserView"
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "Get the current user",
+				"tags": ["Account"]
+			}
+		},
+		"/user/consent": {
+			"get": {
+				"operationId": "getConsentStatus",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ConsentStatus"
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "Get the current consent notice and status",
+				"tags": ["Consent"]
+			}
+		},
+		"/workspaces": {
+			"get": {
+				"operationId": "listWorkspaces",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/WorkspaceListItem"
+									}
+								}
+							}
+						},
+						"description": "Workspace list"
+					}
+				},
+				"summary": "List all workspaces",
+				"tags": ["workspace-registry"]
+			}
+		},
+		"/workspaces/{workspaceSlug}": {
+			"get": {
+				"operationId": "getWorkspace",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Workspace"
+								}
+							}
+						},
+						"description": "Workspace returned"
+					}
+				},
+				"summary": "Fetch a workspace by slug",
+				"tags": ["workspace"]
+			}
+		},
+		"/workspaces/{workspaceSlug}/practices/feedback/on-work": {
+			"get": {
+				"description": "Read-only metadata for up to 50 in-context pieces of feedback addressed to the caller with recorded provider comments, newest delivery first. Uses the exact connected-provider work lookup. Only recorded successful deliveries are included, even when the remaining delivery failed. Incomplete reviews omit draft practice metadata. No bodies, private conversations or replaced feedback; admin status does not broaden the recipient. Permalinks are recorded provider links, not live existence checks.",
+				"operationId": "getOwnDeliveredWorkFeedback",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					},
+					{
+						"in": "query",
+						"name": "url",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 2048,
+							"minLength": 0
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DeliveredWorkFeedback"
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "The caller's recorded feedback comments on this work",
+				"tags": ["Practice feedback"]
+			}
+		},
+		"/workspaces/{workspaceSlug}/practices/items/{itemId}/own-trace": {
+			"get": {
+				"operationId": "getOwnItemTrace",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					},
+					{
+						"in": "path",
+						"name": "itemId",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 19,
+							"pattern": "^[1-9][0-9]*$"
+						}
+					},
+					{
+						"in": "query",
+						"name": "reviewId",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "uuid"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnItemTrace"
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "Trace your results from an item review",
+				"tags": ["item-trace"]
+			}
+		},
+		"/workspaces/{workspaceSlug}/practices/items/{itemId}/reviews": {
+			"get": {
+				"operationId": "listOwnItemReviews",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					},
+					{
+						"in": "path",
+						"name": "itemId",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 19,
+							"pattern": "^[1-9][0-9]*$"
+						}
+					},
+					{
+						"in": "query",
+						"name": "page",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32",
+							"default": 0
+						}
+					},
+					{
+						"in": "query",
+						"name": "size",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32",
+							"default": 20
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PageResponseDTOProfileReview"
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "List your reviews of an item",
+				"tags": ["item"]
+			}
+		},
+		"/workspaces/{workspaceSlug}/practices/results": {
+			"get": {
+				"description": "Paginated results for the authenticated developer with optional filters",
+				"operationId": "listOwnResults",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					},
+					{
+						"in": "query",
+						"name": "practiceSlug",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"in": "query",
+						"name": "groupSlug",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"in": "query",
+						"name": "outcome",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": ["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]
+						}
+					},
+					{
+						"in": "query",
+						"name": "itemKind",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"in": "query",
+						"name": "itemId",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 19,
+							"pattern": "^[1-9][0-9]*$"
+						}
+					},
+					{
+						"in": "query",
+						"name": "severity",
+						"required": false,
+						"schema": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"enum": ["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]
+							}
+						}
+					},
+					{
+						"in": "query",
+						"name": "displayableOnly",
+						"required": false,
+						"schema": {
+							"type": "boolean"
+						}
+					},
+					{
+						"in": "query",
+						"name": "sort",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": ["NEWEST", "OLDEST", "ACTIONABILITY"]
+						}
+					},
+					{
+						"in": "query",
+						"name": "page",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					},
+					{
+						"in": "query",
+						"name": "size",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"format": "int32"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PageResponseDTOResultList"
+								}
+							}
+						},
+						"description": "Paginated results returned"
+					}
+				},
+				"summary": "List results for current developer",
+				"tags": ["Practice Results"]
+			}
+		},
+		"/workspaces/{workspaceSlug}/practices/review-context": {
+			"get": {
+				"description": "Reads the address only: nothing is fetched from it. The address must be on the server this workspace is connected to. Every way of not finding the work — not mirrored, not monitored here, another server, deleted or confidential — is the same 404.",
+				"operationId": "resolveReviewContext",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					},
+					{
+						"description": "The provider page's address, as the browser shows it",
+						"in": "query",
+						"name": "url",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 2048,
+							"minLength": 0
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewContext"
+								}
+							}
+						},
+						"description": "The work, and what the caller may do about it"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "Not an HTTPS address, or not the page of a pull request, merge request or issue"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "The caller is not a member of this workspace"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ProblemDetail"
+								}
+							}
+						},
+						"description": "This workspace has no reviewed work at this address"
+					}
+				},
+				"summary": "Find the reviewed work a provider page shows",
+				"tags": ["Practice review requests"]
+			}
+		},
+		"/workspaces/{workspaceSlug}/practices/review-requests": {
+			"post": {
+				"operationId": "requestReview",
+				"parameters": [
+					{
+						"description": "Workspace slug",
+						"in": "path",
+						"name": "workspaceSlug",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"maxLength": 51,
+							"minLength": 3,
+							"pattern": "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateReviewRequest"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewRequestOutcome"
+								}
+							}
+						},
+						"description": "OK"
+					}
+				},
+				"summary": "Ask for a review of an item",
+				"tags": ["review-request"]
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"ClientSignInConfiguration": {
+				"type": "object",
+				"properties": {
+					"registered": {
+						"type": "boolean"
+					}
+				},
+				"required": ["registered"]
+			},
+			"ProblemDetail": {
+				"type": "object",
+				"properties": {
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string",
+						"format": "uri"
+					},
+					"properties": {
+						"type": "object",
+						"additionalProperties": {}
+					},
+					"status": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"title": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"format": "uri"
+					}
+				}
+			},
+			"ClientRefreshRequest": {
+				"type": "object",
+				"properties": {
+					"refreshToken": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{43}$"
+					}
+				},
+				"required": ["refreshToken"]
+			},
+			"ClientSessionTokens": {
+				"type": "object",
+				"properties": {
+					"accessToken": {
+						"type": "string"
+					},
+					"accessTokenExpiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"refreshToken": {
+						"type": "string"
+					},
+					"sessionExpiresAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				},
+				"required": ["accessToken", "accessTokenExpiresAt", "refreshToken", "sessionExpiresAt"]
+			},
+			"IdentityProviderView": {
+				"type": "object",
+				"description": "One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is\n the OAuth instance origin (scheme + host[:port]) of the authorization endpoint, so the\n workspace-creation wizard can match a target instance to its login.\n\n <p><b>baseUrl is the OAuth origin, not the SCM API origin.</b> It is only meaningful for GitLab rows,\n where the OAuth origin and the API origin coincide (e.g. <code>https://gitlab.example.com</code>). For a\n GitHub row it is <code>https://github.com</code> (the OAuth host), NOT <code>https://api.github.com</code>; the\n sole consumer (the workspace wizard) matches GitLab self-hosted origins and never relies on the GitHub\n value, so the discrepancy is harmless. Do not treat this as an SCM API base URL.",
+				"properties": {
+					"baseUrl": {
+						"type": "string"
+					},
+					"displayName": {
+						"type": "string"
+					},
+					"providerType": {
+						"type": "string"
+					},
+					"registrationId": {
+						"type": "string"
+					}
+				}
+			},
+			"CurrentUserView": {
+				"type": "object",
+				"properties": {
+					"accessTokenExpiresAt": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"appRole": {
+						"type": "string"
+					},
+					"avatarUrl": {
+						"type": "string"
+					},
+					"displayName": {
+						"type": "string"
+					},
+					"gitProviderId": {
+						"type": "string"
+					},
+					"id": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"identityProvider": {
+						"type": "string"
+					},
+					"linkedProviders": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LinkedProvider"
+						}
+					},
+					"primaryEmail": {
+						"type": "string"
+					},
+					"profileUrl": {
+						"type": "string"
+					},
+					"roles": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"status": {
+						"type": "string"
+					},
+					"username": {
+						"type": "string"
+					}
+				}
+			},
+			"LinkedProvider": {
+				"type": "object",
+				"description": "A provider instance the current user is linked to: its type + server-url origin.",
+				"properties": {
+					"serverUrl": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string"
+					}
+				}
+			},
+			"ConsentStatus": {
+				"type": "object",
+				"properties": {
+					"completed": {
+						"type": "boolean"
+					},
+					"noticeVersion": {
+						"type": "string",
+						"description": "Version of the first-login wording the client must be rendering"
+					},
+					"participateInResearch": {
+						"type": "boolean"
+					},
+					"researchOrganization": {
+						"type": "string",
+						"description": "Organization that runs the optional research program, or null when this instance runs none"
+					}
+				},
+				"required": ["completed", "noticeVersion", "participateInResearch"]
+			},
+			"WorkspaceListItem": {
+				"type": "object",
+				"description": "Summary information about a workspace for list views",
+				"properties": {
+					"accountLogin": {
+						"type": "string",
+						"description": "Git provider account login associated with this workspace"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Timestamp when the workspace was created"
+					},
+					"displayName": {
+						"type": "string",
+						"description": "Human-readable name of the workspace"
+					},
+					"id": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Unique identifier of the workspace"
+					},
+					"practicesEnabled": {
+						"type": "boolean",
+						"description": "Whether practice reviews are on"
+					},
+					"providerType": {
+						"type": "string",
+						"description": "High-level git provider type (GITHUB or GITLAB), or null if no SCM connection bound",
+						"enum": ["GITHUB", "GITLAB", "SLACK", "OUTLINE"]
+					},
+					"publishesPublicActivity": {
+						"type": "boolean",
+						"description": "Whether the public activity page is live: the instance allows it and the workspace turned it on"
+					},
+					"status": {
+						"type": "string",
+						"description": "Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)"
+					},
+					"workspaceAddress": {
+						"type": "string",
+						"description": "Canonical workspace address. Uses the apex path when subdomains are off."
+					},
+					"workspaceSlug": {
+						"type": "string",
+						"description": "URL-friendly identifier for the workspace",
+						"example": "my-workspace"
+					}
+				},
+				"required": [
+					"accountLogin",
+					"createdAt",
+					"displayName",
+					"id",
+					"practicesEnabled",
+					"publishesPublicActivity",
+					"status",
+					"workspaceAddress",
+					"workspaceSlug"
+				]
+			},
+			"Workspace": {
+				"type": "object",
+				"description": "Complete workspace information including configuration and settings",
+				"properties": {
+					"accountLogin": {
+						"type": "string",
+						"description": "Git provider account login associated with this workspace"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Timestamp when the workspace was created"
+					},
+					"displayName": {
+						"type": "string",
+						"description": "Human-readable name of the workspace"
+					},
+					"gitlabWebhookRegistered": {
+						"type": "boolean",
+						"description": "Whether a GitLab webhook has been auto-registered for this workspace"
+					},
+					"hasPersonalAccessToken": {
+						"type": "boolean",
+						"description": "Whether a Personal Access Token is configured"
+					},
+					"hasSlackToken": {
+						"type": "boolean",
+						"description": "Whether Slack token is configured"
+					},
+					"id": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Unique identifier of the workspace"
+					},
+					"installationId": {
+						"type": "integer",
+						"format": "int64",
+						"description": "GitHub App installation ID, if linked"
+					},
+					"installationLinkedAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Timestamp when the GitHub App installation was linked"
+					},
+					"kind": {
+						"type": "string",
+						"description": "Integration kind backing this workspace (GITHUB or GITLAB)"
+					},
+					"practiceReviewAutoTriggerEnabled": {
+						"type": "boolean",
+						"description": "Whether automatic practice reviews triggered by PR events are enabled"
+					},
+					"practiceReviewManualTriggerEnabled": {
+						"type": "boolean",
+						"description": "Whether manual practice reviews triggered through a bot command are enabled"
+					},
+					"practicesEnabled": {
+						"type": "boolean",
+						"description": "Whether practice reviews are on"
+					},
+					"providerType": {
+						"type": "string",
+						"description": "High-level git provider type for the workspace's SCM connection (null if none bound)",
+						"enum": ["GITHUB", "GITLAB", "SLACK", "OUTLINE"]
+					},
+					"publicActivityEnabled": {
+						"type": "boolean",
+						"description": "Whether this workspace has enabled its public activity page"
+					},
+					"serverUrl": {
+						"type": "string",
+						"description": "Custom server URL for self-hosted instances (null for cloud defaults)"
+					},
+					"slackConnectionId": {
+						"type": "integer",
+						"format": "int64",
+						"description": "ID of the active Slack connection, if any — addresses PATCH /connections/{id}/status"
+					},
+					"status": {
+						"type": "string",
+						"description": "Current lifecycle status of the workspace (PENDING, ACTIVE, ARCHIVED)"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Timestamp when the workspace was last updated"
+					},
+					"workspaceAddress": {
+						"type": "string",
+						"description": "Canonical workspace address. Uses the apex path when subdomains are off."
+					},
+					"workspaceSlug": {
+						"type": "string",
+						"description": "URL-friendly identifier for the workspace",
+						"example": "my-workspace"
+					}
+				},
+				"required": [
+					"accountLogin",
+					"createdAt",
+					"displayName",
+					"gitlabWebhookRegistered",
+					"hasPersonalAccessToken",
+					"hasSlackToken",
+					"id",
+					"practiceReviewAutoTriggerEnabled",
+					"practiceReviewManualTriggerEnabled",
+					"practicesEnabled",
+					"publicActivityEnabled",
+					"status",
+					"updatedAt",
+					"workspaceAddress",
+					"workspaceSlug"
+				]
+			},
+			"DeliveredWorkFeedback": {
+				"type": "object",
+				"properties": {
+					"feedback": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DeliveredWorkFeedbackItem"
+						}
+					},
+					"item": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/ItemRef"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"required": ["feedback", "item"]
+			},
+			"DeliveredWorkFeedbackItem": {
+				"type": "object",
+				"properties": {
+					"copies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DeliveredWorkFeedbackCopy"
+						}
+					},
+					"deliveredAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"practices": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DeliveredFeedbackPractice"
+						}
+					}
+				},
+				"required": ["copies", "deliveredAt", "id", "practices"]
+			},
+			"DeliveredWorkFeedbackCopy": {
+				"type": "object",
+				"properties": {
+					"endLine": {
+						"type": ["null", "integer"],
+						"format": "int32"
+					},
+					"externalRef": {
+						"type": ["string", "null"]
+					},
+					"externalUrl": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"enum": ["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]
+					},
+					"path": {
+						"type": ["string", "null"]
+					},
+					"postedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"side": {
+						"type": ["string", "null"],
+						"enum": ["OLD", "NEW", null]
+					},
+					"startLine": {
+						"type": ["null", "integer"],
+						"format": "int32"
+					}
+				},
+				"required": [
+					"endLine",
+					"externalRef",
+					"externalUrl",
+					"id",
+					"kind",
+					"path",
+					"postedAt",
+					"side",
+					"startLine"
+				]
+			},
+			"DeliveredFeedbackPractice": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					}
+				},
+				"required": ["name", "slug"]
+			},
+			"ItemRef": {
+				"type": "object",
+				"properties": {
+					"container": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"pattern": "^[1-9][0-9]*$"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"parentId": {
+						"type": ["string", "null"],
+						"pattern": "^[1-9][0-9]*$"
+					},
+					"path": {
+						"type": ["string", "null"]
+					},
+					"provider": {
+						"type": ["string", "null"],
+						"enum": ["GITHUB", "GITLAB", "SLACK", "OUTLINE", null]
+					},
+					"removedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"url": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": [
+					"container",
+					"id",
+					"kind",
+					"label",
+					"parentId",
+					"path",
+					"provider",
+					"removedAt",
+					"title",
+					"url"
+				]
+			},
+			"OwnItemTrace": {
+				"type": "object",
+				"properties": {
+					"events": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OwnItemEvent"
+						}
+					},
+					"item": {
+						"$ref": "#/components/schemas/ItemRef"
+					},
+					"results": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ResultList"
+						}
+					},
+					"review": {
+						"$ref": "#/components/schemas/ReviewRef"
+					}
+				},
+				"required": ["events", "item", "results", "review"]
+			},
+			"OwnItemEvent": {
+				"type": "object",
+				"properties": {
+					"displayName": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"occurredAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				},
+				"required": ["displayName", "name", "occurredAt"]
+			},
+			"ResultList": {
+				"type": "object",
+				"properties": {
+					"acceptedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"currentness": {
+						"type": "string",
+						"enum": ["CURRENT", "STALE", "UNVERIFIABLE"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"item": {
+						"$ref": "#/components/schemas/ItemRef"
+					},
+					"markedIncorrectAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"origin": {
+						"type": "string",
+						"enum": ["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]
+					},
+					"outcome": {
+						"type": "string",
+						"enum": ["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]
+					},
+					"practiceName": {
+						"type": "string"
+					},
+					"practiceSlug": {
+						"type": "string"
+					},
+					"problems": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ProblemSummary"
+						}
+					},
+					"recordedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"reviewId": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"severity": {
+						"type": ["string", "null"],
+						"enum": ["CRITICAL", "MAJOR", "MINOR", "TRIVIAL", null]
+					},
+					"summary": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": [
+					"acceptedAt",
+					"currentness",
+					"id",
+					"item",
+					"markedIncorrectAt",
+					"origin",
+					"outcome",
+					"practiceName",
+					"practiceSlug",
+					"problems",
+					"recordedAt",
+					"reviewId",
+					"severity",
+					"summary"
+				]
+			},
+			"ProblemSummary": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"severity": {
+						"type": "string",
+						"enum": ["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]
+					},
+					"summary": {
+						"type": "string"
+					}
+				},
+				"required": ["id", "severity", "summary"]
+			},
+			"ReviewRef": {
+				"type": "object",
+				"properties": {
+					"completedAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"item": {
+						"$ref": "#/components/schemas/ItemRef"
+					},
+					"itemVersion": {
+						"type": ["string", "null"]
+					},
+					"kind": {
+						"type": "string",
+						"enum": ["ITEM", "SCAN"]
+					},
+					"origin": {
+						"type": "string",
+						"enum": ["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]
+					}
+				},
+				"required": [
+					"completedAt",
+					"createdAt",
+					"id",
+					"item",
+					"itemVersion",
+					"kind",
+					"origin",
+					"status"
+				]
+			},
+			"PageResponseDTOProfileReview": {
+				"type": "object",
+				"description": "Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl\n is an implementation detail, not a JSON contract; these fields preserve the existing clients'\n response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.",
+				"properties": {
+					"content": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ProfileReview"
+						}
+					},
+					"empty": {
+						"type": "boolean"
+					},
+					"first": {
+						"type": "boolean"
+					},
+					"last": {
+						"type": "boolean"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"numberOfElements": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"pageable": {
+						"$ref": "#/components/schemas/Pageable"
+					},
+					"size": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"sort": {
+						"$ref": "#/components/schemas/Sort"
+					},
+					"totalElements": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"totalPages": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"required": [
+					"content",
+					"empty",
+					"first",
+					"last",
+					"number",
+					"numberOfElements",
+					"pageable",
+					"size",
+					"sort",
+					"totalElements",
+					"totalPages"
+				]
+			},
+			"ProfileReview": {
+				"type": "object",
+				"properties": {
+					"feedback": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OwnFeedbackRef"
+						}
+					},
+					"positionOnWork": {
+						"type": "integer",
+						"format": "int32",
+						"description": "This review's place among the reader's reviews of its work, oldest first, whatever the list's filters keep"
+					},
+					"results": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ResultList"
+						}
+					},
+					"review": {
+						"$ref": "#/components/schemas/ReviewRef"
+					},
+					"totalOnWork": {
+						"type": "integer",
+						"format": "int32",
+						"description": "How many reviews of its work recorded something about the reader"
+					}
+				},
+				"required": ["feedback", "positionOnWork", "results", "review", "totalOnWork"]
+			},
+			"OwnFeedbackRef": {
+				"type": "object",
+				"properties": {
+					"copies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/OwnFeedbackCopyRef"
+						}
+					},
+					"deliveredAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"destination": {
+						"type": "string",
+						"enum": ["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"response": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/FeedbackResponse"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"state": {
+						"type": "string",
+						"enum": [
+							"AWAITING_APPROVAL",
+							"READY",
+							"DELIVERED",
+							"UNCONFIRMED",
+							"WITHHELD",
+							"REJECTED",
+							"REPLACED",
+							"FAILED"
+						]
+					}
+				},
+				"required": ["copies", "deliveredAt", "destination", "id", "response", "state"]
+			},
+			"OwnFeedbackCopyRef": {
+				"type": "object",
+				"properties": {
+					"externalUrl": {
+						"type": ["string", "null"]
+					},
+					"id": {
+						"type": "string",
+						"format": "uuid"
+					},
+					"kind": {
+						"type": "string",
+						"enum": ["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]
+					},
+					"postedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				},
+				"required": ["externalUrl", "id", "kind", "postedAt"]
+			},
+			"FeedbackResponse": {
+				"type": "object",
+				"properties": {
+					"comment": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"resolution": {
+						"type": ["string", "null"],
+						"enum": ["ADDRESSED", "DISAGREE", "NOT_APPLICABLE", null]
+					},
+					"usefulness": {
+						"type": ["string", "null"],
+						"enum": ["HELPFUL", "UNHELPFUL", null]
+					}
+				},
+				"required": ["comment", "createdAt", "resolution", "usefulness"]
+			},
+			"Pageable": {
+				"type": "object",
+				"properties": {
+					"offset": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"pageNumber": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"pageSize": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"paged": {
+						"type": "boolean"
+					},
+					"sort": {
+						"$ref": "#/components/schemas/Sort"
+					},
+					"unpaged": {
+						"type": "boolean"
+					}
+				},
+				"required": ["offset", "pageNumber", "pageSize", "paged", "sort", "unpaged"]
+			},
+			"Sort": {
+				"type": "object",
+				"properties": {
+					"empty": {
+						"type": "boolean"
+					},
+					"sorted": {
+						"type": "boolean"
+					},
+					"unsorted": {
+						"type": "boolean"
+					}
+				},
+				"required": ["empty", "sorted", "unsorted"]
+			},
+			"PageResponseDTOResultList": {
+				"type": "object",
+				"description": "Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl\n is an implementation detail, not a JSON contract; these fields preserve the existing clients'\n response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.",
+				"properties": {
+					"content": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ResultList"
+						}
+					},
+					"empty": {
+						"type": "boolean"
+					},
+					"first": {
+						"type": "boolean"
+					},
+					"last": {
+						"type": "boolean"
+					},
+					"number": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"numberOfElements": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"pageable": {
+						"$ref": "#/components/schemas/Pageable"
+					},
+					"size": {
+						"type": "integer",
+						"format": "int32"
+					},
+					"sort": {
+						"$ref": "#/components/schemas/Sort"
+					},
+					"totalElements": {
+						"type": "integer",
+						"format": "int64"
+					},
+					"totalPages": {
+						"type": "integer",
+						"format": "int32"
+					}
+				},
+				"required": [
+					"content",
+					"empty",
+					"first",
+					"last",
+					"number",
+					"numberOfElements",
+					"pageable",
+					"size",
+					"sort",
+					"totalElements",
+					"totalPages"
+				]
+			},
+			"ReviewContext": {
+				"type": "object",
+				"properties": {
+					"canInspectReviewDetails": {
+						"type": "boolean"
+					},
+					"item": {
+						"anyOf": [
+							{
+								"$ref": "#/components/schemas/ItemRef"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"reasonDescription": {
+						"type": ["string", "null"]
+					},
+					"requestAllowed": {
+						"type": "boolean"
+					},
+					"workspaceId": {
+						"type": "string",
+						"pattern": "^[1-9][0-9]*$"
+					},
+					"workspaceSlug": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"canInspectReviewDetails",
+					"item",
+					"reasonDescription",
+					"requestAllowed",
+					"workspaceId",
+					"workspaceSlug"
+				]
+			},
+			"CreateReviewRequest": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string",
+						"pattern": "^[1-9][0-9]*$"
+					}
+				},
+				"required": ["itemId"]
+			},
+			"ReviewRequestOutcome": {
+				"type": "object",
+				"properties": {
+					"reason": {
+						"type": ["string", "null"],
+						"enum": [
+							"GATE_WITHHELD",
+							"COOLDOWN_ACTIVE",
+							"REQUEST_COOLDOWN_ACTIVE",
+							"REQUESTER_QUOTA_EXHAUSTED",
+							"CONCURRENT_DUPLICATE",
+							"COALESCED",
+							"OUT_OF_REVIEW_SCOPE",
+							"BOT_AUTHOR",
+							"BOT_REVIEWER",
+							"STALE_ROLLOUT_REVISION",
+							"WORKSPACE_INACTIVE",
+							"PRACTICES_DISABLED",
+							"NO_ACTIVE_PRACTICE",
+							"REVIEW_MODEL_UNBOUND",
+							"MEMBER_AI_DECLINED",
+							"PERSON_DATA_ERASED",
+							"FEEDBACK_MODE_OFF",
+							"SUBJECT_UNLINKED",
+							"MERGE_ACTOR_UNAVAILABLE",
+							"MODEL_UNAVAILABLE",
+							"BUDGET_EXHAUSTED",
+							"ITEM_NOT_VISIBLE",
+							"VERSION_SUPERSEDED",
+							"PENDING_DEADLINE_EXCEEDED",
+							"ITEM_GONE",
+							"LEGACY_REVIEW_UNBOUND",
+							"OCCASION_EVIDENCE_UNAVAILABLE",
+							"QUIET_WINDOW",
+							"REVIEW_IN_PROGRESS",
+							"ALREADY_CURRENT",
+							null
+						]
+					},
+					"reviewId": {
+						"type": ["string", "null"],
+						"format": "uuid"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["SUBMITTED", "REFUSED"]
+					}
+				},
+				"required": ["reason", "reviewId", "status"]
+			}
+		}
+	}
+}

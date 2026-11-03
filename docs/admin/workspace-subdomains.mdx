@@ -220,7 +220,7 @@ The server does not accept an absolute return path.
 Slack connection callbacks derive their return workspace from the signed workspace ID, not browser storage.
 
 The extension reads `/.well-known/hephaestus.json` on a pasted workspace host.
-This public, non-cacheable document names the configured apex and base domain.
+This public, non-cacheable document names the configured apex, the base domain, and the running version.
 The extension asks for access to the apex before it connects.
 It does not guess a parent domain or send credentials during discovery.
 

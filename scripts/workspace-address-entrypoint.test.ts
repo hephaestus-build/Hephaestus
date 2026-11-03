@@ -169,6 +169,7 @@ void describe("webapp container entrypoint", () => {
 				apexOrigin: "",
 				baseDomain: "",
 				workspaceSubdomainsEnabled: false,
+				version: "",
 			});
 		} finally {
 			removeFixture(fixture);
@@ -200,6 +201,7 @@ void describe("webapp container entrypoint", () => {
 				apexOrigin: "https://example.invalid",
 				baseDomain: "example.invalid",
 				workspaceSubdomainsEnabled: true,
+				version: "",
 			});
 		} finally {
 			removeFixture(fixture);
@@ -222,6 +224,24 @@ void describe("webapp container entrypoint", () => {
 				apexOrigin: tricky,
 				baseDomain: String.raw`a"b\c`,
 				workspaceSubdomainsEnabled: true,
+				version: "",
+			});
+		} finally {
+			removeFixture(fixture);
+		}
+	});
+
+	void test("the discovery file says which release runs", () => {
+		const fixture = createFixture();
+		try {
+			const result = runEntrypoint(fixture, { APPLICATION_VERSION: "1.2.3" });
+			assert.equal(result.status, 0, result.stderr);
+			const { discovery } = served(fixture, result.envConfigs);
+			assert.deepEqual(discovery, {
+				apexOrigin: "",
+				baseDomain: "",
+				workspaceSubdomainsEnabled: false,
+				version: "1.2.3",
 			});
 		} finally {
 			removeFixture(fixture);

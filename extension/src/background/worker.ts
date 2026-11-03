@@ -21,6 +21,7 @@ import {
 } from "~/background/context";
 import { toRpcError, WorkerError } from "~/background/errors";
 import { discoverInstance, resolveInstanceOrigin } from "~/background/instance";
+import { serverTooOld } from "~/background/server-fit";
 import { type Credentials, SessionStore } from "~/background/session";
 import { signIn, type SignInMethod } from "~/background/sign-in";
 import {
@@ -178,6 +179,15 @@ async function appState(): Promise<AppState> {
 		instance: await readInstance(),
 	}));
 	const base = { generation: snapshot.generation, developmentBuild: DEVELOPMENT_BUILD };
+	const shown = snapshot.credentials?.issuer ?? instance;
+	const tooOld = shown === undefined ? undefined : await serverTooOld(shown);
+	if (shown !== undefined && tooOld !== undefined) {
+		return {
+			...base,
+			instance: instanceSummaryOf(shown),
+			session: { status: "server-too-old", ...tooOld },
+		};
+	}
 	const api = AuthenticatedApi.fromSnapshot(snapshot, session);
 	if (api === undefined || snapshot.credentials === undefined) {
 		return instance === undefined
@@ -322,6 +332,10 @@ async function context(
 		return { status: "not-configured" };
 	}
 	const instanceHost = new URL(instance.origin).host;
+	const tooOld = await serverTooOld(instance);
+	if (tooOld !== undefined) {
+		return { status: "server-too-old", instanceHost, ...tooOld };
+	}
 	try {
 		return await resolveContext(await environment(), tabId, workspaceSlug, subject);
 	} catch (error) {

@@ -97,6 +97,19 @@ the type check on its own. Lint holds tests to the web app's Vitest policy: narr
   It stops the row's own click and key handlers.
   Every sync reconciles it, because providers reuse rows for other work.
 
+## An older server
+
+Chrome updates the extension on its own, ahead of a self-hosted server, so a newer extension on an older server is the common case.
+`OLDEST_SERVER_VERSION` (`src/shared/server-version.ts`) is the oldest release the extension supports.
+Raise it only in a major release.
+
+Each call in `src/background/api.ts` must exist in that release, or handle the 404.
+A field that is new since that release must be optional to the extension.
+`src/background/older-server.test.ts` runs the extension against an older release's API.
+After 1.0.0 exists, run `node scripts/extension-oldest-server-spec.ts v1.0.0`, and again when the release moves.
+A server that names no version is 1.0.0-rc.1 or older, so it counts as older too.
+On an older server, the report and settings say why and who can fix it, and their views ask that server for nothing else.
+
 ## Vocabulary and shared components
 
 Labels, icons and sentences come from the webapp's registries, imported by path through `@/`

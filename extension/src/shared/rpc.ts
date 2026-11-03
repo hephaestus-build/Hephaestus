@@ -152,7 +152,14 @@ export interface AccountSummary {
 	instanceAdmin: boolean;
 }
 
+/** A server older than the extension supports. Its version is absent when it does not say. */
+export interface ServerTooOld {
+	serverVersion?: string;
+	oldestServer: string;
+}
+
 export type SessionSummary =
+	| ({ status: "server-too-old" } & ServerTooOld)
 	| { status: "signed-out" }
 	| { status: "consent-required"; account?: AccountSummary }
 	| { status: "signed-in"; account: AccountSummary; sessionExpiresAt: string };

@@ -24,6 +24,7 @@ import type {
 	ReviewActivity,
 	WorkFeedback,
 } from "~/shared/review-context";
+import { serverTooOldText } from "~/shared/server-version";
 
 export type ActionState = { status: "pending" } | { status: "error"; message: string };
 
@@ -222,6 +223,10 @@ function Explanation({ props, webAppOrigin }: { props: PageReportProps; webAppOr
 		}
 		case "signed-out": {
 			text = `Sign in to ${state.instanceHost} to see the practice review of this work.`;
+			break;
+		}
+		case "server-too-old": {
+			text = serverTooOldText(state);
 			break;
 		}
 		case "consent-required": {

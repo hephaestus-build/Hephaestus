@@ -70,6 +70,7 @@ export interface WorkComment {
 export type ReviewContext =
 	| { status: "unsupported-page" }
 	| { status: "not-configured" }
+	| { status: "server-too-old"; instanceHost: string; serverVersion?: string; oldestServer: string }
 	| { status: "signed-out"; instanceHost: string }
 	| { status: "consent-required"; instanceHost: string; webAppUrl: string }
 	| { status: "no-workspace"; instanceHost: string; siteOrigin: string }
