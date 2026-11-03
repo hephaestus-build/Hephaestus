@@ -66,6 +66,15 @@ groups:
           severity: warning
         annotations:
           summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+      - alert: HephaestusWebhookStreamPastAgeBound
+        expr: >-
+          max by (stream) (webhook_stream_oldest_message_age_seconds{job="hephaestus",runtime_role="webhook"})
+          > 1.1 * max by (stream) (webhook_stream_age_bound_seconds{job="hephaestus",runtime_role="webhook"})
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
       - alert: HephaestusStreamConsumerStopped
         expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 0
         for: 6h

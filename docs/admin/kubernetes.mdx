@@ -580,11 +580,11 @@ The webhook role refuses to start when the stream bounds add up to more than tha
 [Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
 
 The `small.yaml` profile sets GitHub to 6 GiB and each GitLab, Slack and Outline stream to 512 MiB.
-A stream keeps deliveries for the shorter of seven days and what its byte bound holds. The byte bounds total 7.5 GiB.
+GitHub and GitLab keep deliveries for the shorter of seven days and what the byte bound holds. Slack and Outline keep them for 72 hours at most, because they carry personal content that an erasure request cannot reach in a stream. The byte bounds total 7.5 GiB.
 These bounds count uncompressed bytes, so compression lowers the disk use but does not lengthen the retention.
+
 The broker file budget is 8 GiB. A fresh bundled broker claims 10 GiB, including the 25 % storage allowance.
 
-The profile overrides the shorter Slack and Outline ages through `webhook.stream.maxAgeByStream`.
 It retains 30-day durable expiry through `config.consumerInactiveThreshold`.
 
 A byte bound can remove messages before seven days. Measure peak traffic before you select these bounds.

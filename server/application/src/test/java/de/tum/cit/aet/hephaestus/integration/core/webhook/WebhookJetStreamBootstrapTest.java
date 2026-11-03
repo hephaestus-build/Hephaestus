@@ -51,11 +51,9 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     private final WebhookProperties properties = WebhookPropertiesFixture.properties();
 
     @Test
-    void shouldCreateFourSevenDayStreamsWhenSmallProfileOverridesTheApplicationDefaults() throws Exception {
+    void shouldKeepPersonalContentInsideItsHorizonOnTheSmallProfile() throws Exception {
         var configurations = createdConfigurations(Map.of(
                 "HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE", "7d",
-                "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK", "7d",
-                "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE", "7d",
                 "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB", "6442450944B",
                 "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES", "536870912B",
                 "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET", "8589934592"));
@@ -66,8 +64,8 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
                 .containsExactlyInAnyOrder(
                         tuple("github", Duration.ofDays(7), 6 * GIBIBYTE),
                         tuple("gitlab", Duration.ofDays(7), GIBIBYTE / 2),
-                        tuple("slack", Duration.ofDays(7), GIBIBYTE / 2),
-                        tuple("outline", Duration.ofDays(7), GIBIBYTE / 2));
+                        tuple("slack", Duration.ofDays(3), GIBIBYTE / 2),
+                        tuple("outline", Duration.ofDays(3), GIBIBYTE / 2));
     }
 
     @Test

@@ -215,6 +215,30 @@ tests:
             exp_annotations:
               summary: A webhook stream sheds deliveries at its byte bound before its age bound; it keeps less than it promises
 
+  - name: a stream older than its age bound fires; one inside its bound does not
+    interval: 1m
+    input_series:
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "500000x180"
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "259200x180"
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "600000x180"
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "604800x180"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusWebhookStreamPastAgeBound
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: HephaestusWebhookStreamPastAgeBound
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stream: slack
+            exp_annotations:
+              summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
+
   - name: a quiet stream that keeps undelivered events fires, a stream that drains does not
     interval: 1m
     input_series:
