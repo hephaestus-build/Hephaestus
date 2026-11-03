@@ -60,7 +60,7 @@ public class ReviewRequestService {
 
     @Transactional
     public ReviewRequestOutcomeDTO request(long workspaceId, long itemId, long accountId) {
-        return request(workspaceId, itemId, accountId, this::assuredAdmin, null);
+        return request(workspaceId, itemId, accountId, this::assuredAdmin, null, null);
     }
 
     // A browser request for another person's work uses admin authority, so it needs the admin passkey proof.
@@ -77,7 +77,11 @@ public class ReviewRequestService {
      */
     @Transactional
     public ReviewRequestOutcomeDTO requestByComment(
-            long workspaceId, long itemId, PersonIdentity commenter, UUID requestKey) {
+            long workspaceId,
+            long itemId,
+            PersonIdentity commenter,
+            UUID requestKey,
+            ReviewRequest.@Nullable CommentAnswer answer) {
         long accountId = identities
                 .resolveActiveAccountId(commenter.providerId(), commenter.subject(), commenter.teamId())
                 .orElseThrow(() -> new AccessForbiddenException("The commenter has no linked account."));
@@ -87,11 +91,21 @@ public class ReviewRequestService {
                 .map(Membership::getRole)
                 .orElseThrow(() -> new AccessForbiddenException("The commenter is not a member of this workspace."));
         return request(
-                workspaceId, itemId, accountId, () -> role.isAtLeast(Membership.WorkspaceRole.ADMIN), requestKey);
+                workspaceId,
+                itemId,
+                accountId,
+                () -> role.isAtLeast(Membership.WorkspaceRole.ADMIN),
+                requestKey,
+                answer);
     }
 
     private ReviewRequestOutcomeDTO request(
-            long workspaceId, long itemId, long accountId, BooleanSupplier admin, @Nullable UUID requestKey) {
+            long workspaceId,
+            long itemId,
+            long accountId,
+            BooleanSupplier admin,
+            @Nullable UUID requestKey,
+            ReviewRequest.@Nullable CommentAnswer answer) {
         var item = items.require(workspaceId, itemId);
         var pinned = items.pin(item, null);
         if (!mayRequest(workspaceId, pinned, accountId, admin))
@@ -110,6 +124,7 @@ public class ReviewRequestService {
                 .requestKey(requestKey)
                 .requestDigest(requestKey == null ? null : CanonicalDigest.sha256Hex(itemId + ":" + accountId))
                 .practiceIds(List.of())
+                .commentAnswer(answer)
                 .build());
         return new ReviewRequestOutcomeDTO(ReviewRequestStatus.SUBMITTED, id, null);
     }

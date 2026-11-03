@@ -135,7 +135,8 @@ class ReviewRequestServiceTest extends BaseUnitTest {
         admin.setRole(Membership.WorkspaceRole.ADMIN);
         when(memberships.findByWorkspace_IdAndId_AccountId(1L, 7L)).thenReturn(Optional.of(admin));
 
-        var outcome = service.requestByComment(1, 3, new PersonIdentity(1, "native-user", null), UUID.randomUUID());
+        var outcome =
+                service.requestByComment(1, 3, new PersonIdentity(1, "native-user", null), UUID.randomUUID(), null);
 
         assertThat(outcome.status()).isEqualTo(ReviewRequestStatus.SUBMITTED);
         verifyNoInteractions(assurance, access);

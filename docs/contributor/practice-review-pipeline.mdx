@@ -69,6 +69,14 @@ This is the same rule as for a practice that waits for checks.
 A retry that seals at a moved version writes the same reason, so the next edge also selects what it did not measure.
 A refusal that can pass, such as an exhausted budget, keeps every event of the window waiting, so that the retry still selects their union.
 
+A person's request selects every practice, with no such removal.
+At capture, each ready practice can keep its result instead of running.
+It keeps a result that a scan could also reuse (`ReuseCandidateQuery`), if the capture of that result read the same content.
+Capture compares a digest of the practice's declared sources and its Applies when sources (`CapturedSourceDigest`).
+The digest leaves out capture and sync times.
+
+The membership becomes `REUSED`. If no practice is left, the review ends with no sandbox and no model call. Feedback composition covers only what the review measured, so a reused result sends nothing new.
+
 Adapters record item events after source sync establishes the recorded change.
 Repeated provider delivery does not create another event for the same item, name and version.
 Queue updates retain the original event time, version and discovery source.

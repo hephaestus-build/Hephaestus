@@ -85,6 +85,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1297,7 +1298,35 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldCompleteInapplicablePracticesWithoutStartingASandbox() throws Exception {
+    void shouldCompleteARetryWhoseEarlierAttemptKeptEveryResultWithNoCapture() {
+        var job = configuredJob();
+        job.setAttempt(1);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), any(UUID.class), anyInt()))
+                .thenReturn(1);
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(handler.keptEveryResult(job)).thenReturn(true);
+
+        assertThat(executor(inlinePool()).processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        verify(handler).completeWithoutExecution(job);
+        verify(handler, never()).prepareInputs(any());
+        verify(jobs)
+                .transitionStatusOwnedBy(
+                        eq(job.getId()), eq(ReviewJobStatus.COMPLETED), any(), eq(null), any(UUID.class), eq(1));
+        verify(sandbox, never()).execute(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldCompleteWithoutStartingASandboxWhenNoPracticeIsLeftToRun(boolean keepsItsResult) throws Exception {
         var job = RuntimeReviewTestData.job();
         job.setSubmittedAt(Instant.now().minusSeconds(2));
         job.setConfigSnapshot(new ConfigSnapshot(
@@ -1342,20 +1371,24 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 true,
                 List.of(),
                 List.of(new SourceReadinessCheck(source, contract, now, now, true, List.of())));
-        var report = new AutomatedReviewReadinessReport(
-                contract,
-                "a".repeat(64),
-                "scm.pull_request",
-                now,
-                now,
-                List.of(readiness),
-                Map.of(
-                        "clear-names",
-                        new AppliesWhenCheck(
-                                true,
-                                "The change touches no Swift file.",
-                                List.of(new AppliesWhenCheck.Clause(
-                                        "CHANGED_PATH", source, AppliesWhenCheck.Result.NOT_FOUND)))));
+        var report = keepsItsResult
+                ? new AutomatedReviewReadinessReport(
+                                contract, "a".repeat(64), "scm.pull_request", now, now, List.of(readiness), Map.of())
+                        .withReused(Set.of("clear-names"))
+                : new AutomatedReviewReadinessReport(
+                        contract,
+                        "a".repeat(64),
+                        "scm.pull_request",
+                        now,
+                        now,
+                        List.of(readiness),
+                        Map.of(
+                                "clear-names",
+                                new AppliesWhenCheck(
+                                        true,
+                                        "The change touches no Swift file.",
+                                        List.of(new AppliesWhenCheck.Clause(
+                                                "CHANGED_PATH", source, AppliesWhenCheck.Result.NOT_FOUND)))));
         var manifest = folder.resolve("manifest.json");
         var index = new JobFolderIndex(
                 contract,

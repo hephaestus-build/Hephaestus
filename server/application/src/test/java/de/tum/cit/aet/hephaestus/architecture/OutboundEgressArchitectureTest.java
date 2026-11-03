@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlInterc
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApprovalWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.LineNoteWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReactionSink;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScmCommentReplySink;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
@@ -44,6 +45,8 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .areAssignableTo(ApprovalWriter.class)
                 .or()
                 .areAssignableTo(ScmCommentReactionSink.class)
+                .or()
+                .areAssignableTo(ScmCommentReplySink.class)
                 .and()
                 .areNotInterfaces()
                 .should()
@@ -80,6 +83,8 @@ class OutboundEgressArchitectureTest extends HephaestusArchitectureTest {
                 .beAssignableTo(ApprovalWriter.class)
                 .orShould()
                 .beAssignableTo(ScmCommentReactionSink.class)
+                .orShould()
+                .beAssignableTo(ScmCommentReplySink.class)
                 .orShould()
                 .haveFullyQualifiedName(SlackMessageService.class.getName())
                 .orShould()

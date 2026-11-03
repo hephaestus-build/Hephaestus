@@ -138,7 +138,8 @@ public class ReviewThreadContentSource {
                     occasionStaged = true;
                     continue;
                 }
-                if (decides(review.getState(), review.getBody())) decisionArray.add(decision(review));
+                if (decides(review.getState(), review.getBody()) && !isHephaestusReview(review))
+                    decisionArray.add(decision(review));
             }
             if (!occasionStaged && occasionDecision != null && decides(occasionDecision))
                 decisionArray.add(occasionDecision);
@@ -198,6 +199,11 @@ public class ReviewThreadContentSource {
                 List.of(),
                 List.of(),
                 ScmCitableTexts.files(files, this::sourceKindFor, objectMapper));
+    }
+
+    private static boolean isHephaestusReview(PullRequestReview review) {
+        String body = review.getBody();
+        return body != null && body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER);
     }
 
     // Filter posted feedback by its marker; bot logins cannot reliably distinguish it from human review.

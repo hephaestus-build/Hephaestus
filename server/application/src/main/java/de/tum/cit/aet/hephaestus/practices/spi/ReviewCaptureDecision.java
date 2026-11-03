@@ -8,6 +8,9 @@ public record ReviewCaptureDecision(
         ReviewPracticeStatus status,
         @Nullable String reason,
         JsonNode facts) {
+    /** The fact that holds the digest of what the practice's capture read, so that a later request can compare it. */
+    public static final String SOURCES_DIGEST = "sourcesDigest";
+
     public ReviewCaptureDecision {
         facts = facts.deepCopy();
     }

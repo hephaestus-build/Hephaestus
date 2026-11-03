@@ -165,6 +165,37 @@ export const NothingRecorded: Story = {
 	},
 };
 
+/** A requested review that kept what it lists: the observations are the earlier review's, and it says so. */
+export const ObservationsKept: Story = {
+	args: {
+		state: readyWith({
+			results: detail.results.map((result) => ({ ...result, reviewId: "earlier-review" })),
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledReviewPanel());
+		await expect(panel.getByText("Kept from the last review")).toBeVisible();
+		await expect(panel.getByText(/did not review them again/u)).toBeVisible();
+	},
+};
+
+/** A reused observation beside a new one: the review did look at the work, so it claims no such thing. */
+export const SomeObservationsKept: Story = {
+	args: {
+		state: readyWith({
+			results: detail.results.map((result, index) =>
+				index === 0 ? { ...result, reviewId: "earlier-review" } : result,
+			),
+		}),
+	},
+	play: async () => {
+		const panel = within(await settledReviewPanel());
+		// The review's own observation is listed, so the review did look at the work.
+		await expect(practiceTable()).toBeVisible();
+		await expect(panel.queryByText("Kept from the last review")).toBeNull();
+	},
+};
+
 export const RunningWithNothingRecorded: Story = {
 	args: {
 		state: readyWith({

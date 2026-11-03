@@ -42,7 +42,7 @@ class ScanListedReuseTest extends BaseUnitTest {
     private final ReviewRepository reviews = mock(ReviewRepository.class);
     private final ReviewPracticeRepository practices = mock(ReviewPracticeRepository.class);
     private final ReviewItemRepository items = mock(ReviewItemRepository.class);
-    private final ScanReuseCandidateQuery candidates = mock(ScanReuseCandidateQuery.class);
+    private final ReuseCandidateQuery candidates = mock(ReuseCandidateQuery.class);
     private final PlatformTransactionManager manager = mock(PlatformTransactionManager.class);
     private final Review review = Review.builder()
             .id(UUID.randomUUID())
@@ -126,7 +126,7 @@ class ScanListedReuseTest extends BaseUnitTest {
         givenPass(List.of(attempted, pending));
         when(items.lockAssignment(1, review.getId(), 2, 4)).thenReturn(Optional.of(pending));
         when(candidates.find(1, id))
-                .thenReturn(Optional.of(new ScanReuseCandidateQuery.ReusableResult(
+                .thenReturn(Optional.of(new ReuseCandidateQuery.ReusableResult(
                         Result.builder().id(resultId).build(),
                         new HistoryCustody(true, false, List.of(), List.of(), List.of()))));
         var service = service();

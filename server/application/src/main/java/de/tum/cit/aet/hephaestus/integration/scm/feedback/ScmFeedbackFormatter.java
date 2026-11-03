@@ -81,16 +81,20 @@ public class ScmFeedbackFormatter {
     }
 
     private String respondLink(ItemRef item) {
+        return "Answer or disagree in [Hephaestus](" + feedbackAddress(item.workspaceId(), item.itemId()) + ").";
+    }
+
+    /** The page in Hephaestus that holds the feedback on this work. */
+    public String feedbackAddress(long workspaceId, long itemId) {
         String slug = workspaces
-                .findById(item.workspaceId())
+                .findById(workspaceId)
                 .orElseThrow(() -> new IllegalStateException("A review job's workspace exists"))
                 .slug();
-        String url = UriComponentsBuilder.fromUriString(subdomains.address(slug, webappUrl))
-                .pathSegment("feedback", Long.toString(item.itemId()))
+        return UriComponentsBuilder.fromUriString(subdomains.address(slug, webappUrl))
+                .pathSegment("feedback", Long.toString(itemId))
                 .build()
                 .encode()
                 .toUriString();
-        return "Answer or disagree in [Hephaestus](" + url + ").";
     }
 
     /**

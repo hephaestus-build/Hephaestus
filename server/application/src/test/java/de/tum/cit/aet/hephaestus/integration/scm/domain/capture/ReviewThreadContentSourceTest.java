@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -322,6 +323,21 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         assertThat(out.get("truncated").asBoolean()).isFalse();
         assertThat(captured.contentStates()).containsValue(SourceContentState.EMPTY);
         assertThat(captured.completeness()).containsValue(SourceCompleteness.COMPLETE);
+    }
+
+    @Test
+    void shouldLeaveHephaestusOwnPostedReviewOutOfTheDecisions() throws Exception {
+        PullRequestReview posted =
+                review(PullRequestReview.State.COMMENTED, "hephaestus", Instant.parse("2025-06-01T10:00:00Z"));
+        posted.setBody("The feedback. " + WorkspaceScmProjection.HEPHAESTUS_MARKER);
+        when(reviewRepository.findRecentByPullRequestIdWithAuthor(any(), any(), any()))
+                .thenReturn(List.of(posted));
+
+        var files = provider.capture(request(metadataWithPr()), provider.sourceKinds())
+                .files();
+
+        assertThat(objectMapper.readTree(files.get(FILE_KEY)).path("reviewDecisions"))
+                .isEmpty();
     }
 
     @Test

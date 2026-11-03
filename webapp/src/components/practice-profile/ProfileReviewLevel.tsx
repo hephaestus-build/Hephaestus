@@ -15,6 +15,7 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import { ReviewOrdinalTag, ReviewOriginTag } from "@/components/practice-trace/review-tags";
 import {
 	type ReviewPracticeFilters,
+	earlierReviewOf,
 	ReviewPracticeTable,
 	ReviewPracticeTableSkeleton,
 } from "@/components/practice-trace/ReviewPracticeTable";
@@ -23,6 +24,7 @@ import {
 	OWN_REVIEW_STATUS_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { ReviewStatusBadge } from "@/components/practice-vocabulary/ReviewStatusBadge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { formatDayTime } from "@/lib/dates";
@@ -104,23 +106,38 @@ export function ProfileReviewLevel({
 		// The feedback the review gave sits with its observation in the practice, where it can be
 		// read and answered; a list of it here could not be narrowed, so the review leaves it out.
 		const { review, results } = state.detail;
+		const unchanged =
+			!isActiveReview(review.status) &&
+			results.length > 0 &&
+			results.every((result) => earlierReviewOf(result, review.id) !== undefined);
 		body = (
-			<ReviewPracticeTable
-				results={results}
-				reviewId={review.id}
-				groupOf={groupOf}
-				filters={filters}
-				onFiltersChange={onFiltersChange}
-				onOpenPractice={onOpenPractice}
-				earlierReviewLink={earlierReviewLink}
-				observationLink={observationLink}
-				openedObservationId={openedObservationId}
-				emptyMessage={
-					isActiveReview(review.status)
-						? "Observations appear here as the review reaches each practice."
-						: "This review recorded no observation about you, so there is nothing to list here."
-				}
-			/>
+			<>
+				{unchanged && (
+					<Alert role="note">
+						<AlertTitle>Kept from the last review</AlertTitle>
+						<AlertDescription>
+							Nothing these practices read has changed, so Hephaestus did not review them again.
+							These observations still stand.
+						</AlertDescription>
+					</Alert>
+				)}
+				<ReviewPracticeTable
+					results={results}
+					reviewId={review.id}
+					groupOf={groupOf}
+					filters={filters}
+					onFiltersChange={onFiltersChange}
+					onOpenPractice={onOpenPractice}
+					earlierReviewLink={earlierReviewLink}
+					observationLink={observationLink}
+					openedObservationId={openedObservationId}
+					emptyMessage={
+						isActiveReview(review.status)
+							? "Observations appear here as the review reaches each practice."
+							: "This review recorded no observation about you, so there is nothing to list here."
+					}
+				/>
+			</>
 		);
 	}
 

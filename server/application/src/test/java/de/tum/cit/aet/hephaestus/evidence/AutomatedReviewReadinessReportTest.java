@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import tools.jackson.databind.json.JsonMapper;
@@ -45,5 +46,9 @@ class AutomatedReviewReadinessReportTest extends BaseUnitTest {
                     .isEqualTo(mapper.readTree(fixture).path(result.name()));
         }
         assertThat(report.runs(decision)).isEqualTo(result != AppliesWhenCheck.Result.NOT_FOUND);
+        // A practice that keeps its current result does not run, and the report's schema does not change.
+        var keeping = report.withReused(Set.of("java-files"));
+        assertThat(keeping.runs(decision)).isFalse();
+        assertThat(mapper.writeValueAsString(keeping)).isEqualTo(mapper.writeValueAsString(report));
     }
 }

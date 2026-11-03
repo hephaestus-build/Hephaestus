@@ -1138,6 +1138,11 @@ public class ReviewJobExecutor {
             UUID jobId, ReviewJob job, ConfigSnapshot snapshot, AtomicReference<PreparationFailure.Stage> stage) {
         stage.set(PreparationFailure.Stage.INPUTS);
 
+        // Keeping a result commits at capture. If that attempt then failed, this one has nothing left to capture.
+        if (handler.keptEveryResult(ownRow(jobId))) {
+            handler.completeWithoutExecution(ownRow(jobId));
+            return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
+        }
         PreparedJobInputs preparedInputs = handler.prepareInputs(ownRow(jobId));
 
         try {
