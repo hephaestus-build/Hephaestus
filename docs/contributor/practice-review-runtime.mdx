@@ -31,7 +31,14 @@ Two kinds of requeue spend no retry, because they are not the review's fault.
 A worker's drain counts in `drain_count`, at most 3 times.
 A sandbox runtime without room counts in `room_refusals`, with no limit.
 Only starvation or a quota that is too small ends such a review.
-`ReviewJob.spentAttempts()` subtracts both, and every retry-budget check reads it.
+
+An attempt that ended a practice and then ran out of time also spends no retry.
+It counts in `progressed_attempts`, and its next attempt starts at once and skips the ended practices.
+A slow provider can thus take many attempts to finish a review.
+The practices of the review bound these attempts, because each one must end a new practice.
+An attempt that ends no practice spends a retry.
+
+`ReviewJob.spentAttempts()` subtracts all three, and every retry-budget check reads it.
 
 Admission locks the review before its job and assignment rows.
 Cancellation follows the same order and prevents later admission from publishing through the old attempt.

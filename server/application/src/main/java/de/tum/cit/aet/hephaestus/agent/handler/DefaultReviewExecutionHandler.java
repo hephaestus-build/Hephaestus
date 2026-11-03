@@ -348,6 +348,11 @@ public class DefaultReviewExecutionHandler {
         return admission.hasStaged(job);
     }
 
+    /** How many practices of the job some attempt ended, with a result or with a reason. */
+    public int endedPractices(ReviewJob job) {
+        return admission.endedPractices(job);
+    }
+
     public void finishInterrupted(ReviewJob job, ReviewStopReason reason) {
         admission.finishInterrupted(
                 new ResultAdmissionService.AdmissionIdentity(

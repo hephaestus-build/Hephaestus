@@ -83,6 +83,14 @@ public class ReviewJob {
     @Column(name = "room_refusals", nullable = false)
     private int roomRefusals = 0;
 
+    /**
+     * The attempts that staged a practice and then ran out of time: each moved the review on, so none spends a retry.
+     * Each stages a new practice, so the practices of the review bound them.
+     */
+    @ColumnDefault("0")
+    @Column(name = "progressed_attempts", nullable = false)
+    private int progressedAttempts = 0;
+
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'NONE'")
     @Column(name = "processing_status", nullable = false, length = 16)
@@ -221,6 +229,6 @@ public class ReviewJob {
 
     /** The attempts that spent a retry: those that a worker's drain stopped, or that found no sandbox room, did not. */
     public int spentAttempts() {
-        return attempt - drainCount - roomRefusals;
+        return attempt - drainCount - roomRefusals - progressedAttempts;
     }
 }
