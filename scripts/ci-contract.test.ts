@@ -1474,12 +1474,11 @@ void describe("CI contract", () => {
 			await writeFile(answer, listed);
 			const result = spawnSync("bash", ["--noprofile", "--norc", "-c", script], {
 				encoding: "utf8",
-				env: {
-					...process.env,
+				env: environmentForGitFixture({
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 					REPOSITORY: "owner/repository",
 					RUN_URL: "https://example.invalid/run",
-				},
+				}),
 			});
 			assert.equal(result.status, 0, result.stderr);
 			const calls = await readFile(log, "utf8");
