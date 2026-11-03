@@ -41,9 +41,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -390,18 +393,28 @@ class PracticeRunnerLiveLlmTest {
         // Guarded by lifecycle. Any refusal fails the measurement, whatever result the run then writes.
         private int refusedRequests;
 
+        /** What the runner staged. It seals with no results, as it does with the server. */
+        private final List<JsonNode> staged = new ArrayList<>();
+
         ProxyStandIn(LiveLlmCredentials creds) throws IOException {
             // Read before the client and the listener exist, so an invalid limit starts nothing.
             requestLimit = requestLimit(System.getProperty(REQUEST_LIMIT_PROPERTY));
             client = HttpClient.newHttpClient();
             server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-            server.createContext("/admit-results", exchange -> {
-                byte[] body = MAPPER.writeValueAsBytes(admit(MAPPER.readTree(exchange.getRequestBody())));
-                exchange.getResponseHeaders().set("content-type", "application/json");
-                exchange.sendResponseHeaders(200, body.length);
-                try (var out = exchange.getResponseBody()) {
-                    out.write(body);
+            server.createContext("/stage-result", exchange -> {
+                byte[] sent = exchange.getRequestBody().readAllBytes();
+                ObjectNode receipt;
+                synchronized (staged) {
+                    receipt = stage(MAPPER.readTree(sent), sent, staged);
                 }
+                respond(exchange, receipt);
+            });
+            server.createContext("/admit-results", exchange -> {
+                ObjectNode answer;
+                synchronized (staged) {
+                    answer = admit(sealed(MAPPER.readTree(exchange.getRequestBody()), staged));
+                }
+                respond(exchange, answer);
             });
             server.createContext("/", exchange -> forward(exchange, creds));
             executor = Executors.newVirtualThreadPerTaskExecutor();
@@ -434,6 +447,44 @@ class PracticeRunnerLiveLlmTest {
                             "model requests refused after the request limit of %s was spent (%d sent)",
                             requestLimit.isPresent() ? String.valueOf(requestLimit.getAsInt()) : "none", sent)
                     .isZero();
+        }
+
+        private static void respond(HttpExchange exchange, ObjectNode answer) throws IOException {
+            byte[] body = MAPPER.writeValueAsBytes(answer);
+            exchange.getResponseHeaders().set("content-type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(body);
+            }
+        }
+
+        /** Keeps one practice's staged request and answers the receipt the runner checks: its slug and a digest. */
+        static ObjectNode stage(JsonNode request, byte[] sent, List<JsonNode> staged) {
+            staged.add(request);
+            JsonNode entries = request.path("results").isEmpty() ? request.path("nonResults") : request.path("results");
+            var receipt = MAPPER.createObjectNode();
+            receipt.put("practiceSlug", entries.path(0).path("practiceSlug").asString());
+            try {
+                receipt.put(
+                        "digest",
+                        HexFormat.of()
+                                .formatHex(MessageDigest.getInstance("SHA-256").digest(sent)));
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException(e);
+            }
+            return receipt;
+        }
+
+        /** The seal names no results: it stands for every staged practice, as the server reads it. */
+        static JsonNode sealed(JsonNode seal, List<JsonNode> staged) {
+            var request = (ObjectNode) seal.deepCopy();
+            var results = request.putArray("results");
+            var nonResults = request.putArray("nonResults");
+            for (JsonNode practice : staged) {
+                practice.path("results").forEach(results::add);
+                practice.path("nonResults").forEach(nonResults::add);
+            }
+            return request;
         }
 
         /**

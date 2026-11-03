@@ -4398,6 +4398,64 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "catch-all-false-on-delete",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"handles-errors-instead-of-swallowing-them": "MAJOR"
+		},
+		"files": {
+			"repo/src/main/java/com/example/userapi/service/UserService.java": "package com.example.userapi.service;\n\nimport com.example.userapi.model.User;\nimport com.example.userapi.repository.UserRepository;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\n@Service\npublic class UserService {\n    private static final Logger log = LoggerFactory.getLogger(UserService.class);\n    private final UserRepository userRepository;\n\n    public UserService(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    private User findById(Long id) {\n        return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));\n    }\n\n    @Transactional\n    public boolean deactivateUser(Long id) {\n        try {\n            User user = findById(id);\n            log.info(\"Deactivating user: email={}\", user.getEmail());\n            userRepository.delete(user);\n            return true;\n        } catch (Exception e) {\n            return false;\n        }\n    }\n}\n",
+			"context/description.md": "Add user deactivation.\n",
+			"context/metadata.json": "{\"title\": \"Add user deactivation\"}"
+		},
+		"reason": "The catch of every exception around a delete returns only false and records nothing, so a caller cannot tell a missing user from an outage or a bug, and nobody can diagnose it.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "catch-all-false-with-excuse-on-delete",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "NOT_MET"
+		},
+		"expectedSeverity": {
+			"handles-errors-instead-of-swallowing-them": "MAJOR"
+		},
+		"files": {
+			"repo/src/main/java/com/example/userapi/service/UserService.java": "package com.example.userapi.service;\n\nimport com.example.userapi.model.User;\nimport com.example.userapi.repository.UserRepository;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\n@Service\npublic class UserService {\n    private static final Logger log = LoggerFactory.getLogger(UserService.class);\n    private final UserRepository userRepository;\n\n    public UserService(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    private User findById(Long id) {\n        return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));\n    }\n\n    @Transactional\n    public boolean deactivateUser(Long id) {\n        try {\n            User user = findById(id);\n            log.info(\"Deactivating user: email={}\", user.getEmail());\n            userRepository.delete(user);\n            return true;\n        } catch (Exception e) {\n            // Any failure is fine here: the caller gets false.\n            return false;\n        }\n    }\n}\n",
+			"context/description.md": "Add user deactivation.\n",
+			"context/metadata.json": "{\"title\": \"Add user deactivation\"}"
+		},
+		"reason": "The comment names no reason why losing the failure of a required delete is safe, so the catch of every exception still discards the cause.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "named-failure-false-on-delete",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "MET"
+		},
+		"files": {
+			"repo/src/main/java/com/example/userapi/service/UserService.java": "package com.example.userapi.service;\n\nimport com.example.userapi.model.User;\nimport com.example.userapi.repository.UserRepository;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\n@Service\npublic class UserService {\n    private static final Logger log = LoggerFactory.getLogger(UserService.class);\n    private final UserRepository userRepository;\n\n    public UserService(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    private User findById(Long id) {\n        return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));\n    }\n\n    @Transactional\n    public boolean deactivateUser(Long id) {\n        try {\n            User user = findById(id);\n            log.info(\"Deactivating user: email={}\", user.getEmail());\n            userRepository.delete(user);\n            return true;\n        } catch (UserNotFoundException e) {\n            return false;\n        }\n    }\n}\n",
+			"context/description.md": "Add user deactivation.\n",
+			"context/metadata.json": "{\"title\": \"Add user deactivation\"}"
+		},
+		"reason": "The catch names the one expected failure, a missing user, and maps it to the declared false result; every other failure propagates.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "documented-catch-all-optional-mail",
+		"expected": {
+			"handles-errors-instead-of-swallowing-them": "MET"
+		},
+		"files": {
+			"repo/src/main/java/com/example/userapi/service/UserService.java": "package com.example.userapi.service;\n\nimport com.example.userapi.model.User;\nimport com.example.userapi.repository.UserRepository;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\nimport org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\n@Service\npublic class UserService {\n    private static final Logger log = LoggerFactory.getLogger(UserService.class);\n    private final UserRepository userRepository;\n\n    public UserService(UserRepository userRepository) {\n        this.userRepository = userRepository;\n    }\n\n    private User findById(Long id) {\n        return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));\n    }\n\n    /**\n     * Sends the optional farewell mail after the account is closed. The mail is best effort: nothing waits for it,\n     * nothing retries it, and a failed send changes no state here, so a failure is safe to absorb.\n     */\n    public void sendFarewell(User user, Mailer mailer) {\n        try {\n            mailer.send(user.getEmail(), \"Your account is closed\");\n        } catch (Exception e) {\n            // Best effort, as the Javadoc explains.\n        }\n    }\n}\n",
+			"context/description.md": "Add user deactivation.\n",
+			"context/metadata.json": "{\"title\": \"Add user deactivation\"}"
+		},
+		"reason": "The Javadoc states why absorbing the failure is safe, and the source agrees: the mail is optional, nothing waits for it and it changes no state.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "ev-keeps-views-free-of-networking-and-persistence-01",
 		"expected": {
 			"keeps-views-free-of-networking-and-persistence": "NOT_MET"

@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,24 @@ class ProxyStandInAdmissionTest {
                 + "\"candidate\":{\"outcome\":\"" + outcome
                 + "\",\"summary\":\"Handles errors\",\"explanation\":\"The handler records the failure.\","
                 + "\"citations\":[],\"evidence\":{\"openQuestions\":[]},\"coverage\":{\"source\":\"host\",\"complete\":true,\"reads\":0,\"truncatedReads\":0,\"failedReads\":0,\"receipts\":[]}}}";
+    }
+
+    @Test
+    void shouldAnswerAnEmptySealFromTheStagedPractices() {
+        var staged = new ArrayList<JsonNode>();
+        byte[] sent = "staged".getBytes(StandardCharsets.UTF_8);
+
+        var first = PracticeRunnerLiveLlmTest.ProxyStandIn.stage(request(entry("first", "MET")), sent, staged);
+        PracticeRunnerLiveLlmTest.ProxyStandIn.stage(request(entry("second", "NOT_MET")), sent, staged);
+        JsonNode seal = MAPPER.readTree(
+                "{\"contractVersion\":3,\"reviewId\":\"" + REVIEW + "\",\"jobId\":\"" + JOB + "\",\"attempt\":0}");
+        var answer = PracticeRunnerLiveLlmTest.ProxyStandIn.admit(
+                PracticeRunnerLiveLlmTest.ProxyStandIn.sealed(seal, staged));
+
+        assertThat(first.path("practiceSlug").asString()).isEqualTo("first");
+        assertThat(first.path("digest").asString()).matches("[0-9a-f]{64}");
+        assertThat(MAPPER.treeToValue(answer, AdmissionResponseDTO.class).admitted())
+                .hasSize(2);
     }
 
     @ParameterizedTest
