@@ -1280,7 +1280,8 @@ describe("complete practice observations", () => {
 		assert(completeObservation.explanation !== null);
 		await within(back).findByText(completeObservation.explanation);
 		expect(router.state.location.search.observation).toBe(completeObservation.id);
-		expect(screen.queryByRole("region", { name: "Introduction" })).toBeNull();
+		// The Guide panel leaves a frame after the Observations panel arrives.
+		await waitFor(() => expect(screen.queryByRole("region", { name: "Introduction" })).toBeNull());
 	});
 
 	it("does not invent explanation or evidence when the retained detail makes them unavailable", async () => {
