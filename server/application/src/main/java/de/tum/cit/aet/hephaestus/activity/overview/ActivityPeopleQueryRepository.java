@@ -385,8 +385,12 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                 .toList();
     }
 
+    /**
+     * The scope's first event, for a query that ends with {@link #FIRST}. The ordered limit reads the
+     * workspace's time index from its start; {@code min()} over these joins reads every event of the workspace.
+     */
     String EARLIEST = """
-            SELECT min(e.occurred_at) FROM activity_event e JOIN repository r ON r.id = e.repository_id
+            SELECT e.occurred_at FROM activity_event e JOIN repository r ON r.id = e.repository_id
             JOIN "user" u ON u.id = e.actor_id
             WHERE e.workspace_id = :#{#scope.workspaceId()} AND e.repository_id IN (:#{#scope.repositoryIds()}) AND EXISTS (
                 SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id = :#{#scope.workspaceId()} AND m.name_with_owner = r.name_with_owner)
@@ -396,14 +400,16 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
         return scope.publicOnly() ? findPublicEarliest(scope) : findInternalEarliest(scope);
     }
 
-    @Query(value = EARLIEST, nativeQuery = true)
+    String FIRST = " ORDER BY e.occurred_at LIMIT 1 ";
+
+    @Query(value = EARLIEST + FIRST, nativeQuery = true)
     @Nullable
     Instant findInternalEarliest(@Param("scope") ActivityScope scope);
 
     @Query(value = PUBLIC_PEOPLE + EARLIEST + """
         AND u.id IN (SELECT id FROM public_people)
             AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')
-        """, nativeQuery = true)
+        """ + FIRST, nativeQuery = true)
     @Nullable
     Instant findPublicEarliest(@Param("scope") ActivityScope scope);
 
@@ -420,7 +426,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                     )
             )
             SELECT count(*) AS total, count(*) FILTER (WHERE complete) AS complete,
-                (SELECT min(e.occurred_at) FROM activity_event e JOIN repository r ON r.id = e.repository_id
+                (SELECT e.occurred_at FROM activity_event e JOIN repository r ON r.id = e.repository_id
                     WHERE e.workspace_id = :#{#scope.workspaceId()} AND e.repository_id IN (:#{#scope.repositoryIds()}) AND EXISTS (SELECT 1 FROM monitors m
                         WHERE m.complete AND m.name_with_owner = r.name_with_owner)
         """;
@@ -428,7 +434,7 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
                     AND e.actor_id IN (SELECT id FROM public_people)
                     AND e.event_type IN ('PULL_REQUEST_OPENED', 'ISSUE_CREATED', 'REVIEW_APPROVED', 'REVIEW_CHANGES_REQUESTED', 'REVIEW_COMMENTED')
         """;
-    String COVERAGE_TAIL = " ) AS since FROM monitors ";
+    String COVERAGE_TAIL = FIRST + ") AS since FROM monitors ";
 
     default CoverageRow findCoverage(ActivityScope scope) {
         return scope.publicOnly() ? findPublicCoverage(scope) : findInternalCoverage(scope);
