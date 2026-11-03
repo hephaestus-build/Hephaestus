@@ -2566,6 +2566,7 @@ index|workspace_team_settings|workspace_team_settingsPK|CREATE UNIQUE INDEX "wor
 index|workspace|uc_workspaceorganization_id_col|CREATE UNIQUE INDEX uc_workspaceorganization_id_col ON public.workspace USING btree (organization_id)
 index|workspace|uc_workspaceslug_col|CREATE UNIQUE INDEX uc_workspaceslug_col ON public.workspace USING btree (slug)
 index|workspace|workspacePK|CREATE UNIQUE INDEX "workspacePK" ON public.workspace USING btree (id)
+partition|auth_event|RANGE (occurred_at)
 partman|public.auth_event|occurred_at|1 mon|2
 sequence|account_export_id_seq|bigint|1|1|9223372036854775807|false
 sequence|account_id_seq|bigint|1|1|9223372036854775807|false

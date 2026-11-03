@@ -95,6 +95,7 @@ class SchemaFingerprintDatabaseTest {
                     """);
             List<String> base = SchemaFingerprint.of(connection);
             assertThat(base).anyMatch(line -> line.startsWith("extension|pg_partman|partman|"));
+            assertThat(base).contains("partition|events|RANGE (at)");
             assertThat(base)
                     .as("an extension's functions move with its minor version, which the extension line leaves out")
                     .noneMatch(line -> line.startsWith("function|citext"));
@@ -171,7 +172,13 @@ class SchemaFingerprintDatabaseTest {
                     ALTER TABLE kinds ADD CONSTRAINT kinds_v
                         CHECK ((v)::text = ANY (ARRAY[('a'::varchar)::text, ('c'::varchar)::text]));
                     """);
-            assertThat(SchemaFingerprint.of(connection)).as("a different list").isNotEqualTo(base);
+            assertThat(SchemaFingerprint.of(connection).stream()
+                            .filter(line -> !line.startsWith("extension|"))
+                            .toList())
+                    .as("a different list")
+                    .isNotEqualTo(base.stream()
+                            .filter(line -> !line.startsWith("extension|"))
+                            .toList());
         }
     }
 

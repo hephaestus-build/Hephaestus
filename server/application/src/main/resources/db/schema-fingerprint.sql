@@ -1,6 +1,7 @@
 -- One sorted line for each object that the changelog decides in the application schema: the schema fingerprint. Two
 -- databases with the same lines have the same tables, columns, defaults, constraints, indexes, triggers, views,
--- functions, sequences, extensions, pg_partman parents and storage options, such as a table's fillfactor.
+-- functions, sequences, extensions, partition keys, pg_partman parents and storage options, such as a table's
+-- fillfactor.
 --
 -- Left out, because no changelog decides them: Liquibase's own tables, pg_partman's runtime partitions, sequence
 -- positions, the names of not-null constraints (a renamed column keeps its old one, and the column line says whether a
@@ -77,6 +78,10 @@ SELECT regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replac
     UNION ALL
     SELECT 'partman|' || p.parent_table || '|' || p.control || '|' || p.partition_interval || '|' || p.premake
     FROM partman.part_config p
+    UNION ALL
+    SELECT 'partition|' || c.relname || '|' || pg_get_partkeydef(c.oid)
+    FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'p' AND c.oid NOT IN (SELECT objid FROM owned)
 ) facts
 WHERE line NOT LIKE '%databasechangelog%'
 ) folded
