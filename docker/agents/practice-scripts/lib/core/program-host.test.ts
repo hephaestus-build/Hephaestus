@@ -879,22 +879,31 @@ void describe("the host's bounds on a program's messages", () => {
 		);
 	});
 
-	void test("a request id used again while its request is open stops the program", async () => {
-		const ws = await workspace({
-			reused: program(
-				"definePracticeScript",
-				`{ meta: {}, async run() {
-					process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
-					process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
-					return Promise.withResolvers().promise;
-				} }`,
-			),
+	for (const { when, pause } of [
+		{ when: "while its request is open", pause: "" },
+		{
+			when: "after its request was answered",
+			pause: "await new Promise((resolve) => setTimeout(resolve, 500));",
+		},
+	]) {
+		void test(`a request id used again ${when} stops the program`, async () => {
+			const ws = await workspace({
+				reused: program(
+					"definePracticeScript",
+					`{ meta: {}, async run() {
+						process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
+						${pause}
+						process.send(JSON.stringify({ kind: "read", id: 7, request: { op: "record", name: "metadata.json" } }));
+						return Promise.withResolvers().promise;
+					} }`,
+				),
+			});
+			const { outcome } = await run(ws, "reused");
+			assert.equal(outcome.status, "failed");
+			assert.equal(outcome.stopReason, "error");
+			assert.equal(outcome.error, "the program reused the id of request 7");
 		});
-		const { outcome } = await run(ws, "reused");
-		assert.equal(outcome.status, "failed");
-		assert.equal(outcome.stopReason, "error");
-		assert.equal(outcome.error, "the program reused the id of request 7");
-	});
+	}
 
 	void test("a second final message stops the program", async () => {
 		const ws = await workspace({ "two-final-results": await fixture("two-final-results") });
