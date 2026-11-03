@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobConflictException;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
@@ -97,7 +98,8 @@ public class OutlineDocumentSyncScheduler {
      */
     @WorkspaceAgnostic("Fleet fan-out: enumerates every workspace with an ACTIVE Outline connection")
     public int syncAllNow() {
-        List<Long> workspaceIds = connectionService.findWorkspaceIdsWithActiveConnection(IntegrationKind.OUTLINE);
+        List<Long> workspaceIds =
+                connectionService.findWorkspaceIdsWithConnection(IntegrationKind.OUTLINE, IntegrationState.ACTIVE);
         for (Long workspaceId : workspaceIds) {
             try {
                 runReconcileJob(workspaceId, SyncJobTrigger.SCHEDULED, handle -> {

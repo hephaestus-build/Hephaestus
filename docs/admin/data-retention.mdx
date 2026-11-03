@@ -68,7 +68,8 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Practice results that no feedback cites, and the raw proof of scans | 400 days | None | A server job at 03:00 every day |
 | Feedback and its delivery records | No automatic deletion. Conversation feedback that is never shown is withheld after 14 days and kept. | None | Workspace purge or person erasure |
 | LLM usage records | 400 days | `HEPHAESTUS_LLM_USAGE_RETENTION` | A server job at 04:15 every day |
-| conversations | No automatic deletion | None | Workspace purge, person erasure, or Slack disconnection |
+| Conversations with Hephaestus: messages, answers, digests and summaries | 400 days after each entry is written, erased in the two weeks before. At least 15 days. | `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` (Helm `config.conversationRetention`) | A server job at 03:45 every Sunday. Also workspace purge, person erasure, or Slack disconnection |
+| Tool results in conversations that can copy another source | The Slack retention of the workspace, 30 days by default, erased in the two weeks before, while a Slack connection exists. Otherwise, as the conversation. | None | A server job at 03:40 every Sunday. Slack disconnection erases all of them |
 | Slack messages and threads | 30 days for each connection, at most 180 days. A message deleted in Slack goes earlier, as [Messages deleted or edited in Slack](#messages-deleted-or-edited-in-slack) says. | None | A server job at 03:30 every day |
 | Outline documents | No age limit. Document bodies above 200 MB for each workspace are evicted. | `hephaestus.integration.outline.cache.max-size-mb` | Outline sync |
 | GitHub and GitLab mirror tables | No age limit while a workspace monitors the repository | None | Repository monitoring |
@@ -128,6 +129,23 @@ These limits remain:
   For such an app, raise the budgets and shorten the interval.
 
 Direct messages with Hephaestus are not part of this sync.
+
+## Tool results in conversations
+
+A tool result is what Hephaestus read during an answer: a file of its context, a command's output or a repository.
+It can copy other people's data, such as messages from a monitored Slack channel.
+Hephaestus does not record which source a tool result copied.
+Thus each one is erased with the shortest retention of a source that it could have read, which is the Slack retention.
+A tool result can copy a message that is near the end of its own retention.
+Thus the words of a channel message can stay for up to twice the Slack retention.
+
+The person's own messages and Hephaestus's answers keep the conversation retention.
+An answer can repeat what Hephaestus read, including channel messages, and its reasoning can too.
+The conversation retention applies to them.
+
+An erased entry keeps its place in the conversation, as a deleted message does.
+Erasing an entry also erases each summary that covers it, so a long conversation is summarized again after a weekly run.
+A weekly run erases at most 20,000 entries and 20,000 tool results for each workspace, and a larger backlog takes more weeks.
 
 ## NATS JetStream
 

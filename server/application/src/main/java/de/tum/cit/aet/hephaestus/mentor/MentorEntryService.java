@@ -210,6 +210,33 @@ public class MentorEntryService {
         redaction.redact(entries.findUnredactedIdsByWorkspaceIdAndSurface(workspaceId, MentorEntry.Surface.SLACK));
     }
 
+    /**
+     * Erases up to {@code limit} entries of a workspace written before the cutoff, as a delete erases them: their words
+     * and every copy of them. An entry this old belongs to no running turn.
+     *
+     * @return how many entries it erased
+     */
+    @Transactional
+    public int redactWrittenBefore(long workspaceId, Instant cutoff, int limit) {
+        List<UUID> ids = entries.findUnredactedIdsWrittenBefore(workspaceId, cutoff, limit);
+        redaction.redact(ids);
+        return ids.size();
+    }
+
+    /**
+     * Erases up to {@code limit} tool results of a workspace written before the cutoff that can copy anyone's data
+     * ({@link MentorEntryRepository#COPIES_PERSON_DATA}), with every copy of them. No record says which source a
+     * result copied, so each one goes with the shortest retention of a source that it could have read.
+     *
+     * @return how many tool results it erased
+     */
+    @Transactional
+    public int redactCopyingToolResultsWrittenBefore(long workspaceId, Instant cutoff, int limit) {
+        List<UUID> ids = entries.findUnredactedCopyingToolResultIdsWrittenBefore(workspaceId, cutoff, limit);
+        redaction.redact(ids);
+        return ids.size();
+    }
+
     /** Full-text search over a conversation tree ({@link MentorEntryRepository#searchByWorkspaceId}). */
     @Transactional(readOnly = true)
     public List<SearchHit> search(long workspaceId, UUID conversationId, SearchQuery search) {

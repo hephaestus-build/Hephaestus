@@ -2,4 +2,5 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
+| `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` | `hephaestus.mentor.conversation-retention` | `default: P400D` | `server` | The age after which every conversation entry is erased, as a delete erases it. |
 | `HEPHAESTUS_MENTOR_TURN_CAPACITY` | `hephaestus.mentor.turn.capacity` | `default: (empty)` | `server` | The conversation turns that all workers together run at once: the number of workers times the conversation turns of each. While every one of them runs a turn, a question that could start next says that Hephaestus is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set. |

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -26,7 +27,8 @@ public class GitLabTokenRotationScheduler {
     @Scheduled(cron = "0 0 3 * * *", zone = "UTC")
     @SchedulerLock(name = "gitlabTokenRotation", lockAtMostFor = "PT2H", lockAtLeastFor = "PT1M")
     public void rotateTokens() {
-        for (long workspaceId : connections.findWorkspaceIdsWithActiveConnection(IntegrationKind.GITLAB)) {
+        for (long workspaceId :
+                connections.findWorkspaceIdsWithConnection(IntegrationKind.GITLAB, IntegrationState.ACTIVE)) {
             workspaces
                     .findById(workspaceId)
                     .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)

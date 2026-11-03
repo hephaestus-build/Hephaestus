@@ -641,6 +641,8 @@ hephaestus:
     mentor:
         turn:
             capacity: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}
+        # Age at which every conversation entry is erased, as a deleted message is; the erasure is irreversible.
+        conversation-retention: ${HEPHAESTUS_MENTOR_CONVERSATION_RETENTION:P400D}
 
     # Dev-only actuator for manually triggering PR reviews (never enable in production).
     # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.

@@ -299,6 +299,13 @@ This applies the rule that unknown visibility never permits an automatic repeat 
 The feedback becomes `WITHHELD` with the stop reason `CONVERSATION_EXPIRED`.
 A later `show_feedback` call for it gets `422`.
 
+`MentorRetentionSweeper` and `SlackRetentionSweeper#sweepCopies` (server role, every Sunday) erase entries through `MentorRedaction`, up to two weeks before their limit, so a missed run keeps the limit.
+The first erases every entry that reaches `hephaestus.mentor.conversation-retention`.
+The second erases each tool result of `COPIES_PERSON_DATA` that reaches the Slack retention, because no record says which source it copied.
+An erased entry erases each summary that covers it, and coverage starts at the first entry of a conversation.
+Thus a long conversation loses its summary after each run and pays for one compaction on its next turn.
+The runs are weekly so that this cost comes about once a week.
+
 The weekly digest links each piece of conversation feedback that became `DELIVERED` in its week to the message in `feedback_copy.mentor_entry_id`.
 The digest creates no copy and changes no delivery.
 In a thread on a digest, Hephaestus discusses a piece through `link_result` or `link_problem`.

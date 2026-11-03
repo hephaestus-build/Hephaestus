@@ -231,7 +231,7 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
                 .beAnnotatedWith("de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic")
                 .because("the fan-out loops run the allowlisted fleet enumerations "
                         + "(OutlineCollectionRepository.findDistinctWorkspaceIdsWithPendingSync, "
-                        + "ConnectionService.findWorkspaceIdsWithActiveConnection) before any tenant is bound, so they "
+                        + "ConnectionService.findWorkspaceIdsWithConnection) before any tenant is bound, so they "
                         + "must declare the bypass via @WorkspaceAgnostic")
                 .check(classes);
     }
