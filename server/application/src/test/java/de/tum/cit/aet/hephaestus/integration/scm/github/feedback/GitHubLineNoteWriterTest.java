@@ -155,6 +155,26 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadBackASubmissionPostedWithAnEarlierFooter() {
+        writer.postPackage(TARGET, publication(), (ids, done) -> true);
+        reviews.getFirst()
+                .put("body", earlierFooter(String.valueOf(reviews.getFirst().get("body"))));
+        for (var thread : threads) {
+            var comment = new LinkedHashMap<String, Object>(comment(thread));
+            comment.put("body", earlierFooter(String.valueOf(comment.get("body"))));
+            thread.put("comments", Map.of("nodes", List.of(comment)));
+        }
+
+        assertThat(writer.findPosted(TARGET, publication())).hasSize(3).allMatch(CopyReceipt::acknowledged);
+    }
+
+    private static String earlierFooter(String body) {
+        String earlier = body.replaceAll("<sub>[^\\n]*</sub>", "<sub>An earlier footer.</sub>");
+        assertThat(earlier).isNotEqualTo(body);
+        return earlier;
+    }
+
+    @Test
     void shouldRefuseAnotherPendingReviewWithoutChangingIt() {
         reviews.add(review("Unrelated draft"));
         assertThat(writer.postPackage(TARGET, publication(), (ids, done) -> true)

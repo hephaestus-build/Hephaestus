@@ -31,6 +31,42 @@ class ScmFeedbackFormatterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldTreatACopyAsTheSameWhateverFooterItWasPostedWith() {
+        var content = ScmFeedbackFixtures.summary("Test body", "<!-- marker -->");
+        String posted = formatter("https://old.example").footer(item()).summary(content);
+        String expected = formatter("https://new.example").footer(item()).summary(content);
+        assertThat(posted).isNotEqualTo(expected);
+        assertThat(ScmFeedbackFormatter.sameCopy(posted, expected)).isTrue();
+
+        String reworded = posted.replaceAll("<sub>[^\\n]*</sub>\\n", "<sub>Other words.</sub>\n");
+        assertThat(reworded).isNotEqualTo(posted);
+        assertThat(ScmFeedbackFormatter.sameCopy(reworded, expected)).isTrue();
+    }
+
+    @Test
+    void shouldNotTreatChangedWordsOrAnotherMarkerAsTheSameCopy() {
+        var content = ScmFeedbackFixtures.summary("Test body", "<!-- marker -->");
+        var footer = formatter("https://hephaestus.example").footer(item());
+        String expected = footer.summary(content);
+
+        assertThat(ScmFeedbackFormatter.sameCopy(expected.replace("Test body", "Other body"), expected))
+                .isFalse();
+        assertThat(ScmFeedbackFormatter.sameCopy(expected.replace("<!-- marker -->", "<!-- other -->"), expected))
+                .isFalse();
+        assertThat(ScmFeedbackFormatter.sameCopy(expected + "\nSomeone's edit", expected))
+                .isFalse();
+    }
+
+    @Test
+    void shouldKeepAnAuthorsSubTagAsPartOfTheWords() {
+        var footer = formatter("https://hephaestus.example").footer(item());
+        String expected = footer.summary(ScmFeedbackFixtures.summary("<sub>one</sub>", "<!-- marker -->"));
+        String other = footer.summary(ScmFeedbackFixtures.summary("<sub>two</sub>", "<!-- marker -->"));
+
+        assertThat(ScmFeedbackFormatter.sameCopy(other, expected)).isFalse();
+    }
+
+    @Test
     void formatsSummaryMarkerBodyMetadataAndSettingsLink() {
         ItemRef item = item();
         ScmFeedbackFormatter formatter = formatter("https://hephaestus.example.com");
