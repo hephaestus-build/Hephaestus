@@ -134,6 +134,7 @@ function AdminLlmModelFormDialogContent({
 			? {
 					...metadataShared,
 					clearBrand: fields.brand === undefined,
+					clearDataHandling: fields.operatedBy === undefined,
 					...reasoningEffortUpdateOf(fields.reasoningEffort),
 				}
 			: {

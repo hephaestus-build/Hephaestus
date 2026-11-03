@@ -5612,6 +5612,7 @@ export const zUpdateLlmModelRequest = z.object({
         'MOONSHOT'
     ]).optional(),
     clearBrand: z.boolean().optional(),
+    clearDataHandling: z.boolean().optional(),
     clearReasoningEffort: z.boolean().optional(),
     contextWindow: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     dataHandlingNote: z.string().min(0).max(200).optional(),
@@ -5790,6 +5791,7 @@ export const zUpdateWorkspaceLlmModelRequest = z.object({
         'MOONSHOT'
     ]).optional(),
     clearBrand: z.boolean().optional(),
+    clearDataHandling: z.boolean().optional(),
     clearReasoningEffort: z.boolean().optional(),
     contextWindow: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     dataHandlingNote: z.string().min(0).max(200).optional(),
