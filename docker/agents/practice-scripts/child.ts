@@ -16,6 +16,7 @@ import {
 import { isJsonObject } from "./lib/core/json.ts";
 import { ipcModels } from "./lib/core/models-ipc.ts";
 import {
+	captureFailures,
 	isPracticeScriptDefinition,
 	UnratedError,
 	type ModelNeeds,
@@ -133,7 +134,12 @@ async function runDefinition(
 		read,
 		review: async (options) => {
 			stopped.signal.throwIfAborted();
-			const reply = await request((id) => ({ kind: "review", id, options: options ?? {} }));
+			const reply = await request((id) => ({
+				kind: "review",
+				id,
+				options: options ?? {},
+				captureFailures: [...captureFailures()],
+			}));
 			if (reply.kind === "review-failed") {
 				throw new UnratedError(reply.reason, reply.message);
 			}
@@ -161,7 +167,8 @@ try {
 	if (!isPracticeScriptDefinition(exported)) {
 		throw new Error(NOT_A_DEFINITION_ERROR);
 	}
-	await postLast({ kind: "result", value: await runDefinition(job, exported) });
+	const value = await runDefinition(job, exported);
+	await postLast({ kind: "result", value, captureFailures: [...captureFailures()] });
 } catch (error) {
 	// A practice program is foreign code (DB-stored data), so it can throw a non-Error value.
 	await postLast({

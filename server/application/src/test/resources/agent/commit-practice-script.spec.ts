@@ -23,7 +23,7 @@ function evidence(source?: string) {
 void test("captured commits distinguish empty history from missing or malformed records", async () => {
 	assert.equal(await readCapturedCommits(evidence()), null);
 	for (const source of ["{", '{"commits":[null]}', '{"commits":{}}', '{"commits":[{}]}']) {
-		assert.equal(await readCapturedCommits(evidence(source)), null);
+		await assert.rejects(readCapturedCommits(evidence(source)), { name: "UnratedError" });
 	}
 	assert.deepEqual(await readCapturedCommits(evidence('{"commits":[]}')), []);
 	const captured = await readCapturedCommits(
@@ -174,10 +174,7 @@ void test("one authored commit is still a history to judge, and an unread commit
 			'{"commits":[{"sha":"1234567","message":"","parents":"missing","files":[]}]}',
 			'{"commits":[{"sha":"1234567","message":"","parents":[],"files":[{}]}]}',
 		]) {
-			const unread = await runOnCommitRecord(slug, source);
-			assert.deepEqual(unread.leads, []);
-			assert.equal(unread.facts, undefined);
-			assert.match(unread.directions?.[0] ?? "", /missing or malformed: a collection gap/u);
+			await assert.rejects(runOnCommitRecord(slug, source), { name: "UnratedError" });
 		}
 		const empty = await runOnCommitRecord(slug, '{"commits":[]}');
 		assert.match(empty.directions?.[0] ?? "", /^No authored commit in the reviewed range/u);

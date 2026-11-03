@@ -8,12 +8,15 @@ const scriptName = (run: Pick<PracticeScriptRun, "scriptKind">) =>
 	run.scriptKind === "BUILTIN" ? "Built-in review" : "Practice script";
 
 export const PRACTICE_SCRIPT_STOP_REASON_DEFS = {
-	UNAVAILABLE: { sentence: "a model it needed was unavailable", result: "Model unavailable" },
+	UNAVAILABLE: {
+		sentence: "evidence or a model it needed was unavailable",
+		result: "Evidence or model unavailable",
+	},
 	BUDGET: { sentence: "it used up its budget", result: "Out of budget" },
 	DEADLINE: { sentence: "it ran out of time", result: "Ran out of time" },
 	TOO_LARGE: { sentence: "a call was too large", result: "Call too large" },
 	OFF_FORMAT: { sentence: "a model answered in the wrong format", result: "Wrong format" },
-	REFUSED: { sentence: "a model refused to answer", result: "Model refused" },
+	REFUSED: { sentence: "a read or a model call was refused", result: "Read or model call refused" },
 	ERROR: { sentence: "it raised an error", result: "Error" },
 	CANCELLED: { sentence: "the review was cancelled", result: "Cancelled" },
 	INVALID_SCRIPT: {
@@ -23,6 +26,10 @@ export const PRACTICE_SCRIPT_STOP_REASON_DEFS = {
 	INVALID_CANDIDATE: {
 		sentence: "what it returned is not a candidate observation",
 		result: "Returned no candidate observation",
+	},
+	UNREAD_EVIDENCE: {
+		sentence: "it decided without evidence that it asked for and did not get",
+		result: "Decided without its evidence",
 	},
 } satisfies Record<PracticeScriptStopReason, { sentence: string; result: string }>;
 

@@ -131,10 +131,19 @@ export const childMessageSchema = z.discriminatedUnion("kind", [
 	}),
 	z.strictObject({ kind: z.literal("read"), id: callId, request: readRequestSchema }),
 	/** The options are parsed with the review input's own schema when the host answers the request. */
-	z.strictObject({ kind: z.literal("review"), id: callId, options: z.unknown() }),
+	z.strictObject({
+		kind: z.literal("review"),
+		id: callId,
+		options: z.unknown(),
+		captureFailures: z.array(z.string()).optional(),
+	}),
 	z.strictObject({ kind: z.literal("cancel"), id: callId }),
 	z.strictObject({ kind: z.literal("log"), text: z.string().max(MAX_LOG_CHARS) }),
-	z.strictObject({ kind: z.literal("result"), value: z.unknown() }),
+	z.strictObject({
+		kind: z.literal("result"),
+		value: z.unknown(),
+		captureFailures: z.array(z.string()).optional(),
+	}),
 	z.strictObject({
 		kind: z.literal("failed"),
 		message: z.string(),

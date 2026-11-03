@@ -8,7 +8,7 @@ import { z } from "zod";
 import { factsOf } from "../../lib/core/bounded-text.ts";
 import type { PracticeInputs, ReviewLead } from "../../lib/core/contract.ts";
 import { optionalString } from "../../lib/core/json.ts";
-import { UnratedError, type Evidence } from "../../lib/core/practice-script.ts";
+import { captureFailure, type Evidence } from "../../lib/core/practice-script.ts";
 import type { ChangeCommit } from "./change.ts";
 import type { SubIssueSource } from "./issue-classification.ts";
 import { pullRequestChecksRecordSchema, type pullRequestRecordSchema } from "./records.ts";
@@ -163,12 +163,12 @@ async function readReviewRecord<T>(
 	try {
 		value = JSON.parse(record.text);
 	} catch {
-		throw new UnratedError("unavailable", `${name} is not valid JSON`);
+		throw captureFailure("unavailable", `${name} is not valid JSON`);
 	}
 	const parsed = schema.safeParse(value);
 	if (!parsed.success) {
 		const issue = parsed.error.issues[0];
-		throw new UnratedError(
+		throw captureFailure(
 			"unavailable",
 			`${name} has an invalid record shape at ${issue?.path.join(".") ?? ""}: ${issue?.message ?? "invalid"}`,
 		);

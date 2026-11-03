@@ -969,6 +969,7 @@ export const STOP_REASONS = [
 	"cancelled",
 	"invalid-program",
 	"invalid-candidate",
+	"unread-evidence",
 ] as const;
 export type StopReason = (typeof STOP_REASONS)[number];
 export const PROGRAM_KINDS = ["builtin", "custom"] as const;

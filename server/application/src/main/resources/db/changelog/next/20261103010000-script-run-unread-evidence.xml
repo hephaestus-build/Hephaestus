@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793667600000-1" author="hephaestus">
+        <comment>A script run can stop because code decided without evidence that it asked for and did not get.</comment>
+        <sql>ALTER TABLE review_job_script_run DROP CONSTRAINT ck_review_job_script_run_reason</sql>
+        <sql>ALTER TABLE review_job_script_run ADD CONSTRAINT ck_review_job_script_run_reason CHECK (stop_reason IS NULL OR stop_reason IN ('UNAVAILABLE','BUDGET','DEADLINE','TOO_LARGE','OFF_FORMAT','REFUSED','ERROR','CANCELLED','INVALID_SCRIPT','INVALID_CANDIDATE','UNREAD_EVIDENCE'))</sql>
+        <rollback>
+            <sql>ALTER TABLE review_job_script_run DROP CONSTRAINT ck_review_job_script_run_reason</sql>
+            <sql>ALTER TABLE review_job_script_run ADD CONSTRAINT ck_review_job_script_run_reason CHECK (stop_reason IS NULL OR stop_reason IN ('UNAVAILABLE','BUDGET','DEADLINE','TOO_LARGE','OFF_FORMAT','REFUSED','ERROR','CANCELLED','INVALID_SCRIPT','INVALID_CANDIDATE'))</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,7 +1,7 @@
 import type { Citation } from "../../lib/core/contract.ts";
 import { domainAccess } from "../../lib/core/domain-access.ts";
 import {
-	UnratedError,
+	captureFailure,
 	type ModelNeeds,
 	type PracticeScriptContext,
 } from "../../lib/core/practice-script.ts";
@@ -60,7 +60,7 @@ export interface Files {
 
 export function requireChange(files: Files | null): ReadonlyMap<string, DiffFile> {
 	if (files?.change == null) {
-		throw new UnratedError("unavailable", "the change was not captured");
+		throw captureFailure("unavailable", "the change was not captured");
 	}
 	return files.change.files;
 }

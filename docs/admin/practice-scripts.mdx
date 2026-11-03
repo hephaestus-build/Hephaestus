@@ -90,6 +90,17 @@ A listing, search match or claimed count alone does not prove that read.
 Citations must quote authorized captured text.
 The host verifies location, version and domain basis before the result can support feedback.
 
+A result that your code decided must rest on evidence that your code read.
+The host refuses it with the reason **Decided without its evidence** in these cases, even if your code caught the error:
+
+- A read failed.
+- A record was not captured.
+- A kit could not trust a record.
+
+A failure to read is never a statement about the work.
+You can still call `ctx.review` after such a failure. The result's coverage then names what your script could not read.
+A partial read or a cut search can support Not met, but not Met or Does not apply.
+
 ## Ask assigned models
 
 Declare required or optional chat, decision, embedding and reranking models under meta.models.

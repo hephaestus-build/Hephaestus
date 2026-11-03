@@ -82,6 +82,12 @@ Candidate failure counts describe only unresolved gaps in required or cited sour
 A scan Met needs a COMPLETE receipt for its assigned file at the pinned commit.
 An unavailable required read withholds the result instead of producing an outcome.
 
+A candidate that code decided stops with the stop reason `unread-evidence` after any of these:
+
+- A failed read.
+- A read of a record that was not captured.
+- A kit's capture failure. The host counts it as a failed read of the script.
+
 ## Citation verification
 
 Core verifies the quote against captured text and fills coordinates.

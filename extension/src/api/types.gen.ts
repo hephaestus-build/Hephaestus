@@ -3792,7 +3792,7 @@ export type PracticeScriptRun = {
     reviewModelCalls: null | number;
     scriptKind: 'BUILTIN' | 'CUSTOM';
     status: 'OK' | 'WITHHELD' | 'FAILED' | 'NOT_REACHED' | 'NOT_FINISHED';
-    stopReason: 'UNAVAILABLE' | 'BUDGET' | 'DEADLINE' | 'TOO_LARGE' | 'OFF_FORMAT' | 'REFUSED' | 'ERROR' | 'CANCELLED' | 'INVALID_SCRIPT' | 'INVALID_CANDIDATE' | null;
+    stopReason: 'UNAVAILABLE' | 'BUDGET' | 'DEADLINE' | 'TOO_LARGE' | 'OFF_FORMAT' | 'REFUSED' | 'ERROR' | 'CANCELLED' | 'INVALID_SCRIPT' | 'INVALID_CANDIDATE' | 'UNREAD_EVIDENCE' | null;
 };
 
 export type PracticeScriptSummary = {

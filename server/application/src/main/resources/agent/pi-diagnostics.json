@@ -140,7 +140,8 @@
 			"off-format",
 			"refused",
 			"too-large",
-			"unavailable"
+			"unavailable",
+			"unread-evidence"
 		],
 		"provider_retries": "count",
 		"pull_request": "flag",

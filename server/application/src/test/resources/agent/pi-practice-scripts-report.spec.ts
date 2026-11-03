@@ -142,7 +142,13 @@ void test("an error is reported only for a failed practice", () => {
 });
 
 void test("every stop reason of a failed program is reported as it is", () => {
-	const stops = [...REASONS, "cancelled", "invalid-program", "invalid-candidate"] as const;
+	const stops = [
+		...REASONS,
+		"cancelled",
+		"invalid-program",
+		"invalid-candidate",
+		"unread-evidence",
+	] as const;
 	const report = parsed(
 		executionReport(
 			stops.map((stopReason) => [stopReason, outcome({ status: "failed", stopReason })]),
