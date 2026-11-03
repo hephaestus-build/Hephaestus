@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793739770281-1" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="workspace_team_label_filter" indexName="IX_workspace_team_label_filterPK"/>
+    </preConditions>
+    <comment>IX_workspace_team_label_filterPK repeats an index on workspace_team_label_filter that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX "IX_workspace_team_label_filterPK"</sql>
+    <rollback>
+      <sql>CREATE UNIQUE INDEX "IX_workspace_team_label_filterPK" ON workspace_team_label_filter (label_id, team_id, workspace_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-2" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="workspace_team_repository_settings" indexName="IX_workspace_team_repository_settingsPK"/>
+    </preConditions>
+    <comment>IX_workspace_team_repository_settingsPK repeats an index on workspace_team_repository_settings that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX "IX_workspace_team_repository_settingsPK"</sql>
+    <rollback>
+      <sql>CREATE UNIQUE INDEX "IX_workspace_team_repository_settingsPK" ON workspace_team_repository_settings (repository_id, team_id, workspace_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-3" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="workspace_team_settings" indexName="IX_workspace_team_settingsPK"/>
+    </preConditions>
+    <comment>IX_workspace_team_settingsPK repeats an index on workspace_team_settings that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX "IX_workspace_team_settingsPK"</sql>
+    <rollback>
+      <sql>CREATE UNIQUE INDEX "IX_workspace_team_settingsPK" ON workspace_team_settings (team_id, workspace_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-4" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="commit_contributor" indexName="idx_commit_contributor_commit_id"/>
+    </preConditions>
+    <comment>idx_commit_contributor_commit_id repeats an index on commit_contributor that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_commit_contributor_commit_id</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_commit_contributor_commit_id ON commit_contributor (commit_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-5" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="issue_blocking" indexName="idx_issue_blocking_blocked_id"/>
+    </preConditions>
+    <comment>idx_issue_blocking_blocked_id repeats an index on issue_blocking that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_issue_blocking_blocked_id</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_issue_blocking_blocked_id ON issue_blocking (blocked_issue_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-6" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="issue" indexName="idx_issue_repository_id"/>
+    </preConditions>
+    <comment>idx_issue_repository_id repeats an index on issue that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_issue_repository_id</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_issue_repository_id ON issue (repository_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-7" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="llm_model" indexName="idx_llm_model_connection"/>
+    </preConditions>
+    <comment>idx_llm_model_connection repeats an index on llm_model that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_llm_model_connection</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_llm_model_connection ON llm_model (connection_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-8" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="membership" indexName="idx_membership_account"/>
+    </preConditions>
+    <comment>idx_membership_account repeats an index on membership that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_membership_account</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_membership_account ON membership (account_id, workspace_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-9" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="workspace_team_settings" indexName="idx_workspace_team_settings_team_id"/>
+    </preConditions>
+    <comment>idx_workspace_team_settings_team_id repeats an index on workspace_team_settings that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_workspace_team_settings_team_id</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_workspace_team_settings_team_id ON workspace_team_settings (team_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-10" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="workspace_llm_model" indexName="idx_ws_llm_model_connection"/>
+    </preConditions>
+    <comment>idx_ws_llm_model_connection repeats an index on workspace_llm_model that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX idx_ws_llm_model_connection</sql>
+    <rollback>
+      <sql>CREATE INDEX idx_ws_llm_model_connection ON workspace_llm_model (connection_id)</sql>
+    </rollback>
+  </changeSet>
+    <changeSet id="1793739770281-11" author="hephaestus">
+    <preConditions onFail="MARK_RAN">
+      <indexExists tableName="connection" indexName="ix_connection_workspace_kind"/>
+    </preConditions>
+    <comment>ix_connection_workspace_kind repeats an index on connection that starts with the same columns, so it only adds write cost.</comment>
+    <sql>DROP INDEX ix_connection_workspace_kind</sql>
+    <rollback>
+      <sql>CREATE INDEX ix_connection_workspace_kind ON connection (workspace_id, kind)</sql>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>
