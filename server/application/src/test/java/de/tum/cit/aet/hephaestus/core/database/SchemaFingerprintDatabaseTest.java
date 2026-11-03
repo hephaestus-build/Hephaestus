@@ -112,6 +112,9 @@ class SchemaFingerprintDatabaseTest {
                     "CREATE OR REPLACE VIEW kinds_view AS SELECT id FROM kinds WHERE id > 0",
                     "CREATE OR REPLACE FUNCTION kinds_touch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN"
                             + " NEW.v = 'x'; RETURN NEW; END $$",
+                    "CREATE OR REPLACE FUNCTION kinds_touch() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$"
+                            + " BEGIN RETURN NEW; END $$",
+                    "ALTER TABLE kinds DISABLE TRIGGER kinds_touch",
                     "DROP TRIGGER kinds_touch ON kinds")) {
                 execute(connection, change);
                 assertThat(SchemaFingerprint.of(connection)).as(change).isNotEqualTo(base);
@@ -132,7 +135,7 @@ class SchemaFingerprintDatabaseTest {
     }
 
     @Test
-    void shouldNotChangeWithTheFormOfALiteralListOrTheNameOfANotNullConstraint() throws SQLException {
+    void shouldNotChangeWithTheFormThatARestoreLeavesOrWithWhatAnExtensionOwns() throws SQLException {
         var database = PostgreSQLTestContainer.createDatabase("fingerprint_forms");
         try (Connection connection =
                 DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password())) {
@@ -141,7 +144,9 @@ class SchemaFingerprintDatabaseTest {
                     CREATE EXTENSION pg_partman WITH SCHEMA partman;
                     CREATE TABLE kinds (
                         v varchar(8) CONSTRAINT old_name NOT NULL,
-                        CONSTRAINT kinds_v CHECK (v::text = ANY ((ARRAY['a'::varchar, 'b'::varchar])::text[])));
+                        n integer,
+                        CONSTRAINT kinds_v CHECK (v::text = ANY ((ARRAY['a'::varchar, 'b'::varchar])::text[])),
+                        CONSTRAINT kinds_n CHECK (n BETWEEN 1 AND 9 AND n <> 5));
                     """);
             List<String> base = SchemaFingerprint.of(connection);
 
@@ -150,8 +155,16 @@ class SchemaFingerprintDatabaseTest {
                     ALTER TABLE kinds ADD CONSTRAINT kinds_v
                         CHECK ((v)::text = ANY (ARRAY[('a'::varchar)::text, ('b'::varchar)::text]));
                     ALTER TABLE kinds RENAME CONSTRAINT old_name TO new_name;
+                    ALTER TABLE kinds DROP CONSTRAINT kinds_n;
+                    ALTER TABLE kinds ADD CONSTRAINT kinds_n CHECK ((n >= 1) AND (n <= 9) AND (n <> 5));
+                    CREATE EXTENSION pg_trgm;
                     """);
-            assertThat(SchemaFingerprint.of(connection)).isEqualTo(base);
+            assertThat(SchemaFingerprint.of(connection))
+                    .as("a restored expression, a renamed not-null constraint and what an extension owns")
+                    .filteredOn(line -> !line.startsWith("extension|"))
+                    .isEqualTo(base.stream()
+                            .filter(line -> !line.startsWith("extension|"))
+                            .toList());
 
             execute(connection, """
                     ALTER TABLE kinds DROP CONSTRAINT kinds_v;

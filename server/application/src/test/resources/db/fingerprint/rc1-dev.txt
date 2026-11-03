@@ -1967,7 +1967,7 @@ constraint|review_scope_repository|ck_review_scope_repository_branches|CHECK (((
 constraint|review_scope_repository|review_scope_repository_pkey|PRIMARY KEY (repository_monitor_id, workspace_id)
 constraint|review_scope_repository|sfk_review_scope_repository_monitor|FOREIGN KEY (repository_monitor_id, workspace_id) REFERENCES repository_to_monitor(id, workspace_id) ON DELETE CASCADE
 constraint|review_scope_repository|sfk_review_scope_repository_workspace|FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE RESTRICT
-constraint|review|ck_review_budget|CHECK ((((budget_usd IS NULL) OR (((budget_usd >= 0.0001) AND (budget_usd <= (100000)::numeric)) AND (round(budget_usd, 4) = budget_usd))) AND (((kind)::text <> 'SCAN'::text) OR (budget_usd IS NOT NULL))))
+constraint|review|ck_review_budget|CHECK ((((budget_usd IS NULL) OR ((budget_usd >= 0.0001) AND (budget_usd <= (100000)::numeric) AND (round(budget_usd, 4) = budget_usd))) AND (((kind)::text <> 'SCAN'::text) OR (budget_usd IS NOT NULL))))
 constraint|review|ck_review_checks|CHECK ((jsonb_typeof(checks) = 'object'::text))
 constraint|review|ck_review_completed|CHECK ((((status)::text = ANY (ARRAY['COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED'])) = (completed_at IS NOT NULL)))
 constraint|review|ck_review_inventory|CHECK (((inventory_receipt IS NULL) OR (((kind)::text = 'SCAN'::text) AND (jsonb_typeof(inventory_receipt) = 'object'::text))))
@@ -2086,33 +2086,33 @@ constraint|workspace|workspacePK|PRIMARY KEY (id)
 extension|btree_gist|public|1
 extension|citext|public|1
 extension|pg_partman|partman|5
-function|check_result_children(p_id uuid)|225bbd2ff25a9b8a38cf37a2ec0fc3a9
-function|check_review_item_scope(p_review uuid, p_practice bigint, p_item bigint)|bc6eaa7fa03921d64494bcfb7c5d7033
-function|config_audit_event_block_mutation()|d971b28a3d628a6ed8d6798629a415c7
-function|conversation_receipt_words(p_workspace_id bigint, p_feedback_id uuid, p_entry_id uuid, p_turn_id uuid)|f74731ce3ffb6af87d446e36e459499c
-function|enforce_consent_decision_append_only()|7c4ac1934b2f4a1199aca543381ce68b
-function|enforce_consent_notice_immutable()|38458d89d2fcbc66a9ab19422a0eaf97
-function|enforce_practice_current_definition()|193ab68250340172f9c43b83bd26b50c
-function|enforce_result_children()|17f5b2d8e54861ff560ed51c2eedfdb7
-function|enforce_review_item_scope()|fe6c2cad8ad799c57bb0fe6544debc6b
-function|feedback_content_digest(p_id uuid)|7bb4d5c88d383061548f07ac5575599d
-function|feedback_package_digest(p_digests text[])|b2229e842fd9cf4715c3179c9c8c1f31
-function|guard_feedback_copy_fence()|67731339a71266c940d2b6df2170870f
-function|guard_feedback_history()|4c6339536336703ba58af65f5263d135
-function|guard_feedback_send_destination()|ebb1546d18be3f4339b4c61c9a09c735
-function|guard_item_event_facts()|36ece75dd43880b434b4a79ec61e9400
-function|guard_item_identity()|fd2435fa70ce59d8abafba7c123b57a9
-function|guard_practice_identity()|a90d14b7c2ae94fc7623e00e3b1cfd2c
-function|guard_practice_version()|ccf5b99d51f116186b1d2979c49f555d
-function|guard_result_facts()|a10aa0a2a7dfd466d6b7d36840ae9fa5
-function|guard_result_insert()|e04b00d90636cf68d1105c36a72d2658
-function|guard_review_item_write()|67dea6746e370516a3d31077f86ea120
-function|practice_definition_complete(d jsonb)|cafe527bb992b3869473cb14f1f03373
-function|practice_review_digest(d jsonb)|4029e18a7615af0ef78dc0cbae2fdf00
-function|reserve_workspace_slug()|9b55ff17e073d8ab4e7b146dafa30dc8
-function|review_model_digest(models jsonb)|090a3b35454c2480b94ab47c18c38386
-function|touch_problem_parent()|4c3192095972dd2eb6ed8e94e6fc4145
-function|workspace_slug_assignable(label text)|8caa4bd101febb9e12a978ca717eef53
+function|check_result_children(p_id uuid)|22ce3b846af3571b9d335a2226370061
+function|check_review_item_scope(p_review uuid, p_practice bigint, p_item bigint)|d43c51b985d46f1266d1a437d020e318
+function|config_audit_event_block_mutation()|d1d4dffdcea870181412374c3cbf9d50
+function|conversation_receipt_words(p_workspace_id bigint, p_feedback_id uuid, p_entry_id uuid, p_turn_id uuid)|9ef1dd477795a3b4121f740eccbf004e
+function|enforce_consent_decision_append_only()|72926e82da37632a4cf097206e83167a
+function|enforce_consent_notice_immutable()|ee78c4a6aed58850496fb08c0d3563ce
+function|enforce_practice_current_definition()|764a48c8487870032f011967ed9dfd64
+function|enforce_result_children()|30dc6264cd8fb949ef6af8b0349ecd91
+function|enforce_review_item_scope()|8a5ad2c38c2c30e88cc47eff26ac6530
+function|feedback_content_digest(p_id uuid)|0e5bcb4abb3fab8e1fbe6cdb40e1bae8
+function|feedback_package_digest(p_digests text[])|ef6c4486ea38dbd3db4197b5da26306d
+function|guard_feedback_copy_fence()|34d5453bab2c6d6938e55842c66cb439
+function|guard_feedback_history()|0618030f63ae9329aa8ddc47140fae1c
+function|guard_feedback_send_destination()|6f2494309a2367553f46090cf06d4179
+function|guard_item_event_facts()|f33dc04c499bec1c128040be3a6a1850
+function|guard_item_identity()|5af9c9e50ba388f295023ae6cca707ae
+function|guard_practice_identity()|b077f60f9d8bbea18257cc2136d942d7
+function|guard_practice_version()|061038d2bbb44148a28f80fe5dbc38b9
+function|guard_result_facts()|df89009ebf9f4c42f4fc8b95102213c1
+function|guard_result_insert()|66af0d2acd71168458f840e55e8bf5a4
+function|guard_review_item_write()|e0cc40f1faaf1117f7c68a5a9c4b420d
+function|practice_definition_complete(d jsonb)|df42655552dfd70209899ae91259ec89
+function|practice_review_digest(d jsonb)|4aab2da03016ddb233912c77815a1cfa
+function|reserve_workspace_slug()|721f9633b47969942ef913713b6fa33b
+function|review_model_digest(models jsonb)|477f963057a64ecc4e2ee24866af20f1
+function|touch_problem_parent()|7bb7f4cab69f6e76ac39977ffcd8647a
+function|workspace_slug_assignable(label text)|6b67c96c9adbb148f141f56593bcc472
 index|account_export|account_export_pkey|CREATE UNIQUE INDEX account_export_pkey ON public.account_export USING btree (id)
 index|account_export|ix_account_export_account|CREATE INDEX ix_account_export_account ON public.account_export USING btree (account_id)
 index|account_export|ix_account_export_ready_expiry|CREATE INDEX ix_account_export_ready_expiry ON public.account_export USING btree (expires_at) WHERE ((status)::text = 'READY'::text)

@@ -27,9 +27,11 @@ final class SchemaFingerprint {
     static List<String> of(Connection connection) throws SQLException {
         List<String> lines = new ArrayList<>();
         try (var statement = connection.createStatement()) {
-            // What pg_get_* prints depends on both: a name is qualified off the path, and a timestamp shows the zone.
+            // pg_get_* output depends on these: a name is qualified off the path, and a time shows zone and style.
             statement.execute("SET search_path TO public");
             statement.execute("SET TIME ZONE 'UTC'");
+            statement.execute("SET IntervalStyle TO postgres");
+            statement.execute("SET quote_all_identifiers TO off");
             try (var rows = statement.executeQuery(QUERY)) {
                 while (rows.next()) {
                     lines.add(rows.getString(1));
