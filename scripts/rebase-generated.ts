@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { isSet } from "./lib/env.ts";
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
+import { reorderMigrations } from "./reorder-migrations.ts";
 
 const generated = (file: string) =>
 	file === "server/openapi.yaml" ||
@@ -178,6 +179,12 @@ export async function rebaseGenerated(
 			await run("git", ["-c", "rerere.enabled=false", "rebase", "--abort"], { cwd });
 		}
 		throw error;
+	}
+	// Main's newer migrations sort this branch's ones too early; the merge queue rejects that order.
+	for (const { from, to } of reorderMigrations(base, cwd)) {
+		console.log(
+			`Moved ${path.basename(from)} to ${path.basename(to)}, after main's newest migration.`,
+		);
 	}
 	// After a successful rebase, preserve partial generator output if generation fails.
 	// A reset here could discard edits made while the build was running.

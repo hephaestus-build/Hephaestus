@@ -95,6 +95,29 @@ await test("independent additions survive generated conflicts and regeneration r
 	assert.equal(changed.split("\n").length, 4);
 });
 
+await test("a migration that main's newer one sorts too early moves after it, with its content", async (t) => {
+	const f = await fixture(t);
+	const next = "server/application/src/main/resources/db/changelog/next";
+	await f.put(`${next}/20261102000000-feature.xml`, "<databaseChangeLog/>\n");
+	const head = await f.commit("feature migration");
+	await f.git("switch", "main");
+	await f.put(`${next}/20261103000000-upstream.xml`, "<databaseChangeLog/>\n");
+	const base = await f.commit("upstream migration");
+	await f.git("switch", "feature");
+	await rebaseGenerated(
+		f.cwd,
+		{ head, branch: "feature", base: "main" },
+		base,
+		async () => undefined,
+	);
+	const staged = await f.git("diff", "--cached", "--name-status", "-M");
+	const [status = "", from = "", to = ""] = staged.split("\t");
+	assert.equal(status, "R100");
+	assert.equal(from, `${next}/20261102000000-feature.xml`);
+	assert.ok(path.basename(to) > "20261103000000-upstream.xml", to);
+	assert.match(to, /-feature\.xml$/u);
+});
+
 await test("a handwritten conflict aborts the whole rebase and preserves the original head", async (t) => {
 	const f = await fixture(t);
 	await f.put("source.txt", "feature\n");

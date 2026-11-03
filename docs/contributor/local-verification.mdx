@@ -64,6 +64,10 @@ The build and generators use the rebased worktree's code and dependencies.
 The command fetches `main` and records its commit.
 It rebases onto that commit and restores the original branch if a handwritten file conflicts.
 It resolves conflicts only in `server/openapi.yaml`, both generated API client directories, and the configuration reference.
+
+It also moves this branch's migrations after the newest migration on `main`, as `vp run db:reorder` does.
+The rename is staged beside the regenerated files.
+
 Then it reconciles dependencies with a frozen install and builds one fresh server JAR.
 That JAR supplies the spec and configuration metadata, and both clients are regenerated from the spec.
 The command does not push or change the merge queue.
@@ -118,6 +122,7 @@ The pre-push hook runs `vp run check:push` with one task worker.
 It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
 It does not write source files.
 `git push --no-verify` skips the hook.
+A change under `db/changelog/next/` first checks that the branch's migrations sort after `origin/main` as last fetched.
 
 For Node, it runs changed test files, existing source companion tests and the CI contract suites for workflow changes.
 This selection does not cover every fixture or resource input.

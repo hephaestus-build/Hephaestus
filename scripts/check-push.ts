@@ -3,9 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { changedPaths, parseBase, pathFilters, scopesFor, type Scope } from "./check-affected.ts";
+import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
 import { PUSH_CHECK_ENV, pushStaticTasks } from "./lib/push-gates.ts";
+import { orderProblem } from "./reorder-migrations.ts";
 
 const allScopes = Object.keys(pushStaticTasks).filter(
 	(scope): scope is keyof typeof pushStaticTasks => Object.hasOwn(pushStaticTasks, scope),
@@ -213,6 +215,14 @@ function main(): void {
 		console.log(
 			`No usable merge base with ${base}; selecting all scoped checks and frontend unit projects without fetching.`,
 		);
+	}
+	// First, because it takes milliseconds and otherwise fails only in the merge queue.
+	if (paths?.some((file) => file.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)) === true) {
+		const problem = orderProblem(base);
+		if (problem !== undefined) {
+			console.error(problem);
+			process.exit(1);
+		}
 	}
 	const tasks = pushTasks(paths);
 	if (tasks.length === 0) {

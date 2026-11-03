@@ -163,6 +163,8 @@ async function fixture() {
 	for (const file of [
 		"check-push.ts",
 		"check-affected.ts",
+		"reorder-migrations.ts",
+		"lib/changelog.ts",
 		"lib/env.ts",
 		"lib/git-environment.ts",
 		"lib/json.ts",
@@ -210,6 +212,25 @@ void test("a selected failing test blocks the push after static checks, with one
 		const calls = await readFile(f.calls, "utf8");
 		assert.match(calls, /"workers":"1","offline":"true"/u);
 		assert.doesNotMatch(result.stdout, /Push checks passed/u);
+	} finally {
+		await rm(f.directory, { recursive: true, force: true });
+	}
+});
+
+void test("a migration that sorts before the base's newest blocks the push before any check runs", async () => {
+	const f = await fixture();
+	try {
+		const next = path.join(f.directory, "server/application/src/main/resources/db/changelog/next");
+		await mkdir(next, { recursive: true });
+		await writeFile(path.join(next, "20261103000000-merged.xml"), "<databaseChangeLog/>\n");
+		f.git("add", ".");
+		f.git("-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "main's migration");
+		await writeFile(path.join(next, "20261102000000-mine.xml"), "<databaseChangeLog/>\n");
+		const result = f.run();
+		assert.equal(result.status, 1, result.stdout + result.stderr);
+		assert.match(result.stderr, /20261102000000-mine\.xml/u);
+		assert.match(result.stderr, /vp run db:reorder/u);
+		await assert.rejects(readFile(f.calls, "utf8"), { code: "ENOENT" });
 	} finally {
 		await rm(f.directory, { recursive: true, force: true });
 	}
