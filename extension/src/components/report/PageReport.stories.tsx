@@ -249,6 +249,8 @@ export const ValuesFromANewerServer: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("list", { name: "Comments for you" })).toBeVisible();
+		await expect(canvas.getByText("A comment on this work")).toBeVisible();
+		await expect(canvas.queryByText("Summary comment")).toBeNull();
 		await expect(canvas.getByText(/Unknown \(PARTLY_MET\)/u)).toBeVisible();
 	},
 };
