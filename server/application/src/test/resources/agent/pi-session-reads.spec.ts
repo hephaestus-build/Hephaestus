@@ -1037,6 +1037,8 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 		asked?.text ?? "",
 		/names scm\.repository\.tree as searched.*path "repos\/reviewed"/u,
 	);
+	// A grep in bash leaves no receipt, so the ask names the tool that counts.
+	assert.match(asked?.text ?? "", /Call the grep tool, not grep in bash/u);
 	// Asked once already: the resubmission goes to admission, which withholds it, and spends no more refusals.
 	assert.equal(unreadCheckoutClaim(stored, hostCoverage(), { ...ASK, ask: false }), undefined);
 	// Reading UserController to its end, as the stored result says it did, is no search of the checkout.
