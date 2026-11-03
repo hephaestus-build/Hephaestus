@@ -458,6 +458,10 @@ What happens to a refused delivery depends on [the provider](#which-providers-de
 
 To hold more at once, raise `webhook.resources`.
 
+A delivery's body must arrive within 30 seconds, or the receiver answers `408` and counts `webhook_rejected_total{reason="too-slow"}`.
+No provider waits that long for an answer.
+A sender cannot keep a connection and the bytes behind it by sending slowly.
+
 ## Consumers that outlive their deployment
 
 Only JetStream removes a durable consumer.
