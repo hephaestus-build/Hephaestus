@@ -80,6 +80,13 @@ groups:
           severity: warning
         annotations:
           summary: The webhook receiver cannot store deliveries on the broker
+      - alert: HephaestusWebhookReceiverBusy
+        expr: sum(increase(webhook_rejected_total{job="hephaestus",reason="busy"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The webhook receiver refuses deliveries because large ones fill its memory
       - alert: HephaestusWebhookRedeliveryNotRunning
         expr: >-
           sum(increase(github_webhook_redelivery_total{job="hephaestus",outcome=~"unavailable|refused"}[30m])) > 2

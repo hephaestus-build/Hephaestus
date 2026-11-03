@@ -201,6 +201,25 @@ tests:
             exp_annotations:
               summary: A webhook stream stayed above half of its byte bound; its age bound is too long for its volume
 
+  - name: a receiver that keeps refusing deliveries for memory fires, one that stops does not
+    interval: 1m
+    input_series:
+      - series: 'webhook_rejected_total{job="hephaestus",instance="webhook:9090",provider="github",reason="busy"}'
+        values: "0+1x20"
+      - series: 'webhook_rejected_total{job="hephaestus",instance="webhook:9090",provider="github",reason="payload-too-large"}'
+        values: "0+1x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusWebhookReceiverBusy
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HephaestusWebhookReceiverBusy
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The webhook receiver refuses deliveries because large ones fill its memory
+
   - name: continued publish failures fire, successful publishes do not
     interval: 1m
     input_series:

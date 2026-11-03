@@ -146,8 +146,9 @@ postgresql:
 nats:
   # true runs the release's NATS image as one JetStream server. false uses `external`.
   bundled: true
-  # NATS defaults max_payload to 1 MB. The webhook receiver admits 25 MiB.
-  maxPayloadBytes: 26214400
+  # NATS defaults max_payload to 1 MB. The webhook receiver admits 25 MiB, and the broker counts the
+  # message's headers too, so this leaves them 64 KiB.
+  maxPayloadBytes: 26279936
   jetstream:
     maxMemory: 1G
     # The broker's max_file and the webhook role's stream storage budget. The bundled volume is

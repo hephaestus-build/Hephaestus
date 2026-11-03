@@ -428,17 +428,35 @@ Use the names below for a release named `hephaestus` in namespace `hephaestus`.
 ## Payload size
 
 The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's delivery cap.
-`NATS_MAX_PAYLOAD_BYTES` (default `26214400`) sets NATS' `max_payload`.
+`nats.maxPayloadBytes` (default `26279936`) sets the bundled broker's `max_payload`: 25 MiB and 64 KiB for the message's headers.
+This chart value does not reach an external broker: set `max_payload` on that broker to the same value.
 NATS' own default is only 1 MB.
 Without sufficient capacity, each delivery in the gap would pass verification and acceptance but fail at publish.
 
-1. Configure the broker to carry at least 25 MiB.
+1. Configure the broker to carry at least 25 MiB and 64 KiB.
 
 The receiver reads the broker's live limit at startup and logs at ERROR if the two disagree:
 
 ```text
-The receiver accepts webhooks up to 26214400 bytes but this NATS server caps a message at 1048576
+The receiver needs messages of up to 26279936 bytes, headers included, but this NATS server caps a message at 1048576
 ```
+
+The receiver holds each delivery in its heap until the broker stores it, and a body costs several times its size.
+So it bounds what large deliveries hold at once, from its heap.
+A delivery of 256 KiB or less does not count, and it never waits.
+A larger one that does not fit waits for 1.5 seconds.
+Then the receiver answers `503` with `Retry-After`, and counts `webhook_rejected_total{reason="busy"}`.
+A sender that is still sending the body can see a closed connection instead.
+
+The receiver keeps running.
+What happens to a refused delivery depends on [the provider](#which-providers-deliver-again):
+
+- GitHub delivers it again, when Hephaestus asks.
+- Slack retries it. A Slack delivery above 256 KiB that waits can also pass Slack's 3-second window, which costs a retry.
+- GitLab and Outline do not retry, and repeated failures can disable the hook.
+  Reconciliation recovers the event.
+
+To hold more at once, raise `webhook.resources`.
 
 ## Consumers that outlive their deployment
 

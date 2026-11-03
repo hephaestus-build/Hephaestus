@@ -8,7 +8,7 @@
 | `nats.external.url` | string | `""` | yes | `pattern: "^(?:\|(?:nats\|tls)://[A-Za-z0-9.-]+(?::[0-9]{1,5})?)$"` |
 | `nats.jetstream.maxFileBytes` | integer | `17179869184` | yes | `minimum: 1073741824. maximum: 1099511627776` |
 | `nats.jetstream.maxMemory` | string | `"1G"` | yes | `pattern: "^[0-9]+[KMGT]?$"` |
-| `nats.maxPayloadBytes` | integer | `26214400` | yes | `minimum: 1048576. maximum: 67108864` |
+| `nats.maxPayloadBytes` | integer | `26279936` | yes | `minimum: 1048576. maximum: 67108864` |
 | `nats.persistence.storageClassName` | string | `""` | yes | `pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)?$"` |
 | `nats.resources.limits.cpu` | string | `"1"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |
 | `nats.resources.limits.ephemeral-storage` | string | `"256Mi"` | yes | A positive Kubernetes quantity. Zero is refused: a zero request or limit leaves the workload unbounded or unschedulable. |

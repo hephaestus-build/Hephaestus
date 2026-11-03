@@ -2,18 +2,22 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -22,6 +26,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -50,6 +55,8 @@ public class WebhookIngestPipeline {
 
     static final String NATS_MSG_ID = "Nats-Msg-Id";
     private static final Duration SLACK_PUBLISH_TIMEOUT = Duration.ofSeconds(2);
+    static final String BUSY_REASON = "busy";
+    static final String BUSY_RETRY_AFTER_SECONDS = "30";
 
     private final Map<IntegrationKind, WebhookSignatureVerifier> verifiersByKind;
     private final Map<IntegrationKind, SubjectKeyDeriver> deriversByKind;
@@ -59,6 +66,8 @@ public class WebhookIngestPipeline {
     private final JetStreamPublisher jetStreamPublisher;
 
     private final ObjectMapper objectMapper;
+    private final WebhookInFlightBudget budget;
+    private final MeterRegistry meterRegistry;
 
     public WebhookIngestPipeline(
             List<WebhookSignatureVerifier> verifiers,
@@ -68,13 +77,33 @@ public class WebhookIngestPipeline {
         this(verifiers, derivers, jetStreamPublisher, objectMapper, List.of());
     }
 
-    @Autowired
     public WebhookIngestPipeline(
             List<WebhookSignatureVerifier> verifiers,
             List<SubjectKeyDeriver> derivers,
             @Nullable JetStreamPublisher jetStreamPublisher,
             ObjectMapper objectMapper,
             List<WebhookPublishGate> publishGates) {
+        this(
+                verifiers,
+                derivers,
+                jetStreamPublisher,
+                objectMapper,
+                publishGates,
+                WebhookInFlightBudget.forHeap(Runtime.getRuntime().maxMemory()),
+                new SimpleMeterRegistry());
+    }
+
+    @Autowired
+    public WebhookIngestPipeline(
+            List<WebhookSignatureVerifier> verifiers,
+            List<SubjectKeyDeriver> derivers,
+            @Nullable JetStreamPublisher jetStreamPublisher,
+            ObjectMapper objectMapper,
+            List<WebhookPublishGate> publishGates,
+            WebhookInFlightBudget budget,
+            MeterRegistry meterRegistry) {
+        this.budget = budget;
+        this.meterRegistry = meterRegistry;
         this.verifiersByKind = verifiers.stream()
                 .collect(Collectors.toUnmodifiableMap(WebhookSignatureVerifier::kind, Function.identity(), (a, b) -> {
                     throw new IllegalStateException("Duplicate WebhookSignatureVerifier for kind=" + a.kind());
@@ -153,6 +182,23 @@ public class WebhookIngestPipeline {
     private record Route(Function<JsonNode, String> subject, String dedupId, Map<String, String> headers) {}
 
     private ResponseEntity<?> publish(
+            IntegrationKind kind, byte[] body, Map<String, String> headers, @Nullable Route route) {
+        if (body.length <= WebhookInFlightBudget.SMALL_BODY_BYTES) {
+            return publishHeld(kind, body, headers, route);
+        }
+        try (WebhookInFlightBudget.Holding holding = budget.forPublishing()) {
+            if (!holding.add(body.length * WebhookInFlightBudget.PUBLISH_HEAP_PER_BODY_BYTE)) {
+                String provider = kind.name().toLowerCase(Locale.ROOT);
+                meterRegistry
+                        .counter(IntegrationCoreMetrics.WEBHOOK_REJECTED, "provider", provider, "reason", BUSY_REASON)
+                        .increment();
+                return busy();
+            }
+            return publishHeld(kind, body, headers, route);
+        }
+    }
+
+    private ResponseEntity<?> publishHeld(
             IntegrationKind kind, byte[] body, Map<String, String> headers, @Nullable Route route) {
         if (jetStreamPublisher == null) {
             // No publisher bean — the webhook runtime role is disabled. Vendor will retry.
@@ -238,6 +284,12 @@ public class WebhookIngestPipeline {
                 sanitizeForLog(subject),
                 sanitizeForLog(dedupId));
         return ResponseEntity.accepted().body(Map.of("status", "ok"));
+    }
+
+    static ResponseEntity<ProblemDetail> busy() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, BUSY_RETRY_AFTER_SECONDS)
+                .body(ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, BUSY_REASON));
     }
 
     public static ResponseEntity<ProblemDetail> problem(HttpStatus status, String detail) {
