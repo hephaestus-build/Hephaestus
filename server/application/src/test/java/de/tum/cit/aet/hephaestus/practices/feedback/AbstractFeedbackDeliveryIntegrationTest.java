@@ -101,7 +101,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
     void configureProvider() {
         when(gate.evaluate(any(), any(), anyBoolean())).thenAnswer(call -> {
             Feedback row = call.getArgument(0);
-            boolean incorrect = basis.hasIncorrectBasis(row.getWorkspaceId(), row.getId());
+            boolean incorrect = basis.isIncorrect(row.getWorkspaceId(), row.getId());
             return new FeedbackCheck(
                     call.getArgument(1),
                     !incorrect,
@@ -144,8 +144,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         var targets = mock(FeedbackTargetResolver.class);
         when(targets.resolve(any())).thenReturn(target);
         when(targets.resolveExisting(any())).thenReturn(target);
-        var corrector =
-                new PostedCopyCorrector(basis, copies, visibility, List.of(provider), List.of(provider), transactions);
+        var corrector = new PostedCopyCorrector(copies, visibility, List.of(provider), List.of(provider), transactions);
         return new FeedbackSendService(transactions, targets, List.of(provider), List.of(provider), corrector);
     }
 
@@ -235,6 +234,8 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
     protected final class Provider implements SummaryWriter, LineNoteWriter {
         int summaryCreates, noteCreates, updates;
+        final List<UUID> retracted = new ArrayList<>();
+        final List<UUID> restored = new ArrayList<>();
         Failure summaryFailure = Failure.NONE, noteFailure = Failure.NONE;
         LookupPresence readback = LookupPresence.FOUND;
         CopyUpdateKind retraction = CopyUpdateKind.GONE;
@@ -366,9 +367,26 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         }
 
         @Override
+        public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+            return notes.stream()
+                    .map(note -> {
+                        restored.add(note.copy().copyId());
+                        var gone = !physical.containsKey(note.copy().copyId());
+                        return new CopyUpdateReceipt(
+                                note.copy().copyId(),
+                                gone ? CopyUpdateKind.GONE : CopyUpdateKind.EDITED,
+                                note.copy().externalRef(),
+                                note.copy().externalUrl(),
+                                null);
+                    })
+                    .toList();
+        }
+
+        @Override
         public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> receipts) {
             return receipts.stream()
                     .map(receipt -> {
+                        retracted.add(receipt.copyId());
                         if (retraction == CopyUpdateKind.GONE) physical.remove(receipt.copyId());
                         return new CopyUpdateReceipt(
                                 receipt.copyId(), retraction, receipt.externalRef(), receipt.externalUrl(), null);

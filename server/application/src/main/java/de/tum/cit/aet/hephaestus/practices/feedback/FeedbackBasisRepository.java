@@ -28,23 +28,24 @@ public interface FeedbackBasisRepository extends JpaRepository<FeedbackBasis, UU
 
     List<FeedbackBasis> findByWorkspaceIdAndResultId(long workspaceId, UUID resultId);
 
+    /**
+     * The pieces among {@code feedbackIds} with nothing left to say. A mark ends a private piece, which has one text. On
+     * reviewed work it ends only the copies that rest on the marked result, so such a piece ends with its last copy.
+     */
     @Query(value = """
-        SELECT EXISTS(SELECT 1 FROM feedback_basis b JOIN result_mark m
-          ON m.result_id = b.result_id AND m.workspace_id = b.workspace_id
-         WHERE b.feedback_id = :feedbackId AND b.workspace_id = :workspaceId
-           AND m.kind = 'INCORRECT' AND m.removed_at IS NULL)
-        """, nativeQuery = true)
-    boolean hasIncorrectBasis(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
-
-    /** The pieces among {@code feedbackIds} with a result marked incorrect: {@link #hasIncorrectBasis} for many. */
-    @Query(value = """
-        SELECT DISTINCT b.feedback_id FROM feedback_basis b JOIN result_mark m
-          ON m.result_id = b.result_id AND m.workspace_id = b.workspace_id
+        SELECT DISTINCT b.feedback_id FROM feedback_basis b
+          JOIN result_mark m ON m.result_id = b.result_id AND m.workspace_id = b.workspace_id
+          JOIN feedback f ON f.id = b.feedback_id AND f.workspace_id = b.workspace_id
          WHERE b.feedback_id IN (:feedbackIds) AND b.workspace_id = :workspaceId
            AND m.kind = 'INCORRECT' AND m.removed_at IS NULL
-        """, nativeQuery = true)
-    List<UUID> incorrectBasisFeedbackIds(
+           AND (f.destination <> 'ON_WORK' OR NOT EXISTS (SELECT 1 FROM feedback_copy c
+             WHERE c.workspace_id = b.workspace_id AND c.feedback_id = b.feedback_id AND NOT""" + FeedbackCopyRepository.RESTS_ON_INCORRECT_RESULT + "))", nativeQuery = true)
+    List<UUID> incorrectFeedbackIds(
             @Param("workspaceId") long workspaceId, @Param("feedbackIds") Collection<UUID> feedbackIds);
+
+    default boolean isIncorrect(long workspaceId, UUID feedbackId) {
+        return !incorrectFeedbackIds(workspaceId, List.of(feedbackId)).isEmpty();
+    }
 
     @Query(value = """
         SELECT EXISTS(SELECT 1 FROM result_mark m WHERE m.workspace_id=:workspaceId

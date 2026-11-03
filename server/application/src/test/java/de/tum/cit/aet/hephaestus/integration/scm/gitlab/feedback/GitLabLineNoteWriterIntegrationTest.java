@@ -75,8 +75,8 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
         var resolution = mock(FeedbackTargetResolver.class);
         when(resolution.resolve(any())).thenReturn(target);
         when(resolution.resolveExisting(any())).thenReturn(target);
-        var corrector = new PostedCopyCorrector(
-                basis, copies, visibility, List.of(gitlab.channel()), List.of(writer), transactions);
+        var corrector =
+                new PostedCopyCorrector(copies, visibility, List.of(gitlab.channel()), List.of(writer), transactions);
         sender = new FeedbackSendService(
                 transactions, resolution, List.of(gitlab.channel()), List.of(writer), corrector);
         prepare(true);

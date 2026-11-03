@@ -97,8 +97,13 @@ If the retry fails, the feedback reads Failed.
 
 Mark incorrect when the observation was wrong when made.
 Give a reason. The observation stays in history without supporting new feedback.
-The system requests supported provider correction after reconciling any started write.
+
+The system withdraws only the copies that rest on the observation. Other copies of the same feedback stay posted.
+It requests supported provider correction after reconciling any started write.
 An unsupported correction retains the actual posted copy and its reason.
+
+Remove the mark to reverse it. The system writes the original words back into the same provider notes and posts nothing again.
+A copy stays withdrawn until the last mark on its support is gone.
 
 Mark accepted to remove an observation from open-problem lists and current open report counts.
 Give a reason. The recorded outcome and total problem count do not change.

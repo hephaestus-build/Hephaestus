@@ -219,12 +219,29 @@ public class FeedbackSendTransactions {
                 != 1) return;
         feedback.updateDelivery(
                 workspaceId, feedbackId, projection.state(), projection.stopReason(), projection.deliveredAt());
-        if (active.getAction() == FeedbackSendAction.POST
-                && !unresolved
-                && children.stream().anyMatch(c -> c.getState() == FeedbackCopyState.POSTED)
-                && (visibility.withdrawn(workspaceId, feedbackId)
-                        || store.check(row, true).reason() == FeedbackStopReason.RESULT_MARKED_INCORRECT))
+        if (!unresolved && asksForCorrection(row, children))
             sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
+    }
+
+    /**
+     * Whether a mark changed under this send. A copy with a recorded error had its correction tried, so it asks no
+     * more, which ends the sequence of sends.
+     */
+    private boolean asksForCorrection(Feedback row, List<FeedbackCopy> children) {
+        long workspaceId = row.getWorkspaceId();
+        boolean withdrawn = visibility.withdrawn(workspaceId, row.getId());
+        var incorrect = copies.incorrectCopyIds(workspaceId, row.getId());
+        boolean remove = children.stream()
+                .anyMatch(c -> c.getState() == FeedbackCopyState.POSTED
+                        && c.getLastError() == null
+                        && (withdrawn || incorrect.contains(c.getId())));
+        if (remove) return true;
+        return !withdrawn
+                && children.stream()
+                        .anyMatch(c -> c.getState() == FeedbackCopyState.RETRACTED
+                                && c.getLastError() == null
+                                && !incorrect.contains(c.getId()))
+                && store.check(row, true).allowed();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

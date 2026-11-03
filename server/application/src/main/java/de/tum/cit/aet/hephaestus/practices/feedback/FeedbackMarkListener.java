@@ -47,22 +47,35 @@ public class FeedbackMarkListener {
                     .orElseThrow(() -> new EntityNotFoundException("Feedback", id.toString()));
             var send = sends.lockByFeedbackId(row.getWorkspaceId(), id);
             var children = copies.lockByFeedbackId(row.getWorkspaceId(), id);
+            boolean onWork = row.getDestination() == FeedbackDestination.ON_WORK;
             if (!mark.removed()) {
-                copies.withholdPlanned(row.getWorkspaceId(), id, FeedbackStopReason.RESULT_MARKED_INCORRECT.name());
-                if (row.getDestination() == FeedbackDestination.ON_WORK
-                        && children.stream().anyMatch(c -> c.getState() == FeedbackCopyState.POSTED)) {
+                if (onWork) copies.withholdIncorrect(row.getWorkspaceId(), id);
+                else
+                    copies.withholdPlanned(row.getWorkspaceId(), id, FeedbackStopReason.RESULT_MARKED_INCORRECT.name());
+                var incorrect = copies.incorrectCopyIds(row.getWorkspaceId(), id);
+                if (onWork
+                        && children.stream()
+                                .anyMatch(c ->
+                                        c.getState() == FeedbackCopyState.POSTED && incorrect.contains(c.getId()))) {
                     if (send.isEmpty() || send.get().getState() == FeedbackSendState.DONE)
                         sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
-                } else if (children.stream().noneMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED))
+                } else if ((!onWork || basis.isIncorrect(row.getWorkspaceId(), id))
+                        && children.stream().noneMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED))
                     policy.withhold(row, FeedbackStopReason.RESULT_MARKED_INCORRECT);
-            } else if (row.getDestination() == FeedbackDestination.ON_WORK
+            } else if (onWork
                     && !visibility.withdrawn(row.getWorkspaceId(), id)
                     && children.stream()
                             .anyMatch(c -> c.getState() == FeedbackCopyState.POSTED
                                     || c.getState() == FeedbackCopyState.RETRACTED)) {
+                boolean restoredUnsent = copies.restoreUnsent(row.getWorkspaceId(), id) > 0;
                 if ((send.isEmpty() || send.get().getState() == FeedbackSendState.DONE)
                         && policy.check(row, FeedbackCheckStage.EGRESS, true).allowed())
-                    sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
+                    // A copy that this mark held back never reached the provider. Its send settles first, and that
+                    // settlement then restores any posted sibling.
+                    sendQueue.queue(
+                            row,
+                            restoredUnsent ? FeedbackSendAction.POST : FeedbackSendAction.RETRACT,
+                            FeedbackSendState.PENDING);
             } else if (row.getState() == FeedbackState.WITHHELD
                     && row.getStopReason() == FeedbackStopReason.RESULT_MARKED_INCORRECT
                     && !visibility.withdrawn(row.getWorkspaceId(), id)

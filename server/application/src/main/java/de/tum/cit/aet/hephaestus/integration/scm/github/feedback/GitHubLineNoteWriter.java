@@ -496,6 +496,29 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
 
     @Override
     public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> copies) {
+        return rewrite(target, copies, (copy, original) -> ScmFeedbackFormatter.withdrawnCopyBody(original));
+    }
+
+    @Override
+    public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+        var footer = formatter.footer(target.item());
+        var byCopy = notes.stream().collect(Collectors.toMap(note -> note.copy().copyId(), RetractedNote::note));
+        return rewrite(target, notes.stream().map(RetractedNote::copy).toList(), (copy, original) -> {
+            var item = Objects.requireNonNull(byCopy.get(copy.copyId()));
+            return item.writeKey().equals(ScmFeedbackFormatter.lastDeliveryKey(original))
+                    ? postedBody(footer, item)
+                    : null;
+        });
+    }
+
+    /** The new text of one of the author's own notes, or null when this note does not belong to the copy. */
+    @FunctionalInterface
+    private interface Rewrite {
+        @Nullable
+        String body(CopyReceipt copy, String original);
+    }
+
+    private List<CopyUpdateReceipt> rewrite(FeedbackTarget target, List<CopyReceipt> copies, Rewrite rewrite) {
         targets.subject(target, kind());
         long workspaceId = target.item().workspaceId();
         List<CopyUpdateReceipt> outcomes = new ArrayList<>();
@@ -537,6 +560,16 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                             "Existing copy authority could not be verified"));
                     continue;
                 }
+                String rewritten = rewrite.body(copy, original);
+                if (rewritten == null) {
+                    outcomes.add(new CopyUpdateReceipt(
+                            copy.copyId(),
+                            CopyUpdateKind.UNSUPPORTED,
+                            externalRef,
+                            copy.externalUrl(),
+                            "Existing copy authority could not be verified"));
+                    continue;
+                }
                 egressGuard.requireDeliveryAllowed("github.correct-feedback-copy");
                 boolean fileCopy = "IssueComment".equals(note.get("__typename"));
                 String resultPath = fileCopy
@@ -549,7 +582,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                                         ? "mutation CorrectPracticeFile($id:ID!,$body:String!){updateIssueComment(input:{id:$id,body:$body}){issueComment{id url}}}"
                                         : "mutation CorrectPracticeLine($id:ID!,$body:String!){updatePullRequestReviewComment(input:{pullRequestReviewCommentId:$id,body:$body}){pullRequestReviewComment{id url}}}")
                         .variable("id", externalRef)
-                        .variable("body", ScmFeedbackFormatter.withdrawnCopyBody(original))
+                        .variable("body", rewritten)
                         .execute()
                         .block(GRAPHQL_TIMEOUT);
                 if (response == null || !response.getErrors().isEmpty()) {

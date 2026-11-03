@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,6 +17,37 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
 public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID> {
+
+    /**
+     * Whether copy {@code c} rests on a result marked incorrect. The composition trace names each copy's exact support.
+     * A copy that it does not name rests on every basis of its feedback.
+     */
+    String RESTS_ON_INCORRECT_RESULT = " " + """
+        EXISTS (SELECT 1 FROM result_mark m
+         WHERE m.workspace_id = c.workspace_id AND m.kind = 'INCORRECT' AND m.removed_at IS NULL
+           AND m.result_id IN (
+             SELECT (based.value ->> 'resultId')::uuid
+               FROM feedback f JOIN review r ON r.id = f.review_id AND r.workspace_id = f.workspace_id,
+                 jsonb_array_elements(r.checks -> 'feedbackComposition' -> (f.id::text) -> 'copies') traced,
+                 jsonb_array_elements(traced.value -> 'basedOn') based
+              WHERE f.id = c.feedback_id AND f.workspace_id = c.workspace_id
+                AND traced.value ->> 'kind' = c.kind AND (traced.value ->> 'position')::int = c.position
+             UNION ALL
+             SELECT b.result_id FROM feedback_basis b
+              WHERE b.workspace_id = c.workspace_id AND b.feedback_id = c.feedback_id
+                AND NOT EXISTS (SELECT 1
+                  FROM feedback f JOIN review r ON r.id = f.review_id AND r.workspace_id = f.workspace_id,
+                    jsonb_array_elements(r.checks -> 'feedbackComposition' -> (f.id::text) -> 'copies') traced
+                 WHERE f.id = c.feedback_id AND f.workspace_id = c.workspace_id
+                   AND traced.value ->> 'kind' = c.kind AND (traced.value ->> 'position')::int = c.position)))
+        """;
+
+    @Query(
+            value = "SELECT c.id FROM feedback_copy c"
+                    + " WHERE c.workspace_id = :workspaceId AND c.feedback_id = :feedbackId AND"
+                    + RESTS_ON_INCORRECT_RESULT,
+            nativeQuery = true)
+    Set<UUID> incorrectCopyIds(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
 
     List<FeedbackCopy> findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(long workspaceId, UUID feedbackId);
 
@@ -97,9 +129,18 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_copy SET state='PLANNED',stop_reason=NULL,last_error=NULL
-        WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND state='WITHHELD' AND stop_reason='RESULT_MARKED_INCORRECT' AND (write_started_at IS NULL OR readback='ABSENT') AND posted_at IS NULL AND external_ref IS NULL AND mentor_turn_id IS NULL
-        """, nativeQuery = true)
+        UPDATE feedback_copy c SET state='WITHHELD',stop_reason='RESULT_MARKED_INCORRECT'
+        WHERE c.workspace_id=:workspaceId AND c.feedback_id=:feedbackId AND c.state='PLANNED'
+          AND (c.write_started_at IS NULL OR c.readback='ABSENT') AND""" + RESTS_ON_INCORRECT_RESULT, nativeQuery = true)
+    int withholdIncorrect(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
+
+    /** Restores the unsent copies that a mark withheld. A copy that still rests on another mark stays withheld. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE feedback_copy c SET state='PLANNED',stop_reason=NULL,last_error=NULL
+        WHERE c.workspace_id=:workspaceId AND c.feedback_id=:feedbackId AND c.state='WITHHELD'
+          AND c.stop_reason='RESULT_MARKED_INCORRECT' AND (c.write_started_at IS NULL OR c.readback='ABSENT')
+          AND c.posted_at IS NULL AND c.external_ref IS NULL AND c.mentor_turn_id IS NULL AND NOT""" + RESTS_ON_INCORRECT_RESULT, nativeQuery = true)
     int restoreUnsent(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)

@@ -270,11 +270,13 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                                 || copy.getState() == FeedbackCopyState.RETRACTED))
                 .toList();
         boolean withdrawn = visibility.withdrawn(workspaceId, row.getId());
-        boolean textAllowed = complete && !withdrawn && !basis.hasIncorrectBasis(workspaceId, row.getId());
+        boolean textAllowed = complete && !withdrawn && !basis.isIncorrect(workspaceId, row.getId());
+        var incorrect = copies.incorrectCopyIds(workspaceId, row.getId());
         @Nullable String body = null;
         if (textAllowed) {
             if (row.getDestination() == FeedbackDestination.ON_WORK) {
                 body = confirmed.stream()
+                        .filter(copy -> !incorrect.contains(copy.getId()))
                         .map(copy -> copy.getKind() == FeedbackCopyKind.SUMMARY ? row.getBody() : copy.getBody())
                         .filter(Objects::nonNull)
                         .collect(Collectors.joining("\n\n"));

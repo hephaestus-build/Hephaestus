@@ -62,10 +62,12 @@ Workspace admins can set a different mode for a practice group or a single pract
 
 A workspace admin can mark an observation incorrect when it was wrong when made.
 The observation stays in history with the reason and stops supporting new feedback.
-Hephaestus asks GitHub or GitLab to correct an existing comment where the provider supports it.
-Otherwise, the posted words stay visible, and Hephaestus records the state of the correction.
+Hephaestus withdraws only the comments that rest on that observation. Your other comments stay as they are.
+It edits each of those comments in GitHub or GitLab to say that the feedback was withdrawn.
+If the provider cannot make that edit, the posted words stay visible, and Hephaestus records the state of the correction.
+
 If the admin removes the mark later, Hephaestus checks again whether the observation can support feedback.
-It does not post an earlier confirmed comment again.
+It then puts the original words back in the same comments and does not post them again.
 
 A workspace admin can accept an observation to remove it from open-problem lists.
 Acceptance does not change the outcome or claim that you fixed the work.
