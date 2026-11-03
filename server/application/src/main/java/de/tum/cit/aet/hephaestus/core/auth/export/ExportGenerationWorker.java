@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.modulith.events.ApplicationModuleListener;
@@ -64,9 +65,9 @@ public class ExportGenerationWorker {
 
     /** Generate the export atomically; record a failure only after the failed transaction rolls back. */
     public void generate(Long exportId, Long accountId) {
-        boolean generated;
+        Generation generated;
         try {
-            generated = Boolean.TRUE.equals(transaction.execute(status -> assemble(exportId, accountId)));
+            generated = Objects.requireNonNull(transaction.execute(status -> assemble(exportId, accountId)));
         } catch (JacksonException e) {
             recordFailure(exportId, accountId, "serialization_failed", e);
             return;
@@ -74,25 +75,34 @@ public class ExportGenerationWorker {
             recordFailure(exportId, accountId, "assembly_failed", e);
             return;
         }
-        metrics.record(Job.EXPORT_GENERATION, generated ? Outcome.SUCCESS : Outcome.FAILURE);
-        if (generated) {
+        if (generated == Generation.ALREADY_DONE) {
+            return;
+        }
+        metrics.record(Job.EXPORT_GENERATION, generated == Generation.READY ? Outcome.SUCCESS : Outcome.FAILURE);
+        if (generated == Generation.READY) {
             metrics.recordAffected(Job.EXPORT_GENERATION, 1);
             log.info("auth.export: export {} for account {} READY", exportId, accountId);
         }
     }
 
-    private boolean assemble(Long exportId, Long accountId) {
+    private enum Generation {
+        READY,
+        NOT_FOUND,
+        ALREADY_DONE
+    }
+
+    private Generation assemble(Long exportId, Long accountId) {
         AccountExport export = accountExportRepository
                 .lockByIdAndAccountId(exportId, accountId)
                 .orElse(null);
         if (export == null) {
             log.warn("auth.export: generation skipped, export {} for account {} not found", exportId, accountId);
-            return false;
+            return Generation.NOT_FOUND;
         }
         // A redelivery waits on the lock of a generation that still runs, then finds the export no longer pending.
         if (export.getStatus() != AccountExport.Status.PENDING) {
             log.info("auth.export: generation skipped, export {} is already {}", exportId, export.getStatus());
-            return false;
+            return Generation.ALREADY_DONE;
         }
         export.setStatus(AccountExport.Status.PROCESSING);
         accountExportRepository.save(export);
@@ -105,7 +115,7 @@ public class ExportGenerationWorker {
         export.setExpiresAt(now.plus(RETENTION));
         export.setStatus(AccountExport.Status.READY);
         accountExportRepository.save(export);
-        return true;
+        return Generation.READY;
     }
 
     private void recordFailure(Long exportId, Long accountId, String reason, RuntimeException failure) {
