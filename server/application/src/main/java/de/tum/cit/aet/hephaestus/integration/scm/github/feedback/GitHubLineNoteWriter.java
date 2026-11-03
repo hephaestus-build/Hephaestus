@@ -245,7 +245,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                         || !(review.get("state") instanceof String state))
                     throw new FeedbackDeliveryException("GitHub review identity is incomplete");
                 if (!Boolean.TRUE.equals(review.get("viewerDidAuthor"))) continue;
-                boolean same = body.equals(expectedBody)
+                boolean same = ScmFeedbackFormatter.sameCopy(body, expectedBody)
                         && review.get("commit") instanceof Map<?, ?> revision
                         && commit.equals(revision.get("oid"));
                 if (state.equals("PENDING")) {
@@ -259,7 +259,9 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                             || entries.stream()
                                     .anyMatch(entry -> !(entry instanceof Map<?, ?> comment)
                                             || !Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                                            || !expectedNotes.contains(comment.get("body")))
+                                            || !(comment.get("body") instanceof String posted)
+                                            || expectedNotes.stream()
+                                                    .noneMatch(note -> ScmFeedbackFormatter.sameCopy(posted, note)))
                             || entries.stream()
                                             .map(entry -> ((Map<?, ?>) entry).get("body"))
                                             .distinct()
@@ -415,7 +417,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         if (diff.endLine() == null)
             return Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
                     && "FILE".equals(thread.get("subjectType"))
-                    && body.equals(postedBody(footer, item))
+                    && ScmFeedbackFormatter.sameCopy(body, postedBody(footer, item))
                     && diff.path().equals(comment.get("path"))
                     && comment.get("originalCommit") instanceof Map<?, ?> revision
                     && Objects.equals(commitOid, revision.get("oid"));
@@ -424,7 +426,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         Integer expectedStart = startLine != null && startLine < diff.endLine() ? startLine : null;
         String expectedSide = diff.side() == CitationSide.OLD ? "LEFT" : "RIGHT";
         return Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                && body.equals(postedBody(footer, item))
+                && ScmFeedbackFormatter.sameCopy(body, postedBody(footer, item))
                 && expectedSide.equals(thread.get("diffSide"))
                 && (expectedStart == null || expectedSide.equals(thread.get("startDiffSide")))
                 && diff.path().equals(comment.get("path"))

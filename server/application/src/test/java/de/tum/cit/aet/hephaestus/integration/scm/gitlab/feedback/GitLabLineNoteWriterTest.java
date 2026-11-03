@@ -135,6 +135,26 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadACopyPostedWithAnEarlierFooterAsPosted() {
+        when(gitLabProvider.forScope(1L)).thenReturn(client);
+        LineNote expectedCopy = ScmFeedbackFixtures.line(
+                ScmFeedbackFixtures.anchor("src/Foo.java", 10, null),
+                "fix",
+                "<!-- hephaestus-diff-note -->",
+                "result:a:0");
+        String earlierFooter = posted(expectedCopy).replaceAll("<sub>[^\\n]*</sub>", "<sub>An earlier footer.</sub>");
+        assertThat(earlierFooter).isNotEqualTo(posted(expectedCopy));
+        stubDiscussions(
+                List.of(discussion(
+                        "gid://Disc/1", List.of(diffNote("gid://Note/7", earlierFooter, BOT, 10, REVIEWED)))),
+                BOT);
+
+        assertThat(channel.findPosted(target(), new OnWorkPackage(null, List.of(expectedCopy))))
+                .singleElement()
+                .satisfies(receipt -> assertThat(receipt.externalRef()).isEqualTo("gid://Note/7"));
+    }
+
+    @Test
     void shouldReadOnlyTheBotAuthoredCopyWithItsExpectedMarkerAndKey() {
         when(gitLabProvider.forScope(1L)).thenReturn(client);
         LineNote expectedCopy = ScmFeedbackFixtures.line(

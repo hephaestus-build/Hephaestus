@@ -522,6 +522,20 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void findExistingSummary_findsTheCopyPostedWithAnEarlierFooter() {
+        when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
+        GraphQlClient.RequestSpec spec = mockRequestChain();
+        String earlierFooter = EXACT.replaceAll("<sub>[^\\n]*</sub>", "<sub>An earlier footer.</sub>");
+        assertThat(earlierFooter).isNotEqualTo(EXACT);
+        ClientGraphQlResponse page = mockMrNotesPage(List.of(note("gid://gitlab/Note/1", earlierFooter)), false, null);
+        when(spec.execute()).thenReturn(Mono.just(page));
+
+        SummaryLookup result = channel.findExistingSummary(gitlabTarget(), EXPECTED);
+
+        assertThat(result.presence()).isEqualTo(LookupPresence.FOUND);
+    }
+
+    @Test
     void findExistingSummary_aMarkedNoteThatIsNotTheCopy_isUnknown_notFoundOrAbsent() {
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
         GraphQlClient.RequestSpec spec = mockRequestChain();

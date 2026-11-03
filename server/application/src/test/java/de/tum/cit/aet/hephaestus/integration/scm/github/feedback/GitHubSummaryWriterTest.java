@@ -415,7 +415,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepReadbackUnknownAfterAWorkspaceRenameWithoutCreatingAnotherComment() {
+    void shouldFindThePostedCopyAfterAWorkspaceRenameWithoutCreatingAnotherComment() {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         var page = mockCommentsPageResponse(
                 "repository.pullRequest.comments", List.of(comment("IC_1", EXACT)), false, null);
@@ -426,7 +426,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
                 egressGuard,
                 ScmFeedbackFixtures.resolver(),
                 ScmFeedbackFixtures.formatter("renamed-team"));
-        assertThat(writer.findExistingSummary(PR_TARGET, EXPECTED).presence()).isEqualTo(LookupPresence.UNKNOWN);
+        assertThat(writer.findExistingSummary(PR_TARGET, EXPECTED).presence()).isEqualTo(LookupPresence.FOUND);
         verify(graphQlClient, never()).documentName("AddPullRequestComment");
     }
 

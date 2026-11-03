@@ -254,7 +254,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
                     }
                     if (!body.contains(marker)) continue;
                     if (Boolean.TRUE.equals(comment.get("viewerDidAuthor"))
-                            && body.equals(expectedBody)
+                            && ScmFeedbackFormatter.sameCopy(body, expectedBody)
                             && comment.get("id") instanceof String id
                             && !id.isBlank()) {
                         return SummaryLookup.found(

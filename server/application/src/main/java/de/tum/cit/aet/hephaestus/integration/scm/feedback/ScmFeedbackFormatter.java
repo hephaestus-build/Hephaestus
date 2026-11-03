@@ -93,6 +93,26 @@ public class ScmFeedbackFormatter {
         return "Answer or disagree in [Hephaestus](" + url + ").";
     }
 
+    // PostedText escapes `<` outside a code span, and a code span starts with a backtick, so only a footer starts so.
+    private static final Pattern DISCLOSURE_LINE = Pattern.compile("(?m)^<sub>.*</sub>$");
+    private static final Pattern BLANK_LINES = Pattern.compile("\\n{2,}");
+
+    /**
+     * Whether a posted copy holds the words and markers of this copy, whatever disclosure footer it was posted with. The
+     * footer's wording and links can change after a copy is posted: the host, the workspace's address or the text. None
+     * of that makes it another copy, and the provider's copy is not edited to follow them.
+     */
+    public static boolean sameCopy(String posted, String expected) {
+        return withoutDisclosure(posted).equals(withoutDisclosure(expected));
+    }
+
+    private static String withoutDisclosure(String body) {
+        return BLANK_LINES
+                .matcher(DISCLOSURE_LINE.matcher(body).replaceAll(""))
+                .replaceAll("\n\n")
+                .strip();
+    }
+
     private static final Pattern APPROVAL_LANGUAGE = Pattern.compile(
             "^\\s*(?:LGTM|(?:looks good to me)|(?:approved)|(?:ready to merge)|(?:ship it)|(?:approved by\\b[^\\n]*))[.!?]*\\s*$",
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);

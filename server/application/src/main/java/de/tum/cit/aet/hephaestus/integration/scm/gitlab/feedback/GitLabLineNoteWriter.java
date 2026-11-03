@@ -210,7 +210,8 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             String key = ScmFeedbackFormatter.lastDeliveryKey(body);
             var fields = key == null ? null : expected.get(key);
             if (fields == null
-                    || !body.equals(fields.get("note"))
+                    || !(fields.get("note") instanceof String note)
+                    || !ScmFeedbackFormatter.sameCopy(body, note)
                     || !found.add(key)
                     || !draft.path("author_id").isIntegralNumber()
                     || draft.path("author_id").longValue() != author
@@ -266,7 +267,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
             for (var note : pages(workspace, api + "/notes")) {
                 String body = note.path("body").asString("");
                 if (summary.writeMarker() == null || !body.contains(summary.writeMarker())) continue;
-                if (!body.equals(footer.summary(summary))
+                if (!ScmFeedbackFormatter.sameCopy(body, footer.summary(summary))
                         || note.path("author").path("id").longValue() != scan.author()
                         || !note.path("id").isIntegralNumber()
                         || note.path("id").longValue() <= 0
@@ -468,12 +469,14 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         // Only a position the response answered with null proves an ordinary comment; a missing one
         // proves nothing.
         boolean unpositioned = note.containsKey("position") && note.get("position") == null;
-        if (unpositioned && revision != null && body.equals(locationBody(footer, projectUrl, revision, diff, item))) {
+        if (unpositioned
+                && revision != null
+                && ScmFeedbackFormatter.sameCopy(body, locationBody(footer, projectUrl, revision, diff, item))) {
             return CopyForm.FILE_NOTE;
         }
         boolean lineCopy = diff.endLine() != null
                 && revision != null
-                && (body.equals(postedBody(footer, item)) || placesRange(body, footer, item))
+                && (ScmFeedbackFormatter.sameCopy(body, postedBody(footer, item)) || placesRange(body, footer, item))
                 && note.get("position") instanceof Map<?, ?> position
                 && diff.path().equals(position.get(diff.side() == CitationSide.OLD ? "oldPath" : "newPath"))
                 && position.get(diff.side() == CitationSide.OLD ? "oldLine" : "newLine") instanceof Number line
@@ -506,7 +509,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     private boolean placesRange(String body, Footer footer, LineNote item) {
-        return ranged(item.anchor()) && body.equals(lineBody(footer, item));
+        return ranged(item.anchor()) && ScmFeedbackFormatter.sameCopy(body, lineBody(footer, item));
     }
 
     private static boolean ranged(FeedbackAnchor anchor) {

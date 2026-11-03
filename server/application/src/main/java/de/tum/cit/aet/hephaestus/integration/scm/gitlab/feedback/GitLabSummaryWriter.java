@@ -294,7 +294,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
                     if (!body.contains(marker)) continue;
                     if (note.get("author") instanceof Map<?, ?> author
                             && currentUserId.equals(author.get("id"))
-                            && body.equals(expectedBody)
+                            && ScmFeedbackFormatter.sameCopy(body, expectedBody)
                             && note.get("id") instanceof String noteId
                             && !noteId.isBlank()) {
                         return SummaryLookup.found(
