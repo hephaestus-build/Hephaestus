@@ -1,14 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
+import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryDiff;
@@ -18,14 +16,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import org.eclipse.jgit.api.Git;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 
 class ScmCitableTextsTest extends BaseUnitTest {
+    private static final int MAX_FILE = 2 * 1024 * 1024;
+
     @TempDir
     Path root;
 
@@ -55,9 +55,11 @@ class ScmCitableTextsTest extends BaseUnitTest {
             });
             var files = new LinkedHashMap<String, byte[]>();
             var texts = ScmCitableTexts.changed(
-                    manager,
-                    new ReviewRepositoryPreparer.PreparedReview(new RepositoryKey(1, 2), head.name(), base.name()),
-                    files);
+                            manager,
+                            new ReviewRepositoryPreparer.PreparedReview(
+                                    new RepositoryKey(1, 2), head.name(), base.name()),
+                            files)
+                    .texts();
             assertThat(texts).hasSize(4);
             assertThat(texts.stream().filter(text -> text.commit() != null).toList())
                     .hasSize(2)
@@ -139,9 +141,11 @@ class ScmCitableTextsTest extends BaseUnitTest {
             });
             var files = new LinkedHashMap<String, byte[]>();
             var texts = ScmCitableTexts.changed(
-                    manager,
-                    new ReviewRepositoryPreparer.PreparedReview(new RepositoryKey(1, 2), head.name(), base.name()),
-                    files);
+                            manager,
+                            new ReviewRepositoryPreparer.PreparedReview(
+                                    new RepositoryKey(1, 2), head.name(), base.name()),
+                            files)
+                    .texts();
             assertThat(texts.stream().filter(text -> text.commit() != null).toList())
                     .extracting(text -> text.side() + ":" + text.path())
                     .containsExactlyInAnyOrder("OLD:deleted.ts", "OLD:before.ts", "NEW:added.json", "NEW:after.ts");
@@ -154,36 +158,53 @@ class ScmCitableTextsTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldFailCaptureInsteadOfSilentlyOmittingAnOversizedChangedFile() throws Exception {
+    void shouldNameAnOversizedTextFileAndKeepTheRestOfTheChange() throws Exception {
+        var change =
+                change(Map.of("big.ts", "x".repeat(MAX_FILE + 1), "edge.ts", "y".repeat(MAX_FILE), "small.ts", "z\n"));
+
+        assertThat(change.texts().leftOut()).containsExactly("big.ts");
+        assertThat(change.texts().texts()).extracting(CitableText::path).contains("edge.ts", "small.ts");
+        assertThat(change.files()).doesNotContainKey("context/citable/new/big.ts");
+    }
+
+    @Test
+    void shouldLeaveOutAnOversizedBinaryFileWithoutNamingAGap() throws Exception {
+        var change = change(Map.of("image.bin", "\0" + "x".repeat(MAX_FILE + 1), "small.ts", "z\n"));
+
+        assertThat(change.texts().leftOut()).isEmpty();
+        assertThat(change.texts().texts()).extracting(CitableText::path).doesNotContain("image.bin");
+    }
+
+    private record Change(ScmCitableTexts.ChangedTexts texts, Map<String, byte[]> files) {}
+
+    private Change change(Map<String, String> head) throws Exception {
         try (Git git = Git.init().setDirectory(root.toFile()).call()) {
-            Files.writeString(root.resolve("a.ts"), "before\n");
+            Files.writeString(root.resolve("README"), "base\n");
             git.add().addFilepattern(".").call();
             var base = git.commit()
                     .setSign(false)
                     .setMessage("Base")
                     .setAuthor("Test", "test@example.test")
                     .call();
-            Files.writeString(root.resolve("a.ts"), "x".repeat(2 * 1024 * 1024 + 1));
+            for (var file : head.entrySet()) Files.writeString(root.resolve(file.getKey()), file.getValue());
             git.add().addFilepattern(".").call();
-            var head = git.commit()
+            var commit = git.commit()
                     .setSign(false)
                     .setMessage("Head")
                     .setAuthor("Test", "test@example.test")
                     .call();
             var manager = mock(GitRepositoryManager.class);
-            when(manager.changedPaths(any(), any(), any())).thenReturn(Set.of("a.ts"));
+            when(manager.changedPaths(any(), any(), any())).thenReturn(head.keySet());
             when(manager.read(any(), any())).thenAnswer(call -> {
                 GitRepositoryManager.MirrorRead<?> operation = call.getArgument(1);
                 return operation.apply(git.getRepository());
             });
-            assertThatThrownBy(() -> ScmCitableTexts.changed(
-                            manager,
-                            new ReviewRepositoryPreparer.PreparedReview(
-                                    new RepositoryKey(1, 2), head.name(), base.name()),
-                            new LinkedHashMap<>()))
-                    .isInstanceOfSatisfying(
-                            ItemCaptureException.class,
-                            failure -> assertThat(failure.code()).isEqualTo(ItemCaptureCode.CAPTURE_FAILED));
+            var files = new LinkedHashMap<String, byte[]>();
+            var texts = ScmCitableTexts.changed(
+                    manager,
+                    new ReviewRepositoryPreparer.PreparedReview(new RepositoryKey(1, 2), commit.name(), base.name()),
+                    files);
+            return new Change(texts, files);
         }
     }
 }

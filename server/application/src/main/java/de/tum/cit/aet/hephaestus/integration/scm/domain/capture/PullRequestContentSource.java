@@ -215,9 +215,13 @@ public class PullRequestContentSource {
             if (selectedKinds.contains(DIFF)) {
                 var changedPaths =
                         gitRepositoryManager.changedPaths(prepared.key(), prepared.target(), prepared.head());
-                storeChange(files, prepared, changedPaths);
-                citable.addAll(ScmCitableTexts.changed(gitRepositoryManager, prepared, files));
-                completeness.put(DIFF, SourceCompleteness.COMPLETE);
+                var texts = ScmCitableTexts.changed(gitRepositoryManager, prepared, files);
+                citable.addAll(texts.texts());
+                storeChange(files, prepared, changedPaths, texts.leftOut());
+                completeness.put(
+                        DIFF, texts.leftOut().isEmpty() ? SourceCompleteness.COMPLETE : SourceCompleteness.PARTIAL);
+                if (!texts.leftOut().isEmpty())
+                    limitations.put(DIFF, List.of(ScmCitableTexts.CHANGED_FILE_NOT_CAPTURED));
                 identities.put(DIFF, range);
                 contentStates.put(
                         DIFF, changedPaths.isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
@@ -267,7 +271,10 @@ public class PullRequestContentSource {
     }
 
     private void storeChange(
-            Map<String, byte[]> files, ReviewRepositoryPreparer.PreparedReview prepared, Set<String> changedPaths) {
+            Map<String, byte[]> files,
+            ReviewRepositoryPreparer.PreparedReview prepared,
+            Set<String> changedPaths,
+            Set<String> leftOut) {
         ObjectNode change = objectMapper.createObjectNode();
         change.put("base_sha", prepared.target());
         change.put("head_sha", prepared.head());
@@ -275,6 +282,8 @@ public class PullRequestContentSource {
                 "changed_paths",
                 objectMapper.valueToTree(changedPaths.stream().sorted().toList()));
         change.put("diff", gitRepositoryManager.unifiedDiff(prepared.key(), prepared.target(), prepared.head()));
+        change.set(
+                "left_out", objectMapper.valueToTree(leftOut.stream().sorted().toList()));
         try {
             files.put(CHANGE_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(change));
         } catch (JacksonException e) {
