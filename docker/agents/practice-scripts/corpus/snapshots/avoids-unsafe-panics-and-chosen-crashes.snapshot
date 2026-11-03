@@ -124,6 +124,19 @@
 				},
 				{
 					"at": {
+						"file": "web/quote.js",
+						"line": 4
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "javascript",
+						"operators": "process.exit",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
 						"file": "app/tool.py",
 						"line": 16
 					},
@@ -215,6 +228,45 @@
 				},
 				{
 					"at": {
+						"file": "src/lib.rs",
+						"line": 4
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "rust",
+						"operators": ".unwrap()",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/lib.rs",
+						"line": 5
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "rust",
+						"operators": ".expect(",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
+						"file": "src/lib.rs",
+						"line": 10
+					},
+					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
+					"facts": {
+						"language": "rust",
+						"operators": "panic!",
+						"inPreview": false,
+						"testFile": false
+					}
+				},
+				{
+					"at": {
 						"file": "app/models/cart.rb",
 						"line": 8
 					},
@@ -222,32 +274,6 @@
 					"facts": {
 						"language": "ruby",
 						"operators": "exit!",
-						"inPreview": false,
-						"testFile": false
-					}
-				},
-				{
-					"at": {
-						"file": "native/cart.c",
-						"line": 1
-					},
-					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
-					"facts": {
-						"language": "c",
-						"operators": "abort(",
-						"inPreview": false,
-						"testFile": false
-					}
-				},
-				{
-					"at": {
-						"file": "native/cart.c",
-						"line": 2
-					},
-					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
-					"facts": {
-						"language": "c",
-						"operators": "abort(",
 						"inPreview": false,
 						"testFile": false
 					}
@@ -300,19 +326,6 @@
 					"facts": {
 						"language": "objective-c",
 						"operators": "abort(",
-						"inPreview": false,
-						"testFile": false
-					}
-				},
-				{
-					"at": {
-						"file": "ios/Cart.m",
-						"line": 1
-					},
-					"label": "A selected line that spells a crash operator; its facts name the language, the operators, and if it runs in a preview block or a test file.",
-					"facts": {
-						"language": "objective-c",
-						"operators": "NSAssert",
 						"inPreview": false,
 						"testFile": false
 					}
@@ -410,12 +423,12 @@
 				}
 			],
 			"facts": {
-				"crashOperatorLines": 24,
+				"crashOperatorLines": 25,
 				"inPreview": 0,
 				"inTests": 3
 			},
 			"directions": [
-				"24 selected line(s) spell a crash operator: 2 process.exit, 2 non-null assertion, 1 sys.exit, 1 panic(, 1 log.Fatal, 1 os.Exit, 1 System.exit, 1 !! force non-null, 1 error(, 1 exit!, 4 abort(, 1 exit(, 1 assert(, 2 NSAssert, 1 Environment.Exit, 1 Debug.Assert, and 2 more.",
+				"25 selected line(s) spell a crash operator: 3 process.exit, 2 non-null assertion, 1 sys.exit, 1 panic(, 1 log.Fatal, 1 os.Exit, 1 System.exit, 1 !! force non-null, 1 error(, 1 .unwrap(), 1 .expect(, 1 panic!, 1 exit!, 2 abort(, 1 exit(, 1 assert(, 1 NSAssert, and 4 more.",
 				"0 sit inside a preview block and 3 in test files. String-literal text and comments were not scanned.",
 				"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it."
 			]

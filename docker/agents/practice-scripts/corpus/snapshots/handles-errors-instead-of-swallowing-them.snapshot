@@ -174,6 +174,39 @@
 				},
 				{
 					"at": {
+						"file": "src/lib.rs",
+						"line": 6,
+						"endLine": 6
+					},
+					"label": "A Rust `.ok();` statement that drops the Err value.",
+					"facts": {
+						"language": "rust"
+					}
+				},
+				{
+					"at": {
+						"file": "src/lib.rs",
+						"line": 7,
+						"endLine": 7
+					},
+					"label": "A Rust `let _ =` binding of a call result.",
+					"facts": {
+						"language": "rust"
+					}
+				},
+				{
+					"at": {
+						"file": "src/lib.rs",
+						"line": 8,
+						"endLine": 8
+					},
+					"label": "A Rust `if let Err(_)` block with an empty body.",
+					"facts": {
+						"language": "rust"
+					}
+				},
+				{
+					"at": {
 						"file": "src/main/App.java",
 						"line": 4,
 						"endLine": 4
@@ -248,24 +281,46 @@
 					"facts": {
 						"language": "typescript"
 					}
+				},
+				{
+					"at": {
+						"file": "web/page.tsx",
+						"line": 2,
+						"endLine": 2
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "typescript"
+					}
+				},
+				{
+					"at": {
+						"file": "web/quote.js",
+						"line": 2,
+						"endLine": 2
+					},
+					"label": "A catch block with an empty body.",
+					"facts": {
+						"language": "javascript"
+					}
 				}
 			],
 			"facts": {
-				"errorSwallowCandidates": 15,
+				"errorSwallowCandidates": 20,
 				"filesScanned": 11,
 				"linesSelected": 96,
-				"typescript": 3,
-				"javascript": 0,
+				"typescript": 4,
+				"javascript": 1,
 				"python": 3,
 				"go": 3,
 				"java": 2,
 				"kotlin": 2,
-				"rust": 0,
+				"rust": 3,
 				"ruby": 2,
 				"swift": 0
 			},
 			"directions": [
-				"Found 15 possible error-discard constructs in 9 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
+				"Found 20 possible error-discard constructs in 9 languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.",
 				"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler."
 			]
 		}

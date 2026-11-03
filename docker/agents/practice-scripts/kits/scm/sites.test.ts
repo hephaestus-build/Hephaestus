@@ -114,3 +114,88 @@ void test("the first rule alone keeps a span that two rules match", () => {
 	);
 	assert.equal(file.sites(rules).length, 2);
 });
+
+void test("an apostrophe in text does not hide the code on the next lines", () => {
+	for (const [path, text] of [
+		["page.tsx", "const p = <p>don't</p>;\nload();\n"],
+		["quote.js", "x.replace(/['\"]/g, '');\nload();\n"],
+		["tool.py", "note = 'it\nload()\n"],
+	] as const) {
+		const file = sourceFile(path, text, every);
+		assert.deepEqual(
+			file.sites([rule("load", /\bload\(/u)]).map((site) => site.line),
+			[2],
+			path,
+		);
+	}
+});
+
+void test("a Rust quote character is not a string, and a lifetime opens nothing", () => {
+	const file = sourceFile(
+		"lib.rs",
+		"fn f<'a>(s: &'a str) {\n let c = '\"';\n s.unwrap();\n}\n",
+		every,
+	);
+	assert.deepEqual(
+		file.sites([rule("unwrap", /\.unwrap\(\)/u)]).map((site) => site.line),
+		[3],
+	);
+});
+
+void test("a catch that holds only a comment matches a rule for an empty catch", () => {
+	const empty = rule("empty-catch", /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u);
+	for (const text of [
+		"try { run(); } catch {}\n",
+		"try { run(); } catch (e) { /* ignored */ }\n",
+		"try {\n run();\n} catch (e) {\n // ignored\n}\n",
+	]) {
+		assert.equal(sourceFile("a.ts", text, every).sites([empty]).length, 1, text);
+	}
+	assert.equal(sourceFile("a.ts", "// catch {}\n", every).sites([empty]).length, 0);
+	assert.equal(sourceFile("a.ts", 'const s = "catch {}";\n', every).sites([empty]).length, 0);
+	assert.equal(
+		sourceFile("a.ts", "try { run(); } catch { log(); }\n", every).sites([empty]).length,
+		0,
+	);
+});
+
+void test("a rule can still quote a string", () => {
+	const quoted = [rule("label", /\bLabel\s*\(\s*"/u)];
+	assert.equal(
+		sourceFile("a.swift", 'Label("Pay", systemImage: "pay")\n', every).sites(quoted).length,
+		1,
+	);
+});
+
+for (const path of [
+	"a.swift",
+	"a.kt",
+	"a.java",
+	"a.ts",
+	"a.js",
+	"a.cs",
+	"a.go",
+	"a.rs",
+	"a.py",
+	"a.rb",
+	"a.php",
+	"a.m",
+	"a.c",
+]) {
+	void test(`${path}: a comment and a string are not code`, () => {
+		const comment = path.endsWith(".py") || path.endsWith(".rb") ? "#" : "//";
+		const file = sourceFile(path, `${comment} load()\nnote = "load()"\nload()\n`, every);
+		assert.deepEqual(
+			file.sites([rule("load", /\bload\(\)/u)]).map((site) => site.line),
+			[3],
+		);
+	});
+}
+
+void test("a regular expression literal is not code", () => {
+	const file = sourceFile("a.ts", "const call = /load()/u;\nload();\n", every);
+	assert.deepEqual(
+		file.sites([rule("load", /\bload\(\)/u)]).map((site) => site.line),
+		[2],
+	);
+});

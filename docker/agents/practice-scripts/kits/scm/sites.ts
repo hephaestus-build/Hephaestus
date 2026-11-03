@@ -119,11 +119,13 @@ function matches(
 	comments: boolean,
 ): Row[] {
 	const executable = comments ? undefined : maskSource(language, text);
+	// A rule can quote a string, but a comment is not code: `catch { /* ignored */ }` is an empty catch.
+	const tested = comments ? text : maskSource(language, text, false);
 	const lineAt = (offset: number) => text.slice(0, offset).split("\n").length;
 	const found: Row[] = [];
 	for (const [order, rule] of rules.entries()) {
 		const flags = rule.test.flags.includes("g") ? rule.test.flags : `${rule.test.flags}g`;
-		for (const match of text.matchAll(new RegExp(rule.test.source, flags))) {
+		for (const match of tested.matchAll(new RegExp(rule.test.source, flags))) {
 			const first = match[0].search(/\S/u);
 			if (
 				executable !== undefined &&
