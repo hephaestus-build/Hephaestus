@@ -5,7 +5,6 @@ import nodePath from "node:path";
 import { test } from "node:test";
 
 import { executionReportSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
-import { partitionBudget, turnBudget } from "../../../main/resources/agent/pi-review-turns.ts";
 import {
 	capturedLines,
 	directProgram,
@@ -25,7 +24,7 @@ function resultsOf(cwd: string) {
 	return { body, results: results.map((result: unknown) => result) };
 }
 
-void test("followers ignore early response headers and wait for content while another opening starts", async () => {
+void test("the next session waits for the content of the one before it, not for its early response headers", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-opening-stagger-")));
 	try {
 		stagePractices(cwd, [
@@ -37,7 +36,6 @@ void test("followers ignore early response headers and wait for content while an
 			cwd,
 			{},
 			{
-				PI_PRACTICE_CONCURRENCY: "3",
 				PI_HOST_STREAM_DELAYS: JSON.stringify({ leader: 500 }),
 				PI_HOST_DELAYS: JSON.stringify({ leader: 500 }),
 			},
@@ -52,8 +50,8 @@ void test("followers ignore early response headers and wait for content while an
 			return index;
 		};
 		assert.ok(position("headers", "leader") < position("stream", "leader"));
-		assert.ok(position("start", "other") < position("stream", "leader"));
 		assert.ok(position("start", "follower") > position("stream", "leader"));
+		assert.ok(position("start", "other") > position("stream", "leader"));
 		assert.ok(position("start", "follower") < position("finish", "leader"));
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
@@ -68,7 +66,6 @@ void test("three isolated model sessions overlap, retain each candidate and rece
 			cwd,
 			{},
 			{
-				PI_PRACTICE_CONCURRENCY: "3",
 				PI_HOST_DELAYS: JSON.stringify({ "z-last": 1200, "a-first": 900, "m-middle": 600 }),
 			},
 		);
@@ -111,7 +108,7 @@ void test("three isolated model sessions overlap, retain each candidate and rece
 		const notes = readFileSync(nodePath.join(cwd, "work/notes/review.md"), "utf8");
 		assert.ok(notes.indexOf("a-first:") < notes.indexOf("m-middle:"));
 		assert.ok(notes.indexOf("m-middle:") < notes.indexOf("z-last:"));
-		assert.match(exit.stderr, /review\.concurrency configured=3 effective=3/u);
+		assert.match(exit.stderr, /review\.paced sessions_at_once=\d+/u);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -155,7 +152,6 @@ for (const ownership of ["opening", "native-read", "sibling-only", "claimed-only
 					cwd,
 					ownership === "native-read" ? { "a-native": "read-change" } : {},
 					{
-						PI_PRACTICE_CONCURRENCY: "2",
 						PI_HOST_FIRST_COMPLETION: earlier === "sibling" ? "b-sibling" : "a-native",
 						PI_HOST_SESSION_CANDIDATE: JSON.stringify(candidate),
 					},
@@ -207,139 +203,75 @@ for (const ownership of ["opening", "native-read", "sibling-only", "claimed-only
 	});
 }
 
-for (const limit of ["calls", "tokens"]) {
-	void test(`concurrent sessions reserve disjoint group ${limit} and cannot starve a sibling`, async () => {
-		const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-budget-")));
-		try {
-			stagePractices(cwd, [{ slug: "greedy-one" }, { slug: "greedy-two" }, { slug: "finished" }]);
-			const exit = await runRunner(
-				cwd,
-				{ "greedy-one": "budget", "greedy-two": "budget" },
-				{
-					PI_PRACTICE_CONCURRENCY: "3",
-					PI_PRACTICE_MODEL_CALLS: limit === "calls" ? "2" : "12",
-					PI_PRACTICE_OUTPUT_TOKENS: limit === "tokens" ? "150" : "16000",
-					PI_HOST_DELAYS: JSON.stringify({ finished: 100 }),
-				},
-			);
-			assert.equal(exit.status, 0, exit.stderr);
-			const { body, results } = resultsOf(cwd);
-			assert.deepEqual(
-				results.map((result: unknown) => field(result, "practiceSlug")),
-				["finished"],
-			);
-			assert.deepEqual(field(body, "nonResults"), [
-				{ practiceSlug: "greedy-one", reason: "BUDGET" },
-				{ practiceSlug: "greedy-two", reason: "BUDGET" },
-			]);
-			if (limit === "tokens") {
-				for (const slug of ["greedy-one", "greedy-two"]) {
-					assert.deepEqual(
-						capturedLines(cwd, "requests")
-							.filter((row) => field(row, "slug") === slug)
-							.map((row) => field(row, "maxTokens")),
-						[150, 50],
-					);
-				}
-			}
-			const traces = field(readJsonFile(cwd, "out/runner-debug.json"), "turns");
-			assert.ok(Array.isArray(traces));
-			assert.equal(traces.length, 3);
-			for (const trace of traces) {
-				const budget = field(trace, "budget");
-				const calls = field(trace, "calls");
-				const tokens = field(trace, "outputTokens");
-				assert.ok(typeof calls === "number" && typeof tokens === "number");
-				assert.ok(calls <= Number(field(budget, "modelCalls")));
-				assert.ok(tokens <= Number(field(budget, "outputTokens")));
-			}
-		} finally {
-			rmSync(cwd, { recursive: true, force: true });
-		}
-	});
-}
-
-for (const cold of [false, true]) {
-	void test(`the deadline retains finished work and ends running and queued practices with a ${cold ? "cold" : "streaming"} leader`, async () => {
-		const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-deadline-")));
-		try {
-			stagePractices(
-				cwd,
-				["z-running", "a-finished", "y-running", "b-queued"].map((slug) => ({
-					slug,
-					...(cold && slug === "a-finished"
-						? {
-								readsSources: [
-									"scm.pull-request.core",
-									"scm.pull-request.diff",
-									"scm.repository.tree",
-								],
-							}
-						: {}),
-				})),
-			);
-			const exit = await runRunner(
-				cwd,
-				{ "z-running": "hang", "y-running": "hang" },
-				{
-					PI_PRACTICE_CONCURRENCY: "2",
-					AGENT_BUDGET_MS: "6500",
-					PI_HOST_COLD_LEADER: cold ? "z-running" : "",
-				},
-			);
-			assert.equal(exit.status, 1, exit.stderr);
-			const { results } = resultsOf(cwd);
-			const body = readJsonFile(cwd, "out/result.json");
-			assert.deepEqual(capturedLines(cwd, "admission"), []);
-			assert.deepEqual(
-				results.map((result: unknown) => field(result, "practiceSlug")),
-				["a-finished"],
-			);
-			assert.deepEqual(field(body, "nonResults"), [
-				{ practiceSlug: "b-queued", reason: "DEADLINE" },
-				{ practiceSlug: "y-running", reason: "DEADLINE" },
-				{ practiceSlug: "z-running", reason: "DEADLINE" },
-			]);
-			assert.deepEqual(
-				capturedLines(cwd, "prompts")
-					.map((row) => field(row, "slug"))
-					.toSorted((a, b) => String(a).localeCompare(String(b))),
-				cold ? ["a-finished", "z-running"] : ["a-finished", "y-running", "z-running"],
-			);
-			const report = executionReportSchema.parse(readJsonFile(cwd, "out/practice-scripts.json"));
-			assert.equal(
-				report.practices.find((practice) => practice.practiceSlug === "b-queued")?.stopReason,
-				"deadline",
-			);
-			assert.partialDeepStrictEqual(readJsonFile(cwd, "out/practice-coverage.json"), {
-				evaluated: 1,
-				eligible: 4,
-			});
-		} finally {
-			rmSync(cwd, { recursive: true, force: true });
-		}
-	});
-}
-
-void test("group reservations sum to the original budget, including a small group's minimum and indivisible shares", () => {
-	for (const practices of [1, 2, 3, 6]) {
-		const budget = turnBudget(practices, { modelCalls: 3, outputTokens: 1001 });
-		const shares = Array.from({ length: practices }, (_, position) =>
-			partitionBudget(budget, practices, position),
+void test("the deadline retains finished work and ends running and queued practices", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-deadline-")));
+	try {
+		stagePractices(
+			cwd,
+			["z-running", "a-finished", "y-waiting", "b-queued"].map((slug) => ({ slug })),
 		);
+		const exit = await runRunner(
+			cwd,
+			{ "z-running": "hang", "y-waiting": "hang" },
+			{ AGENT_BUDGET_MS: "6500", PI_HOST_COLD_LEADER: "y-waiting" },
+		);
+		assert.equal(exit.status, 1, exit.stderr);
+		const { results } = resultsOf(cwd);
+		const body = readJsonFile(cwd, "out/result.json");
+		assert.deepEqual(capturedLines(cwd, "admission"), []);
+		assert.deepEqual(
+			results.map((result: unknown) => field(result, "practiceSlug")),
+			["a-finished"],
+		);
+		assert.deepEqual(field(body, "nonResults"), [
+			{ practiceSlug: "b-queued", reason: "DEADLINE" },
+			{ practiceSlug: "y-waiting", reason: "DEADLINE" },
+			{ practiceSlug: "z-running", reason: "DEADLINE" },
+		]);
+		assert.deepEqual(
+			capturedLines(cwd, "prompts")
+				.map((row) => field(row, "slug"))
+				.toSorted((a, b) => String(a).localeCompare(String(b))),
+			["a-finished", "y-waiting", "z-running"],
+		);
+		const report = executionReportSchema.parse(readJsonFile(cwd, "out/practice-scripts.json"));
 		assert.equal(
-			shares.reduce((sum, work) => sum + work.modelCalls, 0),
-			budget.modelCalls,
+			report.practices.find((practice) => practice.practiceSlug === "b-queued")?.stopReason,
+			"deadline",
 		);
-		assert.equal(
-			shares.reduce((sum, work) => sum + work.outputTokens, 0),
-			budget.outputTokens,
-		);
-		assert.ok(shares.every((share) => share.modelCalls >= 3 && share.outputTokens >= 1001));
+		assert.partialDeepStrictEqual(readJsonFile(cwd, "out/practice-coverage.json"), {
+			evaluated: 1,
+			eligible: 4,
+		});
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
 	}
 });
 
-void test("a free slot starts the next practice across groups while another practice is still running", async () => {
+void test("a call that no provider answers holds every other practice back and claims nothing", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-waiting-")));
+	try {
+		stagePractices(
+			cwd,
+			["a-waiting", "b-queued", "c-queued"].map((slug) => ({ slug })),
+		);
+		const exit = await runRunner(
+			cwd,
+			{ "a-waiting": "hang" },
+			{ AGENT_BUDGET_MS: "6500", PI_HOST_COLD_LEADER: "a-waiting" },
+		);
+		assert.equal(exit.status, 76, exit.stderr);
+		assert.deepEqual(
+			capturedLines(cwd, "prompts").map((row) => field(row, "slug")),
+			["a-waiting"],
+		);
+		assert.deepEqual(capturedLines(cwd, "admission"), []);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+void test("a served session lets the next practice start while another is still running", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-slots-")));
 	try {
 		const slugs = ["slow", "quick-one", "quick-two", "quick-three"];
@@ -347,18 +279,10 @@ void test("a free slot starts the next practice across groups while another prac
 			cwd,
 			slugs.map((slug) => ({ slug })),
 		);
-		const index = readJsonFile(cwd, "catalog/practices/index.json");
-		assert.ok(Array.isArray(index));
-		const groups = index.map((practice: unknown, position) => ({
-			...recordOf(practice),
-			group: `group-${position}`,
-		}));
-		writeFileSync(nodePath.join(cwd, "catalog/practices/index.json"), JSON.stringify(groups));
 		const exit = await runRunner(
 			cwd,
 			{},
 			{
-				PI_PRACTICE_CONCURRENCY: "2",
 				PI_HOST_DELAYS: JSON.stringify({
 					slow: 900,
 					"quick-one": 150,
@@ -370,18 +294,6 @@ void test("a free slot starts the next practice across groups while another prac
 		assert.equal(exit.status, 0, exit.stderr);
 		const starts = capturedLines(cwd, "model-start");
 		const finishes = capturedLines(cwd, "model-finish");
-		const events = [
-			...starts.map((row) => ({ at: Number(field(row, "at")), change: 1 })),
-			...finishes.map((row) => ({ at: Number(field(row, "at")), change: -1 })),
-		].toSorted((a, b) => a.at - b.at || a.change - b.change);
-		let active = 0;
-		let peak = 0;
-		for (const event of events) {
-			active += event.change;
-			peak = Math.max(peak, active);
-		}
-		assert.equal(active, 0);
-		assert.equal(peak, 2);
 		assert.ok(
 			Number(
 				field(
@@ -402,11 +314,6 @@ void test("a free slot starts the next practice across groups while another prac
 	}
 });
 
-function recordOf(value: unknown): Record<string, unknown> {
-	assert.ok(typeof value === "object" && value !== null && !Array.isArray(value));
-	return Object.fromEntries(Object.entries(value));
-}
-
 void test("a session stop failure preserves completed siblings for admission and starts no further practice", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-stop-")));
 	try {
@@ -418,8 +325,8 @@ void test("a session stop failure preserves completed siblings for admission and
 			cwd,
 			{ "y-running": "hang" },
 			{
-				PI_PRACTICE_CONCURRENCY: "2",
 				PI_HOST_STOP_FAILURE: "z-stop",
+				PI_HOST_COLD_LEADER: "y-running",
 				PI_HOST_DELAYS: JSON.stringify({ "z-stop": 150 }),
 			},
 		);

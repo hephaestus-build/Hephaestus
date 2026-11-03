@@ -1048,7 +1048,6 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                         null,
                                         12,
                                         16000,
-                                        3,
                                         maxTokensPerAttempt,
                                         maxSearchUnitsPerAttempt,
                                         Duration.ofMinutes(10))),
@@ -1059,7 +1058,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
-                new ProxyCallsInFlight(3),
+                new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 capacity,
                 new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));

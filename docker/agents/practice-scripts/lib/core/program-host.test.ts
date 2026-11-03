@@ -33,12 +33,7 @@ import {
 	type RequiredSource,
 } from "./program-host.ts";
 import { InputReader } from "./script-inputs.ts";
-import {
-	ProgramSettlementError,
-	RETURN_MS,
-	SCRIPT_PROCESS_LEASE_MS,
-	SCRIPT_PROCESSES,
-} from "./script-run.ts";
+import { ProgramSettlementError, RETURN_MS } from "./script-run.ts";
 
 const roots: string[] = [];
 after(async () =>
@@ -213,6 +208,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 			reader: new EvidenceReader(ws.sources, receipts),
 			models: options.models ?? {},
 			budget: options.budget ?? new ModelBudget(10_000, MODEL_CONCURRENCY),
+			awaitModel: () => () => undefined,
 			review: async (reviewOptions, signal) => {
 				reviews.push(reviewOptions);
 				return options.review === undefined ? REVIEWED : options.review(reviewOptions, signal);
@@ -745,90 +741,6 @@ export default definePracticeScript({
 		assert.ok(!logs.some((line) => line.includes("after the review")), logs.join("\n"));
 		assert.equal(outcome.status, "ok", outcome.error);
 		assert.equal(outcome.candidate?.summary, REVIEWED.summary);
-	});
-
-	void test("only a bounded number of script processes run at once, and the rest wait for room", async () => {
-		const ws = await workspace(
-			Object.fromEntries(
-				["a", "b", "c", "d", "e"].map((name) => [
-					name,
-					program(
-						"definePracticeScript",
-						`{ meta: {}, async run(ctx) {
-							ctx.log("span " + Date.now());
-							await new Promise((resolve) => setTimeout(resolve, 150));
-							ctx.log("span " + Date.now());
-							return ctx.review({});
-						} }`,
-					),
-				]),
-			),
-		);
-		const runs = await Promise.all(["a", "b", "c", "d", "e"].map(async (name) => run(ws, name)));
-		const spans = runs.map(({ outcome, logs }) => {
-			assert.equal(outcome.status, "ok", outcome.error);
-			const [from, to] = logs
-				.filter((line) => line.startsWith("span "))
-				.map((line) => Number(line.slice(5)));
-			assert.ok(from !== undefined && to !== undefined, logs.join("\n"));
-			return { from, to };
-		});
-		const overlap = Math.max(
-			...spans.map(
-				({ from }) => spans.filter((span) => span.from <= from && from < span.to).length,
-			),
-		);
-		assert.ok(overlap <= SCRIPT_PROCESSES, `${String(overlap)} ran at once`);
-	});
-
-	void test("scripts that hold their room past the lease do not starve the next one", async () => {
-		const ws = await workspace({
-			hold: program(
-				"definePracticeScript",
-				`{ meta: {}, async run() { return Promise.withResolvers().promise; } }`,
-			),
-			next: program(
-				"definePracticeScript",
-				`{ meta: {}, async run(ctx) { return ctx.review({}); } }`,
-			),
-		});
-		const release = new AbortController();
-		const holding = Array.from({ length: SCRIPT_PROCESSES }, async () =>
-			run(ws, "hold", { signal: release.signal }),
-		);
-		await sleep(200);
-		const { outcome } = await run(ws, "next", { deadlineMs: SCRIPT_PROCESS_LEASE_MS + 5000 });
-		assert.equal(outcome.status, "ok", outcome.error);
-		release.abort(new UnratedError("cancelled", "the attempt was cancelled"));
-		await Promise.all(holding);
-	});
-
-	void test("a program that waits for room stops when the attempt is cancelled", async () => {
-		const ws = await workspace({
-			hold: program(
-				"definePracticeScript",
-				`{ meta: {}, async run() { return Promise.withResolvers().promise; } }`,
-			),
-			next: program(
-				"definePracticeScript",
-				`{ meta: {}, async run(ctx) { return ctx.review({}); } }`,
-			),
-		});
-		const release = new AbortController();
-		const holding = Array.from({ length: SCRIPT_PROCESSES }, async () =>
-			run(ws, "hold", { signal: release.signal }),
-		);
-		await sleep(200);
-		const cancel = new AbortController();
-		const waiting = run(ws, "next", { signal: cancel.signal });
-		await sleep(50);
-		cancel.abort(new UnratedError("cancelled", "the attempt was cancelled"));
-		const { outcome, reviews } = await waiting;
-		assert.equal(outcome.status, "failed");
-		assert.equal(outcome.stopReason, "cancelled");
-		assert.deepEqual(reviews, []);
-		release.abort(new UnratedError("cancelled", "the attempt was cancelled"));
-		await Promise.all(holding);
 	});
 
 	void test("requests open at its review end with the program and do not lose the review", async () => {

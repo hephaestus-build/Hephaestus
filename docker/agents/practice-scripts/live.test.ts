@@ -200,6 +200,7 @@ async function runLive(slug: string, source: string, bound: BoundModels): Promis
 				reader: new EvidenceReader(sources, receipts),
 				models: hostModels(bound, standIn.url, TOKEN, slug),
 				budget: new ModelBudget(200_000, MODEL_CONCURRENCY),
+				awaitModel: () => () => undefined,
 				// The review session is the host's, never a direct call: this fake answers it over IPC.
 				review: async (options): Promise<Candidate> => {
 					await resolveLeads(options.leads ?? [], sources);

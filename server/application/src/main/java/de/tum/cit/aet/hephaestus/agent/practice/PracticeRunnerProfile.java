@@ -14,7 +14,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     private static final List<String> SIDECARS = List.of(
             "pi-agent-sandbox.ts",
             "pi-assessment-cache.ts",
-            "pi-opening-queue.ts",
+            "pi-session-pace.ts",
             "pi-task-paths.ts",
             "pi-tool-arguments.ts",
             "pi-tool-validation.ts",
@@ -54,10 +54,13 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
         return SIDECARS;
     }
 
+    /** The runner's heap. Its sessions live in it, so it also bounds how many run at once. */
+    public static final int HEAP_MIB = 256;
+
     @Override
     public List<String> runtimeFlags() {
         // Subprocesses bypass Node permissions; read-only mounts and container isolation protect evidence.
-        return List.of("--max-old-space-size=256");
+        return List.of("--max-old-space-size=" + HEAP_MIB);
     }
 
     @Override

@@ -46,7 +46,7 @@ function outcome(changes: Partial<ProgramOutcome> = {}): ProgramOutcome {
 const failed = (error: string | undefined) =>
 	outcome({ status: "failed", stopReason: "error", ...(error === undefined ? {} : { error }) });
 
-const slugOf = (i: number) => `p-${String(i).padStart(3, "0")}`;
+const slugOf = (i: number) => `p-${String(i).padStart(4, "0")}`;
 
 const sharedFixture = (name: string): unknown =>
 	JSON.parse(readFileSync(path.join(import.meta.dirname, "../practice-results", name), "utf8"));
@@ -282,7 +282,7 @@ void test("the report keeps whole entries within its byte bound, and says it lef
 });
 
 void test("the report keeps every practice within its bounds and leaves out the errors that do not fit", () => {
-	const slugs = Array.from({ length: 200 }, (_, i) => slugOf(i));
+	const slugs = Array.from({ length: 2000 }, (_, i) => slugOf(i));
 	const error = "\u{1F642}".repeat(PRACTICE_SCRIPT_ERROR_MAX_CHARS);
 	const report = parsed(executionReport(slugs.map((slug) => [slug, failed(error)])));
 	assert.equal(report.truncated, false);
@@ -300,7 +300,7 @@ void test("the report keeps every practice within its bounds and leaves out the 
 
 void test("an error that does not fit leaves room for a shorter error after it", () => {
 	const long = "\u{1F642}".repeat(PRACTICE_SCRIPT_ERROR_MAX_CHARS);
-	const slugs = Array.from({ length: 40 }, (_, i) => slugOf(i));
+	const slugs = Array.from({ length: 600 }, (_, i) => slugOf(i));
 	const report = parsed(
 		executionReport(
 			slugs.map((slug, i) => [slug, failed(i === slugs.length - 1 ? "Cannot read x" : long)]),

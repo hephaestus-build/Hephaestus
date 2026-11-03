@@ -210,7 +210,6 @@ export function stagePractices(cwd: string, practices: readonly StagedPractice[]
 				({ slug, readsSources = ["scm.pull-request.core", "scm.pull-request.diff"] }) => ({
 					slug,
 					name: "Authentication review",
-					group: "security",
 					readsSources,
 					exhaustiveSources: ["scm.pull-request.diff"],
 					versionId: "7",
@@ -265,9 +264,8 @@ export async function runRunner(
 				PI_RUNNER_CWD: cwd,
 				PI_CODING_AGENT_DIR: cwd,
 				AGENT_BUDGET_MS: "60000",
-				PI_PRACTICE_MODEL_CALLS: "12",
-				PI_PRACTICE_CONCURRENCY: "1",
-				PI_PRACTICE_OUTPUT_TOKENS: "16000",
+				PI_PRACTICE_MODEL_CALLS: "36",
+				PI_PRACTICE_OUTPUT_TOKENS: "48000",
 				PI_DIRECT_MODEL_TOKENS: "200000",
 				LLM_PROXY_URL: "https://unused.invalid",
 				LLM_PROXY_TOKEN: "job-token",
@@ -701,6 +699,7 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						const delay = field(delays, slug);
 						capture("model-start", { slug, at: Date.now() });
 						capture("model-events", { slug, event: "start" });
+						emit({ type: "turn_start" });
 						await firstProviderEvent(slug);
 						if (typeof delay === "number") {
 							await sleep(delay);

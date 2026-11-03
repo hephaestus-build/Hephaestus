@@ -155,6 +155,9 @@ public class PiRuntimeFactory {
         retry.put("maxRetries", RETRY_MAX_ATTEMPTS);
         retry.put("baseDelayMs", RETRY_BASE_DELAY_MS);
         settings.put("retry", retry);
+        // A model call can wait for its pool's grant longer than the SDK's default of 5 minutes. The proxy answers or
+        // refuses every waiting call by the attempt's deadline, and its own bounds end a silent provider.
+        settings.put("httpIdleTimeoutMs", 0);
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(settings);
         } catch (JacksonException e) {

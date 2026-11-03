@@ -14,7 +14,7 @@
  *
  *   node scripts/sandbox-footprint.ts --stage <dir> [--image <ref>] [--reviews <n>] [--memory 3g]
  *     [--tool-calls 12] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
- *     [--practice-concurrency <n>] [--work <dir>] [--out <file>]
+ *     [--work <dir>] [--out <file>]
  *
  * The work directory receives the container logs, `samples.jsonl` and, without `--out`,
  * `footprint.json`. The run exits 1 unless its verdict shows that every review was measured.
@@ -60,7 +60,6 @@ const { values: options } = parseArgs({
 		"work-seconds": { type: "string", default: "1500" },
 		"budget-seconds": { type: "string", default: "1200" },
 		"node-options": { type: "string", default: "" },
-		"practice-concurrency": { type: "string", default: "" },
 		label: { type: "string", default: "baseline" },
 		work: { type: "string" },
 		out: { type: "string" },
@@ -74,10 +73,6 @@ const toolCalls = positiveInteger(options["tool-calls"], "--tool-calls");
 const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
 const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
 const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
-const practiceConcurrency =
-	options["practice-concurrency"] === ""
-		? null
-		: positiveInteger(options["practice-concurrency"], "--practice-concurrency");
 const runId = `fp-${randomUUID().slice(0, 8)}`;
 
 /** The memory volumes of a review Pod (KubernetesPods.MEMORY_VOLUMES) and its disk volumes (attemptVolumes). */
@@ -679,9 +674,6 @@ function environment(sessionId: string): string[] {
 	env.AGENT_BUDGET_MS = String(budgetSeconds * 1000);
 	if (options["node-options"] !== "") {
 		env.NODE_OPTIONS = options["node-options"];
-	}
-	if (practiceConcurrency !== null) {
-		env.PI_PRACTICE_CONCURRENCY = String(practiceConcurrency);
 	}
 	return Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 }

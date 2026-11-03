@@ -41,7 +41,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 new PiResultParser(mapper, new SimpleMeterRegistry()),
                 new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT),
                 new PracticeReviewProperties(
-                        false, 15, 5, samplingTemperature, 12, 16000, 3, 150_000, 1000, Duration.ofMinutes(10)),
+                        false, 15, 5, samplingTemperature, 12, 16000, 150_000, 1000, Duration.ofMinutes(10)),
                 mapper);
     }
 
@@ -62,8 +62,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
     void shouldHandTheRunnerTheWorkEachPracticeIsOwed() {
         assertThat(adapter.buildSandboxSpec(proxyRequest()).environment())
                 .containsEntry(PracticePiAdapter.PRACTICE_MODEL_CALLS_ENV, "12")
-                .containsEntry(PracticePiAdapter.PRACTICE_OUTPUT_TOKENS_ENV, "16000")
-                .containsEntry(PracticePiAdapter.PRACTICE_CONCURRENCY_ENV, "3");
+                .containsEntry(PracticePiAdapter.PRACTICE_OUTPUT_TOKENS_ENV, "16000");
     }
 
     @Test

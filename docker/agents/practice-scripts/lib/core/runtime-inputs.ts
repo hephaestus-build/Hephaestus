@@ -5,7 +5,6 @@ export const runtimeIdSchema = z.uuid();
 export const practiceIndexSchema = z.array(
 	z.strictObject({
 		slug: z.string().regex(PRACTICE_SLUG),
-		group: z.string().min(1).optional(),
 		name: z.string().min(1),
 		readsSources: z.array(z.string().min(1)),
 		exhaustiveSources: z.array(z.string().min(1)),

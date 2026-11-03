@@ -188,7 +188,7 @@ class WorkerFeedbackComposerTest {
                 gateway,
                 assignments,
                 items,
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000, Duration.ofMinutes(10)),
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)),
                 new AgentProperties(
                         true,
                         Duration.ofSeconds(1),

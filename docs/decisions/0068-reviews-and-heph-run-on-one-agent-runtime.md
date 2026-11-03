@@ -627,6 +627,7 @@ Each layer brings these proofs:
   - A chart fit test on `small-16gib`. A worker's rolling update fits the node, at about 12.3 of 15.4 GiB requested.
     It fits once no worker has its own Heph pool.
     The profile then moves from `Recreate` to a rolling update, as `small` did.
+
 - **The review's tools sidecar** brings the tool placement, `grep` over `exec`, `find` with a Node glob, and codemode under decision H. Proofs:
   - `ReviewCoverageAuthorityTest`: a hostile tools side that forges a full read gets no coverage, and the same read through the loop does.
   - `ReviewLoopPermissionTest`: under the loop's grants, `read`, `ls`, `find`, `grep` and codemode work, and a process spawn is refused.
@@ -735,9 +736,9 @@ A draining flag and a `NOTIFY` channel would have no reader, so the layer adds n
 
 [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md) amends this ADR.
 
-- § Fit by measured use: a review agent Pod requests 384 MiB at practice concurrency 27. The table above records the earlier estimate.
+- § Fit by measured use: a review agent Pod requests 384 MiB, and it sets its own width. The table above records the earlier estimate.
 - [Decision G](#g-review-pod-admission-checks-quota-and-provider-demand): a live background waiter alone no longer blocks a claim.
-  A wide review has waiters whenever the pool is below its width.
+  A self-paced review has a waiter whenever the provider is the limit.
   Thus, the rule would keep a second review from starting.
   The pool's fair order shares the grants.
 - [Option Z](#z-one-loop-host-for-every-loop-rejected) stays rejected.

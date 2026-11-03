@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.Duration;
 import org.hibernate.validator.constraints.time.DurationMin;
@@ -22,11 +21,8 @@ import org.springframework.validation.annotation.Validated;
  * @param maxRequestsPerRequesterPerHour
  *                            manual review requests per person, workspace and hour. 0 disables the limit.
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
- * @param practiceModelCalls  The model calls that one practice gets in a review turn. A turn gets this number for
- *                            each practice, and at least the number for three practices.
- * @param practiceOutputTokens
- *                            the output tokens one practice is owed in a review turn, counted the same way.
- * @param practiceConcurrency maximum concurrent practice sessions in an item review. Scans remain serial.
+ * @param practiceModelCalls  The model calls that one practice gets in a review.
+ * @param practiceOutputTokens The output tokens that one practice gets in a review.
  * @param directModelTokensPerAttempt The input and output tokens that the direct model calls of the practice programs
  *                                    of one review attempt may spend together. The calls of the review session itself
  *                                    do not count. The runner holds the programs to it, and the proxy refuses further
@@ -44,9 +40,8 @@ public record PracticeReviewProperties(
         @Min(0) @DefaultValue("15") int cooldownMinutes,
         @Min(0) @DefaultValue("5") int maxRequestsPerRequesterPerHour,
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
-        @Min(1) @DefaultValue("12") int practiceModelCalls,
-        @Min(1000) @DefaultValue("16000") int practiceOutputTokens,
-        @Min(1) @Max(32) @DefaultValue("3") int practiceConcurrency,
+        @Min(1) @DefaultValue("36") int practiceModelCalls,
+        @Min(1000) @DefaultValue("48000") int practiceOutputTokens,
         @Min(1) @DefaultValue("200000") long directModelTokensPerAttempt,
         @Min(1) @DefaultValue("1000") long directModelSearchUnitsPerAttempt,
         @DurationMin(minutes = 1) @DefaultValue("PT10M") Duration compositionTimeout) {}

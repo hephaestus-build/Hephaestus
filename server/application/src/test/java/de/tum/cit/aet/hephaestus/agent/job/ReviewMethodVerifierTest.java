@@ -24,8 +24,7 @@ class ReviewMethodVerifierTest extends BaseUnitTest {
     private final LlmModelResolver models = mock(LlmModelResolver.class);
     private final ModelBindingSource binding = mock(ModelBindingSource.class);
     private final ReviewMethodVerifier verifier = new ReviewMethodVerifier(
-            models,
-            new PracticeReviewProperties(false, 15, 5, 0.5, 12, 16000, 3, 200000, 1000, Duration.ofMinutes(10)));
+            models, new PracticeReviewProperties(false, 15, 5, 0.5, 12, 16000, 200000, 1000, Duration.ofMinutes(10)));
 
     private ReviewMethod persisted() {
         when(models.resolve(binding))

@@ -39,9 +39,10 @@ import tools.jackson.databind.node.ObjectNode;
 @LiveLlmTest
 class CompositionEvalLiveTest {
     /** {@code hephaestus.practice-review.practice-model-calls} at its default, as staging runs it. */
-    private static final int PRACTICE_MODEL_CALLS = 12;
+    private static final int PRACTICE_MODEL_CALLS = 36;
 
-    private static final int PRACTICES_PER_TURN = 3;
+    /** The composer's own bound, {@code MAX_COMPOSITION_CALLS}. */
+    private static final int COMPOSITION_CALLS = 12;
 
     @Test
     void shouldComposeEveryCaseWithTheLiveModel() throws Exception {
@@ -104,10 +105,7 @@ class CompositionEvalLiveTest {
         var tool = new ModelSession.Tool(
                 "check_package", ReviewOnWork.TOOL_DESCRIPTION, scenario.turn().toolParameters());
         var session = new ModelSession(transport, MAPPER, settings, system, List.of(tool));
-        long notMet = scenario.turn().restable().values().stream()
-                .filter(Evidence.Result::notMet)
-                .count();
-        int bound = PRACTICE_MODEL_CALLS * (int) Math.min(Math.max(1, notMet), PRACTICES_PER_TURN);
+        int bound = Math.min(COMPOSITION_CALLS, PRACTICE_MODEL_CALLS);
         long started = System.nanoTime();
         Boolean firstAccepted = null;
         JsonNode last = null;

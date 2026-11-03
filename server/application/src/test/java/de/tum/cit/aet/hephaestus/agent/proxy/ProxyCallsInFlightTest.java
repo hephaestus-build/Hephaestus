@@ -15,7 +15,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +24,7 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     /** 2 × (3 + 1) + 4 at practice concurrency 3. */
     private static final int REVIEW_CALLS = 12;
 
-    private final ProxyCallsInFlight calls = new ProxyCallsInFlight(3);
+    private final ProxyCallsInFlight calls = new ProxyCallsInFlight(12);
 
     @Test
     @DisplayName("a review attempt keeps two calls for each session and its script calls, and no more")
@@ -96,18 +95,6 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
         assertThat(calls.begin(attempt(UsageSourceType.MENTOR_TURN)).isOverCap())
                 .isFalse();
         assertThat(calls.begin(next).isOverCap()).isFalse();
-    }
-
-    @Test
-    @DisplayName("the cap follows the configured practice concurrency")
-    void shouldGrowTheReviewCapWhenPracticeConcurrencyGrows() {
-        ProxyCallsInFlight wider = new ProxyCallsInFlight(6);
-        ProxyRouting.BilledAttempt review = attempt(UsageSourceType.REVIEW_JOB);
-
-        IntStream.range(0, 18)
-                .forEach(index -> assertThat(wider.begin(review).isOverCap()).isFalse());
-
-        assertThat(wider.begin(review).isOverCap()).isTrue();
     }
 
     @Test

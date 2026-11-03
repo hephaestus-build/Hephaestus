@@ -191,6 +191,7 @@ try {
 				reader: new EvidenceReader(sources, receipts),
 				models: {},
 				budget: new ModelBudget(0, 1),
+				awaitModel: () => () => undefined,
 				review: async (options) => {
 					const asked: AskedReview = { input: options };
 					reviews.push(asked);

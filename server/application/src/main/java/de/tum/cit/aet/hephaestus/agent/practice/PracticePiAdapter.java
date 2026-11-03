@@ -39,8 +39,6 @@ public class PracticePiAdapter {
     /** The runner bounds each turn by these, per practice it carries: pi-runner.ts PER_PRACTICE_WORK. */
     static final String PRACTICE_MODEL_CALLS_ENV = "PI_PRACTICE_MODEL_CALLS";
 
-    static final String PRACTICE_CONCURRENCY_ENV = "PI_PRACTICE_CONCURRENCY";
-
     static final String PRACTICE_OUTPUT_TOKENS_ENV = "PI_PRACTICE_OUTPUT_TOKENS";
 
     /**
@@ -74,7 +72,6 @@ public class PracticePiAdapter {
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
         environment.put(PRACTICE_MODEL_CALLS_ENV, Integer.toString(reviewProperties.practiceModelCalls()));
         environment.put(PRACTICE_OUTPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceOutputTokens()));
-        environment.put(PRACTICE_CONCURRENCY_ENV, Integer.toString(reviewProperties.practiceConcurrency()));
         environment.put(DIRECT_MODEL_TOKENS_ENV, Long.toString(reviewProperties.directModelTokensPerAttempt()));
         Double temperature = reviewProperties.samplingTemperature();
         if (temperature != null) {

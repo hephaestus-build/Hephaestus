@@ -427,7 +427,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                 completion,
                 mock(MentorLedgerNotifications.class),
                 host,
-                new ProxyCallsInFlight(3),
+                new ProxyCallsInFlight(12),
                 mock(TurnSandboxes.class),
                 mock(AttemptTokenIssuer.class),
                 new JsonMapper(),

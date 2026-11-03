@@ -73,7 +73,6 @@ public class WorkerFeedbackComposer {
     /** Fresh sessions after the first, only when the history under the review changed while it was composed. */
     static final int MAX_PUBLIC_RECOMPOSITIONS = 2;
 
-    private static final int PRACTICES_PER_TURN = 3;
     private static final int MAX_COMPOSITION_CALLS = 12;
     private static final Duration PROVIDER_RETRY_PAUSE = Duration.ofSeconds(1);
     private static final int DEFAULT_CONTEXT_WINDOW = 128_000;
@@ -577,10 +576,8 @@ public class WorkerFeedbackComposer {
             return Ending.NONE;
         }
 
-        private int bound(int practices) {
-            return Math.min(
-                    MAX_COMPOSITION_CALLS - calls,
-                    properties.practiceModelCalls() * Math.min(Math.max(1, practices), PRACTICES_PER_TURN));
+        private int bound() {
+            return Math.min(MAX_COMPOSITION_CALLS - calls, properties.practiceModelCalls());
         }
 
         /** Whether a request with this turn fits the model's context window with room for its answer. */
@@ -654,8 +651,7 @@ public class WorkerFeedbackComposer {
                 log.warn("The review input exceeds the model's context window: jobId={}", job.getId());
                 return stopped(CompositionStop.CONTEXT_WINDOW);
             }
-            int bound = bound((int)
-                    restable.values().stream().filter(Evidence.Result::notMet).count());
+            int bound = bound();
             var reply = session.send(turn);
             boolean askedOnceMore = false;
             boolean nudged = false;
@@ -872,7 +868,7 @@ public class WorkerFeedbackComposer {
                 stopFor(CompositionStop.CONTEXT_WINDOW);
                 return;
             }
-            int bound = bound(PrivateFeedback.composable(state, routes).size());
+            int bound = bound();
             var reply = session.send(turn);
             boolean askedOnceMore = false;
             boolean nudged = false;
