@@ -10,16 +10,18 @@ import java.time.Duration;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Separate bean from {@code AccountExportService}: self-invocation would bypass the {@link Async}
- * proxy and run the assembly inline on the request thread.
+ * Generates the export that {@link AccountExportRequested} owes. The event publication registry
+ * delivers it at least once, so a generation that a restart interrupted runs again, and a delivery
+ * for an export that is no longer in flight does nothing.
  */
 @ConditionalOnServerRole
 @Component
@@ -53,8 +55,13 @@ public class ExportGenerationWorker {
         this.transaction = new TransactionTemplate(transactionManager);
     }
 
+    // The generation owns its transactions: one for the bundle, and one for a failure after that rolls back.
+    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
+    public void on(AccountExportRequested requested) {
+        generate(requested.exportId(), requested.accountId());
+    }
+
     /** Generate the export atomically; record a failure only after the failed transaction rolls back. */
-    @Async
     public void generate(Long exportId, Long accountId) {
         boolean generated;
         try {
@@ -79,6 +86,11 @@ public class ExportGenerationWorker {
                 .orElse(null);
         if (export == null) {
             log.warn("auth.export: generation skipped, export {} for account {} not found", exportId, accountId);
+            return false;
+        }
+        if (export.getStatus() != AccountExport.Status.PENDING
+                && export.getStatus() != AccountExport.Status.PROCESSING) {
+            log.info("auth.export: generation skipped, export {} is already {}", exportId, export.getStatus());
             return false;
         }
         export.setStatus(AccountExport.Status.PROCESSING);

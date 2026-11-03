@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
-import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
-
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
@@ -13,6 +11,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,10 +29,11 @@ import org.springframework.web.server.ResponseStatusException;
  * cannot distinguish "exists but not yours" from "doesn't exist".
  *
  * <h2>Async generation</h2>
- * {@link #requestExport} persists a PENDING row in the request transaction, then — after commit —
- * hands off to {@link ExportGenerationWorker#generate} on the application async executor. The
- * request returns 202 immediately; the client polls {@link #status}. The post-commit handoff
- * guarantees the worker (a new transaction) sees the committed row.
+ * {@link #requestExport} persists a PENDING row and publishes {@link AccountExportRequested} in the
+ * request transaction, so the event publication registry records the generation that is owed. The
+ * request returns 202 immediately; the client polls {@link #status}. {@link ExportGenerationWorker}
+ * generates after commit, and a restart before it finishes leaves an incomplete publication that is
+ * resubmitted.
  */
 @ConditionalOnServerRole
 @Service
@@ -41,17 +41,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountExportService {
 
     private final AccountExportRepository accountExportRepository;
-    private final ExportGenerationWorker generationWorker;
+    private final ApplicationEventPublisher events;
     private final AuthEventLogger authEventLogger;
     private final Clock clock;
 
     public AccountExportService(
             AccountExportRepository accountExportRepository,
-            ExportGenerationWorker generationWorker,
+            ApplicationEventPublisher events,
             AuthEventLogger authEventLogger,
             Clock clock) {
         this.accountExportRepository = accountExportRepository;
-        this.generationWorker = generationWorker;
+        this.events = events;
         this.authEventLogger = authEventLogger;
         this.clock = clock;
     }
@@ -95,10 +95,7 @@ public class AccountExportService {
                 .account(accountId)
                 .details("{\"exportId\":" + export.getId() + "}")
                 .record();
-        // Hand off after the PENDING row commits so the worker's own transaction can read it.
-        // The worker is @Async on a separate bean → real proxy hop (no inline self-invocation).
-        Long exportId = export.getId();
-        afterCommit(() -> generationWorker.generate(Objects.requireNonNull(exportId), accountId));
+        events.publishEvent(new AccountExportRequested(Objects.requireNonNull(export.getId()), accountId));
         return export;
     }
 
