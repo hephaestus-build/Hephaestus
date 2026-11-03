@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -115,6 +116,20 @@ class SlackConversationProjectorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSayThatOlderThreadsWereLeftOutWhenThereAreMoreThanTheCap() {
+        threads(IntStream.rangeClosed(0, SlackConversationProjector.MAX_THREADS)
+                .mapToObj(index -> thread("C" + index, (1760000000 + index) + ".000000"))
+                .toArray(Object[][]::new));
+        when(messageRepository.findThreadMessages(eq(WORKSPACE), anyString(), anyString(), any(Pageable.class)))
+                .thenAnswer(call -> List.of(message(call.getArgument(2), 9L, "Short note.")));
+
+        JsonNode payload = projector.buildPayload(WORKSPACE, DEVELOPER);
+
+        assertThat(payload.path("conversations")).hasSize(SlackConversationProjector.MAX_THREADS);
+        assertThat(payload.path("truncated").asBoolean()).isTrue();
+    }
+
+    @Test
     void shouldLeaveOutTheOldestWholeThreadsWhenTheFileIsTooLargeAndCountThem() {
         threads(
                 thread("C1", "1760000300.000000"),
@@ -179,7 +194,8 @@ class SlackConversationProjectorTest extends BaseUnitTest {
     }
 
     private void threads(Object[]... rows) {
-        when(threadRepository.findParticipatingThreadRows(WORKSPACE, DEVELOPER, SlackConversationProjector.MAX_THREADS))
+        when(threadRepository.findParticipatingThreadRows(
+                        WORKSPACE, DEVELOPER, SlackConversationProjector.MAX_THREADS + 1))
                 .thenReturn(List.of(rows));
     }
 

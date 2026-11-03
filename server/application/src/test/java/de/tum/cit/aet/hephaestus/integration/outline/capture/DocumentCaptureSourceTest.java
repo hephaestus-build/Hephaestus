@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -127,6 +128,21 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSayThatTheTeamHasMoreDocumentsThanTheListShows() throws Exception {
+        var many = IntStream.rangeClosed(0, DocumentCaptureSource.MAX_MENTOR_DOCUMENTS)
+                .mapToObj(index -> doc("Engineering", "doc-" + index, "Doc " + index, "Body."))
+                .toList();
+        when(projection.documentsForWorkspace(WORKSPACE_ID)).thenReturn(many);
+
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        provider.contribute(mentorRequest(), files);
+
+        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        assertThat(root.path("documents")).hasSize(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS);
+        assertThat(root.path("hasMore").asBoolean()).isTrue();
+    }
+
+    @Test
     void mentorPathEmitsSingleJsonArray() throws Exception {
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(
@@ -137,7 +153,9 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         provider.contribute(mentorRequest(), files);
 
         assertThat(files.keySet()).containsExactly("inputs/context/outline_docs.json");
-        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        JsonNode root = objectMapper
+                .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
+                .path("documents");
         assertThat(root.isArray()).isTrue();
         assertThat(root).hasSize(2);
         JsonNode entry = root.get(0);
@@ -168,7 +186,9 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(mentorRequest(), files);
 
-        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        JsonNode root = objectMapper
+                .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
+                .path("documents");
         // "collection" stays the path/slug identity; "collection_name" is the additive human label.
         assertThat(root.get(0).get("collection").asString()).isEqualTo("engineering");
         assertThat(root.get(0).get("collection_name").asString()).isEqualTo("Engineering Docs");
@@ -191,7 +211,9 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(mentorRequest(), files);
 
-        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        JsonNode root = objectMapper
+                .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
+                .path("documents");
         JsonNode linked = root.get(0);
         assertThat(linked.get("author").asString()).isEqualTo("Ada Lovelace");
         assertThat(linked.get("author_account_id").asString()).isEqualTo("555");
@@ -222,7 +244,9 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(mentorRequest(), files);
 
-        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        JsonNode root = objectMapper
+                .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
+                .path("documents");
         JsonNode rich = root.get(0);
         // ISO-8601 upstream clocks, present only when captured.
         assertThat(rich.get("created").asString()).isEqualTo("2025-11-01T08:00:00Z");
@@ -273,7 +297,9 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(mentorRequest(), files);
 
-        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        JsonNode root = objectMapper
+                .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
+                .path("documents");
         assertThat(root.path(0).path("url").asString()).isEqualTo("https://docs.example/doc/release-guide-abc123");
         assertThat(root.path(0).path("body").asString()).hasSize(DocumentCaptureSource.MENTOR_BODY_CHARS);
         assertThat(root.path(0).path("bodyTruncated").asBoolean()).isTrue();
@@ -314,13 +340,16 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         MentorContextRequest request = new MentorContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
         when(mentorMessages.textForMessage(WORKSPACE_ID, 7L, messageId))
                 .thenReturn(Optional.of("How do we deploy the webhook server?"));
-        when(projection.searchDocuments(eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS)))
+        when(projection.searchDocuments(
+                        eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS + 1)))
                 .thenReturn(List.of(doc("Ops", "deploy-guide", "Deploy Guide", "Steps.")));
 
         Map<String, byte[]> files = new LinkedHashMap<>();
         provider.contribute(request, files);
 
-        JsonNode root = objectMapper.readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")));
+        JsonNode root = objectMapper
+                .readTree(Objects.requireNonNull(files.get("inputs/context/outline_docs.json")))
+                .path("documents");
         assertThat(root).hasSize(1);
         assertThat(root.get(0).get("slug").asString()).isEqualTo("deploy-guide");
         verify(projection, never()).documentsForWorkspace(anyLong());
@@ -331,7 +360,8 @@ class DocumentCaptureSourceTest extends BaseUnitTest {
         UUID messageId = UUID.randomUUID();
         MentorContextRequest request = new MentorContextRequest(WORKSPACE_ID, 7L, UUID.randomUUID(), messageId);
         when(mentorMessages.textForMessage(WORKSPACE_ID, 7L, messageId)).thenReturn(Optional.of("something niche"));
-        when(projection.searchDocuments(eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS)))
+        when(projection.searchDocuments(
+                        eq(WORKSPACE_ID), anyString(), eq(DocumentCaptureSource.MAX_MENTOR_DOCUMENTS + 1)))
                 .thenReturn(List.of());
         when(projection.documentsForWorkspace(WORKSPACE_ID))
                 .thenReturn(List.of(doc("Engineering", "onboarding-guide", "Onboarding Guide", "Welcome.")));

@@ -56,7 +56,6 @@ import tools.jackson.databind.JsonNode;
 @ConditionalOnCaptureRole
 public class PracticePageFeedbackService {
 
-    static final int MAX_CARDS = 20;
     static final Duration CLOSED_CARD_STAYS = Duration.ofDays(30);
 
     private final FeedbackRepository feedbackRepository;
@@ -241,7 +240,6 @@ public class PracticePageFeedbackService {
                             hidden);
                 })
                 .filter(Objects::nonNull)
-                .limit(MAX_CARDS)
                 .toList();
     }
 

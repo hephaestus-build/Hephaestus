@@ -134,7 +134,10 @@ public class DocumentCaptureSource implements ContentSource {
             emitted++;
         }
         try {
-            files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(array));
+            var root = objectMapper.createObjectNode();
+            root.set("documents", array);
+            root.put("hasMore", documents.size() > MAX_MENTOR_DOCUMENTS);
+            files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize Outline documents context", e);
         }
@@ -145,7 +148,7 @@ public class DocumentCaptureSource implements ContentSource {
         String query = deriveQueryText(null, currentUserMessageText(request));
         if (!query.isBlank()) {
             List<ProjectedDocument> ranked =
-                    projection.searchDocuments(request.workspaceId(), query, MAX_MENTOR_DOCUMENTS);
+                    projection.searchDocuments(request.workspaceId(), query, MAX_MENTOR_DOCUMENTS + 1);
             if (!ranked.isEmpty()) {
                 return ranked;
             }

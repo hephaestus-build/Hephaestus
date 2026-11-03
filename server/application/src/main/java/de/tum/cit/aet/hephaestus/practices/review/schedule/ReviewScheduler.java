@@ -3,8 +3,12 @@ package de.tum.cit.aet.hephaestus.practices.review.schedule;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
@@ -22,7 +26,10 @@ public class ReviewScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewScheduler.class);
 
-    private static final int MAX_SCHEDULES_PER_TICK = 20;
+    private static final int PAGE_SIZE = 20;
+
+    /** Under the lock's ten minutes, and past it the next tick picks up what is still due. */
+    private static final Duration TICK_BUDGET = Duration.ofMinutes(5);
 
     private final ReviewScheduleRepository scheduleRepository;
     private final ReviewScheduleBatchOpener opener;
@@ -36,7 +43,19 @@ public class ReviewScheduler {
     @SchedulerLock(name = "review-schedule-scheduler", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
     public void tick() {
         Instant now = Instant.now();
-        List<ReviewSchedule> due = scheduleRepository.findDue(now, PageRequest.ofSize(MAX_SCHEDULES_PER_TICK));
+        Instant deadline = now.plus(TICK_BUDGET);
+        // A schedule that could not even be deferred stays due, so one read of it is the end of the work.
+        Set<UUID> tried = new HashSet<>();
+        List<ReviewSchedule> due;
+        do {
+            due = scheduleRepository.findDue(now, PageRequest.ofSize(PAGE_SIZE)).stream()
+                    .filter(schedule -> tried.add(schedule.getId()))
+                    .toList();
+            openAll(due, now);
+        } while (!due.isEmpty() && Instant.now().isBefore(deadline));
+    }
+
+    private void openAll(List<ReviewSchedule> due, Instant now) {
         for (ReviewSchedule schedule : due) {
             try {
                 ReviewScheduleOutcome outcome = opener.openDueRun(schedule.getId(), now);
