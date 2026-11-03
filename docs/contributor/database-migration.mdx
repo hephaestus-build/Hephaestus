@@ -128,7 +128,8 @@ if history never changes underneath an instance that already ran part of it.
    A new file must sort after every migration already on the base branch.
    The generator chooses the next timestamp when the current second is already used.
    After a rebase, run `vp run db:reorder`.
-   It gives this branch's out-of-order files a later timestamp with `git mv` and keeps their content.
+   It gives this branch's out-of-order files a timestamp after the newest file on `main` and in the merge queue.
+   It uses `git mv` and keeps their content.
    It refuses to rename a file that `origin/main` or a release tag has.
    The pre-push hook and `vp run db:reorder --check` find an out-of-order file before the merge queue does.
    Reset a local database that applied the moved file with `vp run dev:reset`.

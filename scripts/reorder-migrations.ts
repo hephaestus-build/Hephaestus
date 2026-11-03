@@ -4,6 +4,10 @@
  *   vp run db:reorder [--base <revision>]          rename out-of-order files with `git mv`
  *   vp run db:reorder --check [--base <revision>]  exit 1 and name the files, change nothing
  *
+ * The rename also sorts after every `next/` file that a pull request in the merge queue adds: that
+ * pull request merges first, and its file would otherwise sort after this branch's on `main`. The
+ * check reads only the base, because the pre-push hook does not use the network.
+ *
  * Liquibase reads `next/` in filename order, and a released file never moves
  * (`docs/contributor/database-migration.mdx` § Changelog immutability policy). So a branch file that
  * sorts at or before the base's newest file must take a later name before it merges. The rename keeps
@@ -21,6 +25,7 @@ import {
 	migrationFilename,
 } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 export interface Rename {
@@ -31,11 +36,18 @@ export interface Rename {
 const slugOf = (file: string): string => path.posix.basename(file).slice(15, -".xml".length);
 
 /**
- * The renames that put every branch file after the base's newest file, in the branch's own order.
- * Empty when the branch's earliest file already sorts last, so a second run changes nothing.
+ * The renames that put every branch file after the newest file of the base and of the merge queue,
+ * in the branch's own order. Empty when the branch's earliest file already sorts last, so a second
+ * run changes nothing.
  */
-export function reorder(base: readonly string[], branch: readonly string[], now: number): Rename[] {
-	const newest = base
+export function reorder(
+	base: readonly string[],
+	branch: readonly string[],
+	now: number,
+	queued: readonly string[] = [],
+): Rename[] {
+	const own = new Set(branch);
+	const newest = [...base, ...queued.filter((file) => !own.has(file))]
 		.map((file) => path.posix.basename(file))
 		.toSorted()
 		.at(-1);
@@ -50,6 +62,62 @@ export function reorder(base: readonly string[], branch: readonly string[], now:
 		taken.push(name);
 		return { from, to: `${path.posix.dirname(from)}/${name}` };
 	});
+}
+
+/**
+ * The `next/` files that pull requests in `main`'s merge queue add, from the response to
+ * `QUEUE_QUERY`. Throws when a pull request changes more files than one page shows: a missed file
+ * would let this branch sort before it.
+ */
+export function queuedMigrations(response: unknown): string[] {
+	const data = asRecord(asRecord(response, "response").data, "data");
+	const queue = asRecord(data.repository, "repository").mergeQueue;
+	if (queue === null || queue === undefined) {
+		return [];
+	}
+	const entries = asRecord(asRecord(queue, "mergeQueue").entries, "entries");
+	return asArray(entries.nodes, "entries").flatMap((entry) => {
+		const pullRequest = asRecord(asRecord(entry, "entry").pullRequest, "pullRequest");
+		const files = asRecord(pullRequest.files, "files");
+		if (asRecord(files.pageInfo, "pageInfo").hasNextPage === true) {
+			throw new Error(
+				`Queued pull request #${String(pullRequest.number)} changes more files than one page shows. Check its migrations by hand.`,
+			);
+		}
+		return asArray(files.nodes, "files").flatMap((node) => {
+			const file = asRecord(node, "file");
+			const name = asString(file.path, "path");
+			return file.changeType === "ADDED" && name.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)
+				? [name]
+				: [];
+		});
+	});
+}
+
+const QUEUE_QUERY =
+	'query($owner:String!,$name:String!){repository(owner:$owner,name:$name){mergeQueue(branch:"main"){entries(first:100){nodes{pullRequest{number files(first:100){pageInfo{hasNextPage} nodes{path changeType}}}}}}}}';
+
+/** The `next/` files that the merge queue of a GitHub origin adds; none for any other remote. */
+export function readQueue(cwd: string): string[] {
+	const origin = spawnSync("git", ["remote", "get-url", "origin"], {
+		cwd,
+		encoding: "utf8",
+		env: environmentWithoutGitRepository(),
+	});
+	const repository = githubRepository(origin.status === 0 ? origin.stdout.trim() : "");
+	if (repository === undefined) {
+		return [];
+	}
+	const [owner = "", name = ""] = repository.split("/");
+	const result = spawnSync(
+		"gh",
+		["api", "graphql", "-f", `query=${QUEUE_QUERY}`, "-f", `owner=${owner}`, "-f", `name=${name}`],
+		{ cwd, encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES },
+	);
+	if (result.status !== 0) {
+		throw new Error(`Could not read the merge queue of ${repository}: ${result.stderr.trim()}`);
+	}
+	return queuedMigrations(parseJson(result.stdout));
 }
 
 /** The renames that would move a file that `main` or a release already has: never allowed. */
@@ -106,9 +174,13 @@ function releasedFiles(cwd: string, base: string): Set<string> {
  * Stages the renames that put this branch's migrations after `base`, and returns them. Throws,
  * changing nothing, when a rename would move a file that the base, main or a release has.
  */
-export function reorderMigrations(base: string, cwd = process.cwd()): Rename[] {
+export function reorderMigrations(
+	base: string,
+	cwd = process.cwd(),
+	queued: readonly string[] = [],
+): Rename[] {
 	const found = migrations(base, cwd);
-	const renames = reorder(found.base, found.branch, Date.now());
+	const renames = reorder(found.base, found.branch, Date.now(), queued);
 	if (renames.length === 0) {
 		return [];
 	}
@@ -202,9 +274,11 @@ function main(): void {
 	if (fetched.status !== 0) {
 		throw new Error("Could not fetch origin main and its tags. Fetch them, then run this again.");
 	}
-	const renames = reorderMigrations(base, cwd);
+	const renames = reorderMigrations(base, cwd, readQueue(cwd));
 	if (renames.length === 0) {
-		console.log(`This branch's migrations already sort after ${base}; nothing to rename.`);
+		console.log(
+			`This branch's migrations already sort after ${base} and the merge queue; nothing to rename.`,
+		);
 		return;
 	}
 	for (const { from, to } of renames) {

@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { violations } from "./check-changelog-immutability.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
-import { githubRepository, refusals, reorder } from "./reorder-migrations.ts";
+import { githubRepository, queuedMigrations, refusals, reorder } from "./reorder-migrations.ts";
 
 const next = (name: string): string => `${NEXT_CHANGELOG_DIRECTORY}/${name}`;
 const at = (iso: string): number => Date.parse(iso);
@@ -39,6 +39,47 @@ void test("files that sort too early move after the newest, keep their slugs and
 		),
 		[],
 	);
+});
+
+void test("files also move after every migration that a queued pull request adds", () => {
+	const base = [next("20261103100829-a.xml")];
+	const queued = [next("20261103154836-queued.xml"), next("20261103110000-mine.xml")];
+	// Sorted after main's newest, but before a file that merges first from the queue.
+	const branch = [next("20261103110000-mine.xml")];
+	assert.deepEqual(reorder(base, branch, at("2026-11-03T12:00:00Z"), queued), [
+		{ from: next("20261103110000-mine.xml"), to: next("20261103154837-mine.xml") },
+	]);
+	// Without the queue the same branch counts as in order: what the pre-push check reads.
+	assert.deepEqual(reorder(base, branch, at("2026-11-03T12:00:00Z")), []);
+});
+
+const response = (files: unknown[], hasNextPage = false) => ({
+	data: {
+		repository: {
+			mergeQueue: {
+				entries: {
+					nodes: [
+						{ pullRequest: { number: 7, files: { pageInfo: { hasNextPage }, nodes: files } } },
+					],
+				},
+			},
+		},
+	},
+});
+
+void test("the queued migrations are the next/ files that queued pull requests add", () => {
+	assert.deepEqual(
+		queuedMigrations(
+			response([
+				{ path: next("20261103154836-queued.xml"), changeType: "ADDED" },
+				{ path: next("20261101000000-old.xml"), changeType: "MODIFIED" },
+				{ path: "server/openapi.yaml", changeType: "ADDED" },
+			]),
+		),
+		[next("20261103154836-queued.xml")],
+	);
+	assert.deepEqual(queuedMigrations({ data: { repository: { mergeQueue: null } } }), []);
+	assert.throws(() => queuedMigrations(response([], true)), /#7 changes more files/u);
 });
 
 void test("a file on main or in a release is never renamed", () => {

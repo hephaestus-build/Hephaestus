@@ -65,7 +65,7 @@ The command fetches `main` and records its commit.
 It rebases onto that commit and restores the original branch if a handwritten file conflicts.
 It resolves conflicts only in `server/openapi.yaml`, both generated API client directories, and the configuration reference.
 
-It also moves this branch's migrations after the newest migration on `main`, as `vp run db:reorder` does.
+It also moves this branch's migrations after the newest migration on `main` and in the merge queue, as `vp run db:reorder` does.
 The rename is staged beside the regenerated files.
 
 Then it reconciles dependencies with a frozen install and builds one fresh server JAR.

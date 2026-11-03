@@ -221,7 +221,7 @@ Issues follow `CONTRIBUTING.md` § Issues.
 | Docs page | `docs/**` | `vp run docs:build` and `gate:prose` | `docs/contributor/simplified-technical-english.md` |
 | Screen that a user page shows | The route or component | `vp run generate:docs-screenshots`. Commit the images. | `docs/contributor/add-a-user-guide-screenshot.md` |
 | Shipped behavior | A changeset too | `vp run gate:changesets` | `.changeset/README.md` |
-| Rebase onto `main` | Nothing by hand | `vp run pr:rebase-generated <n>`: it regenerates conflicted generated files and moves the branch's migrations after `main`'s | `docs/contributor/local-verification.mdx` § Rebase generated artifacts |
+| Rebase onto `main` | Nothing by hand | `vp run pr:rebase-generated <n>`: it regenerates conflicted generated files and moves the branch's migrations after those of `main` and the merge queue | `docs/contributor/local-verification.mdx` § Rebase generated artifacts |
 
 Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/api/**`, `routeTree.gen.ts`, the ERD, the configuration reference, or the user-guide screenshots.
 `generate:api:client` empties both `src/api/` directories first.
