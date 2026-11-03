@@ -408,9 +408,8 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 	}
 
 	let peopleOptions: PeopleScopeOptions;
-	if (membersQuery.isPending || membersQuery.hasNextPage) {
-		peopleOptions = { status: "loading" };
-	} else if (membersQuery.isError) {
+	// Error first: a failed later page keeps the earlier pages and still has a next page.
+	if (membersQuery.isError) {
 		peopleOptions = {
 			status: "error",
 			error: membersQuery.error,
@@ -418,6 +417,8 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 				void membersQuery.refetch();
 			},
 		};
+	} else if (membersQuery.isPending || membersQuery.hasNextPage) {
+		peopleOptions = { status: "loading" };
 	} else {
 		peopleOptions = {
 			status: "ready",

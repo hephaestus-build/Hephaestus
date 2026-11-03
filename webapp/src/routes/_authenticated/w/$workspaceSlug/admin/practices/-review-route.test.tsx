@@ -578,7 +578,36 @@ describe("review route", () => {
 
 		renderRouteAt("/w/acme/admin/practices/review?section=automated-review");
 
-		await screen.findByText(/^1 of 8 eligible people/u, {}, ROUTE_RENDER_WAIT);
+		// While members load, every chosen id counts: the name from the second page shows they all arrived.
+		await screen.findByRole(
+			"button",
+			{ name: "Remove Later Member from the review scope" },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByText(/^1 of 8 eligible people/u)).not.toBeNull();
+	});
+
+	it("shows the member error with a retry when a later page of members fails", async () => {
+		const persisted = reviewSettings({
+			reviewScope: {
+				people: "SELECTED",
+				repositories: "ALL",
+				accountIds: ["101"],
+				selectedRepositories: [],
+			},
+		});
+		const settings = stubSettings(persisted);
+		stubWorkspace([
+			...settings.handlers(true),
+			http.get("*/workspaces/:workspaceSlug/members", ({ request }) =>
+				secondMemberPageFails(pageOf(request)),
+			),
+		]);
+
+		renderRouteAt("/w/acme/admin/practices/review?section=automated-review");
+
+		await screen.findByText("We could not load eligible members", {}, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("button", { name: /retry/iu })).not.toBeNull();
 	});
 
 	it("widens the review scope only after the preview is confirmed, with the read ETag", async () => {
@@ -873,6 +902,13 @@ function twoMemberPages(page: string, later: WorkspaceMembership) {
 		totalElements: 2,
 		totalPages: 2,
 	};
+}
+
+/** The first page of members loads and names a second; the second fails. */
+function secondMemberPageFails(page: string) {
+	return page === "0"
+		? HttpResponse.json(twoMemberPages("0", membership({})))
+		: HttpResponse.json({ status: 500 }, { status: 500 });
 }
 
 /** The page a list read asks for; the first when it names none. */
