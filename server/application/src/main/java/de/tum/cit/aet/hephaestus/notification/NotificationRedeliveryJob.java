@@ -11,8 +11,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Resubmits failed notifications. Expiration belongs to listeners: filtering after Modulith's SQL
- * batch limit would let expired rows starve later publications (ADR 0044).
+ * Resubmits failed event publications of every module: notifications, and other durable work such as
+ * account exports. Expiration belongs to listeners: filtering after Modulith's SQL batch limit would let
+ * expired rows starve later publications (ADR 0044).
  */
 @Component
 @ConditionalOnServerRole

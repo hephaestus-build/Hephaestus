@@ -12,7 +12,7 @@ spring:
     modulith:
         moments:
             enabled: false
-        # Event publication registry — the durable outbox behind notification listeners (ADR 0044).
+        # Event publication registry: the durable outbox behind every @ApplicationModuleListener (ADR 0044, ADR 0075).
         # Only @ApplicationModuleListener methods get a registry row; the plain
         # @TransactionalEventListener fan-out elsewhere in the tree keeps its fire-and-forget
         # semantics. A completed row is deleted, a failed one stays until

@@ -20,8 +20,9 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Generates the export that {@link AccountExportRequested} owes. The event publication registry
- * delivers it at least once, so a generation that a restart interrupted runs again, and a delivery
- * for an export that is no longer in flight does nothing.
+ * delivers it at least once: a generation that a stopped process left open runs again, and a delivery
+ * for an export that is no longer pending does nothing. A generation that fails records FAILED and
+ * completes its publication, so it is not retried.
  */
 @ConditionalOnServerRole
 @Component
@@ -82,14 +83,14 @@ public class ExportGenerationWorker {
 
     private boolean assemble(Long exportId, Long accountId) {
         AccountExport export = accountExportRepository
-                .findByIdAndAccountId(exportId, accountId)
+                .lockByIdAndAccountId(exportId, accountId)
                 .orElse(null);
         if (export == null) {
             log.warn("auth.export: generation skipped, export {} for account {} not found", exportId, accountId);
             return false;
         }
-        if (export.getStatus() != AccountExport.Status.PENDING
-                && export.getStatus() != AccountExport.Status.PROCESSING) {
+        // A redelivery waits on the lock of a generation that still runs, then finds the export no longer pending.
+        if (export.getStatus() != AccountExport.Status.PENDING) {
             log.info("auth.export: generation skipped, export {} is already {}", exportId, export.getStatus());
             return false;
         }
@@ -114,7 +115,9 @@ public class ExportGenerationWorker {
             // Repository errors can mark a transaction rollback-only; recovery needs a fresh transaction.
             transaction.executeWithoutResult(status -> {
                 accountExportRepository
-                        .findByIdAndAccountId(exportId, accountId)
+                        .lockByIdAndAccountId(exportId, accountId)
+                        .filter(export -> export.getStatus() == AccountExport.Status.PENDING
+                                || export.getStatus() == AccountExport.Status.PROCESSING)
                         .ifPresent(export -> fail(export, reason));
             });
         } catch (RuntimeException recoveryFailure) {

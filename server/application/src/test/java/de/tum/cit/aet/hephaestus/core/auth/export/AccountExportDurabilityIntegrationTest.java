@@ -34,8 +34,27 @@ class AccountExportDurabilityIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private ExportGenerationWorker worker;
+
     @MockitoSpyBean
     private ExportBundleAssembler assembler;
+
+    @Test
+    void shouldLeaveAReadyExportUnchangedWhenItsGenerationIsDeliveredAgain() {
+        long accountId = Objects.requireNonNull(
+                accounts.save(new Account("Redelivered export subject")).getId());
+        long exportId = Objects.requireNonNull(exports.requestExport(accountId).getId());
+        assertThat(status(exportId)).isEqualTo("READY");
+        Object completedAt =
+                jdbc.queryForObject("SELECT completed_at FROM account_export WHERE id = ?", Object.class, exportId);
+
+        worker.on(new AccountExportRequested(exportId, accountId));
+
+        assertThat(status(exportId)).isEqualTo("READY");
+        assertThat(jdbc.queryForObject("SELECT completed_at FROM account_export WHERE id = ?", Object.class, exportId))
+                .isEqualTo(completedAt);
+    }
 
     @Test
     void shouldGenerateTheExportWhenTheRegistryResubmitsAnInterruptedGeneration() {

@@ -49,7 +49,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     private AccountExport existingExport() {
         AccountExport export = new AccountExport(ACCOUNT_ID);
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.of(export));
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.of(export));
         return export;
     }
 
@@ -111,7 +111,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
     @Test
     void shouldMarkFailedWhenTheInitialLookupFails() {
         AccountExport export = new AccountExport(ACCOUNT_ID);
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID))
                 .thenThrow(new IllegalStateException("lookup failed"))
                 .thenReturn(Optional.of(export));
 
@@ -146,7 +146,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     @Test
     void shouldReportFailureWhenTheDatabaseCannotRecordIt() {
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenThrow(new IllegalStateException("db down"));
 
         worker.generate(EXPORT_ID, ACCOUNT_ID);
 
@@ -164,7 +164,7 @@ class ExportGenerationWorkerTest extends BaseUnitTest {
 
     @Test
     void shouldWriteNothingAndReportFailureWhenRowIsMissing() {
-        when(repository.findByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(repository.lockByIdAndAccountId(EXPORT_ID, ACCOUNT_ID)).thenReturn(Optional.empty());
 
         worker.generate(EXPORT_ID, ACCOUNT_ID);
 
