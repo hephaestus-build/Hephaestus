@@ -1399,6 +1399,40 @@ tests:
         alertname: HephaestusReviewsIncomplete
         exp_alerts: []
 
+  - name: a readback that cannot tell whether a copy landed fires for its provider
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_readback_total{job="hephaestus",instance="server:9090",provider="github",outcome="unknown"}'
+        values: "0 0 0 1x30"
+      - series: 'practice_feedback_readback_total{job="hephaestus",instance="server:9090",provider="gitlab",outcome="unknown"}'
+        values: "0x33"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusFeedbackReadbackUnknown
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusFeedbackReadbackUnknown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              provider: github
+            exp_annotations:
+              summary: Readback could not tell whether feedback reached the work on github
+
+  - name: readback that finds a copy or proves it absent does not fire
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_readback_total{job="hephaestus",instance="server:9090",provider="github",outcome="found"}'
+        values: "0+1x30"
+      - series: 'practice_feedback_readback_total{job="hephaestus",instance="server:9090",provider="gitlab",outcome="absent"}'
+        values: "0+1x30"
+      - series: 'practice_feedback_readback_total{job="hephaestus",instance="server:9090",provider="gitlab",outcome="unknown"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: HephaestusFeedbackReadbackUnknown
+        exp_alerts: []
+
   - name: three reviews that all end partial stay below the floor of four
     interval: 1m
     input_series:

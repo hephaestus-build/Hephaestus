@@ -24,6 +24,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,7 +67,8 @@ class GitLabReadbackLiveTest {
         var http = HttpClient.create();
         String ca = System.getenv("READBACK_GITLAB_CA");
         if (ca != null && !ca.isBlank()) {
-            var trusted = SslContextBuilder.forClient().trustManager(new File(ca)).build();
+            var trusted =
+                    SslContextBuilder.forClient().trustManager(new File(ca)).build();
             http = http.secure(spec -> spec.sslContext(trusted));
         }
         var connector = new ReactorClientHttpConnector(http);
@@ -97,8 +99,10 @@ class GitLabReadbackLiveTest {
         var builder = WebClient.builder().clientConnector(connector);
         var current = writer(provider, builder, tokens, ScmFeedbackFixtures.formatter("readback"));
         var posted = new ArrayList<CopyReceipt>();
+        var keys = new HashSet<String>();
         try {
             var fresh = ScmFeedbackFixtures.readbackPackage("current", path, line);
+            fresh.notes().forEach(note -> keys.add(note.writeKey()));
             var written = current.postPackage(target, fresh, (attempting, completed) -> true)
                     .receipts();
             posted.addAll(written);
@@ -110,11 +114,9 @@ class GitLabReadbackLiveTest {
                     written);
 
             var old = ScmFeedbackFixtures.readbackPackage("rc.1", path, line);
+            old.notes().forEach(note -> keys.add(note.writeKey()));
             var oldWritten = writer(
-                            provider,
-                            builder,
-                            tokens,
-                            ScmFeedbackFixtures.formatterBeforeDisclosureMarker("readback"))
+                            provider, builder, tokens, ScmFeedbackFixtures.formatterBeforeDisclosureMarker("readback"))
                     .postPackage(target, old, (attempting, completed) -> true)
                     .receipts();
             posted.addAll(oldWritten);
@@ -124,6 +126,19 @@ class GitLabReadbackLiveTest {
             var never = ScmFeedbackFixtures.readbackPackage("never", path, line);
             assertThat(current.findPosted(target, never)).isNotNull().noneMatch(CopyReceipt::acknowledged);
         } finally {
+            // A package that did not publish leaves its drafts; remove only the drafts that carry this run's keys.
+            List<Map<String, Object>> drafts = Objects.requireNonNull(rest.get()
+                    .uri(URI.create(api + "/draft_notes"))
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
+                    .block(TIMEOUT));
+            for (var draft : drafts)
+                if (keys.contains(ScmFeedbackFormatter.lastDeliveryKey(String.valueOf(draft.get("note")))))
+                    rest.delete()
+                            .uri(URI.create(api + "/draft_notes/" + draft.get("id")))
+                            .retrieve()
+                            .toBodilessEntity()
+                            .block(TIMEOUT);
             for (var receipt : posted) {
                 String ref = receipt.externalRef();
                 if (ref == null) continue;

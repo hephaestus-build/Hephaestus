@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.ApprovedFeedbackDeliveryListener;
+import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackReadbackMeters;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransactions;
@@ -55,6 +56,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -145,7 +147,13 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         when(targets.resolve(any())).thenReturn(target);
         when(targets.resolveExisting(any())).thenReturn(target);
         var corrector = new PostedCopyCorrector(copies, visibility, List.of(provider), List.of(provider), transactions);
-        return new FeedbackSendService(transactions, targets, List.of(provider), List.of(provider), corrector);
+        return new FeedbackSendService(
+                transactions,
+                targets,
+                List.of(provider),
+                List.of(provider),
+                corrector,
+                new FeedbackReadbackMeters(new SimpleMeterRegistry()));
     }
 
     protected void prepare(boolean note) {

@@ -30,11 +30,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
+import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -59,6 +61,7 @@ class FeedbackSendServiceTest {
             .body("Add a focused test.")
             .build();
     final ItemRef item = mock(ItemRef.class);
+    final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     FeedbackTarget target;
     FeedbackSendService sender;
 
@@ -78,7 +81,12 @@ class FeedbackSendServiceTest {
             return write.get();
         });
         sender = new FeedbackSendService(
-                transactions, targets, List.of(writer), List.of(), mock(PostedCopyCorrector.class));
+                transactions,
+                targets,
+                List.of(writer),
+                List.of(),
+                mock(PostedCopyCorrector.class),
+                new FeedbackReadbackMeters(meters));
     }
 
     FeedbackCopy copy(FeedbackCopyState state) {
@@ -123,6 +131,7 @@ class FeedbackSendServiceTest {
         sender.send(1, id);
         verify(writer, never()).postSummary(any(), any());
         verify(transactions, never()).absent(anyLong(), any(), anyString(), any());
+        assertThat(readbacks("unknown")).isEqualTo(1);
     }
 
     @Test
@@ -132,6 +141,7 @@ class FeedbackSendServiceTest {
         sender.send(1, id);
         verify(transactions).absent(eq(1L), eq(id), anyString(), eq(copyId));
         verify(writer, never()).postSummary(any(), any());
+        assertThat(readbacks("absent")).isEqualTo(1);
     }
 
     @Test
@@ -145,6 +155,7 @@ class FeedbackSendServiceTest {
         verify(transactions).receipt(eq(1L), eq(id), anyString(), capture.capture());
         assertThat(capture.getValue().getFirst().externalRef()).isEqualTo("42");
         verify(writer, never()).postSummary(any(), any());
+        assertThat(readbacks("found")).isEqualTo(1);
     }
 
     @Test
@@ -153,6 +164,8 @@ class FeedbackSendServiceTest {
         sender.send(1, id);
         verify(writer, never()).postSummary(any(), any());
         verify(writer, never()).findExistingSummary(any(), any());
+        assertThat(readbacks("found") + readbacks("absent") + readbacks("unknown"))
+                .isZero();
     }
 
     @Test
@@ -202,7 +215,12 @@ class FeedbackSendServiceTest {
                 .thenReturn(new FeedbackSendTransactions.Attempt(
                         feedback, FeedbackSendAction.POST, List.of(copy(summary), note(line)), 1));
         return new FeedbackSendService(
-                transactions, targets, List.of(writer), writers, mock(PostedCopyCorrector.class));
+                transactions,
+                targets,
+                List.of(writer),
+                writers,
+                mock(PostedCopyCorrector.class),
+                new FeedbackReadbackMeters(meters));
     }
 
     @Test
@@ -229,6 +247,22 @@ class FeedbackSendServiceTest {
         verify(notes, never()).postPackage(any(), any(), any());
         verify(transactions).absent(eq(1L), eq(id), anyString(), eq(noteId));
         verify(transactions, never()).absent(eq(1L), eq(id), anyString(), eq(copyId));
+        assertThat(readbacks("absent")).isEqualTo(1);
+        assertThat(readbacks("found") + readbacks("unknown")).isZero();
+    }
+
+    @Test
+    void shouldCountEachCopyOfAReadBackPackageByWhatTheProviderShowed() {
+        var sender = pullRequest(List.of(notes), FeedbackCopyState.WRITE_STARTED, FeedbackCopyState.WRITE_STARTED);
+        when(notes.findPosted(eq(target), any()))
+                .thenReturn(List.of(
+                        new CopyReceipt(copyId, CopyDisposition.PRESERVED_EXISTING, "PRR_1", null, true, null),
+                        CopyReceipt.attempted(noteId)));
+        sender.send(1, id);
+        verify(notes, never()).postPackage(any(), any(), any());
+        assertThat(readbacks("found")).isEqualTo(1);
+        assertThat(readbacks("unknown")).isEqualTo(1);
+        assertThat(readbacks("absent")).isZero();
     }
 
     @Test
@@ -239,6 +273,26 @@ class FeedbackSendServiceTest {
         verify(notes, never()).postPackage(any(), any(), any());
         verify(transactions, never()).receipt(anyLong(), any(), anyString(), anyList());
         verify(transactions, never()).absent(anyLong(), any(), anyString(), any());
+        assertThat(readbacks("unknown")).isEqualTo(2);
+    }
+
+    @Test
+    void shouldRegisterEveryProviderAndOutcomeAtZeroWhenTheServerStarts() {
+        assertThat(meters.find(PracticeMetrics.FEEDBACK_READBACK).counters())
+                .extracting(counter -> counter.getId().getTag("provider") + "/"
+                        + counter.getId().getTag("outcome"))
+                .containsExactlyInAnyOrder(
+                        "github/found",
+                        "github/absent",
+                        "github/unknown",
+                        "gitlab/found",
+                        "gitlab/absent",
+                        "gitlab/unknown");
+    }
+
+    private double readbacks(String outcome) {
+        return meters.counter(PracticeMetrics.FEEDBACK_READBACK, "provider", "github", "outcome", outcome)
+                .count();
     }
 
     @Test

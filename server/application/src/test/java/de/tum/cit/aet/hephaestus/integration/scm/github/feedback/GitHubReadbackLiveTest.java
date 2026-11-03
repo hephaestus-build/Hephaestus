@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReceipt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
-import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -94,8 +93,7 @@ class GitHubReadbackLiveTest {
                     written);
 
             var old = ScmFeedbackFixtures.readbackPackage("rc.1", path, line);
-            var oldWritten = writer(
-                            provider, nodeIds, ScmFeedbackFixtures.formatterBeforeDisclosureMarker("readback"))
+            var oldWritten = writer(provider, nodeIds, ScmFeedbackFixtures.formatterBeforeDisclosureMarker("readback"))
                     .postPackage(target, old, (attempting, completed) -> true)
                     .receipts();
             posted.addAll(oldWritten);
@@ -155,19 +153,12 @@ class GitHubReadbackLiveTest {
                                     clientMutationId
                                   }
                                 }
-                                """)
-                        .variable("id", ref)
-                        .execute()
-                        .block(TIMEOUT);
-            else
-                client.document("""
+                                """).variable("id", ref).execute().block(TIMEOUT);
+            else client.document("""
                                 mutation($id: ID!) {
                                   deletePullRequestReviewComment(input: {id: $id}) { clientMutationId }
                                 }
-                                """)
-                        .variable("id", ref)
-                        .execute()
-                        .block(TIMEOUT);
+                                """).variable("id", ref).execute().block(TIMEOUT);
         }
     }
 }

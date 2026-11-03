@@ -4,6 +4,7 @@ public final class PracticeMetrics {
 
     public static final String REVIEW_ENDED = "practice.review.ended";
     public static final String REVIEW_ITEMS_ENDED = "practice.review.items.ended";
+    public static final String FEEDBACK_READBACK = "practice.feedback.readback";
 
     private PracticeMetrics() {}
 }
