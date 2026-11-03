@@ -15,7 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 @Slf4j
 public class ActivityLedgerReconciler implements ActivityLedgerRepair {
-    private static final int CHUNK_SIZE = 1000;
+    static final int CHUNK_SIZE = 200;
     private final ActivityLedgerRepository repository;
     private final ActivityPersonWriteAdmission admission;
     private final PlatformTransactionManager transactionManager;
@@ -28,17 +28,20 @@ public class ActivityLedgerReconciler implements ActivityLedgerRepair {
         var transaction = new TransactionTemplate(transactionManager);
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         int inserted = 0;
-        for (Source source : Source.values()) {
-            long ceiling = repository.findCeiling(repositoryId, source.name());
-            long after = 0;
-            while (after < ceiling) {
-                long lower = after;
-                var chunk = Objects.requireNonNull(transaction.execute(
-                        status -> reconcileChunk(workspaceId, repositoryId, source, lower, ceiling)));
-                inserted += chunk.inserted();
-                if (chunk.lastId() == after) break;
-                after = chunk.lastId();
+        long ceiling = repository.findCeiling(repositoryId);
+        long after = 0;
+        while (after < ceiling) {
+            var parents = repository.findChunkParents(repositoryId, after, ceiling, CHUNK_SIZE);
+            if (parents.isEmpty()) break;
+            long lower = after;
+            long last = parents.getLast();
+            // One transaction per source: each holds its own sorted set of actor locks, and two sets in one
+            // transaction could deadlock with an erasure that locks them in the other order.
+            for (Source source : Source.values()) {
+                inserted += Objects.requireNonNull(
+                        transaction.execute(status -> reconcileSource(workspaceId, repositoryId, source, lower, last)));
             }
+            after = last;
         }
         if (inserted > 0) {
             log.info(
@@ -50,25 +53,20 @@ public class ActivityLedgerReconciler implements ActivityLedgerRepair {
         return inserted;
     }
 
-    private Chunk reconcileChunk(long workspaceId, long repositoryId, Source source, long after, long ceiling) {
-        var ids = repository.findChunkIds(repositoryId, source.name(), after, ceiling, CHUNK_SIZE);
-        if (ids.isEmpty()) return new Chunk(after, 0);
-        long last = ids.getLast();
+    private int reconcileSource(long workspaceId, long repositoryId, Source source, long after, long last) {
         if (source == Source.REPLY_REVIEW) {
             repository.deleteReplyEvents(workspaceId, repositoryId, source.name(), after, last);
-            return new Chunk(last, 0);
+            return 0;
         }
         if (source == Source.INVALID_ISSUE) {
             repository.deleteInvalidIssueEvents(workspaceId, repositoryId, source.name(), after, last);
-            return new Chunk(last, 0);
+            return 0;
         }
         var candidates = repository.findChunkActors(repositoryId, source.name(), after, last);
         var admitted = admission.holdActors(candidates);
-        if (admitted.isEmpty()) return new Chunk(last, 0);
-        return new Chunk(last, repository.insertChunk(workspaceId, repositoryId, source.name(), after, last, admitted));
+        if (admitted.isEmpty()) return 0;
+        return repository.insertChunk(workspaceId, repositoryId, source.name(), after, last, admitted);
     }
-
-    private record Chunk(long lastId, int inserted) {}
 
     private enum Source {
         INVALID_ISSUE,
