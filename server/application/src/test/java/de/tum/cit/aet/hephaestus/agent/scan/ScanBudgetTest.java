@@ -50,7 +50,7 @@ class ScanBudgetTest extends BaseUnitTest {
             policy,
             admission,
             monthly,
-            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200000, 1000, Duration.ofMinutes(10)));
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200000, 1000, Duration.ofMinutes(10)));
     private final ReviewAssignmentSnapshot assignment = RuntimeReviewTestData.assignment(null, null);
     private final ScanExecutionSnapshot scan = new ScanExecutionSnapshot(
             RuntimeReviewTestData.review(ReviewKind.SCAN, assignment),

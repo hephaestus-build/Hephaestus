@@ -115,7 +115,7 @@ public class ScanBudget {
     }
 
     public long callCap(int practices) {
-        return Math.multiplyExact((long) Math.max(3, practices), limits.practiceModelCalls());
+        return Math.multiplyExact((long) practices, limits.practiceModelCalls());
     }
 
     private static long boundedContext(@Nullable Integer context) {

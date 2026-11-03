@@ -82,7 +82,6 @@ function stageScan(cwd: string, includeContext = false): string {
 			{
 				slug: "auth-review",
 				name: "Authentication review",
-				group: "security",
 				versionId: "1",
 				readsSources: ["scm.repository.tree"],
 				exhaustiveSources: ["scm.repository.tree"],
@@ -177,7 +176,6 @@ for (const [basis, explicitCommit, incremental = false] of [
 					PI_HOST_SCAN_PATH: FILE,
 					PI_HOST_PROBLEM_DRAFTS: String(incremental),
 					PI_HOST_SESSION_CANDIDATE: JSON.stringify(candidate),
-					PI_PRACTICE_CONCURRENCY: "3",
 				},
 			);
 			assert.deepEqual(capturedLines(cwd, "scan-read")[0], {
@@ -195,7 +193,6 @@ for (const [basis, explicitCommit, incremental = false] of [
 				return;
 			}
 			assert.equal(exit.status, 0, exit.stderr);
-			assert.match(exit.stderr, /review\.concurrency configured=3 effective=1/u);
 			const [request] = capturedLines(cwd, "staging");
 			const body = field(request, "body");
 			const results = field(body, "results");

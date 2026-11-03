@@ -77,9 +77,61 @@ More workers scale linearly. A bench proves 64 reviews with a fake provider.
 ### Width
 
 - **A script ends at `ctx.review`.** The host ends the script's process when the script calls it, and it returns the session's result. Code after the call does not run. The contract already said to return the result. A failed review ends with the review's reason and gives no result.
-- **At most two script processes load at once in a Pod.** A script gives its room back when its process ends, at its first model call, or after 10 seconds, so one slow script cannot starve the others.
-- **`practice-concurrency` defaults to 27.** It is a bound on work in the Pod, not a rate. The call pool sets the rate.
+- **A review sets its own pace.** A review accepts any number of practices, and they wait in one queue in the runner. No setting limits them. See [Pace](#pace).
 - **The Pod requests 384 MiB.** The limit stays 1,280 MiB, because a large change can pass the request.
+
+### Pace
+
+The runner starts the next practice session only when both of these conditions are true:
+
+- **No running session waits for the model.** A session waits from the start of a model call until its first content, and while its SDK waits to retry. A new session also holds the next start until its first model call, for at most 10 seconds. Being served shows that there is room, as an acknowledgement does in a congestion window.
+- **The Pod has room.** Its cgroup has memory for one script process at its heap limit, and the runner's heap can hold one more average session. The kernel can reclaim inactive file cache, so that cache counts as free.
+
+The runner always starts a session when none runs, so a review can always finish.
+Width rises with free capacity and stops when calls have to wait. No number sets it.
+
+Waiting is not work. The stall timer does not count a call that waits for its first byte, because the proxy answers or refuses every waiting call.
+Budgets count calls and tokens, so a wait spends neither.
+The attempt deadline still runs, so an attempt can end with practices not reached. They end with `DEADLINE` for that attempt, never with a claim, and the next attempt continues with them.
+An attempt that ended a new practice spends no retry. An attempt that ended none spends one, and an attempt with no reply at all exits as provider unreachable.
+
+The proxy's limit on calls in flight no longer follows the width. It is 174 calls for each attempt: the runner's 256 MiB heap holds at most 85 sessions at about 3 MiB each, each with one open call and one that an abort left closing, and the scripts' 4 direct calls.
+It protects the worker's memory from a sandbox that the runner no longer controls, because a call that waits for a grant keeps its body there.
+The pool's fair grants share the provider.
+The gateway's rate limit for each sandbox becomes four times that limit, 696 requests per minute, so it does not set the width either.
+
+This measurement used a fake provider that models a GPU: no 429 responses, a queue past the limit, and a first token and a rate per stream that slow with each active stream.
+Each run is one attempt of 840 s in one container of 1,280 MiB and 1 CPU.
+Limit "none" means no queue, only the slowdown. A result of `n` of `m` means the rest ended with `DEADLINE`.
+
+| Practices | Limit | Peak memory | Sessions at once | Time in the Pod |   Results |
+| --------: | ----: | ----------: | ---------------: | --------------: | --------: |
+|         3 |  none |     223 MiB |                3 |            88 s |    3 of 3 |
+|         3 |     1 |     193 MiB |                2 |           141 s |    3 of 3 |
+|        27 |  none |     250 MiB |               27 |           312 s |  27 of 27 |
+|        27 |    12 |     252 MiB |               13 |           363 s |  27 of 27 |
+|        27 |     3 |     207 MiB |                4 |           725 s |  27 of 27 |
+|        27 |     1 |     197 MiB |                3 |           841 s |  11 of 27 |
+|        60 |  none |     325 MiB |               38 |           544 s |  60 of 60 |
+|        60 |    12 |     262 MiB |               13 |           707 s |  60 of 60 |
+|        60 |     3 |     221 MiB |                4 |           841 s |  34 of 60 |
+|        60 |     1 |     196 MiB |                2 |           841 s |  11 of 60 |
+|       200 |  none |     372 MiB |               50 |           842 s | 76 of 200 |
+|       200 |    12 |     316 MiB |               13 |           842 s | 56 of 200 |
+|       200 |     3 |     208 MiB |                4 |           842 s | 28 of 200 |
+|       200 |     1 |     209 MiB |                3 |           840 s | 12 of 200 |
+
+Width settles at about the limit plus one, and the queue never holds more than one call from a review.
+On a provider that refuses with 429 instead of queueing, a limit of 3 at 27 practices reached 24 of 27 with no pool. A fixed width of 27 reached 7 of 27.
+
+Work in flight at the deadline is lost, so the runner starts no session when the time left is shorter than the mean time of the sessions that finished in this attempt. Before any session finishes, it starts.
+At 200 practices on a limit of 12, the output tokens of sessions that the deadline stopped fell from 14.3 % to 4.7 %, and the results rose from 56 to 60.
+
+A call can wait for its pool's grant longer than 5 minutes. Node's fetch and the SDK gave up after 5 minutes without response headers, and the SDK then asked again.
+The runner turns that limit off, and the proxy still answers or refuses every waiting call by the attempt's deadline.
+A provider that held each first token for 330 s gave no result before this change and one result after it, with no repeated call.
+
+A review of 200 practices on a limit of 1 ended every practice with a result in 23 attempts, with at most 265 MiB, in a run where the fake provider's time ran 10 times faster.
 
 ### Selection
 
@@ -96,7 +148,8 @@ More workers scale linearly. A bench proves 64 reviews with a fake provider.
 
 - **Every model is in a call pool by default**, with an adaptive limit that follows the provider's 429 responses and `Retry-After`. Nobody has to guess a provider's limit. There is no separate component.
 - The pool is fair between reviews and workspaces, and conversations stay protected.
-- **Decision G changes.** Today a claim starts no Pod while the pool has one live background waiter. A wide review has waiters whenever the pool is below its width, so that rule would keep a second review from ever starting. A waiter alone no longer blocks a claim, and the pool's fair order shares the grants.
+- **Decision G changes.** Today a claim starts no Pod while the pool has one live background waiter. A self-paced review always has a waiter while the provider is the limit, so that rule would keep a second review from ever starting. Claims follow Pod memory and `worker.reviews`, and the pool's fair order shares the grants.
+- **Pods that wait stay bounded and cheap.** `worker.reviews` and the reviews quota bound them. A review on a limit of 1 peaks near 200 MiB. An attempt ends at its deadline, and attempts that end no practice spend retries, so a review on a provider that stopped ends with its reason.
 
 ### Capacity
 
@@ -109,13 +162,13 @@ Not built, unless the bench shows that Pods are still the first limit after thes
 
 One loop for each Pod costs about 160 MiB of code and base heap, and a session adds about 3 MiB.
 At 32 reviews a host for each worker would save about 5 GiB (estimated), and 32 Pods at 384 MiB fit the 13 GiB of room on a 32 GiB node.
-The provider binds long before that: 32 reviews at this width want about 445 model streams on average.
+The provider binds long before that: 32 reviews at a width of 27 want about 445 model streams on average.
 The reasons of ADR 0068 still hold, and a large change makes the first one worse: one V8 heap with several 300 MiB loops has no limit for each review.
 A host would also need resume through PostgreSQL and a QuickJS instance for each attempt.
 
 ### Several practices in one session
 
-Not built. `PI_PRACTICE_BATCH_SIZE` does not batch sessions: it only divides a turn's budget. Each practice has had a session of its own since [#2519](https://github.com/hephaestus-build/Hephaestus/pull/2519), which fixed one practice's reasoning carrying into the next.
+Not built, and it never ran. Each practice has had a session of its own since [#2519](https://github.com/hephaestus-build/Hephaestus/pull/2519), which fixed one practice's reasoning carrying into the next. `PI_PRACTICE_BATCH_SIZE` and practice groups in the runner did nothing: no code set the variable, and the server sent no group. All 537 stored practice sessions ran on the same budget. This decision removes them. Batching needs its own measured design.
 
 A comparison on the real model had up to six related practices in one call against one practice in each call, with no tools:
 
@@ -137,9 +190,10 @@ This points at the larger gain: fewer calls in each session, not fewer sessions.
 - Positive: a 429 slows every caller, with no setting.
 - Negative: code after `ctx.review` no longer runs. A stored script that changed a result after the call loses that step. The migration guide says so.
 - Negative: a Pod can pass its request on a large change, so it is among the first to go if a node runs out of memory.
-- Negative: one review can ask for 27 model streams. The pool's fairness is what stops it from taking all of them.
-- **Order matters.** With no pool, a provider limit of 12 calls at width 27 lost no result, and the review took 268 s instead of 143 s. A limit of 3 lost 20 of the 27 practices at width 27 and 14 at width 12: the sessions ran out of retries, and each practice ended unavailable, with no claim about the work. So the default width ships only after the adaptive limit.
-- Unproven: no real provider has run at these widths. The model's rate at 6 streams and above is not measured.
+- Negative: one review can ask for as many model streams as the provider serves. The pool's fairness is what stops it from taking all of them.
+- Negative: a large review on a slow provider takes many attempts, and each attempt loses the work in flight at its deadline.
+- **Order matters.** Decision G changes only after the call pool of [#3678](https://github.com/hephaestus-build/Hephaestus/pull/3678) is in place.
+- Unproven: no real provider has run at these widths, and the rate model of the fake provider is an assumption. The model's rate at 6 streams and above is not measured.
 
 ## Revisit trigger
 

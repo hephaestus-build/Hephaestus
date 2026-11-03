@@ -48,7 +48,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     void setUp() {
         gate = new ProxyBudgetGate(
                 budgetService,
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000, Duration.ofMinutes(10)));
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 200_000, 1000, Duration.ofMinutes(10)));
     }
 
     private static LlmBudgetHeadroom instanceCapOfOneDollar() {

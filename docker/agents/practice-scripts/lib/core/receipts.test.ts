@@ -166,6 +166,7 @@ void test("code that only quotes the assigned scan file gets no MET", async (t) 
 			requiredSources: [],
 			models: {},
 			budget: new ModelBudget(0, 1),
+			awaitModel: () => () => undefined,
 			review: async () => parsed.candidate,
 			signal: new AbortController().signal,
 			log: () => undefined,

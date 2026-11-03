@@ -154,7 +154,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 requestPolicy,
                 mock(ScanCallGuard.class),
                 routingService,
-                new ProxyCallsInFlight(3),
+                new ProxyCallsInFlight(12),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 mock(LlmCallPermits.class),
                 new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
@@ -641,7 +641,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
-                    new ProxyCallsInFlight(3),
+                    new ProxyCallsInFlight(12),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     mock(LlmCallPermits.class),
                     new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
@@ -737,7 +737,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
-                    new ProxyCallsInFlight(3),
+                    new ProxyCallsInFlight(12),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     mock(LlmCallPermits.class),
                     new HephCallProperties(HEPH_FIRST_BYTE, HEPH_IDLE));
@@ -778,7 +778,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         private MockWebServer upstream;
         private LlmProxyService streamingController;
         private SimpleMeterRegistry streamingMeterRegistry;
-        private final ProxyCallsInFlight streamingCalls = new ProxyCallsInFlight(3);
+        private final ProxyCallsInFlight streamingCalls = new ProxyCallsInFlight(12);
         private final LlmCallPermits streamingPermits = mock(LlmCallPermits.class);
         private final CircuitBreakerRegistry streamingBreakers = CircuitBreakerRegistry.ofDefaults();
         private final LlmConnectionHealth streamingHealth = new LlmConnectionHealth(streamingBreakers);
@@ -1644,7 +1644,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             CountDownLatch authenticated = new CountDownLatch(1);
             CountDownLatch sealed = new CountDownLatch(1);
             // The pause between authentication and registration, where a stop can end the attempt.
-            ProxyCallsInFlight calls = new ProxyCallsInFlight(3) {
+            ProxyCallsInFlight calls = new ProxyCallsInFlight(12) {
                 @Override
                 public Call begin(ProxyRouting.BilledAttempt billed) {
                     authenticated.countDown();

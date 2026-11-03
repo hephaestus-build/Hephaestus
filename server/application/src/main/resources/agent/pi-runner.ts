@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
+import { getHeapStatistics } from "node:v8";
 import { admit, AdmissionUnreachableError, stagePractice } from "./pi-admitted-results.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
@@ -37,7 +39,7 @@ import {
 } from "./pi-change.ts";
 import { type DiagnosticValue, diagnose, errorKind, ms } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
-import { OpeningQueue } from "./pi-opening-queue.ts";
+import { type ModelWait, newModelWait, roomForSession, SessionPace } from "./pi-session-pace.ts";
 
 import {
 	CONTEXT_IS_LOOP_ONLY,
@@ -83,15 +85,7 @@ import {
 } from "./pi-result-normalize.ts";
 import { buildResultTools, RESULT_TOOL_NAMES } from "./pi-result-tools.ts";
 import { type BriefSource, buildBrief } from "./pi-review-brief.ts";
-import {
-	type Work,
-	missingSlugs,
-	planTurns,
-	partitionBudget,
-	shouldRecordNow,
-	spent,
-	turnBudget,
-} from "./pi-review-turns.ts";
+import { type Work, missingSlugs, shouldRecordNow, spent } from "./pi-review-turns.ts";
 import { outputPath } from "./pi-runner-output.ts";
 import {
 	addAssistantUsage,
@@ -164,7 +158,11 @@ import {
 	runtimeIdSchema,
 } from "./work/practice-scripts/lib/core/runtime-inputs.ts";
 import { InputReader } from "./work/practice-scripts/lib/core/script-inputs.ts";
-import { abortReasonOf, RETURN_MS } from "./work/practice-scripts/lib/core/script-run.ts";
+import {
+	abortReasonOf,
+	RETURN_MS,
+	SCRIPT_HEAP_BYTES,
+} from "./work/practice-scripts/lib/core/script-run.ts";
 
 /** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
@@ -534,7 +532,6 @@ async function abortSession(session: AgentSession): Promise<void> {
 const PLACES = new Map<string, Record<string, DiagnosticValue>>([
 	["measure", { phase: "measure" }],
 	["review", { phase: "review" }],
-	["finish", { phase: "finish" }],
 ]);
 
 function placeOf(label: string): Record<string, DiagnosticValue> {
@@ -585,6 +582,9 @@ interface ReviewSessionState {
 	recordingMessageTokens: number;
 	callOutputLimit: number | null;
 	lastEventAt: number;
+	modelWait: ModelWait;
+	/** Records the first byte of the call that this session's turn is waiting on. */
+	servedTurn: (() => void) | null;
 	activeReview: ActiveReview | null;
 	currentTurnSlugs: readonly string[];
 	/** A measuring session may submit only its assigned practice. */
@@ -606,6 +606,8 @@ function newSessionState(): ReviewSessionState {
 		recordingMessageTokens: 0,
 		callOutputLimit: null,
 		lastEventAt: Date.now(),
+		modelWait: newModelWait(),
+		servedTurn: null,
 		activeReview: null,
 		currentTurnSlugs: [],
 		activePractice: null,
@@ -690,21 +692,15 @@ export async function runReviewJob(): Promise<void> {
 	const LLM_PROXY_URL = requiredEnv("LLM_PROXY_URL");
 	const LLM_PROXY_TOKEN = requiredEnv("LLM_PROXY_TOKEN");
 	const DIRECT_MODEL_TOKENS = positiveIntegerEnv("PI_DIRECT_MODEL_TOKENS");
-	const PRACTICE_CONCURRENCY = positiveIntegerEnv("PI_PRACTICE_CONCURRENCY");
-	if (PRACTICE_CONCURRENCY > 32) {
-		throw new Error("PI_PRACTICE_CONCURRENCY must not exceed 32");
-	}
-	const PRACTICES_PER_TURN = hasText(process.env.PI_PRACTICE_BATCH_SIZE)
-		? Number(process.env.PI_PRACTICE_BATCH_SIZE)
-		: 6;
 	// Refusal exhaustion leaves the practice NOT_REACHED.
 	const MAX_REFUSALS_PER_PRACTICE = 8;
-	// The server sets each practice's budget; turnBudget combines it for the assigned practices.
+	// The server sets what one practice may spend.
 	const PER_PRACTICE_WORK: Work = {
 		modelCalls: positiveIntegerEnv("PI_PRACTICE_MODEL_CALLS"),
 		outputTokens: positiveIntegerEnv("PI_PRACTICE_OUTPUT_TOKENS"),
 	};
-	// Abort a stalled stream independently of the turn's work budget.
+	// Abort a stalled stream independently of the turn's work budget. A call that waits for its first
+	// byte is not stalled: the proxy answers it when the pool grants it, or refuses it at the deadline.
 	const STALL_MS = 300_000;
 	// Reaching the model's output limit can leave its tool arguments incomplete.
 	let outputLimit = Number.POSITIVE_INFINITY;
@@ -715,6 +711,23 @@ export async function runReviewJob(): Promise<void> {
 	// The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
 	// the only reading against which the process budget means anything.
 	const PROCESS_START_MS = Date.now();
+
+	// Node's fetch gives up after 5 minutes without response headers, but a model call can wait longer
+	// for its pool's grant. The proxy answers or refuses every waiting call by the attempt's deadline,
+	// so the runner waits as long as the proxy does. The SDK sets this dispatcher only in its own CLI.
+	const sdkUndici: unknown = createRequire(import.meta.resolve("@earendil-works/pi-coding-agent"))(
+		"undici",
+	);
+	if (
+		!isRecord(sdkUndici) ||
+		typeof sdkUndici.Agent !== "function" ||
+		typeof sdkUndici.setGlobalDispatcher !== "function"
+	) {
+		throw new Error("the SDK's HTTP client is not available");
+	}
+	Reflect.apply(sdkUndici.setGlobalDispatcher, sdkUndici, [
+		Reflect.construct(sdkUndici.Agent, [{ headersTimeout: 0 }]),
+	]);
 
 	setTimeout(() => {
 		diagnose("watchdog.exited", { after_ms: AGENT_BUDGET_MS + 30_000 });
@@ -797,7 +810,7 @@ export async function runReviewJob(): Promise<void> {
 		attempts: AttemptDebug[];
 		turns: TurnTrace[];
 		usageTotals: UsageTotals;
-		practiceConcurrency?: { configured: number; effective: number };
+		sessionsAtOnce?: number;
 		/** Each practice's required brief sources: sizes and read state only, never their text. */
 		practiceSources: Record<string, RequiredSourceTrace[]>;
 	} = {
@@ -2345,22 +2358,25 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		const streamUsage = newUsageLedger();
-		let releaseOpening: ((key: string) => void) | undefined;
 		let providerFailures = 0;
-		const measurementReply = { received: false };
+		const measurementReply = { asked: false, received: false };
 		const subscribeSession = (trackedSession: AgentSession) => {
 			const scope = sessionState();
 			return trackedSession.subscribe((event: AgentSessionEvent) =>
 				sessionScopes.run(scope, () => {
-					// Responses can start the SDK message at headers. Wait for content or a successful reply.
+					if (event.type === "turn_start" || event.type === "auto_retry_start") {
+						measurementReply.asked = true;
+						scope.servedTurn ??= scope.modelWait.call();
+					}
+					// Responses can start the SDK message at headers, so content is the first sign of service.
 					if (
 						event.type === "message_update" ||
-						(event.type === "message_end" &&
-							event.message.role === "assistant" &&
-							event.message.stopReason !== "error" &&
-							event.message.stopReason !== "aborted")
+						event.type === "agent_end" ||
+						(event.type === "message_end" && event.message.role === "assistant")
 					) {
-						releaseOpening?.(JSON.stringify([...declaredOf(scope.activePractice)].toSorted()));
+						scope.servedTurn?.();
+						scope.servedTurn = null;
+						scope.modelWait.started();
 					}
 					chargeWork(event);
 					const label = practiceLogLabel();
@@ -2487,7 +2503,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
 		deriveChangeView();
 		persistRecordedNotes();
-		const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
 		// One brief for each declared set: practices that declare the same sources share its bytes.
 		const briefs = new Map<string, ReturnType<typeof buildBrief>>();
 		function briefOf(slug: string): ReturnType<typeof buildBrief> {
@@ -2510,7 +2525,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 		diagnose("review.started", {
 			practices: allSlugs.length,
-			turns: turns.length,
 			context_loop_only: CONTEXT_IS_LOOP_ONLY,
 			brief_chars_max: Math.max(0, ...allSlugs.map((slug) => briefOf(slug).text.length)),
 		});
@@ -2674,7 +2688,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		// Liveness, not a budget: a turn that shows no sign of life for STALL_MS is aborted.
 		const checkStall = (scope: ReviewSessionState) => {
 			sessionScopes.run(scope, () => {
-				if (scope.currentTurn?.stoppedBy === null && Date.now() - scope.lastEventAt >= STALL_MS) {
+				if (
+					scope.currentTurn?.stoppedBy === null &&
+					!scope.modelWait.waitsForModel() &&
+					Date.now() - scope.lastEventAt >= STALL_MS
+				) {
 					providerFailures += 1;
 					stopTurn("stall");
 				}
@@ -2698,15 +2716,13 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			label: string,
 			heading: string,
 			slugs: readonly string[],
-			reservedBudget?: Work,
-			practicePosition?: { index: number; count: number },
 		): Promise<StopReason | null> {
 			const safetyMs = measureEnd - Date.now();
 			if (safetyMs <= RETURN_MS) {
 				diagnose("turn.near_ceiling", { ...placeOf(label), skipped: true });
 				return "safety";
 			}
-			const budget = reservedBudget ?? turnBudget(slugs.length, PER_PRACTICE_WORK);
+			const budget = PER_PRACTICE_WORK;
 			diagnose("turn.started", {
 				...placeOf(label),
 				practices: slugs.length,
@@ -2718,7 +2734,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				owed: () => owedPractices(slugs).length,
 				nudge: RECORD_NUDGE,
 			});
-			if (reservedBudget !== undefined) {
+			if (slugs.length === 1) {
 				trace.practiceSlug = slugs[0];
 			}
 			const safety = scheduleDeadline(safetyMs, () => stopTurn("safety"));
@@ -3043,6 +3059,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					Math.max(0, measureEnd - Date.now()),
 				);
 				const sources = sourcesForPractice(slug, evidenceSources);
+				const { modelWait } = sessionState();
 				const outcome = await runPracticeProgram(
 					program,
 					{
@@ -3056,6 +3073,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						reader: new EvidenceReader(sources, programReads),
 						models: hostModels(boundModels, LLM_PROXY_URL, LLM_PROXY_TOKEN, slug),
 						budget: directBudget,
+						awaitModel: () => modelWait.call(),
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),
@@ -3127,7 +3145,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					}
 					await runProgram(
 						slug,
-						`${heading}\nPractice ${(practicePosition?.index ?? index) + 1} of ${practicePosition?.count ?? slugs.length} in this turn.`,
+						`${heading}\nPractice ${index + 1} of ${slugs.length} in this turn.`,
 					);
 				}
 			} finally {
@@ -3145,25 +3163,15 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 		async function measurePractices(): Promise<void> {
 			let stalls = 0;
-			const serial =
-				PRACTICE_CONCURRENCY === 1 ||
-				practiceIndex.some((practice) => practice.contextPaths !== undefined);
-			runnerDebug.practiceConcurrency = {
-				configured: PRACTICE_CONCURRENCY,
-				effective: serial ? 1 : PRACTICE_CONCURRENCY,
-			};
-			diagnose("review.concurrency", {
-				configured: PRACTICE_CONCURRENCY,
-				effective: serial ? 1 : PRACTICE_CONCURRENCY,
-			});
+			const serial = practiceIndex.some((practice) => practice.contextPaths !== undefined);
 			if (serial) {
-				for (const [index, turn] of turns.entries()) {
-					const label = `turn ${index + 1}/${turns.length} (${turn.id})`;
+				for (const [index, slug] of allSlugs.entries()) {
+					const label = `turn ${index + 1}/${allSlugs.length} (${slug})`;
 					PLACES.set(label, { phase: "review", turn: index + 1 });
 					const stop = await runScope(
 						label,
-						`## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
-						turn.slugs,
+						`## Turn ${index + 1} of ${allSlugs.length}: ${slug}`,
+						[slug],
 					);
 					stalls = stop === "stall" ? stalls + 1 : 0;
 					if (stop === "safety" || stalls >= 2) {
@@ -3172,85 +3180,62 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					}
 				}
 			} else {
-				const planned = turns.flatMap((turn, index) => {
-					const budget = turnBudget(turn.slugs.length, PER_PRACTICE_WORK);
-					return turn.slugs.map((slug, position) => {
-						const label = `turn ${index + 1}/${turns.length} (${turn.id}) / ${slug}`;
-						PLACES.set(label, { phase: "review", turn: index + 1, practice: practiceAt(slug) });
-						return {
-							slug,
-							label,
-							heading: `## Turn ${index + 1} of ${turns.length}: ${turn.id}`,
-							budget: partitionBudget(budget, turn.slugs.length, position),
-							position: { index: position, count: turn.slugs.length },
-						};
-					});
+				// The server's index owns the start order.
+				const planned = allSlugs.map((slug, index) => {
+					const label = `turn ${index + 1}/${allSlugs.length} (${slug})`;
+					PLACES.set(label, { phase: "review", turn: index + 1, practice: practiceAt(slug) });
+					return { slug, label, heading: `## Turn ${index + 1} of ${allSlugs.length}: ${slug}` };
 				});
-				// Turns partition budgets; the server's index still owns the start order across groups.
-				const order = new Map(practiceIndex.map((practice, index) => [practice.slug, index]));
-				planned.sort((a, b) => (order.get(a.slug) ?? 0) - (order.get(b.slug) ?? 0));
-				const signature = (work: (typeof planned)[number]) =>
-					JSON.stringify([...declaredOf(work.slug)].toSorted());
-				const queue = new OpeningQueue(planned, signature);
-				releaseOpening = (key) => queue.firstStream(key);
-				const cancelQueue = () => queue.dispose();
-				const queueDeadline = setTimeout(
-					cancelQueue,
-					Math.max(0, measureEnd - RETURN_MS - Date.now()),
+				const baseHeapBytes = getHeapStatistics().used_heap_size;
+				const pace = new SessionPace((running) =>
+					roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
-				measuringEnded.signal.addEventListener("abort", cancelQueue, { once: true });
-				const workers = await Promise.allSettled(
-					Array.from({ length: Math.min(PRACTICE_CONCURRENCY, planned.length) }, async () => {
-						while (Date.now() < measureEnd - RETURN_MS && !measurementClosed) {
-							const work = await queue.take();
-							if (
-								work === undefined ||
-								measuringEnded.signal.aborted ||
-								Date.now() >= measureEnd - RETURN_MS
-							) {
-								return;
-							}
-							const scope = newSessionState();
-							activeScopes.add(scope);
-							try {
-								await sessionScopes.run(scope, async () =>
-									runScope(work.label, work.heading, [work.slug], work.budget, work.position),
-								);
-							} catch (error) {
-								measurementClosed = true;
-								unreachedReason = "error";
-								measuringEnded.abort(
-									new UnratedError("unavailable", "a review session could not stop safely"),
-								);
-								throw error;
-							} finally {
-								// A scripted practice or failed leader may finish without a streamed response.
-								queue.firstStream(signature(work));
-								activeScopes.delete(scope);
-							}
-						}
-					}),
-				);
-				measuringEnded.signal.removeEventListener("abort", cancelQueue);
-				clearTimeout(queueDeadline);
-				queue.dispose();
-				releaseOpening = undefined;
+				let sessionsAtOnce = 0;
+				const startsEnd = AbortSignal.any([
+					measuringEnded.signal,
+					AbortSignal.timeout(Math.max(0, measureEnd - RETURN_MS - Date.now())),
+				]);
+				const runSession = async (work: (typeof planned)[number], scope: ReviewSessionState) => {
+					try {
+						await sessionScopes.run(scope, async () =>
+							runScope(work.label, work.heading, [work.slug]),
+						);
+					} catch (error) {
+						measurementClosed = true;
+						unreachedReason = "error";
+						measuringEnded.abort(
+							new UnratedError("unavailable", "a review session could not stop safely"),
+						);
+						throw error;
+					} finally {
+						pace.end(scope.modelWait);
+						activeScopes.delete(scope);
+					}
+				};
+				const running: Promise<void>[] = [];
+				let notStarted = 0;
+				for (const [index, work] of planned.entries()) {
+					if (!(await pace.nextStart(startsEnd, measureEnd - RETURN_MS)) || measurementClosed) {
+						notStarted = planned.length - index;
+						break;
+					}
+					const scope = newSessionState();
+					pace.begin(scope.modelWait);
+					sessionsAtOnce = Math.max(sessionsAtOnce, pace.sessions);
+					activeScopes.add(scope);
+					running.push(runSession(work, scope));
+				}
+				const workers = await Promise.allSettled(running);
+				runnerDebug.sessionsAtOnce = sessionsAtOnce;
+				diagnose("review.paced", {
+					sessions_at_once: sessionsAtOnce,
+					held_for_memory: pace.heldForMemory,
+					not_started: notStarted,
+				});
 				const failure = workers.find((worker) => worker.status === "rejected");
 				if (failure?.status === "rejected") {
 					diagnose("measurement.stopped", { error: errorKind(failure.reason) });
 				}
-			}
-
-			const unfinished = allSlugs.filter(
-				(slug) => !executions.has(slug) && !blockedPractices.has(slug),
-			);
-			if (serial && unfinished.length > 0 && stalls < 2 && Date.now() < measureEnd - RETURN_MS) {
-				diagnose("review.finishing", { unfinished: unfinished.length });
-				await runScope(
-					"finish",
-					"## Unfinished practices\nNo turn recorded a result for this practice; evaluate it now.",
-					unfinished,
-				);
 			}
 		}
 
@@ -3298,7 +3283,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			throw stagingFailure.error;
 		}
 		if (!maybeWriteResultFile()) {
-			if (providerFailures > 0 && !measurementReply.received) {
+			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
 				diagnose("review.unreachable", { unanswered_calls: providerFailures });
 				finalizeOutput();
 				process.exit(PROVIDER_UNREACHABLE_EXIT);

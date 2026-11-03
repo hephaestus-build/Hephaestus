@@ -143,7 +143,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private JsonMapper mapper;
 
-    private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(3);
+    private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(12);
     private HephTurnDispatcher dispatcher;
     private HephTurnController controller;
     private MockMvc gateway;

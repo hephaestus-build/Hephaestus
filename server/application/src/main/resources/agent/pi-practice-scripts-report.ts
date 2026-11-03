@@ -5,8 +5,8 @@ import {
 } from "./work/practice-scripts/lib/core/contract.ts";
 import type { ProgramOutcome } from "./work/practice-scripts/lib/core/program-host.ts";
 
-export const PRACTICE_SCRIPT_REPORT_MAX_BYTES = 64 * 1024;
-export const PRACTICE_SCRIPT_REPORT_MAX_PRACTICES = 256;
+export const PRACTICE_SCRIPT_REPORT_MAX_BYTES = 1024 * 1024;
+export const PRACTICE_SCRIPT_REPORT_MAX_PRACTICES = 2560;
 export const PRACTICE_SCRIPT_ERROR_MAX_CHARS = 500;
 
 const BLANK_START = /^[\p{Cc}\p{Z}]+/u;

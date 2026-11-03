@@ -5,7 +5,7 @@
  */
 import { supportsForcedToolChoice } from "./model-capabilities.ts";
 
-import { type ChildProcess, fork } from "node:child_process";
+import { fork } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -38,13 +38,8 @@ import { reasonOf, UnratedError } from "./practice-script.ts";
 const CHILD_HEAP_MB = 256;
 /** A program's process is killed this long after its deadline, so a program that unwinds still returns. */
 export const RETURN_MS = 5000;
-/**
- * Script processes that may run at once in one Pod. Each loads Node and the toolkit, and it ends at its review, so
- * this bound is what keeps a wide review's memory flat: without it, every script of the review loads together.
- */
-export const SCRIPT_PROCESSES = 2;
-/** A script that holds its room this long gives it back, so that one slow script cannot starve the others. */
-export const SCRIPT_PROCESS_LEASE_MS = 10_000;
+/** The most memory that one script process can hold on its heap. */
+export const SCRIPT_HEAP_BYTES = CHILD_HEAP_MB * 1024 * 1024;
 
 export class ProgramSettlementError extends Error {
 	override name = "ProgramSettlementError";
@@ -66,6 +61,8 @@ export interface ProgramServices {
 	/** The practice's direct models, with the credential: every call names the practice to the proxy. */
 	models: Partial<SlotModels>;
 	budget: ModelBudget;
+	/** A direct model call waits for its answer. The returned function records the answer. */
+	awaitModel: () => () => void;
 	/** Run one review of this practice. It rejects with `UnratedError` when the session gives no result. */
 	review: (options: ReviewOptions, signal: AbortSignal) => Promise<Candidate>;
 	signal: AbortSignal;
@@ -157,55 +154,6 @@ export function abortReasonOf(signal: AbortSignal): AbortReason {
 		: "deadline";
 }
 
-let processesFree = SCRIPT_PROCESSES;
-const processWaiters: (() => void)[] = [];
-
-/** Waits for room for one script process. False if `signal` ended the wait. */
-async function enterProcesses(signal: AbortSignal): Promise<boolean> {
-	if (signal.aborted) {
-		return false;
-	}
-	if (processesFree > 0) {
-		processesFree -= 1;
-		return true;
-	}
-	const turn = Promise.withResolvers<boolean>();
-	const give = () => {
-		signal.removeEventListener("abort", stop);
-		turn.resolve(true);
-	};
-	const stop = () => {
-		processWaiters.splice(processWaiters.indexOf(give), 1);
-		turn.resolve(false);
-	};
-	processWaiters.push(give);
-	signal.addEventListener("abort", stop, { once: true });
-	return turn.promise;
-}
-
-function leaveProcesses(): void {
-	const next = processWaiters.shift();
-	if (next === undefined) {
-		processesFree += 1;
-	} else {
-		next();
-	}
-}
-
-/** Takes the room this process entered with. The returned function gives it back, once. */
-function holdProcessRoom(): () => void {
-	let held = true;
-	const release = () => {
-		if (held) {
-			held = false;
-			clearTimeout(lease);
-			leaveProcesses();
-		}
-	};
-	const lease = setTimeout(release, SCRIPT_PROCESS_LEASE_MS);
-	return release;
-}
-
 /**
  * Run one custom program in its own process, until it returns, fails, asks for its review or reaches
  * its deadline. Its value is returned unchecked: the host validates it as a candidate.
@@ -217,12 +165,7 @@ export async function runCustomProgram(
 ): Promise<ProgramExecution> {
 	const { slug } = job;
 	const calls = noCalls();
-	const entered =
-		Date.now() < job.deadline &&
-		(await enterProcesses(
-			AbortSignal.any([services.signal, AbortSignal.timeout(job.deadline - Date.now())]),
-		));
-	if (!entered) {
+	if (services.signal.aborted || Date.now() >= job.deadline) {
 		const stopReason = services.signal.aborted ? abortReasonOf(services.signal) : "deadline";
 		return {
 			failure: {
@@ -235,23 +178,16 @@ export async function runCustomProgram(
 	}
 	let report: SlotReport[] = [];
 	const readable = readableRoots([path.dirname(path.dirname(modulePath))]);
-	const releaseRoom = holdProcessRoom();
-	let child: ChildProcess;
-	try {
-		child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
-			env: {},
-			execArgv: [
-				"--permission",
-				...readable.map((dir) => `--allow-fs-read=${dir}`),
-				`--max-old-space-size=${CHILD_HEAP_MB}`,
-			],
-			stdio: ["ignore", "pipe", "pipe", "ipc"],
-			serialization: "advanced",
-		});
-	} catch (error) {
-		releaseRoom();
-		throw error;
-	}
+	const child = fork(path.join(import.meta.dirname, "../..", "child.ts"), [], {
+		env: {},
+		execArgv: [
+			"--permission",
+			...readable.map((dir) => `--allow-fs-read=${dir}`),
+			`--max-old-space-size=${CHILD_HEAP_MB}`,
+		],
+		stdio: ["ignore", "pipe", "pipe", "ipc"],
+		serialization: "advanced",
+	});
 	let output = 0;
 	const prefix = (chunk: Buffer) => {
 		if (output >= MAX_OUTPUT_CHARS) {
@@ -282,7 +218,6 @@ export async function runCustomProgram(
 		stopped.abort(new UnratedError("deadline", "the program ended"));
 	};
 	child.once("close", (...exit) => {
-		releaseRoom();
 		processGone.resolve(exit);
 		if (!handOff.happened) {
 			endProgram();
@@ -382,8 +317,6 @@ export async function runCustomProgram(
 		request: OpenRequest,
 		call: AbortSignal,
 	) => {
-		// A direct model call can take minutes, and it holds no more of the Pod than waiting for it does.
-		releaseRoom();
 		const { id, slot, label } = message;
 		const model = services.models[slot];
 		if (
@@ -407,7 +340,12 @@ export async function runCustomProgram(
 				? asked
 				: await services.budget.run(asked.reserve, call, async () => {
 						calls[slot] += 1;
-						return asked.run();
+						const answered = services.awaitModel();
+						try {
+							return await asked.run();
+						} finally {
+							answered();
+						}
 					});
 		if ("value" in outcome) {
 			reply({ kind: "model", id, answer: outcome.value, tokensLeft: services.budget.left });

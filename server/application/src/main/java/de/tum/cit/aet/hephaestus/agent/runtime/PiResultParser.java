@@ -292,8 +292,8 @@ public class PiResultParser {
 
     static final int PRACTICE_SCRIPT_REPORT_VERSION = 2;
 
-    static final int PRACTICE_SCRIPT_REPORT_MAX_BYTES = 64 * 1024;
-    static final int PRACTICE_SCRIPT_REPORT_MAX_ENTRIES = 256;
+    static final int PRACTICE_SCRIPT_REPORT_MAX_BYTES = 1024 * 1024;
+    static final int PRACTICE_SCRIPT_REPORT_MAX_ENTRIES = 2560;
 
     public static final int PRACTICE_SCRIPT_ERROR_MAX_LENGTH = 500;
 

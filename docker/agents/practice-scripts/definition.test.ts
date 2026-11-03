@@ -168,6 +168,7 @@ async function runSource(
 				// Nothing listens there: a test without the stand-in binds no model.
 				models: hostModels(bound, standIn?.url ?? "http://127.0.0.1:9", TOKEN, slug),
 				budget,
+				awaitModel: () => () => undefined,
 				review: async (reviewOptions) => {
 					const leads = await resolveLeads(reviewOptions.leads ?? [], staged.sources);
 					reviews.push({ options: reviewOptions, leads });

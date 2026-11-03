@@ -48,18 +48,20 @@ Opened, ready and a review request measure every practice that they select, curr
 
 ### Work budgets
 
-By default, groups with more than six practices are split into smaller sets.
-Each set has a separate work budget.
-Each practice gets a fresh model session.
+Each practice gets a fresh model session and a work budget of its own.
 
-`PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the maximum number of practices that an item review evaluates at once.
-The default is 3. Valid values are 1 through 32.
+An item review accepts any number of practices, and its runner sets its own pace.
+No setting limits the number of practices at once.
 
 The server starts item-review practices without a current observation first, then the ones with the oldest last verdict.
-The runner fills each free slot with the next practice ready to start.
-Practices with the same declared sources share a cache warm-up: followers wait for the first response, for at most 20 seconds.
-Other source sets can start during this wait.
-Slots can span practice groups.
+The runner starts the next practice in that order when both of these conditions are true:
+
+- No running session waits for a first byte from a model call.
+- The Pod has memory for one more script process, and the runner's heap has room for one more session.
+
+Thus, the review widens while the provider answers, and it stops widening when a call has to wait.
+A new session holds the next start until its first model call, for at most 10 seconds.
+The runner always starts a practice when no session runs.
 Results and the admission request use practice order, independent of completion order.
 
 The review's technical details show **Input from cache** for every protocol.
@@ -89,20 +91,14 @@ It also increases peak memory use and simultaneous model requests.
 The model proxy still paces upstream requests.
 A provider limit or model contention can reduce the benefit.
 
-Set the value to 1 to use the serial group pool.
-Scan reviews always use that serial path.
+Scan reviews use a serial group pool.
 A deadline stops active sessions and leaves queued practices `NOT_REACHED` with reason `DEADLINE`.
 The runner retains completed results for admission.
-The debug report and logs include the configured concurrency, effective concurrency, and time for each concurrent practice.
+The debug report and logs include the most sessions that ran at once, and the time for each practice.
 
-`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 16000) determine each set's budget.
-Each value is multiplied by the number of practices in the set, with a minimum of three.
-A set of five practices can make 60 model calls and write 80,000 output tokens.
-A set of one practice can make 36 model calls and write 48,000 output tokens.
-Concurrent practices reserve shares of this pool.
-Serial review sessions share the pool without reservations.
+`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 36) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 48000) set what each practice can spend.
 
-A practice script that calls `ctx.review()` opens review sessions, and their calls count against these same set budgets.
+A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
 The direct model calls of practice scripts have their own limits for each review attempt: a token limit and a search unit limit.
 [Cost and limits](./ai-providers.mdx#cost-and-limits) owns their settings and defaults.
 [Practice scripts](#practice-scripts) tells you how to read what each practice script did.
@@ -162,11 +158,11 @@ A failure before the sandbox starts is logged with its stage, its kind, such as 
 
 The timeout of the workspace's **Practice reviews** assignment is the whole-run safety ceiling.
 It can stop a productive review and leave later practices `NOT_REACHED`.
-Independent set budgets do not reserve time for every set.
+These budgets do not reserve time for each practice.
 
 A session stops after five minutes without a model or tool event.
+A call that waits for its first byte does not count, because the proxy answers or refuses every waiting call.
 On the serial path, two consecutive stalls end measurement with its recorded results.
-A stalled concurrent practice releases its slot after the session stops.
 
 A timeout below 61 seconds runs at 61 seconds.
 Each practice script runs inside the same timeout, with no time reserved before the review, as the [workspace ABI](/contributor/agent/agent-workspace-abi#practice-script-validation-and-limits) describes.
@@ -175,7 +171,7 @@ Each practice script runs inside the same timeout, with no time reserved before 
 If unset, the provider default applies.
 A low temperature does not guarantee repeatable judgments.
 Do not set `0` for an open model whose vendor advises against greedy decoding.
-Such a model can repeat the same tool call until the review stops that practice group.
+Such a model can repeat the same tool call until the review stops that practice.
 Use the model's recommended sampling or the provider default.
 
 Before you change an environment variable:

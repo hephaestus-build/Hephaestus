@@ -247,7 +247,7 @@ void test("a practice that the run's safety line stops before it starts is repor
 	const stopped = await run(
 		[{ slug: "a-first" }, { slug: "b-hangs" }, { slug: "c-never" }],
 		{ "b-hangs": "hang" },
-		{ AGENT_BUDGET_MS: "7000" },
+		{ AGENT_BUDGET_MS: "7000", PI_HOST_COLD_LEADER: "b-hangs" },
 	);
 	assert.equal(stopped.status, 1, stopped.stderr);
 	const report = executionReport(stopped.cwd);

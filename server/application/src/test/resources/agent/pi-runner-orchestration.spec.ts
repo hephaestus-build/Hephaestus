@@ -120,12 +120,10 @@ function practice(
 	slug: string,
 	readsSources = ["scm.pull-request.core", "scm.pull-request.diff"],
 	versionId?: unknown,
-	group = "code",
 ) {
 	return {
 		slug,
 		name: "Test practice",
-		group,
 		readsSources,
 		exhaustiveSources: readsSources.filter((source) => source === "scm.pull-request.diff"),
 		...(versionId === undefined ? {} : { versionId }),
@@ -1244,14 +1242,6 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							const currentSlug = /### Practice `(?<slug>[^`]+)`/u.exec(text)?.groups?.slug;
 							assert.ok(currentSlug !== undefined && currentSlug !== "", text.slice(0, 400));
-							if (text.includes("## Unfinished practices")) {
-								const reply = await tool("submit_result").execute(
-									"o-3",
-									notMet("Submitted on the finishing turn"),
-								);
-								record(`finish:${currentSlug}:${JSON.stringify(reply)}`);
-								return;
-							}
 							const report = tool("submit_result");
 							measuredTool = report;
 							if (
@@ -1867,41 +1857,7 @@ if (scenario !== undefined && scenario !== "") {
 								return;
 							}
 							if (scenario !== "batch") {
-								if (scenario === "finish" && currentSlug === "second-practice") {
-									for (let call = 1; call <= 6; call += 1) {
-										emit({
-											type: "tool_execution_start",
-											toolCallId: `b-${call}`,
-											toolName: "bash",
-											args: { command: "git show abc --stat | head" },
-										});
-									}
-									return;
-								}
-								if (scenario === "finish") {
-									emit({
-										type: "message_end",
-										message: {
-											role: "assistant",
-											stopReason: "toolUse",
-											usage: callUsage(1200),
-											content: [
-												{ type: "toolCall", id: "o-1", name: "submit_result", arguments: {} },
-											],
-										},
-									});
-								}
-								const measured = await report.execute("o-1", notMet("Unsafe authentication call"));
-								if (scenario === "finish") {
-									record(`batch:${JSON.stringify(measured)}`);
-									emit({
-										type: "tool_execution_end",
-										toolCallId: "o-1",
-										toolName: "submit_result",
-										isError: false,
-										result: measured,
-									});
-								}
+								await report.execute("o-1", notMet("Unsafe authentication call"));
 								return;
 							}
 							// This session received the complete change in its opening.
@@ -2058,7 +2014,6 @@ if (scenario !== undefined && scenario !== "") {
 		"comment-undecided",
 		"draft-commit",
 		"argument-repairs",
-		"finish",
 		"natural-stop",
 		"natural-stop-twice",
 		"refusal-cap",
@@ -2111,7 +2066,7 @@ if (scenario !== undefined && scenario !== "") {
 				"scope-ownership":
 					"a session's submissions bind to its own practice: they change no other practice's result and spend none of its refusal allowance",
 				"scope-budget":
-					"fresh practice sessions share one group budget and accumulate nonzero native usage once",
+					"fresh practice sessions each have their own budget and accumulate nonzero native usage once",
 				"scope-stop-hangs":
 					"a session that never settles fails within the existing deadline, refuses a late submission and keeps its usage without admission",
 				"scope-stop-failure":
@@ -2167,8 +2122,6 @@ if (scenario !== undefined && scenario !== "") {
 					"refuses a quiet replacement when its session received no change content",
 				"comment-undecided":
 					"accepts an undecided result without the change only for a practice that does not read it",
-				finish:
-					"finishes practices no turn reached in a fresh session under one shared finish budget, and never reviews a cut-short practice twice",
 				"natural-stop":
 					"asks a session that ended in prose once, in the same session, to submit its practice's result",
 				"natural-stop-twice":
@@ -2330,22 +2283,14 @@ if (scenario !== undefined && scenario !== "") {
 					let index = [practice("test-practice")];
 					if (
 						stage.startsWith("scope-") ||
-						stage === "finish" ||
 						stage === "settle-safety" ||
 						stage === "session-init" ||
 						stage === "batch" ||
 						stage === "draft-commit"
 					) {
-						index = [
-							practice("test-practice"),
-							practice("second-practice"),
-							...(stage === "finish" ? [practice("third-practice")] : []),
-						];
+						index = [practice("test-practice"), practice("second-practice")];
 					} else if (stage === "stall") {
-						index = [
-							practice("test-practice"),
-							practice("second-practice", undefined, undefined, "docs"),
-						];
+						index = [practice("test-practice"), practice("second-practice")];
 					} else if (stage === "comment-undecided") {
 						index = [practice("test-practice"), practice("review-tone", ["scm.pull-request.core"])];
 					}
@@ -2360,7 +2305,14 @@ if (scenario !== undefined && scenario !== "") {
 							);
 						}
 					}
-					writeFileSync(nodePath.join(cwd, "catalog/practices/index.json"), JSON.stringify(index));
+					// Most stages follow one session at a time, as the runner does for a practice with context paths.
+					const oneAtATime = stage !== "scope-native-problem-isolation" && stage !== "request-caps";
+					writeFileSync(
+						nodePath.join(cwd, "catalog/practices/index.json"),
+						JSON.stringify(
+							oneAtATime ? index.map((entry) => ({ ...entry, contextPaths: [] })) : index,
+						),
+					);
 					for (const { slug } of index) {
 						writeFileSync(
 							nodePath.join(cwd, PRACTICES_DIR, `${slug}.inputs.json`),
@@ -2416,20 +2368,16 @@ if (scenario !== undefined && scenario !== "") {
 								AGENT_BUDGET_MS: budgetMs,
 								PI_PRACTICE_MODEL_CALLS:
 									new Map([
-										["scope-native-schema-cap", "12"],
-										["scope-native-evidence-correction", "12"],
-										["scope-native-evidence-cap", "12"],
-										["scope-native-problem-repair", "8"],
-										["scope-native-problem-isolation", "4"],
-										["scope-native-problem-compaction", "5"],
-										["scope-native-submission-repair", "4"],
-										["scope-native-read-correction", "4"],
-									]).get(stage) ?? "2",
-								PI_PRACTICE_CONCURRENCY:
-									stage === "scope-native-problem-isolation" || stage === "request-caps"
-										? "2"
-										: "1",
-								PI_PRACTICE_OUTPUT_TOKENS: "8000",
+										["scope-native-schema-cap", "36"],
+										["scope-native-evidence-correction", "36"],
+										["scope-native-evidence-cap", "36"],
+										["scope-native-problem-repair", "24"],
+										["scope-native-problem-isolation", "12"],
+										["scope-native-problem-compaction", "15"],
+										["scope-native-submission-repair", "12"],
+										["scope-native-read-correction", "12"],
+									]).get(stage) ?? "6",
+								PI_PRACTICE_OUTPUT_TOKENS: "24000",
 								PI_DIRECT_MODEL_TOKENS: "1000",
 								LLM_PROXY_URL: "https://unused.invalid",
 								LLM_PROXY_TOKEN: "test-token",
@@ -2467,7 +2415,7 @@ if (scenario !== undefined && scenario !== "") {
 								);
 								return turn.phase;
 							}),
-							["practice"],
+							["practice", "practice"],
 						);
 					}
 
@@ -2795,8 +2743,8 @@ if (scenario !== undefined && scenario !== "") {
 							assert.equal(child.status, 0, child.stderr);
 							assert.equal(readResults(nodePath.join(cwd, "out/result.json")).length, 6);
 							assert.equal(events.filter((event) => event.startsWith("create:")).length, 6);
-							assert.doesNotMatch(child.stderr, /turn\.stopped|review\.finishing/u);
-							assert.match(child.stderr, /calls=6 call_budget=12/u);
+							assert.doesNotMatch(child.stderr, /turn\.stopped/u);
+							assert.match(child.stderr, /measurement\.finished .*calls=6/u);
 							break;
 						}
 						case "scope-ownership":
@@ -2832,10 +2780,9 @@ if (scenario !== undefined && scenario !== "") {
 							if (stage === "scope-budget") {
 								assert.match(
 									child.stderr,
-									/turn\.finished .*calls=6 call_budget=6 output_tokens=600 output_token_budget=24000 stopped_by=budget/u,
+									/turn\.finished .*calls=3 call_budget=6 output_tokens=300 output_token_budget=24000 tool_calls=/u,
 								);
 								assert.match(child.stderr, /measurement\.finished .*calls=6/u);
-								assert.doesNotMatch(child.stderr, /review\.finishing/u);
 							}
 							break;
 						}
@@ -3421,64 +3368,6 @@ for (const item of nullableCases) {
 							);
 							break;
 						}
-						case "finish": {
-							assert.equal(child.status, 0, child.stderr);
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3"],
-							);
-							assert.equal(events.filter((event) => event.startsWith("create:")).length, 3);
-							const first = readFileSync(nodePath.join(cwd, "prompt-1.md"), "utf8");
-							const third = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
-							// Each fresh session receives the stable brief and its own complete criterion.
-							assert.ok(first.includes("### `evidence/metadata.json`"), first.slice(0, 300));
-							assert.match(
-								first,
-								/## How submit_result takes a result[\s\S]*"sourcePath": "evidence\/change\.json"/u,
-							);
-							assert.ok(third.includes("### `evidence/metadata.json`"));
-							assert.doesNotMatch(third, /### Practice `test-practice`|test-practice: NOT_MET/u);
-							const batch: unknown = JSON.parse(
-								(events.find((event) => event.startsWith("batch:")) ?? "batch:{}").slice(
-									"batch:".length,
-								),
-							);
-							const details: unknown =
-								typeof batch === "object" && batch !== null ? Reflect.get(batch, "details") : null;
-							assert.ok(typeof details === "object" && details !== null);
-							const written = ["inserted", "duplicates", "refused"]
-								.map((key): unknown => Reflect.get(details, key))
-								.reduce((sum: number, count) => sum + (typeof count === "number" ? count : 0), 0);
-							const pace = Math.round((1500 + 1200 / written) / 2);
-							assert.match(
-								child.stderr,
-								new RegExp(
-									`turn\\.started phase=finish practices=1 call_budget=6 output_token_budget=24000 tokens_per_result=${pace}`,
-									"u",
-								),
-							);
-							// It evaluates the unfinished practice from its criteria, not from memory.
-							assert.match(third, /## Unfinished practices\n[\s\S]*### Practice `third-practice`/u);
-							assert.match(
-								events.find((event) => event.startsWith("finish:third-practice:")) ?? "",
-								/third-practice: stored/u,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("batch:")) ?? "",
-								/"terminate":true/u,
-							);
-							reached({
-								"test-practice": "EVALUATED",
-								"second-practice": "NOT_REACHED",
-								"third-practice": "EVALUATED",
-							});
-							ran({
-								"second-practice": "failed (off-format)",
-								"test-practice": "ok",
-								"third-practice": "ok",
-							});
-							break;
-						}
 						case "repeat": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.match(
@@ -3489,7 +3378,10 @@ for (const item of nullableCases) {
 								child.stderr,
 								/turn\.stopped phase=review turn=1 (?:practice=0 )?stopped_by=loop/u,
 							);
-							assert.match(child.stderr, /tool\.called phase=review tool=read codemode=true/u);
+							assert.match(
+								child.stderr,
+								/tool\.called phase=review (?:practice=0 )?tool=read codemode=true/u,
+							);
 							assert.equal(
 								events.filter((event) => event === "steer").length,
 								1,
@@ -3568,7 +3460,6 @@ for (const item of nullableCases) {
 								["natural-prompt:1:session-1", "natural-prompt:2:session-1"],
 							);
 							assert.equal(events.filter((event) => event.startsWith("create:session")).length, 1);
-							assert.doesNotMatch(child.stderr, /review\.finishing/u);
 							assert.deepEqual(readResults(nodePath.join(cwd, "out/review-state.json")), []);
 							assert.equal(existsSync(nodePath.join(cwd, "out/result.json")), false);
 							reached({ "test-practice": "NOT_REACHED" });

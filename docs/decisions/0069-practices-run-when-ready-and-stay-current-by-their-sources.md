@@ -865,11 +865,11 @@ The composer still decides content and placement. The tools enforce trust and pr
 Provider read-back correction tools are the next lifecycle layer.
 Acceptance must not be described as delivery.
 
-## Update — 2026-11-02: a request reuses current results, and width has a measured maximum
+## Update — 2026-11-02: a request reuses current results, and a review sets its own paceimum
 
 [ADR 0074](0074-a-reviews-width-and-count-follow-the-provider.md) amends this ADR.
 
 - A request on an unchanged item reuses a current result.
   The practice version and the declared sources must not have changed.
   Above, a request is a milestone that measures everything again.
-- [D10](#d10-practice-concurrency): the measured maximum is 27, and the call pool sets the rate. A script's process ends at `ctx.review`, so width costs about 3 MiB for each session.
+- [D10](#d10-practice-concurrency): no setting limits width. The runner sets its own pace, from its Pod's memory and from whether its sessions are being served. A script's process ends at `ctx.review`, so width costs about 3 MiB for each session.

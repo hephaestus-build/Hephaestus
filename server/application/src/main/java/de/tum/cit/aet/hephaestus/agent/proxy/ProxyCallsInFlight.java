@@ -3,10 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
+import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,8 +28,8 @@ import reactor.core.publisher.Sinks;
  * end. For a Heph turn, it also remembers the attempt's last model call that failed, which the turn records when it
  * fails.
  *
- * <p>It also caps the calls one attempt has in flight, at the most that its own runner opens plus slack. A call past the
- * cap is refused before it reaches the provider, so no attempt holds more than its share of a call pool.
+ * <p>It also caps the calls one attempt has in flight. A call past the cap is refused before it reaches the provider,
+ * so a runaway sandbox cannot fill this worker's memory with waiting calls.
  */
 @Component
 @ConditionalOnWorkerRole
@@ -59,6 +59,18 @@ public class ProxyCallsInFlight {
      * {@code docker/agents/practice-scripts/lib/core/concurrency.ts}, which {@code ReviewRunnerConstantsTest} pins.
      */
     static final int SCRIPT_CALLS = 4;
+
+    /** The runner's heap that one practice session holds, measured at about 3 MiB. */
+    private static final int SESSION_HEAP_MIB = 3;
+
+    /**
+     * The most calls one review attempt has in flight. The runner starts a session only while its heap has room for
+     * it, so it never runs more sessions than its heap holds. Each has one call open and one that an abort left
+     * closing, and the scripts' direct calls come on top. Only a sandbox that the runner no longer controls reaches
+     * this. The cap protects this worker's memory, because a call that waits for a grant keeps its body here. A call
+     * pool's fair grants share the provider.
+     */
+    public static final int REVIEW_CALLS = 2 * (PracticeRunnerProfile.HEAP_MIB / SESSION_HEAP_MIB) + SCRIPT_CALLS;
 
     /** A Heph turn has one session: one call, and one that a stop left closing. */
     static final int TURN_CALLS = 2;
@@ -117,15 +129,12 @@ public class ProxyCallsInFlight {
     private final int reviewCalls;
 
     @Autowired
-    ProxyCallsInFlight(PracticeReviewProperties properties) {
-        this(properties.practiceConcurrency());
+    ProxyCallsInFlight() {
+        this(REVIEW_CALLS);
     }
 
-    public ProxyCallsInFlight(int practiceConcurrency) {
-        // Each practice session has one call open and one that an abort left open: the proxy notices a client that went
-        // away only at its next write, so a silent stream stays counted. The extra 2 cover streams of earlier sessions;
-        // the runner ends measuring after two stalls in a row.
-        this.reviewCalls = 2 * (practiceConcurrency + 1) + SCRIPT_CALLS;
+    public ProxyCallsInFlight(int reviewCalls) {
+        this.reviewCalls = reviewCalls;
     }
 
     public Call begin(ProxyRouting.BilledAttempt billed) {
