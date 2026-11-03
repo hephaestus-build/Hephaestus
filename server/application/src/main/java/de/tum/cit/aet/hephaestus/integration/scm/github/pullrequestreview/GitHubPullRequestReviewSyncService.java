@@ -11,6 +11,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ExponentialBackoff;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -102,7 +104,7 @@ public class GitHubPullRequestReviewSyncService {
      * consider using {@link #syncRemainingReviews(Long, PullRequest, String, int)} with
      * a starting cursor.
      */
-    public int syncForPullRequest(Long scopeId, PullRequest pullRequest) {
+    public SyncResult syncForPullRequest(Long scopeId, PullRequest pullRequest) {
         return syncRemainingReviews(scopeId, pullRequest, null, 0);
     }
 
@@ -118,15 +120,15 @@ public class GitHubPullRequestReviewSyncService {
      * @param pullRequest  the pull request to sync reviews for
      * @param startCursor  the cursor to start from (null to fetch all reviews)
      * @param inlineCount  number of reviews already synced inline (for accurate overflow detection)
-     * @return number of reviews synced
+     * @return the reviews synced, and whether the read reached the end of them
      */
-    public int syncRemainingReviews(
+    public SyncResult syncRemainingReviews(
             Long scopeId, PullRequest pullRequest, @Nullable String startCursor, int inlineCount) {
         if (pullRequest == null || pullRequest.getRepository() == null) {
             log.warn(
                     "Skipped review sync: reason=prOrRepositoryNull, prId={}",
                     pullRequest != null ? pullRequest.getId() : "null");
-            return 0;
+            return SyncResult.completed(0);
         }
 
         Repository repository = pullRequest.getRepository();
@@ -135,7 +137,7 @@ public class GitHubPullRequestReviewSyncService {
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
         if (parsedName.isEmpty()) {
             log.warn("Skipped review sync: reason=invalidRepoNameFormat, repoName={}", safeNameWithOwner);
-            return 0;
+            return SyncResult.completed(0);
         }
         RepositoryOwnerAndName ownerAndName = parsedName.get();
 
@@ -148,6 +150,10 @@ public class GitHubPullRequestReviewSyncService {
         boolean hasMore = true;
         int pageCount = 0;
         int retryAttempt = 0;
+        boolean rateLimited = false;
+        // A review page that was not stored, or a review whose comments were not all read, leaves the list unread.
+        boolean pageNotStored = false;
+        boolean commentsCut = false;
 
         while (hasMore) {
             // Check for interrupt (e.g., during application shutdown)
@@ -205,7 +211,7 @@ public class GitHubPullRequestReviewSyncService {
                                 "Skipped review sync: reason=prDeletedFromGitHub, repoName={}, prNumber={}",
                                 safeNameWithOwner,
                                 pullRequest.getNumber());
-                        return totalSynced;
+                        return SyncResult.completed(totalSynced);
                     }
                     ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
                     if (classification != null) {
@@ -220,6 +226,7 @@ public class GitHubPullRequestReviewSyncService {
                             retryAttempt++;
                             continue;
                         }
+                        rateLimited = classification.category() == Category.RATE_LIMITED;
                         break;
                     }
                     log.warn(
@@ -237,6 +244,7 @@ public class GitHubPullRequestReviewSyncService {
                 if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
                     if (!graphQlSyncHelper.waitForRateLimitIfNeeded(
                             scopeId, "review sync", "prNumber", pullRequest.getNumber(), log)) {
+                        rateLimited = true;
                         break;
                     }
                 }
@@ -244,9 +252,11 @@ public class GitHubPullRequestReviewSyncService {
                 GHPullRequestReviewConnection connection =
                         response.field("repository.pullRequest.reviews").toEntity(GHPullRequestReviewConnection.class);
 
-                if (connection == null
-                        || connection.getNodes() == null
-                        || connection.getNodes().isEmpty()) {
+                if (connection == null || connection.getNodes() == null) {
+                    break;
+                }
+                if (connection.getNodes().isEmpty()) {
+                    hasMore = false;
                     break;
                 }
 
@@ -261,7 +271,8 @@ public class GitHubPullRequestReviewSyncService {
                     if (commentsConnection != null) {
                         var commentsPageInfo = commentsConnection.getPageInfo();
                         if (commentsPageInfo != null && Boolean.TRUE.equals(commentsPageInfo.getHasNextPage())) {
-                            fetchAllRemainingComments(client, graphQlReview, commentsPageInfo.getEndCursor(), scopeId);
+                            commentsCut |= !fetchAllRemainingComments(
+                                    client, graphQlReview, commentsPageInfo.getEndCursor(), scopeId);
                         }
                     }
                 }
@@ -274,6 +285,10 @@ public class GitHubPullRequestReviewSyncService {
                         repository,
                         safeNameWithOwner,
                         pullRequest.getNumber());
+                if (pageSynced < 0) {
+                    pageNotStored = true;
+                    break;
+                }
                 totalSynced += pageSynced;
 
                 GHPageInfo pageInfo = connection.getPageInfo();
@@ -282,7 +297,7 @@ public class GitHubPullRequestReviewSyncService {
                 retryAttempt = 0;
             } catch (InstallationNotFoundException e) {
                 log.warn("Installation not found for repository {}, skipping review sync", safeNameWithOwner);
-                return totalSynced;
+                return SyncResult.abortedError(totalSynced);
             } catch (FieldAccessException e) {
                 // Check if this is a NOT_FOUND error (PR deleted from GitHub)
                 if (isNotFoundError(e.getResponse(), "repository.pullRequest")) {
@@ -290,7 +305,7 @@ public class GitHubPullRequestReviewSyncService {
                             "Skipped review sync: reason=prDeletedFromGitHub, repoName={}, prNumber={}",
                             safeNameWithOwner,
                             pullRequest.getNumber());
-                    return totalSynced;
+                    return SyncResult.completed(totalSynced);
                 }
                 log.error(
                         "Failed to sync reviews: repoName={}, prNumber={}",
@@ -308,6 +323,7 @@ public class GitHubPullRequestReviewSyncService {
                         "prNumber",
                         pullRequest.getNumber(),
                         log))) {
+                    rateLimited = classification.category() == Category.RATE_LIMITED;
                     break;
                 }
                 retryAttempt++;
@@ -330,10 +346,10 @@ public class GitHubPullRequestReviewSyncService {
                 safeNameWithOwner,
                 pullRequest.getNumber(),
                 totalSynced);
-        return totalSynced;
+        return SyncResult.ofListRead(hasMore || pageNotStored || commentsCut, rateLimited, totalSynced);
     }
 
-    /** Persists a page of reviews in a new transaction and retries transient failures. */
+    /** Persists a page of reviews in a new transaction and retries transient failures; -1 when the page was not stored. */
     private int persistReviewPageWithRetry(
             List<GHPullRequestReview> reviews,
             Long pullRequestId,
@@ -371,7 +387,7 @@ public class GitHubPullRequestReviewSyncService {
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         log.warn("Interrupted during retry backoff for review page: prNumber={}", prNumber);
-                        return 0;
+                        return -1;
                     }
                 } else {
                     log.error(
@@ -381,11 +397,11 @@ public class GitHubPullRequestReviewSyncService {
                             prNumber,
                             errorDetail,
                             e);
-                    return 0;
+                    return -1;
                 }
             }
         }
-        return 0;
+        return -1;
     }
 
     private int processReviewPage(
@@ -430,12 +446,12 @@ public class GitHubPullRequestReviewSyncService {
      * @param graphQlReview the review to fetch remaining comments for
      * @param startCursor  the cursor to start fetching from
      */
-    private void fetchAllRemainingComments(
+    private boolean fetchAllRemainingComments(
             HttpGraphQlClient client, GHPullRequestReview graphQlReview, String startCursor, Long scopeId) {
         String reviewId = graphQlReview.getId();
         GHPullRequestReviewCommentConnection existingComments = graphQlReview.getComments();
         if (existingComments == null || existingComments.getNodes() == null) {
-            return;
+            return true;
         }
 
         // Create a mutable list to collect all comments
@@ -573,5 +589,6 @@ public class GitHubPullRequestReviewSyncService {
                     fetchedPages,
                     allComments.size());
         }
+        return !hasMore;
     }
 }

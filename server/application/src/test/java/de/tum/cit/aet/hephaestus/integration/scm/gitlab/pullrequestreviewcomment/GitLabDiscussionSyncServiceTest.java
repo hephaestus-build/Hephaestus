@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
@@ -64,6 +65,9 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
     private final Deque<ClientGraphQlResponse> scriptedResponses = new ArrayDeque<>();
 
     @Mock
+    private PullRequestRepository pullRequests;
+
+    @Mock
     private HttpGraphQlClient client;
 
     @Mock
@@ -105,10 +109,12 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
                 issueCommentProcessor,
                 reviewReconciler,
                 gitLabProperties,
-                projectAdmission);
+                projectAdmission,
+                pullRequests);
         provider = new IdentityProvider();
         provider.setId(PROVIDER_ID);
         pr = new PullRequest();
+        pr.setId(343218L);
         pr.setNativeId(343218L);
         pr.setProvider(provider);
         reviewer = new User();
@@ -217,6 +223,43 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
         verify(threadProcessor).applyDiscussionRead(any(), anyInt(), any(), any(), any(), any());
     }
 
+    @Test
+    void shouldRecordTheDiscussionAsReadWholeWhenEveryPageAndNoteArrived() {
+        GitLabDiscussionSyncService pages = pageDrivenService();
+        scriptedResponses.add(discussionPage(List.of(generalDiscussion("a1", "601")), false));
+
+        pages.syncDiscussionsForMergeRequest(SCOPE_ID, repository(), 3, pr);
+
+        verify(pullRequests).recordDiscussionRead(pr.getId(), true);
+    }
+
+    @Test
+    void shouldRecordTheDiscussionAsNotReadWholeWhenAPageNeverArrives() {
+        GitLabDiscussionSyncService pages = pageDrivenService();
+        scriptedResponses.add(discussionPage(List.of(generalDiscussion("a1", "601")), true));
+
+        pages.syncDiscussionsForMergeRequest(SCOPE_ID, repository(), 3, pr);
+
+        verify(pullRequests).recordDiscussionRead(pr.getId(), false);
+    }
+
+    @Test
+    void shouldRecordTheDiscussionAsNotReadWholeWhenADiscussionHasMoreNotesThanOnePage() {
+        GitLabDiscussionSyncService pages = pageDrivenService();
+        var cut = Map.<String, Object>of(
+                "id",
+                "gid://gitlab/Discussion/a1",
+                "resolved",
+                false,
+                "notes",
+                Map.of("pageInfo", Map.of("hasNextPage", true), "nodes", List.of(note("601", null))));
+        scriptedResponses.add(discussionPage(List.of(cut), false));
+
+        pages.syncDiscussionsForMergeRequest(SCOPE_ID, repository(), 3, pr);
+
+        verify(pullRequests).recordDiscussionRead(pr.getId(), false);
+    }
+
     /** The conflict ended the read on its page: the next page stays unread, no resolution is recorded, and GitLab is not blamed. */
     private void assertConflictStoppedTheRead() {
         assertThat(scriptedResponses).hasSize(1);
@@ -247,7 +290,8 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
                         Duration.ofSeconds(60),
                         Duration.ZERO,
                         Duration.ofMinutes(5)),
-                projectAdmission);
+                projectAdmission,
+                pullRequests);
     }
 
     private Repository repository() {

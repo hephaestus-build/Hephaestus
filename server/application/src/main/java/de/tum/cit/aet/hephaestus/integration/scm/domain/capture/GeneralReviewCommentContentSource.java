@@ -107,7 +107,7 @@ public class GeneralReviewCommentContentSource {
                 Map.of(),
                 Map.of(),
                 null,
-                Map.of(),
+                truncated ? Map.of(KIND, List.of(ScmCapturedWork.DISCUSSION_NOT_READ_WHOLE)) : Map.of(),
                 List.of(),
                 List.of(),
                 ScmCitableTexts.files(files, this::sourceKindFor, objectMapper));
@@ -127,7 +127,7 @@ public class GeneralReviewCommentContentSource {
                         || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)
                         || (comment.getNativeId() != null && postedComments.contains(comment.getNativeId()));
             });
-            boolean truncated = false;
+            boolean truncated = pullRequestRepository.isDiscussionNotReadWhole(pullRequestId);
             comments.sort(
                     Comparator.comparing(IssueComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 

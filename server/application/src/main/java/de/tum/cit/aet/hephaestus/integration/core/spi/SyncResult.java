@@ -97,6 +97,20 @@ public record SyncResult(Status status, int count) {
     }
 
     /**
+     * The result of reading one list to its end. A read cut short by a rate limit is retried from the same point; any
+     * other stop is a warning, so that one item the provider will not serve does not hold back its repository's sync.
+     * What the read left out stays recorded on the item.
+     *
+     * @param stopped whether the read ended before the list did
+     * @param rateLimited whether a rate limit ended it
+     * @param count the number of items synced
+     */
+    public static SyncResult ofListRead(boolean stopped, boolean rateLimited, int count) {
+        if (!stopped) return completed(count);
+        return rateLimited ? abortedRateLimit(count) : completedWithWarnings(count);
+    }
+
+    /**
      * Checks if the sync completed successfully (fully or with warnings).
      *
      * @return true if status is COMPLETED or COMPLETED_WITH_WARNINGS

@@ -2073,7 +2073,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                             issueCommentProcessor,
                             reviewReconciler,
                             gitLabProperties,
-                            projectAdmission),
+                            projectAdmission,
+                            mock(PullRequestRepository.class)),
                     natsMessageDeserializer,
                     transactionTemplate);
         }

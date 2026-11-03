@@ -21,6 +21,9 @@ public record ScmCapturedWork(
         @Nullable String targetBranch,
         @Nullable Long reviewSourceId,
         @Nullable Long reviewerUserId) {
+    /** The limitation of a source whose discussion the last provider read did not reach the end of. */
+    public static final String DISCUSSION_NOT_READ_WHOLE = "DISCUSSION_NOT_READ_WHOLE";
+
     public ScmCapturedWork {
         if (sourceId <= 0 || repositoryId <= 0 || number <= 0 || repositoryPath.isBlank())
             throw new IllegalArgumentException("Invalid pinned SCM work");

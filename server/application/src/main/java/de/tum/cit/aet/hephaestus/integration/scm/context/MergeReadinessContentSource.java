@@ -266,6 +266,8 @@ public class MergeReadinessContentSource implements ContentSource {
      *     does
      */
     private ObjectNode describe(long workspaceId, long developerId, long providerId, PullRequest pr, boolean change) {
+        // A read that stopped short leaves lists that cannot show what is absent.
+        boolean notReadWhole = Boolean.FALSE.equals(pr.getDiscussionReadWhole());
         ObjectNode node = objectMapper.createObjectNode();
         node.put("pullRequestId", pr.getId());
         node.put("resource", resourceOf(pr.getId()));
@@ -349,7 +351,7 @@ public class MergeReadinessContentSource implements ContentSource {
                 reviewsCut |= putBody(entry, review.getBody());
             }
         }
-        node.put("latestReviewsStatus", reviewsCut ? "TRUNCATED" : "COMPLETE");
+        node.put("latestReviewsStatus", reviewsCut || notReadWhole ? "TRUNCATED" : "COMPLETE");
 
         List<IssueComment> notes = new ArrayList<>();
         boolean notesUnread = scan(
@@ -377,7 +379,7 @@ public class MergeReadinessContentSource implements ContentSource {
                     note.getCreatedAt(),
                     note.getHtmlUrl());
         }
-        node.put("generalNotesStatus", notesCut ? "TRUNCATED" : "COMPLETE");
+        node.put("generalNotesStatus", notesCut || notReadWhole ? "TRUNCATED" : "COMPLETE");
 
         // A thread's rows arrive together; one holding only Hephaestus's own comments is never kept.
         Map<PullRequestReviewThread, List<PullRequestReviewComment>> others = new LinkedHashMap<>();
@@ -440,7 +442,7 @@ public class MergeReadinessContentSource implements ContentSource {
                         comment.getHtmlUrl());
             }
         }
-        node.put("threadsStatus", threadsCut ? "TRUNCATED" : "COMPLETE");
+        node.put("threadsStatus", threadsCut || notReadWhole ? "TRUNCATED" : "COMPLETE");
 
         List<Issue> closing = queryRepository.findClosingIssuesOfAuthoredPullRequest(
                 workspaceId,

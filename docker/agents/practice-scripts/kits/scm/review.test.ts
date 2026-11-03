@@ -10,8 +10,12 @@ import {
 	readPullRequestChecks,
 } from "./review.ts";
 
-const evidence = (value: unknown): Pick<Evidence, "record"> => ({
-	record: async () => ({ status: "FOUND", text: JSON.stringify(value) }),
+/** One captured record; every other file is absent, as when a practice declares only this source. */
+const evidence = (value: unknown, name?: string): Pick<Evidence, "record"> => ({
+	record: async (asked) =>
+		name === undefined || asked === name
+			? { status: "FOUND", text: JSON.stringify(value) }
+			: { status: "ABSENT" },
 });
 
 const readers = [
@@ -97,11 +101,11 @@ void test("review decisions preserve the retained read time separately from prov
 for (const { name, read, empty, result, invalid } of readers) {
 	void test(`${name} distinguishes absent capture from measured empty data`, async () => {
 		assert.equal(await read({ record: async () => ({ status: "ABSENT" }) }), null);
-		assert.deepEqual(await read(evidence(empty)), result);
+		assert.deepEqual(await read(evidence(empty, name)), result);
 	});
 	void test(`${name} rejects wrong envelopes and malformed entries as unavailable`, async () => {
 		for (const value of [null, true, "record", ...invalid]) {
-			await assert.rejects(read(evidence(value)), (error: unknown) => {
+			await assert.rejects(read(evidence(value, name)), (error: unknown) => {
 				assert.ok(error instanceof UnratedError);
 				assert.equal(error.reason, "unavailable");
 				assert.ok(error.message.includes(name));
@@ -124,10 +128,13 @@ for (const { name, read, empty, result, invalid } of readers) {
 
 void test("comment projection preserves captured body lines and omitted provider fields", async () => {
 	const record = {
-		record: async () => ({
-			status: "FOUND" as const,
-			text: '[\n  {\n    "path": "src/a.ts",\n    "body": "Please fix this"\n  }\n]',
-		}),
+		record: async (name: string) =>
+			name === "comments.json"
+				? {
+						status: "FOUND" as const,
+						text: '[\n  {\n    "path": "src/a.ts",\n    "body": "Please fix this"\n  }\n]',
+					}
+				: { status: "ABSENT" as const },
 	};
 	assert.deepEqual(await readReviewComments(record), [
 		{
@@ -166,4 +173,25 @@ void test("the discussion reader preserves the provider aggregate independently 
 		evidence({ threads: [], reviewDecisions: [], review_decision: "APPROVED" }),
 	);
 	assert.deepEqual(read, { threads: [], decisions: [], reviewDecision: "APPROVED" });
+});
+
+void test("a record that the provider read did not finish cannot be read as absence", async () => {
+	const unfinished = evidence({ threads: [], reviewDecisions: [], truncated: true });
+	await assert.rejects(readReviewThreads(unfinished), (error) => error instanceof UnratedError);
+	await assert.rejects(
+		readGeneralComments(evidence({ comments: [], truncated: true })),
+		(error) => error instanceof UnratedError,
+	);
+	await assert.rejects(
+		readReviewComments({
+			record: async (name) => ({
+				status: "FOUND",
+				text: name === "comments.json" ? "[]" : '{"truncated":true}',
+			}),
+		}),
+		(error) => error instanceof UnratedError,
+	);
+	await assert.doesNotReject(
+		readReviewThreads(evidence({ threads: [], reviewDecisions: [], truncated: false })),
+	);
 });

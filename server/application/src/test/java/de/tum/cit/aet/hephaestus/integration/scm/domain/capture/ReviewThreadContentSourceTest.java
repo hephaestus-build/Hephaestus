@@ -178,6 +178,28 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReportAPartialCaptureWhenTheDiscussionWasNotReadWhole() {
+        when(pullRequestRepository.isDiscussionNotReadWhole(PR_ID)).thenReturn(true);
+
+        var contribution = provider.capture(request(metadataWithPr()), Set.of(ReviewThreadContentSource.KIND));
+
+        assertThat(contribution.completeness())
+                .containsEntry(ReviewThreadContentSource.KIND, SourceCompleteness.PARTIAL);
+        assertThat(contribution.captureLimitations().get(ReviewThreadContentSource.KIND))
+                .containsExactly(ScmCapturedWork.DISCUSSION_NOT_READ_WHOLE);
+    }
+
+    @Test
+    void shouldReportAWholeCaptureWhenNoReadOfTheProviderIsRecorded() {
+        when(pullRequestRepository.isDiscussionNotReadWhole(PR_ID)).thenReturn(false);
+
+        var contribution = provider.capture(request(metadataWithPr()), Set.of(ReviewThreadContentSource.KIND));
+
+        assertThat(contribution.completeness())
+                .containsEntry(ReviewThreadContentSource.KIND, SourceCompleteness.COMPLETE);
+    }
+
+    @Test
     void shouldNameTheReviewerAndTheirDecisionForEachBundledReviewerPractice() {
         String words = "Please cover the empty list before merging.";
         var target =

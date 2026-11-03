@@ -125,6 +125,7 @@ public class GitLabMergeRequestSyncService {
                 safeProjectPath,
                 updatedAfter);
 
+        Instant runStart = Instant.now();
         int totalSynced = 0;
         int totalSkipped = 0;
         String cursor = null;
@@ -132,12 +133,15 @@ public class GitLabMergeRequestSyncService {
         int page = 0;
         boolean rateLimitAborted = false;
         boolean errorAborted = false;
+        // A list longer than a run reads is a warning: holding the timestamp would read the same pages again.
+        boolean capped = false;
         int reportedTotalCount = -1;
 
         try {
             do {
                 if (page >= GitLabSyncConstants.MAX_PAGINATION_PAGES) {
                     log.warn("Reached max pagination pages: scopeId={}, projectPath={}", scopeId, safeProjectPath);
+                    capped = true;
                     break;
                 }
 
@@ -293,6 +297,8 @@ public class GitLabMergeRequestSyncService {
             result = SyncResult.abortedError(totalSynced);
         } else if (rateLimitAborted) {
             result = SyncResult.abortedRateLimit(totalSynced);
+        } else if (capped || discussionSyncService.hasUnfinishedReadSince(repository, runStart)) {
+            result = SyncResult.completedWithWarnings(totalSynced);
         } else {
             result = SyncResult.completed(totalSynced);
         }

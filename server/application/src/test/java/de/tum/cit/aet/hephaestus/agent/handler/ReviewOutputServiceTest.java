@@ -210,6 +210,10 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     /** #50's capture: its diff, and its checkout at the head commit, captured as {@code completeness} says. */
     private void pr50Capture(SourceCompleteness completeness) {
+        pr50Capture(completeness, List.of());
+    }
+
+    private void pr50Capture(SourceCompleteness completeness, List<String> diffLimitations) {
         var whole = new SourceCaptureFacts(Instant.EPOCH, null, null, null);
         var tree = new SourceCaptureFacts(Instant.EPOCH, null, null, PR50_HEAD + ":" + "b".repeat(40));
         var manifest = new JobFolderIndex(
@@ -221,7 +225,12 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         new SourceCapture(
                                 DIFF,
                                 new SourceCaptureState.Available(
-                                        SourceContentState.EMPTY, SourceCompleteness.COMPLETE, whole),
+                                        SourceContentState.EMPTY,
+                                        diffLimitations.isEmpty()
+                                                ? SourceCompleteness.COMPLETE
+                                                : SourceCompleteness.PARTIAL,
+                                        whole,
+                                        diffLimitations),
                                 EvidenceSnapshotFixtures.citation(DIFF),
                                 List.of()),
                         new SourceCapture(
@@ -488,6 +497,19 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
 
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldWithholdAResultThatNamesAsConsultedASourceWhoseCaptureNamesAGap() {
+        pr50Capture(SourceCompleteness.COMPLETE, List.of("SOMETHING_LEFT_OUT"));
+
+        prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.SOURCE_UNAVAILABLE,
+                "The result names " + DIFF.value() + " as consulted, but its capture left part of it out, "
+                        + "so it cannot show that something is absent");
     }
 
     @Test

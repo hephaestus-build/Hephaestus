@@ -33,6 +33,29 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
 
     boolean existsByIdAndDeletedAtIsNull(Long id);
 
+    /** Records whether a read from the provider reached the end of this work's threads, reviews and comments. */
+    @Modifying
+    @Transactional
+    @Query(value = "UPDATE issue SET discussion_read_whole = :whole WHERE id = :id", nativeQuery = true)
+    void recordDiscussionRead(@Param("id") long id, @Param("whole") boolean whole);
+
+    /** Whether the last provider read of this work item stopped before the end of its discussion. */
+    @Query("SELECT COUNT(p) > 0 FROM PullRequest p WHERE p.id = :id AND p.discussionReadWhole = FALSE")
+    boolean isDiscussionNotReadWhole(@Param("id") long id);
+
+    /** Whether this repository holds a work item whose discussion a read did not reach the end of. */
+    @Query(
+            "SELECT COUNT(p) > 0 FROM PullRequest p WHERE p.repository.id = :repositoryId AND p.discussionReadWhole = FALSE")
+    boolean existsUnfinishedDiscussionRead(@Param("repositoryId") long repositoryId);
+
+    /** The same, among the work items that a sync wrote since {@code since}. */
+    @Query("""
+            SELECT COUNT(p) > 0 FROM PullRequest p
+            WHERE p.repository.id = :repositoryId AND p.discussionReadWhole = FALSE AND p.lastSyncAt >= :since
+            """)
+    boolean existsUnfinishedDiscussionReadSince(
+            @Param("repositoryId") long repositoryId, @Param("since") Instant since);
+
     /** The numbers of the repository's open pull requests, newest first. */
     @Query("""
         SELECT p.number

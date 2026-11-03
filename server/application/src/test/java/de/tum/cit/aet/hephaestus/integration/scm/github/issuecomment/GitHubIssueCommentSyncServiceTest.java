@@ -180,7 +180,8 @@ class GitHubIssueCommentSyncServiceTest extends BaseUnitTest {
                     "repository.pullRequest.comments",
                     List.of(createGHComment(1001L, "tail comment")));
 
-            int synced = service.syncRemainingComments(SCOPE_ID, pr, "cursor-page-1");
+            int synced =
+                    service.syncRemainingComments(SCOPE_ID, pr, "cursor-page-1").count();
 
             // PR root, resuming from the embedded page's cursor.
             assertThat(synced).isEqualTo(1);
@@ -205,7 +206,8 @@ class GitHubIssueCommentSyncServiceTest extends BaseUnitTest {
                     "repository.issue.comments",
                     List.of(createGHComment(2001L, "issue tail comment")));
 
-            int synced = service.syncRemainingComments(SCOPE_ID, issue, "cursor-page-1");
+            int synced = service.syncRemainingComments(SCOPE_ID, issue, "cursor-page-1")
+                    .count();
 
             assertThat(synced).isEqualTo(1);
             verify(graphQlClient).documentName("GetIssueComments");

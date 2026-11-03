@@ -121,9 +121,13 @@ const reviewCommentsSchema = z.array(
 	}),
 );
 const generalCommentsSchema = z
-	.object({ comments: z.array(commentSchema) })
-	.transform((record) => record.comments);
+	.object({ comments: z.array(commentSchema), truncated: z.boolean().optional() })
+	.transform((record) => {
+		wholeRecord(record, "general_comments.json");
+		return record.comments;
+	});
 const reviewThreadsSchema = z.object({
+	truncated: z.boolean().optional(),
 	review_decision: z.string().optional(),
 	threads: z.array(
 		z.object({
@@ -149,6 +153,13 @@ const reviewThreadsSchema = z.object({
 		}),
 	),
 });
+
+/** A record the provider read did not finish cannot show that something is absent, so no script reads it as if it could. */
+function wholeRecord(record: { truncated?: boolean }, name: string): void {
+	if (record.truncated === true) {
+		throw captureFailure("unavailable", `${name} does not hold the whole record`);
+	}
+}
 
 async function readReviewRecord<T>(
 	evidence: Pick<Evidence, "record">,
@@ -240,6 +251,15 @@ export async function readReviewComments(
 	if (record === null) {
 		return null;
 	}
+	// comments.json is a bare list. The thread record of the same read says whether that read finished.
+	const threads = await readReviewRecord(
+		evidence,
+		"review_threads.json",
+		z.object({ truncated: z.boolean().optional() }),
+	);
+	if (threads !== null) {
+		wholeRecord(threads.data, "comments.json");
+	}
 	return record.comments.map((comment, index) => ({
 		id: comment.id,
 		thread: comment.thread,
@@ -280,6 +300,9 @@ export async function readReviewThreads(evidence: Pick<Evidence, "record">): Pro
 	reviewDecision?: string;
 } | null> {
 	const record = await readReviewRecord(evidence, "review_threads.json", reviewThreadsSchema);
+	if (record !== null) {
+		wholeRecord(record.data, "review_threads.json");
+	}
 	return record === null
 		? null
 		: {

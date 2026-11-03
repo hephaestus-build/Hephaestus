@@ -123,6 +123,11 @@ Stored tombstones and erased work remain in the comparison count.
 Provider failures leave the checkpoint unchanged.
 Automatic provider probes have a one-hour cooldown per repository and server process.
 
+For GitHub, a manual repair also restarts a completed scan when the repository holds a pull request not read whole.
+The gap in rows does not matter then.
+This covers a pull request that a sync or an earlier version stopped reading at its first page of threads, reviews or comments.
+The practices that need the whole discussion withhold their results on such a pull request until a read finishes it.
+
 ## Run the repair
 
 1. Sign in as a workspace administrator.
@@ -146,7 +151,8 @@ The connection must belong to the workspace.
 An active job is reused instead of starting a duplicate.
 
 For GitHub, the action repairs the stored ledger even for completed repositories.
-For GitHub and GitLab, repair restarts completed history only when at least 20 rows are missing.
+For GitHub and GitLab, repair restarts completed history when at least 20 rows are missing.
+A GitHub pull request that is not read whole also restarts it, as described above.
 Stored coverage must also be less than 80 percent of the provider total.
 
 The server records the provider count of each repair restart in the repository monitor.

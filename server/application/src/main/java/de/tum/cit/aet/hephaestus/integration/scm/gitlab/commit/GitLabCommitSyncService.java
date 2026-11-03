@@ -131,7 +131,10 @@ public class GitLabCommitSyncService {
                 List<Map<String, Object>> commits =
                         fetchCommitPage(scopeId, serverUrl, token, nativeId, branch, since, page);
 
-                if (commits == null || commits.isEmpty()) break;
+                if (commits == null || commits.isEmpty()) {
+                    hasMore = false;
+                    break;
+                }
 
                 for (Map<String, Object> commitData : commits) {
                     if (!admission.runWrite(read, () -> processCommit(commitData, repository, providerId, scopeId))) {
@@ -161,7 +164,9 @@ public class GitLabCommitSyncService {
         }
 
         if (!admission.current(read)) return SyncResult.completed(0);
-        return errorAborted ? SyncResult.abortedError(totalSynced) : SyncResult.completed(totalSynced);
+        if (errorAborted) return SyncResult.abortedError(totalSynced);
+        // A later run starts from the same page, so stopping here for a retry would never reach the rest.
+        return hasMore ? SyncResult.completedWithWarnings(totalSynced) : SyncResult.completed(totalSynced);
     }
 
     @Nullable

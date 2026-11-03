@@ -11,6 +11,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
@@ -252,8 +254,8 @@ public class GitHubPullRequestReviewCommentSyncService {
 
                 threadsReceived += response.getNodes().size();
                 for (var graphQlThread : response.getNodes()) {
-                    int synced = processThreadInternal(graphQlThread, pullRequest, client, scopeId);
-                    totalSynced += synced;
+                    totalSynced += processThreadInternal(graphQlThread, pullRequest, client, scopeId)
+                            .comments();
                 }
 
                 var pageInfo = response.getPageInfo();
@@ -321,11 +323,11 @@ public class GitHubPullRequestReviewCommentSyncService {
      * @param threadDto   the review thread DTO
      * @param pullRequest the pull request the thread belongs to
      * @param scopeId     the scope ID for authentication (used for nested comment pagination)
-     * @return number of comments synced from this thread
+     * @return the comments synced from this thread, and whether the read reached the end of them
      */
-    public int processThread(GitHubReviewThreadDTO threadDto, PullRequest pullRequest, Long scopeId) {
+    public ThreadSync processThread(GitHubReviewThreadDTO threadDto, PullRequest pullRequest, Long scopeId) {
         if (threadDto == null) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
         return processThreadFromDto(threadDto, pullRequest, client, scopeId);
@@ -339,28 +341,29 @@ public class GitHubPullRequestReviewCommentSyncService {
      * @param client      the GraphQL client to use for nested pagination
      * @return number of comments synced from this thread
      */
-    private int processThreadFromDto(
+    private ThreadSync processThreadFromDto(
             GitHubReviewThreadDTO threadDto, PullRequest pullRequest, HttpGraphQlClient client, Long scopeId) {
         if (threadDto == null) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
 
         GHPullRequestReviewCommentConnection commentsConnection = threadDto.commentsConnection();
         if (commentsConnection == null || commentsConnection.getNodes() == null) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
 
+        SyncResult.Status read = SyncResult.Status.COMPLETED;
         // Handle nested pagination for thread comments
         var commentsPageInfo = commentsConnection.getPageInfo();
         if (commentsPageInfo != null && Boolean.TRUE.equals(commentsPageInfo.getHasNextPage())) {
             // Fetch all remaining comments using pagination
-            fetchAllRemainingThreadComments(
+            read = fetchAllRemainingThreadComments(
                     threadDto.nodeId(), commentsConnection, commentsPageInfo.getEndCursor(), client, scopeId);
         }
 
         var graphQlComments = commentsConnection.getNodes();
         if (graphQlComments.isEmpty()) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
 
         // Get the first comment to determine the thread ID (use its databaseId as thread ID)
@@ -368,7 +371,7 @@ public class GitHubPullRequestReviewCommentSyncService {
         Long threadId = extractDatabaseId(firstComment);
         if (threadId == null) {
             log.warn("Skipped thread: reason=missingDatabaseIdOnFirstComment, threadId={}", threadDto.nodeId());
-            return 0;
+            return new ThreadSync(0, SyncResult.Status.COMPLETED_WITH_WARNINGS);
         }
 
         // Create or update the thread, passing the first comment to set timestamps
@@ -400,7 +403,7 @@ public class GitHubPullRequestReviewCommentSyncService {
             threadRepository.save(thread);
         }
 
-        return synced;
+        return new ThreadSync(synced, read);
     }
 
     /**
@@ -411,15 +414,16 @@ public class GitHubPullRequestReviewCommentSyncService {
      * @param commentsConnection the existing comments connection to update
      * @param startCursor        the cursor to start fetching from
      * @param client             the GraphQL client to use for fetching
+     * @return how the read of the thread's comments ended
      */
-    private void fetchAllRemainingThreadComments(
+    private SyncResult.Status fetchAllRemainingThreadComments(
             String threadNodeId,
             GHPullRequestReviewCommentConnection commentsConnection,
             String startCursor,
             HttpGraphQlClient client,
             Long scopeId) {
         if (commentsConnection == null || commentsConnection.getNodes() == null) {
-            return;
+            return SyncResult.Status.COMPLETED;
         }
 
         // Create a mutable list to collect all comments
@@ -427,6 +431,7 @@ public class GitHubPullRequestReviewCommentSyncService {
 
         String cursor = startCursor;
         boolean hasMore = true;
+        boolean rateLimited = false;
         int fetchedPages = 0;
         int retryAttempt = 0;
         int reportedTotalCount = -1;
@@ -505,6 +510,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                 if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
                     if (!graphQlSyncHelper.waitForRateLimitIfNeeded(
                             scopeId, "thread comments fetch", "threadId", threadNodeId, log)) {
+                        rateLimited = true;
                         break;
                     }
                 }
@@ -559,6 +565,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                     fetchedPages,
                     allComments.size());
         }
+        return SyncResult.ofListRead(hasMore, rateLimited, 0).status();
     }
 
     /**
@@ -655,28 +662,29 @@ public class GitHubPullRequestReviewCommentSyncService {
      * @param client        the GraphQL client to use for nested pagination
      * @return number of comments synced from this thread
      */
-    private int processThreadInternal(
+    private ThreadSync processThreadInternal(
             GHPullRequestReviewThread graphQlThread, PullRequest pullRequest, HttpGraphQlClient client, Long scopeId) {
         if (graphQlThread == null) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
 
         GHPullRequestReviewCommentConnection commentsConnection = graphQlThread.getComments();
         if (commentsConnection == null || commentsConnection.getNodes() == null) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
 
+        SyncResult.Status read = SyncResult.Status.COMPLETED;
         // Handle nested pagination for thread comments
         var commentsPageInfo = commentsConnection.getPageInfo();
         if (commentsPageInfo != null && Boolean.TRUE.equals(commentsPageInfo.getHasNextPage())) {
             // Fetch all remaining comments using pagination
-            fetchAllRemainingThreadComments(
+            read = fetchAllRemainingThreadComments(
                     graphQlThread.getId(), commentsConnection, commentsPageInfo.getEndCursor(), client, scopeId);
         }
 
         var graphQlComments = commentsConnection.getNodes();
         if (graphQlComments.isEmpty()) {
-            return 0;
+            return ThreadSync.NOTHING;
         }
 
         // Get the first comment to determine the thread ID (use its databaseId as thread ID)
@@ -684,7 +692,7 @@ public class GitHubPullRequestReviewCommentSyncService {
         Long threadId = extractDatabaseId(firstComment);
         if (threadId == null) {
             log.warn("Skipped thread: reason=missingDatabaseIdOnFirstComment, threadId={}", graphQlThread.getId());
-            return 0;
+            return new ThreadSync(0, SyncResult.Status.COMPLETED_WITH_WARNINGS);
         }
 
         // Create or update the thread, passing the first comment to set timestamps
@@ -717,7 +725,7 @@ public class GitHubPullRequestReviewCommentSyncService {
             threadRepository.save(thread);
         }
 
-        return synced;
+        return new ThreadSync(synced, read);
     }
 
     /**
@@ -929,6 +937,15 @@ public class GitHubPullRequestReviewCommentSyncService {
         };
     }
 
+    /** What one thread's read did: the comments it synced, and how its read of them ended. */
+    public record ThreadSync(int comments, SyncResult.Status read) {
+        static final ThreadSync NOTHING = new ThreadSync(0, SyncResult.Status.COMPLETED);
+
+        public boolean whole() {
+            return read == SyncResult.Status.COMPLETED;
+        }
+    }
+
     /**
      * Synchronizes remaining review threads for a pull request, starting from the given cursor.
      * <p>
@@ -942,23 +959,23 @@ public class GitHubPullRequestReviewCommentSyncService {
      * @return number of additional comments synced
      */
     @Transactional
-    public int syncRemainingThreads(Long scopeId, PullRequest pullRequest, String startCursor) {
+    public SyncResult syncRemainingThreads(Long scopeId, PullRequest pullRequest, String startCursor) {
         if (pullRequest == null) {
             log.warn("Skipped remaining thread sync: reason=prIsNull");
-            return 0;
+            return SyncResult.completed(0);
         }
 
         Repository repository = pullRequest.requireRepository();
         if (repository == null) {
             log.warn("Skipped remaining thread sync: reason=prHasNoRepository, prId={}", pullRequest.getId());
-            return 0;
+            return SyncResult.completed(0);
         }
 
         String safeNameWithOwner = sanitizeForLog(repository.getNameWithOwner());
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(repository.getNameWithOwner());
         if (parsedName.isEmpty()) {
             log.warn("Skipped remaining thread sync: reason=invalidRepoNameFormat, repoName={}", safeNameWithOwner);
-            return 0;
+            return SyncResult.completed(0);
         }
         String owner = parsedName.get().owner();
         String name = parsedName.get().name();
@@ -971,10 +988,12 @@ public class GitHubPullRequestReviewCommentSyncService {
                 pullRequest.getNumber(),
                 startCursor != null ? startCursor.substring(0, Math.min(20, startCursor.length())) + "..." : "null");
 
+        int totalSynced = 0;
         try {
-            int totalSynced = 0;
             String cursor = startCursor;
             boolean hasNextPage = true;
+            boolean rateLimited = false;
+            SyncResult.Status threads = SyncResult.Status.COMPLETED;
             int pageCount = 0;
 
             while (hasNextPage) {
@@ -1044,6 +1063,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                             "Aborting remaining thread sync due to critical rate limit: repoName={}, prNumber={}",
                             safeNameWithOwner,
                             pullRequest.getNumber());
+                    rateLimited = true;
                     break;
                 }
 
@@ -1060,8 +1080,9 @@ public class GitHubPullRequestReviewCommentSyncService {
                 }
 
                 for (var graphQlThread : response.getNodes()) {
-                    int synced = processThreadInternal(graphQlThread, pullRequest, client, scopeId);
-                    totalSynced += synced;
+                    ThreadSync thread = processThreadInternal(graphQlThread, pullRequest, client, scopeId);
+                    totalSynced += thread.comments();
+                    if (thread.read().isWorseThan(threads)) threads = thread.read();
                 }
 
                 var pageInfo = response.getPageInfo();
@@ -1078,7 +1099,8 @@ public class GitHubPullRequestReviewCommentSyncService {
                     safeNameWithOwner,
                     pullRequest.getNumber(),
                     totalSynced);
-            return totalSynced;
+            return SyncResult.merge(
+                    SyncResult.ofListRead(hasNextPage, rateLimited, totalSynced), new SyncResult(threads, 0));
         } catch (InstallationNotFoundException e) {
             throw e;
         } catch (FieldAccessException e) {
@@ -1087,14 +1109,14 @@ public class GitHubPullRequestReviewCommentSyncService {
                         "Skipped remaining thread sync: reason=prDeletedFromGitHub, repoName={}, prNumber={}",
                         safeNameWithOwner,
                         pullRequest.getNumber());
-                return 0;
+                return SyncResult.completed(totalSynced);
             }
             log.error(
                     "Failed to sync remaining threads: repoName={}, prNumber={}",
                     safeNameWithOwner,
                     pullRequest.getNumber(),
                     e);
-            return 0;
+            return SyncResult.completedWithWarnings(totalSynced);
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
             switch (classification.category()) {
@@ -1132,7 +1154,7 @@ public class GitHubPullRequestReviewCommentSyncService {
                             classification.message(),
                             e);
             }
-            return 0;
+            return SyncResult.ofListRead(true, classification.category() == Category.RATE_LIMITED, totalSynced);
         }
     }
 }
