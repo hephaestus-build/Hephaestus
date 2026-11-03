@@ -26,7 +26,7 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
      * pull request contradicts. Tombstoned rows are included, since their recorded facts outlive them.
      */
     String INVALID_ISSUE_ROWS = """
-                SELECT i.id target_id, i.author_id actor_id, i.created_at occurred_at,
+                SELECT i.id parent_id, i.id target_id, i.author_id actor_id, i.created_at occurred_at,
                        'ISSUE_CREATED' event_type, 'issue.created' key_type, 'issue' target_type
                 FROM issue i
                 WHERE i.repository_id=:repositoryId
@@ -34,7 +34,7 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
                 """ + PULL_REQUEST_SIBLING + "))";
 
     String ISSUE_ROWS = """
-                SELECT i.id target_id, i.author_id actor_id, v.occurred_at,
+                SELECT i.id parent_id, i.id target_id, i.author_id actor_id, v.occurred_at,
                        v.event_type, v.key_type, v.target_type
                 FROM issue i CROSS JOIN LATERAL (VALUES
                     (i.created_at,
@@ -54,7 +54,7 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
                   AND (i.issue_type='PULL_REQUEST' OR NOT
                 """ + PULL_REQUEST_SIBLING + ")";
     String REVIEW_ROWS = """
-                SELECT r.id target_id, r.author_id actor_id, r.submitted_at occurred_at,
+                SELECT i.id parent_id, r.id target_id, r.author_id actor_id, r.submitted_at occurred_at,
                        CASE WHEN r.state='DISMISSED' THEN 'REVIEW_COMMENTED' ELSE 'REVIEW_' || r.state END event_type,
                        CASE WHEN r.state='DISMISSED' THEN 'review.commented' ELSE 'review.' || lower(r.state) END key_type,
                        'review' target_type
@@ -64,19 +64,19 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
                   AND NOT (
                 """ + ActivityEventRepository.REPLY_ONLY_REVIEW + ")";
     String REPLY_REVIEW_ROWS = """
-                SELECT r.id target_id, r.author_id actor_id, r.submitted_at occurred_at,
+                SELECT i.id parent_id, r.id target_id, r.author_id actor_id, r.submitted_at occurred_at,
                        'REVIEW_COMMENTED' event_type, 'review.commented' key_type, 'review' target_type
                 FROM pull_request_review r JOIN issue i ON i.id=r.pull_request_id
                 WHERE i.repository_id=:repositoryId AND (
                 """ + ActivityEventRepository.REPLY_ONLY_REVIEW + ")";
     String COMMENT_ROWS = """
-                SELECT c.id target_id, c.author_id actor_id, c.created_at occurred_at,
+                SELECT i.id parent_id, c.id target_id, c.author_id actor_id, c.created_at occurred_at,
                        'COMMENT_CREATED' event_type, 'comment.created' key_type, 'issue_comment' target_type
                 FROM issue_comment c JOIN issue i ON i.id=c.issue_id
                 WHERE i.repository_id=:repositoryId AND i.deleted_at IS NULL
                 """;
     String REVIEW_COMMENT_ROWS = """
-                SELECT c.id target_id, c.author_id actor_id, c.created_at occurred_at,
+                SELECT i.id parent_id, c.id target_id, c.author_id actor_id, c.created_at occurred_at,
                        'REVIEW_COMMENT_CREATED' event_type, 'review_comment.created' key_type,
                        'review_comment' target_type
                 FROM pull_request_review_comment c JOIN issue i ON i.id=c.pull_request_id
@@ -91,7 +91,7 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
             + COMMENT_ROWS + ") s" + " UNION ALL " + "SELECT 'REVIEW_COMMENT' source_type, s.* FROM ("
             + REVIEW_COMMENT_ROWS + ") s";
     String CANDIDATES = "WITH candidate AS (SELECT * FROM (" + SOURCES + """
-            ) source WHERE source_type=:source AND target_id > :after AND target_id <= :last)
+            ) source WHERE source_type=:source AND parent_id > :after AND parent_id <= :last)
             """;
 
     @Query(value = """
@@ -105,19 +105,20 @@ public interface ActivityLedgerRepository extends Repository<ActivityEvent, UUID
             @Param("providerId") long providerId);
 
     @WorkspaceAgnostic("Provider source rows are shared; repository identity bounds this read")
-    @Query(
-            value = "SELECT coalesce(max(target_id),0) FROM (" + SOURCES + ") source WHERE source_type=:source",
-            nativeQuery = true)
-    long findCeiling(@Param("repositoryId") long repositoryId, @Param("source") String source);
+    @Query(value = "SELECT coalesce(max(id),0) FROM issue WHERE repository_id=:repositoryId", nativeQuery = true)
+    long findCeiling(@Param("repositoryId") long repositoryId);
 
+    /**
+     * The repository's next issues and pull requests by id. Every source row hangs off one of them, so a
+     * chunk reads only its own rows: a chunk by source row id reads the whole id range of every repository.
+     */
     @WorkspaceAgnostic("Provider source rows are shared; repository identity bounds this read")
-    @Query(value = "SELECT DISTINCT target_id FROM (" + SOURCES + """
-            ) candidate WHERE source_type=:source AND target_id > :after AND target_id <= :ceiling
-            ORDER BY target_id LIMIT :limit
+    @Query(value = """
+            SELECT id FROM issue WHERE repository_id=:repositoryId AND id > :after AND id <= :ceiling
+            ORDER BY id LIMIT :limit
             """, nativeQuery = true)
-    List<Long> findChunkIds(
+    List<Long> findChunkParents(
             @Param("repositoryId") long repositoryId,
-            @Param("source") String source,
             @Param("after") long after,
             @Param("ceiling") long ceiling,
             @Param("limit") int limit);

@@ -497,6 +497,42 @@ class ActivityLedgerReconcilerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRestoreWorkUnderEveryChunkOfPullRequestsAndNoneOfAnotherRepository() {
+        int count = ActivityLedgerReconciler.CHUNK_SIZE + 2;
+        long first = issue("PULL_REQUEST", 1, authorId);
+        for (int number = 2; number < count; number++) issue("PULL_REQUEST", number, authorId);
+        long last = issue("PULL_REQUEST", count, authorId);
+        long firstReview = review(first, "APPROVED");
+        long lastReview = review(last, "COMMENTED");
+        long lastComment = Objects.requireNonNull(
+                jdbc.queryForObject("""
+                INSERT INTO issue_comment(native_id,provider_id,issue_id,author_id,created_at,body,html_url)
+                VALUES (1,?,?,?,?,'Discussion','https://example.com/comment') RETURNING id
+                """, Long.class, providerId, last, authorId, Timestamp.from(at)));
+        long otherRepository = Objects.requireNonNull(
+                jdbc.queryForObject("""
+            INSERT INTO repository(native_id,provider_id,name,name_with_owner,is_private,is_archived,is_disabled,html_url,pushed_at,visibility)
+            VALUES (2,?,'other',?,false,false,false,'https://example.com/other',now(),'PUBLIC') RETURNING id
+            """, Long.class, providerId, "repair/other-" + UUID.randomUUID()));
+        long elsewhere = Objects.requireNonNull(jdbc.queryForObject(
+                "UPDATE issue SET repository_id=? WHERE repository_id=? AND number=? RETURNING id",
+                Long.class,
+                otherRepository,
+                repositoryId,
+                count / 2));
+        long otherReview = review(elsewhere, "APPROVED");
+
+        reconciler.reconcileRepository(workspaceId, repositoryId);
+
+        assertThat(jdbc.queryForList(
+                        "SELECT target_id FROM activity_event WHERE workspace_id=? AND target_type IN ('review','issue_comment')",
+                        Long.class,
+                        workspaceId))
+                .containsExactlyInAnyOrder(firstReview, lastReview, lastComment)
+                .doesNotContain(otherReview);
+    }
+
+    @Test
     void shouldCountDismissedWorkOnceWithoutInventingItsFormerVerdict() {
         long pr = issue("PULL_REQUEST", 1, authorId);
         long review = review(pr, "DISMISSED");
