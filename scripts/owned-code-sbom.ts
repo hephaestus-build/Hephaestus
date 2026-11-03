@@ -4,8 +4,6 @@ import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import npa from "npm-package-arg";
-
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString } from "./lib/json.ts";
@@ -24,6 +22,11 @@ export function isShippedFile(file: string): boolean {
 	);
 }
 
+// The release jobs run this file with no dependency installed, so it imports no package.
+const NPM_PACKAGE_NAME = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$/u;
+const EXACT_SEMVER =
+	/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*)?(?:\+[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?$/u;
+
 function upstreamPackage(purl: string) {
 	const match =
 		/^pkg:(?<type>[a-z][a-z0-9.+-]*)\/(?<encodedName>[^@\s?#]+)@(?<encodedVersion>[^@/\s?#]+)(?:\?[^#\s]+)?(?:#[^\s]+)?$/u.exec(
@@ -37,15 +40,13 @@ function upstreamPackage(purl: string) {
 	const encodedVersion = asString(match.groups?.encodedVersion, "purl version");
 	const name = decodeURIComponent(encodedName);
 	const version = decodeURIComponent(encodedVersion);
-	if (type === "npm") {
-		const parsed = npa.resolve(name, version);
-		if (
-			parsed.type !== "version" ||
-			parsed.fetchSpec !== version ||
-			`pkg:npm/${encodeURIComponent(name).replaceAll("%2F", "/")}@${version}` !== purl
-		) {
-			throw new Error("Package must be a canonical versioned npm purl (encode a scope's @ as %40)");
-		}
+	if (
+		type === "npm" &&
+		(!NPM_PACKAGE_NAME.test(name) ||
+			!EXACT_SEMVER.test(version) ||
+			`pkg:npm/${encodeURIComponent(name).replaceAll("%2F", "/")}@${version}` !== purl)
+	) {
+		throw new Error("Package must be a canonical versioned npm purl (encode a scope's @ as %40)");
 	}
 	return { type: "library", name, version, purl };
 }

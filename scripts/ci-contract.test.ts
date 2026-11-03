@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { chmod, glob, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { isBuiltin } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
@@ -4512,6 +4513,84 @@ void test("installs dependencies in every job that calls vp", async () => {
 		}
 	}
 	assert.deepEqual(offenders, [], "A job that calls vp must install dependencies first");
+});
+
+/**
+ * The packages that a script needs before its first line runs, through its relative imports. A
+ * `type` import is erased, and a dynamic import loads only on the path that reaches it.
+ */
+function packagesLoadedBy(file: string, seen = new Set<string>()): Map<string, string> {
+	const packages = new Map<string, string>();
+	if (seen.has(file)) {
+		return packages;
+	}
+	seen.add(file);
+	const source = readFileSync(file, "utf8").replaceAll(/\/\*[\s\S]*?\*\//gu, "");
+	for (const match of source.matchAll(
+		/^[\t ]*(?:import|export)\s+(?<type>type\s+)?(?:[^"';]*?\sfrom\s+)?["'](?<specifier>[^"']+)["']/gmu,
+	)) {
+		const specifier = match.groups?.specifier ?? "";
+		if (match.groups?.type !== undefined || isBuiltin(specifier)) {
+			continue;
+		}
+		if (specifier.startsWith(".")) {
+			const imported = packagesLoadedBy(path.join(path.dirname(file), specifier), seen);
+			for (const [name, importer] of imported) {
+				packages.set(name, importer);
+			}
+		} else {
+			packages.set(specifier, file);
+		}
+	}
+	return packages;
+}
+
+// The release jobs hold release credentials, so they run `node scripts/…` with nothing installed. A
+// package import anywhere below such a script stops the job when it loads, on a path that pull
+// request CI may never run.
+void test("a job without an install runs only scripts that load no package", async () => {
+	const offenders: string[] = [];
+	const checked = new Set<string>();
+	for (const [file, source] of await workflowSources()) {
+		const jobs = parseDocument(source).get("jobs");
+		if (!isMap(jobs)) {
+			continue;
+		}
+		for (const pair of jobs.items) {
+			const steps = isMap(pair.value) ? pair.value.get("steps") : undefined;
+			if (!isSeq(steps)) {
+				continue;
+			}
+			const definitions = asArray(steps.toJSON(), "steps").map((entry) => asRecord(entry, "step"));
+			const installs = definitions.some(
+				(entry) =>
+					(entry.uses === "./.github/actions/setup-toolchain" &&
+						isRecord(entry.with) &&
+						entry.with.install === "frozen") ||
+					(typeof entry.run === "string" && /\b(?:vp|pnpm) install\b/u.test(entry.run)),
+			);
+			if (installs) {
+				continue;
+			}
+			const scripts = definitions.flatMap(({ run }) =>
+				[
+					...(typeof run === "string" ? run : "").matchAll(
+						/\bnode\s+(?:\.\.\/)?(?<script>scripts\/[\w./-]+\.ts)\b/gu,
+					),
+				].map((match) => match.groups?.script ?? ""),
+			);
+			for (const script of scripts) {
+				checked.add(script);
+				for (const [name, importer] of packagesLoadedBy(script)) {
+					offenders.push(`${file}#${String(pair.key)}: ${script} loads ${name} in ${importer}`);
+				}
+			}
+		}
+	}
+	for (const script of ["scripts/rescan-release-images.ts", "scripts/verify-release-evidence.ts"]) {
+		assert.ok(checked.has(script), `${script} must stay in the check`);
+	}
+	assert.deepEqual([...new Set(offenders)], []);
 });
 
 void test("the Scorecard ratchet runs on every event that can move a score, outside publishing", async () => {
