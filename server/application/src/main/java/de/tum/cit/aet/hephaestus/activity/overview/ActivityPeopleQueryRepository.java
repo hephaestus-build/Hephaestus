@@ -33,13 +33,24 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             OR EXISTS (SELECT 1 FROM membership asked WHERE asked.account_id = a.id AND asked.left_at IS NULL))
         """;
 
+    /**
+     * The workspace's hidden members as actors, read once per query. A membership lookup for each event
+     * row scans identity once for each row.
+     */
+    String HIDDEN_ACTORS = """
+        hidden_actors AS MATERIALIZED (
+            SELECT u.id FROM membership h
+            JOIN identity i ON i.account_id = h.account_id AND i.team_key = ''
+            JOIN "user" u ON u.provider_id = i.provider_id AND CAST(u.native_id AS text) = i.provider_user_key
+            WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.hidden
+        )
+        """;
+
+    String NOT_HIDDEN = " NOT IN (SELECT id FROM hidden_actors) ";
     String PUBLIC_PERSON = """
               AND u.type = 'USER'
               AND EXISTS (SELECT 1 FROM identity_provider p WHERE p.id = u.provider_id AND p.type IN ('GITHUB', 'GITLAB'))
-              AND NOT EXISTS (SELECT 1 FROM membership m
-                  WHERE m.workspace_id = :#{#scope.workspaceId()} AND m.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = '') AND m.hidden)
-              AND NOT EXISTS (SELECT 1 FROM membership h
-                  WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.hidden AND h.account_id IN (SELECT identity_owner.account_id FROM identity identity_owner WHERE identity_owner.provider_id = u.provider_id AND identity_owner.provider_user_key = CAST(u.native_id AS text) AND identity_owner.team_key = ''))
+              AND u.id""" + NOT_HIDDEN + """
               AND NOT EXISTS (SELECT 1 FROM activity_automation a
                   WHERE a.workspace_id = :#{#scope.workspaceId()} AND a.user_id = u.id)
               AND NOT EXISTS (SELECT 1 FROM identity_restriction s
@@ -68,27 +79,13 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             " AND (:#{#scope.publicOnly()} = false OR (" + PUBLIC_REPOSITORY_CONDITION + ")) ";
     String PUBLIC_REPOSITORY = " AND " + REPOSITORY_AUTHORITY + PUBLIC_REPOSITORY_FILTER;
     // Inline eligibility so each use can join by identity instead of scanning the whole public cohort.
-    String PUBLIC_PEOPLE = """
-        WITH public_people AS NOT MATERIALIZED (SELECT u.id FROM "user" u WHERE true
+    String PUBLIC_PEOPLE = "WITH " + HIDDEN_ACTORS + """
+        , public_people AS NOT MATERIALIZED (SELECT u.id FROM "user" u WHERE true
         """ + PUBLIC_PERSON + """
         )
         """;
-    /**
-     * The workspace's hidden members as actors, read once per query. A membership lookup for each event
-     * row scans identity once for each row.
-     */
-    String HIDDEN_ACTORS = """
-        hidden_actors AS MATERIALIZED (
-            SELECT u.id FROM membership h
-            JOIN identity i ON i.account_id = h.account_id AND i.team_key = ''
-            JOIN "user" u ON u.provider_id = i.provider_id AND CAST(u.native_id AS text) = i.provider_user_key
-            WHERE h.workspace_id = :#{#scope.workspaceId()} AND h.hidden
-        )
-        """;
-
-    String NOT_HIDDEN = " NOT IN (SELECT id FROM hidden_actors) ";
-    String MONITORS = HIDDEN_ACTORS + """
-        , monitored AS (
+    String MONITORS = """
+        monitored AS (
             SELECT DISTINCT r.id, r.provider_id FROM repository_to_monitor m
             JOIN repository r ON r.name_with_owner = m.name_with_owner
             WHERE m.workspace_id = :#{#scope.workspaceId()} AND
@@ -161,8 +158,8 @@ interface ActivityPeopleQueryRepository extends Repository<ActivityEvent, UUID> 
             + SOURCE + NORMALIZED_EVENTS_END;
     String NORMALIZED = PUBLIC_PEOPLE + ", " + MONITORS + NORMALIZED_HEAD + PUBLIC_HELPED + NORMALIZED_HELPED + SOURCE
             + NORMALIZED_TAIL;
-    String INTERNAL_NORMALIZED =
-            "WITH " + MONITORS + NORMALIZED_HEAD + NORMALIZED_HELPED + INTERNAL_SOURCE + NORMALIZED_TAIL;
+    String INTERNAL_NORMALIZED = "WITH " + HIDDEN_ACTORS + ", " + MONITORS + NORMALIZED_HEAD + NORMALIZED_HELPED
+            + INTERNAL_SOURCE + NORMALIZED_TAIL;
     String HEADLINE_COUNTS = """
                 count(*) FILTER (WHERE event_type = 'PULL_REQUEST_OPENED') AS opened,
                 count(*) FILTER (WHERE event_type = 'PULL_REQUEST_MERGED') AS merged,

@@ -157,6 +157,7 @@ There is no email, no banner and no notice period.
   The generic anonymous read in `WorkspaceContextFilter` and the public listing in `findAccessibleWorkspaces` go away.
   An architecture test fails for each anonymous endpoint that is not on an explicit allowlist.
 - Only that endpoint sends `Cache-Control: public, max-age=60`.
+  *Amended 2026-11-03:* it sends `no-store` to every reader, so no shared cache keeps a page after a person is hidden.
   It is rate-limited.
   It sends `noindex` unless an admin turns on **Allow search engines**.
 - The instance operator runs the provider comparison of the activity data runbook.

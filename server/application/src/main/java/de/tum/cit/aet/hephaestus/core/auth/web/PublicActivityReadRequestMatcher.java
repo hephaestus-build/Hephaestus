@@ -8,7 +8,7 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
-/** Exact public reads share anonymous authorization, cacheable CSRF handling and rate limiting. */
+/** Exact public reads share anonymous authorization, cookie-free CSRF handling and rate limiting. */
 @NamedInterface("public-activity-reads")
 public final class PublicActivityReadRequestMatcher {
     public static final RequestMatcher MATCHER = new OrRequestMatcher(List.of(

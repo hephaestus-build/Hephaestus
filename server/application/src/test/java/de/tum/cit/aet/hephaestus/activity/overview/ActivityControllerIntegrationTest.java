@@ -638,7 +638,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectStatus()
                     .isOk()
                     .expectHeader()
-                    .valueEquals("Cache-Control", "max-age=60, public")
+                    .valueEquals("Cache-Control", "no-store")
                     .expectHeader()
                     .valueEquals("X-Robots-Tag", "noindex")
                     .expectHeader()
@@ -1115,7 +1115,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
-        void shouldCacheOnlyAnonymousSuccessAndDefaultToNoIndex() {
+        void shouldLetNoCacheStoreAPublicPageAndDefaultToNoIndex() {
             webTestClient
                     .get()
                     .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
@@ -1123,17 +1123,12 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .expectStatus()
                     .isOk()
                     .expectHeader()
-                    .valueEquals("Cache-Control", "max-age=60, public")
-                    .expectHeader()
-                    .values(
-                            "Vary",
-                            values -> assertThat(String.join(",", values)).contains("Cookie", "Authorization"))
+                    .valueEquals("Cache-Control", "no-store")
                     .expectHeader()
                     .doesNotExist("Set-Cookie")
                     .expectHeader()
                     .valueEquals("X-Robots-Tag", "noindex")
                     .expectBody(Void.class);
-            // A signed-in reader sees their own choice at once, so no shared cache may hold it.
             webTestClient
                     .get()
                     .uri("/public/workspaces/{slug}/activity", workspace.getWorkspaceSlug())
@@ -1143,10 +1138,6 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .isOk()
                     .expectHeader()
                     .valueEquals("Cache-Control", "no-store")
-                    .expectHeader()
-                    .values(
-                            "Vary",
-                            values -> assertThat(String.join(",", values)).contains("Cookie", "Authorization"))
                     .expectBody(Void.class);
             webTestClient
                     .get()
@@ -1178,7 +1169,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         .expectStatus()
                         .isOk()
                         .expectHeader()
-                        .valueEquals("Cache-Control", "max-age=60, public")
+                        .valueEquals("Cache-Control", "no-store")
                         .expectHeader()
                         .valueEquals("X-Robots-Tag", "noindex")
                         .expectHeader()

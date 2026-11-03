@@ -393,7 +393,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** The cacheable read must not publish a per-client SPA CSRF cookie. */
+    /** An anonymous read gets no cookie, so the public read must not publish a per-client SPA CSRF cookie. */
     private static final class PublicActivityReadFilter extends OncePerRequestFilter {
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
