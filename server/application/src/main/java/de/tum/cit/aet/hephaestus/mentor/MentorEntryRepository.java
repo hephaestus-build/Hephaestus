@@ -385,6 +385,33 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
     String COPIES_PERSON_DATA = "e.kind = 'TOOL_RESULT' AND e.payload -> 'message' ->> 'toolName' IN ('read', 'bash',"
             + " 'load_context', 'fetch_context')";
 
+    /** The entries of a workspace not erased yet that were written before the cutoff, oldest first. */
+    @Query(value = """
+            SELECT e.id FROM mentor_entry e
+            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND e.created_at < :cutoff
+            ORDER BY e.created_at
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> findUnredactedIdsWrittenBefore(
+            @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+    /** The tool results of a workspace not erased yet that can copy anyone's data, written before the cutoff. */
+    @Query(value = """
+            SELECT e.id FROM mentor_entry e
+            WHERE e.workspace_id = :workspaceId AND e.redacted_at IS NULL AND e.created_at < :cutoff AND
+            """ + COPIES_PERSON_DATA + """
+
+            ORDER BY e.created_at
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> findUnredactedCopyingToolResultIdsWrittenBefore(
+            @Param("workspaceId") long workspaceId, @Param("cutoff") Instant cutoff, @Param("limit") int limit);
+
+    /** The workspaces that hold a conversation entry not erased yet. */
+    @WorkspaceAgnostic("The conversation retention sweep finds its workspaces first and then erases in each one")
+    @Query(value = "SELECT DISTINCT workspace_id FROM mentor_entry WHERE redacted_at IS NULL", nativeQuery = true)
+    List<Long> findWorkspaceIdsWithUnredactedEntries();
+
     /** The person-data erasure step that redacts the entries of {@link #COPIES_PERSON_DATA}. */
     String COPIES_PERSON_DATA_STORE = "mentor_entry_tool_result_copy";
 

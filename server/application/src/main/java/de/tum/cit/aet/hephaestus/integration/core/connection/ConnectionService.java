@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncStateChangedEvent;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -91,12 +92,16 @@ public class ConnectionService {
     }
 
     /**
-     * Ids of every workspace with an ACTIVE Connection of the given kind — the fan-out a periodic sync
+     * Ids of every workspace with a Connection of the given kind in one of the states — the fan-out a periodic sync
      * scheduler iterates so a freshly connected workspace is picked up even before it has mirrored any data.
      */
     @Transactional(readOnly = true)
-    public List<Long> findWorkspaceIdsWithActiveConnection(IntegrationKind kind) {
-        return connectionRepository.findWorkspaceIdsByKindAndState(kind, IntegrationState.ACTIVE);
+    public List<Long> findWorkspaceIdsWithConnection(IntegrationKind kind, IntegrationState... states) {
+        List<Long> ids = new ArrayList<>();
+        for (IntegrationState state : states) {
+            ids.addAll(connectionRepository.findWorkspaceIdsByKindAndState(kind, state));
+        }
+        return ids;
     }
 
     /**

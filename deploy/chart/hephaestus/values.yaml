@@ -314,6 +314,8 @@ config:
   durableConsumerName: hephaestus
   consumerInactiveThreshold: 30d
   llmUsageRetention: P400D
+  # Age at which every conversation entry with Hephaestus is erased. docs/admin/data-retention.mdx.
+  conversationRetention: P400D
   # A second currency beside USD for AI spend: empty, or EUR. docs/admin/production-setup.mdx.
   llmDisplayCurrency: ""
   # Model endpoints on a private network: host names, IP addresses or CIDR ranges that provider base

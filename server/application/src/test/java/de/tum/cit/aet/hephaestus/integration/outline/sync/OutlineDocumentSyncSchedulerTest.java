@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobConflictException;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobHandle;
@@ -90,7 +91,7 @@ class OutlineDocumentSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void syncAllNow_recordsAReconciliationScheduledJob_perActiveWorkspace_andRunsTheWorkspacePass() {
-        when(connectionService.findWorkspaceIdsWithActiveConnection(IntegrationKind.OUTLINE))
+        when(connectionService.findWorkspaceIdsWithConnection(IntegrationKind.OUTLINE, IntegrationState.ACTIVE))
                 .thenReturn(List.of(WORKSPACE_1, WORKSPACE_2));
         when(connectionService.findActive(WORKSPACE_1, IntegrationKind.OUTLINE)).thenReturn(Optional.of(connection1));
         when(connectionService.findActive(WORKSPACE_2, IntegrationKind.OUTLINE)).thenReturn(Optional.of(connection2));
@@ -116,7 +117,7 @@ class OutlineDocumentSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void syncAllNow_oneWorkspaceHasAnActiveJobAlready_isSkipped_theOtherStillRuns() {
-        when(connectionService.findWorkspaceIdsWithActiveConnection(IntegrationKind.OUTLINE))
+        when(connectionService.findWorkspaceIdsWithConnection(IntegrationKind.OUTLINE, IntegrationState.ACTIVE))
                 .thenReturn(List.of(WORKSPACE_1, WORKSPACE_2));
         when(connectionService.findActive(WORKSPACE_1, IntegrationKind.OUTLINE)).thenReturn(Optional.of(connection1));
         when(connectionService.findActive(WORKSPACE_2, IntegrationKind.OUTLINE)).thenReturn(Optional.of(connection2));
@@ -147,7 +148,7 @@ class OutlineDocumentSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void syncAllNow_workspaceLostItsActiveConnectionMeanwhile_isSilentlySkipped() {
-        when(connectionService.findWorkspaceIdsWithActiveConnection(IntegrationKind.OUTLINE))
+        when(connectionService.findWorkspaceIdsWithConnection(IntegrationKind.OUTLINE, IntegrationState.ACTIVE))
                 .thenReturn(List.of(WORKSPACE_1));
         when(connectionService.findActive(WORKSPACE_1, IntegrationKind.OUTLINE)).thenReturn(Optional.empty());
 
