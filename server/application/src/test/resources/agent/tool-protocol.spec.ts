@@ -128,6 +128,23 @@ function alive(pid: number): boolean {
 	}
 }
 
+/**
+ * Waits for an event the test cannot await, such as a pid file or a process exit. A fixed sleep in
+ * its place passes or fails with the machine's load.
+ */
+async function until(condition: () => boolean, event: string, timeoutMs = 10_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!condition()) {
+		assert.ok(Date.now() < deadline, `Timed out waiting until ${event}`);
+		await sleep(10);
+	}
+}
+
+const pidIn = (file: string): number | undefined => {
+	const text = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+	return text === "" ? undefined : Number(text);
+};
+
 function refusal(code: string) {
 	return (error: unknown) => error instanceof ToolProtocolError && error.code === code;
 }
@@ -682,8 +699,7 @@ void test("a call past its time is killed with its whole process group", async (
 	assert.equal(exit.timedOut, true);
 	assert.equal(exit.signal, "SIGKILL");
 	const background = Number(readFileSync(pidFile, "utf8"));
-	await sleep(100);
-	assert.equal(alive(background), false);
+	await until(() => !alive(background), "the background process ends");
 });
 
 // A process that leaves its call's group with setsid is found by its call's marker, which only /proc shows.
@@ -696,8 +712,7 @@ void test(
 		assert.equal(exit.code, 0);
 		assert.equal(exit.timedOut, false, "the call ended when its program did, not at its time-out");
 		const detached = Number(readFileSync(pidFile, "utf8"));
-		await sleep(100);
-		assert.equal(alive(detached), false);
+		await until(() => !alive(detached), "the detached process ends");
 	},
 );
 
@@ -706,7 +721,7 @@ void test("an aborted call ends with its process, and a parallel call goes on", 
 	const controller = new AbortController();
 	const cancelled = run(`echo $$ > ${pidFile}; exec sleep 30`, {}, controller.signal);
 	const parallel = run("sleep 0.5; echo done");
-	await sleep(150);
+	await until(() => pidIn(pidFile) !== undefined, "the call writes its pid");
 	controller.abort();
 	const { exit } = await cancelled;
 	assert.equal(exit.signal, "SIGKILL");
@@ -1286,8 +1301,9 @@ void test("a hostile archive writes nothing outside its directory", async () => 
 
 void test("a reset ends every call and clears the scratch", async () => {
 	writeFileSync(path.join(scratch, "left-over"), "x");
-	const sleeping = run("sleep 30");
-	await sleep(100);
+	const pidFile = path.join(workspace, "reset.pid");
+	const sleeping = run(`echo $$ > ${pidFile}; exec sleep 30`);
+	await until(() => pidIn(pidFile) !== undefined, "the call starts");
 	await client.reset();
 	const ended = await sleeping;
 	assert.equal(ended.exit.signal, "SIGKILL");
@@ -1300,12 +1316,11 @@ void test(
 	async () => {
 		const pidFile = path.join(workspace, "reset-detached.pid");
 		const sleeping = run(`setsid sh -c 'echo $$ > ${pidFile}; exec sleep 30' & sleep 30`);
-		await sleep(300);
+		await until(() => pidIn(pidFile) !== undefined, "the detached process writes its pid");
 		const detached = Number(readFileSync(pidFile, "utf8"));
 		await client.reset();
 		await sleeping;
-		await sleep(100);
-		assert.equal(alive(detached), false);
+		await until(() => !alive(detached), "the detached process ends");
 	},
 );
 
@@ -1423,11 +1438,17 @@ void test("the tools side ends the connection on a request id that is already in
 	});
 	const { closed } = await raw([hello, request, request]);
 	assert.equal(closed, true);
-	await sleep(200);
-	const pids = existsSync(pidFile) ? readFileSync(pidFile, "utf8").trim().split("\n") : [];
-	for (const pid of pids) {
-		assert.equal(alive(Number(pid)), false, "the call ended with its connection");
-	}
+	// The connection can close before the call writes its pid. Give a call that started, wrongly
+	// or not, the time to write it; then every call that did start must end.
+	const pids = () =>
+		existsSync(pidFile) ? readFileSync(pidFile, "utf8").trim().split("\n").filter(Boolean) : [];
+	await until(() => pids().length > 0, "a started call writes its pid", 2000).catch(
+		() => undefined,
+	);
+	await until(
+		() => pids().every((pid) => !alive(Number(pid))),
+		"every call ends with its connection",
+	);
 });
 
 void test("a reset ends a call that arrived before it and had not started yet", async () => {

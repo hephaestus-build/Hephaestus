@@ -399,6 +399,11 @@ export const DismissedLevelDoesNotComeBack: Story = {
 	},
 };
 
+/** The decision that the story's play delivers, right after the Escape and so inside the exit. */
+let decide: (() => void) | undefined;
+// Read through a call: the play resets `decide`, and only the click handler sets it again.
+const decision = () => decide;
+
 /**
  * A caller may swap the level in front while it is closing — a queue whose decision lands after the
  * reader pressed Escape. The level swapped in is a level of its own and opens, rather than mounting
@@ -425,10 +430,12 @@ export const LevelSwappedInWhileClosingOpens: Story = {
 								<DrawerTitle>{`${entry.kind} · ${entry.id}`}</DrawerTitle>
 							</DetailDrawerHeader>
 							<DrawerFooter>
-								{/* Answered later, as a request is: after the Escape below, inside the exit. */}
+								{/* Answered later, as a request is: the play answers after the Escape below. */}
 								<Button
 									onClick={() => {
-										setTimeout(() => setStack([{ kind: entry.kind, id: "review-ready-work" }]), 80);
+										decide = () => {
+											setStack([{ kind: entry.kind, id: "review-ready-work" }]);
+										};
 									}}
 								>
 									Decide
@@ -441,9 +448,14 @@ export const LevelSwappedInWhileClosingOpens: Story = {
 		</Stateful>
 	),
 	play: async ({ args }) => {
+		decide = undefined;
 		await expectSettledVisible(await screen.findByText("practice · describe-what-and-why"));
 		await userEvent.click(screen.getByRole("button", { name: "Decide" }));
 		await userEvent.keyboard("{Escape}");
+		await expect(decision()).toBeDefined();
+		// The decision must land inside the exit: the closing level is still mounted.
+		await expect(screen.queryByText("practice · describe-what-and-why")).not.toBeNull();
+		decision()?.();
 
 		await expectSettledVisible(await screen.findByText("practice · review-ready-work"));
 		await expect(popups()).toHaveLength(1);

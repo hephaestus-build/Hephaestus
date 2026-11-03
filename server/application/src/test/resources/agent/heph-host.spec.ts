@@ -432,7 +432,9 @@ void test("text before a tool call stays in its message, and a message without a
 	);
 });
 
-void test("a slow partial answer write holds back only the newest snapshot, and a stop drops it", async () => {
+void test("a slow partial answer write holds back only the newest snapshot, and a stop drops it", async (t) => {
+	// Real windows of a few milliseconds pass or fail with the machine's load.
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	const intervalMs = 5;
 	const writes: { tool: string | null; done: PromiseWithResolvers<undefined> }[] = [];
 	let inFlight = 0;
@@ -454,7 +456,12 @@ void test("a slow partial answer write holds back only the newest snapshot, and 
 	};
 	const sent = () => writes.map((write) => write.tool);
 	const release = (index: number) => writes[index]?.done.resolve(undefined);
-	const windows = async () => sleep(intervalMs * 10);
+	const windows = async () => {
+		// The promise chains that a release or a fired timer started run before and after time moves.
+		await timers.setImmediate();
+		t.mock.timers.tick(intervalMs * 10);
+		await timers.setImmediate();
+	};
 
 	startTool("first");
 	await windows();
