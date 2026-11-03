@@ -48,7 +48,8 @@ class AccountExportDurabilityIntegrationTest extends BaseIntegrationTest {
 
         assertThat(status(exportId)).isEqualTo("PENDING");
         doCallRealMethod().when(assembler).assemble(accountId);
-        // The staleness monitor marks the abandoned publication FAILED; the redelivery job takes it after its minimum age.
+        // The staleness monitor marks the abandoned publication FAILED; the redelivery job takes it after its minimum
+        // age.
         assertThat(jdbc.update(
                         "UPDATE event_publication SET status = 'FAILED', publication_date = ? WHERE serialized_event LIKE ?",
                         Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
