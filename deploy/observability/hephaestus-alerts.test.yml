@@ -1517,3 +1517,103 @@ tests:
               pool: own-model-1
             exp_annotations:
               summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused or queued
+
+  - name: three failed deliveries to one destination in one hour fire, two do not
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_settled_total{job="hephaestus",instance="server:9090",destination="on_work",state="failed",reason="none"}'
+        values: "0 1 2 2 3x30"
+      - series: 'practice_feedback_settled_total{job="hephaestus",instance="worker:9090",destination="conversation",state="failed",reason="none"}'
+        values: "0 1 2x30"
+      - series: 'practice_feedback_settled_total{job="hephaestus",instance="server:9090",destination="on_work",state="withheld",reason="composer_withheld"}'
+        values: "0+1x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusFeedbackDeliveriesFailing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HephaestusFeedbackDeliveriesFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              destination: on_work
+            exp_annotations:
+              summary: At least three feedback deliveries to one destination failed in one hour
+
+  - name: reviews whose first feedback mostly came after 30 minutes fire
+    interval: 1m
+    input_series:
+      - series: 'practice_review_first_delivery_seconds_bucket{job="hephaestus",instance="server:9090",trigger="event",approval="none",le="1800.0"}'
+        values: "0 1 2 3x60"
+      - series: 'practice_review_first_delivery_seconds_count{job="hephaestus",instance="server:9090",trigger="event",approval="none"}'
+        values: "0 1 2 3 4 5x60"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusFeedbackDeliverySlow
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusFeedbackDeliverySlow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: More than 30 % of the reviews of the last six hours posted their first feedback later than 30 minutes after their occasion
+
+  - name: approved, scheduled, timely and too few reviews do not fire
+    interval: 1m
+    input_series:
+      - series: 'practice_review_first_delivery_seconds_bucket{job="hephaestus",instance="server:9090",trigger="request",approval="none",le="1800.0"}'
+        values: "0 1 2 3 4 4x60"
+      - series: 'practice_review_first_delivery_seconds_count{job="hephaestus",instance="server:9090",trigger="request",approval="none"}'
+        values: "0 1 2 3 4 5x60"
+      - series: 'practice_review_first_delivery_seconds_bucket{job="hephaestus",instance="server:9090",trigger="event",approval="approved",le="1800.0"}'
+        values: "0x60"
+      - series: 'practice_review_first_delivery_seconds_count{job="hephaestus",instance="server:9090",trigger="event",approval="approved"}'
+        values: "0+1x60"
+      - series: 'practice_review_first_delivery_seconds_count{job="hephaestus",instance="server:9090",trigger="schedule",approval="none"}'
+        values: "0+1x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: HephaestusFeedbackDeliverySlow
+        exp_alerts: []
+
+  - name: three late reviews stay below the floor of four
+    interval: 1m
+    input_series:
+      - series: 'practice_review_first_delivery_seconds_bucket{job="hephaestus",instance="server:9090",trigger="event",approval="none",le="1800.0"}'
+        values: "0x60"
+      - series: 'practice_review_first_delivery_seconds_count{job="hephaestus",instance="server:9090",trigger="event",approval="none"}'
+        values: "0 1 2 3x60"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: HephaestusFeedbackDeliverySlow
+        exp_alerts: []
+
+  - name: feedback that waits more than two hours fires, a younger wait does not
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_oldest_waiting_seconds{job="hephaestus",instance="server-a:9090"}'
+        values: "7000 7300+60x30"
+      - series: 'practice_feedback_oldest_waiting_seconds{job="hephaestus",instance="server-b:9090"}'
+        values: "0x31"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusFeedbackDeliveryStalled
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HephaestusFeedbackDeliveryStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Feedback on the work has waited more than two hours for its first posted copy
+
+  - name: a short wait above two hours that ends does not fire
+    interval: 1m
+    input_series:
+      - series: 'practice_feedback_oldest_waiting_seconds{job="hephaestus",instance="server:9090"}'
+        values: "7300 7360 7420 0x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HephaestusFeedbackDeliveryStalled
+        exp_alerts: []

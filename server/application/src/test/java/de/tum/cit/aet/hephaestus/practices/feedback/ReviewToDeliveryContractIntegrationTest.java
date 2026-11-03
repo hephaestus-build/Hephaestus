@@ -115,6 +115,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -598,6 +599,12 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "cancelled"))
                     .isEqualTo(withheldBefore + 1);
         }
+    }
+
+    private long firstDeliveries() {
+        return meters.find(PracticeMetrics.REVIEW_FIRST_DELIVERY).timers().stream()
+                .mapToLong(Timer::count)
+                .sum();
     }
 
     private double count(String name, String... tags) {
@@ -1112,6 +1119,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldPostTheAdmittedObservationOnThePullRequestWhenTheReviewedVersionIsStillCurrent() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            double deliveredBefore = count(
+                    PracticeMetrics.FEEDBACK_SETTLED, "destination", "on_work", "state", "delivered", "reason", "none");
+            long firstDeliveriesBefore = firstDeliveries();
             var response = admitStaged(review.identity(), request(review));
 
             var admitted = response.admitted().getFirst();
@@ -1277,6 +1287,24 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     });
             assertThat(sends.findByFeedbackIdAndWorkspaceId(feedbackId, review.workspaceId()))
                     .hasValueSatisfying(send -> assertThat(send.getState()).isEqualTo(FeedbackSendState.DONE));
+            assertThat(count(
+                            PracticeMetrics.FEEDBACK_SETTLED,
+                            "destination",
+                            "on_work",
+                            "state",
+                            "delivered",
+                            "reason",
+                            "none"))
+                    .as("the delivery counts; recovery can also settle sends that earlier tests left")
+                    .isGreaterThan(deliveredBefore);
+            assertThat(firstDeliveries())
+                    .as("the review's first delivery is observed")
+                    .isGreaterThan(firstDeliveriesBefore);
+            assertThat(feedback.oldestWaitingOnWorkSeconds())
+                    .as("the freshness query runs against the schema")
+                    .satisfiesAnyOf(
+                            age -> assertThat(age).isNull(),
+                            age -> assertThat(age).isNotNegative());
         }
     }
 

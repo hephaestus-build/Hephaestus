@@ -10,8 +10,8 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyReadback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackStoreService;
@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FeedbackSendTransactions {
     private static final Duration LEASE = Duration.ofMinutes(2);
     private final FeedbackStoreService store;
-    private final FeedbackRepository feedback;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
     private final FeedbackSendRepository sends;
     private final FeedbackVisibilityService visibility;
@@ -105,12 +105,8 @@ public class FeedbackSendTransactions {
         }
         var projection = FeedbackSendStateMachine.project(
                 row, copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId));
-        feedback.updateDelivery(
-                workspaceId,
-                feedbackId,
-                FeedbackState.UNCONFIRMED,
-                FeedbackStopReason.DELIVERY_UNCONFIRMED,
-                projection.deliveredAt());
+        outcomes.update(
+                row, FeedbackState.UNCONFIRMED, FeedbackStopReason.DELIVERY_UNCONFIRMED, projection.deliveredAt());
         return true;
     }
 
@@ -121,8 +117,7 @@ public class FeedbackSendTransactions {
             record(workspaceId, feedbackId, receipts);
             var projection = FeedbackSendStateMachine.project(
                     row, copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, feedbackId));
-            feedback.updateDelivery(
-                    workspaceId, feedbackId, projection.state(), projection.stopReason(), projection.deliveredAt());
+            outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());
         }
     }
 
@@ -217,8 +212,7 @@ public class FeedbackSendTransactions {
                         now.plusSeconds(30),
                         unresolved ? "Provider visibility is unknown." : null)
                 != 1) return;
-        feedback.updateDelivery(
-                workspaceId, feedbackId, projection.state(), projection.stopReason(), projection.deliveredAt());
+        outcomes.update(row, projection.state(), projection.stopReason(), projection.deliveredAt());
         if (!unresolved && asksForCorrection(row, children))
             sendQueue.queue(row, FeedbackSendAction.RETRACT, FeedbackSendState.PENDING);
     }

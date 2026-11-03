@@ -7,10 +7,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackOutcomes;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPublicationContext;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
-import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackChecks;
@@ -44,10 +44,10 @@ import org.springframework.web.server.ResponseStatusException;
 public class FeedbackDecisionService {
 
     private final FeedbackRepository feedbackRepository;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackDecisionRepository decisions;
     private final FeedbackBasisRepository basis;
     private final FeedbackCopyRepository copies;
-    private final FeedbackSendRepository sends;
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final FeedbackGate gate;
@@ -75,7 +75,7 @@ public class FeedbackDecisionService {
         Feedback feedback = feedbackRepository
                 .lockByIdAndWorkspaceId(feedbackId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Feedback", feedbackId.toString()));
-        var send = sends.lockByFeedbackId(workspaceId, feedbackId);
+        var send = sendQueue.lock(workspaceId, feedbackId);
         var lockedCopies = copies.lockByFeedbackId(workspaceId, feedbackId);
         Instant now = clock.instant();
         if (action == FeedbackDecisionAction.RESTORE
@@ -114,9 +114,8 @@ public class FeedbackDecisionService {
                 feedbackRepository.updateChecks(workspaceId, feedbackId, checks);
                 if (refusal != null) return refused(feedback, refusal);
             }
-            feedbackRepository.updateDelivery(
-                    workspaceId,
-                    feedbackId,
+            outcomes.update(
+                    feedback,
                     action == FeedbackDecisionAction.APPROVE ? FeedbackState.READY : FeedbackState.REJECTED,
                     null,
                     feedback.getDeliveredAt());
@@ -175,12 +174,7 @@ public class FeedbackDecisionService {
         if (refusal != FeedbackStopReason.PUBLIC_HISTORY_CHANGED)
             return new FeedbackDecisionOutcome(null, refusal, feedback.getState());
         copies.withholdPlanned(feedback.getWorkspaceId(), feedback.getId(), refusal.name());
-        feedbackRepository.updateDelivery(
-                feedback.getWorkspaceId(),
-                feedback.getId(),
-                FeedbackState.WITHHELD,
-                refusal,
-                feedback.getDeliveredAt());
+        outcomes.update(feedback, FeedbackState.WITHHELD, refusal, feedback.getDeliveredAt());
         return new FeedbackDecisionOutcome(null, refusal, FeedbackState.WITHHELD);
     }
 

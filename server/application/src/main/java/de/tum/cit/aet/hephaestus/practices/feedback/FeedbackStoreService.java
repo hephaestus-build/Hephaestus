@@ -48,6 +48,7 @@ import org.springframework.web.server.ResponseStatusException;
 @ConditionalOnCaptureRole
 public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     private final FeedbackRepository feedback;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackCopyRepository copies;
     private final FeedbackSendRepository sends;
     private final FeedbackDecisionService decisions;
@@ -115,12 +116,7 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
                 || copies.claimConversation(workspaceId, feedbackId, copy.getId(), mentorTurnId) != 1)
             return Optional.empty();
         var recorded = copies.findByIdAndWorkspaceId(copy.getId(), workspaceId).orElseThrow();
-        feedback.updateDelivery(
-                workspaceId,
-                feedbackId,
-                FeedbackState.UNCONFIRMED,
-                FeedbackStopReason.DELIVERY_UNCONFIRMED,
-                row.getDeliveredAt());
+        outcomes.update(row, FeedbackState.UNCONFIRMED, FeedbackStopReason.DELIVERY_UNCONFIRMED, row.getDeliveredAt());
         return Optional.of(new CopyWriteFence(
                 feedbackId, copy.getId(), mentorTurnId, Objects.requireNonNull(recorded.getWriteStartedAt())));
     }
@@ -162,9 +158,8 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
                                 words,
                                 receipt.at())
                         != 1) throw conflict("The conversation receipt could not be recorded.");
-                feedback.updateDelivery(
-                        workspaceId,
-                        fence.feedbackId(),
+                outcomes.update(
+                        row,
                         FeedbackState.DELIVERED,
                         null,
                         row.getDeliveredAt() == null ? receipt.at() : row.getDeliveredAt());
@@ -182,9 +177,8 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
                                 unknown ? FeedbackCopyReadback.UNKNOWN.name() : FeedbackCopyReadback.ABSENT.name(),
                                 receipt.reason() == null ? "The conversation was not delivered." : receipt.reason())
                         != 1) throw conflict("The conversation receipt could not be recorded.");
-                feedback.updateDelivery(
-                        workspaceId,
-                        fence.feedbackId(),
+                outcomes.update(
+                        row,
                         unknown ? FeedbackState.UNCONFIRMED : FeedbackState.FAILED,
                         unknown ? FeedbackStopReason.DELIVERY_UNCONFIRMED : null,
                         row.getDeliveredAt());
@@ -245,9 +239,8 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
         if (!check.allowed()) throw conflict("Current delivery policy does not permit this retry.");
         if (copies.retryAbsent(workspaceId, feedbackId) == 0) throw conflict("No absent copy can be retried.");
         boolean exposed = row.getDeliveredAt() != null;
-        feedback.updateDelivery(
-                workspaceId,
-                feedbackId,
+        outcomes.update(
+                row,
                 exposed ? FeedbackState.UNCONFIRMED : FeedbackState.READY,
                 exposed ? FeedbackStopReason.DELIVERY_UNCONFIRMED : null,
                 row.getDeliveredAt());
@@ -277,6 +270,11 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
 
     public FeedbackCheck check(Feedback row, boolean approval) {
         return policy.check(row, FeedbackCheckStage.EGRESS, approval);
+    }
+
+    /** Records the developer's first read of ready practice-page feedback, which delivers it. */
+    public boolean recordFirstRead(Feedback row, long developerId, Instant readAt) {
+        return outcomes.firstRead(row, developerId, readAt);
     }
 
     /** {@link #check} for the pieces of one workspace, keyed by feedback id. */

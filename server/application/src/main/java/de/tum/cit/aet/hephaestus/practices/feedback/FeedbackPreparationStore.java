@@ -66,6 +66,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
     private static final String PREPARATION_RECEIPTS = "feedbackPreparationReceipts";
     private static final int MAX_REVIEW_CHECK_BYTES = 65_536;
     private final FeedbackRepository feedback;
+    private final FeedbackOutcomes outcomes;
     private final FeedbackBasisRepository basis;
     private final FeedbackCopyRepository copies;
     private final ResultRepository results;
@@ -316,6 +317,7 @@ public class FeedbackPreparationStore implements PreparedReviewQuery {
             return preparedReceipt(existing.get(), preparedAt);
         }
         ledger.record(row, edges, planned);
+        outcomes.created(row);
         policy.prepared(row);
         preparation.recorded(
                 prepared,

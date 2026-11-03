@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackClosedBy;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import jakarta.persistence.EntityManager;
@@ -110,15 +109,7 @@ public class PracticePageFeedbackService {
                     if (view == null
                             && !card.withdrawn()
                             && card.feedback().getState() == FeedbackState.READY
-                            && feedbackRepository.recordFirstRead(
-                                            workspaceId,
-                                            card.feedback().getId(),
-                                            developerId,
-                                            now,
-                                            FeedbackDestination.PRACTICE_PAGE,
-                                            FeedbackState.READY,
-                                            FeedbackState.DELIVERED)
-                                    == 1) {
+                            && store.recordFirstRead(card.feedback(), developerId, now)) {
                         readAt = now;
                     }
                     return toCard(card, references, readAt);

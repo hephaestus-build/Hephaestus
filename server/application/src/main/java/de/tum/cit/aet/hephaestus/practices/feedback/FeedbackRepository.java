@@ -118,6 +118,23 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
             @Param("itemId") long itemId,
             @Param("developerId") long developerId);
 
+    /** Whether another feedback of the review already has a posted copy, on the work or in a conversation. */
+    @Query(value = """
+        SELECT EXISTS(SELECT 1 FROM feedback WHERE workspace_id=:workspaceId AND review_id=:reviewId AND id<>:id
+          AND destination<>'PRACTICE_PAGE' AND delivered_at IS NOT NULL)
+        """, nativeQuery = true)
+    boolean hasOtherPostedFeedback(
+            @Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId, @Param("id") UUID id);
+
+    /** Seconds since the oldest feedback on the work that may be sent and has no posted copy, or null when none waits. */
+    @WorkspaceAgnostic("Delivery freshness is one instance-wide age; it reads no content")
+    @Query(value = """
+        SELECT EXTRACT(EPOCH FROM now()-min(created_at)) FROM feedback
+         WHERE destination='ON_WORK' AND state IN ('READY','UNCONFIRMED') AND delivered_at IS NULL
+        """, nativeQuery = true)
+    @Nullable
+    Double oldestWaitingOnWorkSeconds();
+
     @Query(value = """
         SELECT f.* FROM feedback f WHERE f.workspace_id=:workspaceId AND f.destination='CONVERSATION' AND f.state='READY' AND f.created_at<:cutoff
           AND NOT EXISTS(SELECT 1 FROM feedback_copy c WHERE c.workspace_id=f.workspace_id AND c.feedback_id=f.id AND (c.write_started_at IS NOT NULL OR c.posted_at IS NOT NULL))
