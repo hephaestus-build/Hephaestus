@@ -267,7 +267,16 @@ By default, streams with personal message content, `slack` and `outline`, have a
 Their `hephaestus.webhook.stream.max-age-by-stream` entries take precedence over the shared age.
 PostgreSQL is the system of record. An erasure request cannot reach inside a broker stream.
 These streams are transport buffers.
-The `small` chart profile selects its own [stream limits](./kubernetes#storage-and-retention), including both per-stream age overrides.
+
+This holds on every chart profile. The `small` profile selects its own [byte bounds](./kubernetes#storage-and-retention).
+A site value in `webhook.stream.maxAgeByStream` overrides this, and it then keeps personal content for longer.
+
+An outage longer than the age bound loses older Slack and Outline events from the stream:
+
+- The nightly Slack history sync refills messages in active monitored channels.
+  It also removes a stored message that a complete read of Slack no longer returns.
+  [Messages deleted or edited in Slack](./data-retention#messages-deleted-or-edited-in-slack) lists the messages that it does not compare.
+- The Outline sync restores each document's current state, and it removes deleted documents on a clean reconciliation pass.
 
 ## The storage budget, and why it is not just a number
 

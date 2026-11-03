@@ -938,8 +938,8 @@ for (const name of ["small", "small-16gib", "external"] as const) {
 		for (const [provider, ageKey, bytesKey, bytes] of [
 			["github", "MAX_AGE", "MAX_BYTES_GITHUB", "6442450944B"],
 			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
-			["slack", "MAXAGEBYSTREAM_SLACK", "MAX_BYTES", "536870912B"],
-			["outline", "MAXAGEBYSTREAM_OUTLINE", "MAX_BYTES", "536870912B"],
+			["slack", "MAX_AGE", "MAX_BYTES", "536870912B"],
+			["outline", "MAX_AGE", "MAX_BYTES", "536870912B"],
 		] as const) {
 			assert.equal(
 				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${ageKey}`),
@@ -970,7 +970,7 @@ await test("per-stream ages accept a site override and reject an unknown provide
 		"webhook",
 	);
 	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), "9d");
-	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), "7d");
+	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
 	assert.match(
 		render([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { unknown: "7d" } } } }])
 			.stderr,
@@ -1716,6 +1716,13 @@ await test("a worker takes any number of reviews that its memory limit holds", (
 		tooMany.stderr,
 		/worker\.reviews 66 needs worker\.resources\.limits\.memory of at least 2065Mi/u,
 	);
+});
+
+await test("the small profile keeps personal content inside the transport-buffer horizon", () => {
+	// The application's 72 hours hold for Slack and Outline: erasure cannot reach inside a broker stream.
+	const receiver = workload(rendered(layersFor("small")), "webhook");
+	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), undefined);
+	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
 });
 
 await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
