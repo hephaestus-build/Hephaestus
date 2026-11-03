@@ -112,6 +112,8 @@ export async function rebaseGenerated(
 	if (merges.trim() !== "") {
 		throw new Error("This branch has merge commits. Rebase it manually to preserve its intent.");
 	}
+	// Read before the rebase: a queue that cannot be read then leaves the history untouched.
+	const queued = readQueue(cwd);
 	try {
 		let completed = await run(
 			"git",
@@ -180,16 +182,17 @@ export async function rebaseGenerated(
 		}
 		throw error;
 	}
+	// Before the steps that can fail, so the lease stays visible.
+	console.log(`Rebased onto ${base}. Original head for the push lease: ${pr.head}`);
 	// Main's and the merge queue's newer migrations sort this branch's ones too early; the queue rejects that order.
-	for (const { from, to } of reorderMigrations(base, cwd, readQueue(cwd))) {
+	for (const { from, to } of reorderMigrations(base, cwd, queued)) {
 		console.log(
-			`Moved ${path.basename(from)} to ${path.basename(to)}, after main's newest migration.`,
+			`Moved ${path.basename(from)} to ${path.basename(to)}, after the newest migration of main and the merge queue.`,
 		);
 	}
 	// After a successful rebase, preserve partial generator output if generation fails.
 	// A reset here could discard edits made while the build was running.
 	await regenerate();
-	console.log(`Rebased onto ${base}. Original head for the push lease: ${pr.head}`);
 	console.log(
 		"Review the regenerated diff, commit it, then run format, check and the affected tests before a leased push.",
 	);
