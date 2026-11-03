@@ -39,8 +39,12 @@ public record LlmCallPoolDTO(
                 requiredMode = RequiredMode.REQUIRED)
         boolean dedicated,
 
-        @Nullable @Schema(description = "When a provider's refusal last lowered the learned limit")
+        @Nullable @Schema(description = "When a provider's refusal or queue last lowered the learned limit")
         Instant throttledAt,
+
+        @Nullable
+        @Schema(description = "The fastest first token known from the provider, in milliseconds; null before the first")
+        Integer baselineFirstTokenMs,
 
         @Nullable @Schema(description = "The provider asked for no call before this time")
         Instant noCallBefore,
@@ -61,6 +65,7 @@ public record LlmCallPoolDTO(
                 LlmCallLimit.reserve(effective),
                 pool.isDedicated(),
                 pool.getThrottledAt(),
+                pool.getBaselineFirstTokenMs(),
                 pool.getNoCallBefore(),
                 pool.getRequestsPerMinute(),
                 pool.getTokensPerMinute(),

@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -35,6 +37,17 @@ final class LlmPoolMeters {
 
     /** The answers that lower a pool's limit: {@link LlmCallPermits#throttles}. */
     static final List<Integer> THROTTLE_STATUSES = List.of(429, 503, 529);
+
+    /**
+     * The GenAI semantic conventions' buckets for time to first chunk, 0.01 s doubling to 81.92 s, and two more, as a
+     * provider's queue can hold a first token for minutes.
+     */
+    private static final Duration[] FIRST_CHUNK_BUCKETS = IntStream.rangeClosed(0, 15)
+            .mapToObj(doubling -> Duration.ofMillis(10L << doubling))
+            .toArray(Duration[]::new);
+
+    /** What lowered a limit. */
+    static final List<String> DECREASE_CAUSES = List.of("refusal", "delay");
 
     /** Why a call waited: {@code none} when its pool admitted it at once. */
     static final List<String> WAIT_REASONS = List.of("none", "capacity", "cooldown");
@@ -65,7 +78,9 @@ final class LlmPoolMeters {
     void observe(List<LlmCallPermitRepository.Backlog> backlog) {
         Map<String, long[]> sums = new HashMap<>();
         for (var row : backlog) {
-            long[] sum = sums.computeIfAbsent(label(row.getSlug()), key -> new long[3]);
+            long[] sum = sums.computeIfAbsent(label(row.getSlug()), key -> new long[4]);
+            Integer baseline = row.getBaselineFirstTokenMs();
+            if (baseline != null) sum[3] = Math.max(sum[3], baseline);
             sum[0] += LlmCallLimit.effective(row.getLearnedLimit(), row.getMaxConcurrentCalls());
             sum[1] += row.getWaitingTurns();
             sum[2] += row.getWaitingBackground();
@@ -73,7 +88,10 @@ final class LlmPoolMeters {
         sums.keySet().forEach(this::pool);
         pools.forEach((label, pool) -> {
             long[] sum = sums.get(label);
-            if (sum != null) pool.limit.set(sum[0]);
+            if (sum != null) {
+                pool.limit.set(sum[0]);
+                pool.baselineMillis.set(sum[3]);
+            }
             pool.waitingTurns.set(sum == null ? 0 : sum[1]);
             pool.waitingBackground.set(sum == null ? 0 : sum[2]);
         });
@@ -112,15 +130,22 @@ final class LlmPoolMeters {
                 .register(registry);
 
         for (int status : THROTTLE_STATUSES) throttledCounter(slug, status);
-        limitDecreasesCounter(slug);
+        for (String cause : DECREASE_CAUSES) limitDecreasesCounter(slug, cause);
         absorbedCounter(slug);
+        for (LlmCallClass callClass : LlmCallClass.values()) firstTokenTimer(slug, callClass);
+        baselineResetsCounter(slug);
         return new Pool(
                 slug,
                 active,
                 coolingUntil,
                 poolGauge(AgentMetrics.LLM_POOL_LIMIT, "The calls in flight a pool allows now", slug, null),
                 poolGauge(AgentMetrics.LLM_POOL_WAITERS, "Live model calls that wait for a pool", slug, "conversation"),
-                poolGauge(AgentMetrics.LLM_POOL_WAITERS, "Live model calls that wait for a pool", slug, "background"));
+                poolGauge(AgentMetrics.LLM_POOL_WAITERS, "Live model calls that wait for a pool", slug, "background"),
+                poolGauge(
+                        AgentMetrics.LLM_POOL_FIRST_TOKEN_BASELINE,
+                        "The fastest first token known from a pool's provider, in milliseconds",
+                        slug,
+                        null));
     }
 
     private AtomicLong poolGauge(String name, String description, String slug, @Nullable String queue) {
@@ -142,9 +167,26 @@ final class LlmPoolMeters {
                 .register(registry);
     }
 
-    private Counter limitDecreasesCounter(String slug) {
+    private Counter limitDecreasesCounter(String slug, String cause) {
         return Counter.builder(AgentMetrics.LLM_POOL_LIMIT_DECREASES)
-                .description("How often a provider's answer lowered a pool's limit")
+                .description("How often a provider's refusal or queue lowered a pool's limit")
+                .tag("pool", slug)
+                .tag("cause", cause)
+                .register(registry);
+    }
+
+    private Timer firstTokenTimer(String slug, LlmCallClass callClass) {
+        return Timer.builder(AgentMetrics.GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK)
+                .description("How long a served stream waited for its provider's first event, after its pool's grant")
+                .tag("pool", slug)
+                .tag("class", callClass.tag())
+                .serviceLevelObjectives(FIRST_CHUNK_BUCKETS)
+                .register(registry);
+    }
+
+    private Counter baselineResetsCounter(String slug) {
+        return Counter.builder(AgentMetrics.LLM_POOL_FIRST_TOKEN_BASELINE_RESETS)
+                .description("How often a pool at its floor took a new first-token baseline")
                 .tag("pool", slug)
                 .register(registry);
     }
@@ -199,6 +241,7 @@ final class LlmPoolMeters {
         private final AtomicLong limit;
         private final AtomicLong waitingTurns;
         private final AtomicLong waitingBackground;
+        private final AtomicLong baselineMillis;
 
         private Pool(
                 String slug,
@@ -206,13 +249,15 @@ final class LlmPoolMeters {
                 AtomicLong coolingUntil,
                 AtomicLong limit,
                 AtomicLong waitingTurns,
-                AtomicLong waitingBackground) {
+                AtomicLong waitingBackground,
+                AtomicLong baselineMillis) {
             this.slug = slug;
             this.active = active;
             this.coolingUntil = coolingUntil;
             this.limit = limit;
             this.waitingTurns = waitingTurns;
             this.waitingBackground = waitingBackground;
+            this.baselineMillis = baselineMillis;
         }
 
         AtomicInteger active(LlmCallClass callClass) {
@@ -239,8 +284,16 @@ final class LlmPoolMeters {
             throttledCounter(slug, status).increment();
         }
 
-        void limitDecreased() {
-            limitDecreasesCounter(slug).increment();
+        void limitDecreased(String cause) {
+            limitDecreasesCounter(slug, cause).increment();
+        }
+
+        void firstToken(LlmCallClass callClass, int millis) {
+            firstTokenTimer(slug, callClass).record(millis, TimeUnit.MILLISECONDS);
+        }
+
+        void baselineReset() {
+            baselineResetsCounter(slug).increment();
         }
 
         void absorbed() {

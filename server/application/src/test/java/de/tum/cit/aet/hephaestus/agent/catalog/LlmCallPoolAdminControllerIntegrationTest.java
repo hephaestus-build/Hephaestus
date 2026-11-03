@@ -234,7 +234,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         var row = pools.findById(workspacePool).orElseThrow();
         assertThat(row.isDedicated()).isTrue();
         assertThat(row.getMaxConcurrentCalls()).isNull();
-        assertThat(row.getLearnedLimit()).isEqualTo(8);
+        assertThat(row.getLearnedLimit()).isEqualTo(4);
         assertThat(row.getSlug()).isEqualTo("own-workspace-model-" + own.getId());
         assertThat(pools.findById(instancePool).orElseThrow().getSlug()).isEqualTo("own-model-" + instance.getId());
 
@@ -296,17 +296,17 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
         LlmModel model = instanceModel();
         var row = pools.findById(model.getCallPoolId()).orElseThrow();
 
-        LlmCallPoolDTO capped = put(row.getId(), row.getSlug(), 4);
-        assertThat(capped.maxConcurrentCalls()).isEqualTo(4);
-        assertThat(capped.learnedLimit()).isEqualTo(8);
-        assertThat(capped.effectiveLimit()).isEqualTo(4);
+        LlmCallPoolDTO capped = put(row.getId(), row.getSlug(), 2);
+        assertThat(capped.maxConcurrentCalls()).isEqualTo(2);
+        assertThat(capped.learnedLimit()).isEqualTo(4);
+        assertThat(capped.effectiveLimit()).isEqualTo(2);
         assertThat(capped.conversationReserve()).isEqualTo(1);
         assertThat(capped.dedicated()).isTrue();
 
         LlmCallPoolDTO uncapped = put(row.getId(), row.getSlug(), null);
         assertThat(uncapped.maxConcurrentCalls()).isNull();
-        assertThat(uncapped.effectiveLimit()).isEqualTo(8);
-        assertThat(uncapped.conversationReserve()).isEqualTo(2);
+        assertThat(uncapped.effectiveLimit()).isEqualTo(4);
+        assertThat(uncapped.conversationReserve()).isEqualTo(1);
     }
 
     private LlmCallPoolDTO put(long id, String slug, @Nullable Integer ceiling) {

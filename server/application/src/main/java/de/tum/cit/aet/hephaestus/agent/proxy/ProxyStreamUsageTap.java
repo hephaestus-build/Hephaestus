@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,13 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
 
     private boolean malformedUsage;
 
+    private @Nullable LongConsumer firstEvent;
+
+    private long sentAt = System.nanoTime();
+
+    /** Written by the exchange's thread when the head arrives, read by the request thread for the first event. */
+    private volatile boolean served = true;
+
     ProxyStreamUsageTap(ObjectMapper objectMapper, boolean responsesProtocol) {
         this(objectMapper, responsesProtocol ? LlmApiProtocol.OPENAI_RESPONSES : LlmApiProtocol.OPENAI_COMPLETIONS);
     }
@@ -59,6 +67,24 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
         this.objectMapper = objectMapper;
         this.protocol = protocol;
         this.anthropicUsage = objectMapper.createObjectNode();
+    }
+
+    /**
+     * Receives the nanoseconds from the request to the stream's first event: the provider's first answer, after any
+     * time in its queue. Only a served stream counts, as a failure that answers at once says nothing about a queue.
+     */
+    void onFirstEvent(LongConsumer firstEvent) {
+        this.firstEvent = firstEvent;
+    }
+
+    /** The request leaves now; a second one, such as a retry without our usage request, starts the clock again. */
+    void sending() {
+        sentAt = System.nanoTime();
+        served = true;
+    }
+
+    void answered(boolean success) {
+        served = success;
     }
 
     @Override
@@ -92,6 +118,11 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
 
     private void handleLine(byte[] line) {
         int from = startsWith(line, DATA_PREFIX) ? DATA_PREFIX.length : -1;
+        if (from >= 0 && firstEvent != null) {
+            LongConsumer first = firstEvent;
+            firstEvent = null;
+            if (served) first.accept(System.nanoTime() - sentAt);
+        }
         if (from < 0 || !contains(line, USAGE_MARKER)) {
             return;
         }

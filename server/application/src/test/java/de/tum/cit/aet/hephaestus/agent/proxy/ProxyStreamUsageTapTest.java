@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,28 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
 
     private static void feed(ProxyStreamUsageTap tap, String text) {
         tap.accept(text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void shouldReportTheFirstEventOnceAndOnlyForAServedStream() {
+        List<Long> served = new ArrayList<>();
+        var tap = completionsTap();
+        tap.onFirstEvent(served::add);
+        tap.sending();
+        tap.answered(true);
+        feed(tap, ": keep-alive\n\ndata: {\"choices\":[]}\n\ndata: {\"choices\":[]}\n\n");
+
+        assertThat(served).hasSize(1);
+        assertThat(served.getFirst()).isNotNegative();
+
+        List<Long> refused = new ArrayList<>();
+        var failed = completionsTap();
+        failed.onFirstEvent(refused::add);
+        failed.sending();
+        failed.answered(false);
+        feed(failed, "data: {\"error\":{\"message\":\"busy\"}}\n\n");
+
+        assertThat(refused).isEmpty();
     }
 
     @Test

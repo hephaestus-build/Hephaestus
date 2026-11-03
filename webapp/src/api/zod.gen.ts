@@ -1960,6 +1960,7 @@ export const zCurrentUserView = z.object({
  * Provider capacity that the models in it share
  */
 export const zLlmCallPool = z.object({
+    baselineFirstTokenMs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     conversationReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     dedicated: z.boolean(),
     displayName: z.string(),

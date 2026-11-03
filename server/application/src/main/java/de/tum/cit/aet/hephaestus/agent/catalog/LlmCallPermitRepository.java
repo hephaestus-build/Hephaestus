@@ -147,15 +147,19 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
         long getWaitingTurns();
 
         long getWaitingBackground();
+
+        @Nullable
+        Integer getBaselineFirstTokenMs();
     }
 
     /** What every pool in use stands at, whichever worker holds its calls, for its gauges. */
     @Query(value = """
             SELECT p.slug AS "slug",p.learned_limit AS "learnedLimit",p.max_concurrent_calls AS "maxConcurrentCalls",
+              p.baseline_first_token_ms AS "baselineFirstTokenMs",
               count(*) FILTER (WHERE q.state='WAITING' AND q.call_class='TURN') AS "waitingTurns",
               count(*) FILTER (WHERE q.state='WAITING' AND q.call_class<>'TURN') AS "waitingBackground"
             FROM llm_call_pool p JOIN llm_call_permit q ON q.pool_id=p.id
-            GROUP BY p.id,p.slug,p.learned_limit,p.max_concurrent_calls
+            GROUP BY p.id,p.slug,p.learned_limit,p.max_concurrent_calls,p.baseline_first_token_ms
             """, nativeQuery = true)
     List<Backlog> backlog();
 

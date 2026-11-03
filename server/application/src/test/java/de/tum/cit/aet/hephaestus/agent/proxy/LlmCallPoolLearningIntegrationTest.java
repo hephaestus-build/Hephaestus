@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
@@ -21,9 +22,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -202,6 +205,132 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         assertThat(limit).isBetween(6, 24);
     }
 
+    /** A GPU server: it never refuses, runs what its slots hold, and queues the rest, so that first tokens come later. */
+    private static final class FakeGpu {
+        final Semaphore slots;
+        final AtomicLong tokens = new AtomicLong();
+        final AtomicInteger waiting = new AtomicInteger();
+        final AtomicInteger mostWaiting = new AtomicInteger();
+
+        FakeGpu(int slots) {
+            this.slots = new Semaphore(slots, true);
+        }
+
+        void call(Runnable firstToken) throws InterruptedException {
+            mostWaiting.accumulateAndGet(waiting.incrementAndGet(), Math::max);
+            slots.acquire();
+            waiting.decrementAndGet();
+            try {
+                Thread.sleep(50);
+                firstToken.run();
+                Thread.sleep(1_000);
+                tokens.addAndGet(100);
+            } finally {
+                slots.release();
+            }
+        }
+    }
+
+    @Test
+    void shouldLowerTheLimitFromFirstTokensAloneWhenAServerQueuesAndNeverRefuses(TestReporter reporter)
+            throws Exception {
+        long pool = ownPool();
+        String slug = slug(pool);
+        var gpu = new FakeGpu(8);
+        long ends = System.nanoTime() + Duration.ofSeconds(45).toNanos();
+        List<Integer> limits = new ArrayList<>();
+        try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> running = new ArrayList<>();
+            for (int i = 0; i < 60; i++) {
+                LlmCallPermits worker = i % 2 == 0 ? workerA : workerB;
+                UUID source = UUID.randomUUID();
+                running.add(calls.submit(() -> {
+                    while (System.nanoTime() < ends) {
+                        try (var permit = Objects.requireNonNull(worker.acquire(
+                                pool,
+                                LlmCallClass.EVENT,
+                                new LlmCallPermits.Caller(1L, source, 0, null),
+                                () -> false,
+                                Instant.now().plusSeconds(120)))) {
+                            long sent = System.nanoTime();
+                            gpu.call(() -> worker.firstToken(permit, System.nanoTime() - sent, true));
+                            permit.served(true);
+                        }
+                    }
+                    return null;
+                }));
+            }
+            while (System.nanoTime() < ends) {
+                TimeUnit.SECONDS.sleep(1);
+                limits.add(limit(pool));
+            }
+            for (var call : running) call.get(120, TimeUnit.SECONDS);
+        }
+
+        var row = pools.findById(pool).orElseThrow();
+        double delayDecreases = meters.get(AgentMetrics.LLM_POOL_LIMIT_DECREASES)
+                .tag("pool", slug)
+                .tag("cause", "delay")
+                .counter()
+                .count();
+        reporter.publishEntry(Map.of(
+                "gpuSlots", "8",
+                "gpuLimits", limits.toString(),
+                "gpuTokensPerSecond", Double.toString(gpu.tokens.get() / 45.0),
+                "gpuPeakTokensPerSecond", Double.toString(8 * 100.0 / 1.05),
+                "gpuMostWaiting", gpu.mostWaiting.toString(),
+                "gpuBaselineMs", String.valueOf(row.getBaselineFirstTokenMs())));
+        assertThat(delayDecreases).isPositive();
+        assertThat(meters.get(AgentMetrics.GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK)
+                        .tag("pool", slug)
+                        .tag("class", "event")
+                        .timer()
+                        .count())
+                .isPositive();
+        assertThat(meters.get(AgentMetrics.GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK)
+                        .tag("pool", slug)
+                        .tag("class", "turn")
+                        .timer()
+                        .count())
+                .isZero();
+        assertThat(row.getThrottledAt()).isNotNull();
+        assertThat(row.getNoCallBefore()).isNull();
+        assertThat(row.getBaselineFirstTokenMs()).isNotNull().isGreaterThanOrEqualTo(50);
+        assertThat(row.getLearnedLimit()).isBetween(LlmCallLimit.FLOOR, 30);
+        assertThat(gpu.tokens.get() / 45.0).isGreaterThan(0.7 * 8 * 100.0 / 1.05);
+        assertThat(rows.countActive(pool)).isZero();
+    }
+
+    @Test
+    void shouldNotRaiseALimitThatFirstTokensWatchForACallThatDidNotStream() {
+        long pool = ownPool();
+        setLimit(pool, 4);
+        jdbc.update("UPDATE llm_call_pool SET baseline_first_token_ms=900 WHERE id=?", pool);
+        var composition = admit(workerA, pool, LlmCallClass.COMPOSITION, 1);
+        var held = List.of(admit(workerA, pool, LlmCallClass.EVENT, 1), admit(workerA, pool, LlmCallClass.EVENT, 1));
+
+        composition.served(true);
+        composition.close();
+        held.forEach(LlmCallPermits.Permit::close);
+
+        assertThat(limit(pool)).isEqualTo(4);
+    }
+
+    @Test
+    void shouldLeaveASharedPoolAloneWhenAWorkspaceCredentialsCallIsSlow() {
+        long pool = sharedPool();
+        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+
+        workerA.firstToken(call, Duration.ofMinutes(5).toNanos(), false);
+        call.close();
+
+        await().during(Duration.ofMillis(300))
+                .atMost(Duration.ofSeconds(2))
+                .untilAsserted(
+                        () -> assertThat(pools.findById(pool).orElseThrow().getWindowSamples())
+                                .isZero());
+    }
+
     private void runCallers(FakeProvider provider, long pool, int callers) throws Exception {
         int before = provider.served.get();
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -240,6 +369,7 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         assertThat(limit(pool)).isEqualTo(3);
         assertThat(meters.get(AgentMetrics.LLM_POOL_LIMIT_DECREASES)
                         .tag("pool", slug(pool))
+                        .tag("cause", "refusal")
                         .counter()
                         .count())
                 .isEqualTo(2);
@@ -609,13 +739,14 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
                 pools, rows, transactions, LlmCallPermitsTestFixtures.PROPERTIES, id, registry, models);
     }
 
-    /** A pool as a model gets it from the database: dedicated, with no maximum, at the first limit. */
+    /** A pool as a model gets it from the database: dedicated, with no maximum. */
     private long ownPool() {
         var pool = new LlmCallPool();
         pool.setSlug("own-model-" + UUID.randomUUID());
         pool.setDisplayName("Own capacity");
         long id = pools.save(pool).getId();
-        jdbc.update("UPDATE llm_call_pool SET dedicated=TRUE WHERE id=?", id);
+        // These cases count from eight, which leaves room to fall and a reserve of two.
+        jdbc.update("UPDATE llm_call_pool SET dedicated=TRUE,learned_limit=8 WHERE id=?", id);
         return id;
     }
 
@@ -623,7 +754,9 @@ class LlmCallPoolLearningIntegrationTest extends BaseIntegrationTest {
         var pool = new LlmCallPool();
         pool.setSlug("shared-" + UUID.randomUUID());
         pool.setDisplayName("Shared capacity");
-        return pools.save(pool).getId();
+        long id = pools.save(pool).getId();
+        setLimit(id, 8);
+        return id;
     }
 
     private void setLimit(long pool, int limit) {

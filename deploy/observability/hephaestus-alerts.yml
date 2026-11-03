@@ -144,6 +144,27 @@ groups:
           severity: warning
         annotations:
           summary: LLM budget admission kept refusing work for 15 minutes
+      - alert: HephaestusModelRefusalsReachCallers
+        expr: >-
+          sum by (pool) (increase(llm_pool_upstream_throttled_total{job="hephaestus"}[10m]))
+          - sum by (pool) (increase(llm_pool_upstream_absorbed_total{job="hephaestus"}[10m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A model provider's refusals kept reaching callers for 15 minutes instead of only slowing them
+      - alert: HephaestusModelLimitAtFloor
+        expr: >-
+          max by (pool) (llm_pool_limit{job="hephaestus"}) <= 2
+          and on (pool) (
+            sum by (pool) (increase(llm_pool_limit_decreases_total{job="hephaestus"}[30m]))
+            + sum by (pool) (increase(llm_pool_first_token_baseline_resets_total{job="hephaestus"}[30m]))
+          ) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: A model's call limit stayed at its floor of two calls for 30 minutes while its provider refused or queued
       - alert: HephaestusAgentJobsFailing
         expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[1h])) >= 3
         labels:

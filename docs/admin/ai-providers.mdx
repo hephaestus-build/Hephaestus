@@ -513,7 +513,9 @@ They never see an upstream model ID, base URL, or credential.
 Every model has a call pool. You do not create it or set a number for it.
 The pool learns how many calls in flight the provider serves.
 The pool applies this limit across all workers and workspaces.
-When the provider refuses calls, all callers of that model wait, and their calls continue.
+When the provider refuses calls or queues them, all callers of that model wait, and their calls continue.
+
+A model server on your own GPUs, such as vLLM, queues calls by default. The pool reads this queue from the time to the first token.
 
 | What the system learns | What you can set |
 | --- | --- |
@@ -523,12 +525,12 @@ When the provider refuses calls, all callers of that model wait, and their calls
 | | `requestsPerMinute`, `tokensPerMinute` and `tokensPerCall`, if the provider publishes these rates |
 | | Which models share one pool |
 
-A new pool starts at 8 calls in flight, and the limit rises while the provider serves all of them.
+A new pool starts at 4 calls in flight, and the limit rises while the provider serves all of them.
 The [runtime guide](./runtime-roles.mdx#call-pools) explains how the limit changes.
 
 Use the instance admin API under `/api/admin/llm/call-pools` for all changes in this section:
 
-- `GET /api/admin/llm/call-pools` shows each pool's `learnedLimit`, `effectiveLimit`, `conversationReserve` and `throttledAt`.
+- `GET /api/admin/llm/call-pools` shows each pool's `learnedLimit`, `effectiveLimit`, `conversationReserve`, `throttledAt` and `baselineFirstTokenMs`.
 - `GET /api/admin/llm/call-pools/models` shows the pool of each model.
 
 ### Set a ceiling or a rate

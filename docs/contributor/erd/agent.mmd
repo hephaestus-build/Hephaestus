@@ -56,6 +56,9 @@ erDiagram
         INTEGER limit_credit "NOT NULL"
         TIMESTAMPTZ throttled_at
         BOOLEAN dedicated "NOT NULL"
+        INTEGER baseline_first_token_ms
+        INTEGER window_first_token_ms
+        INTEGER window_samples "NOT NULL"
     }
 
     LlmConnection {

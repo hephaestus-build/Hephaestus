@@ -2142,6 +2142,10 @@ export type ListedScanReportItem = {
  */
 export type LlmCallPool = {
     /**
+     * The fastest first token known from the provider, in milliseconds; null before the first
+     */
+    baselineFirstTokenMs?: number;
+    /**
      * How many of the effective limit's calls only conversations may use
      */
     conversationReserve: number;
@@ -2179,7 +2183,7 @@ export type LlmCallPool = {
      */
     slug: string;
     /**
-     * When a provider's refusal last lowered the learned limit
+     * When a provider's refusal or queue last lowered the learned limit
      */
     throttledAt?: string;
     tokensPerCall?: number;

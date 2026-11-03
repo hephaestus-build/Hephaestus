@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793778247489-1" author="hephaestus">
+        <comment>A pool reads its provider's queue from the time to the first token.</comment>
+        <addColumn tableName="llm_call_pool">
+            <column name="baseline_first_token_ms" type="INTEGER"/>
+            <column name="window_first_token_ms" type="INTEGER"/>
+            <column name="window_samples" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="llm_call_pool" columnName="window_samples"/>
+            <dropColumn tableName="llm_call_pool" columnName="window_first_token_ms"/>
+            <dropColumn tableName="llm_call_pool" columnName="baseline_first_token_ms"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793778247489-2" author="hephaestus">
+        <comment>A pool starts at 4 calls in flight, as a model server with few slots queues from the fifth call on. A pool that never lowered its limit still has its first value of 8 and starts again at 4.</comment>
+        <addDefaultValue tableName="llm_call_pool" columnName="learned_limit" columnDataType="INTEGER" defaultValueNumeric="4"/>
+        <update tableName="llm_call_pool">
+            <column name="learned_limit" valueNumeric="4"/>
+            <column name="limit_credit" valueNumeric="0"/>
+            <where>learned_limit = 8 AND throttled_at IS NULL</where>
+        </update>
+        <rollback>
+            <addDefaultValue tableName="llm_call_pool" columnName="learned_limit" columnDataType="INTEGER" defaultValueNumeric="8"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

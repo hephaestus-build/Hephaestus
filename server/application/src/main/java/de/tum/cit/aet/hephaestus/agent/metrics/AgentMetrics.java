@@ -35,6 +35,11 @@ public final class AgentMetrics {
     public static final String LLM_BUDGET_BLOCKED = "llm.budget.blocked";
     public static final String LLM_BUDGET_EXHAUSTED = "llm.budget.exhausted";
     public static final String LLM_POOL_COOLDOWN_ACTIVE = "llm.pool.cooldown.active";
+    /** GenAI semantic conventions v1.41.1: from the request after the pool's grant to a served stream's first event. */
+    public static final String GEN_AI_CLIENT_TIME_TO_FIRST_CHUNK = "gen_ai.client.operation.time_to_first_chunk";
+
+    public static final String LLM_POOL_FIRST_TOKEN_BASELINE = "llm.pool.first.token.baseline";
+    public static final String LLM_POOL_FIRST_TOKEN_BASELINE_RESETS = "llm.pool.first.token.baseline.resets";
     public static final String LLM_POOL_LIMIT = "llm.pool.limit";
     public static final String LLM_POOL_LIMIT_DECREASES = "llm.pool.limit.decreases";
     public static final String LLM_POOL_PERMITS_GRANTED = "llm.pool.permits.granted";

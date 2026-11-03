@@ -514,12 +514,31 @@ No worker holds a database connection while its call waits for a grant or for th
 
 | Event | Effect |
 | --- | --- |
-| New pool | The limit starts at 8 calls in flight |
-| A served call ended while the limit was full, and the provider did not refuse in the last 10 minutes | The limit rises by 1, so it doubles in about one call duration |
-| A served call ended while the limit was full, and the provider refused in the last 10 minutes | The limit rises by 1 for each limit's worth of such calls |
+| New pool | The limit starts at 4 calls in flight |
+| A served call ended while the limit was full. It did not wait in the provider's queue, and the limit did not fall in the last 10 minutes | The limit rises by 1, so it doubles in about one call duration |
+| Such a call ended, and the limit fell in the last 10 minutes | The limit rises by 1 for each limit's worth of such calls |
 | The provider answers 429, 529, or 503 | The limit falls to 70%, and never below 2. No call starts until the provider's `Retry-After` has passed, or for 5 seconds without one |
+| Even the fastest first token of a window of calls exceeds twice the baseline plus 1 second | The limit falls in proportion to that delay, to 70% at most and never below 2. Calls continue with no pause |
 
-A burst of refusals lowers the limit once: only a call that started under the current limit can lower it.
+A model server such as vLLM queues calls by default and refuses none, so a limit that learns only from refusals keeps rising.
+The pool measures the time from each streamed call's request to its first event.
+A window holds at least 4 such samples, and half of the limit when that is more.
+The baseline is the fastest first token that the pool knows.
+A queue delays every call behind it, and a long prompt delays only itself, so the pool compares only the fastest call of a window.
+
+A call without a stream, such as a feedback composition, gives no sample. It cannot raise a limit that first tokens watch.
+A model that only such calls use learns from refusals only.
+A failed answer gives no sample either, as it can arrive at once even behind a queue.
+
+The baseline is one value for all calls of a pool.
+Short prompts can set it, and only long prompts that miss the cache can follow.
+Then the limit falls to the floor once, takes their first token as the new baseline, and rises again.
+
+At a limit of 2, these calls alone cannot make a queue. If the window is still late, the pool takes that window as its new baseline, and the limit can rise again.
+Thus, a provider that became slower, or another tenant on the same server, cannot hold the limit at the floor.
+Tokens per second of one stream give no such signal. They fall while a batch fills and more calls still add throughput, and they stop falling at the point where the queue starts.
+
+A burst of refusals or late calls lowers the limit once: only a call that started under the current limit can lower it.
 The same rule applies to a served call that raises it.
 The limit does not rise while calls do not fill it.
 An instance admin's maximum is a ceiling on the limit.
@@ -527,7 +546,9 @@ An instance admin's maximum is a ceiling on the limit.
 The conversation reserve is a quarter of the limit, rounded up, and the limit always leaves one background call.
 A limit of 32 has a reserve of 8. A limit of 8 has a reserve of 2.
 When the limit falls, calls in flight continue. A conversation can still use its reserve while they end.
+
 A new provider pause applies to conversations too, as the provider would refuse their calls.
+A queue at the provider delays them too, which is why the limit stays below it.
 
 #### What a caller sees
 
