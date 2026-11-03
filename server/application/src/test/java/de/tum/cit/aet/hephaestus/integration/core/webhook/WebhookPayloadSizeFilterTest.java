@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -171,6 +173,26 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
     }
 
     @Test
+    void aBodyThatMissesItsDeadlineIsRefusedAndHoldsNothingAfterwards() throws Exception {
+        WebhookPayloadSizeFilter expired = new WebhookPayloadSizeFilter(
+                roomy,
+                meters,
+                new WebhookInFlightBudget(10L * LARGE, 1024, Duration.ofMillis(1)),
+                Duration.ofNanos(-1));
+
+        for (int bytes : new int[] {1024, LARGE}) {
+            MockHttpServletResponse refused = new MockHttpServletResponse();
+            expired.doFilter(delivery(bytes), refused, (request, ignored) -> readBody(request));
+            assertThat(refused.getStatus()).as(bytes + " bytes").isEqualTo(HttpServletResponse.SC_REQUEST_TIMEOUT);
+        }
+        assertThat(meters.get(IntegrationCoreMetrics.WEBHOOK_REJECTED)
+                        .tag("reason", "too-slow")
+                        .counter()
+                        .count())
+                .isEqualTo(2);
+    }
+
+    @Test
     void anEncodedPathIsGuardedLikeThePathItRoutesTo() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/%77ebhooks/github");
         request.setContent(new byte[2048]);
@@ -208,7 +230,7 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
         filter.doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
-        verify(chain, times(1)).doFilter(request, response);
+        verify(chain, times(1)).doFilter(any(), eq(response));
     }
 
     @Test

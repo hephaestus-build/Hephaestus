@@ -17,8 +17,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 
 /**
@@ -30,52 +32,85 @@ public class WebhookPayloadSizeFilter extends PayloadSizeFilter {
 
     private static final String UNIFIED_WEBHOOK_PREFIX = "/webhooks/";
 
+    /**
+     * The read timeout of the connector resets with each byte, so a sender that drips a body stays connected for as
+     * long as it likes. No provider waits this long for an answer: GitHub gives up after 10 seconds.
+     */
+    static final Duration BODY_DEADLINE = Duration.ofSeconds(30);
+
     private final MeterRegistry meterRegistry;
     private final Map<String, Counter> rejectionCounters = new ConcurrentHashMap<>();
     private final WebhookInFlightBudget budget;
+    private final Duration bodyDeadline;
 
     public WebhookPayloadSizeFilter(
             WebhookProperties properties, MeterRegistry meterRegistry, WebhookInFlightBudget budget) {
+        this(properties, meterRegistry, budget, BODY_DEADLINE);
+    }
+
+    WebhookPayloadSizeFilter(
+            WebhookProperties properties,
+            MeterRegistry meterRegistry,
+            WebhookInFlightBudget budget,
+            Duration bodyDeadline) {
         super(properties.http().maxPayloadBytes());
         this.meterRegistry = meterRegistry;
         this.budget = budget;
+        this.bodyDeadline = bodyDeadline;
     }
 
     @Override
     protected void accepted(
             HttpServletRequest request, HttpServletResponse response, FilterChain chain, long contentLength)
             throws ServletException, IOException {
-        if (contentLength >= 0 && contentLength <= WebhookInFlightBudget.SMALL_BODY_BYTES) {
-            chain.doFilter(request, response);
-            return;
-        }
-        try (WebhookInFlightBudget.Holding holding = budget.forArriving()) {
+        boolean small = contentLength >= 0 && contentLength <= WebhookInFlightBudget.SMALL_BODY_BYTES;
+        // A null resource is legal here: a small body counts only against the deadline.
+        try (WebhookInFlightBudget.Holding holding = small ? null : budget.forArriving()) {
+            CountedBody body = new CountedBody(request, holding, System.nanoTime() + bodyDeadline.toNanos());
             try {
-                chain.doFilter(new CountedBody(request, holding), response);
+                chain.doFilter(body, response);
             } catch (ServletException | RuntimeException failure) {
-                if (!holding.refused()) {
+                if (!body.refused()) {
                     throw failure;
                 }
             }
-            if (holding.refused()) {
-                refused(request, WebhookIngestPipeline.BUSY_REASON);
-                // A reader outside the MVC handlers lets the refusal reach this filter unanswered.
-                if (!response.isCommitted()) {
-                    response.reset();
-                    response.setHeader(HttpHeaders.RETRY_AFTER, WebhookIngestPipeline.BUSY_RETRY_AFTER_SECONDS);
-                    response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                }
+            if (body.tooSlow) {
+                answer(request, response, "too-slow", HttpServletResponse.SC_REQUEST_TIMEOUT);
+            } else if (body.refused()) {
+                answer(
+                        request,
+                        response,
+                        WebhookIngestPipeline.BUSY_REASON,
+                        HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             }
+        }
+    }
+
+    private void answer(HttpServletRequest request, HttpServletResponse response, String reason, int status) {
+        refused(request, reason);
+        // A reader outside the MVC handlers lets the refusal reach this filter unanswered.
+        if (!response.isCommitted()) {
+            response.reset();
+            response.setHeader(HttpHeaders.RETRY_AFTER, WebhookIngestPipeline.BUSY_RETRY_AFTER_SECONDS);
+            response.setStatus(status);
         }
     }
 
     /** Any reader of the body counts through here: the pipeline, and the controllers that read a body themselves. */
     private static final class CountedBody extends HttpServletRequestWrapper {
-        private final WebhookInFlightBudget.Holding holding;
+        private final WebhookInFlightBudget.@Nullable Holding holding;
+        private final long deadlineNanos;
+        private boolean tooSlow;
 
-        private CountedBody(HttpServletRequest request, WebhookInFlightBudget.Holding holding) {
+        private CountedBody(
+                HttpServletRequest request, WebhookInFlightBudget.@Nullable Holding holding, long deadlineNanos) {
             super(request);
             this.holding = holding;
+            this.deadlineNanos = deadlineNanos;
+        }
+
+        private boolean refused() {
+            return tooSlow || (holding != null && holding.refused());
         }
 
         @Override
@@ -112,7 +147,11 @@ public class WebhookPayloadSizeFilter extends PayloadSizeFilter {
                 }
 
                 private void count(int read) {
-                    if (!holding.add(read)) {
+                    if (System.nanoTime() - deadlineNanos > 0) {
+                        tooSlow = true;
+                        throw new WebhookBodyTooSlowException();
+                    }
+                    if (holding != null && !holding.add(read)) {
                         throw new WebhookReceiverBusyException();
                     }
                 }
