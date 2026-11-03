@@ -181,25 +181,59 @@ tests:
             exp_annotations:
               summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
 
-  - name: a stream above half of its byte bound for an hour fires, one that ages out does not
-    interval: 5m
+  - name: a stream that sheds before its age bound fires; one at its bound that keeps the promise, and a young one, do not
+    interval: 1m
     input_series:
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "432000x180"
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "604800x180"
       - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
-        values: "0.6x20"
+        values: "1x180"
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+        values: "600000x180"
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+        values: "604800x180"
       - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
-        values: "0.4x20"
+        values: "0.97x180"
+      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "3600x180"
+      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "259200x180"
+      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "0.01x180"
     alert_rule_test:
       - eval_time: 30m
-        alertname: HephaestusWebhookStreamNearByteBound
+        alertname: HephaestusWebhookRetentionBelowAgeBound
         exp_alerts: []
-      - eval_time: 70m
-        alertname: HephaestusWebhookStreamNearByteBound
+      - eval_time: 90m
+        alertname: HephaestusWebhookRetentionBelowAgeBound
         exp_alerts:
           - exp_labels:
               severity: warning
               stream: github
             exp_annotations:
-              summary: A webhook stream stayed above half of its byte bound; its age bound is too long for its volume
+              summary: A webhook stream sheds deliveries at its byte bound before its age bound; it keeps less than it promises
+
+  - name: a quiet stream that keeps undelivered events fires, a stream that drains does not
+    interval: 1m
+    input_series:
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "3x480"
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60"
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HephaestusStreamConsumerStopped
+        exp_alerts: []
+      - eval_time: 7h
+        alertname: HephaestusStreamConsumerStopped
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stream: slack
+            exp_annotations:
+              summary: A stream kept undelivered events for 6 hours; a consumer that stays stopped past its retention loses them
 
   - name: a receiver that keeps refusing deliveries for memory fires, one that stops does not
     interval: 1m

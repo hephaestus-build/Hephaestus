@@ -36,7 +36,7 @@ webhook:
     maxAgeByStream:
       slack: 7d
       outline: 7d
-    maxBytesGithub: 4294967296B
+    maxBytesGithub: 6442450944B
     maxBytes: 536870912B
 config:
   consumerInactiveThreshold: 30d

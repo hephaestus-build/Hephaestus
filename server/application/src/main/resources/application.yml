@@ -765,8 +765,8 @@ hephaestus:
             # The bound that holds a stream in steady state. Consumers acknowledge within seconds, so
             # the age only decides how long an offline deployment can resume from the stream;
             # reconciliation repairs what it misses inside hephaestus.sync.timeframe-days. Sized so a
-            # busy GitHub stream stays below half of its byte bound: a stream at its byte bound deletes
-            # its oldest message on every publish (WebhookIngestionCannotFailSilentlyTest).
+            # busy GitHub stream's byte bound holds it: a stream at its byte bound deletes its oldest
+            # message on every publish (WebhookIngestionCannotFailSilentlyTest).
             max-age: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE:7d}
             # Streams whose messages carry real personal content, not just change pointers. SQL is the
             # system of record and GDPR erasure cannot reach inside the broker, so these are capped

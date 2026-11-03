@@ -936,7 +936,7 @@ for (const name of ["small", "small-16gib", "external"] as const) {
 		const resources = rendered(layersFor(name));
 		const receiver = workload(resources, "webhook");
 		for (const [provider, ageKey, bytesKey, bytes] of [
-			["github", "MAX_AGE", "MAX_BYTES_GITHUB", "4294967296B"],
+			["github", "MAX_AGE", "MAX_BYTES_GITHUB", "6442450944B"],
 			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
 			["slack", "MAXAGEBYSTREAM_SLACK", "MAX_BYTES", "536870912B"],
 			["outline", "MAXAGEBYSTREAM_OUTLINE", "MAX_BYTES", "536870912B"],
@@ -989,7 +989,7 @@ await test("an existing installation can keep its broker budget and volume when 
 	);
 	assert.equal(
 		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
-		"4294967296B",
+		"6442450944B",
 	);
 	assert.equal(
 		String(

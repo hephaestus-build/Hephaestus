@@ -212,7 +212,13 @@ Each stream carries two bounds:
   `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` at `10GB`) is the disk-safety bound behind it.
   At this bound, the broker deletes the oldest message on every publish.
 
-Size the age so that your daily GitHub volume times the age stays below half of the GitHub byte bound.
+**A stream's retention is the shorter of its age bound and what its byte bound holds.**
+At 750 MB a day, a byte bound of 4 GiB holds about 5.5 days, whatever the age bound says.
+A consumer that stops for longer loses the older events from the stream.
+
+Size the byte bound so that it holds your daily GitHub volume times the age.
+With `discard old`, a stream at its byte bound is normal, and it loses nothing until the bound holds less than the age.
+`HephaestusWebhookRetentionBelowAgeBound` fires when it does.
 The defaults keep a busy instance (750 MB a day) at about 5 GB.
 Lower the age as your volume grows.
 `webhook.stream.oldest.message.age` shows the retention that your deployment gets.

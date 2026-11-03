@@ -16,6 +16,7 @@ public final class IntegrationCoreMetrics {
     public static final String WEBHOOK_REJECTED = "webhook.rejected";
     public static final String WEBHOOK_STREAM_BYTES = "webhook.stream.bytes";
     public static final String WEBHOOK_STREAM_BYTES_LIMIT = "webhook.stream.bytes.limit";
+    public static final String WEBHOOK_STREAM_AGE_BOUND = "webhook.stream.age.bound";
     public static final String WEBHOOK_STREAM_BYTES_UTILIZATION = "webhook.stream.bytes.utilization";
     public static final String WEBHOOK_STREAM_CONSUMER_ACK_PENDING = "webhook.stream.consumer.ack.pending";
     public static final String WEBHOOK_STREAM_CONSUMER_PENDING = "webhook.stream.consumer.pending";
