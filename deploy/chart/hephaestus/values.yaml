@@ -255,7 +255,8 @@ worker:
   replicas: 2
   # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
   # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes). The reviews tier's quota, the compositions and the
-  # threads that the worker's heap leaves room for follow it.
+  # threads that the worker's heap leaves room for follow it. The chart refuses a count that
+  # worker.resources.limits.memory cannot hold.
   reviews: 5
   # Resident turns per worker. Unprofiled clusters keep eight; the single-node profiles select auto.
   # Auto divides the declared CPU budget across workers,

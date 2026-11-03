@@ -713,16 +713,13 @@ It reads providers from the same instance/workspace catalog as the app pod.
 1. Register providers at runtime under Instance administration → AI models, or under the workspace's AI models page.
 2. Never register providers through an environment variable.
 
-Both capacities default to `auto`.
-Review capacity then sizes from `Runtime.availableProcessors()`.
 [Tunables](#tunables) gives the Conversation turn capacity.
-Override them only if the host is noisy.
 
-The JVM binds `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` and `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`.
-Set `worker.reviews` and `worker.conversationTurns` through the chart.
+The JVM binds `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` and `SANDBOX_MAX_CONCURRENT`.
+Set `worker.conversationTurns` and `worker.reviews` through the chart.
 
-`SANDBOX_MAX_CONCURRENT` also caps review capacity.
-A worker never claims a review when it already runs as many review sandboxes as the host permits.
+`SANDBOX_MAX_CONCURRENT` is the review capacity.
+A worker never claims a review when it already runs that many review sandboxes.
 A review that only writes its feedback holds no sandbox, so it does not count.
 The selected chart profile owns this limit.
 A higher review capacity there has no effect until you also raise the sandbox limit.

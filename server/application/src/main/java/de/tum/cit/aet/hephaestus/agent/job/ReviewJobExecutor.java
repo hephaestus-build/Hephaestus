@@ -583,12 +583,11 @@ public class ReviewJobExecutor {
         if (!sandboxManager.ready()) {
             return 0;
         }
-        int slots = Math.min(capacityState.map(WorkerCapacityState::reviewMax).orElse(Integer.MAX_VALUE), sandboxSlots);
         long holding = localRunningJobs.keySet().stream()
                 .filter(jobId -> !composingJobs.contains(jobId))
                 .count();
-        long free =
-                Math.min(slots - holding, agentProperties.maxConcurrentCompositions() - (long) localRunningJobs.size());
+        long free = Math.min(
+                sandboxSlots - holding, agentProperties.maxConcurrentCompositions() - (long) localRunningJobs.size());
         if (free <= 0) {
             return 0;
         }

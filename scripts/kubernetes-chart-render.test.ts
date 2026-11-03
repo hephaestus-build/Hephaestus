@@ -1696,6 +1696,28 @@ await test("what a worker holds for its reviews follows worker.reviews", () => {
 	});
 });
 
+await test("a worker takes any number of reviews that its memory limit holds", () => {
+	const base = [...layersFor("small"), { worker: { conversationTurns: 8 } }];
+	assert.ok(
+		render([
+			...base,
+			{
+				worker: {
+					reviews: 66,
+					resources: { limits: { memory: "3Gi" }, requests: { memory: "3Gi" } },
+				},
+			},
+		]).ok,
+	);
+	// Too little memory does not lower the reviews. The JVM would not start, or would run out of heap.
+	const tooMany = render([...base, { worker: { reviews: 66 } }]);
+	assert.equal(tooMany.ok, false);
+	assert.match(
+		tooMany.stderr,
+		/worker\.reviews 66 needs worker\.resources\.limits\.memory of at least 2065Mi/u,
+	);
+});
+
 await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
 	// Without a worker, a submitted review job would wait for a worker that never comes.
 	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");

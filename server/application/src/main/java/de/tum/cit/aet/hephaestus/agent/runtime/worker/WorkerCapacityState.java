@@ -11,8 +11,8 @@ public final class WorkerCapacityState {
     private final AtomicInteger inFlightReview = new AtomicInteger();
     private final int reviewMax;
 
-    public WorkerCapacityState(WorkerProperties properties) {
-        this.reviewMax = properties.capacity().resolveReviewMax();
+    public WorkerCapacityState(int reviewSlots) {
+        this.reviewMax = reviewSlots;
     }
 
     public void claimReview() {

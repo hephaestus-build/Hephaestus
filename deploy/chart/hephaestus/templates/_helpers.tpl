@@ -613,6 +613,25 @@ PostgreSQL volume.
 {{- end -}}
 {{- end -}}
 
+{{/*
+What a worker's memory limit must hold for its reviews. The buildpack reserves 240 MiB of code cache, 261 MiB of
+metaspace and a stack per thread, and gives the heap the rest. Too little does not bound the reviews: the JVM stops at its
+start, or runs out of heap. The heap needs what the role holds at rest, and what each review holds while it runs.
+*/}}
+{{- define "hephaestus.workerMemoryFitsReviews" -}}
+{{- $limit := .Values.worker.resources.limits.memory | toString -}}
+{{- $mi := 0 -}}
+{{- if hasSuffix "Gi" $limit -}}{{- $mi = mul (trimSuffix "Gi" $limit | int) 1024 -}}
+{{- else if hasSuffix "Mi" $limit -}}{{- $mi = trimSuffix "Mi" $limit | int -}}
+{{- else -}}{{- fail "worker.resources.limits.memory must end in Mi or Gi" -}}
+{{- end -}}
+{{- $reviews := int .Values.worker.reviews -}}
+{{- $required := add 501 120 (mul 8 $reviews) 256 (mul 10 $reviews) -}}
+{{- if lt (int $mi) (int $required) -}}
+{{- fail (printf "worker.reviews %d needs worker.resources.limits.memory of at least %dMi for its threads and heap" $reviews $required) -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Compositions run after a review's sandbox ends, and they take about half as long as the sandbox. */}}
 {{- define "hephaestus.activeCompositions" -}}
 {{- max 4 (div (add (int .Values.worker.reviews) 1) 2) -}}

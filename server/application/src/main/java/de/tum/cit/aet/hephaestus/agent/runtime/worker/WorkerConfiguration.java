@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -16,8 +17,8 @@ import org.springframework.context.annotation.Configuration;
 public class WorkerConfiguration {
 
     @Bean
-    WorkerCapacityState workerCapacityState(WorkerProperties properties, MeterRegistry meterRegistry) {
-        WorkerCapacityState state = new WorkerCapacityState(properties);
+    WorkerCapacityState workerCapacityState(SandboxProperties sandbox, MeterRegistry meterRegistry) {
+        WorkerCapacityState state = new WorkerCapacityState(sandbox.maxConcurrentContainers());
         registerCapacityGauges(meterRegistry, state);
         return state;
     }

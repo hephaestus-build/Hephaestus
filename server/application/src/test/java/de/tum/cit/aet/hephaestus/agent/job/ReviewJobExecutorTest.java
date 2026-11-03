@@ -1135,8 +1135,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         600,
                         null)
                 .toJson(new JsonMapper()));
+        sandboxProperties = new SandboxProperties(1, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         var workerCapacity = mock(WorkerCapacityState.class);
-        when(workerCapacity.reviewMax()).thenReturn(1);
         capacity = Optional.of(workerCapacity);
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
@@ -1258,8 +1258,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         600,
                         null)
                 .toJson(new JsonMapper()));
+        sandboxProperties = new SandboxProperties(1, 10, 60, new SandboxProperties.DefaultResourceLimits(1.5));
         var workerCapacity = mock(WorkerCapacityState.class);
-        when(workerCapacity.reviewMax()).thenReturn(1);
         capacity = Optional.of(workerCapacity);
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
