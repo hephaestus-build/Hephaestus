@@ -90,7 +90,11 @@ public class ReviewJobCompletionService {
                         || assignments.hasStaged(job)))
             for (var assignment : job.getInput().assignments())
                 members.fail(
-                        job.getWorkspaceId(), assignment, reason, "The execution ended without an admitted result");
+                        job.getWorkspaceId(),
+                        assignment,
+                        job.getId(),
+                        reason,
+                        "The execution ended without an admitted result");
         var capture = job.getCapture();
         boolean runtimeIncomplete =
                 admitted && capture != null && !capture.path("nonResults").isEmpty();
@@ -105,6 +109,7 @@ public class ReviewJobCompletionService {
                 members.fail(
                         job.getWorkspaceId(),
                         assignment.id(),
+                        job.getId(),
                         ReviewStopReason.valueOf(nonResult.path("reason").asString()),
                         "Runtime execution ended without a result for this practice");
             }

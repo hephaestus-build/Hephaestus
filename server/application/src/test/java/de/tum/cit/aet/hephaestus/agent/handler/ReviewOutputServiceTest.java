@@ -717,7 +717,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .satisfies(result -> assertThat(result.practiceId()).isEqualTo(31));
         assertThat(Objects.requireNonNull(job.getCapture()).path("nonResults"))
                 .isEqualTo(mapper.valueToTree(request.nonResults()));
-        verify(membership).fail(eq(1L), eq(second.id()), eq(ReviewStopReason.BUDGET), any());
+        verify(membership).fail(eq(1L), eq(second.id()), eq(job.getId()), eq(ReviewStopReason.BUDGET), any());
     }
 
     @Test
@@ -732,7 +732,12 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         prepare(job, request).record(job);
         assertThat(staged).isEmpty();
         verify(membership)
-                .fail(eq(1L), eq(RuntimeReviewTestData.assignment(5L, null).id()), eq(ReviewStopReason.BUDGET), any());
+                .fail(
+                        eq(1L),
+                        eq(RuntimeReviewTestData.assignment(5L, null).id()),
+                        eq(job.getId()),
+                        eq(ReviewStopReason.BUDGET),
+                        any());
         verifyNoInteractions(results, verifier);
     }
 

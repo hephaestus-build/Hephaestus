@@ -21,5 +21,10 @@ public interface ReviewAssignmentStore {
 
     void withhold(long workspaceId, ReviewAssignmentId assignment, CandidateRefusal reason, String message);
 
-    void fail(long workspaceId, ReviewAssignmentId assignment, ReviewStopReason reason, String message);
+    /**
+     * Ends a listed or staged practice without a result. Only {@code jobId}, the invocation bound to it, may do so:
+     * while it runs, and after it ends until its processing settles. The caller fences {@code jobId} on its lease and
+     * attempt.
+     */
+    void fail(long workspaceId, ReviewAssignmentId assignment, UUID jobId, ReviewStopReason reason, String message);
 }

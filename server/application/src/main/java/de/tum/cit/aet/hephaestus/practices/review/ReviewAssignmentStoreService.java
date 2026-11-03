@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -162,17 +163,19 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
     @Override
     @Transactional
     public void withhold(long workspaceId, ReviewAssignmentId assignment, CandidateRefusal reason, String message) {
-        recordWithheld(workspaceId, assignment, reason.wireValue(), message, false);
+        recordWithheld(workspaceId, assignment, reason.wireValue(), message, null);
     }
 
     @Override
     @Transactional
-    public void fail(long workspaceId, ReviewAssignmentId assignment, ReviewStopReason reason, String message) {
-        recordWithheld(workspaceId, assignment, reason.name(), message, true);
+    public void fail(
+            long workspaceId, ReviewAssignmentId assignment, UUID jobId, ReviewStopReason reason, String message) {
+        recordWithheld(workspaceId, assignment, reason.name(), message, jobId);
     }
 
     private void recordWithheld(
-            long workspaceId, ReviewAssignmentId id, String reason, String message, boolean terminalFailure) {
+            long workspaceId, ReviewAssignmentId id, String reason, String message, @Nullable UUID failedBy) {
+        boolean terminalFailure = failedBy != null;
         var review = reviews.lockByIdAndWorkspaceId(id.reviewId(), workspaceId).orElseThrow();
         if (review.getStatus().isTerminal()
                 || (!terminalFailure
@@ -188,10 +191,14 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 .orElseThrow();
         if (member.getState() != ReviewItemState.LISTED
                 && !(terminalFailure && member.getState() == ReviewItemState.STAGED)) return;
-        if (terminalFailure
-                && (member.getJobId() == null
-                        || !runtime.unsettledJobIds(workspaceId, id.reviewId()).contains(member.getJobId())))
-            throw new IllegalStateException("Only the bound terminal invocation can record an execution failure.");
+        // A practice is staged while its attempt runs (ADR 0063), so the bound invocation may end one as soon as it
+        // fails, and after the attempt ends until its processing settles.
+        if (failedBy != null
+                && (!failedBy.equals(member.getJobId())
+                        || !(runtime.activeJobIds(workspaceId, id.reviewId()).contains(failedBy)
+                                || runtime.unsettledJobIds(workspaceId, id.reviewId())
+                                        .contains(failedBy))))
+            throw new IllegalStateException("Only the bound invocation can record an execution failure.");
         member.setState(ReviewItemState.WITHHELD);
         member.setReason(reason);
         member.setAttemptedAt(clock.instant());

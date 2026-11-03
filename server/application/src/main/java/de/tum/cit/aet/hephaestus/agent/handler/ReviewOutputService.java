@@ -185,6 +185,7 @@ public class ReviewOutputService {
                 assignmentStore.fail(
                         owned.getWorkspaceId(),
                         assignment.id(),
+                        owned.getId(),
                         nonResult.reason(),
                         "The runtime ended this practice without a result.");
             }

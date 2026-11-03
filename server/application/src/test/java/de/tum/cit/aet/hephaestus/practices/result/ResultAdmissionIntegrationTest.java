@@ -409,6 +409,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assignments.fail(
                 workspaceId,
                 assignment,
+                pending.jobId(),
                 ReviewStopReason.CANCELLED,
                 "The invoked execution stopped before admitting a result.");
         assertThat(jdbc.sql("SELECT state FROM review_item WHERE workspace_id=:ws AND review_id=:review")

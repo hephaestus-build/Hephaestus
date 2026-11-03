@@ -625,6 +625,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
             members.fail(
                     job.getWorkspaceId(),
                     settled.id(),
+                    job.getId(),
                     ReviewStopReason.PREPARATION_FAILED,
                     "The execution ended without an admitted result");
 

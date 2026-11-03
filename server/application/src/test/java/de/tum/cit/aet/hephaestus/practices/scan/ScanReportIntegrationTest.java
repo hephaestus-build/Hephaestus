@@ -488,6 +488,7 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         assignments.fail(
                 workspaceId,
                 assignment,
+                jobId,
                 ReviewStopReason.CANCELLED,
                 "The invoked execution stopped before admitting a result.");
         jdbc.sql("UPDATE review_job SET processing_status='FAILED' WHERE workspace_id=:ws AND id=:id")
