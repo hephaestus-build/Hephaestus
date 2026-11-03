@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="20261103081558-1" author="hephaestus">
+        <preConditions onFail="HALT"><tableExists tableName="practice_version"/><tableExists tableName="review_job_script_usage"/><tableExists tableName="review_item"/></preConditions>
+        <comment>Retires the five practices of the first seed, which repeat catalog practices. Only rows with an unedited definition change. A row with no review history goes. A row with history stays with its results: Reviewed by Nobody stops new reviews, and feedback Off stops what was not delivered.</comment>
+        <sql splitStatements="true"><![CDATA[
+CREATE TEMP TABLE seeded_practice ON COMMIT DROP AS
+SELECT p.id, p.workspace_id, v.definition, s.note,
+    (SELECT max(all_versions.number) FROM practice_version all_versions WHERE all_versions.practice_id=p.id) AS last_number,
+    EXISTS (SELECT 1 FROM result x WHERE x.practice_id=p.id)
+        OR EXISTS (SELECT 1 FROM review_practice x WHERE x.practice_id=p.id)
+        OR EXISTS (SELECT 1 FROM review_item x WHERE x.practice_id=p.id)
+        OR EXISTS (SELECT 1 FROM review_job_script_run x WHERE x.practice_id=p.id)
+        OR EXISTS (SELECT 1 FROM review_job_script_usage x WHERE x.practice_id=p.id) AS reviewed
+FROM practice p
+JOIN practice_version v ON v.id=p.current_version_id
+JOIN (VALUES
+    ('commit-message-quality','e4b3301e826d76116d0f03596b3221c3','Retired in 1.0: it repeats the catalog practice Write commit subjects a reviewer can follow. Hephaestus no longer reviews it, and its feedback is off. Its results stay. To bring it back, set Reviewed by to Hephaestus, remove this note and choose a feedback mode.'),
+    ('error-handling','fe98da4a0ca2c5046a942ecc93a2ff61','Retired in 1.0: it repeats the catalog practice Handle errors instead of swallowing them. Hephaestus no longer reviews it, and its feedback is off. Its results stay. To bring it back, set Reviewed by to Hephaestus, remove this note and choose a feedback mode.'),
+    ('pr-description-quality','c9069c97ada1e65a2e93e42df001a530','Retired in 1.0: it repeats the catalog practice Describe what changed and why. Hephaestus no longer reviews it, and its feedback is off. Its results stay. To bring it back, set Reviewed by to Hephaestus, remove this note and choose a feedback mode.'),
+    ('pr-scope','d096cce35fa18a30dfbcba77fec9fbf1','Retired in 1.0: it repeats the catalog practice Keep the change reviewable. Hephaestus no longer reviews it, and its feedback is off. Its results stay. To bring it back, set Reviewed by to Hephaestus, remove this note and choose a feedback mode.'),
+    ('review-thoroughness','e9d41685832d77e61d5dcdc1bf061afa','Retired in 1.0: it came from an early version, and the catalog does not offer it. Hephaestus no longer reviews it, and its feedback is off. Its results stay. To bring it back, set Reviewed by to Hephaestus, choose review events that this kind of work offers, remove this note and choose a feedback mode.')
+) AS s(slug,definition_md5,note) ON s.slug=p.slug AND s.definition_md5=md5(v.definition::text)
+WHERE p.catalog_slug IS NULL;
+
+DELETE FROM practice WHERE id IN (SELECT id FROM seeded_practice WHERE NOT reviewed);
+
+INSERT INTO practice_version(workspace_id,practice_id,number,definition)
+SELECT workspace_id,id,last_number+1,
+    jsonb_set(
+        jsonb_set(definition,'{reviewedBy,by}','"NOBODY"'),
+        '{reviewedBy,limits}',
+        (definition#>'{reviewedBy,limits}') || jsonb_build_object('code','RETIRED_SEEDED_PRACTICE','description',note))
+FROM seeded_practice WHERE reviewed;
+
+UPDATE practice p
+SET current_version_id=v.id, feedback_mode='OFF', updated_at=now()
+FROM seeded_practice s
+JOIN practice_version v ON v.practice_id=s.id AND v.number=s.last_number+1
+WHERE p.id=s.id AND s.reviewed;
+        ]]></sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup and start the previous release. Deleted seed practices had no review history, so nothing about a person is lost.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

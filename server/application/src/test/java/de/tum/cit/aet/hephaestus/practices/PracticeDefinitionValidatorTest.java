@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -24,12 +25,16 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.PullRequestReviewIt
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class PracticeDefinitionValidatorTest extends BaseUnitTest {
     private PracticeDefinitionValidator validator;
@@ -58,6 +63,46 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 .when(descriptor.reviewCapabilities())
                 .thenReturn(new ReviewCapabilities(List.of(), List.of(), Set.of(), Set.of(), Set.of()));
         validator = new PracticeDefinitionValidator(sources, options);
+    }
+
+    /** An admin who brings back a retired seed practice saves it as Hephaestus again, against the real catalog. */
+    @Test
+    void shouldAcceptARetiredSeedPracticeAsNobodyAndAgainAsHephaestus() throws Exception {
+        var mapper = JsonMapper.builder().build();
+        var real = new PracticeDefinitionValidator(
+                new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC()),
+                new PracticeItemOptions(new ItemDescriptorRegistry(
+                        List.of(new PullRequestItemDescriptor(), new PullRequestReviewItemDescriptor()))));
+        JsonNode seeded;
+        try (var input = Objects.requireNonNull(
+                getClass().getResourceAsStream("/db/practice-retired/seeded-definitions.json"))) {
+            seeded = mapper.readTree(input);
+        }
+        var kind = new ItemKind("scm.pull_request");
+        for (var entry : seeded.properties()) {
+            var restored = (ObjectNode) entry.getValue().deepCopy();
+            if (entry.getKey().equals("review-thoroughness")) {
+                // It listens for an event of another kind of work, so it never ran. Bringing it back needs a valid
+                // event.
+                assertThatThrownBy(() -> real.validate(kind, mapper.treeToValue(restored, PracticeDefinition.class)))
+                        .hasMessage("Choose review events offered for this item kind.");
+                ((ObjectNode) restored.path("reviewOn")).putArray("events").add("scm.pull_request.opened");
+            }
+            var retired = restored.deepCopy();
+            ((ObjectNode) retired.path("reviewedBy")).put("by", "NOBODY");
+            ((ObjectNode) retired.path("reviewedBy"))
+                    .withArray("limits")
+                    .addObject()
+                    .put("code", "RETIRED_SEEDED_PRACTICE")
+                    .put("description", "Retired in 1.0.");
+
+            assertThatCode(() -> real.validate(kind, mapper.treeToValue(retired, PracticeDefinition.class)))
+                    .as(entry.getKey())
+                    .doesNotThrowAnyException();
+            assertThatCode(() -> real.validate(kind, mapper.treeToValue(restored, PracticeDefinition.class)))
+                    .as(entry.getKey())
+                    .doesNotThrowAnyException();
+        }
     }
 
     @Test
