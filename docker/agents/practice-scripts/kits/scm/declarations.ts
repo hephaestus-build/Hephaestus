@@ -23,7 +23,20 @@ interface StringSyntax {
 	interpolation?: [open: string, openBracket: string, closeBracket: string];
 	/** Swift `#"…"#`: the literal may be prefixed by hashes that the closing delimiter must repeat. */
 	hashPrefixed?: boolean;
+	/** The language ends this literal at its line, so an apostrophe elsewhere cannot hide the next lines. */
+	endsAtLine?: boolean;
 }
+
+/** One-line literals, for a language where a quote cannot span lines. */
+const oneLine = (
+	open: string,
+	rest: Omit<StringSyntax, "open" | "close" | "endsAtLine"> = {},
+): StringSyntax => ({
+	open,
+	close: open,
+	endsAtLine: true,
+	...rest,
+});
 
 interface Syntax {
 	/** Named groups `kind`, `name`, `supertypes`; tested against each line. */
@@ -32,6 +45,9 @@ interface Syntax {
 	blockComment?: [string, string];
 	nestedBlockComments?: boolean;
 	strings: StringSyntax[];
+	alsoLineComment?: string;
+	/** The language has `/…/` regular expression literals. */
+	regexLiterals?: boolean;
 }
 
 const MODIFIERS = String.raw`(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|fileprivate|internal|protected|open|final|abstract|static|sealed|data|inner|value|indirect|partial|export|default|declare|pub(?:\([^)]*\))?|unsafe)\s+)*`;
@@ -45,9 +61,10 @@ const TYPESCRIPT: Syntax = {
 	blockComment: ["/*", "*/"],
 	strings: [
 		{ open: "`", close: "`", escape: "\\", interpolation: ["${", "{", "}"] },
-		{ open: '"', close: '"', escape: "\\" },
-		{ open: "'", close: "'", escape: "\\" },
+		oneLine('"', { escape: "\\" }),
+		oneLine("'", { escape: "\\" }),
 	],
+	regexLiterals: true,
 };
 
 const SYNTAX: Record<string, Syntax> = {
@@ -73,6 +90,7 @@ const SYNTAX: Record<string, Syntax> = {
 				escape: "\\",
 				interpolation: [String.raw`\(`, "(", ")"],
 				hashPrefixed: true,
+				endsAtLine: true,
 			},
 		],
 	},
@@ -86,8 +104,8 @@ const SYNTAX: Record<string, Syntax> = {
 		nestedBlockComments: true,
 		strings: [
 			{ open: '"""', close: '"""', interpolation: ["${", "{", "}"] },
-			{ open: '"', close: '"', escape: "\\", interpolation: ["${", "{", "}"] },
-			{ open: "'", close: "'", escape: "\\" },
+			oneLine('"', { escape: "\\", interpolation: ["${", "{", "}"] }),
+			oneLine("'", { escape: "\\" }),
 		],
 	},
 	java: {
@@ -99,8 +117,8 @@ const SYNTAX: Record<string, Syntax> = {
 		blockComment: ["/*", "*/"],
 		strings: [
 			{ open: '"""', close: '"""', escape: "\\" },
-			{ open: '"', close: '"', escape: "\\" },
-			{ open: "'", close: "'", escape: "\\" },
+			oneLine('"', { escape: "\\" }),
+			oneLine("'", { escape: "\\" }),
 		],
 	},
 	typescript: TYPESCRIPT,
@@ -113,10 +131,16 @@ const SYNTAX: Record<string, Syntax> = {
 		lineComment: "//",
 		blockComment: ["/*", "*/"],
 		strings: [
-			{ open: '$"', close: '"', escape: "\\", interpolation: ["{", "{", "}"] },
+			{
+				open: '$"',
+				close: '"',
+				escape: "\\",
+				interpolation: ["{", "{", "}"],
+				endsAtLine: true,
+			},
 			{ open: '@"', close: '"' },
-			{ open: '"', close: '"', escape: "\\" },
-			{ open: "'", close: "'", escape: "\\" },
+			oneLine('"', { escape: "\\" }),
+			oneLine("'", { escape: "\\" }),
 		],
 	},
 	go: {
@@ -126,8 +150,8 @@ const SYNTAX: Record<string, Syntax> = {
 		blockComment: ["/*", "*/"],
 		strings: [
 			{ open: "`", close: "`" },
-			{ open: '"', close: '"', escape: "\\" },
-			{ open: "'", close: "'", escape: "\\" },
+			oneLine('"', { escape: "\\" }),
+			oneLine("'", { escape: "\\" }),
 		],
 	},
 	rust: {
@@ -140,6 +164,10 @@ const SYNTAX: Record<string, Syntax> = {
 		nestedBlockComments: true,
 		strings: [
 			{ open: 'r#"', close: '"#' },
+			{ open: 'r"', close: '"' },
+			// A quote mark as a character. A lifetime such as `'a` has no closing mark, so `'` opens nothing.
+			{ open: `'"'`, close: "" },
+			{ open: String.raw`'\''`, close: "" },
 			{ open: '"', close: '"', escape: "\\" },
 		],
 	},
@@ -191,6 +219,9 @@ function skipString(source: string, from: number, spec: StringSyntax, all: Strin
 	while (i < source.length) {
 		if (startsWith(source, i, close)) {
 			return i + close.length;
+		}
+		if (spec.endsAtLine === true && source[i] === "\n") {
+			return i;
 		}
 		if (
 			interpolation !== undefined &&
@@ -280,6 +311,11 @@ function braceEvents(source: string, syntax: Syntax): { brace: "{" | "}"; line: 
 		const string = stringOpeningAt(source, i, syntax.strings);
 		if (string) {
 			advanceTo(skipString(source, i, string, syntax.strings));
+			continue;
+		}
+		const regexEnd = syntax.regexLiterals === true && ch === "/" ? regexLiteralEnd(source, i) : -1;
+		if (regexEnd !== -1) {
+			advanceTo(regexEnd);
 			continue;
 		}
 		if (ch === "{" || ch === "}") {
@@ -408,25 +444,86 @@ export function enclosingDeclaration(decls: Declaration[], line: number): Declar
 	return best;
 }
 
-/** Replace comments and string contents with spaces while retaining match offsets and line breaks. */
-export function maskSource(language: string | null, source: string): string {
+const NO_DECLARATIONS = /^$/u;
+const PYTHON: Syntax = {
+	declaration: NO_DECLARATIONS,
+	lineComment: "#",
+	strings: [
+		{ open: '"""', close: '"""', escape: "\\" },
+		{ open: "'''", close: "'''", escape: "\\" },
+		oneLine('"', { escape: "\\" }),
+		oneLine("'", { escape: "\\" }),
+	],
+};
+const RUBY: Syntax = {
+	declaration: NO_DECLARATIONS,
+	lineComment: "#",
+	strings: [
+		oneLine('"', { escape: "\\", interpolation: ["#{", "{", "}"] }),
+		oneLine("'", { escape: "\\" }),
+	],
+	regexLiterals: true,
+};
+const C_LIKE: Syntax = {
+	declaration: NO_DECLARATIONS,
+	lineComment: "//",
+	blockComment: ["/*", "*/"],
+	strings: [oneLine('"', { escape: "\\" }), oneLine("'", { escape: "\\" })],
+};
+
+/** Languages with no declarations here: their location stays unknown, but comments and strings are known. */
+const MASK_ONLY: Record<string, Syntax> = {
+	python: PYTHON,
+	ruby: RUBY,
+	c: C_LIKE,
+	"objective-c": C_LIKE,
+	php: { ...C_LIKE, alsoLineComment: "#" },
+};
+
+/**
+ * The end of a `/…/` regular expression literal that starts here, or -1. A slash after a value is a
+ * division, and one after `<` closes a JSX tag. An unclosed literal on its line is no literal.
+ */
+function regexLiteralEnd(source: string, at: number): number {
+	const before = source.slice(Math.max(0, at - 16), at).trimEnd();
+	const last = before.at(-1);
+	if (
+		last !== undefined &&
+		!"(,=:[!&|?{};+-*%~^\n".includes(last) &&
+		!/(?:^|[^\w$.])(?:return|typeof|case|in|of|delete|void|throw|new|else|do|yield|await)$/u.test(
+			before,
+		)
+	) {
+		return -1;
+	}
+	let inClass = false;
+	for (let i = at + 1; i < source.length; i += 1) {
+		const ch = source[i];
+		if (ch === "\n") {
+			return -1;
+		}
+		if (ch === "\\") {
+			i += 1;
+		} else if (ch === "[") {
+			inClass = true;
+		} else if (ch === "]") {
+			inClass = false;
+		} else if (ch === "/" && !inClass) {
+			return i + 1;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Replace comments and string contents with spaces while retaining match offsets and line breaks.
+ * With `strings` false, only comments are replaced: a rule can quote a string, but not read a comment.
+ */
+export function maskSource(language: string | null, source: string, strings = true): string {
 	if (language === null) {
 		return source;
 	}
-	const syntax: Syntax | undefined =
-		SYNTAX[language] ??
-		(language === "python" || language === "ruby"
-			? {
-					declaration: /^$/u,
-					lineComment: "#",
-					strings: [
-						{ open: '"""', close: '"""', escape: "\\" },
-						{ open: "'''", close: "'''", escape: "\\" },
-						{ open: '"', close: '"', escape: "\\" },
-						{ open: "'", close: "'", escape: "\\" },
-					],
-				}
-			: undefined);
+	const syntax: Syntax | undefined = SYNTAX[language] ?? MASK_ONLY[language];
 	if (syntax === undefined) {
 		return source;
 	}
@@ -441,6 +538,9 @@ export function maskSource(language: string | null, source: string): string {
 	};
 	const maskLiteral = (from: number, literal: StringSyntax): number => {
 		const end = skipString(source, from, literal, syntax.strings);
+		if (!strings) {
+			return end;
+		}
 		const hashes = opensAt(source, from, literal) ?? 0;
 		const raw = "#".repeat(hashes);
 		const marker = interpolationOpener(literal, hashes, raw);
@@ -474,7 +574,10 @@ export function maskSource(language: string | null, source: string): string {
 	};
 	let at = 0;
 	while (at < source.length) {
-		if (source.startsWith(syntax.lineComment, at)) {
+		if (
+			source.startsWith(syntax.lineComment, at) ||
+			(syntax.alsoLineComment !== undefined && source.startsWith(syntax.alsoLineComment, at))
+		) {
 			const end = source.indexOf("\n", at);
 			const next = end === -1 ? source.length : end;
 			blank(at, next);
@@ -503,6 +606,15 @@ export function maskSource(language: string | null, source: string): string {
 		const literal = stringOpeningAt(source, at, syntax.strings);
 		if (literal !== undefined) {
 			at = maskLiteral(at, literal);
+			continue;
+		}
+		const regexEnd =
+			syntax.regexLiterals === true && source[at] === "/" ? regexLiteralEnd(source, at) : -1;
+		if (regexEnd !== -1) {
+			if (strings) {
+				blank(at, regexEnd);
+			}
+			at = regexEnd;
 			continue;
 		}
 		at += 1;

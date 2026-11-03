@@ -152,6 +152,18 @@
 				},
 				{
 					"at": {
+						"file": "src/lib.rs",
+						"line": 9,
+						"endLine": 9
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "rust",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
 						"file": "src/main/App.java",
 						"line": 5,
 						"endLine": 5
@@ -233,20 +245,44 @@
 						"language": "typescript",
 						"call": "A selected call that writes debug output, such as print, console.log or println."
 					}
+				},
+				{
+					"at": {
+						"file": "web/page.tsx",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "typescript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
+				},
+				{
+					"at": {
+						"file": "web/quote.js",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected call that writes debug output, such as print, console.log or println.",
+					"facts": {
+						"language": "javascript",
+						"call": "A selected call that writes debug output, such as print, console.log or println."
+					}
 				}
 			],
 			"facts": {
-				"debugCandidates": 12,
+				"debugCandidates": 15,
 				"todoCandidates": 0,
 				"processNotes": 0,
 				"placeholders": 0,
-				"typescript": 4,
-				"javascript": 0,
+				"typescript": 5,
+				"javascript": 1,
 				"python": 2,
 				"go": 1,
 				"java": 2,
 				"kotlin": 1,
-				"rust": 0,
+				"rust": 1,
 				"ruby": 1,
 				"c": 0,
 				"objectiveC": 0,
@@ -255,7 +291,7 @@
 				"swift": 1
 			},
 			"directions": [
-				"Found 12 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log."
+				"Found 15 debug-output call(s) on selected lines (print/console/log-style) — investigate whether each is leftover debug residue or a deliberate, intent-revealing log."
 			]
 		}
 	],

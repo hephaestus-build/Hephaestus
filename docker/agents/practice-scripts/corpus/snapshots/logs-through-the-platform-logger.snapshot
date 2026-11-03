@@ -268,6 +268,36 @@
 				},
 				{
 					"at": {
+						"file": "web/page.tsx",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "typescript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
+						"file": "web/quote.js",
+						"line": 3,
+						"endLine": 3
+					},
+					"label": "A selected print-style call, such as print, println, console.log or System.out.",
+					"facts": {
+						"language": "javascript",
+						"call": "console.*",
+						"enclosing": "file scope",
+						"inScope": false,
+						"toolPath": false
+					}
+				},
+				{
+					"at": {
 						"file": "app/tool.py",
 						"line": 5,
 						"endLine": 5
@@ -298,7 +328,7 @@
 				}
 			],
 			"facts": {
-				"printsSelected": 7,
+				"printsSelected": 9,
 				"loggerCallsSelected": 5,
 				"printsInToolPaths": 0,
 				"checkoutHasLogger": 1,
@@ -306,7 +336,7 @@
 				"linesSelected": 70
 			},
 			"directions": [
-				"7 print-style call(s) selected (0 listed under a tool or script path) against 5 logger call(s); the checkout matches a logger (ios/Cart.m).",
+				"9 print-style call(s) selected (0 listed under a tool or script path) against 5 logger call(s); the checkout matches a logger (ios/Cart.m).",
 				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic."
 			]
 		}
