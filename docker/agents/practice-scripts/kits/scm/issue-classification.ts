@@ -24,7 +24,7 @@ function norm(s: string): string {
 	return s.toLowerCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
 }
 
-export function classifyIssue(metadata: IssueMetadata) {
+function classifyIssue(metadata: IssueMetadata) {
 	const body = (metadata.body ?? "").trim();
 	const title = (metadata.title ?? "").trim();
 	const issueType = (metadata.issue_type ?? "").toLowerCase();
@@ -57,7 +57,7 @@ export function classifyIssue(metadata: IssueMetadata) {
 	};
 }
 
-export function bodyFact({ emptyBody, titleEcho }: ReturnType<typeof classifyIssue>): string[] {
+function bodyFact({ emptyBody, titleEcho }: ReturnType<typeof classifyIssue>): string[] {
 	if (emptyBody) {
 		return ["The captured body is empty: the title is the only text the issue itself carries."];
 	}
@@ -66,6 +66,12 @@ export function bodyFact({ emptyBody, titleEcho }: ReturnType<typeof classifyIss
 				"The captured body repeats the title and says nothing else (case, spacing and punctuation aside).",
 			]
 		: [];
+}
+
+/** What an issue's text and labels show, and the direction that its body needs, if any. */
+export function issueShape(metadata: IssueMetadata) {
+	const shape = classifyIssue(metadata);
+	return { ...shape, bodyDirections: bodyFact(shape) };
 }
 
 /**

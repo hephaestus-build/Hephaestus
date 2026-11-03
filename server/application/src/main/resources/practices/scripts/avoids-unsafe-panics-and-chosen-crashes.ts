@@ -1,9 +1,7 @@
-import { blockExtents } from "../kits/scm/declarations.ts";
-import { scm } from "../kits/scm/index.ts";
-import { isTestPath } from "../kits/scm/languages.ts";
-import { occurrences, selectedSources, selectedOccurrences } from "../kits/scm/occurrences.ts";
-import { DIRECTION_CHARS, listWithin, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
+import { isTestPath, scm } from "@hephaestus/practice-scripts/scm";
+
+const DIRECTION_CHARS = 300;
 
 export const LABELS = {
 	"crash-operator":
@@ -93,15 +91,10 @@ interface CrashLine {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
+		const work = scm(ctx, "scm.pull_request", "scm.file");
 		const rows: CrashLine[] = [];
 		const byKind: Record<string, number> = {};
-		for (const file of await selectedSources(
-			ctx,
-			domain.files,
+		for (const file of await work.sources(
 			(source) => source.language !== null && LANG_PATTERNS[source.language] !== undefined,
 		)) {
 			const lang = file.language;
@@ -109,22 +102,18 @@ export default definePracticeScript({
 			if (lang === null || patterns === undefined) {
 				continue;
 			}
-			const preview = lang === "swift" ? (blockExtents(lang, file.text, PREVIEW_OPENER) ?? []) : [];
+			const preview = lang === "swift" ? file.blocks(PREVIEW_OPENER) : [];
 			for (const [kind, test] of patterns) {
-				for (const row of selectedOccurrences(
-					ctx,
-					domain.files,
-					occurrences(file, [{ label: kind, test }]),
-				)) {
+				for (const site of file.sites([{ kind, label: kind, test }])) {
 					byKind[kind] = (byKind[kind] ?? 0) + 1;
 					rows.push({
-						path: row.path,
-						line: row.startLine,
-						endLine: row.endLine,
+						path: site.path,
+						line: site.line,
+						endLine: site.endLine,
 						language: lang,
 						operators: kind,
 						inPreview: preview.some(
-							(range) => row.startLine >= range.start && row.endLine <= range.end,
+							(range) => site.line >= range.start && site.endLine <= range.end,
 						),
 						testFile: isTestPath(file.path),
 					});
@@ -138,10 +127,7 @@ export default definePracticeScript({
 		const directions =
 			rows.length > 0
 				? [
-						oneLine(
-							`${rows.length} selected line(s) spell a crash operator: ${listWithin(kinds, DIRECTION_CHARS - 60)}.`,
-							DIRECTION_CHARS,
-						),
+						`${rows.length} selected line(s) spell a crash operator: ${listWithin(kinds, DIRECTION_CHARS - 60)}.`,
 						`${inPreview} sit inside a preview block and ${inTests} in test files. String-literal text and comments were not scanned.`,
 						"A lead matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it.",
 					]

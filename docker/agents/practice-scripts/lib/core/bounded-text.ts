@@ -1,10 +1,20 @@
-import { FACT_CHARS, type Facts } from "./contract.ts";
-
-export { DIRECTION_CHARS } from "./contract.ts";
+import { DIRECTION_CHARS, FACT_CHARS, type Facts, type ReviewOptions } from "./contract.ts";
 
 export function oneLine(text: string, max: number): string {
 	const flat = text.replaceAll(/\s+/gu, " ").trim();
-	return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+	if (flat.length <= max) {
+		return flat;
+	}
+	// Do not cut between the two halves of a surrogate pair.
+	const end = /[\uD800-\uDBFF]/u.test(flat.charAt(max - 2)) ? max - 2 : max - 1;
+	return `${flat.slice(0, end)}…`;
+}
+
+/** The text as it is when it is already one line within the bound, else folded to one. */
+function withinLine(text: string, max: number): string {
+	return text.length <= max && !/[\r\n]/u.test(text) && text.trim() !== ""
+		? text
+		: oneLine(text, max);
 }
 
 /**
@@ -28,20 +38,52 @@ export function listWithin(items: readonly string[], max: number, separator = ",
 	return list;
 }
 
+const FACT_KEY = /^[A-Za-z][A-Za-z0-9]{0,63}$/u;
+
 /**
- * Facts from values that a scan computed. An empty string is not a fact, and a long string is cut to
- * one line of the fact bound.
+ * A program's facts within the bounds: an empty string is no fact, and a long or multi-line string is
+ * folded to one line. A key that is not a fact name is camelCased, unless that name is taken.
  */
-export function factsOf(values: Readonly<Record<string, string | number | boolean>>): Facts {
-	const facts: Facts = {};
-	for (const [key, value] of Object.entries(values)) {
+function foldedFacts(facts: Facts): Facts {
+	const folded: Facts = {};
+	for (const [key, value] of Object.entries(facts)) {
+		const camel = key.replaceAll(/[^A-Za-z0-9]+(?<next>.?)/gu, (_, next: string) =>
+			next.toUpperCase(),
+		);
+		const name = FACT_KEY.test(key) || Object.hasOwn(facts, camel) ? key : camel;
 		if (typeof value !== "string") {
-			facts[key] = value;
+			folded[name] = value;
 		} else if (value.trim() !== "") {
-			facts[key] = oneLine(value, FACT_CHARS);
+			folded[name] = withinLine(value, FACT_CHARS);
 		}
 	}
-	return facts;
+	return folded;
+}
+
+/**
+ * What a program gives its review, within the bounds that can be met without changing what it means:
+ * a long or multi-line text is folded to one line, and an empty fact is no fact. Text that is already
+ * within the bounds stays byte for byte. Too many items stay an error of the program.
+ */
+export function foldedReviewOptions(options: ReviewOptions | undefined): ReviewOptions | undefined {
+	if (options === undefined) {
+		return undefined;
+	}
+	const { directions, facts, leads } = options;
+	return {
+		...options,
+		...(directions === undefined
+			? {}
+			: { directions: directions.map((direction) => withinLine(direction, DIRECTION_CHARS)) }),
+		...(facts === undefined ? {} : { facts: foldedFacts(facts) }),
+		...(leads === undefined
+			? {}
+			: {
+					leads: leads.map((lead) =>
+						lead.facts === undefined ? lead : { ...lead, facts: foldedFacts(lead.facts) },
+					),
+				}),
+	};
 }
 
 /**
@@ -53,4 +95,14 @@ export function noMatchDirections(linesAdded: number, filesScanned: number): str
 		`Scanned ${String(linesAdded)} added lines in ${String(filesScanned)} files for this practice's line patterns; none matched.`,
 		"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff.",
 	];
+}
+
+// Label sampled rows so readers cannot mistake them for the whole change.
+export function sampleNote(scan: { matched: number; hints: readonly unknown[] }): string[] {
+	const omitted = scan.matched - scan.hints.length;
+	return omitted > 0
+		? [
+				`${String(scan.matched)} matching occurrence(s); the first ${String(scan.hints.length)} are listed and ${String(omitted)} are not. Counts by kind cover every line; anything read off the listed rows alone covers only them.`,
+			]
+		: [];
 }

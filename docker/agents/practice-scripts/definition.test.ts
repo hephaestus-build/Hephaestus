@@ -104,7 +104,6 @@ interface RunOptions {
 
 async function stage(slugs: Record<string, string>) {
 	const { root, practices } = await stagePracticeScripts(slugs);
-	await copyFile(path.join(fixtures, "comment-kinds.ts"), path.join(practices, "comment-kinds.ts"));
 	roots.push(root);
 	const repo = path.join(root, "repo");
 	await mkdir(path.join(repo, "lib"), { recursive: true });
@@ -292,7 +291,7 @@ const never = async () => Promise.withResolvers<never>().promise;
 
 const TODO_LEAD = "src/cart.ts:6   // TODO clean this up";
 
-void describe("practice programs and their direct models at the host", () => {
+void describe("practice scripts and their direct models at the host", () => {
 	void test("run without any model: code's leads, and each unrated item named with its reason", async () => {
 		const result = await run("every-slot", {});
 		assert.deepEqual(result.outcome.models, [
@@ -602,7 +601,8 @@ void describe("the attempt's direct model budget", () => {
 				async () => ({ ...chatMessage("ok"), usage }),
 				async (standIn) => {
 					const budget = new ModelBudget(5000, MODEL_CONCURRENCY);
-					const source = `import {definePracticeScript,generateText} from "../lib/core/practice-script.ts";
+					const source = `import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { generateText } from "@hephaestus/practice-scripts/models";
 export default definePracticeScript({ meta: { models: { chat: "required" } }, async run(ctx) {
 await generateText({ model: ctx.models.chat, prompt: "Say yes.", maxOutputTokens: 1000 });
 return ctx.review();
@@ -839,7 +839,8 @@ void describe("a program the host refuses", () => {
 			});
 		}
 		const runs = await runSource(
-			`import {definePracticeScript,generateText} from "../lib/core/practice-script.ts";
+			`import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { generateText } from "@hephaestus/practice-scripts/models";
 export default definePracticeScript({
 	meta: {},
 	run: async (ctx) => ctx.review({ leads: [{ at: { change: "src/cart.ts", line: 400 }, label: "A lead." }] }),

@@ -1,11 +1,11 @@
-import { MODEL_SLOT_CAPS } from "../lib/core/contract.ts";
+import type { UnratedReason } from "@hephaestus/practice-scripts";
 import {
 	definePracticeScript,
 	embedMany,
+	MODEL_SLOT_CAPS,
 	rerank,
 	step,
-	type UnratedReason,
-} from "../lib/core/practice-script.ts";
+} from "@hephaestus/practice-scripts/models";
 
 const items = (count: number) => Array.from({ length: count }, (_, i) => `item ${i}`);
 

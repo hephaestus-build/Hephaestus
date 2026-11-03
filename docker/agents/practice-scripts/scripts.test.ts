@@ -535,36 +535,7 @@ void describe("every bundled practice script", async () => {
 	});
 });
 
-void describe("migrated authored practice programs", () => {
-	void it("keeps branch names and the captured range separate from integration ancestry", async () => {
-		const result = await runBundled("branches-from-the-integration-branch", {
-			item: { source_branch: "feature/export", target_branch: "release/2026" },
-			context: {
-				"commits.json": {
-					commits: [{ sha: "b".repeat(40), message: "Export", parents: [], files: [] }],
-				},
-			},
-		});
-		assert.deepEqual(result.facts, { capturedCommitCount: 1 });
-		const said = result.directions?.join(" ") ?? "";
-		assert.match(said, /feature\/export.*release\/2026/u);
-		assert.match(said, /not a count of commits ahead of the integration branch/u);
-		assert.match(said, /does not establish where this branch was created/u);
-	});
-
-	void it("does not replace an uncaptured commit range with a captured empty one", async () => {
-		for (const captured of [false, true]) {
-			const result = await runBundled("branches-from-the-integration-branch", {
-				context: captured ? { "commits.json": { commits: [] } } : {},
-			});
-			assert.equal(result.facts?.capturedCommitCount, captured ? 0 : undefined);
-			assert.match(
-				result.directions?.join(" ") ?? "",
-				captured ? /contains 0 commit/u : /size is unknown, not zero/u,
-			);
-		}
-	});
-
+void describe("migrated authored practice scripts", () => {
 	void it("carries routing metadata without deciding its accuracy or taxonomy", async () => {
 		const result = await runBundled("triages-the-issue-with-labels-and-ownership", {
 			inputs: requested("scm.issue"),
@@ -673,7 +644,7 @@ const STATE_SOURCE = [
 	"#Preview { @State var preview = 1 }",
 ].join("\n");
 
-void describe("migrated workspace practice programs", () => {
+void describe("migrated workspace practice scripts", () => {
 	void it("names complex changed views by their preview count", async () => {
 		const result = await runBundled(
 			"covers-complex-views-with-previews",

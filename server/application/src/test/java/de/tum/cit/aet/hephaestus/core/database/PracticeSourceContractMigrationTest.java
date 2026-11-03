@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.sql.DriverManager;
+import java.util.HexFormat;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import liquibase.Liquibase;
@@ -30,7 +32,7 @@ class PracticeSourceContractMigrationTest {
     private static final JsonMapper JSON = new JsonMapper();
     private static final String REVIEW = "00000000-0000-0000-0000-000000978011";
     private static final String CUSTOM_SCRIPT = """
-            import { definePracticeScript } from "../lib/core/practice-script.ts";
+            import { definePracticeScript } from "@hephaestus/practice-scripts";
             export default definePracticeScript({ meta: {}, async run(ctx) {
                 return ctx.review({ leads: [{ at: { record: "metadata.json" }, label: "Custom merge facts" }] });
             }});
@@ -174,7 +176,10 @@ class PracticeSourceContractMigrationTest {
         assertThat(upgraded.path("script").asString()).isEqualTo(script);
         assertThat(upgraded.path("criteria")).isEqualTo(adopted.path("criteria"));
         assertThat(definition(jdbc, 978105)).isEqualTo(adopted);
-        runScript(slug, upgraded);
+        // The public script API migration, later in the chain, rewrites this exact bundled text. Run what it leaves.
+        var onPublicApi = Objects.requireNonNull(
+                PracticeMigrationFixture.publicScriptApiPrograms().get(sha256(script)));
+        runScript(slug, ((ObjectNode) upgraded).deepCopy().put("script", onPublicApi.target()));
     }
 
     @Test
@@ -402,6 +407,11 @@ class PracticeSourceContractMigrationTest {
         PracticeMigrationFixture.execute(database, "ALTER TABLE review_job ADD COLUMN worker_id varchar(255)");
         PracticeMigrationFixture.execute(database, resource("db/changelog/source-contract-3.sql"));
         PracticeMigrationFixture.execute(database, "ALTER TABLE review_job DROP COLUMN worker_id");
+    }
+
+    private static String sha256(String text) throws Exception {
+        return HexFormat.of()
+                .formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String resource(String path) throws Exception {

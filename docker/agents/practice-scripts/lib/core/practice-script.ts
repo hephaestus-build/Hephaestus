@@ -94,6 +94,26 @@ export type PracticeScriptContext<M extends ModelNeeds = ModelNeeds> = PracticeI
 	review: (options?: ReviewOptions) => Promise<Candidate>;
 };
 
+/**
+ * What a script reads, as the public API promises it. `review` ends the script: it never returns to
+ * the script, so a script returns its call and never reads its result. The toolkit's own context has
+ * more; a script cannot rely on it.
+ */
+export type ScriptContext = Omit<
+	PracticeScriptContext,
+	"models" | "budget" | "previous" | "evidence" | "review"
+> & {
+	evidence: Pick<Evidence, "record" | "citeRecord">;
+	review: ((options?: ReviewOptions) => Promise<never>) & PracticeInputs["review"];
+};
+
+/** A script as the public API defines it. */
+export interface ScriptDefinition {
+	meta: Record<string, never>;
+	/** Return `ctx.review(...)`, or a result that code decided, without coverage: the host measures it. */
+	run: (ctx: ScriptContext) => Promise<SessionCandidate>;
+}
+
 export interface PracticeScriptDefinition<M extends ModelNeeds> {
 	meta: PracticeScriptMeta<M>;
 	/**

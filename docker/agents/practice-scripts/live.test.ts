@@ -45,9 +45,10 @@ const CHANGE = await readFile(path.join(import.meta.dirname, "fixtures/cart-chan
 
 const EVERY_SLOT = await readFile(path.join(import.meta.dirname, "fixtures/every-slot.ts"), "utf8");
 
-const DECIDES = `import { expectKind, requireChange, scm } from "../kits/scm/index.ts";
+const DECIDES = `import { expectKind, requireChange, scm } from "@hephaestus/practice-scripts/scm";
 import { addedComments, commentKinds } from "./comment-kinds.ts";
-import { classify, definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { classify } from "@hephaestus/practice-scripts/models";
 
 export default definePracticeScript({
 	meta: { models: { decision: "required" } },

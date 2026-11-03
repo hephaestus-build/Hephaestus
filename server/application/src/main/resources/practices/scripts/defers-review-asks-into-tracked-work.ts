@@ -1,17 +1,13 @@
-import { scm, expectKind, requireChange, type DiffFile } from "../kits/scm/index.ts";
-import { issueNumberReferences } from "../kits/scm/references.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
 import {
+	issueReferences,
+	later,
+	scm,
+	type DiffFile,
 	type GeneralComment,
 	type ReviewComment,
-	changeNear,
-	later,
-	readGeneralComments,
-	readReviewComments,
-	readReviewThreads,
-	reviewerCommentRows,
-} from "../kits/scm/review.ts";
-import { factsOf } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+	type ReviewThread,
+} from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"inline-ask":
@@ -34,9 +30,8 @@ interface Ask {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		if (ctx.review.origin === "REQUEST" && !domain.item.is_merged) {
+		const work = scm(ctx, "scm.pull_request");
+		if (ctx.review.origin === "REQUEST" && !work.item.is_merged) {
 			return ctx.review({
 				leads: [],
 				directions: [
@@ -44,11 +39,11 @@ export default definePracticeScript({
 				],
 			});
 		}
-		const change = requireChange(domain.files);
-		const author = domain.item.author ?? "";
-		const inline = await readReviewComments(ctx.evidence);
-		const general = await readGeneralComments(ctx.evidence);
-		const record = await readReviewThreads(ctx.evidence);
+		const change = work.changedFiles();
+		const author = work.item.author ?? "";
+		const inline = await work.inlineComments();
+		const general = await work.conversationComments();
+		const record = await work.reviewRecord();
 		const decisions = record?.decisions ?? [];
 		const asks: Ask[] = [];
 		const byOthers = (comment: { author?: string }) =>
@@ -126,8 +121,8 @@ function askOf(
 	const replyText = replies.map((r) => r.body).join("\n");
 	const followUpText = followUps.map((r) => r.body).join("\n");
 	const authorReplied = replies.length > 0;
-	const issueNamedInReply = issueNumberReferences(replyText).length > 0;
-	const facts = factsOf({
+	const issueNamedInReply = issueReferences(replyText).mentioned.length > 0;
+	const facts = {
 		by: ask.author ?? "",
 		at: ask.createdAt ?? "",
 		authorReplied,
@@ -138,7 +133,7 @@ function askOf(
 		waiverWordsInFollowUp: WAIVER.test(followUpText),
 		approvedAfterAsk: record.approvedAfterAsk,
 		threadResolved: record.threadResolved,
-	});
+	};
 	if (!("path" in ask)) {
 		return {
 			lead: {
@@ -169,4 +164,59 @@ function askOf(
 		authorReplied,
 		issueNamedInReply,
 	};
+}
+
+interface ReviewerCommentRow {
+	comment: ReviewComment;
+	/** No earlier comment by others in the same thread: this one opens it. */
+	opensThread: boolean;
+	replies: ReviewComment[];
+	followUps: ReviewComment[];
+	thread?: ReviewThread;
+}
+
+function sameThread(a: ReviewComment, b: ReviewComment): boolean {
+	return a.thread !== undefined && b.thread !== undefined
+		? a.thread === b.thread
+		: a.path === b.path && a.line === b.line;
+}
+
+function reviewerCommentRows(
+	inline: readonly ReviewComment[],
+	threads: readonly ReviewThread[],
+	author: string,
+): ReviewerCommentRow[] {
+	const byOthers = (c: ReviewComment) => c.author !== undefined && c.author !== author;
+	const threadOf = (c: ReviewComment) =>
+		threads.find((t) =>
+			c.thread !== undefined && t.id !== undefined
+				? t.id === c.thread
+				: t.path === c.path && t.line === c.line,
+		);
+	return inline.flatMap((comment, index) => {
+		if (!byOthers(comment)) {
+			return [];
+		}
+		const after = (c: ReviewComment) =>
+			sameThread(c, comment) && later(c.createdAt, comment.createdAt);
+		return [
+			{
+				comment,
+				opensThread: !inline.some(
+					(earlier, j) => j < index && byOthers(earlier) && sameThread(earlier, comment),
+				),
+				replies: inline.filter((c) => c.author === author && after(c)),
+				followUps: inline.filter((c) => byOthers(c) && after(c)),
+				thread: threadOf(comment),
+			},
+		];
+	});
+}
+
+function changeNear(diff: DiffFile | undefined, line: number | undefined, radius = 15): boolean {
+	if (diff === undefined || line === undefined) {
+		return false;
+	}
+	const near = (n: number) => Math.abs(n - line) <= radius;
+	return [...diff.addedLines.keys()].some(near) || [...diff.removedLines.keys()].some(near);
 }

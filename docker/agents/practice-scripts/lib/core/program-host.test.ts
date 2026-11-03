@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 import { chatOptionsSchema } from "./model-options.ts";
 
 import { MockEmbeddingModelV4, MockLanguageModelV4 } from "ai/test";
@@ -92,8 +93,9 @@ const REVIEWED: Candidate = {
 const fixture = async (name: string) => readFile(path.join(FIXTURES, `${name}.ts`), "utf8");
 
 const program = (imports: string, body: string) =>
-	`import {scm} from "../kits/scm/index.ts";
-import { ${imports} } from "../lib/core/practice-script.ts";\nexport default definePracticeScript(${body});\n`;
+	`import {scm} from "@hephaestus/practice-scripts/scm";
+import { reasonOf } from "@hephaestus/practice-scripts/models";
+import { ${imports} } from "@hephaestus/practice-scripts";\nexport default definePracticeScript(${body});\n`;
 
 const cited = `await ctx.evidence.citeRecord("metadata.json", 36)`;
 const readThen = (before: string, result: string) =>
@@ -108,7 +110,7 @@ const readThen = (before: string, result: string) =>
 const FAILED_READ = `await ctx.evidence.record("..").catch(() => undefined);`;
 const NOT_CAPTURED = `await ctx.evidence.record("review_threads.json");`;
 const FAILED_CITE = `await ctx.evidence.citeRecord("review_threads.json", 1).catch(() => undefined);`;
-const ABSENT_FILE = `await scm(ctx).files?.head.read("no-such-file.txt");`;
+const ABSENT_FILE = `await scm(ctx, "scm.pull_request").head?.read("no-such-file.txt");`;
 const NOT_MET = `{ outcome: "NOT_MET", summary: "The change is too large",
 	explanation: "The record counts the changed files.", citations: [], evidence: {},
 	problems: [{ severity: "MINOR", summary: "Too many changed files",
@@ -123,9 +125,8 @@ const DOES_NOT_APPLY = `{ outcome: "DOES_NOT_APPLY", summary: "No view changed",
 	explanation: "No changed file is a view.", citations: [${cited}],
 	evidence: { inapplicability: { consulted: ["scm.pull-request.core"],
 		prerequisite: "user interface files", ruledOutBy: "No changed file is a view." } } }`;
-const KIT_FAILURE = `await readReviewThreads(ctx.evidence).catch(() => undefined);`;
-const kitProgram = (result: string) =>
-	`import { readReviewThreads } from "../kits/scm/review.ts";\n${readThen(KIT_FAILURE, result)}`;
+const KIT_FAILURE = `await scm(ctx, "scm.pull_request").reviewRecord().catch(() => undefined);`;
+const kitProgram = (result: string) => readThen(KIT_FAILURE, result);
 
 interface Workspace {
 	practices: string;
@@ -142,7 +143,6 @@ const malformed = async (ws: Workspace) => {
 
 async function workspace(scripts: Record<string, string | null>): Promise<Workspace> {
 	const { root, practices } = await stagePracticeScripts(scripts);
-	await copyFile(path.join(FIXTURES, "comment-kinds.ts"), path.join(practices, "comment-kinds.ts"));
 	roots.push(root);
 	const repo = path.join(root, "repo");
 	await mkdir(path.join(repo, "src"), { recursive: true });
@@ -262,7 +262,7 @@ const decidesFromTheChange = (read: boolean) =>
 		"definePracticeScript",
 		`{ meta: {}, run: async (ctx) => {
 				${read ? 'await ctx.evidence.record("metadata.json");' : ""}
-				const found = await scm(ctx).files?.change?.cite("src/cart.ts", "NEW", 2);
+				const found = await scm(ctx, "scm.pull_request").change?.cite("src/cart.ts", "NEW", 2);
 				return {
 					outcome: "MET",
 					summary: "Met",
@@ -380,16 +380,16 @@ void describe("a practice's result", () => {
 			kept: program(
 				"definePracticeScript",
 				`{ meta: {}, run: async (ctx) => {
-						await scm(ctx).files?.head.grep("needle");
+						await scm(ctx, "scm.pull_request").head?.grep("needle");
 						return ctx.review({});
 					} }`,
 			),
 			decided: program(
 				"definePracticeScript",
 				`{ meta: {}, run: async (ctx) => {
-						await scm(ctx).files?.head.grep("needle");
+						await scm(ctx, "scm.pull_request").head?.grep("needle");
 						await ctx.evidence.record("metadata.json");
-						const found = await scm(ctx).files?.change?.cite("src/cart.ts", "NEW", 2);
+						const found = await scm(ctx, "scm.pull_request").change?.cite("src/cart.ts", "NEW", 2);
 						return { outcome: "MET", summary: "Met", explanation: "The change shows the practice.",
 							citations: [found], evidence: {} };
 					} }`,
@@ -456,8 +456,8 @@ void describe("a practice's result", () => {
 		});
 	});
 
-	const CUT_LISTING = `await scm(ctx).files?.head.grep("a|e", { maxResults: 1 });`;
-	const CUT_READ = `await scm(ctx).files?.head.read("notes.txt", { maxLines: 1 });`;
+	const CUT_LISTING = `await scm(ctx, "scm.pull_request").head?.grep("a|e", { maxResults: 1 });`;
+	const CUT_READ = `await scm(ctx, "scm.pull_request").head?.read("notes.txt", { maxLines: 1 });`;
 	for (const [cause, before] of [
 		["a cut search", CUT_LISTING],
 		["a cut read", CUT_READ],
@@ -573,6 +573,56 @@ void describe("a practice's result", () => {
 		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
 	});
 
+	for (const [form, line] of [
+		["a relative path", `import "../lib/core/contract.ts";`],
+		["a path through the install", `import "../kits/scm/index.ts";`],
+		[
+			"an absolute path",
+			`import ${JSON.stringify(path.resolve(import.meta.dirname, "contract.ts"))};`,
+		],
+		[
+			"a file URL",
+			`import ${JSON.stringify(pathToFileURL(path.resolve(import.meta.dirname, "contract.ts")).href)};`,
+		],
+		["a deep name", `import "@hephaestus/practice-scripts/lib/core/contract.ts";`],
+		["a Node module", `import "node:fs";`],
+		["a package", `import "zod";`],
+		["a data URL", `import "data:text/javascript,export default 1";`],
+		["a dynamic import", `await import("../lib/core/contract.ts");`],
+	] as const) {
+		void test(`a script that imports ${form} stops as an invalid program, and names the import`, async () => {
+			const ws = await workspace({
+				importer: `${line}
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({}) });
+`,
+			});
+			const { outcome, reviews } = await run(ws, "importer");
+			assert.equal(outcome.status, "failed");
+			assert.equal(outcome.stopReason, "invalid-program");
+			assert.match(
+				outcome.error ?? "",
+				/A practice script can import only @hephaestus\/practice-scripts/u,
+			);
+			assert.equal(outcome.candidate, undefined);
+			assert.deepEqual(reviews, []);
+		});
+	}
+
+	void test("a script with a name in the export map runs", async () => {
+		const ws = await workspace({
+			importer: `import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
+import { chat } from "@hephaestus/practice-scripts/chat";
+import { docs } from "@hephaestus/practice-scripts/docs";
+import { issueReferences } from "@hephaestus/practice-scripts/scm";
+void [chat, docs, listWithin, issueReferences];
+export default definePracticeScript({ meta: {}, run: async (ctx) => ctx.review({}) });
+`,
+		});
+		const { outcome } = await run(ws, "importer");
+		assert.equal(outcome.status, "ok", outcome.error);
+	});
+
 	void test("the built-in asks one review with no prepared input and returns its result", async () => {
 		const ws = await workspace({ "built-in": null });
 		const { outcome, reviews } = await run(ws, "built-in");
@@ -659,10 +709,10 @@ void describe("what a program's process may do", () => {
 		const escape = path.join(tmpdir(), "practice-program-escape");
 		await writeFile(
 			path.join(ws.practices, "probe.ts"),
-			`import { execFileSync } from "node:child_process";
-import {readFileSync,writeFileSync} from "node:fs";
-import {definePracticeScript} from "../lib/core/practice-script.ts";
-import {scm} from "../kits/scm/index.ts";
+			`import {definePracticeScript} from "@hephaestus/practice-scripts";
+import {scm} from "@hephaestus/practice-scripts/scm";
+const { execFileSync } = process.getBuiltinModule("node:child_process");
+const { readFileSync, writeFileSync } = process.getBuiltinModule("node:fs");
 const attempt = (action) => { try { action(); return "allowed"; } catch (error) { return error.code ?? "denied"; } };
 export default definePracticeScript({
 	meta: {},
@@ -672,7 +722,7 @@ export default definePracticeScript({
 		ctx.log("system " + attempt(() => readFileSync("/etc/hostname")));
 		ctx.log("write " + attempt(() => writeFileSync(${JSON.stringify(escape)}, "x")));
 		ctx.log("program " + attempt(() => execFileSync("cat", ["/proc/1/environ"])));
-		ctx.log("context " + (await scm(ctx).files.head.read("notes.txt")).status);
+		ctx.log("context " + (await scm(ctx, "scm.pull_request").head.read("notes.txt")).status);
 		return ${JSON.stringify(REVIEWED)};
 	},
 });
@@ -1075,7 +1125,7 @@ void test("direct model calls share the attempt's budget: a later practice sees 
 		},
 	});
 	const spend = program(
-		"definePracticeScript, reasonOf",
+		"definePracticeScript",
 		`{
 			meta: { models: { chat: "required" } },
 			async run(ctx) {

@@ -1,3 +1,4 @@
+import { foldedReviewOptions } from "./bounded-text.ts";
 import type { Candidate, ReviewOptions, SlotModels } from "./contract.ts";
 import { registerDomainAccess } from "./domain-access.ts";
 import { MAX_LOG_CHARS, type ProgramJob, type ReadRequest, type ReadValues } from "./ipc.ts";
@@ -36,7 +37,8 @@ export function programContext(job: ProgramJob, port: ProgramPort): PracticeScri
 		abortSignal: port.abortSignal,
 		log: (text) => port.log(text.slice(0, MAX_LOG_CHARS)),
 		review: Object.assign(
-			async (options?: ReviewOptions): Promise<Candidate> => port.review(options),
+			async (options?: ReviewOptions): Promise<Candidate> =>
+				port.review(foldedReviewOptions(options)),
 			job.inputs.review,
 		),
 	};

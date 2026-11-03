@@ -1,8 +1,15 @@
 {
-	"name": "hephaestus-practice-scripts",
+	"name": "@hephaestus/practice-scripts",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"exports": {
+		".": "./lib/api.ts",
+		"./scm": "./kits/scm/api.ts",
+		"./chat": "./kits/chat/index.ts",
+		"./docs": "./kits/docs/index.ts",
+		"./models": "./lib/api-models.ts"
+	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "4.0.92",
 		"@ai-sdk/openai": "4.0.105",

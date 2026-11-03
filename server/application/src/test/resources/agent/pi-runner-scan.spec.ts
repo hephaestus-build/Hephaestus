@@ -331,23 +331,23 @@ void test("a scan script receives the pinned tree and returns a citation without
 	writeFileSync(
 		path.join(cwd, PRACTICES_DIR, "auth-review.ts"),
 		`
-import assert from "node:assert/strict";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
-import { scm } from "../kits/scm/index.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 export default definePracticeScript({
 	meta: {},
 	async run(input) {
-		const ctx = scm(input);
-		assert.ok(ctx.files);
-		assert.equal(ctx.files.head.commit, ctx.item.commitId);
-		assert.equal(ctx.files.change, null);
-		const file = await ctx.files.head.read(ctx.scope.item.path);
+		const assert = process.getBuiltinModule("node:assert/strict");
+		const work = scm(input, "scm.file");
+		assert.ok(work.head);
+		assert.equal(work.head.commit, work.item.commitId);
+		assert.equal(work.change, null);
+		const file = await work.head.read(input.scope.item.path);
 		assert.deepEqual(file, { status: "FOUND", text: ${JSON.stringify(TEXT)}, truncated: false });
 		return {
 			outcome: "MET",
 			summary: "The file has captured source",
 			explanation: "The assigned source is readable at its pinned commit.",
-			citations: [await ctx.files.head.cite(ctx.scope.item.path, 1)],
+			citations: [await work.head.cite(input.scope.item.path, 1)],
 			evidence: {},
 		};
 	},

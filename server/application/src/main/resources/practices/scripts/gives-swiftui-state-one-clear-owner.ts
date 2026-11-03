@@ -1,7 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { isTestPath } from "../kits/scm/languages.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { isTestPath, scm } from "@hephaestus/practice-scripts/scm";
 
 const TEST_IMPORT = /import\s+XCTest|import\s+Testing/u;
 const VIEW = /:\s*(?:\w+\s*,\s*)*View\s*[,{]/u;
@@ -77,13 +75,8 @@ function viewLineCues(lines: readonly string[], index: number): [Cue, Record<str
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(
-			ctx,
-			domain.files,
-			(file) => file.language === "swift" && !isTestPath(file.path),
-		);
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => file.language === "swift" && !isTestPath(file.path));
 		const counts = new Map<Cue, number>();
 		const leads: ReviewLead[] = [];
 		const cue = (
@@ -101,9 +94,8 @@ export default definePracticeScript({
 			if (TEST_IMPORT.test(file.text)) {
 				continue;
 			}
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
 			const lines = file.text.split("\n");
-			const isAdded = (line: number) => added?.has(line) === true;
+			const { isAdded } = file;
 			for (const [index, line] of lines.entries()) {
 				if (!isAdded(index + 1)) {
 					continue;

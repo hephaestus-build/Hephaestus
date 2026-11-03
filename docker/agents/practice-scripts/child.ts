@@ -23,6 +23,9 @@ import {
 	type PracticeScriptDefinition,
 } from "./lib/core/practice-script.ts";
 import { programContext } from "./lib/core/program-context.ts";
+import { guardScriptImports } from "./lib/core/script-imports.ts";
+
+guardScriptImports();
 
 const send = process.send?.bind(process);
 if (send === undefined) {
@@ -170,7 +173,7 @@ try {
 	const value = await runDefinition(job, exported);
 	await postLast({ kind: "result", value, captureFailures: [...captureFailures()] });
 } catch (error) {
-	// A practice program is foreign code (DB-stored data), so it can throw a non-Error value.
+	// A practice script is foreign code (DB-stored data), so it can throw a non-Error value.
 	await postLast({
 		kind: "failed",
 		message: error instanceof Error ? error.message : String(error),

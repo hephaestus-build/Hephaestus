@@ -23,7 +23,7 @@ import org.springframework.validation.annotation.Validated;
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
  * @param practiceModelCalls  The model calls that one practice gets in a review.
  * @param practiceOutputTokens The output tokens that one practice gets in a review.
- * @param directModelTokensPerAttempt The input and output tokens that the direct model calls of the practice programs
+ * @param directModelTokensPerAttempt The input and output tokens that the direct model calls of the practice scripts
  *                                    of one review attempt may spend together. The calls of the review session itself
  *                                    do not count. The runner holds the programs to it, and the proxy refuses further
  *                                    direct calls.

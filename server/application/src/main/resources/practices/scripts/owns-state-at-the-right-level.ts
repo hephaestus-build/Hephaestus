@@ -1,11 +1,9 @@
-import { scm } from "../kits/scm/index.ts";
-import { sampleNote, scanOccurrences, type SourcePattern } from "../kits/scm/source-scan.ts";
-import { factsOf, noMatchDirections } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm, type SiteRule } from "@hephaestus/practice-scripts/scm";
 
 const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
-const STATE_DECLARATIONS: readonly SourcePattern[] = [
+const STATE_DECLARATIONS: readonly [string, RegExp][] = [
 	["state-creating-an-object", /@State(?:Object)?\b[^=]*=\s*[A-Z][A-Za-z0-9_]*\s*\(/u],
 	["state-property", /@State\b/u],
 	["state-object", /@StateObject\b/u],
@@ -42,47 +40,35 @@ export const LABELS = {
 	"mutable-stored-property": "A selected stored var without a property wrapper.",
 	"environment-injection": "A selected .environment or .environmentObject modifier.",
 };
-const LABEL_OF = new Map<string, string>(Object.entries(LABELS));
+
+const LABEL_OF: Record<string, string> = LABELS;
+
+const rulesOf = (rows: readonly [string, RegExp][]): SiteRule[] =>
+	rows.map(([kind, test]) => ({ kind, label: LABEL_OF[kind] ?? "", test }));
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const scan = await scanOccurrences(ctx, domain.files, {
-			languages: ["swift"],
-			patterns: STATE_DECLARATIONS,
-			scope: SWIFTUI_VIEW,
-			maxHints: 60,
-		});
-		const leads: ReviewLead[] = scan.hints.flatMap((hint) => {
-			const label = LABEL_OF.get(hint.pattern);
-			return label === undefined
-				? []
-				: [
-						{
-							at: { file: hint.file, line: hint.line, endLine: hint.endLine },
-							label,
-							facts: factsOf(hint.flags),
-						},
-					];
-		});
-		const inViews = scan.hints.filter((hint) => hint.flags.inScope === true);
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const found = await work.sites(
+			{ swift: rulesOf(STATE_DECLARATIONS) },
+			{ overlap: "first", enclosing: { scope: SWIFTUI_VIEW }, listed: 60 },
+		);
+		const leads = [...found.leads];
+		const inViews = found.listed.filter((site) => site.facts.inScope === true);
 		const objectsCreatedInViews = inViews.filter(
-			(hint) => hint.pattern === "state-creating-an-object" || hint.pattern === "state-object",
+			(site) => site.kind === "state-creating-an-object" || site.kind === "state-object",
 		).length;
 		const storedVarsInViews = inViews.filter(
-			(hint) => hint.pattern === "mutable-stored-property",
+			(site) => site.kind === "mutable-stored-property",
 		).length;
-		const directions: string[] = [...sampleNote(scan)];
+		const directions: string[] = [...found.listedNote];
 		if (leads.length === 0) {
-			directions.push(...noMatchDirections(scan.linesSelected, scan.filesScanned));
+			directions.push(...found.noMatch);
 		}
-		if (scan.matched > 0) {
+		if (found.matched > 0) {
 			directions.push(
-				`${scan.matched} state declaration(s) or wiring line(s) selected; ${inViews.length} of the listed rows lie inside view types. Walk each against the four rules.`,
+				`${found.matched} state declaration(s) or wiring line(s) selected; ${inViews.length} of the listed rows lie inside view types. Walk each against the four rules.`,
 			);
 		}
 		if (objectsCreatedInViews > 0) {
@@ -98,13 +84,13 @@ export default definePracticeScript({
 		return ctx.review({
 			leads,
 			facts: {
-				stateDeclarationsSelected: scan.matched,
+				stateDeclarationsSelected: found.matched,
 				stateDeclarationsInViews: inViews.length,
 				objectsCreatedInViews,
 				storedVarsInViews,
-				filesWithUnknownLocation: scan.filesWithUnknownLocation,
-				filesScanned: scan.filesScanned,
-				linesSelected: scan.linesSelected,
+				filesWithUnknownLocation: found.filesWithUnknownLocation,
+				filesScanned: found.filesScanned,
+				linesSelected: found.linesSelected,
 			},
 			directions,
 		});

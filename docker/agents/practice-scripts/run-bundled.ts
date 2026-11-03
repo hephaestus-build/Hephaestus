@@ -20,7 +20,10 @@ import {
 	type PracticeScriptDefinition,
 } from "./lib/core/practice-script.ts";
 import { programContext } from "./lib/core/program-context.ts";
+import { guardScriptImports } from "./lib/core/script-imports.ts";
 import { stagePracticeScripts } from "./stage.ts";
+
+guardScriptImports();
 
 const SCRIPTS_DIR = path.resolve(
 	import.meta.dirname,
@@ -150,7 +153,7 @@ export const REVIEWED: Candidate = {
 export type Files = Record<string, unknown>;
 
 export interface RunInputs {
-	/** A stored practice program; absent selects the bundled resource. */
+	/** A stored practice script; absent selects the bundled resource. */
 	script?: string;
 	/**
 	 * The record of the work, which the program reads as `ctx.item`. For a pull request or an issue,
@@ -234,6 +237,20 @@ async function load(
 			: {},
 		root,
 	};
+}
+
+/** What a bundled program's file exports, for a test of a helper that it holds. */
+export async function bundledExports<T>(slug: string): Promise<T> {
+	const { root, practices } = await stagePracticeScripts(
+		{ [slug]: await readFile(path.join(SCRIPTS_DIR, `${slug}.ts`), "utf8") },
+		{},
+	);
+	try {
+		// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- The test names what a program's file exports; the test fails if it is not there.
+		return (await import(path.join(practices, `${slug}.ts`))) as T;
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 }
 
 /**

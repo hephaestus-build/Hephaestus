@@ -1,13 +1,5 @@
-import { scm, expectKind } from "../kits/scm/index.ts";
-import {
-	branchIssueReferences,
-	closingReferences,
-	issueNumberReferences,
-	withoutHtmlComments,
-} from "../kits/scm/references.ts";
-import { readLinkedWorkItems } from "../kits/scm/review.ts";
-import { DIRECTION_CHARS, factsOf, listWithin, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
+import { branchIssueReferences, issueReferences, scm } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"closing-reference":
@@ -29,10 +21,10 @@ const unqualified = (source: string) => source.replaceAll(QUALIFIED_REF, " ");
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const { item: metadata } = domain;
-		const linked = await readLinkedWorkItems(ctx.evidence);
+		const work = scm(ctx, "scm.pull_request");
+		const { item: metadata } = work;
+		const capture = await work.linkedIssues();
+		const linked = capture?.items ?? null;
 		const rows: ReviewLead[] = [];
 		const references = new Set<string>();
 		const row = (
@@ -41,7 +33,7 @@ export default definePracticeScript({
 			facts: { number: number; target: string } & Record<string, string | number | boolean>,
 		) => {
 			references.add(`${facts.target}#${String(facts.number)}`);
-			rows.push({ at: { record }, label: LABELS[kind], facts: factsOf(facts) });
+			rows.push({ at: { record }, label: LABELS[kind], facts });
 		};
 		const add = (record: string, where: string, numbers: number[], closing: boolean) => {
 			for (const number of numbers) {
@@ -80,15 +72,20 @@ export default definePracticeScript({
 		}
 		const title = metadata.title ?? "";
 		const body = metadata.body ?? "";
-		const branch = metadata.source_branch;
-		add("metadata.json", "metadata.json (title)", issueNumberReferences(unqualified(title)), false);
+		const { source_branch: branch } = metadata;
+		add(
+			"metadata.json",
+			"metadata.json (title)",
+			issueReferences(unqualified(title)).mentioned,
+			false,
+		);
 		qualified("metadata.json", "metadata.json (title)", title);
-		const closing = closingReferences(unqualified(body));
+		const { closing } = issueReferences(unqualified(body));
 		add("description.md", "description.md", closing, true);
 		add(
 			"description.md",
 			"description.md",
-			issueNumberReferences(unqualified(body)).filter((n) => !closing.includes(n)),
+			issueReferences(unqualified(body)).mentioned.filter((n) => !closing.includes(n)),
 			false,
 		);
 		qualified("description.md", "description.md", body);
@@ -114,7 +111,21 @@ export default definePracticeScript({
 				providerClosingLinks: (linked ?? []).filter((item) => item.how === "closesOnMerge").length,
 				linkedWorkItems: linked?.length ?? -1,
 			},
-			directions: directions.map((direction) => oneLine(direction, DIRECTION_CHARS)),
+			directions: directions.map((direction) => direction),
 		});
 	},
 });
+
+// Providers do not link issue references inside hidden HTML comments.
+const HTML_COMMENT = /<!--[\s\S]*?-->/gu;
+
+// Retain a boundary so removed comments cannot join separate tokens.
+function withoutHtmlComments(text: string): string {
+	let result = text;
+	let previous;
+	do {
+		previous = result;
+		result = result.replaceAll(HTML_COMMENT, " ");
+	} while (result !== previous);
+	return result;
+}

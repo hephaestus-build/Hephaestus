@@ -1007,7 +1007,7 @@ Thus, search units have a limit of their own.
 The shared-model budget and the provider cap show on **AI usage**.
 The two direct model limits also bound spend on a workspace's own provider that has no provider cap.
 
-The practice program host checks the direct model token limit before each call.
+The practice script host checks the direct model token limit before each call.
 It cannot know the search units of a call before the provider answers, so only the proxy counts them.
 The proxy enforces both limits.
 When a direct model limit, the shared-model budget or the provider cap is spent, the proxy refuses further direct calls with HTTP 402.

@@ -149,7 +149,7 @@ const WORK_RECORD = {
 	assignees: [],
 };
 
-const LEADS_PROGRAM = `import { definePracticeScript } from "../lib/core/practice-script.ts";
+const LEADS_PROGRAM = `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {

@@ -1,11 +1,9 @@
-import { scm } from "../kits/scm/index.ts";
-import { countLabel, scanOccurrences, type SourcePattern } from "../kits/scm/source-scan.ts";
-import { DIRECTION_CHARS, factsOf, noMatchDirections, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 interface Shapes {
-	print: SourcePattern[];
-	logger: SourcePattern[];
+	print: [string, RegExp][];
+	logger: [string, RegExp][];
 }
 
 const SCRIPTING: Shapes = {
@@ -13,13 +11,13 @@ const SCRIPTING: Shapes = {
 	logger: [["logger", /\b(?:log|logger)\.(?:trace|debug|info|warn|error|fatal)\s*\(/u]],
 };
 
-const APPLE_SYSTEM_LOG: SourcePattern[] = [
+const APPLE_SYSTEM_LOG: [string, RegExp][] = [
 	["os_log", /\bos_log(?:_(?:info|debug|error|fault))?\s*\(/u],
 	["NSLog", /\bNSLogv?\s*\(/u],
 ];
 
 // A bare Log name does not establish android.util.Log; the review must resolve its import.
-const ANDROID_LOG: SourcePattern[] = [
+const ANDROID_LOG: [string, RegExp][] = [
 	["android.util.Log", /\b(?:android\.util\.)?Log\.(?:v|d|i|w|e|wtf)\s*\(/u],
 	["Timber", /\bTimber\.(?:v|d|i|w|e|wtf)\s*\(/u],
 ];
@@ -84,37 +82,40 @@ export const LABELS = {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const tree = domain.files?.head ?? null;
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const tree = work.head;
 		const leads: ReviewLead[] = [];
 		let prints = 0;
 		let loggers = 0;
 		let filesScanned = 0;
 		let linesSelected = 0;
 		for (const [language, shapes] of Object.entries(DIAGNOSTICS)) {
-			const scan = await scanOccurrences(ctx, domain.files, {
-				languages: [language],
-				patterns: [...shapes.print, ...shapes.logger],
-				maxHints: LISTED,
-			});
-			filesScanned += scan.filesScanned;
-			linesSelected += scan.linesSelected;
-			prints += shapes.print.reduce((sum, [label]) => sum + countLabel(scan, label), 0);
-			loggers += shapes.logger.reduce((sum, [label]) => sum + countLabel(scan, label), 0);
-			for (const hint of scan.hints) {
-				const isPrint = shapes.print.some(([label]) => label === hint.pattern);
+			const rows = [...shapes.print, ...shapes.logger].map(([kind, test]) => ({
+				kind,
+				label: kind,
+				test,
+			}));
+			const found = await work.sites(
+				{ [language]: rows },
+				{ overlap: "first", enclosing: {}, listed: LISTED },
+			);
+			filesScanned += found.filesScanned;
+			linesSelected += found.linesSelected;
+			const count = (kinds: readonly [string, RegExp][]) =>
+				kinds.reduce((sum, [kind]) => sum + (found.counts.get(kind) ?? 0), 0);
+			prints += count(shapes.print);
+			loggers += count(shapes.logger);
+			for (const site of found.listed) {
+				const isPrint = shapes.print.some(([kind]) => kind === site.kind);
 				leads.push({
-					at: { file: hint.file, line: hint.line, endLine: hint.endLine },
+					at: { file: site.path, line: site.line, endLine: site.endLine },
 					label: isPrint ? LABELS["print-call"] : LABELS["logger-call"],
-					facts: factsOf({
+					facts: {
 						language,
-						call: hint.pattern,
-						...hint.flags,
-						toolPath: TOOL_PATH.test(hint.file),
-					}),
+						call: site.kind,
+						...site.facts,
+						toolPath: TOOL_PATH.test(site.path),
+					},
 				});
 			}
 		}
@@ -137,17 +138,17 @@ export default definePracticeScript({
 				: [];
 		if (prints > 0) {
 			directions.push(
-				oneLine(
-					`${String(prints)} print-style call(s) selected (${String(printsInToolPaths)} listed under a tool or script path) against ${String(loggers)} logger call(s); ${existing.length > 0 ? `the checkout matches a logger (${existing[0]?.file ?? ""})` : "a bounded search of the checkout matched no logger definition, which does not show there is none"}.`,
-					DIRECTION_CHARS,
-				),
+				`${String(prints)} print-style call(s) selected (${String(printsInToolPaths)} listed under a tool or script path) against ${String(loggers)} logger call(s); ${existing.length > 0 ? `the checkout matches a logger (${existing[0]?.file ?? ""})` : "a bounded search of the checkout matched no logger definition, which does not show there is none"}.`,
 				"Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic.",
 			);
 		} else if (loggers > 0) {
 			directions.push(`${String(loggers)} logger call(s) selected and no print-style call.`);
 		}
 		if (listed.length === 0) {
-			directions.push(...noMatchDirections(linesSelected, filesScanned));
+			directions.push(
+				`Scanned ${String(linesSelected)} added lines in ${String(filesScanned)} files for this practice's line patterns; none matched.`,
+				"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff.",
+			);
 		}
 		return ctx.review({
 			leads: listed,

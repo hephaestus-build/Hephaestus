@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { duplicatePairs } from "./duplication.ts";
-import type { DiffFile } from "./types.ts";
+import type { DiffFile } from "./kits/scm/types.ts";
+import { bundledExports } from "./run-bundled.ts";
+
+interface DuplicatePair {
+	a: { path: string; startLine: number; endLine: number };
+	b: { path: string; startLine: number; endLine: number };
+	lines: number;
+	differing: string[];
+	identicalLines: number;
+}
+
+const { duplicatePairs } = await bundledExports<{
+	duplicatePairs: (files: ReadonlyMap<string, DiffFile>) => DuplicatePair[];
+}>("removes-duplication-instead-of-copy-pasting");
 
 function file(path: string, start: number, lines: string[]): [string, DiffFile] {
 	return [

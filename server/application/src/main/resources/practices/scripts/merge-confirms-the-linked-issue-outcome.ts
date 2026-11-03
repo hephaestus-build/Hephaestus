@@ -1,15 +1,17 @@
-import { scm, expectKind } from "../kits/scm/index.ts";
-import { subIssueRollup } from "../kits/scm/issue-classification.ts";
+import {
+	definePracticeScript,
+	type ReviewLead,
+	type PracticeScriptContext,
+} from "@hephaestus/practice-scripts";
 import {
 	branchIssueReferences,
-	closingReferences,
-	issueNumberReferences,
-	OUTCOME_HEADING,
-} from "../kits/scm/references.ts";
-import { checkableItems, readLinkedWorkItems, reviewsMergedWork } from "../kits/scm/review.ts";
-import { factsOf } from "../lib/core/bounded-text.ts";
-import { REVIEW_LEAD_LIMIT } from "../lib/core/contract.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+	checkableItems,
+	issueReferences,
+	scm,
+	subIssueRollup,
+} from "@hephaestus/practice-scripts/scm";
+
+const REVIEW_LEAD_LIMIT = 200;
 
 export const LABELS = {
 	"checkable-outcome":
@@ -37,8 +39,7 @@ function howLinked(
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
+		const work = scm(ctx, "scm.pull_request");
 		if (!reviewsMergedWork(ctx.review)) {
 			return ctx.review({
 				leads: [],
@@ -47,15 +48,16 @@ export default definePracticeScript({
 				],
 			});
 		}
-		const { item: record } = domain;
+		const { item: record } = work;
 		const body = record.body ?? "";
-		const closing = new Set(closingReferences(body));
+		const closing = new Set(issueReferences(body).closing);
 		const named = new Set([
-			...issueNumberReferences(record.title ?? ""),
-			...issueNumberReferences(body),
+			...issueReferences(record.title ?? "").mentioned,
+			...issueReferences(body).mentioned,
 			...branchIssueReferences(record.source_branch),
 		]);
-		const captured = await readLinkedWorkItems(ctx.evidence);
+		const capture = await work.linkedIssues();
+		const captured = capture?.items ?? null;
 		const linked = captured ?? [];
 		const leads: ReviewLead[] = [];
 		let untickedItems = 0;
@@ -84,7 +86,7 @@ export default definePracticeScript({
 			leads.push({
 				at: { record: `linked_work_items/${String(item.number)}.md` },
 				label: LABELS[kind],
-				facts: factsOf({
+				facts: {
 					number: item.number,
 					how,
 					taskItems: items.length,
@@ -95,7 +97,7 @@ export default definePracticeScript({
 					...(rollup.completed === undefined ? {} : { subIssuesCompleted: rollup.completed }),
 					subIssuesSource: item.subIssuesSource ?? "",
 					state: item.state ?? "",
-				}),
+				},
 			});
 		}
 		const candidates = leads.filter((lead) => lead.label === LABELS["checkable-outcome"]);
@@ -143,3 +145,15 @@ export default definePracticeScript({
 		});
 	},
 });
+
+/**
+ * Whether a practice that only the merge moment brings into a review reads a merged pull request:
+ * at that event, or when the review state that the review recorded is MERGED.
+ */
+function reviewsMergedWork(review: PracticeScriptContext["review"]): boolean {
+	return review.event?.name === "scm.pull_request.merged" || review.event?.state.state === "MERGED";
+}
+
+/** A heading under which an issue states what "done" means without a task list. */
+const OUTCOME_HEADING =
+	/^\s*#+\s*(?:acceptance criteria|definition of done|dod\b|done when|expected (?:outcome|result|behaviou?r)|given\b)/imu;

@@ -1,5 +1,5 @@
 /**
- * The messages between the program host and the child process of a custom practice program. The host
+ * The messages between the program host and the child process of a custom practice script. The host
  * trusts its own messages. It parses every message a child sends, because the child runs untrusted
  * code. Every request carries a call id; the host answers each once.
  */

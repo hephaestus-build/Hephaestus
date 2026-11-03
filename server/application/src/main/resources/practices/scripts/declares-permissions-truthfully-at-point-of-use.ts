@@ -1,18 +1,7 @@
-import { scm, expectKind, requireChange, type FileTree } from "../kits/scm/index.ts";
-import {
-	countLabel,
-	sampleNote,
-	scanOccurrences,
-	type SourcePattern,
-} from "../kits/scm/source-scan.ts";
-import {
-	DIRECTION_CHARS,
-	factsOf,
-	listWithin,
-	noMatchDirections,
-	oneLine,
-} from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm, type FileTree } from "@hephaestus/practice-scripts/scm";
+
+const DIRECTION_CHARS = 300;
 
 const PERMISSION_REFERENCES: readonly [string, RegExp, string[]][] = [
 	[
@@ -62,12 +51,12 @@ const PERMISSION_REFERENCES: readonly [string, RegExp, string[]][] = [
 	["LocalNetwork", /\bNWBrowser\b|\bNetService\b/u, ["NSLocalNetworkUsageDescription"]],
 ];
 
-const REQUEST: readonly SourcePattern[] = [
+const REQUEST: readonly [string, RegExp][] = [
 	[
 		"authorization request",
 		/\brequest(?:WhenInUse|Always)?Authorization\b|\brequestAccess\b|\brequestTrackingAuthorization\b|\bPHPhotoLibrary\.requestAuthorization\b/u,
 	],
-	...PERMISSION_REFERENCES.map(([kind, re]): SourcePattern => [
+	...PERMISSION_REFERENCES.map(([kind, re]): [string, RegExp] => [
 		`permission-related reference ${kind}`,
 		re,
 	]),
@@ -158,20 +147,19 @@ async function usageKeysInCheckout(tree: FileTree | null): Promise<CheckoutKeys 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const change = requireChange(domain.files);
-		const tree = domain.files?.head ?? null;
-		const scan = await scanOccurrences(ctx, domain.files, {
-			languages: ["swift"],
-			patterns: REQUEST,
-		});
-		const leads: ReviewLead[] = scan.hints.flatMap((hint) => {
-			const kind = KIND_OF_LABEL.get(hint.pattern);
+		const work = scm(ctx, "scm.pull_request");
+		const change = work.changedFiles();
+		const tree = work.head;
+		const found = await work.sites(
+			{ swift: REQUEST.map(([kind, test]) => ({ kind, label: kind, test })) },
+			{ overlap: "first", enclosing: {} },
+		);
+		const leads: ReviewLead[] = found.listed.flatMap((site) => {
+			const kind = KIND_OF_LABEL.get(site.kind);
 			const label = kind === undefined ? undefined : LABEL_OF.get(kind);
 			return label === undefined
 				? []
-				: [{ at: { change: hint.file, line: hint.line }, label, facts: factsOf(hint.flags) }];
+				: [{ at: { change: site.path, line: site.line }, label, facts: site.facts }];
 		});
 		const keysInChange = new Map<string, string>();
 		for (const [file, df] of change) {
@@ -192,7 +180,7 @@ export default definePracticeScript({
 		}
 		const checkout = await usageKeysInCheckout(tree);
 		const references = PERMISSION_REFERENCES.filter(([kind]) =>
-			scan.counts.has(`permission-related reference ${kind}`),
+			found.counts.has(`permission-related reference ${kind}`),
 		);
 		const located = (keys: string[]) =>
 			keys.flatMap((key) => {
@@ -205,7 +193,7 @@ export default definePracticeScript({
 				];
 				return where.length === 0 ? [] : [`${key} (${where.join(", ")})`];
 			});
-		const directions: string[] = [...sampleNote(scan)];
+		const directions: string[] = [...found.listedNote];
 		if (references.length > 0) {
 			const read =
 				checkout === null
@@ -215,11 +203,8 @@ export default definePracticeScript({
 				if (keys.length === 0) {
 					return `${kind} (no usage key applies).`;
 				}
-				const found = located(keys);
-				return oneLine(
-					`${kind} — keys located: ${found.length > 0 ? found.join("; ") : "none"}.`,
-					DIRECTION_CHARS,
-				);
+				const locatedKeys = located(keys);
+				return `${kind} — keys located: ${locatedKeys.length > 0 ? locatedKeys.join("; ") : "none"}.`;
 			});
 			const others = references.slice(REFERENCE_LINES - 1).map(([kind]) => kind);
 			directions.push(
@@ -233,14 +218,14 @@ export default definePracticeScript({
 				"A key located in a file does not show the target declares it, and a key not located does not show it is missing: read the target's own Info.plist or build settings, and the key the actual API and deployment target require.",
 			);
 		}
-		const requests = countLabel(scan, "authorization request");
+		const requests = found.counts.get("authorization request") ?? 0;
 		if (requests > 0) {
 			directions.push(
 				`${requests} authorization requests were added. For each request, read the enclosing flag and the call chain. Decide whether it runs when the feature is reached or earlier. A root view can be the feature that needs authorization.`,
 			);
 		}
 		if (leads.length === 0) {
-			directions.push(...noMatchDirections(scan.linesSelected, scan.filesScanned));
+			directions.push(...found.noMatch);
 		}
 		return ctx.review({
 			leads: leads.slice(0, 40),
@@ -254,8 +239,8 @@ export default definePracticeScript({
 							usageKeysLocatedInCheckout: checkout.keys.size,
 							projectFilesRead: checkout.filesRead,
 						}),
-				filesScanned: scan.filesScanned,
-				linesAdded: scan.linesSelected,
+				filesScanned: found.filesScanned,
+				linesAdded: found.linesSelected,
 			},
 			directions,
 		});

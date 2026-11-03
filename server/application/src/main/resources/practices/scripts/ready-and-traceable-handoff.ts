@@ -1,25 +1,27 @@
-import { readCapturedCommits } from "../kits/scm/change.ts";
-import { scm, expectKind } from "../kits/scm/index.ts";
-import { branchIssueReferences, issueNumberReferences } from "../kits/scm/references.ts";
-import { checkableItems } from "../kits/scm/review.ts";
-import { DIRECTION_CHARS, listWithin, oneLine } from "../lib/core/bounded-text.ts";
-import { definePracticeScript } from "../lib/core/practice-script.ts";
+import { definePracticeScript, listWithin } from "@hephaestus/practice-scripts";
+import {
+	branchIssueReferences,
+	checkableItems,
+	issueReferences,
+	scm,
+} from "@hephaestus/practice-scripts/scm";
+
+const DIRECTION_CHARS = 300;
 
 const BRANCH_CHARS = 80;
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const description = domain.item.body ?? "";
+		const work = scm(ctx, "scm.pull_request");
+		const description = work.item.body ?? "";
 		const directions: string[] = [];
 
-		const commits = await readCapturedCommits(ctx.evidence);
+		const commits = await work.commits();
 		const body = `${description}\n${(commits ?? []).map((c) => c.message).join("\n")}`;
-		const branch = domain.item.source_branch;
+		const branch = work.item.source_branch;
 		const quotedBranch = oneLine(branch, BRANCH_CHARS);
-		const bodyRefs = new Set(issueNumberReferences(body).map((n) => `#${n}`));
+		const bodyRefs = new Set(issueReferences(body).mentioned.map((n) => `#${n}`));
 		const branchRefs = new Set(branchIssueReferences(branch).map((n) => `#${n}`));
 		const allRefs = new Set<string>([...bodyRefs, ...branchRefs]);
 		if (allRefs.size > 0) {
@@ -64,3 +66,8 @@ export default definePracticeScript({
 		});
 	},
 });
+
+function oneLine(text: string, max: number): string {
+	const flat = text.replaceAll(/\s+/gu, " ").trim();
+	return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+}

@@ -11,8 +11,8 @@ import org.jspecify.annotations.Nullable;
  * Input for {@link PracticePiAdapter#buildSandboxSpec}. Carries no prompt — that travels in the
  * {@code task.json} envelope the handler writes.
  *
- * @param jobToken the job's one proxy credential; the review and its practice programs' direct model calls share it
- * @param practiceScriptModels the direct models that the practice programs may call, by kind; empty for a job that is
+ * @param jobToken the job's one proxy credential; the review and its practice scripts' direct model calls share it
+ * @param practiceScriptModels the direct models that the practice scripts may call, by kind; empty for a job that is
  *     no practice review
  */
 public record PracticeAgentRequest(

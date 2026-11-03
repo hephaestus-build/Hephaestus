@@ -1,15 +1,8 @@
-import { scm } from "../kits/scm/index.ts";
-import {
-	countLabel,
-	sampleNote,
-	scanOccurrences,
-	type SourcePattern,
-} from "../kits/scm/source-scan.ts";
-import { factsOf, noMatchDirections } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm, type SiteRule } from "@hephaestus/practice-scripts/scm";
 
 // SwiftUI custom(size:) scales; custom(fixedSize:) does not.
-const INTERFACE_LINES: readonly SourcePattern[] = [
+const INTERFACE_LINES: readonly [string, RegExp][] = [
 	[
 		"accessibility-modifier",
 		/\.accessibility(?:Label|Hint|Hidden|AddTraits|Value|Identifier)\s*\(/u,
@@ -51,35 +44,24 @@ export const LABELS = {
 	button: "A selected Button.",
 	toggle: "A selected Toggle.",
 };
-const LABEL_OF = new Map<string, string>(Object.entries(LABELS));
+
+const LABEL_OF: Record<string, string> = LABELS;
+
+const rulesOf = (rows: readonly [string, RegExp][]): SiteRule[] =>
+	rows.map(([kind, test]) => ({ kind, label: LABEL_OF[kind] ?? "", test }));
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const scan = await scanOccurrences(ctx, domain.files, {
-			languages: ["swift"],
-			patterns: INTERFACE_LINES,
-			maxHints: 60,
-		});
-		const leads: ReviewLead[] = scan.hints.flatMap((hint) => {
-			const label = LABEL_OF.get(hint.pattern);
-			return label === undefined
-				? []
-				: [
-						{
-							at: { file: hint.file, line: hint.line, endLine: hint.endLine },
-							label,
-							facts: factsOf(hint.flags),
-						},
-					];
-		});
-		const count = (label: string) => countLabel(scan, label);
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const found = await work.sites(
+			{ swift: rulesOf(INTERFACE_LINES) },
+			{ overlap: "first", enclosing: {}, listed: 60 },
+		);
+		const leads = [...found.leads];
+		const count = (kind: string) => found.counts.get(kind) ?? 0;
 		const facts = {
-			interfaceLinesSelected: scan.matched,
+			interfaceLinesSelected: found.matched,
 			symbolImages: count("symbol-image"),
 			assetImages: count("asset-image"),
 			accessibilityModifiers: count("accessibility-modifier"),
@@ -89,11 +71,11 @@ export default definePracticeScript({
 			semanticFonts: count("semantic-font"),
 			heightCaps: count("height-cap"),
 			colourByState: count("colour-by-state"),
-			filesWithUnknownLocation: scan.filesWithUnknownLocation,
-			filesScanned: scan.filesScanned,
-			linesSelected: scan.linesSelected,
+			filesWithUnknownLocation: found.filesWithUnknownLocation,
+			filesScanned: found.filesScanned,
+			linesSelected: found.linesSelected,
 		};
-		const directions: string[] = [...sampleNote(scan)];
+		const directions: string[] = [...found.listedNote];
 		if (facts.symbolImages + facts.assetImages > 0) {
 			directions.push(
 				`${String(facts.symbolImages + facts.assetImages)} image(s) selected against ${String(facts.accessibilityModifiers)} accessibility modifier(s) — for each image inside a Button, Toggle or tap gesture, read the whole view chain for a label or a Label title.`,
@@ -115,7 +97,7 @@ export default definePracticeScript({
 			);
 		}
 		if (leads.length === 0) {
-			directions.push(...noMatchDirections(scan.linesSelected, scan.filesScanned));
+			directions.push(...found.noMatch);
 		}
 		return ctx.review({ leads, facts, directions });
 	},

@@ -1,13 +1,5 @@
-import { scm } from "../kits/scm/index.ts";
-import {
-	occurrences,
-	selectedSources,
-	selectedOccurrences,
-	occurrenceLead,
-	sortOccurrenceLeads,
-} from "../kits/scm/occurrences.ts";
-import { noMatchDirections } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"try-discards-error": "A Swift `try?` that turns a thrown error into nil.",
@@ -99,52 +91,30 @@ const LANG_PATTERNS: Record<string, [ErrorKind, RegExp][]> = {
 	],
 };
 
+const RULES = Object.fromEntries(
+	Object.entries(LANG_PATTERNS).map(([language, rows]) => [
+		language,
+		rows.map(([kind, test]) => ({ kind, label: LABELS[kind], test })),
+	]),
+);
+
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const leads: ReviewLead[] = [];
-		const byLang: Record<string, number> = {};
-		let filesScanned = 0;
-		let linesSelected = 0;
-		for (const file of await selectedSources(
-			ctx,
-			domain.files,
-			(source) => source.language !== null && LANG_PATTERNS[source.language] !== undefined,
-		)) {
-			const lang = file.language;
-			const patterns = lang === null ? undefined : LANG_PATTERNS[lang];
-			if (lang === null || patterns === undefined) {
-				continue;
-			}
-			filesScanned += 1;
-			linesSelected +=
-				ctx.scope.kind === "SCAN"
-					? file.text.split("\n").length
-					: (domain.files?.change?.files.get(file.path)?.addedLines.size ?? 0);
-			const found = selectedOccurrences(
-				ctx,
-				domain.files,
-				occurrences(
-					file,
-					patterns.map(([kind, test]) => ({ label: LABELS[kind], test })),
-				),
-			);
-			leads.push(...found.map(occurrenceLead));
-			byLang[lang] = (byLang[lang] ?? 0) + found.length;
-		}
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const found = await work.sites(RULES, { tests: true, listed: 40 });
+		const { filesScanned, linesSelected } = found;
+		const byLang = Object.fromEntries(found.languages);
+		const leads = found.sites;
 		const directions =
 			leads.length > 0
 				? [
 						`Found ${leads.length} possible error-discard constructs in ${Object.keys(byLang).length} languages. First establish whether each call can fail. For each failure, inspect whether it stays visible.`,
 						"A valid fixed URL has no runtime-dependent parse failure. A later empty-value check does not swallow an error already recorded by its handler.",
 					]
-				: noMatchDirections(linesSelected, filesScanned);
+				: found.noMatch;
 		return ctx.review({
-			leads: sortOccurrenceLeads(leads).slice(0, 40),
+			leads: found.leads,
 			facts: { errorSwallowCandidates: leads.length, filesScanned, linesSelected, ...byLang },
 			directions,
 		});

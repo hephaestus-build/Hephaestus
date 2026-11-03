@@ -1,6 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const NETWORK_TYPES = ["URLSession", "URLRequest", "HTTPURLResponse", "URLComponents"];
 const NETWORK_CALLS = [
@@ -29,9 +28,8 @@ type Cue = keyof typeof LABELS;
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(ctx, domain.files, (file) => file.language === "swift");
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => file.language === "swift");
 		const counts = new Map<Cue, number>();
 		const leads: ReviewLead[] = [];
 		const cue = (
@@ -55,8 +53,7 @@ export default definePracticeScript({
 				continue;
 			}
 			const view = views.join(", ").slice(0, 200);
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
-			const isAdded = (line: number) => added?.has(line) === true;
+			const { isAdded } = file;
 			for (const [index, line] of lines.entries()) {
 				const at = index + 1;
 				if (!isAdded(at) || line.trimStart().startsWith("//")) {

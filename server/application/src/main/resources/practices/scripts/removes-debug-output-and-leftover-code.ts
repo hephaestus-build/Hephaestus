@@ -1,6 +1,5 @@
-import { expectKind, scm } from "../kits/scm/index.ts";
-import { selectedSources } from "../kits/scm/occurrences.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm } from "@hephaestus/practice-scripts/scm";
 
 const COMMENTED_CODE =
 	/^\/\/\s*(?:let |var |func |if |for |return |guard |switch |case |struct |class |import |@)/u;
@@ -32,9 +31,8 @@ function printOnlyButton(lines: readonly string[], index: number): boolean {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const files = await selectedSources(ctx, domain.files, (file) => file.language === "swift");
+		const work = scm(ctx, "scm.pull_request");
+		const files = await work.sources((file) => file.language === "swift");
 		const counts = new Map<Cue, number>();
 		const leads: ReviewLead[] = [];
 		const cue = (
@@ -49,8 +47,7 @@ export default definePracticeScript({
 			}
 		};
 		for (const file of files) {
-			const added = domain.files?.change?.files.get(file.path)?.addedLines;
-			const isAdded = (line: number) => added?.has(line) === true;
+			const { isAdded } = file;
 			const lines = file.text.split("\n");
 			const header = /^\/\/\s+(?<name>\S+\.swift)/u.exec(lines[0] ?? "")?.groups?.name;
 			const actual = file.path.split("/").pop() ?? "";

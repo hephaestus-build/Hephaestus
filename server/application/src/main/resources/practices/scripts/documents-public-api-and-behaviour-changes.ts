@@ -1,8 +1,5 @@
-import { isCommentLine } from "../kits/scm/declarations.ts";
-import { scm, expectKind, requireChange, type FileTree } from "../kits/scm/index.ts";
-import { languageOf } from "../kits/scm/languages.ts";
-import { noMatchDirections } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { languageOf, scm, type FileTree } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
 	"public-declaration":
@@ -89,10 +86,9 @@ async function declaresPublicProduct(tree: FileTree): Promise<boolean> {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const change = requireChange(domain.files);
-		const head = domain.files?.head ?? null;
+		const work = scm(ctx, "scm.pull_request");
+		const change = work.changedFiles();
+		const { head } = work;
 		const hasPublicProduct = head !== null && (await declaresPublicProduct(head));
 
 		const leads: ReviewLead[] = [];
@@ -169,3 +165,18 @@ export default definePracticeScript({
 		});
 	},
 });
+
+function isCommentLine(content: string, language: string): boolean {
+	const trimmed = content.trimStart();
+	if (language === "python" || language === "ruby") {
+		return trimmed.startsWith("#");
+	}
+	return trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
+}
+
+function noMatchDirections(linesAdded: number, filesScanned: number): string[] {
+	return [
+		`Scanned ${String(linesAdded)} added lines in ${String(filesScanned)} files for this practice's line patterns; none matched.`,
+		"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff.",
+	];
+}

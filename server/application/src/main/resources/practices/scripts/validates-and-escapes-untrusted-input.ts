@@ -1,8 +1,5 @@
-import { isCommentLine } from "../kits/scm/declarations.ts";
-import { scm, expectKind, requireChange } from "../kits/scm/index.ts";
-import { languageOf } from "../kits/scm/languages.ts";
-import { factsOf, noMatchDirections } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { languageOf, scm } from "@hephaestus/practice-scripts/scm";
 
 type PatternRows = [string, RegExp][];
 
@@ -161,9 +158,8 @@ function firstMatch(rows: PatternRows, content: string): string | null {
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		expectKind(domain, "scm.pull_request");
-		const change = requireChange(domain.files);
+		const work = scm(ctx, "scm.pull_request");
+		const change = work.changedFiles();
 		const leads: ReviewLead[] = [];
 		let flowCount = 0;
 		let linesAdded = 0;
@@ -202,12 +198,12 @@ export default definePracticeScript({
 				leads.push({
 					at: { change: path, line: sink.line },
 					label: LABELS["source-near-sink"],
-					facts: factsOf({
+					facts: {
 						sourceLine: near.line,
 						sourceToken: near.label,
 						sinkToken: sink.label,
 						lineDistance: Math.abs(near.line - sink.line),
-					}),
+					},
 				});
 			}
 		}
@@ -227,3 +223,18 @@ export default definePracticeScript({
 		});
 	},
 });
+
+function isCommentLine(content: string, language: string): boolean {
+	const trimmed = content.trimStart();
+	if (language === "python" || language === "ruby") {
+		return trimmed.startsWith("#");
+	}
+	return trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*");
+}
+
+function noMatchDirections(linesAdded: number, filesScanned: number): string[] {
+	return [
+		`Scanned ${String(linesAdded)} added lines in ${String(filesScanned)} files for this practice's line patterns; none matched.`,
+		"A pattern sees one line: what spans lines or has no keyword, such as an early return, a discarded result or a missing else, is yours to enumerate from the diff.",
+	];
+}

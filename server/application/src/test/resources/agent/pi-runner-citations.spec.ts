@@ -32,7 +32,7 @@ async function run(
 			slug: "test-practice",
 			...(prepared
 				? {
-						program: `import { definePracticeScript } from "../lib/core/practice-script.ts";
+						program: `import { definePracticeScript } from "@hephaestus/practice-scripts";
 export default definePracticeScript({
     meta: {},
     async run(ctx) { return ctx.review({ facts: { commitSubject: "Add authentication" } }); },

@@ -166,16 +166,18 @@ type PracticeScriptModelSlots = Partial<
 export function practiceScript(models: PracticeScriptModelSlots = {}): string {
 	const declared = Object.entries(models).map(([slot, need]) => `${slot}: "${need}"`);
 	return [
-		'import { addedComments, definePracticeScript, requireChange } from "../lib/practice-script.ts";',
+		'import { definePracticeScript } from "@hephaestus/practice-scripts";',
+		'import { scm } from "@hephaestus/practice-scripts/scm";',
 		"",
-		String.raw`const OPEN_WORK = /\b(TODO|FIXME)\b/u;`,
+		"const OPEN_WORK = {",
+		'  typescript: [{ kind: "open-work", label: "A TODO or FIXME that the change adds.", test: /TODO|FIXME/u }],',
+		"};",
 		"",
 		"export default definePracticeScript({",
 		declared.length > 0 ? `  meta: { models: { ${declared.join(", ")} } },` : "  meta: {},",
 		"  async run(ctx) {",
-		"    const leads = addedComments(requireChange(ctx.files))",
-		"      .filter((comment) => OPEN_WORK.test(comment.text))",
-		'      .map((comment) => ({ at: comment.at, label: "A TODO or FIXME that the change adds." }));',
+		'    const work = scm(ctx, "scm.pull_request");',
+		"    const { leads } = await work.sites(OPEN_WORK, { comments: true });",
 		"    return ctx.review({ leads });",
 		"  },",
 		"});",

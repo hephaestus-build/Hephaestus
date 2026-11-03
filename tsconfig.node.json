@@ -19,6 +19,14 @@
 		"forceConsistentCasingInFileNames": true,
 		"skipLibCheck": true,
 		"noEmit": true,
+		// A practice script imports the toolkit's export map by name; `script-imports.ts` resolves it at run time.
+		"paths": {
+			"@hephaestus/practice-scripts": ["./docker/agents/practice-scripts/lib/api.ts"],
+			"@hephaestus/practice-scripts/scm": ["./docker/agents/practice-scripts/kits/scm/api.ts"],
+			"@hephaestus/practice-scripts/chat": ["./docker/agents/practice-scripts/kits/chat/index.ts"],
+			"@hephaestus/practice-scripts/docs": ["./docker/agents/practice-scripts/kits/docs/index.ts"],
+			"@hephaestus/practice-scripts/models": ["./docker/agents/practice-scripts/lib/api-models.ts"]
+		},
 		// Match the runtime's toolkit link so relative imports resolve in source and staged layouts.
 		"rootDirs": [
 			"server/application/src/main/resources/practices",

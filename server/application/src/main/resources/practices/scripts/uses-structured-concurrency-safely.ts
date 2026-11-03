@@ -1,16 +1,9 @@
-import { scm, type FileTree } from "../kits/scm/index.ts";
-import {
-	countLabel,
-	sampleNote,
-	scanOccurrences,
-	type SourcePattern,
-} from "../kits/scm/source-scan.ts";
-import { factsOf, noMatchDirections } from "../lib/core/bounded-text.ts";
-import { definePracticeScript, type ReviewLead } from "../lib/core/practice-script.ts";
+import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { scm, type FileTree, type SiteRule } from "@hephaestus/practice-scripts/scm";
 
 const SWIFTUI_VIEW = /\b(?:View|App|Scene)\b/u;
 
-const CONCURRENCY: readonly SourcePattern[] = [
+const CONCURRENCY: readonly [string, RegExp][] = [
 	["detached-task", /\bTask\.detached\b/u],
 	["stored-task-handle", /(?:let|var)\s+\w+\s*(?::\s*Task<[^>]*>)?\s*=\s*Task\s*[{(]/u],
 	["task-block", /\bTask\s*(?:\(priority:[^)]*\))?\s*\{/u],
@@ -82,52 +75,40 @@ export const LABELS = {
 	"default-isolation-setting":
 		"A line of a project file that names a default actor isolation for one target or module.",
 };
-const LABEL_OF = new Map<string, string>(Object.entries(LABELS));
+
+const LABEL_OF: Record<string, string> = LABELS;
+
+const rulesOf = (rows: readonly [string, RegExp][]): SiteRule[] =>
+	rows.map(([kind, test]) => ({ kind, label: LABEL_OF[kind] ?? "", test }));
 
 export default definePracticeScript({
 	meta: {},
 	async run(ctx) {
-		const domain = scm(ctx);
-		if (domain.kind !== "scm.pull_request" && domain.kind !== "scm.file") {
-			throw new Error("this practice requires SCM source files");
-		}
-		const scan = await scanOccurrences(ctx, domain.files, {
-			languages: ["swift"],
-			patterns: CONCURRENCY,
-			scope: SWIFTUI_VIEW,
-			maxHints: 60,
-		});
-		const leads: ReviewLead[] = scan.hints.flatMap((hint) => {
-			const label = LABEL_OF.get(hint.pattern);
-			return label === undefined
-				? []
-				: [
-						{
-							at: { file: hint.file, line: hint.line, endLine: hint.endLine },
-							label,
-							facts: factsOf(hint.flags),
-						},
-					];
-		});
-		const count = (label: string) => countLabel(scan, label);
-		const unstructuredInViews = scan.hints.filter(
-			(hint) => hint.pattern === "task-block" && hint.flags.inScope === true,
+		const work = scm(ctx, "scm.pull_request", "scm.file");
+		const found = await work.sites(
+			{ swift: rulesOf(CONCURRENCY) },
+			{ overlap: "first", enclosing: { scope: SWIFTUI_VIEW }, listed: 60 },
+		);
+		const leads = [...found.leads];
+		const count = (kind: string) => found.counts.get(kind) ?? 0;
+		const unstructuredInViews = found.listed.filter(
+			(site) => site.kind === "task-block" && site.facts.inScope === true,
 		).length;
 		const facts = {
-			concurrencyLinesSelected: scan.matched,
+			concurrencyLinesSelected: found.matched,
 			taskBlocks: count("task-block"),
 			taskBlocksInListedViewRows: unstructuredInViews,
 			taskModifiers: count("task-modifier"),
 			detachedTasks: count("detached-task"),
 			dispatchQueues: count("dispatch-queue"),
 			mainActorMarks: count("main-actor-mark") + count("main-actor-run"),
-			filesWithUnknownLocation: scan.filesWithUnknownLocation,
-			filesScanned: scan.filesScanned,
-			linesSelected: scan.linesSelected,
+			filesWithUnknownLocation: found.filesWithUnknownLocation,
+			filesScanned: found.filesScanned,
+			linesSelected: found.linesSelected,
 		};
-		const directions: string[] = [...sampleNote(scan)];
+		const directions: string[] = [...found.listedNote];
 		if (leads.length === 0) {
-			directions.push(...noMatchDirections(scan.linesSelected, scan.filesScanned));
+			directions.push(...found.noMatch);
 		}
 		if (unstructuredInViews > 0) {
 			directions.push(
@@ -139,8 +120,8 @@ export default definePracticeScript({
 				`${facts.detachedTasks} detached task(s) and ${facts.dispatchQueues} dispatch queue use(s) — read whether the code shows a need for independent execution or scheduling; no written reason is required when it does.`,
 			);
 		}
-		if (scan.matched > 0) {
-			const settings = await defaultIsolationLines(domain.files?.head ?? null);
+		if (found.matched > 0) {
+			const settings = await defaultIsolationLines(work.head);
 			leads.push(
 				...settings.map((at): ReviewLead => ({ at, label: LABELS["default-isolation-setting"] })),
 			);

@@ -1,4 +1,4 @@
-/** The contract of a practice program, as the host parses it, and of the result it returns. */
+/** The contract of a practice script, as the host parses it, and of the result it returns. */
 import type {
 	EmbeddingModelV4,
 	EmbeddingModelV4CallOptions,
@@ -52,7 +52,7 @@ export const CANDIDATE_LIMITS = {
 export const PRACTICE_SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 
 /**
- * The header that names the practice of every direct model call of a practice program, so the proxy
+ * The header that names the practice of every direct model call of a practice script, so the proxy
  * can attribute its usage.
  */
 export const PRACTICE_SCRIPT_PRACTICE_HEADER = "x-hephaestus-practice";
@@ -63,7 +63,7 @@ export const PROXY_REFUSAL_HEADER = "hephaestus-proxy-refusal";
 /** The proxy's refusal of a call while its attempt already has its most model calls in flight. */
 export const CALLS_IN_FLIGHT_REFUSAL = "CALLS_IN_FLIGHT";
 
-/** What a practice program may ask a model to do directly. One slot, one kind of model. */
+/** What a practice script may ask a model to do directly. One slot, one kind of model. */
 export const MODEL_SLOTS = ["chat", "decision", "embedding", "reranking"] as const;
 export type ModelSlot = (typeof MODEL_SLOTS)[number];
 export const modelSlotSchema = z.enum(MODEL_SLOTS);
@@ -375,7 +375,7 @@ export interface CitationCapabilities {
 	commit: "REQUIRED" | "OPTIONAL" | "FORBIDDEN";
 }
 /*
- * The result a practice program returns: one candidate per practice. Admission on the server parses
+ * The result a practice script returns: one candidate per practice. Admission on the server parses
  * its structure again (`CandidateParser`) and verifies quotes and example overlap against captured
  * sources (`CandidateEvidenceVerifier`). `CandidateContractSyncTest` keeps the bounds and codes equal.
  */
