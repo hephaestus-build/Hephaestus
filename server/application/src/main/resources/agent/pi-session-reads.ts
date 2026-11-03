@@ -610,6 +610,7 @@ export function unreadCheckoutClaim(
 		? `If your search covered only the selected or cited lines, name the source that holds them, such as scm.pull-request.diff, in place of ${TREE_SOURCE}.`
 		: "If you cannot, remove the claim about the rest of the repository and keep only what the cited lines show.";
 	return {
-		text: `${claim}, but this session ran no search of the whole checkout. Call grep with a pattern for what is missing and path "${checkout.root}", without a glob, and narrow the pattern until the search is not cut, then submit again. ${exit}`,
+		// A grep in bash runs, but it leaves no receipt that admission can read, so the model must hear which tool counts.
+		text: `${claim}, but this session ran no search of the whole checkout. Call the grep tool, not grep in bash, with a pattern for what is missing and path "${checkout.root}", without a glob. A search in bash proves nothing to admission. Narrow the pattern until the search is not cut, then submit again. ${exit}`,
 	};
 }
