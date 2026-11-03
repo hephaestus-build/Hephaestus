@@ -639,17 +639,18 @@ status. Consult the server log when an export remains queued or processing after
 
 ## Transaction metrics
 
-The server and worker roles time each database transaction from its begin to its commit or rollback.
-A transaction holds one pooled connection for that time, so a long transaction can make other requests wait for a connection.
+Every process with a database times each database transaction from its begin to its commit or rollback.
+A transaction holds a pooled connection for at most that time, so a long transaction can make other requests wait for a connection.
 
 | Prometheus name                                | Type      | Labels                | Meaning                                                    |
 | ---------------------------------------------- | --------- | --------------------- | ---------------------------------------------------------- |
-| `database_transaction_duration_seconds`        | Histogram | `boundary`, `outcome` | Time from transaction begin to commit or rollback          |
+| `database_transaction_duration_seconds`        | Histogram | `boundary`, `outcome` | Time from transaction begin to commit or rollback. `_bucket`, `_count` and `_sum` series |
 | `database_transaction_duration_seconds_max`    | Gauge     | `boundary`, `outcome` | The longest such time in the current step                  |
 
 `boundary` is the class and method that open the transaction, for example `SyncJobService.completeJob`.
 A programmatic transaction without a name reports `programmatic`.
-`outcome` is `commit` or `rollback`.
+`outcome` is `commit` or `rollback`. A commit that fails reports `rollback`.
+
 The buckets are at 1 s, 5 s and 30 s.
 Arguments, identifiers and workspaces are not labels.
 Every transaction is timed in the same way, so the count is the transaction rate of each boundary.

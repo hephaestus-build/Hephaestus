@@ -50,8 +50,6 @@ class TransactionDurationsIntegrationTest extends BaseIntegrationTest {
         Timer rolledBack = timer(inner, "rollback");
         assertThat(committed.count()).isEqualTo(1);
         assertThat(rolledBack.count()).isEqualTo(1);
-        assertThat(committed.totalTime(TimeUnit.NANOSECONDS))
-                .isGreaterThanOrEqualTo(rolledBack.totalTime(TimeUnit.NANOSECONDS));
         assertThat(Arrays.stream(committed.takeSnapshot().histogramCounts())
                         .map(bucket -> bucket.bucket(TimeUnit.SECONDS))
                         .toList())

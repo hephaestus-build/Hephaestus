@@ -14,6 +14,17 @@ class TransactionDurationsTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheNestedClassWhenTheBoundaryIsDeclaredOnANestedClass() {
+        assertThat(TransactionDurations.boundary("de.tum.cit.aet.hephaestus.Outer$Inner.run"))
+                .isEqualTo("Outer$Inner.run");
+    }
+
+    @Test
+    void shouldKeepAnUnqualifiedNameWhenItHasNoPackage() {
+        assertThat(TransactionDurations.boundary("probe")).isEqualTo("probe");
+    }
+
+    @Test
     void shouldGroupUnnamedTemplatesWhenTheTransactionHasNoName() {
         assertThat(TransactionDurations.boundary(null)).isEqualTo(TransactionDurations.UNNAMED);
         assertThat(TransactionDurations.boundary("")).isEqualTo(TransactionDurations.UNNAMED);

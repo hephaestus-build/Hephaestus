@@ -13,8 +13,8 @@ import org.springframework.transaction.TransactionExecution;
 import org.springframework.transaction.TransactionExecutionListener;
 
 /**
- * Times every transaction from begin to commit or rollback, which is how long it holds its pooled connection, tagged by
- * its boundary. Spring Boot registers this listener with the auto-configured transaction manager.
+ * Times every transaction from begin to commit or rollback, the longest time it can hold a pooled connection, tagged by
+ * its boundary. A commit that fails is reported as a rollback. Spring Boot registers this listener with the auto-configured transaction manager.
  */
 @Component
 public class TransactionDurations implements TransactionExecutionListener {
